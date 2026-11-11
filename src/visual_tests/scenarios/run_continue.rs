@@ -14,6 +14,8 @@ const SESSION: &str = "The Vault";
 const UNREAD: &str = "Splat could not read this run’s saved Undo steps";
 const DISMISS: &str = "Dismiss the Undo message";
 const LATER: &str = "A later fight or rest was played. Start a new run to play this one again.";
+/// The same reason for a fight whose encounter is deleted: only its cause.
+const LATER_GONE: &str = "A later fight or rest was played.";
 const NO_TIMELINE: &str = "Splat cannot read Timeline.md. Fix that on the Timeline page first.";
 const DISK_CHANGED: &str = "Timeline.md changed on disk. Settle that on the Timeline page first.";
 
@@ -678,6 +680,13 @@ pub fn run(d: &mut Driver<'_>) {
         d.visible_passage(UNREAD) && d.in_view(NEXT_TURN) && d.in_view(DISMISS),
         "The run opens on its turn and says that its Undo steps could not be read",
     );
+    // iter-25-R AI3, FI2: the warning says the cause, so Undo's reason does not repeat it.
+    const UNREAD_REASON: &str = "Nothing to undo. Splat could not read the saved Undo steps.";
+    d.observe(
+        "iter-25-R-AI3-short",
+        d.visible_text("Nothing to undo") && !d.visible_text("could not read the saved Undo steps"),
+        "While the warning shows, Undo's reason says only Nothing to undo",
+    );
     d.state("undo-steps-unread", Sizes::All);
     open_lookup(d);
     whole_at_every_size(
@@ -695,6 +704,11 @@ pub fn run(d: &mut Driver<'_>) {
         "Dismiss removes the message and leaves Lookup on its entry",
     );
     close_lookup(d);
+    d.observe(
+        "iter-25-R-AI3-after-dismiss",
+        d.visible_text(UNREAD_REASON),
+        "After Dismiss, Undo's reason gives the cause, with a full stop",
+    );
     d.click(NEXT_TURN);
     d.restart();
     d.observe(
@@ -714,16 +728,21 @@ pub fn run(d: &mut Driver<'_>) {
     }
     d.click_starting("Open the run of Sunken Vault");
     d.expect("Read-only");
+    // iter-25-R FI1: the vault's encounter is deleted, so no new run can start from it. The
+    // reason gives only its cause.
     d.observe(
-        "T17.8",
-        !d.has(CONTINUE) && d.visible_passage(LATER),
-        "After a later fight, History offers no Continue fight and says why",
+        "iter-25-R-FI1",
+        d.visible_text("Encounter deleted")
+            && !d.has(CONTINUE)
+            && d.visible_passage(LATER_GONE)
+            && !d.visible_text("Start a new run"),
+        "After a later fight, History offers no Continue fight and says why, with no step a deleted encounter cannot take",
     );
     whole_at_every_size(
         d,
         "T17.6",
         "The History run that is not the last fight",
-        &[LATER],
+        &[LATER_GONE],
         "",
     );
     d.state("history-not-the-last-fight", Sizes::All);
@@ -732,7 +751,7 @@ pub fn run(d: &mut Driver<'_>) {
         d,
         "T17.6",
         "The History run that is not the last fight, beside Lookup",
-        &[LATER, "New encounter", "Reload from disk"],
+        &[LATER_GONE, "New encounter", "Reload from disk"],
         "",
     );
     d.state("history-not-the-last-fight-beside-lookup", Sizes::All);

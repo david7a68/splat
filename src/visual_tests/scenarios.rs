@@ -7747,8 +7747,8 @@ pub mod signed_in {
             "T10.3",
             d.visible_text(&format!("Changes for {MEMBER} {STRANDED}"))
                 && !d.visible_text("Nothing is lost")
-                && d.visible_text("Closing ends Undo for this run."),
-            "Closing after that names the changes that were never sent, and promises only what it keeps",
+                && !d.visible_text("ends Undo"),
+            "Closing after that names the changes that were never sent, and promises only what it keeps. A close keeps Undo, so it never says Undo ends",
         );
         d.state("close-with-unsent-changes", Sizes::Default);
         // iter-17-B: Connect to sync starts its line at the dialog's text edge.
@@ -7879,7 +7879,10 @@ pub mod signed_in {
         let blocked_words = |d: &Driver<'_>| {
             d.is_disabled("Close now")
                 && d.visible_text("Choose which HP to keep before you close.")
-                && d.visible_text(crate::encounter_run::CLOSE_BLOCKED)
+                // iter-25-R FL4: the cause is the ended view's one exact sentence, not the
+                // general three-cause line.
+                && d.visible_text("Settle 1 conflict first.")
+                && !d.visible_text(crate::encounter_run::CLOSE_BLOCKED)
                 && !d.visible_text("or close and choose next time")
         };
         d.observe(
@@ -13234,9 +13237,19 @@ pub mod encounter_owned_groups {
         open_arrivals(d);
         d.expect(&add_group(NEW_NAME));
         d.state("own-groups-in-combat", Sizes::Default);
+        let row_before = d.place_of(&add_group(GROUP_SHRINE)).map(|rect| rect.top());
         d.type_into(&format!("Initiative total for {NEW_NAME}"), "14");
         d.click(&add_group(NEW_NAME));
         d.expect("Wolf");
+        // iter-25-R FB1: the result has its own line, so no group row moves when it shows.
+        let row_after = d.place_of(&add_group(GROUP_SHRINE)).map(|rect| rect.top());
+        d.observe(
+            "iter-25-R-FB1",
+            d.visible_text(&format!("{NEW_NAME} joined at\u{a0}14."))
+                && row_before.is_some()
+                && row_before == row_after,
+            format!("The result shows and the group rows stay: {row_before:?} then {row_after:?}"),
+        );
         d.state("own-group-added-in-combat", Sizes::Default);
         d.observe(
             "T13.5",
@@ -13263,51 +13276,80 @@ pub mod encounter_owned_groups {
             .painted_rect_in("Cannot join", egui::Rect::EVERYTHING)
             .expect("the panel names the groups that cannot join");
         d.scroll_until(panel.center(), "Edit group", 5);
-        // A repair link under its member fault starts its words at the warning text, and its
-        // icon hangs in the gutter. In a wide panel, it stays beside the fault on its line.
+        // iter-25-R FB5: a member fault's repair is a bordered secondary button. Below its
+        // fault, its border starts at the warning text; in a wide panel, it stays beside the
+        // fault on its line, after an `L` gap.
         for size in [SMALL, DEFAULT, LARGE] {
             let (placed, detail) = d.at_size(size, |d| {
                 let mut placed = true;
                 let mut detail = String::new();
-                for (fault, link) in [
+                for (fault, repair) in [
                     ("Member 1, Unknown creature", "Campaign → Packages"),
                     ("Member 2, Cinder Wolf: Maximum HP", "Edit group"),
                 ] {
                     let text = d.painted_rect_in(fault, egui::Rect::EVERYTHING);
-                    let near = |at: &Pos2| {
-                        text.is_some_and(|text| {
-                            at.y >= text.top() - 1.0 && at.y < text.bottom() + crate::design::XL
+                    let buttons: Vec<_> = d
+                        .nodes()
+                        .into_iter()
+                        .filter(|node| node.name == repair)
+                        .map(|node| node.rect)
+                        .filter(|rect| {
+                            text.is_some_and(|text| {
+                                rect.center().y >= text.top() - crate::design::XL
+                                    && rect.center().y < text.bottom() + crate::design::XL
+                            })
                         })
+                        .collect();
+                    let bordered = |rect: &egui::Rect| {
+                        d.control_frame_at(*rect)
+                            .is_some_and(|frame| frame.stroke.width > 0.0)
                     };
-                    let words: Vec<_> = painted_starts(d, link, 0)
-                        .into_iter()
-                        .filter(near)
-                        .collect();
-                    let icons: Vec<_> = painted_starts(d, link, 2)
-                        .into_iter()
-                        .filter(near)
-                        .collect();
-                    placed &= match (text, words.as_slice(), icons.as_slice()) {
-                        (Some(text), [words], [icon]) if size == LARGE => {
-                            words.y < text.bottom()
-                                && icon.x >= text.right() + crate::design::L - 0.5
+                    placed &= match (text, buttons.as_slice()) {
+                        (Some(text), [button]) if size == LARGE => {
+                            bordered(button)
+                                && button.center().y < text.bottom()
+                                && button.left() >= text.right() + crate::design::L - 0.5
                         }
-                        (Some(text), [words], [icon]) => {
-                            words.y >= text.bottom() - 0.5
-                                && (words.x - text.left()).abs() < 1.0
-                                && icon.x < text.left() - 1.0
+                        (Some(text), [button]) => {
+                            bordered(button)
+                                && button.top() >= text.bottom() - 0.5
+                                && (button.left() - text.left()).abs() < 1.0
                         }
                         _ => false,
                     };
-                    detail += &format!("{link}: text {text:?}, words {words:?}, icon {icons:?}. ");
+                    detail += &format!("{repair}: text {text:?}, buttons {buttons:?}. ");
                 }
                 (placed, detail)
             });
             d.observe(
-                "iter-15-B-FD4",
+                "iter-25-R-FB5",
                 placed,
-                format!("Arrivals repair links hang their icon at {size:?}: {detail}"),
+                format!("Arrivals repairs are bordered message actions at {size:?}: {detail}"),
             );
+        }
+        // iter-25-R FA4: a cut tie button keeps the arrival's copy number, the part that tells
+        // two arrivals apart.
+        if d.nodes()
+            .iter()
+            .any(|node| node.name.starts_with("Move Shrine Reserve"))
+        {
+            for size in [SMALL, DEFAULT, LARGE] {
+                let words = d.at_size(size, |d| {
+                    d.nodes()
+                        .into_iter()
+                        .find(|node| node.name.starts_with("Move Shrine Reserve"))
+                        .map(|node| d.painted_lines_in(node.rect).join(" "))
+                });
+                d.observe(
+                    "iter-25-R-FA4",
+                    words.as_deref().is_some_and(|words| {
+                        words.split_once(") before ").is_some_and(|(arrival, _)| {
+                            arrival.ends_with(|c: char| c.is_ascii_digit())
+                        })
+                    }),
+                    format!("At {size:?} the tie button keeps the copy number: {words:?}"),
+                );
+            }
         }
         d.state("own-group-dragged-in-combat", Sizes::All);
         close_run(d);
@@ -13625,6 +13667,21 @@ pub mod run_no_groups {
         resume_run(d, RUN);
         open_arrivals(d);
         d.expect("No groups yet. Make one on Encounters with");
+        // iter-25-R FJ7: the sentence's full stop follows the link's last word.
+        let link = d.place_of("New group");
+        let stop = link.and_then(|link| {
+            let area = egui::Rect::from_min_max(
+                egui::pos2(link.right() - 1.0, link.top()),
+                egui::pos2(link.right() + crate::design::L, link.bottom()),
+            );
+            d.painted_word_rect(".", area)
+        });
+        d.observe(
+            "iter-25-R-FJ7",
+            link.zip(stop)
+                .is_some_and(|(link, stop)| (stop.left() - link.right()).abs() <= 2.0),
+            format!("A full stop follows New group: link {link:?}, stop {stop:?}"),
+        );
         d.state("no-groups", Sizes::Default);
         d.goal("see that a campaign has no groups");
     }
@@ -13762,6 +13819,19 @@ pub mod run_add_creature {
         );
         d.type_into("New creature AC", "14");
         d.type_into("New creature initiative total", "9");
+        // iter-25-R SI2: one rule between Add and the groups below it.
+        let rules = d.place_of(ADD_GHOST).map(|add| {
+            d.horizontal_rules(
+                add.left() + crate::design::S,
+                add.bottom(),
+                add.bottom() + 60.0,
+            )
+        });
+        d.observe(
+            "iter-25-R-SI2",
+            rules.as_ref().is_some_and(|rules| rules.len() == 1),
+            format!("One rule below Add, not two: {rules:?}"),
+        );
         d.state("arrivals-made-up-ready", Sizes::Default);
         d.click(ADD_GHOST);
         d.expect(
@@ -15791,8 +15861,17 @@ pub mod session_plan {
         d.click("Long rest");
         d.click(&format!("Resume: {SECOND}"));
         d.expect("Party HP is full after the long rest.");
-        d.expect("Undo: full HP after long rest");
         d.expect("Use the saved HP");
+        // iter-25-R FM1: Splat made the fill, so it is no Undo step. `Use the saved HP` is the
+        // one control that gives the saved HP back.
+        d.observe(
+            "iter-25-R-FM1",
+            !d.has_containing("full HP after long rest") && d.has_containing("Nothing to undo"),
+            format!(
+                "The header offers no Undo of the fill: {}",
+                d.name_starting("Undo")
+            ),
+        );
         d.observe(
             "iter-7-S1",
             kestrel(d).contains("HP 41/41"),
@@ -15833,7 +15912,8 @@ pub mod session_plan {
         );
         d.observe(
             "iter-16-B-FT2-header",
-            d.has("Undo: use the saved HP") && !d.has_containing("Nothing to undo"),
+            // iter-25-R FH4: the header and the message's Undo name one step: use saved HP.
+            d.has("Undo: use saved HP") && !d.has_containing("Nothing to undo"),
             "The header names the new step, not an empty history",
         );
         // FJ4: the message's Undo names its step, as every other message Undo does.
@@ -15860,9 +15940,9 @@ pub mod session_plan {
         d.observe(
             "iter-16-B-FT2-notice-back",
             d.has("Use the saved HP")
-                && d.has("Undo: full HP after long rest")
+                && !d.has_containing("full HP after long rest")
                 && !d.visible_text(SAVED_HP_SET),
-            "After Undo the rest notice and its Undo step are back, and the result is gone",
+            "After Undo the rest notice is back, with no Undo step of the fill, and the result is gone",
         );
         d.click("Use the saved HP");
         d.expect(SAVED_HP_SET);

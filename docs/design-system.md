@@ -1312,8 +1312,9 @@ every unread value is, and its example line starts at the message words. `No mem
 list is a warning `message`, in the same form as the member faults above it.
 In the group editor, a missing member's `Campaign → Packages` is a notice action under its warning
 (`message_with_actions`): the link's words start at the warning text, and its icon hangs in the gutter before them.
-Arrivals and the Encounters list draw a member fault's repair (`Campaign → Packages` or `Edit group`) the same way
-when it goes below the fault; when there is room, it sits beside the fault after an `L` gap.
+Arrivals and the Encounters list draw a member fault's repair (`Campaign → Packages` or `Edit group`) as a message
+action, from one function (`group_fault`): a bordered secondary button beside the fault after an `L` gap when there is
+room, else below it with its border at the message words.
 
 Join status parts on one line with dot separators beside the group name when they fit, else before the first member. Use a separate line only when neither has room. `Changed` keeps its muted pencil. Member names stay intact. A line never ends with a separator: the `·` moves to the next line with the part after it. Keep `at`
 with its total in arrival messages. Live group notices name only the group and its initiative totals. Member names and roll details stay in Log. Arrival faults use the shared message form (icon and bar in the fault's tone, text-colour words) and the tone recorded for that fault. The same fault keeps its tone in the editor, the Encounters list, Arrivals and the session plan: an invalid value, such as `Maximum HP would become −28. It must be 1 or more.`, is an error; a member that is missing, unread or has no maximum HP is a warning. Every view draws each member fault in its own tone first, then the group's own reason (`No members can join.`) as a warning message, also when no member can join. Live initiative notices name who joins and the total. Before the current turn,
@@ -1364,7 +1365,8 @@ warning. App close says Keep running, Keep recording or Keep processing for each
 titles name the unfinished session. Sync conflicts name the character and offer Review conflict. The run's
 conflict dialog offers to `close and choose next time` only when Close now works. While a sync change is not
 confirmed, it says `Choose which HP to keep before you close.`, and the cause shows once in muted `Small` text
-above the actions, which all wait for it.
+above the actions, which all wait for it, in the ended view's exact form: `Settle 1 conflict first.` A close keeps the
+run's Undo steps, so no close words say that Undo ends.
 The app-close and run-close dialogs draw their recovery actions through one shared function: quiet, on one line,
 Connect to sync before Review conflict, and the first one starts at the dialog text. Stop and
 close is secondary when saved work remains.
@@ -1479,8 +1481,10 @@ plan row, the Timeline row and the detail alike. Keep one Undo ruling until the 
 ruling now in force: `Everyone starts the next fight at full.` or `The next fight starts from the HP the party
 has now.`
 Resuming a saved Setup after a restoring rest starts party HP full, says `Party HP is full after the long
-rest.` and offers Use the saved HP. Use the saved HP is its own named step, not an Undo: the header then says
-`Undo: use the saved HP`, and the same place says `Party HP set to the saved values.` with `Undo use saved HP`, which
+rest.` and offers Use the saved HP. Splat made that fill, so it is no Undo step: the header keeps the step before it,
+or `Nothing to undo`, and Use the saved HP is the one way back. Every kept Undo state gets the same full HP, so Undo of
+an older step never takes the rest away. Use the saved HP is its own named step: the header then says
+`Undo: use saved HP`, and the same place says `Party HP set to the saved values.` with `Undo use saved HP`, which
 gives back the full HP. A message's Undo names its step, as every other message Undo does. Combat retains saved HP; the rest message names those fights. A run started after a
 restoring rest with no fight since logs `Party HP is full after the long rest.`, and its saved row says `Last:
 full HP after long rest`; `carried over` is only for HP from a fight. Every `Last:` value that Splat writes

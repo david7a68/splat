@@ -728,12 +728,23 @@ impl Run {
         }
     }
 
+    /// The words beside an empty Undo, before any fitting. While the unread-steps warning
+    /// shows, it says the cause, so the header says only `Nothing to undo` (AI3).
+    pub(super) fn empty_undo_words(&self) -> &str {
+        if self.undo_unread {
+            "Nothing to undo"
+        } else {
+            self.empty_undo_reason()
+        }
+    }
+
     fn empty_undo(&self, ui: &mut egui::Ui) -> bool {
         let full = self.empty_undo_reason();
+        let words = self.empty_undo_words();
         let action = self.undo_action("Undo");
         let room = ui.available_width() - action.natural_width(ui) - design::S;
-        let shown = if design::number_width(ui, full, &Type::Small.font(ui)) <= room {
-            full
+        let shown = if design::number_width(ui, words, &Type::Small.font(ui)) <= room {
+            words
         } else {
             "Nothing to undo"
         };
@@ -2690,10 +2701,7 @@ impl Run {
                 return;
             }
             if self.closing {
-                let note = close_saved_words(
-                    !self.history.is_empty(),
-                    self.syncs.values().any(|sync| sync.enabled),
-                );
+                let note = close_saved_words(self.syncs.values().any(|sync| sync.enabled));
                 closed = self.close_confirmation(ui, &note);
                 return;
             }
@@ -2873,6 +2881,33 @@ impl Run {
 
     /// The second step of closing. Returns true when the run has closed. The words follow
     /// the save state: a run that cannot save must not say that it stays saved.
+    /// Why a close waits, as one exact sentence: `Settle 2 conflicts and 1 pending change
+    /// first.` The ended view and the close dialog both say it, so one block has one form.
+    fn close_reason(&self) -> Option<String> {
+        self.close_block().map(|general| {
+            let conflicts = self.conflict_count();
+            let pending = self
+                .syncs
+                .values()
+                .filter(|sync| {
+                    sync.unconfirmed() && sync.state() != SyncState::Conflict && !sync.stranded()
+                })
+                .count();
+            let mut parts = Vec::new();
+            if conflicts > 0 {
+                parts.push(design::count(conflicts, "conflict", "conflicts"));
+            }
+            if pending > 0 {
+                parts.push(design::count(pending, "pending change", "pending changes"));
+            }
+            if parts.is_empty() {
+                general.to_owned()
+            } else {
+                format!("Settle {} first.", parts.join(" and "))
+            }
+        })
+    }
+
     fn close_confirmation(&mut self, ui: &mut egui::Ui, note: &str) -> bool {
         self.close_dialog(ui, note)
     }
@@ -2882,7 +2917,7 @@ impl Run {
         let cannot_save = self.strip().not_saved;
         let stranded = self.stranded_names();
         let lost = self.unsent_only_here_names();
-        let block = self.close_block();
+        let block = self.close_reason();
         let mut keep = ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape));
         let mut close = false;
         let mut save_new = false;
@@ -2933,7 +2968,7 @@ impl Run {
             } else if stranded.is_empty() {
                 ui.add(egui::Label::new(note).wrap());
             } else {
-                ui.add(egui::Label::new(format!("Changes for {} were not sent to D&D Beyond. The saved run keeps HP, death saves and conditions for the next sync. Closing ends Undo for this run.", stranded.join(", "))).wrap());
+                ui.add(egui::Label::new(format!("Changes for {} were not sent to D&D Beyond. The saved run keeps HP, death saves and conditions for the next sync.", stranded.join(", "))).wrap());
             }
             if !lost.is_empty() {
                 ui.add(
@@ -2958,26 +2993,26 @@ impl Run {
             // Every close action here waits for the same cause, so it shows once, above them.
             if block.is_some() {
                 ui.add_space(design::S);
-                design::blocked_reason(ui, block);
+                design::blocked_reason(ui, block.as_deref());
             }
             let (lose, ()) = design::dialog_actions(
                 ui,
                 |ui| {
                     (cannot_save || !lost.is_empty())
                         && Action::destructive("Close and lose changes")
-                            .blocked(block)
+                            .blocked(block.as_deref())
                             .show(ui)
                             .clicked()
                 },
                 |ui| {
                     if cannot_save {
                         save_new = Action::primary("Save as a new run and close")
-                            .blocked(block)
+                            .blocked(block.as_deref())
                             .show(ui)
                             .clicked();
                     } else if lost.is_empty() {
                         close |= Action::secondary("Close now")
-                            .blocked(block)
+                            .blocked(block.as_deref())
                             .show(ui)
                             .clicked();
                     }
@@ -3396,103 +3431,109 @@ impl Run {
                 // Measured once: the search field and the group list share the block.
                 let arrival = self.arrival_block(ui);
                 self.add_creature_form(ui, arrival.map(|(_, block)| block));
-                if let Some(previous) = self.history.last().filter(|_| {
-                    self.ad_hoc.query.trim().is_empty()
-                        && self.state.log.last().is_some_and(|line| {
-                            line.starts_with(super::GROUP_ADDED)
-                                || line.starts_with(super::ONE_ADDED)
-                        })
-                }) {
-                    let start = previous.participants.len();
-                    let tied = self
-                        .state
-                        .participants
-                        .iter()
-                        .enumerate()
-                        .skip(start)
-                        .find_map(|(first, arrival)| {
-                            let total = arrival.initiative?;
-                            self.state
-                                .order
-                                .iter()
-                                .copied()
-                                .rev()
-                                .find(|i| {
-                                    *i < start
-                                        && self.state.participants[*i].present
-                                        && self.state.participants[*i].initiative == Some(total)
-                                })
-                                .map(|before| (first, Self::roll_block_first(&self.state, before)))
-                        });
-                    let group_line = self.group_arrival_notice(start);
-                    let line = group_line
-                        .as_deref()
-                        .unwrap_or_else(|| self.state.log.last().map_or("", String::as_str));
-                    if let Some((first, before)) = tied {
-                        let name =
-                            Self::roll_block_name(&self.state, &self.state.participants[before]);
-                        let waits = self.state.phase == Phase::Running
-                            && self
-                                .state
-                                .order
-                                .iter()
-                                .position(|i| *i == before)
-                                .is_some_and(|at| at <= self.state.cursor);
-                        let total = self.state.participants[first].initiative.unwrap();
-                        let tie = if group_line.is_some() {
-                            format!(" Tied with {name} at\u{a0}{total}, placed after.")
-                        } else {
-                            String::new()
-                        };
-                        let line = format!(
-                            "{line}{tie}{}",
-                            if waits {
-                                " ·\u{a0}acts next round if moved before"
-                            } else {
-                                ""
-                            }
-                        );
-                        // The name the `joined at` message uses, so one arrival has one name.
-                        let arrival = Self::arrival_name(&self.state, first, &name);
-                        let full = format!("Move {arrival} before {name}");
-                        let font = Type::Strong.font(ui);
-                        // A finished change, tie or not: the Move button shows the open choice.
-                        design::message(ui, Tone::Success, &line);
-                        design::message_choice_row(ui, Tone::Success, |ui| {
-                            let shown = undo_words(
-                                ui,
-                                &full,
-                                false,
-                                &self.state.participants,
-                                &font,
-                                ui.available_width() - design::M * 2.0,
-                            );
-                            if Action::secondary(&shown)
-                                .name(&full)
-                                .hint(&full)
-                                .density(Density::Read)
-                                .show(ui)
-                                .clicked()
-                            {
-                                self.run_command(Command::MoveArrivalBefore(first, before));
-                            }
-                        });
-                    } else {
-                        design::message(ui, Tone::Success, line);
-                    }
-                } else if let Some(line) = self
-                    .state
-                    .log
-                    .last()
-                    .filter(|line| line.contains(" moved before "))
-                {
-                    design::message(ui, Tone::Success, line);
-                }
+                // FB1: the result has a line of its own, kept while it is empty, so a group
+                // that joins moves no row below it and a second Add lands where the first did.
+                // The result is the newest step's, so the next step ends it.
+                ui.vertical(|ui| {
+                    ui.set_min_height(Type::Body.line());
+                    self.arrival_result(ui);
+                });
                 design::rule(ui);
                 add = self.group_list(ui, arrival);
             });
         if let Some(id) = add {
             self.add_group_from_panel(id);
+        }
+    }
+
+    /// The newest arrival's result: who joined and at what total, with `Move … before …` when
+    /// it tied, or the move that settled a tie.
+    fn arrival_result(&mut self, ui: &mut egui::Ui) {
+        if let Some(previous) = self.history.last().filter(|_| {
+            self.ad_hoc.query.trim().is_empty()
+                && self.state.log.last().is_some_and(|line| {
+                    line.starts_with(super::GROUP_ADDED) || line.starts_with(super::ONE_ADDED)
+                })
+        }) {
+            let start = previous.participants.len();
+            let tied = self
+                .state
+                .participants
+                .iter()
+                .enumerate()
+                .skip(start)
+                .find_map(|(first, arrival)| {
+                    let total = arrival.initiative?;
+                    self.state
+                        .order
+                        .iter()
+                        .copied()
+                        .rev()
+                        .find(|i| {
+                            *i < start
+                                && self.state.participants[*i].present
+                                && self.state.participants[*i].initiative == Some(total)
+                        })
+                        .map(|before| (first, Self::roll_block_first(&self.state, before)))
+                });
+            let group_line = self.group_arrival_notice(start);
+            let line = group_line
+                .as_deref()
+                .unwrap_or_else(|| self.state.log.last().map_or("", String::as_str));
+            if let Some((first, before)) = tied {
+                let name = Self::roll_block_name(&self.state, &self.state.participants[before]);
+                let waits = self.state.phase == Phase::Running
+                    && self
+                        .state
+                        .order
+                        .iter()
+                        .position(|i| *i == before)
+                        .is_some_and(|at| at <= self.state.cursor);
+                let total = self.state.participants[first].initiative.unwrap();
+                let tie = if group_line.is_some() {
+                    format!(" Tied with {name} at\u{a0}{total}, placed after.")
+                } else {
+                    String::new()
+                };
+                let line = format!(
+                    "{line}{tie}{}",
+                    if waits {
+                        " ·\u{a0}acts next round if moved before"
+                    } else {
+                        ""
+                    }
+                );
+                // The name the `joined at` message uses, so one arrival has one name.
+                let arrival = Self::arrival_name(&self.state, first, &name);
+                let full = format!("Move {arrival} before {name}");
+                let font = Type::Strong.font(ui);
+                // A finished change, tie or not: the Move button shows the open choice.
+                design::message(ui, Tone::Success, &line);
+                design::message_choice_row(ui, Tone::Success, |ui| {
+                    let room = ui.available_width() - design::M * 2.0;
+                    let shown = move_words(ui, &arrival, &name, &font, room).unwrap_or_else(|| {
+                        undo_words(ui, &full, false, &self.state.participants, &font, room)
+                    });
+                    if Action::secondary(&shown)
+                        .name(&full)
+                        .hint(&full)
+                        .density(Density::Read)
+                        .show(ui)
+                        .clicked()
+                    {
+                        self.run_command(Command::MoveArrivalBefore(first, before));
+                    }
+                });
+            } else {
+                design::message(ui, Tone::Success, line);
+            }
+        } else if let Some(line) = self
+            .state
+            .log
+            .last()
+            .filter(|line| line.contains(" moved before "))
+        {
+            design::message(ui, Tone::Success, line);
         }
     }
 
@@ -3624,13 +3665,19 @@ impl Run {
                         .rich(ui, "No groups yet. Make one on Encounters with")
                         .color(c.muted),
                 );
-                if design::link(ui, "New group").clicked() {
-                    self.wants_new_group = true;
-                }
+                // FJ7: one sentence in one size, and its full stop follows the link's last
+                // word. The link and its full stop wrap together.
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 0.0;
+                    if design::small_link(ui, "New group").clicked() {
+                        self.wants_new_group = true;
+                    }
+                    ui.label(Type::Small.rich(ui, ".").color(c.muted));
+                });
             });
             return None;
         }
-        design::rule(ui);
+        // SI2: `groups_tab` draws the one rule above the groups.
         let offered = super::OfferedGroups::of(&groups, self.source);
         let in_plan = |group: &Arc<super::RunGroup>| {
             self.planned
@@ -3998,15 +4045,13 @@ impl Run {
                 .iter()
                 .chain(&own)
                 .all(|fault| fault.kind == super::FaultKind::NotInPackages)
-                && design::status_link(
-                    ui,
-                    Status {
-                        icon: icons::EDIT,
-                        word: "Edit group",
-                        color: colors().accent,
-                    },
-                )
-                .clicked()
+                // The faults' actions start at the message words; this one does too.
+                && design::message_choice_row(ui, Tone::Warning, |ui| {
+                    Action::secondary("Edit group")
+                        .density(Density::Read)
+                        .show(ui)
+                        .clicked()
+                })
             {
                 self.wants_group_editor = Some(group.path.clone());
             }
@@ -5561,7 +5606,7 @@ impl Run {
             "Close run"
         }));
         if !self.undo_continues() || self.undo_blocked().is_some() {
-            actions += match self.continue_blocked {
+            actions += match self.continue_words() {
                 Some(reason) => continue_reason_width(ui, reason) + gap,
                 None => glance(continue_action()),
             };
@@ -5713,26 +5758,7 @@ impl Run {
         );
         header_ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             ui.set_min_height(60.0);
-            let close_reason = self.close_block().map(|_| {
-                let conflicts = self.conflict_count();
-                let pending = self
-                    .syncs
-                    .values()
-                    .filter(|sync| {
-                        sync.unconfirmed()
-                            && sync.state() != SyncState::Conflict
-                            && !sync.stranded()
-                    })
-                    .count();
-                let mut parts = Vec::new();
-                if conflicts > 0 {
-                    parts.push(design::count(conflicts, "conflict", "conflicts"));
-                }
-                if pending > 0 {
-                    parts.push(design::count(pending, "pending change", "pending changes"));
-                }
-                format!("Settle {} first.", parts.join(" and "))
-            });
+            let close_reason = self.close_reason();
             let close_width = close_reason.as_ref().map_or_else(
                 || {
                     Action::primary("Close run")
@@ -5830,7 +5856,7 @@ impl Run {
         }
         // Continue fight, and Undo of an ending from the run file, are for the fight that was
         // played last. For another fight, the reason stands where the control would be.
-        if let Some(reason) = self.continue_blocked {
+        if let Some(reason) = self.continue_words() {
             let width = continue_reason_width(ui, reason);
             ui.allocate_ui_with_layout(
                 vec2(width, Type::Small.line()),
@@ -6175,52 +6201,17 @@ pub(crate) fn change_preview(row: &Row) -> String {
 }
 
 /// Keep a member's repair at the end of that member's fault, with no overlapping targets.
-/// The fault's tone and link come from its kind, so it looks the same on every screen.
+/// The fault's tone and repair come from its kind, so it looks the same on every screen: the
+/// Encounters list and Arrivals. FB5: the repair is a message action, a bordered secondary
+/// button after an `L` gap, or below with its border at the message words, as every message
+/// action without an icon is.
 pub(crate) fn group_fault(ui: &mut egui::Ui, fault: &super::MemberFault) -> bool {
-    let packages = fault.kind == super::FaultKind::NotInPackages;
-    let tone = fault.tone();
-    let status = Status {
-        icon: if packages {
-            icons::CAMPAIGN
-        } else {
-            icons::EDIT
-        },
-        word: if packages {
-            "Campaign → Packages"
-        } else {
-            "Edit group"
-        },
-        color: colors().accent,
-    };
-    let gap = ui.spacing().item_spacing.x;
-    let inset = design::S
-        + design::HAIRLINE_WIDTH
-        + design::number_width(ui, icons::WARN, &Type::Body.font(ui))
-        + gap * 2.0
-        - design::XS;
-    let text_width = design::number_width(ui, fault, &Type::Body.font(ui)) + inset;
-    let link_width = design::number_width(
-        ui,
-        &format!("{} {}", status.icon, status.word),
-        &Type::Small.font(ui),
-    );
-    if text_width + design::L + link_width <= ui.available_width() {
-        ui.horizontal_top(|ui| {
-            ui.allocate_ui_with_layout(vec2(text_width, 0.0), Layout::top_down(Align::Min), |ui| {
-                design::message(ui, tone, fault);
-            });
-            ui.add_space(design::L - gap);
-            design::status_link(ui, status).clicked()
-        })
-        .inner
+    let repair = if fault.kind == super::FaultKind::NotInPackages {
+        "Campaign → Packages"
     } else {
-        // A notice action: the link's words start at the warning text.
-        design::message_with_actions(ui, tone, fault, |ui| {
-            hanging_link(ui, status.icon, |ui| {
-                design::status_link(ui, status).clicked()
-            })
-        })
-    }
+        "Edit group"
+    };
+    design::message_with_action(ui, fault.tone(), fault, repair)
 }
 
 /// A repair link under a message. Its words start at the message text, and its icon hangs in
@@ -6326,16 +6317,39 @@ fn conflict_close_words(blocked: bool) -> &'static str {
     }
 }
 
-fn close_saved_words(undo: bool, sync: bool) -> String {
-    match (undo, sync) {
-        (false, false) => {
-            "The run stays saved. Resume it from Paused run on the left, or from Encounters."
-        }
-        (true, false) => "The run stays saved. Closing ends Undo for this run.",
-        (false, true) => "The run stays saved. Sync stops.",
-        (true, true) => "The run stays saved. Closing ends Undo for this run. Sync stops.",
+/// What a close keeps. A close keeps the run's Undo steps too (they are saved with the run), so
+/// nothing here may say that closing ends Undo.
+fn close_saved_words(sync: bool) -> String {
+    if sync {
+        "The run stays saved. Sync stops."
+    } else {
+        "The run stays saved. Resume it from Paused run on the left, or from Encounters."
     }
     .to_owned()
+}
+
+/// The tie button's words, `Move <arrival> before <name>`, when they fit `width`. FA4: an arrival
+/// named by its first member, `Shrine Reserve (Goblin Warrior 3)`, gives up the member's name
+/// before its copy number, which tells two arrivals apart: `Move Shrine Reserve (… 3) before
+/// Brannoch Vale`. None when neither form fits.
+fn move_words(
+    ui: &egui::Ui,
+    arrival: &str,
+    before: &str,
+    font: &egui::FontId,
+    width: f32,
+) -> Option<String> {
+    let full = format!("Move {arrival} before {before}");
+    if design::number_width(ui, &full, font) <= width {
+        return Some(full);
+    }
+    let (group, member) = arrival.strip_suffix(')')?.rsplit_once(" (")?;
+    let copy = member
+        .rsplit_once(' ')
+        .map(|(_, last)| last)
+        .filter(|last| !last.is_empty() && last.chars().all(|c| c.is_ascii_digit()))?;
+    let short = format!("Move {group} (…\u{a0}{copy}) before {before}");
+    (design::number_width(ui, &short, font) <= width).then_some(short)
 }
 
 /// Cut only the target, keeping action words, amounts and copy numbers.
@@ -9144,6 +9158,29 @@ mod tests {
                 // Room for all of it: nothing changes.
                 let wide = design::number_width(ui, &full, &font);
                 assert_eq!(words(&full, wide), full);
+                // iter-25-R FA4: the tie button gives up a member's name before its copy
+                // number, which tells two arrivals apart. One pixel short of each form's width
+                // gives the next form.
+                let arrival = "Shrine Reserve (Goblin Warrior 3)";
+                let whole = "Move Shrine Reserve (Goblin Warrior 3) before Brannoch Vale";
+                let short = "Move Shrine Reserve (…\u{a0}3) before Brannoch Vale";
+                let at = |width: f32| move_words(ui, arrival, "Brannoch Vale", &font, width);
+                let whole_width = design::number_width(ui, whole, &font);
+                let short_width = design::number_width(ui, short, &font);
+                assert_eq!(at(whole_width).as_deref(), Some(whole));
+                assert_eq!(at(whole_width - 1.0).as_deref(), Some(short));
+                assert_eq!(
+                    at(short_width - 1.0),
+                    None,
+                    "then the caller cuts the target"
+                );
+                // An arrival named by its group alone has no member to give up.
+                let plain = "Move Shrine Reserve before Brannoch Vale";
+                let plain_width = design::number_width(ui, plain, &font);
+                let alone =
+                    |width: f32| move_words(ui, "Shrine Reserve", "Brannoch Vale", &font, width);
+                assert_eq!(alone(plain_width).as_deref(), Some(plain));
+                assert_eq!(alone(plain_width - 1.0), None);
                 // The name shortens first, while the source fits.
                 let named = format!("Undo: {SHEET_SOURCE}HP for Brannoch…");
                 assert_eq!(words(&full, design::number_width(ui, &named, &font)), named);
@@ -9556,6 +9593,15 @@ mod tests {
                 })
                 .collect();
             assert!(fills.contains(&tone), "{fault:?}: {fills:?}");
+            // iter-25-R FB5: the repair is a bordered secondary button, not an underlined
+            // link, on the Encounters list and in Arrivals alike.
+            use egui_kittest::kittest::Queryable;
+            let repair = harness.get_by_label("Edit group").rect();
+            let bordered = harness.output().shapes.iter().any(|shape| {
+                matches!(&shape.shape, egui::Shape::Rect(rect)
+                    if rect.stroke.width > 0.0 && rect.rect.expand(1.0).contains_rect(repair))
+            });
+            assert!(bordered, "{fault:?}: the repair {repair:?} has a border");
             assert!(!fills.contains(&other), "{fault:?}: {fills:?}");
         }
     }
@@ -10430,12 +10476,14 @@ mod tests {
     #[test]
     fn close_names_only_the_live_losses() {
         assert_eq!(
-            close_saved_words(false, false),
+            close_saved_words(false),
             "The run stays saved. Resume it from Paused run on the left, or from Encounters."
         );
-        assert!(!close_saved_words(false, true).contains("Undo"));
-        assert!(!close_saved_words(true, false).contains("Sync stops"));
-        assert!(close_saved_words(true, true).contains("Undo for this run. Sync stops."));
+        assert_eq!(close_saved_words(true), "The run stays saved. Sync stops.");
+        // AL1: a close keeps Undo, so no close words say that it ends.
+        for sync in [false, true] {
+            assert!(!close_saved_words(sync).contains("Undo"));
+        }
     }
 
     #[test]

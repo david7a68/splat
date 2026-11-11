@@ -843,21 +843,33 @@ const SHEET_SOURCE: &str = "D&D Beyond ";
 const MAX_PARTICIPANTS: usize = 2000;
 /// Where a run's own text ends. Saved runs hold both parts in one string.
 pub(crate) const SETUP_HEADING: &str = "## Setup (DM reference)";
-const DISK_CONFLICT: &str = "This run changed on disk, perhaps from another copy of Splat or a sync tool. Your run is safe in memory, and saving has stopped until you choose.";
+const DISK_CONFLICT: &str = "This run changed on disk, perhaps from another copy of Splat or a sync tool. Your run is safe until you choose. Saving has stopped.";
 const MAX_FROM_SHEET: &str =
     "Maximum HP comes from the D&D Beyond sheet while sync is on. Stop sync to change it here.";
-/// The Undo step a long rest makes when it fills a saved Setup's HP.
+/// What `Last:` says after a long rest fills a saved Setup's HP. It is no Undo step.
 const REST_STEP: &str = "full HP after long rest";
 /// The log's words for full HP after a restoring rest, wherever the run learns of it.
 const REST_LOG: &str = "Party HP is full after the long rest.";
 /// The Undo step that puts back the HP a Setup had before the rest.
-const SAVED_HP_STEP: &str = "use the saved HP";
+const SAVED_HP_STEP: &str = "use saved HP";
 /// Why Continue fight is not offered: a fight or a rest has a later place in the order of play.
 pub(crate) const CONTINUE_LATER: &str =
     "A later fight or rest was played. Start a new run to play this one again.";
 /// Why Continue fight is not offered: the Timeline has no event for this fight.
 const CONTINUE_NO_EVENT: &str =
     "This fight is not on the Timeline. Start a new run to play it again.";
+/// The cause alone, for a fight whose encounter is deleted: no new run can start from it.
+const CONTINUE_LATER_GONE: &str = "A later fight or rest was played.";
+const CONTINUE_NO_EVENT_GONE: &str = "This fight is not on the Timeline.";
+/// The words for a `continue_blocked` reason. A reason's next step, `Start a new run …`, is
+/// true only while the fight's encounter exists; for a deleted encounter only the cause stays.
+pub(crate) fn continue_reason(reason: &'static str, encounter_exists: bool) -> &'static str {
+    match reason {
+        CONTINUE_LATER if !encounter_exists => CONTINUE_LATER_GONE,
+        CONTINUE_NO_EVENT if !encounter_exists => CONTINUE_NO_EVENT_GONE,
+        _ => reason,
+    }
+}
 /// Why Continue fight is not offered: the Timeline cannot say which fight was played last.
 const CONTINUE_NEEDS_TIMELINE: &str =
     "Splat cannot read Timeline.md. Fix that on the Timeline page first.";
@@ -912,9 +924,9 @@ const CONTINUE_STEP: &str = "continue fight";
 /// The reason for an empty Undo in a run whose file is from before Splat kept Undo steps.
 const UNDO_NOT_KEPT: &str = "Nothing to undo since reopening";
 /// The reason for an empty Undo after the file's steps could not be read.
-const UNDO_UNREAD_REASON: &str = "Nothing to undo. Splat could not read the saved Undo steps";
+const UNDO_UNREAD_REASON: &str = "Nothing to undo. Splat could not read the saved Undo steps.";
 /// What the run and its log say, once, when the file's Undo steps could not be read.
-pub(crate) const UNDO_UNREAD: &str = "Splat could not read this run’s saved Undo steps, so Undo starts again from here. The run itself is complete.";
+pub(crate) const UNDO_UNREAD: &str = "Splat could not read this run’s saved Undo steps, so Undo starts again from here. No turn, HP or condition was lost.";
 /// The result of `Use the saved HP`, until the next step.
 pub(crate) const SAVED_HP_USED: &str = "Party HP set to the saved values.";
 pub(crate) const NOBODY_PRESENT: &str =
@@ -1238,7 +1250,6 @@ impl Run {
         if self.state.phase != Phase::Setup || order <= self.rest_order {
             return;
         }
-        let before = self.state.clone();
         let mut saved = Vec::new();
         for (index, participant) in self.state.participants.iter_mut().enumerate() {
             if participant.definition.fields.contains_key("splat_external")
@@ -1249,7 +1260,22 @@ impl Run {
                 participant.temporary_hp = 0;
             }
         }
-        self.keep_step(before, REST_STEP.into(), false);
+        // FM1: Splat made this fill, not the DM, so it is no Undo step: `Use the saved HP` is
+        // the one way back. The rest came after every kept step, so each kept state gets the
+        // same full HP, and Undo of an older step never takes the rest away with it.
+        for state in &mut self.history {
+            for (index, _, _) in &saved {
+                if let (Some(old), Some(now)) = (
+                    state.participants.get_mut(*index),
+                    self.state.participants.get(*index),
+                ) && old.name == now.name
+                    && old.max_hp.is_some()
+                {
+                    old.hp = old.max_hp;
+                    old.temporary_hp = 0;
+                }
+            }
+        }
         self.state.last_change = Some(REST_STEP.into());
         self.state.log.push(REST_LOG.into());
         self.carried = Some(CarriedHp {
@@ -1282,12 +1308,21 @@ impl Run {
     fn last_step(&self) -> Option<&str> {
         self.history_labels.last().map(String::as_str)
     }
-    /// True while the long rest's full HP is the newest step on a saved Setup.
+    /// True while the long rest's full HP still stands on a saved Setup: every hero it filled
+    /// is at full HP with no temporary HP, and `Use the saved HP` is not the newest step. The
+    /// fill is no Undo step, so this reads the state itself. Its owner is `carried`, which a
+    /// close ends; any change to those heroes' HP ends the offer, and Undo of it brings it back.
     fn rest_filled_saved_hp(&self) -> bool {
-        self.carried
-            .as_ref()
-            .is_some_and(|carried| carried.saved && !carried.sheets.is_empty())
-            && self.last_step() == Some(REST_STEP)
+        self.carried.as_ref().is_some_and(|carried| {
+            carried.saved
+                && !carried.sheets.is_empty()
+                && carried.sheets.iter().all(|(index, _, _)| {
+                    self.state
+                        .participants
+                        .get(*index)
+                        .is_some_and(|p| p.hp == p.max_hp && p.temporary_hp == 0)
+                })
+        }) && self.last_step() != Some(SAVED_HP_STEP)
     }
     /// True while `Use the saved HP` is the newest step, so its result and Undo still apply.
     fn saved_hp_used(&self) -> bool {
@@ -1298,7 +1333,7 @@ impl Run {
     /// The full HP stays in history, so the DM can return to it.
     fn use_saved_hp(&mut self) -> Result<(), String> {
         if !self.rest_filled_saved_hp() {
-            return Err("The long rest’s HP is no longer the newest change.".into());
+            return Err("The party’s HP changed after the long rest.".into());
         }
         let mut commands = Vec::new();
         for (index, hp, temp) in self.carried.iter().flat_map(|carried| &carried.sheets) {
@@ -1324,7 +1359,7 @@ impl Run {
     /// The carried values that still differ from the sheets, as one step back to the sheets.
     fn back_to_sheets(&self) -> Option<(String, Command)> {
         let carried = self.carried.as_ref()?;
-        if carried.saved && self.last_step() != Some(REST_STEP) {
+        if carried.saved && !self.rest_filled_saved_hp() {
             return None;
         }
         let mut commands = Vec::new();
@@ -1797,6 +1832,22 @@ impl Run {
     fn undo_unends_saved(&self) -> bool {
         self.undo_continues() && self.history.len() <= self.saved_steps
     }
+    /// Whether this run's encounter is still in the campaign. A run with no encounter, or with
+    /// no index read yet, counts as present: only a known deletion changes words.
+    fn encounter_exists(&self) -> bool {
+        match (&self.content, self.source) {
+            // A map lookup, so the ended view may ask every frame.
+            (Some(index), Some(source)) => index
+                .position(source)
+                .is_some_and(|at| index.items[at].entry.kind == "encounter"),
+            _ => true,
+        }
+    }
+    /// The words that stand where Continue fight would be (`continue_reason`).
+    pub(super) fn continue_words(&self) -> Option<&'static str> {
+        self.continue_blocked
+            .map(|reason| continue_reason(reason, self.encounter_exists()))
+    }
     /// Why Undo cannot take the ending away, as far as the app last worked it out.
     pub(super) fn undo_blocked(&self) -> Option<&'static str> {
         self.continue_blocked.filter(|_| self.undo_unends_saved())
@@ -1821,7 +1872,7 @@ impl Run {
             // A file that changed under an edit is only the rule's answer, in the control's
             // place: the Timeline's next change, the save that settles it, works it out again.
             if current {
-                self.error = Some(reason.into());
+                self.error = Some(continue_reason(reason, self.encounter_exists()).into());
             }
             return;
         }
@@ -3342,7 +3393,7 @@ impl Run {
         self.history_from_sheet = from_sheet;
         self.saved_steps = saved;
         if !dropped.is_empty() {
-            let line = format!("Sheet update removed undo steps: {}.", dropped.join("; "));
+            let line = format!("Sheet update removed Undo steps: {}.", dropped.join("; "));
             self.state.log.push(line.clone());
             for previous in &mut self.history {
                 previous.log.push(line.clone());
@@ -5432,9 +5483,14 @@ mod tests {
                 .unwrap();
         }
         assert_eq!(setup.history.len(), undo::LIMIT);
+        let newest = setup.undo_label();
         setup.rest_saved_setup(1);
         assert_eq!(setup.history.len(), undo::LIMIT);
-        assert_eq!(setup.undo_label(), "Undo: full HP after long rest");
+        assert_eq!(
+            setup.undo_label(),
+            newest,
+            "the rest's fill is no Undo step"
+        );
         let other = stored(&mut setup, dir.path());
         let reopened = close_and_reopen(&mut setup, other);
         assert_same_undo(&setup, &reopened);
@@ -5722,6 +5778,11 @@ mod tests {
             assert!(opened.history.is_empty(), "{what}");
             assert!(opened.undo_unread, "{what}");
             assert_eq!(opened.empty_undo_reason(), UNDO_UNREAD_REASON, "{what}");
+            // AI3, FI2: the warning says the cause, so the header beside Undo does not repeat
+            // it while the warning shows. Hover and the accessible name keep the full reason.
+            assert_eq!(opened.empty_undo_words(), "Nothing to undo", "{what}");
+            opened.undo_unread = false;
+            assert_eq!(opened.empty_undo_words(), UNDO_UNREAD_REASON, "{what}");
             let said = |run: &Run| run.state.log.iter().filter(|l| *l == UNDO_UNREAD).count();
             assert_eq!(said(&opened), 1, "{what}");
             // The next save leaves the unread steps out, so it is said once.
@@ -6539,7 +6600,7 @@ mod tests {
                 .state
                 .log
                 .iter()
-                .any(|line| line.contains("removed undo steps") && line.contains(&own))
+                .any(|line| line.contains("removed Undo steps") && line.contains(&own))
         );
         // The other guard's step stays, and Undo of it leaves the sheet's value alone.
         assert_eq!(reopened.undo_label(), format!("Undo: 2 damage to {other}"));
@@ -7703,13 +7764,15 @@ mod tests {
             resumed.state.participants[0].max_hp
         );
         assert_eq!(resumed.state.participants[0].temporary_hp, 0);
-        assert_eq!(resumed.history.len(), 1);
-        assert_eq!(resumed.undo_label(), "Undo: full HP after long rest");
+        // FM1: Splat made the fill, so it is no Undo step. `Use the saved HP` is the way back.
+        assert_eq!(resumed.history.len(), 0);
+        assert_eq!(resumed.undo_label(), "Undo");
+        assert!(resumed.rest_filled_saved_hp());
         assert_eq!(
             resumed.state.log.last().unwrap(),
             "Party HP is full after the long rest."
         );
-        resumed.undo();
+        resumed.use_saved_hp().unwrap();
         assert_eq!(
             (
                 resumed.state.participants[0].hp,
@@ -7721,14 +7784,20 @@ mod tests {
         reopened.rest_saved_setup(1);
         assert_eq!(reopened.state.participants[0].hp, Some(3));
         reopened.rest_saved_setup(2);
-        assert_eq!(reopened.history.len(), 1);
+        assert_eq!(reopened.history.len(), 1, "only Use the saved HP is a step");
+        // The rest came after that step, so its kept state has the rest's full HP too: Undo
+        // of the older step does not take the rest away with it.
+        assert_eq!(
+            reopened.history[0].participants[0].hp,
+            reopened.state.participants[0].max_hp
+        );
         begin(&mut reopened);
         reopened.state.participants[0].hp = Some(4);
         let mut combat = close_and_reopen(&mut reopened, campaign);
         let steps = combat.history.len();
         assert_eq!(
             steps, 5,
-            "the rest, and the four steps that began the fight"
+            "Use the saved HP, and the four steps that began the fight"
         );
         combat.rest_saved_setup(3);
         assert_eq!(combat.state.participants[0].hp, Some(4));
@@ -7789,9 +7858,10 @@ mod tests {
             run.state.log[before], SAVED_HP_USED,
             "before each hero's line"
         );
-        // A named step, so the rest's full HP is still one Undo away.
-        assert_eq!(run.history.len(), 2);
-        assert_eq!(run.undo_label(), "Undo: use the saved HP");
+        // A named step, so the rest's full HP is still one Undo away. The fill is no step.
+        assert_eq!(run.history.len(), 1);
+        // FH4: one name for the step, in the header and in the message's Undo.
+        assert_eq!(run.undo_label(), "Undo: use saved HP");
         assert!(run.saved_hp_used() && !run.rest_filled_saved_hp());
         assert!(run.back_to_sheets().is_none());
         assert!(run.use_saved_hp().is_err(), "the press cannot repeat");
@@ -7799,15 +7869,22 @@ mod tests {
         run.undo();
         assert_eq!(hp(&run), full, "Undo gives back the full HP");
         assert!(!run.state.log.iter().any(|line| line == SAVED_HP_USED));
-        assert_eq!(run.undo_label(), "Undo: full HP after long rest");
+        assert_eq!(run.undo_label(), "Undo", "the fill itself is no step");
+        assert!(run.rest_filled_saved_hp(), "and its offer is back");
         assert!(run.rest_filled_saved_hp() && !run.saved_hp_used());
+        // FM1: no Undo takes the fill away; Use the saved HP is the one way back.
         run.undo();
-        assert_eq!(
-            hp(&run),
-            saved,
-            "Undo of the rest still restores the saved HP"
+        assert_eq!(hp(&run), full, "Undo has no step of the fill to take back");
+        assert!(run.rest_filled_saved_hp() && !run.saved_hp_used());
+        // Any other change to a hero's HP ends the offer, as the newest change used to.
+        run.apply(Command::Health(0, Some(1), max)).unwrap();
+        assert!(!run.rest_filled_saved_hp() && run.use_saved_hp().is_err());
+        assert!(run.back_to_sheets().is_none());
+        run.undo();
+        assert!(
+            run.rest_filled_saved_hp(),
+            "Undo of that change brings the offer back"
         );
-        assert!(!run.rest_filled_saved_hp() && !run.saved_hp_used());
 
         // The result lasts until the next step.
         let mut again = close_and_reopen(&mut run, campaign);
@@ -7957,7 +8034,7 @@ mod tests {
             run.state
                 .log
                 .iter()
-                .any(|line| line.contains("removed undo steps"))
+                .any(|line| line.contains("removed Undo steps"))
         );
     }
     #[test]
@@ -7988,7 +8065,7 @@ mod tests {
             run.state
                 .log
                 .iter()
-                .any(|line| line.contains("removed undo steps") && line.contains("damage"))
+                .any(|line| line.contains("removed Undo steps") && line.contains("damage"))
         );
     }
     #[test]
@@ -8180,6 +8257,18 @@ mod tests {
             continue_blocked(&book.events, true, Uuid::new_v4()),
             Some(CONTINUE_NO_EVENT)
         );
+        // FI1: a deleted encounter cannot start a new run, so its reason keeps only the cause.
+        // While the encounter exists, and for a reason that names no new run, the words stay.
+        for (reason, gone) in [
+            (CONTINUE_LATER, "A later fight or rest was played."),
+            (CONTINUE_NO_EVENT, "This fight is not on the Timeline."),
+            (CONTINUE_NEEDS_TIMELINE, CONTINUE_NEEDS_TIMELINE),
+            (CONTINUE_DISK_CHANGED, CONTINUE_DISK_CHANGED),
+        ] {
+            assert_eq!(continue_reason(reason, true), reason);
+            assert_eq!(continue_reason(reason, false), gone);
+            assert!(!continue_reason(reason, false).contains("new run"));
+        }
         // The app starts again with A open, as A was when the app closed. A's ending comes
         // from its file, so Undo of it goes by the rule, as Continue fight does, though no
         // answer was worked out before: A stays ended, and the next fight still starts from B.
