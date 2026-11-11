@@ -675,9 +675,16 @@ Task marks at the start of a list item show an empty box for `[ ]` and a checked
 A note row has selected fill only while its reader is open. Open questions, Problems, creation and repair
 keep the remembered note without selected fill.
 
-Broken notes stay under Cannot be read. Each row's second line states the cause, and the group uses the same gap as folder headings. They use the Campaign repair source editor. Keep drafts in memory and
+Broken notes stay under Cannot be read. Each row's second line states the cause; a long path wraps and is never cut. The group uses the same gap as folder headings. They use the Campaign repair source editor. Keep drafts in memory and
 warn before app close or a campaign switch. The unreadable count in the header opens the first broken
-note's repair, keeping other repair drafts. A rolled table selects the matching row, marks it with dice and
+note's repair, keeping other repair drafts. A note that the system will not read (not UTF-8 text, or no
+permission) cannot open in the source editor. Its pane keeps the title and file line, leads with an error that names
+the file (`Splat cannot read Notes/Broken.md as text.`), then gives the recovery in plain words with Try again and
+Cancel at the message text. Technical details below holds the system's words. Its row's cause is short
+(`Text format cannot be read`). Try again reads the folder again: a fixed note opens in the reader, a note that is
+still broken opens its repair, and a file moved or deleted outside Splat ends the pane. Splat never writes that file.
+Every World message about a file that the system will not read or write names the file and the recovery, never the
+system's words. A rolled table selects the matching row, marks it with dice and
 states the result below in UI sans. Typed rolls use well fill, a centred placeholder and dice as the column
 heading. Fixed headers cover passing rows with page fill and a hairline. Generator cards name their table
 sources below attributes. Every card's `Will save <path>` is the path Save NPC writes: the folder that holds most of

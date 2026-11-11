@@ -1,4 +1,5 @@
 //! The same source editor for broken notes in Campaign and World.
+use super::file_fault::FileFault;
 use crate::{
     design::{self, colors},
     library::write_note,
@@ -36,6 +37,14 @@ pub(crate) fn editor(ui: &mut egui::Ui, path: &str, draft: &mut String, error_li
         });
 }
 
+/// Why a repair did not open.
+#[derive(Debug)]
+pub(super) enum OpenError {
+    /// The file is there, but the system will not read it as text.
+    Unread(FileFault),
+    Words(String),
+}
+
 pub(super) struct Repair {
     pub path: String,
     baseline: String,
@@ -47,9 +56,12 @@ pub(super) struct Repair {
 }
 
 impl Repair {
-    pub fn open(campaign: &Campaign, path: &str) -> Result<Self, String> {
-        let text = std::fs::read_to_string(crate::library::note_path(&campaign.path, path)?)
-            .map_err(|e| e.to_string())?;
+    /// The note's text in the source editor. A file the system will not read keeps its fault
+    /// whole, so the page can name the file, the recovery and the system's words apart.
+    pub fn open(campaign: &Campaign, path: &str) -> Result<Self, OpenError> {
+        let file = crate::library::note_path(&campaign.path, path).map_err(OpenError::Words)?;
+        let text = std::fs::read_to_string(file)
+            .map_err(|error| OpenError::Unread(FileFault::read(path, &error)))?;
         Ok(Self {
             path: path.into(),
             baseline: text.clone(),
@@ -286,7 +298,14 @@ mod tests {
             assert_eq!(std::fs::read_to_string(&path).unwrap(), text);
         }
         std::fs::write(&path, [0xff]).unwrap();
-        assert!(Repair::open(&campaign, "Broken.md").is_err());
+        match Repair::open(&campaign, "Broken.md") {
+            Err(OpenError::Unread(fault)) => {
+                assert_eq!(fault.kind, super::super::file_fault::Kind::NotText);
+                assert_eq!(fault.path, "Broken.md");
+            }
+            other => panic!("AD2-open-kind: {:?}", other.err()),
+        }
+        assert_eq!(std::fs::read(&path).unwrap(), [0xff], "AD1-bytes");
     }
 
     #[test]

@@ -5,6 +5,7 @@
 mod checks;
 pub(crate) mod edit;
 mod fields;
+pub(crate) mod file_fault;
 pub mod lines;
 pub mod page;
 mod related;
@@ -960,19 +961,22 @@ fn create_at(
         text.push('\n');
         text.push_str(details);
     }
-    fs::create_dir_all(campaign.path.join(&folder)).map_err(|e| e.to_string())?;
+    let failed = file_fault::write_error(&relative);
+    fs::create_dir_all(campaign.path.join(&folder)).map_err(&failed)?;
     if kind.is_empty() {
         use std::io::Write;
         let mut temp =
             tempfile::NamedTempFile::new_in(path.parent().ok_or("Missing parent folder")?)
-                .map_err(|e| e.to_string())?;
+                .map_err(&failed)?;
         temp.write_all(text.as_bytes())
             .and_then(|_| temp.as_file().sync_all())
-            .map_err(|e| e.to_string())?;
-        temp.persist_noclobber(&path).map_err(|e| e.to_string())?;
+            .map_err(&failed)?;
+        temp.persist_noclobber(&path)
+            .map_err(|error| failed(error.error))?;
     } else {
         write_note(&campaign.path, &relative, None, &text)?;
     }
+    drop(failed);
     let id = if kind.is_empty() {
         note_id(&relative)
     } else {
@@ -984,8 +988,7 @@ fn create_at(
 /// Give a plain note an identity. Its body does not change.
 pub fn make_entry(campaign: &Campaign, item: &Item, kind: &str) -> Result<Uuid, String> {
     let relative = &item.entry.path;
-    let path = note_path(&campaign.path, relative)?;
-    let text = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    let text = file_fault::read_note(&campaign.path, relative)?;
     let id = crate::hermetic::new_uuid();
     let name = &item.entry.name;
     let updated = if sessions::split_note(&text).is_some() {
@@ -1016,8 +1019,7 @@ fn set_world_field(
     name: &str,
     value: Value,
 ) -> Result<Change, String> {
-    let path = note_path(&campaign.path, &entry.path)?;
-    let text = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    let text = file_fault::read_note(&campaign.path, &entry.path)?;
     Entry::parse(&entry.path, &text)?;
     let updated = fields::patch(&text, name, value)?;
     write_note(&campaign.path, &entry.path, Some(&text), &updated)?;
@@ -1173,7 +1175,7 @@ fn obsidian_url(path: &Path) -> String {
 
 pub(crate) fn make_npc_note(campaign: &Campaign, entry: &Entry) -> Result<Uuid, String> {
     let (id, path) = create_at(campaign, &entry.name, "npc", "")?;
-    let text = fs::read_to_string(campaign.path.join(&path)).map_err(|e| e.to_string())?;
+    let text = file_fault::read_note(&campaign.path, &path)?;
     let npc = Entry::parse(&path, &text)?;
     set_world_field(
         campaign,
@@ -1338,8 +1340,7 @@ pub(crate) fn separate_entry_result(filename: &str) -> String {
 }
 
 pub(crate) fn new_identity(campaign: &Campaign, relative: &str) -> Result<(Change, Uuid), String> {
-    let path = note_path(&campaign.path, relative)?;
-    let before = fs::read_to_string(path).map_err(|e| e.to_string())?;
+    let before = file_fault::read_note(&campaign.path, relative)?;
     let noun = IdentityNoun::of(&Entry::parse(relative, &before)?);
     let id = crate::hermetic::new_uuid();
     let after = crate::content_workspace::new_note_identity(&before, relative, id)?;
@@ -1831,9 +1832,7 @@ impl Reader {
                         &format!("Rename the note to {stem}"),
                     ) {
                         let result = (|| {
-                            let before =
-                                fs::read_to_string(note_path(&campaign.path, &item.entry.path)?)
-                                    .map_err(|error| error.to_string())?;
+                            let before = file_fault::read_note(&campaign.path, &item.entry.path)?;
                             let after = crate::content_workspace::patch_fields(
                                 &before,
                                 &[("splat_name", Some(stem.to_string().into()))],
@@ -2182,9 +2181,8 @@ impl Reader {
         // A picker can outlive an outside edit. Re-read before deriving a replacement or Log.
         let fresh = if key == "part_of" {
             let result = (|| {
-                let path =
-                    note_path(&campaign.path, &item.entry.path).map_err(|error| (error, None))?;
-                let file = fs::read_to_string(path).map_err(|error| (error.to_string(), None))?;
+                let file = file_fault::read_note(&campaign.path, &item.entry.path)
+                    .map_err(|error| (error, None))?;
                 let entry = Entry::parse(&item.entry.path, &file).map_err(|error| (error, None))?;
                 if let Some(unread) = fields::unread_groups(&entry, &file) {
                     return Err((unread.reason.clone(), Some((unread, Box::new(entry)))));
@@ -2268,8 +2266,7 @@ impl Reader {
         let result = (|| {
             let before = match &fresh {
                 Some((file, _)) => file.clone(),
-                None => fs::read_to_string(note_path(&campaign.path, &item.entry.path)?)
-                    .map_err(|e| e.to_string())?,
+                None => file_fault::read_note(&campaign.path, &item.entry.path)?,
             };
             let patched = fields::patch(&before, key, value)?;
             let after = match &log {
