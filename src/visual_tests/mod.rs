@@ -34,6 +34,7 @@ pub(crate) mod ergonomics;
 pub(crate) mod fixture;
 #[cfg(target_os = "linux")]
 mod isolation;
+mod plain_evening;
 mod render;
 mod repeated_captures;
 mod scenarios;
@@ -61,7 +62,7 @@ type Script = fn(&mut Driver<'_>);
 
 const DEFAULT_JOBS: usize = 4;
 
-const SCENARIOS: [(&str, Seed, Script); 80] = [
+const SCENARIOS: [(&str, Seed, Script); 82] = [
     ("file-formats", Seed::Formats, scenarios::file_formats::run),
     ("stat-formats", Seed::Formats, scenarios::stat_formats::run),
     ("data-integrity", Seed::Campaign, scenarios::integrity::run),
@@ -379,6 +380,10 @@ const SCENARIOS: [(&str, Seed, Script); 80] = [
         Seed::Campaign,
         scenarios::world_build::campaign_copy_registered,
     ),
+    // G6: the frozen evening of `artifacts/dm-audit/`.
+    ("dm-audit", Seed::Campaign, dm_audit::run),
+    // G7: the plain campaign against its reference.
+    ("plain-evening", Seed::Plain, plain_evening::run),
 ];
 
 impl crate::Splat {

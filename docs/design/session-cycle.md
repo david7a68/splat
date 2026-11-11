@@ -309,8 +309,8 @@ nothing takes focus from `Amount`.
 ### 2.4 J4: the race, between fights
 
 The Tournament of [the example](world-examples/heralds-tournament.md), with its note as it is and one
-addition that P9 makes: the bells' rival table gets `for:`. **Trackers are used between fights only**; what
-a fight may show of them is held for the owner (section 7). The start: Session page, Lookup closed, the
+addition that P9 makes: the bells' rival table gets `for:`. **Trackers are used between fights only**; in a
+fight the run shows no tracker part, and the owner accepted this cost (section 7). The start: Session page, Lookup closed, the
 clock at 30, Favor 2, no seals. **Paper** is the same race on the paper sheet: each mark, tick, note or
 erasure is one act (**p**), and each die that a table needs is one die (**d**).
 
@@ -811,8 +811,9 @@ the improvised encounter by `Close run` (cut: after a restart nothing remembers 
 **Question.** "What is due, and what are the numbers?"
 
 **The slice.** This design builds trackers for use **between fights**: the ledger, the Trackers view of
-Lookup, the Due list and the rail's `Due N` (P9). What a fight may show of a tracker is held for the owner
-(section 7), so the run has no part of F4, and the marks that a round or a day raises wait.
+Lookup, the Due list and the rail's `Due N` (P9). In a fight the DM uses Trackers through Ctrl+T, and the owner
+accepted this cost (section 7), so the run has no part of F4. Marks that a round raises are dropped, and day
+marks come in P11.
 
 The data model of [World and house rules](world-and-house-rules.md) stands, and this pull request changes
 that document in place: Trackers is a view of Lookup, the ledger is the Undo, a mark's table can name what
@@ -928,7 +929,8 @@ action. Escape closes Lookup.
 **What stays with the DM.** Awarding Favor, moving a rival, what a bell does on the map, and every rule that a
 tracker's number stands for. A proposed change applies only when the DM presses `Done`.
 
-**Not built, and why.** Any tracker part in a run, and day marks (held for the owner; section 7). The parts in
+**Not built, and why.** Any tracker part in a run (the owner accepted this cost; section 7), and day marks
+(P11). The parts in
 [World and rules: later](world-and-rules-later.md). An action on a notice for a group (**Add to fight** is the
 route, as today). A `Make house rule note` action (no band holds it today; the DM sets the note's properties).
 
@@ -1181,7 +1183,7 @@ Case A, the plan at 330 px
   at 0 HP`. When a creature at 0 HP has no XP that Splat knows (a made-up creature, an NPC with no stat
   block), the line says so: `XP 450 for 3 at 0 HP. XP not known for Captain Varra: enter an award here.` It
   is still an XP line, and the link and the loot are written. An amount that is not known is left out of
-  every sum and is never counted as zero. This point is proposed; the owner has not ruled yet (section 7).
+  every sum and is never counted as zero. This is the rule (section 7).
 - **Loot,** as lines under it: the encounter's loot and the loot of each creature at 0 HP. A roll that was
   made has its result. A roll that was not made is written with `(not rolled)`, as `Copy loot` writes it
   today, and the result says how many.
@@ -1694,9 +1696,9 @@ the reference of G7.
 | **P6** | F6 | `src/world.rs` (the header band and the field), `src/world/lines.rs` (reuse `add_log`, `:459`), `src/sessions/plan.rs` | P1c, P3 | New `log-from-play`. Extend `world-facts` |
 | **P7** | F7. An ordered read of the session notes that keeps an unreadable note in its place | `src/sessions.rs` (the block, the search for the newest block), `src/sessions/plan.rs`, `src/encounter_run/loot.rs`, `src/difficulty.rs` | P2, P3 | Extend `run-loot`, `session-plan` |
 | **P8** | F5, with rows 11, 16 and 18 of section 2.5. The draft's provenance, and the exact inverse of `Undo carry over` | `src/sessions.rs`, `src/sessions/page.rs` (`last_time_block`, `recap_preview`), `src/markdown_view.rs` | P3 | New `session-carry-over`. Extend `session-plan` |
-| **P9** | F4, the slice between fights: house rule notes, in play, the ledger with its save and its Undo, quick actions, instances, marks at a value with `for:`, the Due rows, the rail's count, `Add to Timeline`, the Trackers view and Ctrl+T. In the Tournament example: `for:` on the bells, `activation` not pinned (it is held with P10), and no line about **Make house rule note** | New `src/trackers.rs`, `src/trackers/ledger.rs`, `src/trackers/view.rs`. `src/lookup.rs`, `src/lib.rs`, `src/campaign_content.rs`, `crates/core`, the example note | P1a, P1c | New `trackers`, with the Session page's plan tab and `Start fight` beside the view. Extend `run-lookup`, `nav-state` |
-| **P10** | Held (section 7): marks that a fight raises | – | The owner's answer, and P9 through a whole race in an app round | – |
-| **P11** | Held with P10: day marks | – | P10 | – |
+| **P9** | F4, the slice between fights: house rule notes, in play, the ledger with its save and its Undo, quick actions, instances, marks at a value with `for:`, the Due rows, the rail's count, `Add to Timeline`, the Trackers view and Ctrl+T. In the Tournament example: `for:` on the bells, `activation` not pinned (P10, which needed it, is dropped), and no line about **Make house rule note** | New `src/trackers.rs`, `src/trackers/ledger.rs`, `src/trackers/view.rs`. `src/lookup.rs`, `src/lib.rs`, `src/campaign_content.rs`, `crates/core`, the example note | P1a, P1c | New `trackers`, with the Session page's plan tab and `Start fight` beside the view. Extend `run-lookup`, `nav-state` |
+| **P10** | Dropped (section 7): marks that a fight raises | – | – | – |
+| **P11** | Day marks | – | P9 | – |
 | **P12** | The audit, again. Extend the evening to use every feature, measure it, and add the scripts for J2, J3, J4 and J6. Run G6 and G7 on the whole | `src/visual_tests/dm_audit.rs`, `artifacts/dm-audit/` | All that are built | The audit's captures, and `plain-evening` |
 
 **What can be built at the same time.**
@@ -1706,7 +1708,8 @@ the reference of G7.
   `src/encounters/list.rs`, each in its own function.
 - **Wave B, three at once:** P4, P6, P9. P4 and P9 share no file.
 - **Wave C, two at once:** P7 and P8. Both call `Draft::apply`, so neither adds a save of its own.
-- **Then:** P12. P10 and P11 wait (section 7). The full gate runs on merged source after each wave.
+- **Then:** P12, and P11 after P9. P10 is dropped (section 7). The full gate runs on merged source after each
+  wave.
 
 ## 7. Limits
 
@@ -1732,14 +1735,13 @@ Each is a limit that this design keeps and states, with its count.
 - **Where the note is behind its tab** (cases B, C and D), a typed line costs the tab changes: 2 in J2 and in
   J6.
 
-**Two points wait for the owner.**
+**Two rulings of the owner** (2026-11-11).
 
-1. **Trackers in a fight.** A tracker act in a fight costs three acts, because Trackers is a view of Lookup
-   and the run's own panel hides beside it. One press needs pinned quick actions in view in the run, and the
-   owner rules before a strip or a panel view joins the run. Until then the DM marks the paper sheet in a
-   fight and enters the fight's marks after it (section 2.4), a bell inside a fight shows then, and P10 and
-   P11 wait.
+1. **Trackers in a fight.** The run gets no strip, no popover and no tracker part. In a fight the DM opens
+   the Trackers view with Ctrl+T, presses, and goes back: three acts for each press, because Trackers is a
+   view of Lookup and the run's own panel hides beside it. The rail's `Due N` still shows. The owner accepted
+   this cost. P10 (marks that a fight raises) is dropped, and P11 (day marks) depends on P9 only.
 2. **F7, an award that is not known.** The XP line names the creature whose XP Splat does not know, and
-   leaves that amount out of the sum. Proposed; the owner has not ruled yet.
+   leaves that amount out of the sum.
 
 No question is open for the lead. While a run is open, a reader has no `Start fight` action.

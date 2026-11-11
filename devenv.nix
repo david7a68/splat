@@ -46,6 +46,7 @@
     esac
     # Feedback-only settings must not turn a merge gate into a partial/report run.
     unset SPLAT_VISUAL_SCENARIOS SPLAT_VISUAL_UPDATE_BASELINE SPLAT_VISUAL_DIAGNOSE
+    unset SPLAT_DM_AUDIT_WRITE SPLAT_PLAIN_EVENING_WRITE
     export SPLAT_VISUAL_ENFORCE=baseline
     # Cargo serializes compilation in this target directory, but releases its
     # build lock before running tests. Let fmt/Clippy overlap test execution.
@@ -97,6 +98,20 @@
     fi
     echo "Output: $out"
     exit "$status"
+  '';
+  # Measure the audit's evening (G6) and write the plain reference (G7) from this source.
+  # Run it on main only: the files it writes are what every later change is compared with.
+  scripts.audit-freeze.exec = ''
+    if [ "$#" -gt 1 ]; then
+      echo "Use: audit-freeze [label]" >&2
+      exit 2
+    fi
+    label="''${1:-freeze}"
+    case "$label" in
+      "" | */* | .*) echo "Use a plain capture label." >&2; exit 2 ;;
+    esac
+    SPLAT_VISUAL_ENFORCE=report SPLAT_DM_AUDIT_WRITE=1 SPLAT_PLAIN_EVENING_WRITE=1 \
+      visual-test "$label" --only dm-audit,plain-evening
   '';
   # Apply only chrome counts from a completed full or --only run, without recapturing.
   scripts.visual-baseline-chrome.exec = ''

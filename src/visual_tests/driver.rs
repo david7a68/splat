@@ -1028,6 +1028,14 @@ impl<'a> Driver<'a> {
         self.click_rect(rect, &format!("Click: {name}"));
     }
 
+    /// Click a link by its words, where a button elsewhere has the same name.
+    pub fn click_link(&mut self, name: &str) {
+        let rect = self.aim(&format!("link {name:?}"), |node| {
+            node.name == name && node.is_link()
+        });
+        self.click_rect(rect, &format!("Click: {name}"));
+    }
+
     /// Add an event from the shared strip, opening More only when the strip needs it.
     pub fn click_add_event(&mut self, name: &str) {
         if !self.has(name) {

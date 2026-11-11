@@ -1,0 +1,13 @@
+reader	window	title	entry	font size	title width	title left	art	Edit	scroll bar	inside	room after
+Lookup	1200x800	Captain Varra	NPC	26	160.1	781	-	949.1-1010.2	no	406	176.8
+Lookup	960x640	Captain Varra	NPC	26	160.1	627	-	795.1-856.2	no	320	90.8
+Lookup	1200x800	Captain Varra	creature, with art	26	160.1	781	949.1-1013.1	-	no	406	173.9
+Lookup	960x640	Captain Varra	creature, with art	26	160.1	627	795.1-859.1	-	no	320	87.9
+Lookup	1200x800	Oren Thistlewick	NPC	26	196.5	781	-	985.5-1046.6	no	406	140.4
+Lookup	960x640	Oren Thistlewick	NPC	26	196.5	627	-	831.5-892.6	no	320	54.4
+Lookup	1200x800	Oren Thistlewick	creature, with art	26	196.5	781	985.5-1049.5	-	no	406	137.5
+Lookup	960x640	Oren Thistlewick	creature, with art	26	196.5	627	831.5-895.5	-	no	320	51.5
+Lookup	1200x800	Captain Varra Black	NPC	26	229.5	781	-	1018.5-1079.6	no	406	107.4
+Lookup	960x640	Captain Varra Black	NPC	26	229.5	627	-	864.5-925.6	no	320	21.4
+Lookup	1200x800	Captain Varra Black	creature, with art	26	229.5	781	1018.5-1082.5	-	no	406	104.5
+Lookup	960x640	Captain Varra Black	creature, with art	26	229.5	627	864.5-928.5	-	no	320	18.5

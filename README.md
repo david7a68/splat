@@ -167,6 +167,13 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
   Use `d.expect_same("reason")` only for an intended small visual change, after its
   behaviour assertion. The repeated-capture check still runs on later captures.
   Captures and frame comparisons finish pending note and Timeline saves first.
+- `dm-audit` (G6) plays the measured evening of `artifacts/dm-audit/` and fails when a task's
+  page transitions, interactions or path differ from `artifacts/dm-audit/counts.json`.
+  `plain-evening` (G7) plays the frozen plain campaign and fails on any difference from
+  `src/visual_tests/plain_evening/reference.json` in a control's or text's rectangle, the words
+  or a campaign file, unless a row of `plain_evening/allowed.json` names exactly that difference.
+  `devenv shell -- audit-freeze [label]` writes the counts and the reference again from this
+  source. Run it on `main` only.
 - `audit-gate [label]` runs formatting, Clippy, all tests and all captures. It
   clears scenario filters and baseline-update mode, and enforces the baseline.
   Video and optional contact-sheet settings work as for `visual-test`.
