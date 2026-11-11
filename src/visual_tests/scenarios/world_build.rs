@@ -2343,21 +2343,26 @@ pub(super) fn row_marks(d: &Driver<'_>, row_words: &str) -> Vec<Vec<(String, egu
             && job.text.contains(" · ")
             && clip.intersects(text.visual_bounding_rect())
         {
-            rows.push(
-                job.sections
-                    .iter()
-                    .filter(|section| section.format.color != design::colors().muted)
-                    .map(|section| {
-                        (
-                            job.text[section.byte_range.clone()].trim().to_owned(),
-                            section.format.color,
-                        )
-                    })
-                    .collect::<Vec<_>>(),
-            );
+            rows.push(painted_marks(job));
         }
     });
     rows
+}
+
+/// Every part of painted words that is in neither the muted nor the text colour, with its colour.
+fn painted_marks(job: &egui::text::LayoutJob) -> Vec<(String, egui::Color32)> {
+    job.sections
+        .iter()
+        .filter(|section| {
+            ![design::colors().muted, design::colors().text].contains(&section.format.color)
+        })
+        .map(|section| {
+            (
+                job.text[section.byte_range.clone()].trim().to_owned(),
+                section.format.color,
+            )
+        })
+        .collect()
 }
 
 /// True when there is at least one such row and each has exactly one mark: the warning icon in
@@ -3152,6 +3157,23 @@ pub fn package_about(d: &mut Driver<'_>) {
                 && d.has(&format!("{} About Emberfall Watch", crate::icons::WARN))
                 && !d.has("About Emberfall Watch"),
             "The About row warns for the manifest problem the header counts",
+        );
+        // Round 23 FD8: the About row's warning icon has the warning colour too.
+        let about = format!("{} About Emberfall Watch", crate::icons::WARN);
+        let mut marks = Vec::new();
+        d.each_painted_text(|text, clip| {
+            let job = &text.galley.job;
+            // At 1200 the package name shortens by whole words.
+            if job.text.starts_with(&about[..about.len() - " Watch".len()])
+                && clip.intersects(text.visual_bounding_rect())
+            {
+                marks.push(painted_marks(job));
+            }
+        });
+        d.observe(
+            "iter-23-L-FD8-about",
+            warning_marked(&marks),
+            format!("The About row's mark has the warning colour: {marks:?}"),
         );
     });
     go_campaign(d);
@@ -5048,6 +5070,27 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
             format!("Lookup rows drop the kind and keep the file and the whole fault: {detail}"),
         );
     }
+    // Round 23 FD8: a Lookup row's fault mark has the warning colour, as on a Library row.
+    let pane_left = d
+        .place_of("Resize Lookup column")
+        .map_or(f32::INFINITY, |splitter| splitter.right());
+    let mut marks = Vec::new();
+    d.each_painted_text(|text, clip| {
+        let job = &text.galley.job;
+        // At 960 the fault shortens to whole words and then to its mark; the file stays.
+        if job.text.contains("NPCs/Rook Ambry")
+            && job.text.contains(design::icons::WARN)
+            && text.pos.x >= pane_left
+            && clip.intersects(text.visual_bounding_rect())
+        {
+            marks.push(painted_marks(job));
+        }
+    });
+    d.observe(
+        "iter-23-L-FD8-lookup",
+        marks.len() == 2 && warning_marked(&marks),
+        format!("Both Lookup rows mark the fault in the warning colour: {marks:?}"),
+    );
     d.state("duplicate-world-files-in-lookup", Sizes::All);
     d.press(Key::Escape);
     d.click("Make Rook Ambry copy.md a separate note");
