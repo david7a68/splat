@@ -78,8 +78,8 @@ not its folder, because a session folder can be `.`. A world note is not an entr
 identity. Splat only reads it, and Obsidian stays its editor. A world entry also has Edit, in World and Lookup,
 for its status, stat block, place and the text under its title.
 
-Today `read_directory` skips these notes (`src/content/mod.rs:880-886`), so Lookup cannot find "Reliability"
-or "Verori".
+Before World notes were built, the catalogue's scan skipped these notes, so Lookup could not find "Reliability"
+or "Verori". Lookup finds plain notes and their headings now (`src/lookup.rs:470-489`).
 
 - **Search.** Lookup and the World page search names, headings and body text. A heading is its own
   result: "Gate Mechanics › Reliability".
@@ -248,8 +248,8 @@ event with the action's label in the session being played, through the normal Ti
 Timeline's own Undo, so the event is a row of tonight's plan at once. Undo of the tracker action leaves that
 event.
 
-A quick action with a `table` rolls on its own dice, in a run and out of one. The ledger keeps the roll and
-its row. The run's Log does not, because one file owns one fact. A roll from a table's own **Roll** button in
+A quick action with a `table` rolls on its own dice. The ledger owns these rolls and keeps the roll and
+its row; this slice uses them between fights. The run's Log does not, because one file owns one fact. A roll from a table's own **Roll** button in
 a note stays a step of the run, as it is today.
 
 **Limits.** A tracker counts. It does not know who the operator is, enforce one roll per round, or open a gate.

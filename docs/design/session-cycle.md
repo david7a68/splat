@@ -1,7 +1,7 @@
 # The session cycle
 
-Status: proposed, round 4. Nothing here is built. F8 is being built in pull request 232. A line that says
-"today" is about the app as it is.
+Status: proposed, after design round 4 and its last corrections. Nothing here is built. F8 is being built in
+pull request 232. A line that says "today" is about the app as it is.
 This document fits nine features (F1 to F9) into the app as one workflow: prep at the desk, play at the table,
 the wrap-up, and the next prep. It follows [the brief](../ux-intent.md), [the design
 system](../design-system.md)
@@ -53,8 +53,8 @@ has drifted from `steps.tsv`, so P1a measures `main` again before any feature la
 played when a fight is open, a recording is live, or the current session is not dated before today. Today the
 test is inside `party_bar_shows` (`src/sessions/page.rs:1952-1958`), and `current_link` (`:1929`) uses a
 narrower one (dated today). New in P1c: one function, `played_session`, holds W14's test and returns the
-current session (`current`, `:1918`) or nothing. `party_bar_shows` and `current_link` call it, and so do the
-ledger's Undo (F4), both Log stamps (F6) and `Add to Timeline` (F4).
+current session or nothing. Both call it, and so do the ledger's Undo (F4), both Log stamps (F6) and `Add to
+Timeline` (F4).
 
 ### 1.2 The side panels: today's rule, and the rule for features
 
@@ -72,7 +72,8 @@ ledger's Undo (F4), both Log stamps (F6) and `Add to Timeline` (F4).
   **Trackers** (F4).
 - **Ctrl+T shows Trackers, and Ctrl+T again goes back** (new, P9). With Lookup closed, it opens Lookup on
   Trackers, and a second press closes Lookup. With Lookup open, it shows Trackers in the panel, and a second
-  press shows what Lookup showed before: its entry, its found note or its results. Lookup's `Back` and its
+  press shows what Lookup showed before: its entry, its found note or its results. Ctrl+K opens Lookup on
+  what it showed last, also on Trackers. Lookup's `Back` and its
   history are as today (`src/lookup.rs:1662-1666`, `:1755`).
 - **Keys beside Trackers are the keys beside any Lookup view.** A tracker's typed amount holds focus until
   Enter or Escape. `U` is the run's key.
@@ -110,13 +111,11 @@ because `Edit` follows the art (`src/world.rs:1750-1753`): at case D a 13-letter
 | Lookup at case B | 408 | 168: `Start fight`, and the icon | 133: `Start fight` | 98: the icon |
 | The World page at 960x640 | 512 | 272: both words | 237: both words | 202: `Start fight`, and the icon |
 
-**The routes that stay** when the header does not show an action. Each is counted where a journey uses it.
-
-| Act | Route | Count |
-|---|---|---|
-| `Start fight` with an NPC or a creature that a scene links | The scene row's menu: `Start fight`, beside `Remove from tonight` (F3) | 2, at any width, on the Session page |
-| `Start fight` with any other NPC or creature | The World page's reader, which is wider: `World`, the entry, `Start fight` | 3 or 4, **T T** |
-| `Add to Log` | A done scene's row (F3). Or `Edit`, the line typed with its stamp under `## Log`, `Save changes` | As F6 counts; by `Edit`, 1 more |
+**The routes that stay** when the header does not show an action. `Start fight` is a line of the menu of a
+scene row that links that NPC or creature: 2, at any width, on the Session page (F3). For any other NPC or
+creature the World page's reader is wider: `World`, the entry, `Start fight` is 3 or 4, **T T**. `Add to Log`
+is on a done scene's row (F3); or the DM uses `Edit`, types the line with its stamp under `## Log`, and
+saves: 1 more than F6 counts.
 
 ### 1.3 Widths, and what never hides
 
@@ -184,16 +183,16 @@ Case D: a conflict, and three reminders that start with the same words
 └────────────────────────────────────────────────────────────┘
 ```
 
-**A row's effect words (rule P).** No row changes height because of an effect. A row with a timed effect
-has one second line, with the height of a row with one condition today. That line ends before the HP column
-(`view.rs:6430-6446`): it has about 255 px at case D, and about 285 at case A, where the row has a state
-column.
+**A row's effect words (rule P).** An effect never adds a line or height: a row has the lines and the height
+that the same row has with no effect. Its second line ends before the HP column (`view.rs:6430-6446`): it has
+about 260 px at case D, and about 285 at case A, where the row has a state column.
 
 | Rule | What it means |
 |---|---|
-| Today's words on that line keep their places first: `Bloodied`, `0 HP`, `Absent`, `Conc`, and the sync word last (`view.rs:6477-6583`). Timed effects follow them, in the order the DM added them, before plain conditions | Plain conditions fold into `N more`, as today. With `Bloodied` before them: `Bloodied · Wis save DC 15… · ⚑ +2` |
-| A count has a slot as wide as its widest form, `· time is up` (about 85 px) | A change from `9` to `last round` to `time is up` moves no word |
-| An effect shows whole while the line has room. The first effect shortens its words from their end (`design::words_that_fit`) when it alone is too wide. The effects that do not fit are one count, `⚑ +2`, and the first effect shortens down to that count alone | At case D, with no state word, the line holds one long reminder and a count, or one counted effect and a count. `End Wis save DC 15 (Hold…  2` keeps its place through every count |
+| Timed effects take the place of the conditions in today's order, before plain conditions. Every other word of today keeps its place: `No initiative`, `Bloodied`, `0 HP`, `Absent`, `Conc`, the side's word, `as <name>`, `Changed` with its bonuses, `Loot` and the sync word (`view.rs:6477-6583`) | Plain conditions fold into `N more`, as today. With `Bloodied` before them: `Bloodied · Wis save DC 15… · ⚑ +2` |
+| A count has a slot as wide as the widest of its three forms at the row's scale and font, with the warning icon of `time is up`: about 75 to 98 px. P4 measures it when the effect or the width changes | A change from `9` to `last round` to `time is up` moves no word |
+| An effect shows whole while the line has room. The first effect shortens its words from their end (`design::words_that_fit`) when it alone is too wide. The effects that do not fit are one count, `⚑ +2`. When no effect's words fit, the row shows the count of all its timed effects, with no plus: `⚑ 3`. When that count does not fit on the row's lines, it does not show on the row | At case D, with no other word, the line holds one long reminder and a count, or one counted effect and a count. `End Wis save DC 15 (Hold…  2` keeps its place through every count |
+| `Conc save DC 12` takes only the room that the timed effects leave at their slot widths | Else it is in the hover and the accessible name |
 | The whole words | The hover and accessible name of the line; **Conditions**, which lists each effect; and the notice line on that participant's turn, while they fit |
 | A row with no timed effect | As today |
 
@@ -247,13 +246,10 @@ typed scenes cost 1 more, and 1 to come back to the plan.
 | Seven new records | 0 | 14 | 0 | 0 | 2 | 1 | 11 |
 | **After, in all** | **12** | **240, or 242** | 13 | 6 | 16 | 48 or 50 | 157 |
 
-- **The More clicks.** At 330 px the Add strip does not show `Travel` or `Short rest`. Today's app needs the
-  same two clicks, so they are not a cost of this design.
-- **Overhead for the measured tasks:** 82 before; 80 after, or 82 with the More clicks. **Table time:** the
-  180 measured interactions become 177.
-- **The audit script has drifted from `steps.tsv`.** Its task for a played fight clicks an `Add to notes`
-  that a played fight has not had since pull request 39 (`src/sessions/page.rs:4388`). So this document
-  gives no total for `main`. P1a repairs the script, freezes it, and measures `main`.
+- **The More clicks and the audit script.** `steps.tsv` counts no **More** click, and the script clicks
+  **More** only when `Travel` or `Short rest` is not in view. Its task for a played fight clicks an `Add to
+  notes` that the app no longer has (`src/sessions/page.rs:4388`). So this document gives no total for
+  `main`: P1a repairs the script, freezes it, and measures `main`.
 
 ### 2.2 J2: the improvised evening
 
@@ -273,16 +269,16 @@ Only the steps where a feature acts, at case A. Setup and turns cost what they c
 | Today | 6 | 35 | 6 | 8 | 7 | 14 |
 | After | 3 | 21 | 3 | 4 | 3 | 11 |
 
-- **Today's 35 leaves a smaller record.** The loot is prose under another heading, the second road roll
-  replaces the first on screen, and neither roll is saved.
-- **A wrong click** on `Start fight` costs the close: `Close run`, and `Close now` while the run is not
-  saved yet, as today. The encounter stays in **Ready to run**. A later
-  `Start fight` with her starts that encounter, so no `Fight with Captain Varra 2` is made. `Remove…` takes
-  it away for 4, **T T** (F3).
-- **Step 3 with no stat block** costs 3: `Start fight`, her HP, Enter. A wrong click there costs 1 more to
-  come back, Ctrl+K, because the form closed Lookup (F3).
-- **Step 3 at 960x640** costs 1 more. The header has no room for `Start fight` beside `Captain Varra`, so the
-  DM uses the scene row's menu: 2 (section 1.2). A planned fight costs 1.
+- **Today's 35 leaves a smaller record:** the loot is prose under another heading, and neither road roll is
+  saved.
+- **A wrong click** on `Start fight` costs the close, as today (`Close run`, and `Close now` while the run is
+  not saved yet). The encounter stays, and a later `Start fight` with her starts it again. `Remove…` takes it
+  away for 4, **T T** (F3).
+- **Step 3 with no stat block** costs 3: `Start fight`, her HP, Enter. A wrong click there costs Ctrl+K more.
+- **At 960x640 the walk is 24:** step 3 uses the scene row's menu (1 more), and the note is behind its tab,
+  so `Note` comes before step 5's typed line and `Plan` before step 6 (2 more).
+- **The 21 assumes** the note in Write, and an NPC with no portrait. With a portrait, step 3 uses the scene
+  row's menu at 1200x800 too (section 1.2).
 
 ### 2.3 J3: the broken evening, at 960x640 with Lookup open (case D)
 
@@ -295,16 +291,18 @@ Wolf 2.
 | 1 | The DM ends the fight by mistake | The ended view, 442 px wide. The header says `Undo`; its hover and accessible name say `Undo: end encounter` | Click `Undo`. `U` is off while Lookup is open. Play returns to the same turn | Do 1 | The run file is at round 2 again |
 | 2 | The DM pins `Poisoned 3 rounds` to the wolf (`Effect`, type, Enter). The app stops in round 3 | After a restart the app opens on the run, on the current turn. The row says `Poisoned 2`. `Undo` names the last saved step. The rail says `Due 1`, read from the ledger | Nothing for the run | 0 | The run file holds the effect, its count and the Undo steps |
 | 3 | Lookup is closed after the restart (a limit, section 7) | The run, with no Lookup | Ctrl+K; type `miller` | Panel 1, Find 1 = 2 | None |
-| 4 | A sync conflict opens on Kestrel Dunmoor, on the wolf's turn | The notice line: `⚠ Conflict: Kestrel Dunmoor  Review`, and `Undo` with its target, as today. Part 3 has no room there (section 1.4); the wolf's row says `Poisoned 2` | `Review`; choose. **Review** closes Lookup and selects Kestrel, as today. Then: select the wolf; Ctrl+K, which shows the note again (1 more when Lookup returns to its result list) | Do 2, Find 1, Panel 1 = 4 | The run file |
+| 4 | A sync conflict opens on Kestrel Dunmoor, on the wolf's turn | The notice line: `⚠ Conflict: Kestrel Dunmoor  Review`, and `Undo` with its target, as today. Part 3 has no room there (section 1.4); the wolf's row says `Poisoned 2` | `Review`; choose. **Review** closes Lookup and selects Kestrel, as today. Then: select the wolf; Ctrl+K, which shows the results of `miller`; click the note again | Do 2, Find 2, Panel 1 = 5 | The run file |
 | 5 | The DM edits the session note in Obsidian: a tick, a new plan line | On the Run page nothing opens. Splat held no unsaved words, so it takes the file's text within a second | Nothing | 0 | The note is as Obsidian wrote it |
-| 6 | The same, while Splat holds unsaved typed words for that note | The rail says `Notes changed`. A plan act says `The note changed on disk. Choose in the note first.` and does nothing | Ctrl+J, which closes Lookup; one choice; Ctrl+K. It keeps one version of the lines that both sides changed (a limit of today) | Panel 2, Do 1 = 3 | The note holds the chosen version |
+| 6 | The same, while Splat holds unsaved typed words for that note | The rail says `Notes changed`. A plan act says `The note changed on disk. Choose in the note first.` and does nothing | Ctrl+J, which closes Lookup; one choice; Ctrl+K; click the note again. It keeps one version of the lines that both sides changed (a limit of today) | Panel 2, Find 1, Do 1 = 4 | The note holds the chosen version |
 
 | J3, recovery | Transitions | Interactions | Panel | Find | Do |
 |---|---:|---:|---:|---:|---:|
-| Steps 1 to 5, the clean case | 0 | 7 | 2 | 2 | 3 |
-| Today with pull request 232, the same steps | 0 | 7 | 2 | 2 | 3 |
+| Steps 1 to 5, the clean case | 0 | 8 | 2 | 3 | 3 |
+| Today with pull request 232, the same steps | 0 | 8 | 2 | 3 | 3 |
 
-Today has no count on `Poisoned` and no reminder. Step 6 adds 3. The notice stays due through the fight: the
+Today has no count on `Poisoned` and no reminder. Step 6 adds 4. After Ctrl+K, Lookup shows the results
+of its search again, and the found note needs one more click (`src/lookup.rs:1533-1538`, `:1575-1580`). The
+notice stays due through the fight: the
 rail says so, and the DM finishes it after the fight (section 7). Nothing in this journey is modal, and
 nothing takes focus from `Amount`.
 
@@ -321,8 +319,8 @@ erasure is one act (**p**), and each die that a table needs is one die (**d**).
 | 1 | To open the numbers | Ctrl+T. Trackers stays in view beside the Session page | Panel 1 | 0. The sheet is on the table |
 | 2 | The party enters a room. The clock reaches 40, and a bell is due | `Enter room`. The bell's Due row shows above the trackers | Do 1 | 1 p |
 | 3 | The bell: the check for wandering, a roll for each rival, the wandering table | A real d6; on the Due row `Roll Rival Track` three times and `Roll Wandering` | Do 4, and 1 d | 4 p, and 5 d |
-| 4 | To finish the bell | `Done` | Do 1 | 1 p |
-| 5 | The Old Guard takes its first seal | `Take seal` on the Old Guard's line. A notice is due: a rival uses its 1-2 seals group | Do 1 | 1 p |
+| 4 | To apply the bell's result: the Old Guard takes its first seal | `Take seal` on the Old Guard's line, while the result is still listed. A notice is due: a rival uses its 1-2 seals group | Do 1 | 1 p |
+| 5 | To finish the bell | `Done` | Do 1 | 1 p |
 | 6 | To keep that in mind for the next fight | Nothing. The notice stays due, and the rail says `Due 1` during the fight | 0 | 1 p, a note |
 | 7 | The party enters the arena | `Enter room` | Do 1 | 1 p |
 | | The fight: three rounds. The DM adds the rival group with **Add to fight**, as today. No tracker act | | | The same |
@@ -331,7 +329,7 @@ erasure is one act (**p**), and each die that a table needs is one die (**d**).
 | 10 | The crowd loved a move, then threw a gift | `Crowd loves it`; `Throw a gift`, which also rolls the gift table | Do 2 | 2 p, and 1 d |
 | 11 | A wrong press on `Throw a gift`, seen after the next right press | `Throw a gift`; `Crowd loves it`; then the opposite action, `Crowd loves it` once more | Do 3 | 3 p: two marks and one erasure |
 | 12 | A soul is collected. The clock passes 60: the second bell | `Collect soul`, which changes the clock and the jar | Do 1 | 2 p: the clock and the jar |
-| 13 | The second bell | A real d6; three rival rolls; the wandering roll; `Done` | Do 5, and 1 d | 5 p, and 5 d |
+| 13 | The second bell | A real d6; three rival rolls; the wandering roll; `Done`, after the DM applied the results | Do 5, and 1 d | 5 p, and 5 d |
 
 | J4, between fights | Transitions | Acts | Panel | Do | Dice |
 |---|---:|---:|---:|---:|---:|
@@ -340,12 +338,15 @@ erasure is one act (**p**), and each die that a table needs is one die (**d**).
 
 - **The count is not above paper:** 25 against 25, and 2 dice against 11. Two acts open the view. The design
   saves two marks: the note of step 6, because the notice is the note, and one of the two marks of step 12.
-- **Each tracker act costs one press, as its paper mark costs one mark.** The repair of step 11 is the
-  opposite quick action, as an erasure on paper; the history keeps both presses.
-- **Must remember:** in step 8, how many rounds the fight had; the ended view says it. In the fight itself,
-  everything that the paper sheet held today (section 7).
-- **At case D** the counts are the same: Due rows are the first rows of the view (F4), and the clock, Favor
-  and the seals are the first trackers of the example.
+  Paper's 25 holds nine notes (four results at each bell, and step 6); a DM who writes no note makes 16
+  marks. With each die as an act it is 27 against 36, or against 27.
+- **In a fight the DM marks the paper sheet.** Ctrl+T still opens the view (three acts for each press), and
+  the run offers nothing more. After the fight the DM enters the fight's marks, as steps 8 and 10 do; a mark
+  that those raise shows then.
+- **A wrong press** that the DM sees late is repaired by the opposite quick action, as an erasure on paper
+  (step 11); the history keeps both presses.
+- **At case D** the counts are the same while at most one short notice is due. While a bell's results are
+  listed, a tracker below the clock needs a scroll: 1 more in step 4.
 
 ### 2.5 J5: the plain evening, and the contract
 
@@ -413,14 +414,14 @@ The campaign's notes already use XP, and the last session's note has words under
 Totals: **2 transitions and 23 to 25 interactions (Nav 2, Panel 2, Find 1 to 3, Do 18).** Today's app has no
 route for steps 5, 7 and 9; the steps that it has cost 20 and leave less record. HP carries inside one
 session, as today (`src/lib.rs:328`, `src/timeline.rs:300`): the new session's first fight starts from the
-sheets, and a paused fight that the DM resumes keeps its own HP. At 960x640 with a title of 19 letters, step
-3 goes by `Edit`: 1 more (section 1.2). Nothing is typed twice.
+sheets, and a paused fight that the DM resumes keeps its own HP. At 960x640, step 3 goes by `Edit` beside a
+19-letter title (1 more, section 1.2), and
+step 8 needs `Note` and `Plan` (2 more). The counts assume the note in Write. Nothing is typed twice.
 
 ## 3. The features
 
-Each part has the same order: the question, the place, the wireframes, the exact words, the states, the file,
-Undo, keys, what stays with the DM, and what is not built. A table at the end gives what a reviewer checks on
-paper. Every placement follows the fit rule (rule 2), every write follows section 4.1, and **a state that a
+Each part has the same order, and a table at its end gives what a reviewer checks on paper. Every placement
+follows the fit rule (rule 2), every write follows section 4.1, and **a state that a
 table does not list is as today**: sync, a run that is open, a file that changed on disk or cannot be saved.
 
 The examples of F1 use one party: 5 characters at level 3. Their budgets are Low 750, Moderate 1,125 and High
@@ -442,7 +443,8 @@ reads it from the rules that the campaign uses, as it reads the inspiration rule
   roster with no character uses the campaign's party. A level comes from the saved sheet.
 - **The budget:** for each difficulty, the sum of the table's value for each character's level.
 - **The XP:** the sum for every creature that is not on the party's side, from the function that groups use
-  today (`creature_xp`, `src/encounters/groups.rs:535`).
+  today (`creature_xp`, `src/encounters/groups.rs:535`, which P2 moves into the shared module). It can have
+  no answer for a creature.
 - **The word:** `Low`, `Moderate` or `High` when the XP is at most that budget, and `Above High` for more.
 - **When.** The answer is kept with the revisions it came from (the encounter note, the saved sheets, the rule
   entry) and is computed again when one of them changes, never each frame.
@@ -501,7 +503,6 @@ slider to scale a fight. The 2014 thresholds (no typed table in the SRD 5.1 data
 | Primary action in view | The screen's own, unchanged. F1 adds no action |
 | Components and tokens | The word: the line's own type, in `text`. Numbers: the same type in `muted`, with `number` digits. No icon and no state colour |
 | In view at 960x640 | Lookup closed and open: the editor's line, and each summary that has room; else the opened row |
-| Keys and targets | No new target |
 
 ### F2. Effects and turn reminders
 
@@ -583,7 +584,9 @@ more room. Case C is case A with the run's panel at 346 px.
   spent`.
 - **Concentration.** When a row marked `Conc` takes damage, the row's second line ends with `Conc save DC 12`
   until the next step: 10, or half the damage if that is more, and at most 30. With no room on that line, the
-  words are in the row's hover and accessible name only. Splat does not roll the save or clear `Conc`.
+  words are in the row's hover and accessible name only. Splat does not roll the save or clear `Conc`. It
+  reads the
+  damage from the newest Undo step, so the run file gains no field.
 
 **What a click does.** One act for each target. Hover and the accessible name say it: `Remove Frightened`,
 `Spend one`, `Roll 1d6. 5–6 makes it ready`.
@@ -599,9 +602,8 @@ more room. Case C is case A with the run's panel at 346 px.
 
 A count is its own target, 24 px wide or more, so the name beside it keeps its act.
 
-**What Splat reads at the end of the words.** `10 rounds` or `1 round`. `1 minute` or `2 minutes`, as 10
-rounds each. `on its turn`. `3 uses` or `1 use`. `recharge 6`, `recharge 5–6` or `recharge 5-6`. Anything else
-stays words: `Bless for a while`, `Mage Armor 8 hours`.
+**What Splat reads at the end of the words.** `10 rounds`; `1 minute`, as 10 rounds; `on its turn`; `3 uses`;
+`recharge 6`, `recharge 5–6` or `recharge 5-6`. Anything else stays words: `Mage Armor 8 hours`.
 
 **Exact words.** `Effect`. Dock field: `Effect on <name>, such as Bless 10 rounds`. On the row and the notice
 line: `Bless 9`, `Bless · last round`,
@@ -648,8 +650,8 @@ are, and Enter on one is a click.
 **What stays with the DM.** When an effect starts and ends. Every save. Whether a use was spent and when it
 comes back. Whether concentration holds. Splat counts, shows and rolls when asked.
 
-**Not built, and why.** A time on words typed in prep (an encounter's `Other effect` stays a label, so no old
-text starts to count). A link from a caster's concentration to its effects. A reminder for uses or a recharge.
+**Not built, and why.** A time on words typed in prep (no old text starts to count). A reminder for uses or a
+recharge. Suggestions in the dock's field, and one effect for several rows (cut).
 
 | Check | F2 |
 |---|---|
@@ -670,7 +672,6 @@ reveal. `Item` already means loot and equipment.
 done box, in the note's own order. Obsidian shows the same line with the same box. This is true of a task
 line that the DM typed before this feature: it is the DM's plan (section 2.5, row 14).
 
-- **Not a Timeline event,** because a planned scene has not happened. **Not a new list or tab.**
 - **The order of the plan:** what has happened in this session, as today; then the fights and scenes still to
   come, in the note's order; then the groups, as today. A done scene stays in its place, so no row jumps.
 
@@ -718,7 +719,8 @@ Add  ⚔ Fight  ⚇ Group  ⌂ Long rest  ⋯⌄    │
 - **The box** is at the start of the row, where a fight has its caret. A click or Space ticks it. The note
   changes by one character.
 - **The words** are drawn by the Reader and wrap as a plan row's title wraps today. A link opens its entry in
-  Lookup, beside the page; Back returns to what Lookup held.
+  Lookup, beside the page. `Back` returns to an entry that Lookup held, as today; a found note or event is
+  searched again (2), and Ctrl+T returns to Trackers.
 - **The second line** shows only when the words link exactly one World entry: its kind, status and place
   (`NPC · alive · Ashfall Keep`).
 - **The action place** is empty until the scene is done. Then, when the words link exactly one World entry, it
@@ -755,9 +757,8 @@ adds a creature. It is blocked as the editor's `Start fight` is, with the same r
   today.
   Cost from the Session page: `Encounters`, the menu, `Remove…`, `Session` = 4, **T T**.
 
-**Cases B, C and D.** The plan has its own tab and the full page width. The row is the same. In case D,
-Lookup on an entry and the plan are both in view; the note is behind its tab, so the typed route costs one
-tab change.
+**Cases B, C and D.** The plan has its own tab and the full page width; the row is the same. The note is
+behind its tab, so the typed route costs the tab changes.
 
 **Exact words.** `Scene`. Field: `Plan a scene: words, a person or a place`. The empty plan's words are as
 today. The box's accessible names: `Done: Captain Varra` and `Open: Captain Varra`. `Remove from tonight`.
@@ -795,9 +796,8 @@ Enter adds, the arrow keys choose a suggestion, and Escape closes.
 
 **What stays with the DM.** What a scene is, when it is done, and whether it happened at all.
 
-**Not built, and why.** Editing a scene's words in its row (the note holds them). Dragging rows. A plan link
-for an improvised fight (the run's own event is its row). Removal of the improvised encounter by `Close run`
-(cut in round 3: after a restart nothing remembers which click made it).
+**Not built, and why.** Editing a scene's words in its row, and dragging rows (the note holds them). Removal of
+the improvised encounter by `Close run` (cut: after a restart nothing remembers which click made it).
 
 | Check | F3 |
 |---|---|
@@ -805,7 +805,6 @@ for an improvised fight (the run's own event is its row). Removal of the improvi
 | Components and tokens | `Scene`: a line of the `More Add actions` menu, icon `icons::CHECK_SQUARE`. Field: `add_field`. Box: the theme's checkbox, 24 px. Words: the Reader's inline text with `link`. Second line: `Type::Small` in `muted`. `Start fight` in a reader: `Action::quiet` with `icons::RUN`. `Remove…`: `menu_action` with `icons::REMOVE`. Messages: `undo_message` |
 | In view at 960x640 | Lookup closed and open: the Add strip and the rows. Nothing scrolls sideways |
 | States | Open: an empty box. Done: a checked box, and the words in `muted` |
-| Keys and targets | As above. The box, each link and the menu are 24 px or more |
 
 ### F4. Trackers and the Due list
 
@@ -813,17 +812,14 @@ for an improvised fight (the run's own event is its row). Removal of the improvi
 
 **The slice.** This design builds trackers for use **between fights**: the ledger, the Trackers view of
 Lookup, the Due list and the rail's `Due N` (P9). What a fight may show of a tracker is held for the owner
-(section 7). So nothing of F4 is in the run: no part of the notice line, no key and no row. The marks that
-a round or a day raises wait with that answer.
+(section 7), so the run has no part of F4, and the marks that a round or a day raises wait.
 
 The data model of [World and house rules](world-and-house-rules.md) stands, and this pull request changes
 that document in place: Trackers is a view of Lookup, the ledger is the Undo, a mark's table can name what
 it rolls for (`for:`), each Due row ends with `Done`, and each instance has its own line.
 
-| Surface | What shows | When |
-|---|---|---|
-| The rail's status slot, above Lookup | A bell and `Due 2` | Only while a notice is due, on every page. A click opens Trackers |
-| The Lookup panel | The **Trackers** view | Ctrl+T, or a click on `Due 2` |
+The rail's status slot, above Lookup, shows a bell and `Due 2` only while a notice is due, on every page. A
+click on it, or Ctrl+T, opens the **Trackers** view in the Lookup panel.
 
 **Wireframe: Trackers in Lookup at case D (346 px, about 322 inside), beside the Session page, with three
 notices and four rolls.** The view is one scroll area, as Lookup's reader is (`src/lookup.rs:2195-2203`).
@@ -883,8 +879,9 @@ Seals
 - **The result line** names the last act and has `Undo` and `Add to Timeline`. After `Add to Timeline` it says
   `Added to the Timeline.` with `Undo add`.
 - **A tracker's history,** with **Remove**, and the list of problems show in the house rule note's reader.
-- **In a run** the view opens as on every page, because it is a view of Lookup. The run has nothing more
-  for it.
+- **In a fight** the DM marks the paper sheet. Ctrl+T still opens the view (three acts for each press), and
+  the run offers nothing more. After the fight the DM enters the fight's marks; a mark that those raise
+  shows then.
 - **Cases A and C** are the page before Ctrl+T: nothing shows unless a notice is due. **Case B** is the same
   view at 432 px.
 
@@ -931,12 +928,9 @@ action. Escape closes Lookup.
 **What stays with the DM.** Awarding Favor, moving a rival, what a bell does on the map, and every rule that a
 tracker's number stands for. A proposed change applies only when the DM presses `Done`.
 
-**Not built, and why.** Any tracker part in a run: a mark that a round raises, a notice on the run's notice
-line, a quick action in the dock (held for the owner; section 7). Day marks, which wait with it. The parts in
-[World and rules: later](world-and-rules-later.md). An action on a notice for a group that its words link
-(**Add to fight** is the route, as today). A `Make
-house rule note` action (no band on a World note's reader holds it today; the DM sets the note's properties,
-as the companion shows).
+**Not built, and why.** Any tracker part in a run, and day marks (held for the owner; section 7). The parts in
+[World and rules: later](world-and-rules-later.md). An action on a notice for a group (**Add to fight** is the
+route, as today). A `Make house rule note` action (no band holds it today; the DM sets the note's properties).
 
 | Check | F4 |
 |---|---|
@@ -979,9 +973,8 @@ nothing wraps (section 2.5, row 11).
   only that session.
 - **When the line reads the last session.** When that note's file changes and when a recording of that session
   is processed, never each frame.
-- **The preview and the carry-over read one source.** The **Last time** line previews the last session's
-  `What happened`, then its processed recap. Today it reads that note's own `Recap of last time` first, which
-  tells the session before it (`recap_preview`, `src/sessions/page.rs:915`).
+- **The preview and the carry-over read one source:** the last session's `What happened`, then its processed
+  recap (section 2.5, row 16).
 
 ```text
 Case A, before and after
@@ -996,8 +989,7 @@ line, `From Session 1: The Road`, which links that session. The rule is by the e
 wrote the line, so an embed that the DM typed is drawn the same way (section 2.5, row 18). Today Read shows it
 as a link. In Write it is the one line of source.
 
-**Cases B, C and D.** `Carry over` never takes a line of its own. The result message is capped at the list
-measure and wraps. Carry over does not use Lookup.
+**Cases B, C and D.** `Carry over` never takes a line of its own, and the result message wraps.
 
 **Exact words.** `Carry over`. Hover says what it will add: `Add the last session’s recap, 2 plan lines and 2
 open threads to this note.` Result: `Carried over from Session 1: the recap, 2 plan lines and 2 open
@@ -1047,15 +1039,14 @@ line as any line, and the part stays done.
 
 **What stays with the DM.** Which threads are still open, and what the recap says aloud.
 
-**Not built, and why.** A recap that an LLM writes for reading aloud. Carrying from sessions before the last.
-Ticking a thread in the old note when it is ticked here (two files for one act).
+**Not built, and why.** Carrying from sessions before the last. Ticking a thread in the old note when it is
+ticked here (two files for one act).
 
 | Check | F5 |
 |---|---|
 | Primary action in view | The plan's `Start fight`, as today |
 | Components and tokens | `Carry over`: `Action::quiet`. Result: `undo_message`, success tone. The embed in Read: the Reader's prose under a `Type::Small` muted line with `link`. A source that is gone: `small_message`, warning tone |
 | In view at 960x640 | The **Last time** line and the action, above the tabs, with Lookup closed or open |
-| Keys and targets | Tab, Enter. A Read control, 28 px |
 
 ### F6. Wrap-up to World
 
@@ -1149,7 +1140,6 @@ for player characters. Editing a Log line in Splat (Edit and Obsidian do it).
 | Primary action in view | None in Lookup |
 | Components and tokens | `Add to Log` in a reader: `Action::quiet` with `icons::ADD`. On a scene's row: `Action::quiet` in the row's action slot. Field: `add_field`. Stamp: `Type::Small` in `muted`. Result: `undo_message` |
 | In view at 960x640 | The header by section 1.2, the field and the result, above the entry's text |
-| Keys and targets | As above. Every target is 24 px or more |
 
 ### F7. Rewards record
 
@@ -1167,8 +1157,7 @@ holds only the menu today (`src/sessions/page.rs:4344-4346`), and its title has 
 has today beside the action's own width. P7 works this out when the title or the width changes, not each
 frame. When the title uses the width, it is the last of the opened row's links: `Log · Whole run · Timeline ·
 Add rewards` (`:4918-4926`), so no link of today moves. After the act, the same place says `In notes`: the
-status that an event's row has today (`:4392`), or muted words in the opened row. `Copy loot` stays on the
-ended view, for a chat or another program.
+status that an event's row has today (`:4392`), or muted words in the opened row.
 
 ```text
 Case A, the plan at 330 px
@@ -1189,13 +1178,17 @@ Case A, the plan at 330 px
 - **The XP line,** first under it, when the notes use XP (below): the XP of the creatures that ended at 0 HP,
   also those marked absent at 0 HP, and each character's share. F1's function gives the numbers. The line
   names what it counted and what still stood, so the DM can change it. With nobody at 0 HP it says `XP 0 for 0
-  at 0 HP`.
+  at 0 HP`. When a creature at 0 HP has no XP that Splat knows (a made-up creature, an NPC with no stat
+  block), the line says so: `XP 450 for 3 at 0 HP. XP not known for Captain Varra: enter an award here.` It
+  is still an XP line, and the link and the loot are written. An amount that is not known is left out of
+  every sum and is never counted as zero. This point is proposed; the owner has not ruled yet (section 7).
 - **Loot,** as lines under it: the encounter's loot and the loot of each creature at 0 HP. A roll that was
   made has its result. A roll that was not made is written with `(not rolled)`, as `Copy loot` writes it
   today, and the result says how many.
 
 **XP has no switch.** There is no setting, no control and no stored mark. For a new block Splat looks for the
-newest rewards block: in this note first, then in the note of each earlier session, newest first. A note
+newest rewards block: in this note first (the last block in its text), then in the note of each earlier
+session, newest first. A note
 with no block is passed. A note that cannot be read stops the search; P7 reads the notes in order and keeps
 an unreadable one in its place.
 
@@ -1226,7 +1219,7 @@ line in this note, as the note stands, and how many fights it sums.
 
 **Exact words.** `Add rewards`. `In notes`. Result: `Rewards added under Loot and rewards.`, then one line of
 the table above; with XP, `XP tonight: 1,650 for 2 fights.`; with rolls that were not made, `2 loot rolls were
-not made.` `Undo rewards`.
+not made.`; with an award that is not known, `1 award is not known.` `Undo rewards`.
 
 | State | What shows |
 |---|---|
@@ -1263,8 +1256,7 @@ action after its words.
 the party levels up. A milestone is a line that the DM writes.
 
 **Not built, and why.** `Update rewards`, and any record in the run of what was written (two owners for one
-fact). A switch for XP, on one block or on all (cut in rounds 3 and 4: the note holds the choice, and a
-deleted line changes it). A status link to the block. A stored total. A party inventory.
+fact). A switch for XP (cut: the note holds the choice). A stored total. A party inventory.
 
 | Check | F7 |
 |---|---|
@@ -1272,7 +1264,6 @@ deleted line changes it). A status link to the block. A stored total. A party in
 | Components and tokens | `Add rewards`: `Action::quiet` in the plan row's action band, or `word_link` in the opened row. `In notes`: `design::status` with `icons::OK` in `document.saved`. Result: `undo_message` |
 | In view at 960x640 | The played rows; the action on the row, or one click away in the opened row |
 | States | Not added: `Add rewards`. Added: check and `In notes`. Blocked: the reason in `Small` |
-| Keys and targets | As above. Read controls, 28 px; the opened row's links are 24 px high |
 
 ### F8. Undo after a restart, and Continue fight
 
@@ -1306,7 +1297,6 @@ It shows only after a file that this version cannot read, and `Next turn` works 
 | Primary action in view | `Next turn` in play. On the ended view, `Close run`, as today |
 | Components and tokens | As built |
 | In view at 960x640 | The pull request's own scenario captures each surface with Lookup closed and open |
-| Keys and targets | `U`, as today. No new key |
 
 ### F9. Travel and random encounters
 
@@ -1373,8 +1363,10 @@ first.` So a wrong `Roll for encounters` can go at any time.
 - **One check at each whole interval from the start, and none at the journey's end.** Two days give two
   checks, at 0 and 24 hours. An empty length, or one that the clock cannot read, gives one line, `This
   journey`. `Roll all 2` shows under the lines while two or more are not rolled.
-- **The lines on screen follow the length as the DM types it.** The file takes the length on Enter or when
-  the field loses focus, as the field does today. `Roll for encounters` puts focus in **How long** when the
+- **The lines on screen follow the length as the DM types it.** New in P5, on Timeline and on the
+  Session page: the file takes the length on Enter or when the field loses focus. Today each key changes the
+  event (`src/timeline/page.rs:1011-1019`). An outside change to the event meets the Timeline's choices of
+  today at that save. `Roll for encounters` puts focus in **How long** when the
   journey has no length.
 - **A check belongs to its offset** from the journey's start: 0 hours, 24 hours, and so on. Its name is read
   from the clock: `Day 3` for a day, `Day 3, 08:00` for a watch or for hours. **A result is never deleted by
@@ -1386,7 +1378,9 @@ first.` So a wrong `Roll for encounters` can go at any time.
   writes the link under `## Plan for tonight` as the first line still to come. So the fight is the next plan
   row and has the primary `Start fight`. Then the line says `In the plan`, while the plan has a row still to
   come for that
-  link: Splat reads this from the plan and stores no mark. After that fight is played, `Plan “Wolf Pack”` shows
+  link: Splat reads this by the plan's own rule, which takes one played event for each link
+  (`src/sessions/page.rs:4185-4205`), and stores no mark. F5's "not played" uses the same rule. After that
+  fight is played, `Plan “Wolf Pack”` shows
   again and adds a second line.
 - More than 31 lines are not listed. The row says `This journey has 240 checks. Split it into shorter
   journeys to roll them here.`
@@ -1452,7 +1446,6 @@ table chosen by terrain.
 | Components and tokens | Menu lines: quiet items. **How long**: the Timeline's field. Table: `menu_button`. `Roll`, `Roll all`: `Action::secondary` with `icons::DICE`. `Enter a roll`: `number_field`. `Clear`, `Plan “…”`: `Action::quiet`. `In the plan`: `status`. Messages: `undo_message` |
 | In view at 960x640 | The open row scrolls with the plan, as open rows do today. The Add strip stays above it |
 | States | Not rolled: the buttons. Rolled: the number and words. Planned: check and `In the plan`. Fault: warning icon and `Cannot roll` |
-| Keys and targets | As above. `Roll` and `Enter a roll` are 28 px high and at least 24 px wide |
 
 ## 4. Cross-feature rules
 
@@ -1540,7 +1533,6 @@ Each row is one new write, with the fragment as the file holds it. Longer fragme
 |---|---|
 | F2 reminder and F4 Due notice | The notice is the campaign's fact, and the rail's count stays until `Done`. An effect that the DM types on a row is the DM's own second note. Splat never makes one from the other |
 | F2 effect and an official condition | Words that are a condition's name become that condition, with the time. One entry holds the condition and its count, so a sheet that removes one removes both |
-| F2 the row and the notice line | The row is the place to act. The notice line repeats its words |
 | F2 the dock's field and the Conditions tab's field | One reader of the words, and both write the same entry. The Conditions tab's field keeps its `Add` button, as today (`view.rs:2430`) |
 | F3 scene and a Timeline event | The scene is the plan. The event is what happened. A done scene with one entry offers `Add to Log`, not an event |
 | F3 a scene that links an NPC and the fight with that NPC | The improvised encounter is named `Fight with <name>`, so the NPC's own name is never an encounter's name |
@@ -1560,11 +1552,9 @@ pattern is already in the app.
 | Add typed words to a list | The add field: one field with no button. Enter adds. A suggestion adds by an arrow key and Enter, or a click. Escape clears and closes. The field stays open after Enter only where several lines follow each other | Enter, Escape | `Add loot` in the encounter editor | F2 the effect field, F3 scenes, F6 `Add to Log` |
 | Put a record in the session note | A quiet action on the plan row, `Add …`. Then the status `In notes` in its place | Tab, Enter | `Add to notes` and the status `In notes` on event rows (`src/sessions/page.rs:4392-4394`) | F7 `Add rewards` |
 | Start a fight | `Start fight` with the run icon: a bordered button on a row and in the editor, a quiet action in a reader's header, a line of a scene row's menu | Tab, Enter | Plan, Encounters, editor | F3 in a reader |
-| Mark a plan line done | A box at the start of the row; accessible name `Done: …` or `Open: …` | Space | New for a plan row | F3 scenes |
 | Finish a notice | A quiet `Done` at the end of the notice's actions. It applies the ticked proposed changes | Tab, Enter | New | F4 |
 | Roll | A control with the dice icon. A result takes its place when the thing rolls once, and is listed under it otherwise. `Roll all N`; `Enter a roll` for a player's own roll | Enter | Tables in the Reader, loot, the dock | F2 a spent recharge, F4 notices, F9 checks |
 | Name a table outside its own note | Its heading, from one descriptor for a marked table: source note, heading, key, dice, interval | | New. The Reader's own button says `Roll 1d20` and the loot editor's menu is as today | F4, F9 |
-| Undo of a tracker act | The result line's first action, `Undo: <label>` | Tab, Enter | New | F4 |
 | Undo anywhere else | A message that says what happened, with a quiet `Undo <noun>` on its line, where the DM acted. Section 4.1 says when it ends | Tab, Enter | Plan, Timeline, World, Library | `Undo scene`, `Undo carry over`, `Undo Log line`, `Undo rewards`, `Undo checks`, `Undo roll`, `Undo clear`, `Undo plan line` |
 | Remove | A line of the row's menu, with an Undo message | Tab, Enter | Fights and groups in the plan; a saved group's `Remove…` | F3 scenes and an encounter's `Remove…`, F4 `Dismiss` |
 
@@ -1573,7 +1563,7 @@ pattern is already in the app.
 ### 5.1 New controls and their components
 
 No feature adds a colour or a type size. Three icons join `design::icons`: `PIN`, `BELL` and `CHECK_SQUARE`.
-Section 3 names the component and token of each control in its check table. The shared parts land before the
+The shared parts land before the
 features, in P1c, so that every user has one copy:
 
 - `add_field`: the loot editor's add field with suggestions, with today's behaviour. Its two callers of today
@@ -1595,15 +1585,19 @@ the rule in this document is the text.
 
 **Changed and new workflows.** Pull request 232 has its own changes to W4 and to assumption A8.
 
-| Workflow | Text to add | Done well |
-|---|---|---|
-| W5 | "The editor says how the roster compares with the party's XP budget." | T5.7 |
-| W11 | "A journey that the DM asks to check rolls its encounter checks in its own row, and a result becomes a planned fight in one step." | T11.9, T11.10 |
-| W14 | "The plan also holds scenes, with a done mark. A creature's or an NPC's page starts a fight that nobody planned." | T12.10 to T12.12 |
-| Section 3, Reachable from anywhere | "**Trackers:** Ctrl+T opens the trackers and the Due list in the Lookup panel, and goes back." | T19.1 |
-| W15, new: Keep track of what lasts | "On each turn the DM sees what they asked to be reminded of, and how long it lasts, with no answer needed." | T17.1 to T17.6 |
-| W16, new: Close the evening and open the next | "Rewards, what changed in the world, the recap and the open threads are where the next step needs them, with nothing typed twice." | T18.1 to T18.4 |
-| W17, new: Run a house rule's numbers | "Between fights, one press records a change, a due notice stays in view, and the history is a file." | T19.1 to T19.4 |
+- **W5,** add: "The editor says how the roster compares with the party's XP budget." (T5.7)
+- **W11,** add: "A journey that the DM asks to check rolls its encounter checks in its own row, and a result
+  becomes a planned fight in one step." (T11.9, T11.10)
+- **W14,** add: "The plan also holds scenes, with a done mark. A creature's or an NPC's page starts a fight
+  that nobody planned." (T12.10 to T12.12)
+- **Section 3, Reachable from anywhere,** add: "**Trackers:** Ctrl+T shows the trackers and the Due list in
+  the Lookup panel, and goes back." (T19.1)
+- **W15, new, Keep track of what lasts:** "On each turn the DM sees what they asked to be reminded of, and
+  how long it lasts, with no answer needed." (T17.1 to T17.6)
+- **W16, new, Close the evening and open the next:** "Rewards, what changed in the world, the recap and the
+  open threads are where the next step needs them, with nothing typed twice." (T18.1 to T18.4)
+- **W17, new, Run a house rule's numbers:** "Between fights, one press records a change, a due notice stays
+  in view, and the history is a file." (T19.1 to T19.4)
 
 **New rows for section 8.**
 
@@ -1613,21 +1607,21 @@ the rule in this document is the text.
 | T11.9 | A two-day journey rolls two checks in 1; each is a quoted line of the event in `Timeline.md`, and an older reader keeps a line whose words hold `: `. A shorter length deletes none. A result edited in Obsidian shows its words, and `Clear` removes it |
 | T11.10 | A result that names an encounter is planned in 1, and its `Start fight` is next; `In the plan` shows only while that row is to come. With several tables and no earlier choice, `Roll` waits, and the event holds `Checks table:` through a restart. `No checks` takes the block off |
 | T12.10 | A task line is a scene with a box. A tick changes one character. A plain list line gets no row. The empty plan is as today |
-| T12.11 | A scene's link opens its entry in Lookup in 1, and Back returns |
+| T12.11 | A scene's link opens its entry in Lookup in 1, and `Back` returns to an earlier entry |
 | T12.12 | A reader starts a fight in 1, and a scene row's menu in 2. An NPC with no stat block opens the made-up form with its name and focus in HP. After `Close run`, also after a restart, a second `Start fight` starts the same encounter. `Remove…` and `Undo remove encounter` remove and restore an encounter with no saved run |
-| T17.1 | An effect with a count joins a row in ≤ 4, with the run's panel hidden; focus returns to Amount. With the longest name, the dock has no `Effect`, and the name keeps its size and words; `E` adds the effect through the Conditions tab's field in 4, and the pointer in 5 |
+| T17.1 | An effect with a count joins a row in ≤ 4, with the run's panel hidden; focus returns to Amount. With the longest name the dock has no `Effect`, and the name keeps its size and words; `E` adds the effect through the Conditions tab's field in 4, the pointer in 5 |
 | T17.2 | On its turn the effect's words show on the notice line and the row. A label shows on no notice. `Next turn` takes 1 and does not move |
 | T17.3 | A count of 10 says 10, then 9, says `time is up` at 0, and removes nothing. Undo of `Next turn` gives it back, also after a restart |
-| T17.4 | Case D: the notice line and the rows match section 1.4 with a conflict on a 16-letter name and three reminders that start with the same words, and with no conflict. With 12 participants that each have a timed effect, every row has the height of a row with one condition. `End Wis save DC 15 (Hold Person) 2 rounds` keeps its place through `2`, `last round` and `time is up` |
+| T17.4 | Case D: the notice line and the rows match section 1.4 with a conflict on a 16-letter name and three reminders that start with the same words, and with no conflict. With 12 participants that each have a timed effect, every row has the height that the same row has with no effect. `End Wis save DC 15 (Hold Person) 2 rounds` keeps its place through `2`, `last round` and `time is up` |
 | T17.5 | A spent recharge rolls in 1 and a use is spent in 1, on the row. A counted condition's name opens its rule |
-| T17.6 | Damage to a `Conc` row adds the save DC at the end of its second line, with no action, notice or new line |
-| T18.1 | A fight's loot reaches the note in 1, with its reference and one Undo, and the note shows the block. The row says `In notes`, also after the heading is renamed. The XP line follows the three rows of F7's table, and no block that exists is changed. A title that fills the row has the action as the last link of the opened row, at the same row height |
+| T17.6 | Damage to a `Conc` row adds the save DC at the end of its second line, with no action, notice or new line. With a timed effect on the row, the DC takes only the room that is left |
+| T18.1 | A fight's loot reaches the note in 1, with its reference and one Undo, and the note shows the block. The row says `In notes`, also after the heading is renamed. The XP line follows F7's table, and no block that exists is changed. A made-up NPC at 0 HP gives an XP line that names the award that is not known; the next block still has an XP line, and the sum leaves that award out. A title that fills the row has the action as the last link of the opened row, at the same row height |
 | T18.2 | A line reaches an entry's Log in ≤ 4 from a done scene, stamped as a **Change** at that moment. The header's actions match the table of section 1.2 for titles of 13, 16 and 19 letters at cases B and D and on the World page, with and without a portrait, and every title keeps its width |
 | T18.3 | `Carry over` shows only while the session has no event and no run. It adds the recap link, the plan lines (a paused fight has `Resume`) and the threads in 1, below the DM's words. A written recap is kept. After a copied draft became the embed, `Undo carry over` gives back the draft and both properties as they were |
 | T18.4 | A note the DM did not act on does not change. A new session with no carry-over is the template, and its first fight starts from the sheets |
 | T19.1 | Ctrl+T opens Trackers in Lookup, and Ctrl+T again shows what Lookup showed: an entry, a found note, or nothing. `Back` is as today |
 | T19.2 | A quick action takes 1, also on an instance's line. `Undo` steps back through the acts of the session being played, also after a restart. The opposite action corrects a value in 1 |
-| T19.3 | A value that passes a mark raises a Due row above the trackers and the rail's count, on every page. Nothing of a tracker shows in the run |
+| T19.3 | A value that passes a mark raises a Due row above the trackers and the rail's count, on every page. The Run page shows no tracker part except the rail's count |
 | T19.4 | Case D, beside the Session page: three notices with four rolls and the result line are in view with no scroll |
 | G6 | The unchanged evening of the audit gives the counts it gave before |
 | G7 | The plain campaign differs from its reference only by rows of section 2.5 |
@@ -1636,7 +1630,10 @@ the rule in this document is the text.
 table and long names, is played by a script that uses no new control, at 1200x800 and 960x640, with Lookup
 closed and open. For each screen the check compares four things with the reference: each control's and
 text's **rectangle**, each row's **height**, the **words**, and the campaign's **files**. A difference passes
-only when it is a row of section 2.5 that the pull request owns. The reference lands in P1a. Each feature's
+only when it is a row of section 2.5 that the pull request owns. The check holds the exact difference that
+each row permits, the named control or words with its rectangle, and it masks no region. So a link that
+moves beside `Add rewards`, a second line on the **Last time** line, an old effect that starts to count, a
+changed `Back` and a file written with no act all fail. The reference lands in P1a. Each feature's
 pull request proves that the check can fail, with four mutations: the difficulty word forced onto a line of
 its own (a height); `Add rewards` forced onto a row whose title then wraps (a rectangle); a line `E` added to
 the run's **Keys** list (words); `carried_from` written at `Create session` (files).
@@ -1648,7 +1645,7 @@ the run's **Keys** list (words); `carried_from` written at `Create session` (fil
 - **Effect**: words that the DM pins to one participant of a run. It can have a time (a count of rounds, or
   on its turn), a count of uses, or a recharge. It stays in that run. _Avoid_: Custom condition, timer.
 - **Reminder**: the words of an effect that has a time, on the run's notice line during its participant's
-  turn. It asks for nothing.
+  turn.
 - **Scene**: a task line of a session's plan that is not a fight or a group, with a done mark. _Avoid_: Plan
   item, task, to-do.
 - **Carry-over**: the act that adds the last session's recap link, plan lines that were not played and open
@@ -1674,21 +1671,20 @@ the reference of G7.
 **Rules for every pull request.**
 
 - Its visual-test scenarios cover each changed surface **with Lookup closed and with Lookup open, at
-  960x640**, and once at 1200x800, with the long content of its wireframes. A new scenario goes at the end of
-  `SCENARIOS`.
+  960x640**, and once at 1200x800, with the long content of its wireframes.
 - It extends an existing scenario or test when that one has the same setup, and it breaks the code once for
   each new check and says so.
 - For each result that stays on screen and each Undo, it tests an act A, an unrelated act B, then Undo of A.
-- For each new write it tests the path of section 4.1: an edit on disk a moment before, unsaved words with a
+  For each new write it tests the path of section 4.1: an edit on disk a moment before, unsaved words with a
   changed file, a failed save, and a restart.
-- It runs G6 and G7, with its mutation of G7.
-- It adds its own lines to `docs/design-system.md`, `docs/ux-intent.md`, `CONTEXT.md` and `README.md`, from
-  section 5, and its task to the evening in `src/visual_tests/dm_audit.rs` as a **new** task.
+- It runs G6 and G7, with its mutation of G7. It adds its own lines to `docs/design-system.md`,
+  `docs/ux-intent.md`, `CONTEXT.md` and `README.md` from section 5, and its task to
+  `src/visual_tests/dm_audit.rs` as a **new** task.
 
 | PR | Scope | Files and modules | Depends on | Scenarios |
 |---|---|---|---|---|
 | **P0** | F8: merge pull request 232 when it passes its review, by the rule of F8 | As built | None | As built |
-| **P1a** | The audit. Repair the script (drop the task that clicks `Add to notes` on a played fight; keep setup acts apart from counted acts). Freeze it and measure `main`. Add the plain campaign, its script and the G7 reference. Measure a `Display` title of 13, 16 and 19 letters for section 1.2 | `src/visual_tests/dm_audit.rs`, `scenarios.rs`, `fixture.rs`, `artifacts/dm-audit/` | P0 | New `plain-evening` |
+| **P1a** | The audit. Repair the script (drop the task that clicks `Add to notes` on a played fight; keep setup acts apart from counted acts). Freeze it and measure `main`. Add the plain campaign, its script and the G7 reference. Measure a `Display` title of 13, 16 and 19 letters for section 1.2, with a portrait and a scroll bar | `src/visual_tests/dm_audit.rs`, `scenarios.rs`, `fixture.rs`, `artifacts/dm-audit/` | P0 | New `plain-evening` |
 | **P1b** | No change in behaviour. Move the plan pane to `src/sessions/plan.rs`, and the run's dock and notice line to `src/encounter_run/dock.rs` and `notice.rs` | Those files | P0 | None new. `visual-compare` shows no difference |
 | **P1c** | The shared parts of section 5.1. `Draft::apply`, with today's two plan acts under it and their behaviour unchanged. `played_session`, called by `current_link` and `party_bar_shows` (section 2.5, row 19). An entry that opens while an NPC is held shows under its row (row 17) | `src/sessions.rs`, `src/sessions/page.rs`, `src/sessions/plan.rs`, `src/loot_editor.rs`, `src/design/components.rs`, `src/roll_table.rs`, `src/lookup.rs`, `src/lib.rs` (the Log stamp) | P1a, P1b | Extend `session-plan`, `run-loot`, `roll-table-author`, `npc-in-lookup`, `world-facts` |
 | **P2** | F1 | New `src/difficulty.rs`. `src/encounter_settings.rs`, `src/encounters.rs`, `src/encounters/list.rs`, `src/sessions/plan.rs`, `src/encounter_run/view.rs` (Arrivals) | P1a, P1b, P1c | New `encounter-difficulty`. Extend `encounter-build`, `session-plan`, `encounter-groups` |
@@ -1698,10 +1694,10 @@ the reference of G7.
 | **P6** | F6 | `src/world.rs` (the header band and the field), `src/world/lines.rs` (reuse `add_log`, `:459`), `src/sessions/plan.rs` | P1c, P3 | New `log-from-play`. Extend `world-facts` |
 | **P7** | F7. An ordered read of the session notes that keeps an unreadable note in its place | `src/sessions.rs` (the block, the search for the newest block), `src/sessions/plan.rs`, `src/encounter_run/loot.rs`, `src/difficulty.rs` | P2, P3 | Extend `run-loot`, `session-plan` |
 | **P8** | F5, with rows 11, 16 and 18 of section 2.5. The draft's provenance, and the exact inverse of `Undo carry over` | `src/sessions.rs`, `src/sessions/page.rs` (`last_time_block`, `recap_preview`), `src/markdown_view.rs` | P3 | New `session-carry-over`. Extend `session-plan` |
-| **P9** | F4, the slice between fights: house rule notes, in play, the ledger with its save and its Undo, quick actions, instances, marks at a value with `for:`, the Due rows, the rail's count, `Add to Timeline`, the Trackers view and Ctrl+T. `for:` on the bells of the Tournament example | New `src/trackers.rs`, `src/trackers/ledger.rs`, `src/trackers/view.rs`. `src/lookup.rs`, `src/lib.rs`, `src/campaign_content.rs`, `crates/core`, the example note | P1a, P1c | New `trackers`. Extend `run-lookup`, `nav-state` |
+| **P9** | F4, the slice between fights: house rule notes, in play, the ledger with its save and its Undo, quick actions, instances, marks at a value with `for:`, the Due rows, the rail's count, `Add to Timeline`, the Trackers view and Ctrl+T. In the Tournament example: `for:` on the bells, `activation` not pinned (it is held with P10), and no line about **Make house rule note** | New `src/trackers.rs`, `src/trackers/ledger.rs`, `src/trackers/view.rs`. `src/lookup.rs`, `src/lib.rs`, `src/campaign_content.rs`, `crates/core`, the example note | P1a, P1c | New `trackers`, with the Session page's plan tab and `Start fight` beside the view. Extend `run-lookup`, `nav-state` |
 | **P10** | Held (section 7): marks that a fight raises | – | The owner's answer, and P9 through a whole race in an app round | – |
 | **P11** | Held with P10: day marks | – | P10 | – |
-| **P12** | The audit, again. Extend the evening to use every feature, measure it, and add the scripts for J2, J3, J4 and J6. Run G6 and G7 on the whole | `src/visual_tests/dm_audit.rs`, `artifacts/dm-audit/` | All | The audit's captures, and `plain-evening` |
+| **P12** | The audit, again. Extend the evening to use every feature, measure it, and add the scripts for J2, J3, J4 and J6. Run G6 and G7 on the whole | `src/visual_tests/dm_audit.rs`, `artifacts/dm-audit/` | All that are built | The audit's captures, and `plain-evening` |
 
 **What can be built at the same time.**
 
@@ -1716,26 +1712,34 @@ the reference of G7.
 
 Each is a limit that this design keeps and states, with its count.
 
-- **An overlapping edit is not merged** (today). With unsaved typed words for a note and a changed file, the
-  comparison of today offers one version or the other, and a feature's act waits for that choice.
-- **Lookup's place is not kept across a restart** (today), and a held form is lost with it. What Lookup's
-  reader shows for a note that changed on disk is as today; P1c records it in a test.
+- **An overlapping edit is not merged** (today): with unsaved typed words and a changed file, the comparison
+  of today offers one version, and a feature's act waits for that choice.
+- **Lookup's place is not kept across a restart** (today), and a held form is lost with it. A found note is
+  searched again after Lookup closed or showed an entry: 1 or 2 more (section 2.3, F3). `Back` is as today;
+  P1c records these states in a test.
 - **The rewards block does not follow the fight** after it is written (F7).
 - **A reader's header at 960x640 with Lookup open** shows `Start fight` beside a title of up to about 10
-  letters, and the `Add to Log` icon up to about 17. Section 1.2 counts the other routes.
-- **A row has one line for its effects.** At 960x640 with Lookup open it holds one long reminder, or one
-  counted effect, and a count of the others. The hover, **Conditions** and the notice line hold the whole
-  words (section 1.4).
+  letters, and the `Add to Log` icon up to about 17; a portrait takes about 80 px more. Section 1.2 counts
+  the other routes.
+- **A row's effects share its second line with today's words.** At 1200x800 it holds one counted effect and
+  a count, or two counted effects with short names. At 960x640 with Lookup open it holds one long reminder,
+  or one counted effect, and a count. The hover, **Conditions** and the notice line hold the whole words
+  (section 1.4).
 - **`Effect` by the pointer costs 5** when the dock has no room for it and Lookup is open (F2).
 - **Removing a stray encounter costs 4,** with 2 page transitions (F3).
-- **Continuing an older fight is cut** (F8). After a later fight or rest, the order of play would have to
-  change, and change back, across two files. The DM starts a new run. The fight played last goes on in 2 or
-  3 interactions when its run is closed.
-- **The typed route to a scene costs a tab change** where the note is behind its tab (cases B, C and D).
+- **Continuing an older fight is cut** (F8): after a later fight or rest, the order of play would have to
+  change, and change back, across two files. The DM starts a new run.
+- **Where the note is behind its tab** (cases B, C and D), a typed line costs the tab changes: 2 in J2 and in
+  J6.
 
-**Held for the owner: trackers in a fight.** A tracker act in a fight costs three acts, because Trackers is
-a view of Lookup and the run's own panel hides beside it. One press needs pinned quick actions in view in
-the run, and the owner rules before a strip or a panel view joins the run. Until then a fight has no tracker
-part, the DM keeps a race's numbers on paper during a fight (section 2.4), and P10 and P11 wait.
+**Two points wait for the owner.**
+
+1. **Trackers in a fight.** A tracker act in a fight costs three acts, because Trackers is a view of Lookup
+   and the run's own panel hides beside it. One press needs pinned quick actions in view in the run, and the
+   owner rules before a strip or a panel view joins the run. Until then the DM marks the paper sheet in a
+   fight and enters the fight's marks after it (section 2.4), a bell inside a fight shows then, and P10 and
+   P11 wait.
+2. **F7, an award that is not known.** The XP line names the creature whose XP Splat does not know, and
+   leaves that amount out of the sum. Proposed; the owner has not ruled yet.
 
 No question is open for the lead. While a run is open, a reader has no `Start fight` action.
