@@ -508,35 +508,66 @@ fn merge_groups(
     groups
 }
 
-fn missing_words(name: &str) -> String {
-    format!("{} {name} · Not found", design::icons::WARN)
+/// The name part of a missing link: the warning icon and the name, in `Body` as a set link is.
+fn missing_name(name: &str) -> String {
+    format!("{} {name}", design::icons::WARN)
 }
+
+/// The state part of a missing link, in `Small` after the name.
+const NOT_FOUND: &str = " · Not found";
 
 /// The width a missing link takes as `missing_link` draws it: one line, or with `stacked` its
 /// name line above `Not found`.
 fn missing_width(ui: &egui::Ui, name: &str, stacked: bool) -> f32 {
-    let font = Type::Small.font(ui);
+    let name = design::number_width(ui, &missing_name(name), &Type::Body.font(ui));
+    let small = Type::Small.font(ui);
     if stacked {
-        design::number_width(ui, &format!("{} {name}", design::icons::WARN), &font)
-            .max(design::number_width(ui, "Not found", &font))
+        name.max(design::number_width(
+            ui,
+            NOT_FOUND.trim_start_matches(" · "),
+            &small,
+        ))
     } else {
-        design::number_width(ui, &missing_words(name), &font)
+        name + design::number_width(ui, NOT_FOUND, &small)
     }
 }
 
-/// A link to a note that is not there: icon, name and ` · Not found`. When the row is too narrow,
-/// or its label stands above it (`stacked`, Lookup beside World), the name wraps by whole words
-/// and `Not found` takes its own line below it, whole.
+/// A link to a note that is not there: icon and name in `Body`, as a set link, in the warning
+/// tone, then ` · Not found` in `Small`. When the row is too narrow, or its label stands above it
+/// (`stacked`, Lookup beside World), the name wraps by whole words and `Not found` takes its own
+/// line below it, whole. The name's first line is as tall as a row's control and centred in it,
+/// so a `Change` beside the value lines up with the name, not between the two lines.
 fn missing_link(ui: &mut egui::Ui, name: &str, stacked: bool) {
-    let words = missing_words(name);
     let warning = colors().result.warning;
-    if !stacked && design::number_width(ui, &words, &Type::Small.font(ui)) <= ui.available_width() {
-        ui.label(Type::Small.rich(ui, &words).color(warning));
+    let words = missing_name(name);
+    if !stacked && missing_width(ui, name, false) <= ui.available_width() {
+        let mut job = egui::text::LayoutJob::default();
+        let style = ui.style().clone();
+        for text in [
+            Type::Body.rich(ui, &words).color(warning),
+            Type::Small.rich(ui, NOT_FOUND).color(warning),
+        ] {
+            text.append_to(
+                &mut job,
+                &style,
+                egui::FontSelection::Style(egui::TextStyle::Body),
+                egui::Align::Center,
+            );
+        }
+        ui.label(job);
     } else {
         ui.vertical(|ui| {
-            let (name, state) = words.split_once(" · ").unwrap_or((&words, ""));
-            ui.add(egui::Label::new(Type::Small.rich(ui, name).color(warning)).wrap());
-            ui.label(Type::Small.rich(ui, state).color(warning));
+            // The name's first line sits where a one-line value is centred in the row's
+            // control, so `Change` beside it is level with the name; `Not found` follows it.
+            ui.add_space(((Density::Scan.control() - Type::Body.line()) / 2.0).max(0.0));
+            // `Not found` sits directly under the name, as one value's two lines.
+            ui.spacing_mut().item_spacing.y = 0.0;
+            ui.add(egui::Label::new(Type::Body.rich(ui, &words).color(warning)).wrap());
+            ui.label(
+                Type::Small
+                    .rich(ui, NOT_FOUND.trim_start_matches(" · "))
+                    .color(warning),
+            );
         });
     }
 }
@@ -616,15 +647,49 @@ fn empty_optional(value: &Value) -> bool {
 }
 
 /// The message's action starts at its words, below them, as every message action does.
-fn unread_groups_message(ui: &mut egui::Ui, campaign: &Campaign, path: &str, reason: &str) {
-    let open = design::message_with_actions(ui, Tone::Warning, reason, |ui| {
-        design::link(ui, "Edit in Obsidian").clicked()
-    });
+fn unread_groups_message(
+    ui: &mut egui::Ui,
+    campaign: &Campaign,
+    path: &str,
+    reason: &str,
+    whole: &str,
+) {
+    // `design::message_with_actions`'s layout, with the message's own response kept: its words
+    // carry the whole sentence's hover and description (round 25 FD4).
+    let open = ui
+        .scope(|ui| {
+            ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
+            let response = design::message(ui, Tone::Warning, reason);
+            whole_value(ui, &response, reason, whole);
+            let inset = response.rect.left() - ui.cursor().left();
+            ui.horizontal_top(|ui| {
+                ui.add_space(inset);
+                design::link(ui, "Edit in Obsidian").clicked()
+            })
+            .inner
+        })
+        .inner;
     if open {
         ui.ctx().open_url(egui::OpenUrl::new_tab(obsidian_url(
             &campaign.path.join(path),
         )));
     }
+}
+
+/// A warning that quotes an unread value cut around `…` (round 25 FD4): its hover and its
+/// accessible description keep the sentence with the value whole.
+fn whole_value(ui: &egui::Ui, response: &egui::Response, shown: &str, whole: &str) {
+    if shown != whole {
+        response.clone().on_hover_text(whole);
+        ui.ctx()
+            .accesskit_node_builder(response.id, |node| node.set_description(whole));
+    }
+}
+
+/// An unread-value warning, cut as `whole_value` says.
+fn unread_warning(ui: &mut egui::Ui, shown: &str, whole: &str) {
+    let response = design::message(ui, Tone::Warning, shown);
+    whole_value(ui, &response, shown, whole);
 }
 
 fn reference(value: &Value) -> Option<Reference> {
@@ -1714,8 +1779,9 @@ struct GroupFault {
     generation: u64,
     /// The Part of list on disk that could not be read.
     unread: Option<fields::Unread>,
-    /// Every other value not read, as the reader words it. They sit with the Part of reason.
-    notices: Vec<String>,
+    /// Every other value not read, as the reader words it, with a long value cut, then whole.
+    /// They sit with the Part of reason.
+    notices: Vec<(String, String)>,
     /// The entry for the shared reader, without its flags. None when it has none.
     entry: Option<Entry>,
 }
@@ -1731,14 +1797,38 @@ fn status_unread(entry: &Entry) -> bool {
         .any(|flag| flag.kind == FlagKind::Unread(Field::Status))
 }
 
-/// A value the reader could not read, as the shared reader says it (`src/library/view.rs`).
-fn flag_words(flag: &splat::content::layout::Flag) -> String {
-    flag.message.clone()
+/// A value the reader could not read, as the shared reader says it (`src/library/view.rs`):
+/// the sentence with a long value cut, then whole.
+fn flag_words(flag: &splat::content::layout::Flag) -> (String, String) {
+    (copy_words(flag.short_message()), copy_words(&flag.message))
+}
+
+#[cfg(test)]
+thread_local! {
+    /// `copy_words` calls on this (the UI) thread.
+    static WORD_COPIES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How often an unread warning's words were copied out of a flag on this thread.
+#[cfg(test)]
+pub(crate) fn word_copies() -> usize {
+    WORD_COPIES.with(std::cell::Cell::get)
+}
+
+/// The one copy of an unread warning's words, made when its fault is cached. The reader draws
+/// from a borrow, so an unchanged frame makes none.
+pub(super) fn copy_words(words: &str) -> String {
+    #[cfg(test)]
+    WORD_COPIES.with(|count| count.set(count.get() + 1));
+    words.to_owned()
 }
 
 impl GroupFault {
     /// The flags of `entry` other than the Part of one, and the entry without any flags.
-    fn flags(entry: &Entry, unread: Option<&fields::Unread>) -> (Vec<String>, Option<Entry>) {
+    fn flags(
+        entry: &Entry,
+        unread: Option<&fields::Unread>,
+    ) -> (Vec<(String, String)>, Option<Entry>) {
         if entry.flags.is_empty() {
             return (Vec::new(), None);
         }
@@ -2116,15 +2206,16 @@ impl Reader {
                     .and_then(|path| fs::read_to_string(path).ok())
             });
         }
-        let unread_reason = self
+        // The reader draws the unread warning from a borrow of the cached fault: no frame copies
+        // its words (round 25 review).
+        let has_unread = self
             .group_fault
             .as_ref()
             .filter(|fault| !editing && fault.id == id)
-            .and_then(|fault| fault.unread.as_ref())
-            .map(|unread| unread.reason.clone());
+            .is_some_and(|fault| fault.unread.is_some());
         // A refused Part of write shows as the unread warning below the file line.
         if let Some(error) = &self.error
-            && !(self.group_error && unread_reason.is_some())
+            && !(self.group_error && has_unread)
         {
             ui.horizontal_wrapped(|ui| {
                 design::message(ui, Tone::Error, error);
@@ -2167,21 +2258,30 @@ impl Reader {
         design::reader::measure(ui, |ui| {
             // A draft whose note is gone, whatever note is open.
             self.lost_edits(ui, index);
-            if let Some(reason) = unread_reason
+            let fault = self.group_fault.as_ref().filter(|fault| fault.id == id);
+            if let Some(unread) = fault
+                .filter(|_| !editing)
+                .and_then(|fault| fault.unread.as_ref())
                 && let Some(campaign) = campaign
                 && (self.error.is_none() || self.group_error)
             {
                 if file_line {
                     // The file line just above has the one Edit in Obsidian link.
-                    design::message(ui, Tone::Warning, &reason);
+                    unread_warning(ui, &unread.reason, &unread.whole);
                 } else {
-                    unread_groups_message(ui, campaign, &item.entry.path, &reason);
+                    unread_groups_message(
+                        ui,
+                        campaign,
+                        &item.entry.path,
+                        &unread.reason,
+                        &unread.whole,
+                    );
                 }
             }
             // Every other value not read sits here too, not below the values.
-            if let Some(fault) = self.group_fault.as_ref().filter(|fault| fault.id == id) {
-                for notice in &fault.notices {
-                    design::message(ui, Tone::Warning, notice);
+            if let Some(fault) = fault {
+                for (notice, whole) in &fault.notices {
+                    unread_warning(ui, notice, whole);
                 }
             }
         });
@@ -2522,7 +2622,8 @@ impl Reader {
         design::quiet_section(ui, "Give this note a type", |ui| {
             // The help says what the choice does for the DM; how Splat stores it waits in
             // Technical details at the end of the section.
-            ui.label(Type::Small.rich(ui, TYPE_HELP).color(colors().muted));
+            // Help under a section keeps the reader measure (round 25 FG1, AG1).
+            design::help(ui, TYPE_HELP);
             ui.horizontal_wrapped(|ui| {
                 for (at, (label, kind)) in [("NPC", "npc"), ("Location", "location")]
                     .into_iter()
@@ -2552,10 +2653,7 @@ impl Reader {
                 chosen = Some(other);
             }
             design::quiet_section(ui, "Technical details", |ui| {
-                ui.add(
-                    egui::Label::new(Type::Small.rich(ui, TYPE_STORAGE).color(colors().muted))
-                        .wrap(),
-                );
+                design::help(ui, TYPE_STORAGE);
             });
         });
         match make_entry(campaign, item, &chosen?) {
