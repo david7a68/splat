@@ -294,7 +294,8 @@ fn condition(text: &str, before: Option<usize>, start: usize, end: usize) -> Opt
 /// sentence is another effect, such as `takes 10 (3d6) Acid damage at the start of each of its
 /// turns`, and is not rolled with the save. One later form is read: `If the target has 20 Hit
 /// Points or fewer, … Otherwise, the target takes 18 (4d8) Psychic damage`, as damage with that
-/// condition. Without a label, it is the damage after the DC in the DC's sentence.
+/// condition. Without a label, it is the damage after the DC in the DC's sentence, and never
+/// the damage before it.
 fn save_damage(
     text: &str,
     groups: &[(Range<usize>, DamagePart, bool)],
@@ -308,12 +309,8 @@ fn save_damage(
             .collect()
     };
     let Some(label) = text[dc..].find("Failure:").map(|at| dc + at) else {
-        let end = sentence_end(text, dc);
-        let after = within(dc..end);
-        if !after.is_empty() {
-            return after;
-        }
-        return within(text[..dc].rfind(". ").map_or(0, |at| at + 2)..end);
+        // Damage before the DC in that sentence is the hit's, not the save's.
+        return within(dc..sentence_end(text, dc));
     };
     let start = label + "Failure:".len();
     let first_end = sentence_end(text, start);
@@ -671,6 +668,9 @@ mod tests {
         // The older wording: the damage after the DC, in its sentence.
         let old = "Bite. Melee Weapon Attack: +5 to hit. Hit: 7 (1d8 + 3) piercing damage, and the target must make a DC 11 Constitution saving throw, taking 9 (2d8) poison damage on a failed save.";
         assert_eq!(save_parts(old), vec![part("2d8", "Poison")]);
+        // An older rider save with no damage of its own does not take the hit's.
+        let petrify = "Bite. Melee Weapon Attack: +3 to hit. Hit: 3 (1d4 + 1) piercing damage, and the target must succeed on a DC 11 Constitution saving throw against being magically petrified.";
+        assert_eq!(save_parts(petrify), vec![]);
     }
 
     #[test]

@@ -12,6 +12,7 @@ use splat::content::Entry;
 use splat::content::dice_text::{self, D20, DamagePart, RollLink, When};
 use splat::content::inspiration::Inspiration;
 use splat::execution::dice::Random;
+use std::collections::BTreeMap;
 
 /// An armed action: whose, which, and how its d20 rolls.
 #[derive(Clone, Debug)]
@@ -45,6 +46,8 @@ pub(super) struct Reroll {
     /// The row that shows the result: the target, or the actor for a check.
     pub shown: usize,
     pub outcome: Outcome,
+    /// The save whose damage this is, rolled once for all of its targets.
+    pub save: Option<Armed>,
 }
 
 /// What a row's right-click menu chose.
@@ -204,7 +207,7 @@ impl Run {
         if let Some(first) = &outcome.first {
             self.badges.insert(actor, first.headline());
         }
-        self.keep_for_reroll(actor, actor, outcome);
+        self.keep_for_reroll(actor, actor, outcome, None);
         Ok(())
     }
 
@@ -241,8 +244,9 @@ impl Run {
         }
     }
 
-    /// Send what the run spent to each synced sheet that can take it now. Until a sheet
-    /// shows none, the run remembers the spend, and saves it with the run.
+    /// Send what the run spent to each synced sheet that can take it now. The run remembers
+    /// a spend, and saves it with the run, until D&D Beyond confirms that the sheet shows
+    /// none: a value that waits to be sent, or cannot be sent, is not a confirmation.
     pub(super) fn settle_spent_inspiration(&mut self) {
         if self.spent_inspiration.is_empty() {
             return;
@@ -251,18 +255,19 @@ impl Run {
             let Some(p) = self.state.participants.get(*row) else {
                 continue;
             };
-            if !self.spent_inspiration.contains(&p.key) || !sync.ready() {
+            if !self.spent_inspiration.contains(&p.key) {
                 continue;
             }
-            match sync.values().get("inspiration") {
-                Some(group) if group["inspiration"] == true => {
-                    sync.set_group("inspiration", serde_json::json!({"inspiration": false}));
-                }
-                Some(_) => {
-                    self.spent_inspiration.remove(&p.key);
-                    self.dirty = true;
-                }
-                None => {}
+            let has = |groups: &BTreeMap<String, serde_json::Value>| {
+                groups
+                    .get("inspiration")
+                    .map(|group| group["inspiration"] == true)
+            };
+            if sync.confirmed().and_then(has) == Some(false) {
+                self.spent_inspiration.remove(&p.key);
+                self.dirty = true;
+            } else if sync.ready() && has(sync.values()) == Some(true) {
+                sync.set_group("inspiration", serde_json::json!({"inspiration": false}));
             }
         }
     }
@@ -283,13 +288,20 @@ impl Run {
     }
 
     /// Keep a roll made for a player for a reroll, by a rule that rerolls after the roll.
-    fn keep_for_reroll(&mut self, actor: usize, shown: usize, outcome: Outcome) {
+    fn keep_for_reroll(
+        &mut self,
+        actor: usize,
+        shown: usize,
+        outcome: Outcome,
+        save: Option<Armed>,
+    ) {
         self.reroll = (self.inspiration == Some(Inspiration::Reroll)
             && self.has_inspiration(actor))
         .then_some(Reroll {
             actor,
             shown,
             outcome,
+            save,
         });
     }
 
@@ -319,7 +331,9 @@ impl Run {
             },
         )?;
         self.spend_inspiration(kept.actor);
-        if kept.shown != kept.actor {
+        if let Some(save) = &kept.save {
+            self.show_save_damage(save, &outcome);
+        } else if kept.shown != kept.actor {
             self.show_attack(kept.shown, &outcome);
         } else if let Some(first) = &outcome.first {
             self.badges.insert(kept.shown, first.headline());
@@ -474,7 +488,38 @@ impl Run {
             }
             return chosen;
         }
-        // Each section is a heading and its choices.
+        let sections = self.row_menu_sections(row);
+        if sections.is_empty() {
+            return None;
+        }
+        // Under the row, so the row it is about stays in view.
+        let open = if response.secondary_clicked() {
+            Some(egui::SetOpenCommand::Bool(true))
+        } else if response.clicked() {
+            Some(egui::SetOpenCommand::Bool(false))
+        } else {
+            None
+        };
+        egui::Popup::menu(response).open_memory(open).show(|ui| {
+            for (heading, items) in &sections {
+                ui.label(
+                    crate::design::Type::Small
+                        .rich(ui, heading)
+                        .color(crate::design::colors().muted),
+                );
+                for (words, choice) in items {
+                    if rolls::menu_item(ui, words) {
+                        chosen = Some(choice.clone());
+                        ui.close();
+                    }
+                }
+            }
+        });
+        chosen
+    }
+
+    /// What a row's right-click menu offers now: each section is a heading and its choices.
+    fn row_menu_sections(&self, row: usize) -> Vec<(String, Vec<(String, RowChoice)>)> {
         let mut sections: Vec<(String, Vec<(String, RowChoice)>)> = Vec::new();
         if let Some(armed) = self.armed.as_ref().filter(|armed| armed.actor != row) {
             let name = &self.state.participants[row].name;
@@ -508,11 +553,11 @@ impl Run {
                 sections.push((heading, items));
             }
         }
-        if let Some(kept) = self
-            .reroll
-            .as_ref()
-            .filter(|kept| kept.shown == row && self.has_inspiration(kept.actor))
-        {
+        // A save's damage is one roll for all of its targets, so each of their rows offers it.
+        if let Some(kept) = self.reroll.as_ref().filter(|kept| {
+            (kept.shown == row || (kept.save.is_some() && self.save_targets().contains(&row)))
+                && self.has_inspiration(kept.actor)
+        }) {
             sections.push((
                 "Inspiration: reroll one die".to_owned(),
                 kept.outcome
@@ -523,33 +568,7 @@ impl Run {
                     .collect(),
             ));
         }
-        if sections.is_empty() {
-            return None;
-        }
-        // Under the row, so the row it is about stays in view.
-        let open = if response.secondary_clicked() {
-            Some(egui::SetOpenCommand::Bool(true))
-        } else if response.clicked() {
-            Some(egui::SetOpenCommand::Bool(false))
-        } else {
-            None
-        };
-        egui::Popup::menu(response).open_memory(open).show(|ui| {
-            for (heading, items) in &sections {
-                ui.label(
-                    crate::design::Type::Small
-                        .rich(ui, heading)
-                        .color(crate::design::colors().muted),
-                );
-                for (words, choice) in items {
-                    if rolls::menu_item(ui, words) {
-                        chosen = Some(choice.clone());
-                        ui.close();
-                    }
-                }
-            }
-        });
-        chosen
+        sections
     }
 
     /// Whether a damage condition holds, when the run can tell: the roll's mode, or whether
@@ -724,7 +743,7 @@ impl Run {
             self.spend_inspiration(actor);
         }
         self.show_attack(row, &outcome);
-        self.keep_for_reroll(actor, row, outcome);
+        self.keep_for_reroll(actor, row, outcome, None);
         Ok(())
     }
 
@@ -893,14 +912,14 @@ impl Run {
 
     /// Roll a save's settled damage once, into Amount.
     fn roll_save_damage(&mut self, armed: &Armed, parts: &[DamagePart]) -> Result<(), String> {
-        let RollLink::SaveDc {
-            label, dc, half, ..
-        } = &armed.link
-        else {
+        let RollLink::SaveDc { label, .. } = &armed.link else {
             return Ok(());
         };
         if parts.is_empty() {
-            // Its condition gives these targets another effect, in the rules text.
+            // Its condition gives these targets another effect, in the rules text. An amount
+            // from before is not this save's damage, so Enter must not apply it.
+            self.amount.clear();
+            self.reroll = None;
             for row in self.save_targets() {
                 self.badges
                     .insert(row, "No damage · see the text".to_owned());
@@ -917,22 +936,32 @@ impl Run {
             |random| rolls::make(&who, &link, Mode::Normal, changes, None, random),
             Outcome::lines,
         )?;
-        if let Some(rolled) = &outcome.damage {
-            let total = rolled.total.max(0);
-            // One target has no half mark, so its half goes straight into Amount.
-            let lone_half = *half
-                && self.also.is_empty()
-                && self
-                    .saves
-                    .get(&self.selected)
-                    .is_some_and(|save| save >= dc);
-            self.amount = if lone_half { total / 2 } else { total }.to_string();
-            self.focus_amount = true;
-            for row in self.save_targets() {
-                self.badges.insert(row, format!("{total} damage"));
-            }
-        }
+        self.show_save_damage(armed, &outcome);
+        let shown = self.selected;
+        self.keep_for_reroll(armed.actor, shown, outcome, Some(armed.clone()));
         Ok(())
+    }
+
+    /// A save's damage in Amount and on each target's row. The targets and their half marks
+    /// stay as they are.
+    fn show_save_damage(&mut self, armed: &Armed, outcome: &Outcome) {
+        let (RollLink::SaveDc { dc, half, .. }, Some(rolled)) = (&armed.link, &outcome.damage)
+        else {
+            return;
+        };
+        let total = rolled.total.max(0);
+        // One target has no half mark, so its half goes straight into Amount.
+        let lone_half = *half
+            && self.also.is_empty()
+            && self
+                .saves
+                .get(&self.selected)
+                .is_some_and(|save| save >= dc);
+        self.amount = if lone_half { total / 2 } else { total }.to_string();
+        self.focus_amount = true;
+        for row in self.save_targets() {
+            self.badges.insert(row, format!("{total} damage"));
+        }
     }
 
     /// Mark the save targets at or above the DC to take half.
@@ -1178,8 +1207,20 @@ mod tests {
         let sync = &run.syncs[&0];
         assert_eq!(sync.values()["inspiration"]["inspiration"], false);
         assert!(sync.dirty(), "the change waits to be sent");
+        // A value that waits to be sent is not a confirmation: a run saved and reopened now
+        // must still know the spend, or the old sheet would give the inspiration back.
         run.settle_spent_inspiration();
-        assert!(run.spent_inspiration.is_empty(), "the sync has it now");
+        run.settle_spent_inspiration();
+        assert_eq!(run.spent_inspiration.len(), 1, "kept until confirmed");
+        assert!(!run.has_inspiration(0));
+        // D&D Beyond confirms that the sheet shows none.
+        run.syncs.get_mut(&0).unwrap().simulate_sheet(
+            7,
+            30,
+            &serde_json::json!({"id":7,"canEdit":true,"removedHitPoints":0,"temporaryHitPoints":0,"deathSaves":{"successCount":0,"failCount":0},"conditions":[],"inspiration":false}),
+        );
+        run.settle_spent_inspiration();
+        assert!(run.spent_inspiration.is_empty(), "the sheet has it now");
     }
 
     fn log_has(run: &Run, words: &str) -> bool {
@@ -1298,14 +1339,79 @@ mod tests {
     }
 
     #[test]
-    fn the_next_step_ends_the_chance_to_reroll() {
+    fn applied_damage_ends_the_chance_to_reroll() {
         let mut run = live();
         run.inspiration = Some(Inspiration::Reroll);
-        inspired_player(&mut run, 0);
-        run.roll_link(ask(check(), 0));
+        let actor = run.current().unwrap();
+        let target = (0..3).find(|row| *row != actor).unwrap();
+        inspired_player(&mut run, actor);
+        run.roll_link(ask(attack(), actor));
+        run.target(target, None);
+        run.row_choice(target, RowChoice::Roll(Mode::Normal, false));
         assert!(run.reroll.is_some());
-        run.apply(Command::Next).unwrap();
+        // Enter applies the amount. A reroll after it would put damage in Amount again.
+        let amount = run.amount.parse().unwrap();
+        run.apply(Command::Damage(target, amount)).unwrap();
         assert!(run.reroll.is_none());
+        assert!(
+            run.row_menu_sections(target)
+                .iter()
+                .all(|(heading, _)| { !heading.starts_with("Inspiration") })
+        );
+    }
+
+    #[test]
+    fn a_players_save_damage_can_reroll_a_die_for_all_of_its_targets() {
+        let mut run = live();
+        run.inspiration = Some(Inspiration::Reroll);
+        let actor = run.current().unwrap();
+        let others: Vec<usize> = (0..3).filter(|row| *row != actor).collect();
+        inspired_player(&mut run, actor);
+        let save = RollLink::SaveDc {
+            label: "Burning Hands".into(),
+            ability: "Dexterity".into(),
+            dc: 14,
+            half: true,
+            damage: vec![DamagePart {
+                dice: "3d6".into(),
+                kind: Some("Fire".into()),
+                when: None,
+            }],
+        };
+        run.roll_link(ask(save, actor));
+        run.target(others[0], None);
+        run.target(others[1], None);
+        run.saves.insert(others[0], 15);
+        run.saves.insert(others[1], 9);
+        let armed = run.armed.clone().unwrap();
+        run.half_made(&armed);
+        run.state.random = Random::controlled([1, 2, 3, 6]);
+        run.save_damage(&armed).unwrap();
+        assert_eq!(run.amount, "6");
+        // Each target's row offers the one roll's dice.
+        for row in &others {
+            let sections = run.row_menu_sections(*row);
+            let (_, items) = sections
+                .iter()
+                .find(|(heading, _)| heading.starts_with("Inspiration"))
+                .expect("a reroll section");
+            assert_eq!(items[0].0, "1 on 3d6 fire");
+        }
+        let die = run.reroll.as_ref().unwrap().outcome.dice()[0].1;
+        run.row_choice(others[1], RowChoice::Reroll(die));
+        assert_eq!(run.amount, "11");
+        for row in &others {
+            assert_eq!(run.badges.get(row).map(String::as_str), Some("11 damage"));
+        }
+        assert_eq!(
+            run.halved.iter().copied().collect::<Vec<_>>(),
+            vec![others[0]],
+            "the half marks stay"
+        );
+        let mut targets = run.save_targets();
+        targets.sort_unstable();
+        assert_eq!(targets, others, "the targets stay");
+        assert!(!run.has_inspiration(actor));
     }
 
     fn bloodied_bite() -> RollLink {
@@ -1460,6 +1566,7 @@ mod tests {
         let lines = run.state.log.len();
         run.save_damage(&armed).unwrap();
         assert_eq!(run.state.log.len(), lines);
+        assert_eq!(run.amount, "", "the 9 from before must not wait for Enter");
         assert_eq!(
             run.badges.get(&others[0]).map(String::as_str),
             Some("No damage · see the text")

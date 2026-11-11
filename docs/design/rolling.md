@@ -91,9 +91,10 @@ A save's damage is what a failure takes at once: the damage in the first
 sentence after `Failure:`. Damage in a later sentence is another effect at
 another time (`takes 10 (3d6) Acid damage at the start of each of its turns`),
 so it is not rolled with the save; it stays in the tile's hover. Before this,
-30 of the 143 built-in saves with damage rolled too much, such as 6d6 for the
-gelatinous cube's 3d6 Engulf. Older text without the label uses the damage
-after the DC in its sentence.
+26 of the 143 built-in saves with damage rolled something else, such as 6d6 for
+the gelatinous cube's 3d6 Engulf; 124 saves have damage now. Older text without
+the label uses the damage after the DC in its sentence, and never the damage
+before it, which is the hit's.
 
 One later form is read as a condition: `If the target has 20 Hit Points or
 fewer, it drops to 0 Hit Points. Otherwise, the target takes 13 (3d8) Psychic
@@ -101,7 +102,8 @@ damage` rolls only for a target with more than 20 HP. `Roll damage` settles a
 condition when every target gives the same answer. When they differ, or the
 run cannot tell, the question opens under the first target's row, because one
 roll of damage cannot be both. When the answer gives no damage, the rows say
-`No damage · see the text`.
+`No damage · see the text` and Amount is cleared, so Enter cannot apply an
+amount from before.
 
 ### Inspiration
 
@@ -122,11 +124,12 @@ With none, a run offers no inspiration. A run keeps the rule it started with.
 
 Only a player character with inspiration is offered it: by the synced D&D Beyond
 sheet, or else by the last read of their sheet. The run remembers each spend, by
-participant, in the run file, until that sheet shows no inspiration. A synced
-sheet is sent `No inspiration` at once, or when its sync next can take it (a
-sync that starts later, or reconnects). A read that still shows inspiration is
-older than the spend and does not give it back; after the sheet has shown none,
-a new grant counts again.
+participant, in the run file, until D&D Beyond confirms that the sheet shows no
+inspiration. A value that waits to be sent, or that a read-only sheet cannot
+take, is not a confirmation. A synced sheet is sent `No inspiration` at once, or
+when its sync next can take it (a sync that starts later, or reconnects). A read
+that still shows inspiration is older than the spend and does not give it back;
+after the sheet has shown none, a new grant counts again.
 
 - **Reroll rule.** After the run rolls for a player (`Roll for them`, or a
   check, save, skill or dice from the sheet), a right-click on the row with the
@@ -135,8 +138,10 @@ a new grant counts again.
   first, at most 8. The new die stands, its keep and totals are made again
   (`Dice::reroll`), Amount takes the new damage, and the Log says `1 becomes 6`
   and only the roll that changed. On an attack, the damage rolls again only when
-  the d20 begins or ends a critical hit. The next step of the run (an applied
-  amount, Next turn) ends the chance to reroll.
+  the d20 begins or ends a critical hit. A save's damage rolled for a player is
+  one roll for all of its targets: each target's row offers its dice, and the
+  targets and half marks stay. The next step of the run (an applied amount, Next
+  turn) ends the chance to reroll.
 - **Advantage rule.** The tile, number or target menu offers `with inspiration
   (advantage)`; the roll has advantage and the Log says inspiration was expended.
 
