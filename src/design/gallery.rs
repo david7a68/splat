@@ -365,9 +365,11 @@ pub fn components(ui: &mut egui::Ui) {
         .collect(),
         &[1],
     );
+    // The submenu keeps inside the gallery's pane, as the encounter editor's does.
+    let inside = ui.max_rect().intersect(ui.clip_rect());
     let menu = Action::quiet("Group actions").show(ui);
     egui::Popup::menu(&menu).show(|ui| {
-        menu_submenu(ui, "Move to…", |ui| {
+        menu_submenu(ui, "Move to…", inside, |ui| {
             let _ = Action::quiet("Bridge Ambush")
                 .density(Density::Read)
                 .show(ui);

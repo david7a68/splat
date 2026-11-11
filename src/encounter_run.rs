@@ -116,9 +116,78 @@ pub(crate) struct RunGroup {
     /// Every reason this group cannot be added now.
     pub problem: Option<String>,
     /// Unread rows do not block the readable members.
-    pub warnings: Vec<String>,
+    pub warnings: Vec<MemberFault>,
 }
+
+/// Why one member of a group cannot join. The check that finds the fault decides its kind, and
+/// every view of the group (its editor, the Encounters list, Arrivals, the session plan) takes
+/// the fault's tone and repair link from that kind.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct MemberFault {
+    pub kind: FaultKind,
+    pub text: String,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum FaultKind {
+    /// The note names a creature that this campaign's packages do not have.
+    NotInPackages,
+    /// The member's changes make a creature that cannot be, such as a maximum HP below 1.
+    InvalidChange,
+    /// The member can be read but not run: a D&D Beyond sheet, no maximum HP, an unread row.
+    CannotJoin,
+}
+
+impl FaultKind {
+    /// An invalid value is an error wherever it shows. A member that is only left out is a
+    /// warning: the group still loads, and its other members can join.
+    pub(crate) fn tone(self) -> crate::design::Tone {
+        match self {
+            Self::InvalidChange => crate::design::Tone::Error,
+            Self::NotInPackages | Self::CannotJoin => crate::design::Tone::Warning,
+        }
+    }
+}
+
+impl MemberFault {
+    pub(crate) fn new(kind: FaultKind, text: String) -> Self {
+        Self { kind, text }
+    }
+    pub(crate) fn tone(&self) -> crate::design::Tone {
+        self.kind.tone()
+    }
+}
+
+impl std::ops::Deref for MemberFault {
+    type Target = str;
+    fn deref(&self) -> &str {
+        &self.text
+    }
+}
+
+#[cfg(test)]
+impl From<&str> for MemberFault {
+    fn from(text: &str) -> Self {
+        Self::new(FaultKind::CannotJoin, text.to_owned())
+    }
+}
+
 impl RunGroup {
+    /// The group's own reasons it cannot join, such as `No members can join.`: the lines of
+    /// `problem` after the ones its member faults wrote. Every view draws the member faults with
+    /// their own tone, then these as warnings.
+    pub(crate) fn own_problems(&self) -> Vec<&str> {
+        let members = self
+            .warnings
+            .iter()
+            .map(|fault| fault.lines().count())
+            .sum();
+        self.problem
+            .as_deref()
+            .map(|problem| problem.lines().skip(members).collect())
+            .unwrap_or_default()
+    }
+
     /// The first member's bonus decides a shared roll, as it does for any initiative group.
     pub(crate) fn leader(&self) -> Option<Resolved> {
         let member = self.members.first()?;
