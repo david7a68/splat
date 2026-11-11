@@ -2234,12 +2234,16 @@ impl Encounters {
         )
     }
     /// What each saved run's file says to the Timeline: its result, and when it was last
-    /// played. The open run speaks for itself, so its file is not here.
+    /// played. The open run speaks for itself, so its file is not here. A file that changed
+    /// since the list was read is not here either: what was read is no longer its word.
     pub fn saved_facts(&self) -> impl Iterator<Item = &crate::timeline::RunFact> {
         let open = self.run.as_ref().map(crate::encounter_run::Run::id);
         self.snapshot
             .iter()
             .flat_map(|snapshot| &snapshot.runs)
+            .filter(|run| {
+                run.stamp.is_some() && crate::encounter_run::file_stamp(&run.path) == run.stamp
+            })
             .filter_map(|run| run.fact.as_ref())
             .filter(move |fact| Some(fact.id) != open)
     }
@@ -7045,6 +7049,22 @@ mod tests {
         assert!(editor.go_to_run);
         assert!(editor.paused_run().is_none());
         assert_eq!(editor.draft.as_ref().unwrap().body, "Keep this draft");
+
+        // The open run speaks to the Timeline for itself, so its file does not.
+        assert_eq!(editor.saved_facts().count(), 0);
+        editor.run = None;
+        assert_eq!(editor.saved_facts().count(), 1);
+        // A file that changed since the list was read no longer says what was read.
+        let later = std::time::SystemTime::now() + std::time::Duration::from_secs(3600);
+        fs::File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_modified(later)
+            .unwrap();
+        assert_eq!(editor.saved_facts().count(), 0);
+        editor.read_runs_again(&campaign);
+        assert_eq!(editor.saved_facts().count(), 1);
     }
 
     fn slot_override(draft: &mut Draft, index: usize, text: &str) {

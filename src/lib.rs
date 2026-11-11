@@ -359,7 +359,13 @@ impl Splat {
             .timeline
             .next_order()
             .max(played.max().unwrap_or(0) + 1);
+        let said = open_run.and_then(|run| self.timeline.played_of(run));
         if let Some(run) = self.encounters.run_mut() {
+            // Before the run is told the next place, so that a step that waits for it is
+            // counted against the place the fight had.
+            if let Some(said) = said {
+                run.adopt_played(said);
+            }
             run.set_play_next(next, session);
         }
     }

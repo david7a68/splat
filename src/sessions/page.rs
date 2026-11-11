@@ -7376,6 +7376,7 @@ mod tests {
             saved_at: None,
             unsent: vec![],
             fact: None,
+            stamp: None,
         }
     }
 
@@ -7449,6 +7450,7 @@ mod tests {
             saved_at: None,
             unsent: vec!["Kestrel".into()],
             fact: None,
+            stamp: None,
         };
         let mut other = saved.clone();
         other.id = Some(Uuid::new_v4());

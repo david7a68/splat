@@ -351,10 +351,12 @@ pub struct Played {
 
 impl Played {
     /// This fight is played now, when `next` is the next place in the order of play. A fight
-    /// that has the last place keeps it. With no session chosen, it stays in the one it had.
+    /// that has the last place keeps it, and a place never goes down: when less is known than
+    /// the fight already says, as while the Timeline cannot be read, the fight's own word
+    /// stands. With no session chosen, it stays in the one it had.
     pub fn now(self, next: u64, session: Option<Uuid>) -> Self {
         Self {
-            order: if self.order != 0 && self.order + 1 == next {
+            order: if self.order != 0 && self.order + 1 >= next {
                 self.order
             } else {
                 next
@@ -940,6 +942,9 @@ impl Book {
         crate::sessions::sync_folder(parent)?;
         self.flags = formats::parse_with_sessions(&text, &self.session_links).1;
         self.baseline = Some(text.into_bytes());
+        // A save can take in events that were changed outside, so what follows the events
+        // is worked out again.
+        self.revision += 1;
         self.events = events;
         self.saved_events.clone_from(&self.events);
         self.merged_outside = outside;
@@ -971,7 +976,10 @@ impl Book {
             {
                 Ok(_) => {
                     match self.merged_events(std::str::from_utf8(&bytes).unwrap(), true) {
-                        Ok(merged) => self.events = merged,
+                        Ok(merged) => {
+                            self.events = merged;
+                            self.revision += 1;
+                        }
                         Err(error) => {
                             self.error = Some(error);
                             return;
@@ -1234,18 +1242,23 @@ impl Book {
     /// Every run sits on the timeline without a step from the DM. The DM's words stay, and
     /// so does the DM's undo, because a new round is not an edit.
     /// What a run says now. `played` means it changed while open, and it was not only opened.
+    /// When the fight of this run was last played, as its event has it. A run file from
+    /// before runs kept this takes it from here, once.
+    pub fn played_of(&self, run: Uuid) -> Option<Played> {
+        self.events
+            .iter()
+            .find(|event| event.run == Some(run))
+            .map(|event| Played {
+                order: event.played_order,
+                session: event.continued_in.or(event.session),
+            })
+    }
+
     /// A run's fact as a test gives it, with no run behind it. `played` stamps it as a step of
     /// the DM's would, by the rule the run uses: `Played::now`.
     #[cfg(test)]
     pub fn record_run(&mut self, fact: &RunFact, session: Option<Uuid>, played: bool) {
-        let said = self
-            .events
-            .iter()
-            .find(|event| event.run == Some(fact.id))
-            .map_or(fact.played, |event| Played {
-                order: event.played_order,
-                session: event.continued_in.or(event.session),
-            });
+        let said = self.played_of(fact.id).unwrap_or(fact.played);
         let fact = RunFact {
             played: if played {
                 said.now(self.next_order(), session)
@@ -1451,8 +1464,11 @@ mod tests {
         disk_events[1].title = "Outside road".into();
         let disk = formats::patch(&baseline, &disk_events, &BTreeMap::new(), false).unwrap();
         fs::write(&path, format!("{disk}\nOutside prose.\n")).unwrap();
+        let revision = book.revision();
         book.save();
         assert!(!book.conflict && !book.unsaved(), "{:?}", book.error);
+        // The save took in an outside change, so what follows the events is worked out again.
+        assert_ne!(book.revision(), revision);
         let saved = fs::read_to_string(&path).unwrap();
         let events = parse(&saved).unwrap();
         assert_eq!(
@@ -1814,6 +1830,7 @@ mod tests {
             saved_at: None,
             unsent: Vec::new(),
             fact: None,
+            stamp: None,
         };
         (fight, run)
     }
@@ -2167,6 +2184,8 @@ mod tests {
         assert_eq!(last.now(7, first).order, 7);
         // With no session chosen, the fight stays in the one it had.
         assert_eq!(last.now(7, None).session, first);
+        // A place never goes down, when less is known than the fight says.
+        assert_eq!(last.now(3, first).order, 4);
     }
 
     #[test]

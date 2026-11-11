@@ -947,8 +947,11 @@ restart. So a fight that is opened, continued and taken back keeps its old place
 from the fight that was played last. The Timeline decides none of this. It takes what the run files say after each
 read of `Timeline.md` or of the run folder, so nothing is lost when the file cannot be read for a time, when the
 app restarts, or when you work in another campaign meanwhile. Moving an event on Timeline changes the story's order
-and not the order of play. One limit: a fight that is played while `Timeline.md` cannot be read takes its place
-from the run files alone, so it can fall before a long rest that no run has seen.
+and not the order of play. A run file that changed on disk since Splat read the run folder, and two run files with
+one identity, say nothing to the Timeline until the folder is read again. Two limits: a fight that is played while
+`Timeline.md` cannot be read takes its place from the run files alone, so it can fall before a long rest that no
+run has seen; and a fight that starts while the file cannot be read reaches the Timeline only if its run is the
+open run when the file reads again.
 With another run open, Continue fight is blocked and says **Close the open run first.**
 
 ### Run storage and campaign initiative

@@ -659,9 +659,9 @@ pub(crate) struct Run {
     also: BTreeSet<usize>,
     /// The targets that take half of a damage amount, for a save.
     halved: BTreeSet<usize>,
-    /// How many of the newest Undo steps the DM took since this opened. Undo of one of them
-    /// leaves the run as it was. Undo of an older step is a change the DM makes now. Never saved.
-    own_steps: usize,
+    /// A step was taken before the app could say when the fight is played, as Continue fight
+    /// from History is. It is counted when the app says so. Never saved.
+    unstamped: bool,
     /// The next place in the campaign's order of play, and the session being played, as the
     /// app last gave them. None in a run with no app around it. Never saved.
     play_next: Option<(u64, Option<Uuid>)>,
@@ -1013,7 +1013,7 @@ impl Run {
             selected: 0,
             also: BTreeSet::new(),
             halved: BTreeSet::new(),
-            own_steps: 0,
+            unstamped: false,
             play_next: None,
             carried: None,
             rest_order: 0,
@@ -1160,7 +1160,7 @@ impl Run {
     /// state before it, and with that state when the fight was played before.
     fn keep_own_step(&mut self, before: State, label: String, from_sheet: bool) {
         self.keep_step(before, label, from_sheet);
-        self.own_steps = (self.own_steps + 1).min(self.history.len());
+        self.unstamped = self.play_next.is_none();
         self.state.played = self.played_now();
     }
     /// When this fight is last played, if the DM changes it now.
@@ -1173,12 +1173,24 @@ impl Run {
     /// The next place in the campaign's order of play, and the session being played. The app
     /// gives these when they change, so that a step can say when the fight was played.
     pub fn set_play_next(&mut self, next: u64, session: Option<Uuid>) {
-        let first = self.play_next.replace((next, session)).is_none();
-        // A step taken before the app could say when, as Continue fight from History is,
-        // counts from now. Undo of it still gives back when the fight was played before.
-        if first && self.own_steps > 0 {
+        self.play_next = Some((next, session));
+        // A step taken before the app could say when counts from now. Undo of it still gives
+        // back when the fight was played before.
+        if std::mem::take(&mut self.unstamped) {
             self.state.played = self.played_now();
             self.dirty = true;
+        }
+    }
+    /// A run file from before runs kept when they were played says nothing. It takes its
+    /// fight's place from the Timeline once, in every state it holds, so that Undo can give
+    /// that place back. A run that has its own word keeps it.
+    pub fn adopt_played(&mut self, played: crate::timeline::Played) {
+        let unsaid = crate::timeline::Played::default();
+        for state in self.history.iter_mut().chain([&mut self.state]) {
+            if state.played == unsaid && played != unsaid {
+                state.played = played;
+                self.dirty = true;
+            }
         }
     }
     /// The newest Undo step's name, if there is one.
@@ -2250,10 +2262,6 @@ impl Run {
     fn undo(&mut self) {
         if let Some(previous) = self.history.pop() {
             self.notice = None;
-            // A step from this opening is taken back: the run is as it was before it. An
-            // older step that goes is a change that the DM makes now.
-            let older = self.own_steps == 0;
-            self.own_steps = self.own_steps.saturating_sub(1);
             self.history_labels.pop();
             self.history_from_sheet.pop();
             // What D&D Beyond last confirmed is a fact, not a step that can be taken back.
@@ -2266,9 +2274,6 @@ impl Run {
             self.state = previous;
             for (p, values) in self.state.participants.iter_mut().zip(confirmed) {
                 p.combat_values = values;
-            }
-            if older {
-                self.state.played = self.played_now();
             }
             self.forget_removed_participants();
             // Undo of a save's damage step arms the save again, as it stood.
@@ -3125,9 +3130,6 @@ impl Run {
             }
         }
         let indices: Vec<_> = affected.into_iter().collect();
-        // The newest `own_steps` steps are from this opening. One that a sheet removes is no
-        // longer there to take back, and what it changed stays changed.
-        let own_from = self.history.len().saturating_sub(self.own_steps);
         for (at, previous) in self.history.iter().enumerate() {
             let next = self.history.get(at + 1).unwrap_or(before);
             let touches = indices.iter().any(|index| {
@@ -3141,9 +3143,6 @@ impl Run {
             });
             if touches {
                 dropped.push(self.history_labels[at].clone());
-                if at >= own_from {
-                    self.own_steps -= 1;
-                }
                 continue;
             }
             let mut previous = previous.clone();
@@ -3839,7 +3838,7 @@ impl Run {
             history_from_sheet: Vec::new(),
             also: BTreeSet::new(),
             halved: BTreeSet::new(),
-            own_steps: 0,
+            unstamped: false,
             play_next: None,
             carried: None,
             rest_order: saved.rest_order,
@@ -3942,6 +3941,7 @@ impl Run {
                             saved_at: modified,
                             unsent: Vec::new(),
                             fact: None,
+                            stamp: None,
                             path,
                         });
                     }
@@ -3971,6 +3971,9 @@ impl Run {
                 .and_then(|id| identities.get(&id))
                 .filter(|paths| paths.len() > 1)
             {
+                // Two files with one identity have no one owner, so neither speaks for the
+                // fight on the Timeline.
+                run.fact = None;
                 run.label = format!(
                     "Duplicate identity: {} · {}",
                     paths
@@ -4067,7 +4070,6 @@ impl Run {
             label.insert_str(0, &format!("Copy {copy_number} · "));
         }
         SavedRunInfo {
-            path,
             id: Some(self.id),
             source: self.source,
             encounter: legacy
@@ -4078,6 +4080,8 @@ impl Run {
             saved_at,
             unsent: self.unsent_in_save(),
             fact: Some(self.timeline_fact()),
+            stamp: file_stamp(&path),
+            path,
         }
     }
     /// Who holds values that D&D Beyond did not confirm, in a run that keeps the party matched.
@@ -4130,8 +4134,17 @@ pub struct SavedRunInfo {
     /// Who holds values not sent to D&D Beyond.
     pub unsent: Vec<String>,
     /// What the run's file says to the Timeline: its result, and when it was last played.
-    /// None for a file that is not a run.
+    /// None for a file that is not a run, and for a file that shares its identity with another.
     pub fact: Option<crate::timeline::RunFact>,
+    /// The file's change time and length when `fact` was read. A file that differs now has
+    /// changed since, and `fact` is no longer its word.
+    pub stamp: Option<(std::time::SystemTime, u64)>,
+}
+
+/// A file's change time and length, to tell whether it changed since it was read.
+pub(crate) fn file_stamp(path: &Path) -> Option<(std::time::SystemTime, u64)> {
+    let metadata = fs::metadata(path).ok()?;
+    Some((metadata.modified().ok()?, metadata.len()))
 }
 
 /// A run file the DM deleted, kept in memory for one step of undo.
@@ -4364,7 +4377,6 @@ impl Run {
         self.history.clear();
         self.history_labels.clear();
         self.history_from_sheet.clear();
-        self.own_steps = 0;
         self.reopened = false;
         self.no_saved_undo = None;
         self.undo_stopped = false;
@@ -4563,6 +4575,11 @@ mod tests {
             rows.iter()
                 .all(|row| row.label.contains("Duplicate identity"))
         );
+        // Two files with one identity have no one owner, so neither speaks to the Timeline.
+        assert!(rows.iter().all(|row| row.fact.is_none()));
+        fs::remove_file(dir.path().join("conflict.json")).unwrap();
+        let rows = Run::list(dir.path(), campaign).unwrap();
+        assert_eq!(rows[0].fact, Some(run.timeline_fact()));
     }
 
     #[test]
@@ -6234,29 +6251,6 @@ mod tests {
         assert_eq!(reopened.state.participants[0].hp, Some(max - 12));
     }
     #[test]
-    fn a_step_that_a_sheet_removed_still_counts_as_play() {
-        let dir = tempfile::tempdir().unwrap();
-        let (mut reopened, _, max) = reopened_with_steps(dir.path());
-        first_sync(&mut reopened, max, 9);
-        let opened = reopened.timeline_fact();
-        reopened.set_play_next(7, None);
-        assert_eq!(reopened.timeline_fact(), opened, "as it opened");
-        // Two steps of this opening. The sheet confirms the first, then replaces its value.
-        reopened.apply(Command::Damage(0, 2)).unwrap();
-        connected_tick(&mut reopened);
-        read_sheet(&mut reopened, max, 11);
-        reopened.apply(Command::Damage(1, 1)).unwrap();
-        read_sheet(&mut reopened, max, 14);
-        assert_eq!(reopened.state.participants[0].hp, Some(max - 14));
-        assert_eq!(reopened.timeline_fact().played.order, 7);
-        // Undo of the step that is left, and then of a step from before the run opened: the
-        // run never says what it said when it opened, because the removed step's change stays.
-        reopened.undo();
-        assert_eq!(reopened.timeline_fact().played.order, 7);
-        reopened.undo();
-        assert_eq!(reopened.timeline_fact().played.order, 7);
-    }
-    #[test]
     fn undo_before_the_first_read_after_a_restart_is_a_conflict_and_not_a_silent_write() {
         let dir = tempfile::tempdir().unwrap();
         let (mut reopened, name, max) = reopened_with_steps(dir.path());
@@ -7349,18 +7343,42 @@ mod tests {
         reopened.undo();
         assert_eq!(reopened.timeline_fact(), opened);
         reopened.apply(Command::Damage(0, 1)).unwrap();
+        // Undo restores it with the rest of the state, also after a close: the app says the
+        // next place first, as it does when a run opens, and Undo is still not play.
         let mut again = close_and_reopen(&mut reopened, campaign);
+        again.set_play_next(12, later);
         assert_eq!(again.timeline_fact().played, hit);
         again.undo();
         assert_eq!(again.timeline_fact().played, played);
-        // Undo of a step from before the run opened is a change that the DM makes now.
-        again.set_play_next(12, later);
-        again.undo();
-        assert_eq!(again.timeline_fact().played.order, 12);
-        // A step and its Undo there leave that change standing.
+        // Less is known than the fight says, as while the Timeline cannot be read: a step
+        // never takes a place before the one the fight has.
+        again.set_play_next(2, later);
         again.apply(Command::Next).unwrap();
-        again.undo();
-        assert_eq!(again.timeline_fact().played.order, 12);
+        assert_eq!(again.timeline_fact().played.order, 3);
+
+        // A run file from before this says nothing. It takes its fight's place from the
+        // Timeline once, in every state it holds, so that Undo can give that place back.
+        let mut legacy = self::run();
+        begin(&mut legacy);
+        let campaign = stored(&mut legacy, dir.path());
+        let mut legacy = close_and_reopen(&mut legacy, campaign);
+        assert_eq!(legacy.timeline_fact().played, Played::default());
+        let before = Played {
+            order: 4,
+            session: first,
+        };
+        legacy.adopt_played(before);
+        legacy.set_play_next(6, later);
+        assert_eq!(legacy.timeline_fact().played, before);
+        legacy.apply(Command::Damage(0, 1)).unwrap();
+        assert_eq!(legacy.timeline_fact().played.order, 6);
+        legacy.undo();
+        assert_eq!(legacy.timeline_fact().played, before);
+        // Its own word stands once it has one.
+        legacy.adopt_played(hit);
+        assert_eq!(legacy.timeline_fact().played, before);
+        legacy.undo();
+        assert_eq!(legacy.timeline_fact().played, before, "an older state too");
     }
 
     #[test]
