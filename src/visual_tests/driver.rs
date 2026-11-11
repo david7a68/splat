@@ -2128,6 +2128,28 @@ impl<'a> Driver<'a> {
         self.film_frames(Overlay::caption(caption), super::video::AIM_FRAMES);
     }
 
+    /// Egui's vertical scroll bars and Splat's column splitters, in points: the lanes beside a
+    /// pane that an app target must keep clear of.
+    pub fn chrome_lanes(&self) -> Vec<egui::Rect> {
+        const LANE: f32 = 20.0;
+        let scale = 1.0 / self.harness.ctx.pixels_per_point();
+        ergonomics::controls(&self.harness)
+            .into_iter()
+            .filter(|control| {
+                control.chrome
+                    && control.popup.is_none()
+                    && control.rect.height() > control.rect.width()
+                    && control.rect.width() * scale <= LANE
+            })
+            .map(|control| control.rect * scale)
+            .collect()
+    }
+
+    /// The app's style, for sizes that egui derives from it.
+    pub fn app_style(&self) -> egui::Style {
+        (*self.harness.ctx.style()).clone()
+    }
+
     pub fn column_edge(&self, name: &str) -> f32 {
         self.harness
             .ctx

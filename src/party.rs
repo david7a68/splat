@@ -437,7 +437,7 @@ impl Party {
                 design::empty_state(
                     ui,
                     icons::PARTY,
-                    "This campaign has no party members.",
+                    "This campaign has no party members",
                     "Add characters in D&D Beyond, then refresh the party.",
                     |ui| {
                         if design::link(ui, "Connect D&D Beyond").clicked() {

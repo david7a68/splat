@@ -3668,18 +3668,21 @@ impl Run {
             // The same warning form as the group's faults below: a mark, and words in text colour.
             design::small_message(ui, Tone::Warning, reason);
         }
-        let warnings = group.warnings.join("\n");
+        let warnings = &group.warnings;
         if !warnings.is_empty() {
             ui.label(Type::Small.rich(ui, "Cannot join").color(c.muted));
         }
-        if let Some(problem) = group
-            .problem
-            .as_deref()
-            .or((!warnings.is_empty()).then_some(warnings.as_str()))
-        {
-            for fault in problem.lines() {
+        // The members' faults come first in `problem`; the lines after them are the group's own
+        // reason, such as no member that can join.
+        let own: Vec<super::MemberFault> = group
+            .own_problems()
+            .into_iter()
+            .map(|line| super::MemberFault::new(super::FaultKind::CannotJoin, line.into()))
+            .collect();
+        if !warnings.is_empty() || !own.is_empty() {
+            for fault in warnings.iter().chain(&own) {
                 if group_fault(ui, fault) {
-                    if fault.contains("not in this campaign's packages") {
+                    if fault.kind == super::FaultKind::NotInPackages {
                         self.wants_packages = true;
                     } else {
                         self.wants_group_editor = Some(group.path.clone());
@@ -3688,9 +3691,10 @@ impl Run {
             }
             // Every fault gives one link; when all point to packages, the group editor
             // stays one click away.
-            if problem
-                .lines()
-                .all(|fault| fault.contains("not in this campaign's packages"))
+            if warnings
+                .iter()
+                .chain(&own)
+                .all(|fault| fault.kind == super::FaultKind::NotInPackages)
                 && design::status_link(
                     ui,
                     Status {
@@ -4480,10 +4484,12 @@ impl Run {
         design::rule(ui);
         if let Some(path) = &self.roster_source {
             let filename = path.file_name().unwrap_or_default().to_string_lossy();
+            let last = self.roster_faults.len().saturating_sub(1);
             for (index, fault) in self.roster_faults.iter().enumerate() {
                 let words = fault.words();
-                // One file names every unread row, so its name and actions show once.
-                if index > 0 {
+                // One file names every unread row, so its name and actions show once, after
+                // the last warning about it.
+                if index < last {
                     design::small_message(ui, Tone::Warning, &words);
                     continue;
                 }
@@ -4519,13 +4525,21 @@ impl Run {
                             );
                         });
                     } else {
-                        design::small_message(ui, Tone::Warning, &words);
-                        crate::world::entry_file_actions(
-                            ui,
-                            path.parent().unwrap_or(path),
-                            &filename,
-                            true,
-                        );
+                        // The file line starts at the warning's words, as every message's
+                        // actions do, and its name wraps whole rather than being cut.
+                        let words_left =
+                            design::small_message(ui, Tone::Warning, &words).rect.left();
+                        let inset = words_left - ui.cursor().left();
+                        ui.horizontal_top(|ui| {
+                            ui.add_space(inset);
+                            ui.vertical(|ui| {
+                                crate::encounters::file_line(
+                                    ui,
+                                    path.parent().unwrap_or(path),
+                                    &filename,
+                                );
+                            });
+                        });
                     }
                 });
             }
@@ -5725,8 +5739,10 @@ pub(crate) fn change_preview(row: &Row) -> String {
 }
 
 /// Keep a member's repair at the end of that member's fault, with no overlapping targets.
-pub(crate) fn group_fault(ui: &mut egui::Ui, fault: &str) -> bool {
-    let packages = fault.contains("not in this campaign's packages");
+/// The fault's tone and link come from its kind, so it looks the same on every screen.
+pub(crate) fn group_fault(ui: &mut egui::Ui, fault: &super::MemberFault) -> bool {
+    let packages = fault.kind == super::FaultKind::NotInPackages;
+    let tone = fault.tone();
     let status = Status {
         icon: if packages {
             icons::CAMPAIGN
@@ -5755,7 +5771,7 @@ pub(crate) fn group_fault(ui: &mut egui::Ui, fault: &str) -> bool {
     if text_width + design::L + link_width <= ui.available_width() {
         ui.horizontal_top(|ui| {
             ui.allocate_ui_with_layout(vec2(text_width, 0.0), Layout::top_down(Align::Min), |ui| {
-                design::message(ui, Tone::Warning, fault);
+                design::message(ui, tone, fault);
             });
             ui.add_space(design::L - gap);
             design::status_link(ui, status).clicked()
@@ -5763,7 +5779,7 @@ pub(crate) fn group_fault(ui: &mut egui::Ui, fault: &str) -> bool {
         .inner
     } else {
         // A notice action: the link's words start at the warning text.
-        design::message_with_actions(ui, Tone::Warning, fault, |ui| {
+        design::message_with_actions(ui, tone, fault, |ui| {
             hanging_link(ui, status.icon, |ui| {
                 design::status_link(ui, status).clicked()
             })
@@ -8877,41 +8893,63 @@ mod tests {
 
     #[test]
     fn iter5_b_arrival_fault_uses_text_colour_and_warning_mark() {
-        let fault = "Member 2, Cinder Wolf: Changes: HP lots not read";
-        let mut harness = egui_kittest::Harness::new(|ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| {
-                group_fault(ui, fault);
+        // iter-22-B FT1: the mark's tone comes from the fault's kind. An unread change is a
+        // warning; an invalid maximum HP is an error here, as it is in the group editor.
+        for (fault, tone, other) in [
+            (
+                super::super::MemberFault::from("Member 2, Cinder Wolf: Changes: HP lots not read"),
+                colors().result.warning,
+                colors().result.error,
+            ),
+            (
+                super::super::MemberFault::new(
+                    super::super::FaultKind::InvalidChange,
+                    "Member 1, Cinder Wolf: Maximum HP would become −28. It must be 1 or more."
+                        .into(),
+                ),
+                colors().result.error,
+                colors().result.warning,
+            ),
+        ] {
+            let shown = fault.clone();
+            let mut harness = egui_kittest::Harness::new(move |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    group_fault(ui, &shown);
+                });
             });
-        });
-        design::theme::install(&harness.ctx);
-        harness.run_steps(2);
-        let texts: Vec<_> = harness
-            .output()
-            .shapes
-            .iter()
-            .filter_map(|shape| match &shape.shape {
-                egui::Shape::Text(text) if text.galley.text().contains(fault) => Some(text),
-                _ => None,
-            })
-            .collect();
-        assert!(!texts.is_empty());
-        for text in texts {
-            assert!(
-                text.galley
-                    .job
-                    .sections
-                    .iter()
-                    .all(|section| section.format.color == colors().text)
-            );
-        }
-        assert!(
-            harness
+            design::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            let texts: Vec<_> = harness
                 .output()
                 .shapes
                 .iter()
-                .any(|shape| matches!(&shape.shape,
-            egui::Shape::Rect(rect) if rect.fill == colors().result.warning))
-        );
+                .filter_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) if text.galley.text().contains(&*fault) => Some(text),
+                    _ => None,
+                })
+                .collect();
+            assert!(!texts.is_empty());
+            for text in texts {
+                assert!(
+                    text.galley
+                        .job
+                        .sections
+                        .iter()
+                        .all(|section| section.format.color == colors().text)
+                );
+            }
+            let fills: Vec<_> = harness
+                .output()
+                .shapes
+                .iter()
+                .filter_map(|shape| match &shape.shape {
+                    egui::Shape::Rect(rect) => Some(rect.fill),
+                    _ => None,
+                })
+                .collect();
+            assert!(fills.contains(&tone), "{fault:?}: {fills:?}");
+            assert!(!fills.contains(&other), "{fault:?}: {fills:?}");
+        }
     }
 
     #[test]

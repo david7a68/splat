@@ -331,7 +331,16 @@ pub fn broken(d: &mut Driver<'_>) {
     d.click("1 note cannot be read");
     d.click_containing("Notes/Broken.md");
     d.expect("Save repaired note");
+    let clean = super::session_recording::accent_filled(d);
     d.replace_text_in("Note text", &fixed);
+    // Round 22 FD3: one weight for a save row. The changed repair's save is the screen's one
+    // primary action; unchanged, it is not primary.
+    let changed = super::session_recording::accent_filled(d);
+    d.observe(
+        "iter-22-C-FD3-world",
+        !clean.iter().any(|name| name == "Save repaired note") && changed == ["Save repaired note"],
+        format!("Accent-filled unchanged {clean:?}, changed {changed:?}"),
+    );
     d.click("Save repaired note");
     d.settle();
     d.observe(
@@ -3587,6 +3596,122 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     d.expect("Bite");
     d.expect_same("The paused run keeps its saved creature snapshot across a package repair.");
     d.state("repaired-package-in-paused-run", Sizes::All);
+
+    // iter-22-E-SD1: a repair draft's notice and save-row state come from its current parse. The
+    // saved file stays unreadable on its owner line until Save or a newer file.
+    close_run(d);
+    fs::write(&path, &broken).unwrap();
+    d.focus_window(false);
+    d.focus_window(true);
+    go_library(d);
+    search_library(d, "Cinder Wolf");
+    d.click_starting("Creatures/Cinder Wolf.md · ");
+    d.click(EDIT_MARKDOWN);
+    d.expect("Line 4 opens a list");
+    d.expect("Invalid");
+    // A new fault on another line, so each step's notice is one no earlier step showed.
+    let other_fault = valid.replace("splat_name: Cinder Wolf", "splat_name: [");
+    assert_ne!(other_fault, valid);
+    // The saved file's stored error, as the folder read gives it: the old code fell back to it.
+    let stored = splat::content::Entry::parse("Creatures/Cinder Wolf.md", &broken).unwrap_err();
+    let stored = stored.split(" at line").next().unwrap().to_owned();
+    assert!(!stored.contains("opens a list"), "{stored}");
+    fn sd1(
+        d: &mut Driver<'_>,
+        step: &str,
+        notice: Option<&str>,
+        word: &str,
+        owner: &str,
+        stored: &str,
+    ) {
+        let shown = notice.is_none_or(|notice| d.has_containing(notice));
+        let gone = ["Line 4 opens a list", "Line 6 opens a list", stored]
+            .into_iter()
+            .filter(|other| notice != Some(*other))
+            .all(|other| !d.has_containing(other));
+        d.observe(
+            &format!("iter-22-E-SD1-{step}-notice"),
+            shown && gone,
+            format!("The notice is {notice:?}; no other line fault and no stored error shows"),
+        );
+        // A status node is its icon, a space and its word.
+        let state = |word: &str| {
+            d.nodes()
+                .iter()
+                .any(|node| node.name.ends_with(&format!(" {word}")))
+        };
+        let others = ["Invalid", "Unsaved", "No changes"]
+            .into_iter()
+            .filter(|other| *other != word)
+            .all(|other| !state(other));
+        d.observe(
+            &format!("iter-22-E-SD1-{step}-state"),
+            state(word) && others,
+            format!("The save row says only {word}"),
+        );
+        d.observe(
+            &format!("iter-22-E-SD1-{step}-owner"),
+            d.has_containing(owner),
+            format!("The owner line says {owner}"),
+        );
+    }
+    const UNREADABLE: &str = "Ashen Marches · Cannot be read";
+    d.replace_editor_text(&valid);
+    sd1(d, "valid", None, "Unsaved", UNREADABLE, &stored);
+    d.state("repair-draft-parses", Sizes::All);
+    d.replace_editor_text(&other_fault);
+    sd1(
+        d,
+        "invalid-again",
+        Some("Line 6 opens a list"),
+        "Invalid",
+        UNREADABLE,
+        &stored,
+    );
+    d.press_ctrl(Key::Z);
+    assert_eq!(d.editor_text().as_deref(), Some(valid.as_str()));
+    sd1(d, "editor-undo", None, "Unsaved", UNREADABLE, &stored);
+    d.click("Discard");
+    assert_eq!(d.editor_text().as_deref(), Some(broken.as_str()));
+    sd1(
+        d,
+        "discard",
+        Some("Line 4 opens a list"),
+        "Invalid",
+        UNREADABLE,
+        &stored,
+    );
+    d.click("Undo discard of Creatures/Cinder Wolf.md");
+    assert_eq!(d.editor_text().as_deref(), Some(valid.as_str()));
+    sd1(d, "undo-discard", None, "Unsaved", UNREADABLE, &stored);
+    // An outside change under the valid draft: Reload takes the file's own fault.
+    fs::write(&path, &other_fault).unwrap();
+    d.focus_window(false);
+    d.focus_window(true);
+    d.wait_for_text("This entry changed on disk. Your draft is safe until you choose.");
+    d.click("Reload and lose my draft");
+    assert_eq!(d.editor_text().as_deref(), Some(other_fault.as_str()));
+    sd1(
+        d,
+        "reload",
+        Some("Line 6 opens a list"),
+        "Invalid",
+        UNREADABLE,
+        &stored,
+    );
+    // An outside repair with no draft: the file reads again, and nothing is left to fix.
+    fs::write(&path, &valid).unwrap();
+    d.focus_window(false);
+    d.focus_window(true);
+    d.wait_for_text("Ashen Marches · Used here");
+    sd1(
+        d,
+        "outside-repair",
+        None,
+        "No changes",
+        "Ashen Marches · Used here",
+        &stored,
+    );
 }
 
 /// Deleting a file leaves its uses visible and its reader link unresolved.
