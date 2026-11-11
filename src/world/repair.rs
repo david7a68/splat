@@ -336,7 +336,15 @@ impl Repair {
                         discarded_now = true;
                     }
                     if self.dirty() {
-                        design::blocked_reason(ui, Some(crate::encounters::draft_switch_reason()));
+                        // Save refuses this draft, so Discard is the one way to switch (FB6).
+                        design::blocked_reason(
+                            ui,
+                            Some(if problem.is_some() {
+                                crate::encounters::blocked_draft_switch_reason()
+                            } else {
+                                crate::encounters::draft_switch_reason()
+                            }),
+                        );
                     }
                 });
             });

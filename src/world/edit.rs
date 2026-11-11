@@ -753,6 +753,8 @@ impl Reader {
             }
         }
         ui.add_space(design::M);
+        // The frame the DM chooses Reload: its result, below the save row, scrolls into view.
+        let had_conflict = draft.disk.is_some();
         let overwrite = match draft.conflict(ui, index) {
             Conflict::Waiting => {
                 self.edits.insert(id, draft);
@@ -1055,7 +1057,8 @@ impl Reader {
         // The reload result sits below the save row, where nothing the DM works on follows it:
         // the first edit ends it without moving a field (round 25 results family).
         if draft.reloaded.is_some() {
-            ui.scope(|ui| {
+            let just_reloaded = had_conflict && draft.disk.is_none() && !overwrite;
+            let shown = ui.scope(|ui| {
                 ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
                 if design::reloaded_draft(ui)
                     && let Some((_, previous)) = draft.reloaded.take()
@@ -1063,6 +1066,9 @@ impl Reader {
                     draft.now = previous;
                 }
             });
+            if just_reloaded {
+                ui.scroll_to_rect(shown.response.rect, None);
+            }
         }
         if cancel {
             self.error = None;

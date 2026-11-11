@@ -150,6 +150,13 @@ pub fn broken(d: &mut Driver<'_>) {
     // Round 24 SA1, FA1: the disk did not fail, so the message is the cause alone; `Not saved.`
     // is only for a disk failure.
     let combined = "Line 3 opens a list with [ that never closes.";
+    d.observe(
+        "iter-25-D-FB6",
+        d.is_disabled("Save repaired note")
+            && d.visible_text(crate::encounters::blocked_draft_switch_reason())
+            && !d.has(crate::encounters::draft_switch_reason()),
+        "Save is blocked, so the switch lock says `Discard to switch campaign.`",
+    );
     for size in [SMALL, DEFAULT, LARGE] {
         let (one_message, ordered, (state_word, within)) = d.at_size(size, |d| {
             let errors: Vec<_> = d
@@ -171,8 +178,9 @@ pub fn broken(d: &mut Driver<'_>) {
             let state_word =
                 state.is_some() && !d.has(&format!("{} Unsaved", design::icons::DRAFT));
             let discard = d.place_of("Discard").unwrap();
+            // Round 25 FB6: Save refuses this draft, so the lock names Discard only.
             let reason = d
-                .place_of(crate::encounters::draft_switch_reason())
+                .place_of(crate::encounters::blocked_draft_switch_reason())
                 .unwrap();
             let save = d.place_of("Save repaired note").unwrap();
             // Round 23 AF1: the editor and its save row end together within `LIST_MEASURE`.
