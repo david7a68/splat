@@ -818,6 +818,12 @@ struct DuplicateIndex {
     keys: std::collections::HashMap<String, Vec<usize>>,
 }
 
+#[cfg(test)]
+thread_local! {
+    /// How many times the notes were read to count a rename's links.
+    static RENAME_LINK_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// The link index a scan used, and each listed entry's position and broken link count.
 type BrokenLinks = (
     std::sync::Arc<crate::lookup::ContentIndex>,
@@ -870,6 +876,9 @@ pub(crate) struct Loaded {
     /// Listed entries with a broken link, found against this link index. A new index, an edited
     /// note (`invalidate`) or a reload (a new `Loaded`) finds them again.
     broken_links: std::sync::Mutex<Option<BrokenLinks>>,
+    /// How many links a rename's offer would change, for its old and new names. A reload (a new
+    /// `Loaded`) or an edited note (`invalidate`) counts them again.
+    rename_links: std::sync::Mutex<Option<((String, String), usize)>>,
 }
 impl Loaded {
     fn facets(&self) -> &[Option<Facets>] {
@@ -909,6 +918,31 @@ impl Loaded {
             .collect();
         *cache = Some((index.clone(), notes.clone()));
         notes
+    }
+
+    /// How many links in the notes name `old`, for the offer to change them to `new`. Counted
+    /// once per pair of names until `invalidate` or a reload.
+    fn rename_link_count(&self, old: &str, new: &str) -> usize {
+        let mut cache = self
+            .rename_links
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(((known_old, known_new), count)) = cache.as_ref()
+            && known_old == old
+            && known_new == new
+        {
+            return *count;
+        }
+        #[cfg(test)]
+        RENAME_LINK_SCANS.with(|scans| scans.set(scans.get() + 1));
+        let count = self
+            .notes
+            .iter()
+            .filter(|note| note.owner.root().is_some())
+            .map(|note| crate::world::rename_note_links(&note.text, old, new).1)
+            .sum();
+        *cache = Some(((old.to_owned(), new.to_owned()), count));
+        count
     }
 
     fn can_rename_links(&self, selected: usize, old: &str, new: &str) -> bool {
@@ -1358,6 +1392,10 @@ impl Loaded {
     fn invalidate(&mut self) {
         *self
             .broken_links
+            .get_mut()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+        *self
+            .rename_links
             .get_mut()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
         self.subtitles.take();
@@ -4460,17 +4498,12 @@ impl Library {
         self.apply_page_press(pressed, campaigns);
     }
 
-    /// How many links the offer after a rename would change. It reads the loaded notes, and
-    /// shows only while that offer waits.
+    /// How many links the offer after a rename would change. The loaded notes keep the count
+    /// until they change, so an unchanged frame reads no note.
     fn link_rename_count(&self, old: &str, new: &str) -> usize {
-        self.loaded.as_ref().map_or(0, |loaded| {
-            loaded
-                .notes
-                .iter()
-                .filter(|note| note.owner.root().is_some())
-                .map(|note| crate::world::rename_note_links(&note.text, old, new).1)
-                .sum()
-        })
+        self.loaded
+            .as_ref()
+            .map_or(0, |loaded| loaded.rename_link_count(old, new))
     }
 
     /// The page results' presses from the reader: the link update and its Undo, and the
@@ -7937,6 +7970,24 @@ mod tests {
         loaded.notes[1].path = "Second.md".into();
         loaded.notes[1].entry.as_mut().unwrap().name = "First".into();
         assert!(!loaded.can_rename_links(0, "First", "New name"));
+
+        // Round 24 FC4: the offer's count reads the notes once; an unchanged frame reads none,
+        // and an edited note (`invalidate`) is counted again.
+        let scans = || RENAME_LINK_SCANS.with(std::cell::Cell::get);
+        let start = scans();
+        let before = loaded.rename_link_count("Watch", "Ward");
+        assert_eq!(scans(), start + 1);
+        assert_eq!(loaded.rename_link_count("Watch", "Ward"), before);
+        assert_eq!(scans(), start + 1, "an unchanged frame reads no note");
+        let linker = loaded
+            .notes
+            .iter()
+            .position(|note| note.owner.root().is_some())
+            .expect("fixture: a note in a folder");
+        loaded.notes[linker].text.push_str("\nSee [[Watch]].\n");
+        loaded.invalidate();
+        assert_eq!(loaded.rename_link_count("Watch", "Ward"), before + 1);
+        assert_eq!(scans(), start + 2, "an edited note is counted again");
     }
 
     #[test]
