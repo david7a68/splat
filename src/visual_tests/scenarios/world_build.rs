@@ -2538,21 +2538,27 @@ pub fn package_rename(d: &mut Driver<'_>) {
     search_library(d, "Ash Exposure");
     d.click_starting("Ash Exposure · ");
     d.state("renamed-creature-offers-link-update", Sizes::All);
+    let offer = d.painted_word_rect("Links still say Cinder Wolf.", egui::Rect::EVERYTHING);
     d.click("Update 1 link");
     d.wait_for_text("Undo link update");
     assert!(fs::read_to_string(&path).unwrap().contains("[[Ash Wolf]]"));
-    // AD3: the update's result is a message, and its Undo follows it with its icon. The offer
-    // that asked for the update has gone.
+    // AD3: the update's result is a message, and its Undo follows it with its icon. The result
+    // takes the offer's place, so nothing below it moves.
     undo_follows_message(
         d,
         "iter-19-E-AD3-link",
         "Links now say Ash Wolf.",
         "Undo link update",
     );
+    let result = d.painted_word_rect("Links now say Ash Wolf.", egui::Rect::EVERYTHING);
     d.observe(
-        "iter-19-E-AD3-link-offer-gone",
-        !d.has_containing("Links still say") && !d.has("Update 1 link"),
-        "After the update, only its result shows, not the offer",
+        "iter-19-E-AD3-link-place",
+        !d.has("Update 1 link")
+            && offer.zip(result).is_some_and(|(offer, result)| {
+                (offer.top() - result.top()).abs() <= 1.0
+                    && (offer.left() - result.left()).abs() <= 1.0
+            }),
+        format!("The result {result:?} takes the offer's place {offer:?}, and the offer has gone"),
     );
     d.state("renamed-creature-links-updated", Sizes::All);
     d.click("Undo link update");
