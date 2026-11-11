@@ -558,6 +558,34 @@ impl<'a> Driver<'a> {
         found
     }
 
+    /// Every vertical line segment painted across an area, whatever its colour, such as a
+    /// table's column rule.
+    pub fn vertical_segments_in(&self, area: egui::Rect) -> Vec<egui::Rect> {
+        fn visit(shape: &egui::Shape, area: egui::Rect, found: &mut Vec<egui::Rect>) {
+            match shape {
+                egui::Shape::Vec(shapes) => {
+                    shapes.iter().for_each(|shape| visit(shape, area, found));
+                }
+                egui::Shape::LineSegment { points, .. }
+                    if (points[0].x - points[1].x).abs() < 0.5
+                        && (points[0].y - points[1].y).abs() >= 0.5 =>
+                {
+                    let rect = egui::Rect::from_two_pos(points[0], points[1])
+                        .expand2(egui::vec2(0.5, 0.0));
+                    if area.intersects(rect) {
+                        found.push(rect);
+                    }
+                }
+                _ => {}
+            }
+        }
+        let mut found = Vec::new();
+        for shape in &self.harness.output().shapes {
+            visit(&shape.shape, area, &mut found);
+        }
+        found
+    }
+
     /// A tone bar beside a linked message, rather than a hand-built warning row.
     pub fn has_message_bar(&self, first: egui::Rect, color: egui::Color32) -> bool {
         fn contains(shape: &egui::Shape, first: egui::Rect, color: egui::Color32) -> bool {

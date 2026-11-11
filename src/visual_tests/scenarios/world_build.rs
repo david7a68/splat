@@ -2345,6 +2345,30 @@ pub fn tables(d: &mut Driver<'_>) {
         d.visible_text("Fog") && d.visible_text("Typed 4"),
         "A valid range accepts a typed roll and shows the matched row",
     );
+    // Round 24 FG3: the rolled row's range (2-5, marked) starts at the x of the others.
+    // `1` and `6` are found nearest the rolled row, in the same table.
+    let rolled = d.place_of("2-5");
+    let ranges = ["1", "2-5", "6"].map(|range| {
+        let rolled = rolled?;
+        d.nodes()
+            .into_iter()
+            .filter(|node| node.name == range)
+            .map(|node| node.rect)
+            .min_by(|a, b| {
+                (a.center().y - rolled.center().y)
+                    .abs()
+                    .total_cmp(&(b.center().y - rolled.center().y).abs())
+            })
+    });
+    d.observe(
+        "iter-24-L-FG3",
+        ranges.iter().all(Option::is_some)
+            && ranges
+                .iter()
+                .flatten()
+                .all(|rect| (rect.left() - ranges[0].unwrap().left()).abs() <= 0.5),
+        format!("Every range of the rolled table starts at one x: {ranges:?}"),
+    );
     d.state("authored-table-typed-roll", Sizes::All);
     d.set_base(SMALL);
     d.scroll_until(READER, "The first column must be a number", 24);
@@ -2816,6 +2840,86 @@ pub fn held_npc(d: &mut Driver<'_>) {
 fn reader_pane(d: &Driver<'_>) -> egui::Rect {
     let (width, height) = d.window_size();
     egui::Rect::from_min_max(egui::pos2(405.0, 0.0), egui::pos2(width, height))
+}
+
+/// Astra re-check 2: a fixed part below Edit Markdown's save row whose message is longer than
+/// the part. Tab reaches the part (one widget named with the whole message), Down scrolls its
+/// words up, and the wheel does too. Returns (Tab reached it, a key scrolled it, the wheel
+/// scrolled it), each from a changed painted position, and whether its focus ring keeps clear of
+/// every scroll bar and splitter at 960, 1200 and 1920.
+fn fixed_part_scrolls(d: &mut Driver<'_>, message: &str) -> (bool, bool, bool, [bool; 3]) {
+    let top = |d: &Driver<'_>| {
+        let mut found = None;
+        d.each_painted_text(|text, clip| {
+            // A message's words may follow its icon in one galley.
+            let start = message.chars().take(24).collect::<String>();
+            if text.galley.job.text.contains(&start) && clip.intersects(text.visual_bounding_rect())
+            {
+                found = Some(text.pos.y);
+            }
+        });
+        found
+    };
+    let tabbed = d.tab_to(message);
+    // Astra re-check 3: the part's focus ring keeps clear of its own scroll bar at each size.
+    let ring_clear = [SMALL, DEFAULT, LARGE].map(|size| {
+        d.at_size(size, |d| {
+            let lanes = d.chrome_lanes();
+            let rings = d.focus_rings();
+            !rings.is_empty()
+                && rings
+                    .iter()
+                    // Painted over: an overlap with area, not a shared edge.
+                    .all(|(ring, _)| {
+                        lanes
+                            .iter()
+                            .all(|lane| !lane.intersect(*ring).is_positive())
+                    })
+        })
+    });
+    // Tab passes the part's own Undo first, and egui scrolls the part to show it: start from the
+    // part's top.
+    d.press(egui::Key::PageUp);
+    let before = top(d);
+    d.press(egui::Key::ArrowDown);
+    let keyed = top(d);
+    let key_scrolled = before
+        .zip(keyed)
+        .is_some_and(|(before, keyed)| keyed < before - 1.0);
+    // Back to the top, then the wheel over the part.
+    d.press(egui::Key::PageUp);
+    let back = top(d);
+    let part = d
+        .nodes()
+        .into_iter()
+        .filter(|node| node.name == message)
+        .map(|node| node.rect)
+        .max_by(|a, b| a.area().total_cmp(&b.area()));
+    let wheel_scrolled = match (back, part) {
+        (Some(back), Some(part)) => {
+            d.scroll_at(part.center(), 1);
+            top(d).is_some_and(|after| after < back - 1.0)
+        }
+        _ => false,
+    };
+    (tabbed, key_scrolled, wheel_scrolled, ring_clear)
+}
+
+/// Round 24 FC4: the y of the Read tab, `Show file` on the file line and the reader's title, at
+/// 960, 1200 and 1920. A result in the reader's result place moves none of them.
+pub(super) fn reader_frame(d: &mut Driver<'_>, title: &str) -> Vec<Option<(f32, f32, f32)>> {
+    [SMALL, DEFAULT, LARGE]
+        .into_iter()
+        .map(|size| {
+            d.at_size(size, |d| {
+                Some((
+                    d.place_of("Read")?.top(),
+                    d.place_of("Show file")?.top(),
+                    reader_title(d, title)?.top(),
+                ))
+            })
+        })
+        .collect()
 }
 
 /// A World reader's title, painted in the reader pane.
@@ -3619,11 +3723,26 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.replace_text_in("Markdown editor", &renamed);
     d.click("Save");
     d.wait_for_text("Update 1 link");
+    // Astra review of round 24: the offer and its result belong to the renamed entry (A, Ash
+    // Wolf) and show in its reader only.
+    let ash_exposure = fs::read_to_string(&path).unwrap();
     search_library(d, "Ash Exposure");
     d.click_starting("Ash Exposure · ");
+    d.observe(
+        "iter-24-L-link-owner-offer-hidden",
+        d.visible_text("The watch knows this spell.")
+            && !d.has_containing("Change links from")
+            && !d.has_containing("Update 1 link"),
+        "Another entry's reader does not show the rename's offer",
+    );
+    search_library(d, "Ash Wolf");
+    d.click_starting("Ash Wolf · ");
+    d.wait_for_text("Update 1 link");
     d.state("renamed-creature-offers-link-update", Sizes::All);
+    // Round 24 FC4: the offer and its result sit in the reader's result place, below the title.
+    let with_offer = reader_frame(d, "Ash Wolf");
     // Round 23 AE2: the offer names the old and the new name, so the DM can check the words
-    // before the write. The open reader is Ash Exposure, so nothing else on screen says Ash Wolf.
+    // before the write.
     let offer = d.painted_word_rect(
         "Change links from “Cinder Wolf” to “Ash Wolf”.",
         egui::Rect::EVERYTHING,
@@ -3632,6 +3751,11 @@ pub fn package_rename(d: &mut Driver<'_>) {
         "iter-23-L-AE2",
         offer.is_some() && d.visible_text("Update 1 link"),
         "The link offer names both names, and its action keeps the count",
+    );
+    assert_eq!(
+        fs::read_to_string(&path).unwrap(),
+        ash_exposure,
+        "the offer writes nothing"
     );
     d.click("Update 1 link");
     d.wait_for_text("Undo link update");
@@ -3655,18 +3779,280 @@ pub fn package_rename(d: &mut Driver<'_>) {
         format!("The result {result:?} takes the offer's place {offer:?}, and the offer has gone"),
     );
     d.state("renamed-creature-links-updated", Sizes::All);
-    d.click("Undo link update");
-    assert!(
-        fs::read_to_string(&path)
+    let with_result = reader_frame(d, "Ash Wolf");
+
+    // B (Veilglass Lantern), linked from another file (Ash Wraith), is renamed while A's result
+    // waits. A's result is hidden in B's reader, not ended; B's offer and result are B's.
+    let (entries, _) = splat::content::read_directory(&package).unwrap();
+    let wraith = package.join(
+        &entries
+            .iter()
+            .find(|e| e.name == "Ash Wraith")
             .unwrap()
-            .contains("[[Cinder Wolf]]")
+            .path,
+    );
+    let wraith_before = fs::read_to_string(&wraith).unwrap();
+    fs::write(
+        &wraith,
+        format!("{wraith_before}\nSee [[Veilglass Lantern]].\n"),
+    )
+    .unwrap();
+    d.click("Packages");
+    d.click("Reload from disk");
+    search_library(d, "Veilglass Lantern");
+    d.click_starting("Veilglass Lantern · ");
+    d.wait_for_text("Veilglass Lantern");
+    let a_hidden_in_b = !d.has_containing("Links now say") && !d.has("Undo link update");
+    let lantern_path = package.join(
+        &entries
+            .iter()
+            .find(|e| e.name == "Veilglass Lantern")
+            .unwrap()
+            .path,
+    );
+    d.click(EDIT_MARKDOWN);
+    // Astra re-check: B's long name makes its offer and its result wrap. They scroll inside the
+    // two-line result part, so the editor keeps its place before, with the offer and with the
+    // result, at 960, 1200 and 1920.
+    const LAMP: &str = "Veilglass Lantern of the Ninth Ember Watch at Cinderfall Gate";
+    // From Save's row to the editor: the space that holds the results and the reason.
+    let editor_below_read = |d: &mut Driver<'_>| {
+        [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                // The editor's frame: its accessible rect follows its scrolled text.
+                Some(d.input_frame("Markdown editor")?.0.top() - d.place_of("Save")?.bottom())
+            })
+        })
+    };
+    let lantern = d.editor_text().unwrap();
+    let lamp =
+        crate::content_workspace::patch_fields(&lantern, &[("splat_name", Some(LAMP.into()))])
+            .unwrap()
+            .replace("# Veilglass Lantern", &format!("# {LAMP}"));
+    d.replace_text_in("Markdown editor", &lamp);
+    let b_unsaved = editor_below_read(d);
+    d.click("Save");
+    d.settle();
+    let b_offer_shown = d.has_containing(&format!(
+        "Change links from “Veilglass Lantern” to “{LAMP}”."
+    ));
+    let b_offer_alone = !d.has_containing("Links now say “Ash Wolf”");
+    let b_with_offer = editor_below_read(d);
+    d.click("Update 1 link");
+    d.settle();
+    let b_result_shown = d.has_containing(&format!("Links now say “{LAMP}”."));
+    let b_result_alone = !d.has_containing("Links now say “Ash Wolf”");
+    let b_with_result = editor_below_read(d);
+    // Astra re-check 2: B's long result scrolls by keyboard and by wheel, and its Undo keeps
+    // clear of every scroll bar, splitter and other target at 960, 1200 and 1920.
+    let b_message = format!("Links now say “{LAMP}”.");
+    let (tabbed, keyed, wheeled, ring) = fixed_part_scrolls(d, &b_message);
+    let undo_clear = [SMALL, DEFAULT, LARGE].map(|size| {
+        d.at_size(size, |d| {
+            let lanes = d.chrome_lanes();
+            d.nodes()
+                .into_iter()
+                .find(|node| node.name == "Undo link update")
+                .is_some_and(|undo| {
+                    !undo.shown.is_positive()
+                        || (lanes.iter().all(|lane| !lane.intersects(undo.shown))
+                            && super::press_area_clear(d, undo.rect, "Undo link update", None)
+                                .is_ok())
+                })
+        })
+    });
+    d.observe(
+        "iter-24-L-part-keyboard-result",
+        tabbed && keyed && wheeled && undo_clear.iter().all(|clear| *clear) && ring.iter().all(|r| *r),
+        format!(
+            "B's result part: Tab {tabbed}, a key scrolls it {keyed}, the wheel scrolls it {wheeled}, Undo clear at 960, 1200, 1920 {undo_clear:?}, its focus ring clear {ring:?}"
+        ),
+    );
+    d.observe(
+        "iter-24-L-wrapped-result",
+        b_offer_shown
+            && b_result_shown
+            && b_unsaved.iter().all(Option::is_some)
+            && b_unsaved == b_with_offer
+            && b_unsaved == b_with_result,
+        format!(
+            "B's wrapped offer and result keep its editor below Read: unsaved {b_unsaved:?}, offer {b_with_offer:?}, result {b_with_result:?}"
+        ),
+    );
+    let b_saved = fs::read_to_string(&wraith)
+        .unwrap()
+        .contains(&format!("[[{LAMP}]]"));
+    search_library(d, "Ash Wolf");
+    d.click_starting("Ash Wolf · ");
+    d.settle();
+    let a_back = d.visible_text("Links now say “Ash Wolf”.") && !d.has_containing("Veilglass");
+    d.observe(
+        "iter-24-L-link-owner",
+        a_hidden_in_b && b_offer_alone && b_result_alone && b_saved && a_back,
+        format!(
+            "Each link offer and result shows in its own entry's reader only: A hidden in B {a_hidden_in_b}, B's offer alone {b_offer_alone}, B's result alone {b_result_alone}, B saved {b_saved}, A's result back in A {a_back}"
+        ),
+    );
+    if d.has("Undo link update") {
+        d.click("Undo link update");
+    }
+    let a_undone = fs::read_to_string(&path)
+        .unwrap()
+        .contains("[[Cinder Wolf]]");
+    let b_kept = fs::read_to_string(&wraith)
+        .unwrap()
+        .contains(&format!("[[{LAMP}]]"));
+    d.observe(
+        "iter-24-L-link-owner-undo",
+        a_undone && b_kept,
+        format!("Undo of A's link update restores A's links ({a_undone}) and keeps B's ({b_kept})"),
     );
     d.observe(
         "iter-19-E-AD3-link-undone",
         !d.has_containing("Links now say") && !d.has("Undo link update"),
         "After Undo link update, its result message goes away",
     );
+    let without = reader_frame(d, "Ash Wolf");
+    d.observe(
+        "iter-24-L-FC4-links",
+        without.iter().all(Option::is_some) && with_offer == without && with_result == without,
+        format!(
+            "The tabs, the file line and the title keep their y with the link offer {with_offer:?}, its result {with_result:?} and neither {without:?}"
+        ),
+    );
     d.state("renamed-creature-link-update-undone", Sizes::All);
+
+    // Astra re-check: a stale offer goes. B is renamed (offer), then renamed again to a name
+    // another entry has: the earlier offer ends with that save, though the new rename gives no
+    // offer. Then a valid offer whose entry is renamed outside Splat goes on reload. The linking
+    // file keeps its bytes throughout.
+    let rename_b = |d: &mut Driver<'_>, from: &str, to: &str| {
+        d.click(EDIT_MARKDOWN);
+        let text = d.editor_text().unwrap();
+        let renamed =
+            crate::content_workspace::patch_fields(&text, &[("splat_name", Some(to.into()))])
+                .unwrap()
+                .replace(&format!("# {from}"), &format!("# {to}"));
+        d.replace_text_in("Markdown editor", &renamed);
+        d.click("Save");
+        d.settle();
+    };
+    let rename_outside = |to: &str| {
+        let text = fs::read_to_string(&lantern_path).unwrap();
+        let name = splat::content::Entry::parse("Item.md", &text).unwrap().name;
+        fs::write(
+            &lantern_path,
+            crate::content_workspace::patch_fields(&text, &[("splat_name", Some(to.into()))])
+                .unwrap()
+                .replace(&format!("# {name}"), &format!("# {to}")),
+        )
+        .unwrap();
+    };
+    let linking = fs::read(&wraith).unwrap();
+    search_library(d, "Veilglass");
+    d.click_starting(&format!("{LAMP} · "));
+    rename_b(d, LAMP, "Veilglass Beacon");
+    let first_offer = d.has_containing(&format!(
+        "Change links from “{LAMP}” to “Veilglass Beacon”."
+    ));
+    rename_b(d, "Veilglass Beacon", "Ash Wraith");
+    let second_rename_gone =
+        !d.has_containing("Change links from") && !d.has_containing("Update 1 link");
+    rename_outside(LAMP);
+    d.click("Packages");
+    d.click("Reload from disk");
+    d.settle();
+    search_library(d, "Veilglass");
+    d.click_starting(&format!("{LAMP} · "));
+    rename_b(d, LAMP, "Veilglass Beacon");
+    let second_offer = d.has_containing(&format!(
+        "Change links from “{LAMP}” to “Veilglass Beacon”."
+    ));
+    // Astra re-check 3: the entry is renamed outside Splat at the last moment, after the scan and
+    // after each linking file is checked, directly before the write. Update writes nothing and
+    // says why.
+    let hooked = std::rc::Rc::new(std::cell::Cell::new(false));
+    {
+        let hooked = hooked.clone();
+        let owner = lantern_path.clone();
+        crate::content_workspace::before_next_write(move || {
+            let text = fs::read_to_string(&owner).unwrap();
+            let name = splat::content::Entry::parse("Item.md", &text).unwrap().name;
+            fs::write(
+                &owner,
+                crate::content_workspace::patch_fields(
+                    &text,
+                    &[("splat_name", Some("Veilglass Torch".into()))],
+                )
+                .unwrap()
+                .replace(&format!("# {name}"), "# Veilglass Torch"),
+            )
+            .unwrap();
+            hooked.set(true);
+        });
+    }
+    let pressed = d.has("Update 1 link");
+    if pressed {
+        d.click("Update 1 link");
+    }
+    d.settle();
+    // A hook that did not run must not fire on a later write.
+    crate::content_workspace::before_next_write(|| {});
+    let last_moment_kept = pressed
+        && hooked.get()
+        && fs::read(&wraith).unwrap() == linking
+        && d.has_containing(crate::library::LINKS_NOT_CHANGED);
+    // Back to a fresh offer: B named LAMP on disk, reloaded, then renamed in Splat again.
+    rename_outside(LAMP);
+    d.click("Packages");
+    d.click("Reload from disk");
+    d.settle();
+    search_library(d, "Veilglass");
+    d.click_starting(&format!("{LAMP} · "));
+    rename_b(d, LAMP, "Veilglass Beacon");
+    let third_offer = d.has_containing(&format!(
+        "Change links from “{LAMP}” to “Veilglass Beacon”."
+    ));
+    // Astra re-check 2: renamed outside Splat with no reload, Update reads the entry's file
+    // first, writes nothing and says why.
+    rename_outside("Veilglass Torch");
+    let pressed = d.has("Update 1 link");
+    if pressed {
+        d.click("Update 1 link");
+    }
+    d.settle();
+    let no_reload_kept = pressed
+        && fs::read(&wraith).unwrap() == linking
+        && d.has_containing(crate::library::LINKS_NOT_CHANGED);
+    d.click("Packages");
+    d.click("Reload from disk");
+    d.settle();
+    search_library(d, "Veilglass");
+    d.click_starting("Veilglass Torch · ");
+    d.settle();
+    let outside_gone = !d.has_containing("Change links from") && !d.has_containing("Update 1 link");
+    let bytes_kept = fs::read(&wraith).unwrap() == linking;
+    d.observe(
+        "iter-24-L-stale-offer",
+        first_offer
+            && second_rename_gone
+            && second_offer
+            && last_moment_kept
+            && third_offer
+            && no_reload_kept
+            && outside_gone
+            && bytes_kept,
+        format!(
+            "A stale offer goes: first offer {first_offer}, gone after a rename to a taken name {second_rename_gone}, second offer {second_offer}, Update after an outside rename directly before the write writes nothing {last_moment_kept}, third offer {third_offer}, Update after an outside rename with no reload writes nothing {no_reload_kept}, gone after reload {outside_gone}; the linking file kept its bytes {bytes_kept}"
+        ),
+    );
+    // The later steps compare with the package before B's renames: give B and Ash Wraith their
+    // first text back.
+    fs::write(&wraith, &wraith_before).unwrap();
+    fs::write(&lantern_path, &lantern).unwrap();
+    d.click("Packages");
+    d.click("Reload from disk");
+    d.settle();
 
     let moved = d.root.join("modules/watch-package");
     fs::rename(&package, &moved).unwrap();
@@ -3753,6 +4139,12 @@ pub fn package_rename(d: &mut Driver<'_>) {
                     && (file.center().y - from.center().y).abs() < crate::design::XS
             })
     });
+    // Round 24 FF6: the warning offers no choice that no control names; its buttons do.
+    d.observe(
+        "iter-24-L-FF6",
+        d.has(crate::library::MOVED_ON_DISK) && !d.has_containing("keep the disk version"),
+        "The moved-file warning says the draft is safe, and the two buttons name the choices",
+    );
     d.state_prepared("draft-file-moved-on-disk", Sizes::All, |d| {
         choices_at_text(
             d,
@@ -3909,6 +4301,16 @@ pub fn package_about(d: &mut Driver<'_>) {
     d.expect_same("Undo package use restores the original package selection and About reader.");
     d.assert_state_matches("package-use-undone", "package-about");
     d.click(EDIT_MARKDOWN);
+    // Round 24 FB3: the manifest's editor below Read with no result, at each size.
+    let editor_below_read = |d: &mut Driver<'_>| {
+        [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                // The editor's frame: its accessible rect follows its scrolled text.
+                Some(d.input_frame("Markdown editor")?.0.top() - d.place_of("Read")?.bottom())
+            })
+        })
+    };
+    let no_result = editor_below_read(d);
     let original = d.editor_text().unwrap();
     let renamed = crate::content_workspace::patch_fields(
         &original,
@@ -3978,6 +4380,15 @@ pub fn package_about(d: &mut Driver<'_>) {
     d.expect("Markdown editor");
     d.click("Replace with a basic Module.md");
     d.wait_for_text("Undo write Module.md");
+    // The result takes the slot below the save row, so the editor keeps its place.
+    let with_result = editor_below_read(d);
+    d.observe(
+        "iter-24-L-FB3",
+        no_result.iter().all(Option::is_some) && no_result == with_result,
+        format!(
+            "Edit Markdown's editor is as far below Read with the write result {with_result:?} as with none {no_result:?}"
+        ),
+    );
     d.state_prepared("legacy-manifest-replaced-in-library", Sizes::All, |d| {
         check_undo_icon(d, "Undo write Module.md", "iter-8-E-FD7-library-undo");
         d.observe(
@@ -3987,6 +4398,98 @@ pub fn package_about(d: &mut Driver<'_>) {
             "Library names the existing manifest file",
         );
     });
+    // Astra review of round 24: with the write result kept on screen, Save's refusal of invalid
+    // text, Discard and Undo discard move nothing either. The result and the reason share one
+    // space of fixed height below the save row.
+    let written = d.editor_text().unwrap();
+    let invalid = written.replacen("splat_kind: package", "splat_kind: [", 1);
+    assert_ne!(invalid, written, "fixture: the manifest names its kind");
+    d.replace_editor_text(&invalid);
+    d.wait_for_text("Invalid");
+    let kept = |d: &Driver<'_>| d.visible_text("Module.md was written again.");
+    let refused = (kept(d), editor_below_read(d));
+    d.click("Discard");
+    assert_eq!(d.editor_text().as_deref(), Some(written.as_str()));
+    let discarded = (
+        kept(d) && d.has_containing("Undo discard"),
+        editor_below_read(d),
+    );
+    d.click_starting("Undo discard");
+    assert_eq!(d.editor_text().as_deref(), Some(invalid.as_str()));
+    let undone = (kept(d), editor_below_read(d));
+    d.observe(
+        "iter-24-L-FB3-states",
+        [&refused, &discarded, &undone]
+            .iter()
+            .all(|(kept, tops)| *kept && *tops == no_result),
+        format!(
+            "With the write result on screen the editor stays {no_result:?} below Read: Invalid {refused:?}, discarded {discarded:?}, Undo discard {undone:?}"
+        ),
+    );
+    d.click("Discard");
+    assert_eq!(d.editor_text().as_deref(), Some(written.as_str()));
+    // Astra re-check: a Save reason that wraps (a long unknown kind) scrolls inside its two-line
+    // slot; before it, with it and after Discard the editor keeps its place.
+    let unsaved = (kept(d), editor_below_read(d));
+    let long_kind = written.replacen(
+        "splat_kind: package",
+        "splat_kind: package of the watch that keeps the ember gate beyond the long ash road and the old cinder bridge where the patrol waits for the lantern signal at dusk",
+        1,
+    );
+    assert_ne!(long_kind, written, "fixture: the manifest names its kind");
+    d.replace_editor_text(&long_kind);
+    d.wait_for_text("Invalid");
+    let reason = d
+        .nodes()
+        .into_iter()
+        .find(|node| node.name.contains("ember gate beyond the long ash road"))
+        .map(|node| node.name);
+    let failed = (kept(d), editor_below_read(d));
+    // Astra re-check 2: the long reason scrolls by keyboard and by wheel, and its words keep
+    // clear of every scroll bar and splitter at 960, 1200 and 1920.
+    let message = reason.clone().unwrap_or_default();
+    let mut sizes = Vec::new();
+    d.each_painted_text(|text, clip| {
+        if text.galley.job.text == message {
+            sizes.push((text.pos, text.galley.size(), clip));
+        }
+    });
+    let (tabbed, keyed, wheeled, ring) = fixed_part_scrolls(d, &message);
+    let clear = [SMALL, DEFAULT, LARGE].map(|size| {
+        d.at_size(size, |d| {
+            let lanes = d.chrome_lanes();
+            let mut words = Vec::new();
+            d.each_painted_text(|text, clip| {
+                if text.galley.job.text == message {
+                    words.push(text.visual_bounding_rect().intersect(clip));
+                }
+            });
+            !words.is_empty()
+                && words.iter().all(|rect| {
+                    !rect.is_positive() || lanes.iter().all(|lane| !lane.intersects(*rect))
+                })
+        })
+    });
+    d.observe(
+        "iter-24-L-part-keyboard-reason",
+        tabbed && keyed && wheeled && clear.iter().all(|clear| *clear) && ring.iter().all(|r| *r),
+        format!(
+            "The reason part: Tab {tabbed}, a key scrolls it {keyed}, the wheel scrolls it {wheeled}, its words clear of bars and splitters at 960, 1200, 1920 {clear:?}, its focus ring clear {ring:?}; painted {sizes:?}"
+        ),
+    );
+    d.click("Discard");
+    assert_eq!(d.editor_text().as_deref(), Some(written.as_str()));
+    let after = (kept(d), editor_below_read(d));
+    d.observe(
+        "iter-24-L-FB3-wrapped-reason",
+        reason.is_some()
+            && [&unsaved, &failed, &after]
+                .iter()
+                .all(|(kept, tops)| *kept && *tops == no_result),
+        format!(
+            "Save's reason {reason:?} keeps the editor {no_result:?} below Read: unsaved {unsaved:?}, failed {failed:?}, discarded {after:?}"
+        ),
+    );
     assert!(!folder.join("Package.md").exists());
     d.click("Undo write Module.md");
     d.wait_for_text("Line 4 opens a list");
@@ -4005,7 +4508,8 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     search_library(d, "Cinder Wolf");
     d.click_starting("Cinder Wolf · ");
     d.expect("22 (4d8 + 4)");
-    let warned_about = format!("{} About Ashen Marches", design::icons::WARN);
+    // Round 24 FC2: a manifest that cannot be read is an error on its About row too.
+    let warned_about = format!("{} About Ashen Marches", design::icons::ERROR);
     d.state_prepared("manifest-invalid-library-keeps-entries", Sizes::All, |d| {
         let size = d.window_size();
         let about = d
@@ -4017,12 +4521,37 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
             about.height() <= design::Density::Read.row() + 0.5,
             format!("The warning About row stays one line at {size:?}: {about:?}"),
         );
-        // Must stay true: the warning icon is still painted at the start of the row.
+        // Must stay true: the mark is still painted at the start of the row.
         d.observe(
             "iter-12-E-FD5-icon",
             d.painted_in(about)
-                .starts_with(&format!("{} About Ashen", design::icons::WARN)),
-            format!("The About row still shows its warning icon at {size:?}"),
+                .starts_with(&format!("{} About Ashen", design::icons::ERROR)),
+            format!("The About row still shows its mark at {size:?}"),
+        );
+        // Round 24 FC2: the mark is the error icon in the error colour.
+        let mut marks = Vec::new();
+        d.each_painted_text(|text, clip| {
+            if text
+                .galley
+                .job
+                .text
+                .starts_with(&format!("{} About Ashen", design::icons::ERROR))
+                && clip.intersects(text.visual_bounding_rect())
+            {
+                marks.push(painted_marks(&text.galley.job));
+            }
+        });
+        d.observe(
+            "iter-24-L-FC2",
+            !marks.is_empty()
+                && marks.iter().all(|marks| {
+                    marks
+                        == &[(
+                            design::icons::ERROR.to_owned(),
+                            design::colors().result.error,
+                        )]
+                }),
+            format!("The invalid manifest's About mark is an error at {size:?}: {marks:?}"),
         );
         // At 1200x800 the name does not fit beside the icon, so it shortens and hover gives it whole.
         if size == DEFAULT {
@@ -4115,8 +4644,9 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
             format!("The invalid manifest keeps its error tone in Library repair: {tone:?}"),
         );
         let about = d
-            .place_of(&format!("{} About Ashen Marches", design::icons::WARN))
-            .expect("The warning About row is visible");
+            // Round 24 FC2: the invalid manifest's About row has the error mark.
+            .place_of(&format!("{} About Ashen Marches", design::icons::ERROR))
+            .expect("The marked About row is visible");
         let about_selected = d.app_mut().library.repairing_package_about();
         d.observe(
             "iter-9-E-FD3",
@@ -4463,16 +4993,34 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     d.type_text("draft ");
     let unsent_repair = d.editor_text().unwrap();
     assert_ne!(unsent_repair, broken);
+    // Round 24 AF1, FF1, SF1: the discard result takes the slot reserved below the parse error,
+    // so the editor keeps its y before Discard, after it and after Undo discard.
+    let editor_tops = |d: &mut Driver<'_>| {
+        [SMALL, DEFAULT, LARGE]
+            .map(|size| d.at_size(size, |d| Some(d.place_of("Markdown editor")?.top())))
+    };
+    let typed_tops = editor_tops(d);
     d.click("Discard");
     assert_eq!(d.editor_text().as_deref(), Some(broken.as_str()));
     d.expect("Invalid");
     d.expect("Line 4 opens a list");
     d.expect("Undo discard of Creatures/Cinder Wolf.md");
+    let discarded_tops = editor_tops(d);
     d.state("repair-draft-discarded", Sizes::All);
     d.click("Undo discard of Creatures/Cinder Wolf.md");
     assert_eq!(d.editor_text().as_deref(), Some(unsent_repair.as_str()));
     d.expect("Invalid");
     d.expect("Line 4 opens a list");
+    let undone_tops = editor_tops(d);
+    d.observe(
+        "iter-24-L-AF1",
+        typed_tops.iter().all(Option::is_some)
+            && typed_tops == discarded_tops
+            && discarded_tops == undone_tops,
+        format!(
+            "The repair editor keeps its y: typed {typed_tops:?}, discarded {discarded_tops:?}, undone {undone_tops:?}"
+        ),
+    );
     d.replace_editor_text(&broken);
     let before_scroll = d.input_frame("Markdown editor").unwrap().0;
     d.scroll_at(before_scroll.center(), 3);
@@ -5064,6 +5612,13 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
                 && (changes.top() - second.bottom() - crate::design::XS).abs() < 1.0
         },
     );
+    // Round 24 AC1: both files of the duplicate identity are marked, and the header counts both.
+    let marked = row_marks(d, crate::library::SAME_ENTRY);
+    d.observe(
+        "iter-24-L-AC1",
+        marked.len() == 2 && d.visible_text("2 files need fixing"),
+        format!("Two rows mark the duplicate, and the header counts two files: {marked:?}"),
+    );
     d.state("duplicate-package-library-list", Sizes::All);
     d.click_starting("Cinder Wolf · ");
     d.expect("Make Cinder Wolf copy.md a separate entry");
@@ -5107,12 +5662,31 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
     assert_eq!(fs::read_to_string(&copy).unwrap(), copy_text);
     go_encounters(d);
     open_saved_encounter(d, "Bridge Ambush");
-    d.expect("These two files claim to be the same entry: Cinder Wolf copy.md and Cinder Wolf.md.");
     d.expect("Changes apply to the next fight. To add to this fight, use Add to fight in the run.");
+    // Round 24 FA3: each roster row says the short cause, as Library rows do; the sentence with
+    // the file names is on the row's hover, not repeated in every row.
+    let long =
+        "These two files claim to be the same entry: Cinder Wolf copy.md and Cinder Wolf.md.";
+    let short = format!("{} {}", crate::icons::WARN, crate::library::SAME_ENTRY);
+    let mut painted = Vec::new();
+    d.each_painted_text(|text, clip| {
+        if text.galley.job.text.contains(crate::library::SAME_ENTRY)
+            && clip.intersects(text.visual_bounding_rect())
+        {
+            painted.push(text.galley.job.text.clone());
+        }
+    });
+    d.observe(
+        "iter-24-L-FA3",
+        painted.len() == 2
+            && painted.iter().all(|row| row.ends_with(&short))
+            && !d.has_containing(long),
+        format!("Both Cinder Wolf rows say the short cause, and no row repeats the file names: {painted:?}"),
+    );
     d.state("duplicate-package-in-roster", Sizes::All);
     // Round 23 AD2: a duplicate identity is a warning in the roster too, as in Library; only a
-    // file that cannot be read is an error.
-    let rows = row_marks(d, "These two files claim to be the same entry:");
+    // file that cannot be read is an error. Round 24 FA3: the rows say the short cause.
+    let rows = row_marks(d, crate::library::SAME_ENTRY);
     d.observe(
         "iter-23-L-AD2",
         rows.len() == 2 && warning_marked(&rows),
@@ -6377,6 +6951,14 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
                 && cancel.top() < register.bottom()
         },
     );
+    // Round 24 FF3: the ready form's commit is primary, as `Create package` is, and it is the
+    // only accent-filled control on the screen.
+    let primary = super::session_recording::accent_filled(d);
+    d.observe(
+        "iter-24-L-FF3",
+        primary == ["Register Ashen Reaches"],
+        format!("The ready registration form's commit is the one primary: {primary:?}"),
+    );
     d.state("copied-package-new-name", Sizes::All);
     d.click("Use in this campaign");
     d.expect("Uses every entry in this package, including future entries.");
@@ -6396,8 +6978,25 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     d.expect("Uses every entry in this package, including future entries.");
     d.click("Use in this campaign");
     d.expect("This campaign keeps the original. The copy is registered but not used.");
+    // Round 24 FC4: the search field's place below the page header, before any result.
+    let columns_top = |d: &mut Driver<'_>| {
+        [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                Some(d.place_of("Search the Library")?.top() - d.place_of("Packages")?.top())
+            })
+        })
+    };
+    let columns_before = columns_top(d);
     d.click("Register Ashen Reaches");
     d.wait_for_text("Undo package registration");
+    let columns_after = columns_top(d);
+    d.observe(
+        "iter-24-L-FC4-registration",
+        columns_before.iter().all(Option::is_some) && columns_before == columns_after,
+        format!(
+            "The registration result sits in the reader, so the columns keep their place below the header ({columns_before:?} → {columns_after:?})"
+        ),
+    );
     // Round 21 FD6, round 23 AD1: the result says what the registration did, with no status
     // phrase. A later source change can make encounters use the copy, so it claims no use now.
     d.observe(
@@ -6541,15 +7140,21 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
                 d.place_of(crate::library::USE_COPY),
             )
         });
+        // Round 24 FC4: the result sits in the reader's measure. Undo stays on the message line
+        // where both fit; where they do not, it starts the next line (iter-18-A-SD1 checks its
+        // words there). Use the copy in encounters is the one row below Undo either way.
+        let measure = crate::design::READER_MEASURE;
         d.observe(
             "iter-18-E-FD1",
             undo.zip(message).zip(action).is_some_and(|((undo, message), action)| {
-                (undo.center().y - message.center().y).abs() <= 1.0
-                    && undo.left() >= message.right()
-                    && action.top() >= undo.bottom()
+                let same_line = (undo.center().y - message.center().y).abs() <= 1.0
+                    && undo.left() >= message.right();
+                let wrapped = undo.top() >= message.bottom() - 1.0
+                    && message.width() + undo.width() > measure;
+                (same_line || wrapped) && action.top() >= undo.bottom()
             }),
             format!(
-                "At {size:?}, Undo package registration {undo:?} is on the message line {message:?}, and Use the copy in encounters {action:?} is the one row below"
+                "At {size:?}, Undo package registration {undo:?} is on the message line {message:?} where both fit in the measure ({measure}), and Use the copy in encounters {action:?} is the one row below"
             ),
         );
     }
@@ -6906,6 +7511,12 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
             && d.has("Make Cinder Wolf.md in ashen-marches-copy/ a separate entry")
             && on_disk(&copied) == outside,
         "After an outside copy over a repaired file, the batch result and Undo separate entries are gone, the choices stay and no file changed",
+    );
+    // Round 24 AC2, SC1: the open duplicate's kind line names its folder, as its row does.
+    d.observe(
+        "iter-24-L-AC2",
+        d.visible_text("Creature · CR 1 · ashen-marches/"),
+        "The duplicate reader's kind line keeps the folder that tells the two files apart",
     );
     d.state("one-entry-copied-between-registered-packages", Sizes::All);
     go_encounters(d);
@@ -7822,7 +8433,8 @@ pub fn empty_links(d: &mut Driver<'_>) {
 /// in a campaign, with and without a draft. Its reader names the cause, offers Show file and
 /// Try again, and no editor link or source repair. The file's bytes never change.
 pub fn library_file_fault(d: &mut Driver<'_>) {
-    const HEADLINE: &str = "Splat cannot read Creatures/Cinder Wolf.md as text.";
+    // Round 24 FE5: below the file line, the error says `this file`; the file line names it.
+    const HEADLINE: &str = "Splat cannot read this file as text.";
     let path = d
         .root
         .join("modules/ashen-marches/Creatures/Cinder Wolf.md");
@@ -7853,7 +8465,13 @@ pub fn library_file_fault(d: &mut Driver<'_>) {
     refocus(d);
     d.wait_for_text(HEADLINE);
     d.state_prepared("package-file-not-text", Sizes::All, |d| {
-        file_fault_reader(d, "iter20-E-SD1-package", HEADLINE, false);
+        file_fault_reader(
+            d,
+            "iter20-E-SD1-package",
+            HEADLINE,
+            "Creatures/Cinder Wolf.md",
+            false,
+        );
     });
     let unread_count = files_to_fix(d);
     assert_eq!(
@@ -8003,17 +8621,85 @@ pub fn library_file_fault(d: &mut Driver<'_>) {
     refocus(d);
     search_library(d, "Not text");
     d.click_starting("Notes/Not text.md");
-    let campaign_headline = "Splat cannot read Notes/Not text.md as text.";
+    let campaign_headline = HEADLINE;
     d.wait_for_text(campaign_headline);
     d.state_prepared("campaign-file-not-text", Sizes::All, |d| {
-        file_fault_reader(d, "iter20-E-SD1-campaign", campaign_headline, true);
+        file_fault_reader(
+            d,
+            "iter20-E-SD1-campaign",
+            campaign_headline,
+            "Notes/Not text.md",
+            true,
+        );
     });
     assert_eq!(fs::read(&note).unwrap(), [0xff, 0xfe, b'\n']);
 }
 
 /// The reader of a file that cannot be read: the cause, Show file, Try again at the message
 /// words, Technical details, and no editor link, repair or source editing.
-fn file_fault_reader(d: &mut Driver<'_>, id: &str, headline: &str, campaign: bool) {
+fn file_fault_reader(d: &mut Driver<'_>, id: &str, headline: &str, path: &str, campaign: bool) {
+    // Round 24 FE5: the reader names the file's path once, on its file line; its title is the
+    // file name.
+    let pane = d.place_of("Read").map(|read| {
+        egui::Rect::from_min_max(
+            egui::pos2(read.left() - 1.0, read.top()),
+            egui::pos2(f32::INFINITY, f32::INFINITY),
+        )
+    });
+    let words = pane.map(|pane| d.painted_in(pane)).unwrap_or_default();
+    let name = path.rsplit('/').next().unwrap_or(path);
+    d.observe(
+        &format!(
+            "iter-24-L-FE5-{}",
+            if campaign { "campaign" } else { "package" }
+        ),
+        pane.is_some()
+            && words.matches(path).count() <= 1
+            && d.painted_word_rect(name, pane.unwrap()).is_some()
+            && !words.contains(&format!("cannot read {path}")),
+        format!(
+            "The reader says {path} at most once, on its file line, and is titled {name}: {words}"
+        ),
+    );
+    // Round 24 AE1, FE2: the row marks the fault the header counts with the error icon in the
+    // error colour, and the header count has the error tone.
+    let error = (
+        design::icons::ERROR.to_owned(),
+        design::colors().result.error,
+    );
+    let mut rows = Vec::new();
+    let mut header = Vec::new();
+    d.each_painted_text(|text, clip| {
+        let job = &text.galley.job;
+        if !clip.intersects(text.visual_bounding_rect()) {
+            return;
+        }
+        if job.text.contains("Text format cannot be read") {
+            rows.push(painted_marks(job));
+        }
+        if job.text.contains(" need fixing") || job.text.contains(" needs fixing") {
+            header.push(painted_marks(job));
+        }
+    });
+    d.observe(
+        &format!(
+            "iter-24-L-AE1-{}",
+            if campaign { "campaign" } else { "package" }
+        ),
+        !rows.is_empty()
+            && rows
+                .iter()
+                .all(|marks| marks == std::slice::from_ref(&error)),
+        format!("The unreadable row has one mark, the error icon in the error colour: {rows:?}"),
+    );
+    d.observe(
+        &format!(
+            "iter-24-L-FE2-header-{}",
+            if campaign { "campaign" } else { "package" }
+        ),
+        header.len() == 1 && header[0].first() == Some(&error),
+        format!("The header count leads with the error icon in the error colour: {header:?}"),
+    );
     let message = d.painted_rect_in(headline, egui::Rect::EVERYTHING);
     let again = d.place_of("Try again");
     let words = again.and_then(|again| super::words_left_in(d, again));

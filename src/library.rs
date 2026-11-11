@@ -41,8 +41,21 @@ const UNREAD_EDIT: &str =
 /// A file that cannot be read: what happened, how to recover, and Try again, which starts at the
 /// message words. The system's words go to Technical details. Nothing here changes the file.
 /// Returns whether Try again was chosen.
+/// A read fault's first sentence in the reader, below the file line that names the file: it
+/// says `this file`, so the path shows once. Messages away from the reader keep the path.
+fn fault_here(fault: &FileFault) -> String {
+    use crate::world::file_fault::Kind;
+    match fault.kind {
+        Kind::NotText => "Splat cannot read this file as text.".to_owned(),
+        Kind::ReadDenied => "Splat has no permission to read this file.".to_owned(),
+        Kind::Gone => "Splat cannot find this file.".to_owned(),
+        Kind::CannotRead => "Splat cannot open this file.".to_owned(),
+        Kind::WriteDenied | Kind::Exists | Kind::DiskFull | Kind::CannotWrite => fault.headline(),
+    }
+}
+
 fn fault_notice(ui: &mut egui::Ui, fault: &FileFault) -> bool {
-    let again = design::message_with_actions(ui, Tone::Error, &fault.headline(), |ui| {
+    let again = design::message_with_actions(ui, Tone::Error, &fault_here(fault), |ui| {
         ui.add(
             egui::Label::new(
                 Type::Body
@@ -716,19 +729,24 @@ impl Note {
     }
 
     /// The About row's words. `flagged` is true when the header counts a problem in this file,
-    /// such as a first heading that differs from the name; an unreadable manifest always warns.
+    /// such as a first heading that differs from the name. The mark has the fault's tone: a
+    /// manifest that cannot be read is an error, and a deleted one or another problem is a warning.
     fn about_label(&self, flagged: bool) -> String {
         let name = match &self.owner {
             Owner::Package(module) => &module.name,
             _ => self.name(),
         };
+        let deleted = self.error.as_deref() == Some(crate::content_workspace::DELETED_MANIFEST);
+        let mark = if self.error.is_some() && !deleted {
+            Some(icons::ERROR)
+        } else if deleted || flagged {
+            Some(icons::WARN)
+        } else {
+            None
+        };
         format!(
             "{}About {name}",
-            if self.error.is_some() || flagged {
-                format!("{} ", icons::WARN)
-            } else {
-                String::new()
-            }
+            mark.map_or_else(String::new, |mark| format!("{mark} "))
         )
     }
 
@@ -800,6 +818,12 @@ struct DuplicateIndex {
     keys: std::collections::HashMap<String, Vec<usize>>,
 }
 
+#[cfg(test)]
+thread_local! {
+    /// How many times the notes were read to count a rename's links.
+    static RENAME_LINK_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// The link index a scan used, and each listed entry's position and broken link count.
 type BrokenLinks = (
     std::sync::Arc<crate::lookup::ContentIndex>,
@@ -829,6 +853,14 @@ pub(crate) struct Loaded {
     /// Each keyed by its package or campaign id, so two packages with one name count twice.
     load_errors: Vec<(FileKey, String)>,
     diagnostics: Vec<Diagnostic>,
+    /// Files the header counts that have no message of their own: each file of a duplicate
+    /// identity or key, whose row says `Same entry in two files`. The check names one side only.
+    duplicate_files: Vec<FileKey>,
+    /// Files whose every counted problem is a link to an entry that cannot be found. Their row
+    /// says `N broken links` once, with no second `Needs fixing` mark.
+    link_faults_only: std::collections::HashSet<FileKey>,
+    /// A counted file cannot be read, so the header count has the error tone.
+    unreadable_counted: bool,
     /// Paths that more than one note has, such as `Rules/Watch.md` in two packages, with the
     /// owner name of each note there. Rows that name one of these files name its owner too.
     /// `invalidate` clears it.
@@ -844,6 +876,9 @@ pub(crate) struct Loaded {
     /// Listed entries with a broken link, found against this link index. A new index, an edited
     /// note (`invalidate`) or a reload (a new `Loaded`) finds them again.
     broken_links: std::sync::Mutex<Option<BrokenLinks>>,
+    /// How many links a rename's offer would change, for its old and new names. A reload (a new
+    /// `Loaded`) or an edited note (`invalidate`) counts them again.
+    rename_links: std::sync::Mutex<Option<((String, String), usize)>>,
 }
 impl Loaded {
     fn facets(&self) -> &[Option<Facets>] {
@@ -883,6 +918,60 @@ impl Loaded {
             .collect();
         *cache = Some((index.clone(), notes.clone()));
         notes
+    }
+
+    /// The offer checked against the disk just before its write: the entry's own file still
+    /// holds it with the new name (an outside rename since the last load ends the offer).
+    /// The linking files are checked as they are written: each must still hold what was read.
+    fn offer_holds_on_disk(&self, offer: &LinkOffer) -> bool {
+        self.notes
+            .iter()
+            .find(|note| note.entry.as_ref().is_some_and(|e| e.id == offer.owner))
+            .and_then(|note| {
+                let text = fs::read_to_string(note.owner.root()?.join(&note.path)).ok()?;
+                Entry::parse(&note.path, &text).ok()
+            })
+            .is_some_and(|entry| entry.id == offer.owner && entry.name == offer.new)
+    }
+
+    /// True while a rename's offer still holds: its entry still has the new name, and the old and
+    /// new names name no other entry or file.
+    fn offer_holds(&self, offer: &LinkOffer) -> bool {
+        self.notes
+            .iter()
+            .position(|note| note.entry.as_ref().is_some_and(|e| e.id == offer.owner))
+            .is_some_and(|at| {
+                self.notes[at]
+                    .entry
+                    .as_ref()
+                    .is_some_and(|entry| entry.name == offer.new)
+                    && self.can_rename_links(at, &offer.old, &offer.new)
+            })
+    }
+
+    /// How many links in the notes name `old`, for the offer to change them to `new`. Counted
+    /// once per pair of names until `invalidate` or a reload.
+    fn rename_link_count(&self, old: &str, new: &str) -> usize {
+        let mut cache = self
+            .rename_links
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(((known_old, known_new), count)) = cache.as_ref()
+            && known_old == old
+            && known_new == new
+        {
+            return *count;
+        }
+        #[cfg(test)]
+        RENAME_LINK_SCANS.with(|scans| scans.set(scans.get() + 1));
+        let count = self
+            .notes
+            .iter()
+            .filter(|note| note.owner.root().is_some())
+            .map(|note| crate::world::rename_note_links(&note.text, old, new).1)
+            .sum();
+        *cache = Some(((old.to_owned(), new.to_owned()), count));
+        count
     }
 
     fn can_rename_links(&self, selected: usize, old: &str, new: &str) -> bool {
@@ -1127,6 +1216,55 @@ impl Loaded {
                 ));
             }
         }
+        // Every file of a duplicate identity or key counts, as both rows are marked.
+        self.duplicate_files = (0..self.notes.len())
+            .filter(|&at| !self.duplicates(at).is_empty())
+            .map(|at| Self::file_key(&self.notes[at]))
+            .collect();
+        // A file whose problems are all links to missing entries: each problem is a reference
+        // that resolves to nothing, the way the check resolves them, and each such reference is
+        // a link in the file's own text, which its row counts as a broken link.
+        let ids: std::collections::HashSet<Uuid> = entries.iter().map(|entry| entry.id).collect();
+        let keys: std::collections::HashSet<&str> = entries
+            .iter()
+            .filter_map(|entry| entry.key.as_deref())
+            .collect();
+        self.link_faults_only = self
+            .notes
+            .iter()
+            .filter(|note| note.owner != Owner::Builtin)
+            .filter_map(|note| {
+                let entry = note.entry.as_ref()?;
+                let unresolved: Vec<String> = content::required_references(entry)
+                    .ok()?
+                    .into_iter()
+                    .filter_map(|reference| match reference {
+                        content::Reference::Id(id) => (!ids.contains(&id)).then(|| id.to_string()),
+                        content::Reference::Key(key) => {
+                            (!keys.contains(key.as_str())).then(|| key.to_lowercase())
+                        }
+                    })
+                    .collect();
+                if unresolved.is_empty() {
+                    return None;
+                }
+                let links = crate::world::links_in(&entry.body);
+                let file = Self::file_key(note);
+                let problems = diagnostics.iter().filter(|d| d.file == file).count();
+                (problems == unresolved.len()
+                    && unresolved.iter().all(|target| {
+                        links
+                            .iter()
+                            .any(|link| link.split('|').next().unwrap_or("").trim() == target)
+                    }))
+                .then_some(file)
+            })
+            .collect();
+        self.unreadable_counted = self.notes.iter().any(|note| {
+            note.entry.is_none()
+                && note.error.is_some()
+                && note.error.as_deref() != Some(crate::content_workspace::DELETED_MANIFEST)
+        });
         self.diagnostics = diagnostics;
         // A row marks each file the header counts, so the rows follow the new problems.
         self.subtitles.take();
@@ -1187,7 +1325,7 @@ impl Loaded {
     }
 
     /// How many files the header counts: each file once, by owner and path, for a problem, a
-    /// broken link or both.
+    /// broken link, a duplicate identity or more than one.
     /// `extra` is a file the loaded notes do not know is faulty yet: an open draft's file that
     /// stopped reading.
     fn files_to_fix(&self, broken: &[(usize, usize)], extra: Option<&FileKey>) -> usize {
@@ -1198,6 +1336,11 @@ impl Loaded {
                 let note = &self.notes[at];
                 (note.owner.id(), note.path.as_str())
             }))
+            .chain(
+                self.duplicate_files
+                    .iter()
+                    .map(|(owner, path)| (*owner, path.as_str())),
+            )
             .chain(extra.map(|(owner, path)| (*owner, path.as_str())))
             .collect::<std::collections::HashSet<_>>()
             .len()
@@ -1280,6 +1423,10 @@ impl Loaded {
             .broken_links
             .get_mut()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+        *self
+            .rename_links
+            .get_mut()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
         self.subtitles.take();
         self.counts.take();
         self.duplicate_ids.take();
@@ -1300,15 +1447,21 @@ impl Loaded {
                 let line = note.entry.as_ref().map_or_else(
                     || {
                         // A file the system will not read names its short cause, as World's
-                        // row does. Its owner line in the reader keeps `Cannot be read`.
+                        // row does. Its owner line in the reader keeps `Cannot be read`. A file
+                        // that cannot be read is an error, so its mark has the error tone, as in
+                        // the reader and the header count.
                         if let Some(fault) = &note.fault {
-                            return fault.cause().to_owned();
+                            return format!("{} {}", icons::ERROR, fault.cause());
                         }
                         let (_, line) =
                             crate::campaign_content::repair_problem(&note.path, &note.text);
-                        line.map_or_else(
-                            || "Cannot be read".to_owned(),
-                            |line| format!("Line {line}"),
+                        format!(
+                            "{} {}",
+                            icons::ERROR,
+                            line.map_or_else(
+                                || "Cannot be read".to_owned(),
+                                |line| format!("Line {line}"),
+                            )
                         )
                     },
                     presentation::subtitle,
@@ -1318,7 +1471,7 @@ impl Loaded {
                     .as_ref()
                     .is_some_and(|entry| self.duplicate_ids().contains(&entry.id))
                 {
-                    format!("{} Same entry in two files · {line}", icons::WARN)
+                    format!("{} {SAME_ENTRY} · {line}", icons::WARN)
                 } else if note
                     .entry
                     .as_ref()
@@ -1577,11 +1730,149 @@ fn gone_file_parts(ui: &mut egui::Ui, root: &Path, relative: &str) {
     }
 }
 
+/// The offer to change links after a rename. It belongs to the renamed entry (by its id) and
+/// shows only in that entry's reader.
+struct LinkOffer {
+    owner: Uuid,
+    old: String,
+    new: String,
+}
+
+/// A link update's result and its Undo. It belongs to the renamed entry and shows only in its
+/// reader: while another entry is open it is hidden, not ended. It ends on its owner's next link
+/// update or saved edit, its Undo, or a change on disk to a file it wrote.
+struct LinkResult {
+    owner: Uuid,
+    edits: crate::content_workspace::ContentEdits,
+    new: String,
+}
+
+/// The page's results that are not about the open entry: the offer to change links after a rename
+/// and its result, and a copied package's registration. They take the reader's result place, so a
+/// result never moves the columns, the tabs, the file line or the title.
+#[derive(Default)]
+struct PageResults {
+    /// The offer's words and its action's words.
+    link_offer: Option<(String, String)>,
+    /// The link update's result.
+    links: Option<String>,
+    /// The registration's result, and why its Undo waits.
+    registration: Option<(String, Option<&'static str>)>,
+    /// `Use the copy in encounters` shows, with why it waits.
+    use_copy: Option<Option<&'static str>>,
+    /// The source change's Undo shows, with why it waits.
+    rosters: Option<Option<&'static str>>,
+}
+
+impl PageResults {
+    fn any(&self) -> bool {
+        self.link_offer.is_some()
+            || self.links.is_some()
+            || self.registration.is_some()
+            || self.rosters.is_some()
+    }
+}
+
+/// Which page result's action was pressed.
+#[derive(Clone, Copy, Default)]
+struct PagePress {
+    link_offer: bool,
+    links: bool,
+    registration: bool,
+    use_copy: bool,
+    rosters: bool,
+}
+
+/// How many text lines each part of Edit Markdown's space below the save row holds.
+const SLOT_LINES: f32 = 2.0;
+
+/// One part of Edit Markdown's space below the save row: a fixed rect whatever it holds. Longer
+/// words wrap and scroll inside it, beside a lane kept for the scroll bar, so nothing is cut and
+/// nothing below moves. The part is one focusable widget named with its whole message, so Tab
+/// reaches it and a screen reader reads all of it. While it has focus, the up and down arrows
+/// scroll it by a line and Page Up and Page Down by the part; the wheel scrolls it too.
+fn fixed_part<R>(
+    ui: &mut egui::Ui,
+    rect: egui::Rect,
+    id: &str,
+    name: &str,
+    add: impl FnOnce(&mut egui::Ui) -> R,
+) -> R {
+    let focus = egui::Id::new((id, "focus"));
+    let focused = ui.ctx().memory(|memory| memory.has_focus(focus));
+    let step = if focused {
+        // The arrows scroll the part instead of moving focus.
+        ui.ctx().memory_mut(|memory| {
+            memory.set_focus_lock_filter(
+                focus,
+                egui::EventFilter {
+                    vertical_arrows: true,
+                    ..Default::default()
+                },
+            );
+        });
+        let line = Type::Body.line();
+        ui.input_mut(|input| {
+            let mut step = 0.0;
+            for (key, by) in [
+                (egui::Key::ArrowDown, line),
+                (egui::Key::ArrowUp, -line),
+                (egui::Key::PageDown, rect.height()),
+                (egui::Key::PageUp, -rect.height()),
+            ] {
+                while input.consume_key(egui::Modifiers::NONE, key) {
+                    step += by;
+                }
+            }
+            step
+        })
+    } else {
+        0.0
+    };
+    let mut part = ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(rect)
+            .layout(egui::Layout::top_down(egui::Align::Min)),
+    );
+    let lane = part.spacing().scroll.bar_width + part.spacing().scroll.bar_outer_margin;
+    let inner = egui::ScrollArea::vertical()
+        .id_salt(id)
+        .max_height(rect.height())
+        // egui's default minimum would let a short overflow grow past the part.
+        .min_scrolled_height(rect.height())
+        .auto_shrink([false, true])
+        .show(&mut part, |ui| {
+            ui.set_max_width(rect.width() - lane);
+            if step != 0.0 {
+                ui.scroll_with_delta(egui::vec2(0.0, -step));
+            }
+            add(ui)
+        })
+        .inner;
+    let response = ui.interact(rect, focus, egui::Sense::focusable_noninteractive());
+    // A named group that holds the message and its actions: a screen reader reads the whole
+    // message, and the group is not a second target over its own Undo.
+    ui.ctx().accesskit_node_builder(response.id, |node| {
+        node.set_role(egui::accesskit::Role::GenericContainer);
+        node.set_label(name);
+    });
+    if response.has_focus() {
+        // Inside the content area, clear of the part's own scroll bar lane.
+        design::focus_ring(
+            ui,
+            egui::Rect::from_min_max(rect.min, egui::pos2(rect.right() - lane, rect.bottom())),
+        );
+    }
+    inner
+}
+
 /// The kept results of the open entry's pane, in the order they show. With an entry open, Read
-/// draws them in the reader's warnings place, after the title; Edit Markdown draws them above the
-/// editor. With no entry open, they sit above the empty reader.
+/// draws them in the reader's warnings place, after the title; Edit Markdown draws them in the
+/// reserved slot below the save row. With no entry open, they sit above the empty reader.
 #[derive(Default)]
 struct ReaderResults {
+    /// The page's results, first.
+    page: PageResults,
     /// Every entry in this package is now used here.
     package_use: bool,
     /// A manifest write's result and its Undo's words.
@@ -1599,6 +1890,7 @@ struct ReaderResults {
 /// Which result's Undo was pressed this frame.
 #[derive(Default)]
 struct ResultPress {
+    page: PagePress,
     package_use: bool,
     manifest: bool,
     identities: bool,
@@ -1606,8 +1898,85 @@ struct ResultPress {
     discarded: bool,
 }
 
+impl ReaderResults {
+    /// Every result's words, in the order they show, for the part's accessible name.
+    fn words(&self) -> String {
+        let page = &self.page;
+        page.link_offer
+            .as_ref()
+            .map(|(words, _)| words.clone())
+            .into_iter()
+            .chain(page.links.clone())
+            .chain(page.registration.as_ref().map(|(words, _)| words.clone()))
+            .chain(page.rosters.map(|_| USE_COPY_RESULT.to_owned()))
+            .chain(self.package_use.then(|| PACKAGE_USE_RESULT.to_owned()))
+            .chain(self.manifest.as_ref().map(|(words, _)| words.clone()))
+            .chain(self.identities.clone())
+            .chain(self.identity.clone())
+            .chain(
+                self.discarded
+                    .as_ref()
+                    .map(|name| format!("{name} draft discarded.")),
+            )
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
+    fn any(&self) -> bool {
+        self.page.any()
+            || self.package_use
+            || self.manifest.is_some()
+            || self.identities.is_some()
+            || self.identity.is_some()
+            || self.discarded.is_some()
+    }
+}
+
 fn show_results(ui: &mut egui::Ui, results: &ReaderResults) -> ResultPress {
     let mut pressed = ResultPress::default();
+    let page = &results.page;
+    if let Some((words, action)) = &page.link_offer {
+        // The offer names both names, so the DM can check the words before the write.
+        pressed.page.link_offer = design::message_with_action(ui, Tone::Info, words, action);
+    }
+    if let Some(words) = &page.links {
+        // The result is a message, so its Undo keeps its icon on the message line.
+        pressed.page.links = design::undo_message(ui, Tone::Success, words, "Undo link update");
+    }
+    if let Some((words, blocked)) = &page.registration {
+        // The Undo sits on the message line, as every Undo after a message does. After an
+        // outside change it stays there, blocked, and the reason follows at the message words.
+        // The result still happened, so its words keep the text colour.
+        pressed.page.registration = kept_undo_message(
+            ui,
+            Tone::Success,
+            words,
+            "Undo package registration",
+            *blocked,
+            true,
+        );
+        // The other choice starts below, at the message words. Only Undo is quiet.
+        if let Some(blocked) = page.use_copy {
+            pressed.page.use_copy = design::message_choice_row(ui, Tone::Success, |ui| {
+                Action::secondary(USE_COPY)
+                    .density(Density::Read)
+                    .blocked(blocked)
+                    .show(ui)
+                    .clicked()
+            });
+        }
+    }
+    if let Some(blocked) = page.rosters {
+        // After an outside change the Undo stays, blocked, and the reason follows.
+        pressed.page.rosters = kept_undo_message(
+            ui,
+            Tone::Success,
+            USE_COPY_RESULT,
+            "Undo source change",
+            blocked,
+            true,
+        );
+    }
     if results.package_use {
         pressed.package_use =
             design::undo_message(ui, Tone::Success, PACKAGE_USE_RESULT, "Undo package use");
@@ -1704,17 +2073,27 @@ pub(crate) fn kept_undo_message(
     false
 }
 
+/// Why a link update wrote nothing: the renamed entry changed on disk since the offer was made.
+pub(crate) const LINKS_NOT_CHANGED: &str = "No links were changed. This entry changed on disk since it was renamed. Reload from disk, then rename it again.";
+
+/// The warning for a draft whose file moved on disk. Its two choices name what each one does.
+pub(crate) const MOVED_ON_DISK: &str =
+    "This entry moved on disk. Your draft is safe until you choose.";
+
 const ENTRY_ROW_HEIGHT: f32 = 44.0;
 const SEARCH_NAME: &str = "Search the Library";
+/// A row's short cause for an entry whose identity or key another file claims too.
+pub(crate) const SAME_ENTRY: &str = "Same entry in two files";
 /// A row's short cause for a first heading that does not say the entry's name.
 const HEADING_DIFFERS: &str = "First heading differs";
 /// A row's short cause for any other problem the header counts in its file.
 const NEEDS_FIXING: &str = "Needs fixing";
 
 /// A list row's line without the fault it leads with (`⚠ First heading differs · `). The reader
-/// states that fault in its own warning, so its kind line does not.
+/// states that fault in its own warning, so its kind line does not. The rest of the line stays,
+/// with the folder that tells two packages of one name apart.
 fn row_line_without_fault(line: &str) -> String {
-    for cause in [HEADING_DIFFERS, NEEDS_FIXING] {
+    for cause in [SAME_ENTRY, HEADING_DIFFERS, NEEDS_FIXING] {
         if let Some(rest) = line.strip_prefix(&format!("{} {cause} · ", icons::WARN)) {
             return rest.to_owned();
         }
@@ -2420,33 +2799,6 @@ pub(crate) fn load_all(modules: &[Module], campaign: Option<&Campaign>) -> Resul
     Ok(all)
 }
 
-/// The height `design::draft_discarded` takes at this width: one line beside Undo discard, or the
-/// message with Undo discard on the line below.
-fn discarded_height(ui: &egui::Ui, name: &str, width: f32) -> f32 {
-    let text = format!("{name} draft discarded.");
-    let body = Type::Body.font(ui);
-    let gap = ui.spacing().item_spacing.x;
-    let inset =
-        design::S + 1.0 + design::number_width(ui, icons::INFO, &body) + gap * 2.0 - design::XS;
-    let button = Action::quiet("Undo discard")
-        .icon(icons::UNDO)
-        .density(Density::Read)
-        .natural_width(ui);
-    if design::number_width(ui, &text, &body) + inset + gap + button <= width {
-        return Density::Read.control();
-    }
-    let lines = egui::WidgetText::from(Type::Body.rich(ui, text))
-        .into_galley(
-            ui,
-            Some(egui::TextWrapMode::Wrap),
-            (width - inset).max(1.0),
-            body,
-        )
-        .size()
-        .y;
-    lines + ui.spacing().item_spacing.y + Density::Read.control()
-}
-
 /// Undo discard offers words only to the note they came from. Two owners can each have a
 /// note at the same path.
 fn discard_is_for(discarded: Option<&(Option<Uuid>, String, String)>, note: &Note) -> bool {
@@ -2566,9 +2918,14 @@ pub struct Library {
     copy_campaign_before: Option<(Campaign, String, String, String)>,
     unregistered: Option<Module>,
     copied_rosters: Option<crate::content_workspace::ContentEdits>,
-    renamed_links: Option<(String, String)>,
-    /// The link update and the name its links now say.
-    link_edits: Option<(crate::content_workspace::ContentEdits, String)>,
+    /// Offers to change links after a rename, each owned by the renamed entry.
+    renamed_links: Vec<LinkOffer>,
+    /// Link updates and the names their links now say, each owned by the renamed entry.
+    link_edits: Vec<LinkResult>,
+    /// This frame's page results (link update, registration), drawn in the reader's result place.
+    page_results: PageResults,
+    /// Which page result's action the reader pressed, applied after the reader is drawn.
+    page_pressed: PagePress,
     copied_package: Option<Module>,
     copy_name: String,
     copy_name_open: bool,
@@ -2899,13 +3256,7 @@ impl Library {
         }) {
             self.selection_undo = None;
         }
-        if self
-            .link_edits
-            .as_ref()
-            .is_some_and(|(edits, _)| !edits.on_disk())
-        {
-            self.link_edits = None;
-        }
+        self.link_edits.retain(|result| result.edits.on_disk());
         self.rosters_changed = self
             .copied_rosters
             .as_ref()
@@ -3390,6 +3741,9 @@ impl Library {
                             self.focus_repair =
                                 self.selected.is_some_and(|i| l.notes[i].error.is_some());
                             self.forget_changed_undos();
+                            // An offer whose entry changed outside Splat, or whose names now name
+                            // another entry, goes; it is checked again before any write too.
+                            self.renamed_links.retain(|offer| l.offer_holds(offer));
                             self.loaded = Some(l);
                             self.invalidate();
                         }
@@ -3540,12 +3894,23 @@ impl Library {
                         "file needs fixing",
                         "files need fixing",
                     );
+                    // The count has the tone of the most severe fault it counts: a file that
+                    // cannot be read is an error.
+                    let unreadable = loaded.unreadable_counted || stopped_reading.is_some();
                     let response = design::status_link(
                         ui,
                         Status {
-                            icon: icons::WARN,
+                            icon: if unreadable {
+                                icons::ERROR
+                            } else {
+                                icons::WARN
+                            },
                             word: &word,
-                            color: colors().result.warning,
+                            color: if unreadable {
+                                colors().result.error
+                            } else {
+                                colors().result.warning
+                            },
                         },
                     );
                     egui::Popup::menu(&response).show(|ui| {
@@ -3646,65 +4011,6 @@ impl Library {
         if let Some(message) = &self.message {
             design::message(ui, Tone::Success, message);
         }
-        if let Some((old, new)) = self.renamed_links.clone()
-            && let Some(loaded) = &self.loaded
-        {
-            let mut files = Vec::new();
-            let mut count = 0;
-            for note in &loaded.notes {
-                if let Some(root) = note.owner.root() {
-                    let (after, changed) = crate::world::rename_note_links(&note.text, &old, &new);
-                    if changed > 0 {
-                        count += changed;
-                        files.push((
-                            root.to_path_buf(),
-                            note.path.clone(),
-                            note.text.clone(),
-                            after,
-                        ));
-                    }
-                }
-            }
-            if count > 0
-                && design::message_with_action(
-                    ui,
-                    Tone::Info,
-                    // The offer names both names, so the DM can check the words before the write.
-                    &format!("Change links from “{old}” to “{new}”."),
-                    &format!("Update {}", design::count(count, "link", "links")),
-                )
-            {
-                match crate::content_workspace::ContentEdits::write(files) {
-                    Ok(edits) => {
-                        self.link_edits = Some((edits, new));
-                        self.renamed_links = None;
-                        self.stale = true;
-                        self.content_changed =
-                            campaigns.active_campaign().map(|campaign| campaign.path);
-                    }
-                    Err(error) => self.error = Some(error),
-                }
-            }
-        }
-        // The result is a message, so its Undo keeps its icon on the message line.
-        if let Some((edits, new)) = &self.link_edits
-            && design::undo_message(
-                ui,
-                Tone::Success,
-                &format!("Links now say “{new}”."),
-                "Undo link update",
-            )
-        {
-            match edits.undo() {
-                Ok(()) => {
-                    self.link_edits = None;
-                    self.stale = true;
-                    self.content_changed =
-                        campaigns.active_campaign().map(|campaign| campaign.path);
-                }
-                Err(error) => self.error = Some(error),
-            }
-        }
         if let Some(module) = self.unregistered.clone() {
             let message = format!(
                 "{} is unregistered. Its files stay in {}.",
@@ -3727,76 +4033,46 @@ impl Library {
                 }
             }
         }
-        let (undo_copy, use_copy) = if let Some(copy) = &self.package_copy {
-            let words = package_registered(&copy.module.name, self.copy_campaign_before.is_some());
-            // The Undo sits on the message line, as every Undo after a message does. After an
-            // outside change it stays there, blocked, and the reason follows at the message words.
-            // The result still happened, so its words keep the text colour.
-            let undo = kept_undo_message(
-                ui,
-                Tone::Success,
-                &words,
-                "Undo package registration",
-                self.registration_changed
-                    .then_some(crate::content_workspace::UNDO_ENDED),
-                true,
-            );
-            // The other choice starts below, at the message words. Only Undo is quiet.
-            let use_copy = campaigns.active_campaign().is_some()
-                && self.copied_rosters.is_none()
-                && design::message_choice_row(ui, Tone::Success, |ui| {
-                    Action::secondary(USE_COPY)
-                        .density(Density::Read)
-                        .blocked(self.draft_reason())
-                        .show(ui)
-                        .clicked()
-                });
-            (undo, use_copy)
-        } else {
-            (false, false)
-        };
-        if undo_copy && let Err(error) = self.undo_package_registration(campaigns) {
-            self.error = Some(error);
-        }
-
-        if let Some(copy) = &self.package_copy
-            && let Some(campaign) = campaigns.active_campaign()
-            && self.copied_rosters.is_none()
-            && use_copy
-        {
-            match copy.use_in_rosters(&campaign) {
-                Ok(edits) => {
-                    self.copied_rosters = Some(edits);
-                    self.rosters_changed = false;
-                    self.content_changed = Some(campaign.path);
-                    self.stale = true;
-                }
-                Err(error) => self.error = Some(error),
-            }
-        }
-        // The result is a message, so its Undo keeps its icon on the message line. After an
-        // outside change it stays there, blocked, and the reason follows at the message words.
-        if let Some(edits) = &self.copied_rosters
-            && kept_undo_message(
-                ui,
-                Tone::Success,
-                USE_COPY_RESULT,
-                "Undo source change",
+        // The page's results take the reader's result place (after the title, in Edit Markdown's
+        // reserved slot, or above the empty reader), so they never move the columns, the tabs,
+        // the file line or the title. Their presses are applied after the reader is drawn.
+        // A link offer and a link result show only in their own entry's reader.
+        let open = self.open_entry_id();
+        self.page_results = PageResults {
+            link_offer: self
+                .renamed_links
+                .iter()
+                .find(|offer| Some(offer.owner) == open)
+                .and_then(|offer| {
+                    let count = self.link_rename_count(&offer.old, &offer.new);
+                    (count > 0).then(|| {
+                        (
+                            format!("Change links from “{}” to “{}”.", offer.old, offer.new),
+                            format!("Update {}", design::count(count, "link", "links")),
+                        )
+                    })
+                }),
+            links: self
+                .link_edits
+                .iter()
+                .find(|result| Some(result.owner) == open)
+                .map(|result| format!("Links now say “{}”.", result.new)),
+            registration: self.package_copy.as_ref().map(|copy| {
+                (
+                    package_registered(&copy.module.name, self.copy_campaign_before.is_some()),
+                    self.registration_changed
+                        .then_some(crate::content_workspace::UNDO_ENDED),
+                )
+            }),
+            use_copy: (self.package_copy.is_some()
+                && campaigns.active_campaign().is_some()
+                && self.copied_rosters.is_none())
+            .then(|| self.draft_reason()),
+            rosters: self.copied_rosters.as_ref().map(|_| {
                 self.rosters_changed
-                    .then_some(crate::content_workspace::UNDO_ENDED),
-                true,
-            )
-        {
-            match edits.undo() {
-                Ok(()) => {
-                    self.copied_rosters = None;
-                    self.content_changed =
-                        campaigns.active_campaign().map(|campaign| campaign.path);
-                    self.stale = true;
-                }
-                Err(error) => self.error = Some(error),
-            }
-        }
+                    .then_some(crate::content_workspace::UNDO_ENDED)
+            }),
+        };
         if self.pending.is_some() {
             ui.horizontal(|ui| {
                 crate::design::spinner(ui);
@@ -4295,7 +4571,14 @@ impl Library {
                             let subtitle = if faults > 0 {
                                 format!("{} {} · {subtitle}", icons::WARN, design::count(faults, "table fault", "table faults"))
                             } else if broken > 0 {
-                                format!("{} {} · {subtitle}", icons::WARN, design::count(broken, "broken link", "broken links"))
+                                // One fault gets one mark: when the file's every counted problem
+                                // is a missing link, the links' count is its only cause.
+                                let needs_fixing = format!("{} {NEEDS_FIXING} · ", icons::WARN);
+                                let rest = subtitle
+                                    .strip_prefix(&needs_fixing)
+                                    .filter(|_| loaded.link_faults_only.contains(&Loaded::file_key(note)))
+                                    .unwrap_or(subtitle);
+                                format!("{} {} · {rest}", icons::WARN, design::count(broken, "broken link", "broken links"))
                             } else { subtitle.to_owned() };
                             let response = ui
                                 .push_id(i, |ui| {
@@ -4356,6 +4639,14 @@ impl Library {
                 bottom: 0,
             }))
             .show_inside(ui, |ui| {
+                if self.form || self.new_form {
+                    // A form has no reader: the page's results stay reachable above it.
+                    let results = ReaderResults {
+                        page: std::mem::take(&mut self.page_results),
+                        ..Default::default()
+                    };
+                    self.page_pressed = show_results(ui, &results).page;
+                }
                 if self.form {
                     self.package_form(ui, campaigns);
                 } else if self.new_form {
@@ -4364,6 +4655,133 @@ impl Library {
                     self.editor(ui, &subtitle, campaigns);
                 }
             });
+        let pressed = std::mem::take(&mut self.page_pressed);
+        self.apply_page_press(pressed, campaigns);
+    }
+
+    /// The open entry's identity, which owns its link offer and link result.
+    fn open_entry_id(&self) -> Option<Uuid> {
+        let note = self.loaded.as_ref()?.notes.get(self.selected?)?;
+        note.entry.as_ref().map(|entry| entry.id)
+    }
+
+    /// How many links the offer after a rename would change. The loaded notes keep the count
+    /// until they change, so an unchanged frame reads no note.
+    fn link_rename_count(&self, old: &str, new: &str) -> usize {
+        self.loaded
+            .as_ref()
+            .map_or(0, |loaded| loaded.rename_link_count(old, new))
+    }
+
+    /// The page results' presses from the reader: the link update and its Undo, and the
+    /// registration's Undo, its source change and that change's Undo.
+    fn apply_page_press(&mut self, pressed: PagePress, campaigns: &mut Campaigns) {
+        let open = self.open_entry_id();
+        if pressed.link_offer
+            && let Some(at) = self
+                .renamed_links
+                .iter()
+                .position(|offer| Some(offer.owner) == open)
+            && let Some(loaded) = &self.loaded
+        {
+            let offer = self.renamed_links.remove(at);
+            // The offer is checked again before the write: its entry still has the new name, and
+            // neither name names another entry. A stale offer goes and writes nothing.
+            // The offer is checked against the loaded notes first, then, directly before the
+            // write (after the scan and after each linking file is checked against the disk),
+            // against the entry's own file on disk. A stale offer goes and writes nothing.
+            if !loaded.offer_holds(&offer) {
+                self.error = Some(LINKS_NOT_CHANGED.into());
+            } else {
+                let files: Vec<_> = loaded
+                    .notes
+                    .iter()
+                    .filter_map(|note| {
+                        let root = note.owner.root()?;
+                        let (after, changed) =
+                            crate::world::rename_note_links(&note.text, &offer.old, &offer.new);
+                        (changed > 0).then(|| {
+                            (
+                                root.to_path_buf(),
+                                note.path.clone(),
+                                note.text.clone(),
+                                after,
+                            )
+                        })
+                    })
+                    .collect();
+                let written = crate::content_workspace::ContentEdits::write_checked(files, || {
+                    if loaded.offer_holds_on_disk(&offer) {
+                        Ok(())
+                    } else {
+                        Err(LINKS_NOT_CHANGED.into())
+                    }
+                });
+                let LinkOffer { owner, new, .. } = offer;
+                match written {
+                    Ok(edits) => {
+                        // The owner's new update ends its earlier result.
+                        self.link_edits.retain(|result| result.owner != owner);
+                        self.link_edits.push(LinkResult { owner, edits, new });
+                        self.stale = true;
+                        self.content_changed =
+                            campaigns.active_campaign().map(|campaign| campaign.path);
+                    }
+                    Err(error) => self.error = Some(error),
+                }
+            }
+        }
+        if pressed.links
+            && let Some(at) = self
+                .link_edits
+                .iter()
+                .position(|result| Some(result.owner) == open)
+        {
+            // Undo restores only the files this update wrote, and only while they hold what it
+            // wrote, so another entry's link update stays.
+            match self.link_edits[at].edits.undo() {
+                Ok(()) => {
+                    self.link_edits.remove(at);
+                    self.stale = true;
+                    self.content_changed =
+                        campaigns.active_campaign().map(|campaign| campaign.path);
+                }
+                Err(error) => self.error = Some(error),
+            }
+        }
+        if pressed.registration
+            && let Err(error) = self.undo_package_registration(campaigns)
+        {
+            self.error = Some(error);
+        }
+        if pressed.use_copy
+            && let Some(copy) = &self.package_copy
+            && let Some(campaign) = campaigns.active_campaign()
+            && self.copied_rosters.is_none()
+        {
+            match copy.use_in_rosters(&campaign) {
+                Ok(edits) => {
+                    self.copied_rosters = Some(edits);
+                    self.rosters_changed = false;
+                    self.content_changed = Some(campaign.path);
+                    self.stale = true;
+                }
+                Err(error) => self.error = Some(error),
+            }
+        }
+        if pressed.rosters
+            && let Some(edits) = &self.copied_rosters
+        {
+            match edits.undo() {
+                Ok(()) => {
+                    self.copied_rosters = None;
+                    self.content_changed =
+                        campaigns.active_campaign().map(|campaign| campaign.path);
+                    self.stale = true;
+                }
+                Err(error) => self.error = Some(error),
+            }
+        }
     }
 
     /// What the catalogue shows. Choosing here never changes the active campaign.
@@ -4414,9 +4832,14 @@ impl Library {
                 .wrap()
                 .selected_text(Type::Strong.rich(ui, fitted))
                 .show_ui(ui, |ui| {
-                    // The popup is as wide as the control, so it stays in the scope's column,
-                    // clear of the splitter beside it. A long package name wraps.
-                    ui.set_max_width(ui.available_width());
+                    // The popup is as wide as the control, so it covers the counts beside it and
+                    // stays in the scope's column, clear of the splitter. Its content is the
+                    // control's width less the popup's frame. A long package name wraps.
+                    let frame = ui.style().spacing.menu_margin.sum().x
+                        + 2.0 * ui.style().visuals.window_stroke.width;
+                    let inner = (width - frame).max(0.0);
+                    ui.set_min_width(inner);
+                    ui.set_max_width(inner);
                     ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
                     if active.is_some() {
                         ui.selectable_value(&mut scope, Scope::Uses, label(Scope::Uses));
@@ -4710,8 +5133,16 @@ impl Library {
                                 .then_some("Type a name first."));
                         let register = if self.copy_name_open {
                             ui.horizontal_wrapped(|ui| {
-                                let clicked =
-                                    Action::secondary(&label).blocked(reason).show(ui).clicked();
+                                // The commit of an inline creation form has one weight: primary,
+                                // as `Create package` is, unless a run owns the primary.
+                                let clicked = (if self.run_open {
+                                    Action::secondary(&label)
+                                } else {
+                                    Action::primary(&label)
+                                })
+                                .blocked(reason)
+                                .show(ui)
+                                .clicked();
                                 design::blocked_reason(ui, reason);
                                 ui.add_space(design::L);
                                 if Action::quiet("Cancel").show(ui).clicked() {
@@ -5320,12 +5751,21 @@ impl Library {
         match result {
             Ok(entry) => {
                 let l = self.loaded.as_mut().unwrap();
+                // A saved edit of the entry ends its link update's result and its earlier offer,
+                // whatever this save offers. A rename that passes the check gives a new offer.
+                // Other entries keep theirs.
+                self.link_edits.retain(|result| result.owner != entry.id);
+                self.renamed_links.retain(|offer| offer.owner != entry.id);
                 if let Some(old) = &l.notes[i].entry
                     && old.name != entry.name
                     && entry.kind != "package"
                     && l.can_rename_links(i, &old.name, &entry.name)
                 {
-                    self.renamed_links = Some((old.name.clone(), entry.name.clone()));
+                    self.renamed_links.push(LinkOffer {
+                        owner: entry.id,
+                        old: old.name.clone(),
+                        new: entry.name.clone(),
+                    });
                 }
                 if entry.kind == "package"
                     && let Owner::Package(module) = &l.notes[i].owner
@@ -5391,8 +5831,10 @@ impl Library {
         }
     }
 
-    /// Undo package use and Undo write: the results that this pane keeps for its package.
+    /// Undo package use and Undo write: the results that this pane keeps for its package. The
+    /// page results' presses wait until the reader is drawn.
     fn apply_package_results(&mut self, pressed: &ResultPress) {
+        self.page_pressed = pressed.page;
         if pressed.package_use
             && let Some(undo) = self.selection_undo.take()
         {
@@ -5444,6 +5886,7 @@ impl Library {
                 .as_ref()
                 .map(|write| (write.message(), format!("Undo write {}", write.path()))),
             locked: self.draft_reason(),
+            page: std::mem::take(&mut self.page_results),
             ..Default::default()
         };
         if self.selected.is_none() {
@@ -5547,22 +5990,23 @@ impl Library {
             .as_ref()
             .ok()
             .and_then(|entry| entry.reading().ok().flatten());
-        let title = reading
-            .as_ref()
-            .map_or(note.name(), |reading| reading.title.as_str());
+        // A file with no entry to read is titled by its file name; the file line names its path.
+        let file_name = Path::new(&note.path)
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned());
+        let title = match &reading {
+            Some(reading) => reading.title.as_str(),
+            None if note.entry.is_none()
+                && note.error.as_deref() != Some(crate::content_workspace::DELETED_MANIFEST) =>
+            {
+                file_name.as_deref().unwrap_or(note.name())
+            }
+            None => note.name(),
+        };
+        // A duplicate keeps its folder too: the two readers differ only there.
         let reading_subtitle = reader_subtitle(
             &note.owner,
-            &note
-                .entry
-                .as_ref()
-                .filter(|entry| {
-                    self.loaded
-                        .as_ref()
-                        .unwrap()
-                        .duplicate_ids()
-                        .contains(&entry.id)
-                })
-                .map_or_else(|| row_line_without_fault(subtitle), presentation::subtitle),
+            &row_line_without_fault(subtitle),
             reading
                 .as_ref()
                 .and_then(|_| presentation::class_level(parsed.as_ref().ok()?)),
@@ -6138,15 +6582,18 @@ impl Library {
                     .to_string_lossy(),
             )
         });
-        // Edit Markdown keeps the results above the editor, as it keeps the warnings there.
+        // Edit Markdown puts the results in the reserved slot below its save row, so a result
+        // never moves the editor. Without that row (a built-in's source, a file changed on disk)
+        // they stay above the editor, with the warnings.
+        let slot_row = save_row && !conflict;
         let mut pressed = ResultPress::default();
-        if !choices_in_reader {
+        if !choices_in_reader && !slot_row {
             pressed = show_results(ui, &results);
         }
         let mut repair_pressed = false;
         let mut read_again = false;
         // Save and Discard are one row, as far apart as the pane allows.
-        if save_row && !conflict {
+        if slot_row {
             ui.horizontal(|ui| {
                 ui.set_max_width(editor_width);
                 ui.set_min_height(Density::Scan.control());
@@ -6189,69 +6636,53 @@ impl Library {
                 .as_ref()
                 .filter(|_| note.error.is_none())
                 .or(failed.as_ref());
+            // A repair draft's error stays above the slot; the slot below it holds the discard
+            // result as it does for a readable entry, so Discard does not move the editor.
             if let Some(problem) = repair_problem.as_ref().filter(|_| note.error.is_some()) {
                 repair_pressed = repair_notice(ui, problem, recovery.as_ref(), draft_reason, true);
-                if discard_is_for(self.discarded.as_ref(), note)
-                    && self.draft == note.text
-                    && design::draft_discarded(ui, note.name())
-                    && let Some((_, _, text)) = self.discarded.take()
-                {
-                    self.draft = text;
-                    // The draft changed: a failed Save of the old words no longer owns it.
-                    self.draft_revision += 1;
-                }
-                ui.add_space(design::S);
-            } else {
-                // The guidance takes the reserved slot. When a Save reason or the discard result
-                // needs the slot, the guidance comes first, directly above it.
+            }
+            {
+                // One space below the save row holds the reader's results and, below them, the
+                // reason slot: the discard result, Save's reason, the guidance or the draft's
+                // reason. Each part is two text lines high whatever it holds; longer words wrap
+                // and scroll inside their part. So no result, reason or Discard moves the editor.
+                // The guidance comes first in the result part when the slot holds Save's reason
+                // or the discard result.
                 let discard_shown =
                     discard_is_for(self.discarded.as_ref(), note) && self.draft == note.text;
                 let slot_busy = discard_shown || slot_problem.is_some();
                 let slot_link = link_words.filter(|_| !slot_busy);
-                if let Some(words) = link_words.filter(|_| slot_busy) {
-                    design::message(ui, Tone::Warning, words);
+                let link_above = link_words.filter(|_| slot_busy);
+                let part = SLOT_LINES * Type::Body.line();
+                let top = ui.cursor().min;
+                ui.allocate_exact_size(egui::vec2(editor_width, part * 2.0), egui::Sense::hover());
+                let results_shown = !choices_in_reader && results.any();
+                if results_shown || link_above.is_some() {
+                    let upper = egui::Rect::from_min_size(top, egui::vec2(editor_width, part));
+                    let name = link_above
+                        .map(String::as_str)
+                        .into_iter()
+                        .chain(results_shown.then(|| results.words()).as_deref())
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    if let Some(press) = fixed_part(ui, upper, "library_result_part", &name, |ui| {
+                        if let Some(words) = link_above {
+                            design::message(ui, Tone::Warning, words);
+                        }
+                        results_shown.then(|| show_results(ui, &results))
+                    }) {
+                        pressed = press;
+                    }
                 }
-                // Measure the same words in both states, so the first edit keeps the caret in place.
-                let words = draft_words(matches!(note.owner, Owner::Campaign(_)));
-                // The discard message is measured too, so neither state moves the editor.
-                let body_height = |words: &str| {
-                    egui::WidgetText::from(Type::Body.rich(ui, words))
-                        .into_galley(
-                            ui,
-                            Some(egui::TextWrapMode::Wrap),
-                            editor_width - design::XL,
-                            Type::Body.font(ui),
-                        )
-                        .size()
-                        .y
-                };
-                // The guidance alone fills the slot: a discard result would move it above anyway.
-                let height = if let Some(link) = slot_link {
-                    body_height(link).max(Density::Read.control() + design::XS)
-                } else {
-                    egui::WidgetText::from(Type::Small.rich(ui, words))
-                        .into_galley(
-                            ui,
-                            Some(egui::TextWrapMode::Wrap),
-                            editor_width,
-                            Type::Small.font(ui),
-                        )
-                        .size()
-                        .y
-                        .max(discarded_height(ui, note.name(), editor_width))
-                        .max(Density::Read.control() + design::XS)
-                        .max(slot_problem.map_or(0.0, |problem| body_height(problem)))
-                };
-                let (slot, _) =
-                    ui.allocate_exact_size(egui::vec2(editor_width, height), egui::Sense::hover());
+                let slot = egui::Rect::from_min_size(
+                    top + egui::vec2(0.0, part),
+                    egui::vec2(editor_width, part),
+                );
                 if discard_shown {
-                    let mut slot_ui = ui.new_child(
-                        egui::UiBuilder::new()
-                            .max_rect(slot)
-                            .layout(egui::Layout::top_down(egui::Align::Min)),
-                    );
-                    if design::draft_discarded(&mut slot_ui, note.name())
-                        && let Some((_, _, text)) = self.discarded.take()
+                    let name = format!("{} draft discarded.", note.name());
+                    if fixed_part(ui, slot, "library_reason_part", &name, |ui| {
+                        design::draft_discarded(ui, note.name())
+                    }) && let Some((_, _, text)) = self.discarded.take()
                     {
                         self.draft = text;
                         // The draft changed: a failed Save of the old words no longer owns it.
@@ -6259,30 +6690,21 @@ impl Library {
                     }
                 } else if let Some(problem) = slot_problem {
                     // Save's reason: its refusal before the write, or the disk's failure.
-                    let mut slot_ui = ui.new_child(
-                        egui::UiBuilder::new()
-                            .max_rect(slot)
-                            .layout(egui::Layout::top_down(egui::Align::Min)),
-                    );
-                    design::message(&mut slot_ui, Tone::Error, problem);
+                    fixed_part(ui, slot, "library_reason_part", problem, |ui| {
+                        design::message(ui, Tone::Error, problem);
+                    });
                 } else if let Some(words) = slot_link {
                     // The repair this note was opened for, in the reason line.
-                    let mut slot_ui = ui.new_child(
-                        egui::UiBuilder::new()
-                            .max_rect(slot)
-                            .layout(egui::Layout::top_down(egui::Align::Min)),
-                    );
-                    design::message(&mut slot_ui, Tone::Warning, words);
+                    fixed_part(ui, slot, "library_reason_part", words, |ui| {
+                        design::message(ui, Tone::Warning, words);
+                    });
                 } else if let Some(reason) = draft_reason {
-                    let mut slot_ui = ui.new_child(
-                        egui::UiBuilder::new()
-                            .max_rect(slot)
-                            .layout(egui::Layout::left_to_right(egui::Align::Center)),
-                    );
-                    slot_ui.add(
-                        egui::Label::new(Type::Small.rich(&slot_ui, reason).color(colors().muted))
-                            .wrap(),
-                    );
+                    fixed_part(ui, slot, "library_reason_part", reason, |ui| {
+                        ui.add(
+                            egui::Label::new(Type::Small.rich(ui, reason).color(colors().muted))
+                                .wrap(),
+                        );
+                    });
                 }
             }
         }
@@ -6316,7 +6738,7 @@ impl Library {
                 Tone::Error,
                 &format!(
                     "{} Your draft is safe here until you choose.",
-                    fault.headline()
+                    fault_here(&fault)
                 ),
                 |ui| {
                     ui.add(
@@ -6353,7 +6775,7 @@ impl Library {
             reload_from_disk = reload;
         } else if let Some(change) = &mut self.disk_change {
             let text = if change.moved_to.is_some() {
-                "This entry moved on disk. Save your draft to its new path, or keep the disk version."
+                MOVED_ON_DISK
             } else if change.text.is_some() {
                 "This entry changed on disk. Your draft is safe until you choose."
             } else {
@@ -7350,6 +7772,19 @@ mod tests {
         );
         // Two Watch files and Both.md: three, not two (by path) and not five (by problem).
         assert_eq!(loaded.files_to_fix(&broken, None), 3);
+        // Round 24 FH5 (must stay true): a file with a flag beside its broken link, and a file
+        // whose requirement needs a catalogue match, keep `Needs fixing` for the fault the link
+        // count does not name.
+        assert!(!loaded.link_faults_only.contains(&Loaded::file_key(both)));
+        assert!(
+            !loaded
+                .link_faults_only
+                .contains(&Loaded::file_key(watch(&ember)))
+        );
+        assert!(
+            !loaded.unreadable_counted,
+            "warnings only: the count stays amber"
+        );
 
         let mut library = Library {
             loaded: Some(loaded),
@@ -7454,52 +7889,6 @@ mod tests {
         assert!(manifest.error.is_none());
         assert_eq!(loaded.files_to_fix(&[], None), 1);
         assert_eq!(about(&loaded), format!("{} About Emberfall", icons::WARN));
-    }
-
-    /// The reserved slot measures the shared message, on one line and wrapped, so the editor keeps
-    /// its place when Discard replaces the reason.
-    #[test]
-    fn discarded_height_matches_the_shared_message() {
-        let ctx = egui::Context::default();
-        for (name, width) in [
-            ("Ash Exposure", 600.0),
-            ("Ash Exposure", 200.0),
-            ("Cinder Hound of the Long Ash Road", 260.0),
-        ] {
-            let mut measured = (0.0, 0.0);
-            for _ in 0..2 {
-                let _ = ctx.run(egui::RawInput::default(), |ctx| {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        let expected = discarded_height(ui, name, width);
-                        let shown = ui
-                            .allocate_ui_with_layout(
-                                egui::vec2(width, f32::INFINITY),
-                                egui::Layout::top_down(egui::Align::Min),
-                                |ui| {
-                                    ui.set_width(width);
-                                    design::draft_discarded(ui, name)
-                                },
-                            )
-                            .response
-                            .rect
-                            .height();
-                        measured = (expected, shown);
-                    });
-                });
-            }
-            let (expected, shown) = measured;
-            assert!(
-                (expected - shown).abs() <= 0.5,
-                "{name} at {width}: slot {expected}, message {shown}"
-            );
-            // The narrow case wraps, so the slot must grow past one control.
-            if width < 300.0 {
-                assert!(
-                    expected > Density::Read.control() + design::XS,
-                    "{name} at {width}"
-                );
-            }
-        }
     }
 
     #[test]
@@ -7715,6 +8104,24 @@ mod tests {
         loaded.notes[1].path = "Second.md".into();
         loaded.notes[1].entry.as_mut().unwrap().name = "First".into();
         assert!(!loaded.can_rename_links(0, "First", "New name"));
+
+        // Round 24 FC4: the offer's count reads the notes once; an unchanged frame reads none,
+        // and an edited note (`invalidate`) is counted again.
+        let scans = || RENAME_LINK_SCANS.with(std::cell::Cell::get);
+        let start = scans();
+        let before = loaded.rename_link_count("Watch", "Ward");
+        assert_eq!(scans(), start + 1);
+        assert_eq!(loaded.rename_link_count("Watch", "Ward"), before);
+        assert_eq!(scans(), start + 1, "an unchanged frame reads no note");
+        let linker = loaded
+            .notes
+            .iter()
+            .position(|note| note.owner.root().is_some())
+            .expect("fixture: a note in a folder");
+        loaded.notes[linker].text.push_str("\nSee [[Watch]].\n");
+        loaded.invalidate();
+        assert_eq!(loaded.rename_link_count("Watch", "Ward"), before + 1);
+        assert_eq!(scans(), start + 2, "an edited note is counted again");
     }
 
     #[test]
@@ -7944,6 +8351,28 @@ mod tests {
             .filter(|(_, n)| n.name() == "Wolf" && n.owner.root().is_some())
             .collect();
         assert_eq!(wolves.len(), 2);
+        // Round 24 AC1: both files of the duplicate count in the header, as both rows are
+        // marked, though the check names one side.
+        let wolf_files: Vec<FileKey> = wolves.iter().map(|(_, n)| Loaded::file_key(n)).collect();
+        let named = loaded
+            .diagnostics
+            .iter()
+            .filter(|d| wolf_files.contains(&d.file))
+            .map(|d| &d.file)
+            .collect::<std::collections::HashSet<_>>()
+            .len();
+        assert!(named < 2, "fixture: the check names one Wolf file only");
+        let counted: std::collections::HashSet<&FileKey> = loaded
+            .diagnostics
+            .iter()
+            .map(|d| &d.file)
+            .chain(&wolf_files)
+            .collect();
+        assert_eq!(
+            loaded.files_to_fix(&[], None),
+            counted.len(),
+            "iter-24-L-AC1"
+        );
         for (at, _) in wolves {
             assert_eq!(loaded.duplicates(at).len(), 1);
             assert!(loaded.build_subtitles()[at].contains("Same entry in two files"));
@@ -8412,6 +8841,18 @@ mod tests {
         );
         assert_eq!(
             reader_kind_line(&package, "Creature · CR 1 · Ashen Marches · ashen/"),
+            "Creature · CR 1 · ashen/"
+        );
+        // Round 24 AC2, SC1: a duplicate's reader leaves out its row's fault, and keeps the
+        // folder that tells the two files apart.
+        assert_eq!(
+            reader_kind_line(
+                &package,
+                &row_line_without_fault(&format!(
+                    "{} {SAME_ENTRY} · Creature · CR 1 · Ashen Marches · ashen/",
+                    icons::WARN
+                ))
+            ),
             "Creature · CR 1 · ashen/"
         );
         // Lookalike: another owner's line keeps every part.
@@ -9330,6 +9771,13 @@ mod tests {
                 loaded.notes[0].error.as_deref(),
                 Some(crate::content_workspace::DELETED_MANIFEST)
             );
+            // Round 24 FC2: a deleted manifest is a warning, not the error of an unreadable one.
+            assert!(
+                loaded.notes[0].about_label(false).starts_with(icons::WARN),
+                "iter-24-L-FC2-deleted: {}",
+                loaded.notes[0].about_label(false)
+            );
+            assert!(!loaded.unreadable_counted, "iter-24-L-FC2-deleted-header");
             let catalogue = Catalogue::load(std::slice::from_ref(&module), None).unwrap();
             assert_eq!(
                 catalogue.manifest_problems[&module.id],
@@ -9653,11 +10101,15 @@ mod tests {
         assert!(library.dependency_undo.is_none());
 
         // `Undo link update`.
-        library.link_edits = Some((edit("links"), "Ash Wolf".into()));
+        library.link_edits = vec![LinkResult {
+            owner: Uuid::nil(),
+            edits: edit("links"),
+            new: "Ash Wolf".into(),
+        }];
         library.forget_changed_undos();
-        assert!(library.link_edits.is_some());
+        assert!(!library.link_edits.is_empty());
         change_outside(&mut library);
-        assert!(library.link_edits.is_none());
+        assert!(library.link_edits.is_empty());
 
         // `Undo source change` keeps its data for registration, and blocks both Undos.
         library.copied_rosters = Some(edit("rosters"));
@@ -9788,6 +10240,8 @@ mod tests {
             fs::write(module.path.join(filename), "---\nsplat_kind: [\n---\n").unwrap();
             let write = crate::content_workspace::ManifestWrite::write(&module).unwrap();
             assert_eq!(write.path(), filename);
+            assert!(write.replaced());
+            // Round 24 FF5: the result and its Undo (`Undo write <file>`) share one verb.
             assert_eq!(write.message(), format!("{filename} was written again."));
             write.undo().unwrap();
         }
@@ -9963,7 +10417,14 @@ mod tests {
             let loaded = load_all(std::slice::from_ref(&module), None).unwrap();
             let manifest = loaded.notes.iter().find(|note| note.is_manifest()).unwrap();
             assert!(manifest.error.is_some());
-            assert!(manifest.about_label(false).contains(icons::WARN));
+            // Round 24 FC2: a manifest that cannot be read is an error on the About row.
+            assert!(
+                manifest.about_label(false).starts_with(icons::ERROR)
+                    && !manifest.about_label(false).contains(icons::WARN),
+                "iter-24-L-FC2: {}",
+                manifest.about_label(false)
+            );
+            assert!(loaded.unreadable_counted, "iter-24-L-FC2-header");
             assert!(
                 loaded
                     .diagnostic_texts()
@@ -10215,9 +10676,11 @@ mod tests {
                 .iter()
                 .position(|n| std::ptr::eq(n, bad))
                 .unwrap();
+            // Round 24 AE1, FE2: the cause follows the error mark, as the reader marks it.
             assert!(
-                loaded.subtitles()[at].starts_with("Text format cannot be read"),
-                "iter21-E-FD2-row: {path}: {}",
+                loaded.subtitles()[at]
+                    .starts_with(&format!("{} Text format cannot be read", icons::ERROR)),
+                "iter21-E-FD2-row, iter-24-L-AE1: {path}: {}",
                 loaded.subtitles()[at]
             );
             // The list's problem text is the plain cause, never the system's words.
@@ -10240,8 +10703,8 @@ mod tests {
                 .position(|n| std::ptr::eq(n, broken))
                 .unwrap();
             assert!(
-                loaded.subtitles()[at].starts_with("Line "),
-                "iter21-E-FD2-yaml-line: {path}: {}",
+                loaded.subtitles()[at].starts_with(&format!("{} Line ", icons::ERROR)),
+                "iter21-E-FD2-yaml-line, iter-24-L-AE1: {path}: {}",
                 loaded.subtitles()[at]
             );
             assert_eq!(broken.text, yaml, "a YAML fault keeps its text for repair");
@@ -10255,7 +10718,21 @@ mod tests {
         for (owner, path) in [(module.id, "Wolf.md"), (campaign.id, "Notes/Rule.md")] {
             let plain = note(owner, path);
             assert!(plain.fault.is_none() && plain.error.is_none() && plain.entry.is_some());
+            // Must stay true: a readable row has no mark.
+            let at = loaded
+                .notes
+                .iter()
+                .position(|n| std::ptr::eq(n, plain))
+                .unwrap();
+            assert!(
+                !loaded.subtitles()[at].contains(icons::ERROR)
+                    && !loaded.subtitles()[at].contains(icons::WARN),
+                "{path}: {}",
+                loaded.subtitles()[at]
+            );
         }
+        // Round 24: a counted file that cannot be read gives the header count the error tone.
+        assert!(loaded.unreadable_counted, "iter-24-L-AE1-header");
         assert_eq!(fs::read(module.path.join("Bad.md")).unwrap(), NOT_TEXT);
         assert_eq!(
             fs::read(campaign.path.join("Notes/Bad.md")).unwrap(),
@@ -10742,7 +11219,8 @@ mod tests {
         let painted = sd1_painted(&mut library);
         assert!(!library.source, "SD1-no-source-editing");
         for words in [
-            "Splat cannot read Notes/Bad.md as text.",
+            // Round 24 FE5: the file line names the file; the error says `this file`.
+            "Splat cannot read this file as text.",
             "Splat reads notes as UTF-8 text.",
             "Then choose Try again.",
             "Try again",
@@ -10758,6 +11236,7 @@ mod tests {
             "Missing YAML frontmatter",
             "Missing frontmatter",
             "Save",
+            "cannot read Notes/Bad.md",
         ] {
             assert!(!painted.contains(words), "SD1-hides: {words}\n{painted}");
         }
@@ -10781,7 +11260,7 @@ mod tests {
         );
         let painted = sd1_painted(&mut library);
         assert!(
-            painted.contains("Splat cannot read Package.md as text."),
+            painted.contains("Splat cannot read this file as text."),
             "{painted}"
         );
         assert!(painted.contains("Try again"), "{painted}");
@@ -10835,7 +11314,7 @@ mod tests {
         assert_eq!(fs::read(&file).unwrap(), NOT_TEXT, "SD1-save-keeps-bytes");
         let painted = sd1_painted(&mut library);
         for words in [
-            "Splat cannot read Wolf.md as text. Your draft is safe here until you choose.",
+            "Splat cannot read this file as text. Your draft is safe here until you choose.",
             "Try again",
             "Reload and lose my draft",
             "Technical details",
