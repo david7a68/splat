@@ -12,6 +12,7 @@ use crate::{
     history::{self, Step, Trail},
     matching::{CLOSE_NAMES, Rank, Typed, with_other},
     persistence::{Campaign, Module},
+    world::file_fault::FileFault,
 };
 use eframe::egui;
 use presentation::Section;
@@ -28,6 +29,36 @@ use std::{
 use uuid::Uuid;
 
 const BUILTIN_NAME: &str = "D&D 2024 · SRD 5.2.1";
+
+/// The choice after a package copy's registration names what it changes, in its result's words.
+pub(crate) const USE_COPY: &str = "Use the copy in encounters";
+pub(crate) const USE_COPY_RESULT: &str = "Encounters now use the copy.";
+
+/// Why source editing is blocked for a file that the system will not read.
+const UNREAD_EDIT: &str =
+    "Splat cannot read this file. Fix it outside Splat, then choose Try again.";
+
+/// A file that cannot be read: what happened, how to recover, and Try again, which starts at the
+/// message words. The system's words go to Technical details. Nothing here changes the file.
+/// Returns whether Try again was chosen.
+fn fault_notice(ui: &mut egui::Ui, fault: &FileFault) -> bool {
+    let again = design::message_with_actions(ui, Tone::Error, &fault.headline(), |ui| {
+        ui.add(
+            egui::Label::new(
+                Type::Body
+                    .rich(ui, fault.recovery_with_try_again())
+                    .color(colors().text),
+            )
+            .wrap(),
+        );
+        Action::quiet("Try again").line_start().show(ui).clicked()
+    });
+    ui.add_space(design::S);
+    design::quiet_section(ui, "Technical details", |ui| {
+        ui.add(egui::Label::new(Type::Small.rich(ui, &fault.system).color(colors().muted)).wrap());
+    });
+    again
+}
 
 /// Keep the error with its repair and consequence in both reader and source views.
 fn repair_notice(
@@ -615,6 +646,9 @@ pub(crate) struct Note {
     text: String,
     entry: Option<Entry>,
     error: Option<String>,
+    /// Why the file could not be read at all, from the system error's kind. Such a note has no
+    /// text, so it offers no source editing or repair until a read succeeds.
+    fault: Option<FileFault>,
     owner: Owner,
 }
 impl Note {
@@ -1713,6 +1747,40 @@ pub(crate) fn write_note(
     Ok(entry)
 }
 
+/// A note that the folder reading reported a problem with. A file the system will not read keeps
+/// its fault, from the error's kind, so the reader names the real cause and never offers a
+/// repair of text it does not have. Nothing here changes the file.
+fn problem_note(
+    root: &Path,
+    folder: &content::Folder,
+    error: content::Diagnostic,
+    owner: Owner,
+) -> Result<Note, String> {
+    let full = note_path(root, &error.path)?;
+    let read = match folder.text(&error.path) {
+        Some(text) => Ok(text.to_owned()),
+        // A folder that could not be listed: its own error kind says why.
+        None if full.is_dir() => fs::read_dir(&full).map(|_| String::new()),
+        None => fs::read_to_string(&full),
+    };
+    let (text, fault) = match read {
+        Ok(text) => (text, None),
+        Err(e) => (String::new(), Some(FileFault::read(&error.path, &e))),
+    };
+    Ok(Note {
+        error: Some(
+            fault
+                .as_ref()
+                .map_or(error.message, |fault| fault.cause().to_owned()),
+        ),
+        path: error.path,
+        text,
+        entry: None,
+        fault,
+        owner,
+    })
+}
+
 fn load(module: Option<&Module>) -> Result<Loaded, String> {
     let mut notes = Vec::new();
     if let Some(module) = module {
@@ -1728,7 +1796,7 @@ fn load(module: Option<&Module>) -> Result<Loaded, String> {
             let full = note_path(&module.path, path)?;
             match folder.text(path) {
                 Some(text) => Ok(text.to_owned()),
-                None => fs::read_to_string(full).map_err(|e| e.to_string()),
+                None => fs::read_to_string(full).map_err(|e| FileFault::read(path, &e).message()),
             }
         };
         if !has_manifest
@@ -1753,6 +1821,7 @@ fn load(module: Option<&Module>) -> Result<Loaded, String> {
                 text,
                 entry: (!mismatched).then_some(entry),
                 error: mismatched.then(|| "Package details have another identity. Replace with the registered details, or restore the original id.".into()),
+                fault: None,
                 owner: Owner::Package(module.clone()),
             });
         }
@@ -1762,19 +1831,17 @@ fn load(module: Option<&Module>) -> Result<Loaded, String> {
                 text: String::new(),
                 entry: None,
                 error: Some(crate::content_workspace::DELETED_MANIFEST.into()),
+                fault: None,
                 owner: Owner::Package(module.clone()),
             });
         }
         for error in errors {
-            note_path(&module.path, &error.path)?;
-            let text = text_of(&error.path).unwrap_or_default();
-            notes.push(Note {
-                path: error.path,
-                text,
-                entry: None,
-                error: Some(error.message),
-                owner: Owner::Package(module.clone()),
-            });
+            notes.push(problem_note(
+                &module.path,
+                &folder,
+                error,
+                Owner::Package(module.clone()),
+            )?);
         }
     } else {
         for entry in content::definitions::entries()?.iter().cloned() {
@@ -1786,6 +1853,7 @@ fn load(module: Option<&Module>) -> Result<Loaded, String> {
                 text,
                 entry: Some(entry),
                 error: None,
+                fault: None,
                 owner: Owner::Builtin,
             });
         }
@@ -1835,7 +1903,8 @@ pub(crate) fn load_all(modules: &[Module], campaign: Option<&Campaign>) -> Resul
                     let full = note_path(&campaign.path, path)?;
                     match folder.text(path) {
                         Some(text) => Ok(text.to_owned()),
-                        None => fs::read_to_string(full).map_err(|e| e.to_string()),
+                        None => fs::read_to_string(full)
+                            .map_err(|e| FileFault::read(path, &e).message()),
                     }
                 };
                 for entry in entries.into_iter().filter(|e| {
@@ -1847,19 +1916,13 @@ pub(crate) fn load_all(modules: &[Module], campaign: Option<&Campaign>) -> Resul
                         text,
                         entry: Some(entry),
                         error: None,
+                        fault: None,
                         owner: owner.clone(),
                     });
                 }
                 for error in errors {
-                    note_path(&campaign.path, &error.path)?;
-                    let text = text_of(&error.path).unwrap_or_default();
-                    all.notes.push(Note {
-                        path: error.path,
-                        text,
-                        entry: None,
-                        error: Some(error.message),
-                        owner: owner.clone(),
-                    });
+                    all.notes
+                        .push(problem_note(&campaign.path, &folder, error, owner.clone())?);
                 }
             }
             Err(error) => all.load_errors.push((
@@ -1948,6 +2011,7 @@ pub(crate) fn catalogue_subtitles(
                 text: String::new(),
                 entry: Some(e.entry.clone()),
                 error: None,
+                fault: None,
                 owner: Owner::Builtin,
             })
             .collect(),
@@ -2145,9 +2209,23 @@ fn file_line_row(ui: &mut egui::Ui, wrap: bool, add: impl FnOnce(&mut egui::Ui))
 const NOTE_CHANGED: &str = "This entry changed on disk.";
 /// What is on disk now, in place of what the draft started from.
 struct DiskChange {
-    /// None when the file has gone.
+    /// None when the file has gone, or cannot be read.
     text: Option<String>,
     moved_to: Option<String>,
+    /// Why the file is there but cannot be read. The draft cannot be saved over it.
+    fault: Option<FileFault>,
+}
+
+/// What a note's file holds now: its text, None when it has gone, or why it cannot be read.
+fn read_disk(root: &Path, relative: &str) -> Result<Option<String>, FileFault> {
+    let Ok(path) = note_path(root, relative) else {
+        return Ok(None);
+    };
+    match fs::read_to_string(path) {
+        Ok(text) => Ok(Some(text)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(FileFault::read(relative, &error)),
+    }
 }
 
 /// Check readable and broken notes, so a move cannot create a second identity.
@@ -2162,7 +2240,9 @@ fn moved_note(root: &Path, id: Uuid, old: &str) -> Result<Option<(String, String
         if path == old {
             continue;
         }
-        let text = fs::read_to_string(note_path(root, &path)?).map_err(|e| e.to_string())?;
+        // A file that cannot be read might hold this ID: say which, rather than guess.
+        let text = fs::read_to_string(note_path(root, &path)?)
+            .map_err(|e| FileFault::read(&path, &e).message())?;
         if crate::content_workspace::note_id(&text) == Some(id) {
             if found.is_some() {
                 return Err(
@@ -2433,6 +2513,20 @@ impl Library {
         }
         let draft = std::mem::take(&mut self.draft);
         self.discarded = Some((note.owner.id(), note.path.clone(), draft));
+        if let Some(fault) = change.fault {
+            // The note becomes the file as it is: unreadable, with its fault and no text.
+            note.entry = None;
+            note.error = Some(fault.cause().to_owned());
+            note.fault = Some(fault);
+            note.text = String::new();
+            self.stale = true;
+            if let Some(loaded) = &mut self.loaded {
+                loaded.invalidate();
+            }
+            self.matches = None;
+            self.scope_counts = None;
+            return;
+        }
         match change.text {
             Some(text) => {
                 self.stale = true;
@@ -2455,6 +2549,7 @@ impl Library {
                     text: note.text.clone(),
                     entry: note.entry.clone(),
                     error: note.error.clone(),
+                    fault: note.fault.clone(),
                     owner: note.owner.clone(),
                 });
                 self.draft = note.text.clone();
@@ -2594,26 +2689,43 @@ impl Library {
                 .and_then(|i| self.loaded.as_ref()?.notes.get(i))
             && note.owner.root() == Some(root)
         {
-            let text = note_path(root, &note.path)
-                .ok()
-                .and_then(|path| fs::read_to_string(path).ok());
-            if text.as_deref() != Some(&note.text) {
-                let moved = (text.is_none()
-                    && self
-                        .loaded
+            match read_disk(root, &note.path) {
+                Err(fault) => {
+                    self.disk_change = Some(DiskChange {
+                        text: None,
+                        moved_to: None,
+                        fault: Some(fault),
+                    });
+                }
+                Ok(text) if text.as_deref() != Some(&note.text) => {
+                    let moved = (text.is_none()
+                        && self
+                            .loaded
+                            .as_ref()
+                            .unwrap()
+                            .duplicates(self.selected.unwrap())
+                            .is_empty())
+                    .then(|| {
+                        crate::content_workspace::note_id(&note.text)
+                            .and_then(|id| moved_note(root, id, &note.path).ok().flatten())
+                    })
+                    .flatten();
+                    self.disk_change = Some(DiskChange {
+                        text: moved.as_ref().map(|(_, text)| text.clone()).or(text),
+                        moved_to: moved.map(|(path, _)| path),
+                        fault: None,
+                    });
+                }
+                // The file reads as the draft's start again: a fault it had is over.
+                Ok(_) => {
+                    if self
+                        .disk_change
                         .as_ref()
-                        .unwrap()
-                        .duplicates(self.selected.unwrap())
-                        .is_empty())
-                .then(|| {
-                    crate::content_workspace::note_id(&note.text)
-                        .and_then(|id| moved_note(root, id, &note.path).ok().flatten())
-                })
-                .flatten();
-                self.disk_change = Some(DiskChange {
-                    text: moved.as_ref().map(|(_, text)| text.clone()).or(text),
-                    moved_to: moved.map(|(path, _)| path),
-                });
+                        .is_some_and(|change| change.fault.is_some())
+                    {
+                        self.disk_change = None;
+                    }
+                }
             }
         }
         self.discarded = None;
@@ -3108,27 +3220,17 @@ impl Library {
                     .then_some(crate::content_workspace::UNDO_ENDED),
                 |ui| design::undo_message(ui, Tone::Success, &words, "Undo package registration"),
             );
-            // The other choice starts below, at the message words: `design::message` puts them
-            // `S + 1`, the icon and `XS` from its left edge. It is a quiet `line_start` action
-            // without an icon, so its words, not its padding, start there.
+            // The other choice starts below, at the message words.
             let use_copy = campaigns.active_campaign().is_some()
                 && self.copied_rosters.is_none()
-                && ui
-                    .horizontal(|ui| {
-                        ui.add_space(
-                            design::S
-                                + 1.0
-                                + design::number_width(ui, icons::SUCCESS, &Type::Body.font(ui))
-                                + design::XS,
-                        );
-                        Action::quiet("Use the copy's entries")
-                            .density(Density::Read)
-                            .line_start()
-                            .blocked(self.draft_reason())
-                            .show(ui)
-                            .clicked()
-                    })
-                    .inner;
+                && design::message_choice_row(ui, Tone::Success, |ui| {
+                    Action::quiet(USE_COPY)
+                        .density(Density::Read)
+                        .line_start()
+                        .blocked(self.draft_reason())
+                        .show(ui)
+                        .clicked()
+                });
             (undo, use_copy)
         } else {
             (false, false)
@@ -3159,14 +3261,7 @@ impl Library {
                 ui,
                 self.rosters_changed
                     .then_some(crate::content_workspace::UNDO_ENDED),
-                |ui| {
-                    design::undo_message(
-                        ui,
-                        Tone::Success,
-                        "Encounters now use the copy's entries.",
-                        "Undo source change",
-                    )
-                },
+                |ui| design::undo_message(ui, Tone::Success, USE_COPY_RESULT, "Undo source change"),
             )
         {
             match edits.undo() {
@@ -4493,6 +4588,7 @@ impl Library {
                                     text: text.clone(),
                                     entry: Some(entry),
                                     error: None,
+                                    fault: None,
                                     owner,
                                 });
                                 l.notes.sort_by_cached_key(|n| natural_key(n.name()));
@@ -4641,6 +4737,7 @@ impl Library {
                         self.disk_change = Some(DiskChange {
                             text: Some(text),
                             moved_to: Some(note.path.clone()),
+                            fault: None,
                         });
                         self.error = Some(NOTE_CHANGED.into());
                         return;
@@ -4734,15 +4831,24 @@ impl Library {
                 l.refresh_diagnostics();
                 self.error = None;
             }
-            Err(e) if e == NOTE_CHANGED => {
-                self.disk_change = Some(DiskChange {
-                    moved_to: None,
-                    text: note_path(&root, &note.path)
-                        .ok()
-                        .and_then(|path| fs::read_to_string(path).ok()),
-                });
-            }
-            Err(e) => self.error = Some(e),
+            Err(e) => match read_disk(&root, &note.path) {
+                // The file is there but cannot be read: the draft stays, the file keeps its bytes.
+                Err(fault) => {
+                    self.disk_change = Some(DiskChange {
+                        text: None,
+                        moved_to: None,
+                        fault: Some(fault),
+                    });
+                }
+                Ok(text) if e == NOTE_CHANGED => {
+                    self.disk_change = Some(DiskChange {
+                        moved_to: None,
+                        text,
+                        fault: None,
+                    });
+                }
+                Ok(_) => self.error = Some(e),
+            },
         }
     }
 
@@ -4840,6 +4946,7 @@ impl Library {
             self.disk_change = Some(DiskChange {
                 text: None,
                 moved_to: None,
+                fault: None,
             });
             self.invalidate();
         }
@@ -4903,6 +5010,11 @@ impl Library {
             self.message = None;
         }
         let editable = note.owner.editable();
+        // A file the system will not read has no text to edit: the reader names its fault.
+        let fault = note.fault.clone();
+        if fault.is_some() {
+            self.source = false;
+        }
         let conflict = self.disk_change.is_some();
         // The reader draws the duplicate choices in its scroll area, after the title.
         let choices_in_reader = !self.source && !conflict;
@@ -5104,7 +5216,9 @@ impl Library {
                 "Markdown source"
             };
             let was_source = self.source;
-            design::segmented(ui, &mut self.source, &[(false, "Read"), (true, edit_label)]);
+            design::locked(ui, fault.as_ref().map(|_| UNREAD_EDIT), |ui| {
+                design::segmented(ui, &mut self.source, &[(false, "Read"), (true, edit_label)])
+            });
             if self.source != was_source {
                 self.scope_notice = None;
                 self.focus_repair = self.source && note.error.is_some();
@@ -5203,6 +5317,14 @@ impl Library {
                         .display()
                 )
             });
+            // No editor link for a file that cannot be read, whether it never read or stopped
+            // reading under a draft: an editor cannot open it either.
+            let unread = fault.is_some()
+                || self
+                    .disk_change
+                    .as_ref()
+                    .is_some_and(|change| change.fault.is_some());
+            let obsidian = obsidian_for(root, &note.owner) && !unread;
             let file_line = |ui: &mut egui::Ui| {
                 if recovery.as_ref().is_some_and(|(_, _, exists)| !exists) {
                     if design::link(ui, "Show folder").clicked() {
@@ -5229,25 +5351,14 @@ impl Library {
                         egui::vec2(width, Density::Read.control()),
                         egui::Layout::left_to_right(egui::Align::Center),
                         |ui| {
-                            crate::world::entry_file_parts(
-                                ui,
-                                root,
-                                shown_path,
-                                obsidian_for(root, &note.owner),
-                            );
+                            crate::world::entry_file_parts(ui, root, shown_path, obsidian);
                         },
                     );
                     ui.label(Type::Small.rich(ui, from).color(colors().muted));
                 } else {
-                    crate::world::entry_file_parts(
-                        ui,
-                        root,
-                        shown_path,
-                        obsidian_for(root, &note.owner),
-                    );
+                    crate::world::entry_file_parts(ui, root, shown_path, obsidian);
                 }
             };
-            let obsidian = obsidian_for(root, &note.owner);
             let owner_word = match &note.owner {
                 Owner::Package(_) => package_word.as_str(),
                 Owner::Campaign(_) if note.error.is_some() => "Campaign · Cannot be read",
@@ -5348,19 +5459,24 @@ impl Library {
         }
         let (repair_problem, repair_line) =
             crate::campaign_content::repair_problem(&note.path, &self.draft);
-        let repair_problem = note.error.as_ref().map(|error| {
-            if recovery.as_ref().is_some_and(|(_, _, exists)| !exists) {
-                error.clone()
-            } else {
-                repair_problem.unwrap_or_else(|| error.clone())
-            }
-        });
+        let repair_problem = note
+            .error
+            .as_ref()
+            .filter(|_| fault.is_none())
+            .map(|error| {
+                if recovery.as_ref().is_some_and(|(_, _, exists)| !exists) {
+                    error.clone()
+                } else {
+                    repair_problem.unwrap_or_else(|| error.clone())
+                }
+            });
         // FILES SKIPPED already offers `Convert files…` for this file; the reader keeps one.
         let skipped_here = note
             .owner
             .root()
             .is_some_and(|root| self.layouts.skips(&root.join(&note.path)));
         let mut repair_pressed = false;
+        let mut read_again = false;
         // Save and Discard are one row, as far apart as the pane allows.
         if save_row && !conflict {
             ui.horizontal(|ui| {
@@ -5464,7 +5580,55 @@ impl Library {
             self.draft = text;
         }
         let mut reload_from_disk = false;
-        if let Some(change) = &mut self.disk_change {
+        let mut read_disk_again = false;
+        if let Some(fault) = self
+            .disk_change
+            .as_ref()
+            .and_then(|change| change.fault.clone())
+        {
+            // The file is there but cannot be read. Saving the draft over it would replace bytes
+            // Splat never read, so the choices are to read it again or to let the draft go.
+            let (again, reload) = design::message_with_actions(
+                ui,
+                Tone::Error,
+                &format!(
+                    "{} Your draft is safe here until you choose.",
+                    fault.headline()
+                ),
+                |ui| {
+                    ui.add(
+                        egui::Label::new(
+                            Type::Body
+                                .rich(ui, fault.recovery_with_try_again())
+                                .color(colors().text),
+                        )
+                        .wrap(),
+                    );
+                    ui.horizontal_wrapped(|ui| {
+                        let again = Action::secondary("Try again")
+                            .density(Density::Read)
+                            .show(ui)
+                            .clicked();
+                        ui.add_space(design::L - ui.spacing().item_spacing.x);
+                        let reload = Action::destructive("Reload and lose my draft")
+                            .density(Density::Read)
+                            .show(ui)
+                            .clicked();
+                        (again, reload)
+                    })
+                    .inner
+                },
+            );
+            ui.add_space(design::S);
+            design::quiet_section(ui, "Technical details", |ui| {
+                ui.add(
+                    egui::Label::new(Type::Small.rich(ui, &fault.system).color(colors().muted))
+                        .wrap(),
+                );
+            });
+            read_disk_again = again;
+            reload_from_disk = reload;
+        } else if let Some(change) = &mut self.disk_change {
             let text = if change.moved_to.is_some() {
                 "This entry moved on disk. Save your draft to its new path, or keep the disk version."
             } else if change.text.is_some() {
@@ -5695,6 +5859,10 @@ impl Library {
                                 }
                             } else if subtitle == "Campaign" { note.section().label().trim_end_matches('s') } else { subtitle };
                             view::title_with_art(ui, title, subtitle, parsed.as_ref().ok());
+                            if let Some(fault) = &fault {
+                                read_again = fault_notice(ui, fault);
+                            }
+                            // A read fault has no repair problem: there is no text to repair.
                             if let Some(problem) = &repair_problem {
                                 repair_pressed = repair_notice(ui, problem, note, recovery.as_ref(), draft_reason, false, skipped_here);
                             }
@@ -5772,7 +5940,10 @@ impl Library {
                 }) = &self.dependency_undo
             {
                 let copied = note_path(root, copied_path)?;
-                if fs::read_to_string(&copied).map_err(|e| e.to_string())? != *copied_text {
+                if fs::read_to_string(&copied)
+                    .map_err(|e| FileFault::read(copied_path, &e).message())?
+                    != *copied_text
+                {
                     return Err("The dependency copy changed on disk. Keep it and reconnect the reference in Markdown.".into());
                 }
                 write_note(root, path, Some(after), before)?;
@@ -5841,6 +6012,15 @@ impl Library {
         }
         if reload_from_disk {
             self.reload_note_from_disk(i);
+            return;
+        }
+        // Try again reads the file now. With no draft, every file is read again and the note opens
+        // with its text or its new fault. With a draft (after Undo discard), the file is compared
+        // with it as any outside change is: a load waits while a draft is open.
+        if (read_again || read_disk_again)
+            && let Some(root) = note.owner.root().map(Path::to_path_buf)
+        {
+            self.refresh_destination(&root, ui.ctx());
             return;
         }
         if let Some(target) =
@@ -6015,6 +6195,7 @@ mod tests {
                 text: String::new(),
                 entry: Some(entry),
                 error: None,
+                fault: None,
                 owner: Owner::Builtin,
             });
         }
@@ -6023,6 +6204,7 @@ mod tests {
             text: String::new(),
             entry: None,
             error: Some("Invalid YAML".into()),
+            fault: None,
             owner: Owner::Builtin,
         });
         let check = |loaded: &Loaded| {
@@ -6594,6 +6776,7 @@ mod tests {
                     entry: Some(Entry::parse("Rule.md", &text).unwrap()),
                     text,
                     error: None,
+                    fault: None,
                     owner: Owner::Package(Module {
                         id: Uuid::new_v4(),
                         name: name.into(),
@@ -6665,6 +6848,7 @@ mod tests {
             entry: Some(Entry::parse("Package.md", &text).unwrap()),
             text,
             error: None,
+            fault: None,
             owner,
         };
         library.loaded.as_mut().unwrap().notes[1].owner =
@@ -7436,6 +7620,7 @@ mod tests {
                 text: String::new(),
                 entry: None,
                 error: None,
+                fault: None,
                 owner: Owner::Builtin,
             }],
             ..Default::default()
@@ -7447,6 +7632,7 @@ mod tests {
             text: String::new(),
             entry: None,
             error: None,
+            fault: None,
             owner: Owner::Builtin,
         });
         loaded.invalidate();
@@ -7621,6 +7807,7 @@ mod tests {
                         text: text.clone(),
                         entry: Some(entry),
                         error: None,
+                        fault: None,
                         owner: Owner::Builtin,
                     }],
                     diagnostics: vec![],
@@ -7681,6 +7868,7 @@ mod tests {
                 path,
                 text: source.into(),
                 error: None,
+                fault: None,
                 owner: Owner::Builtin,
             }
         })
@@ -7796,6 +7984,7 @@ mod tests {
             text: duplicate.text.clone(),
             entry: duplicate.entry.clone(),
             error: None,
+            fault: None,
             owner: Owner::Builtin,
         });
         assert_eq!(loaded.resolve_spell(&by_id), None);
@@ -7812,6 +8001,7 @@ mod tests {
                     text: source.into(),
                     entry: Some(Entry::parse(path, source).unwrap()),
                     error: None,
+                    fault: None,
                     owner: Owner::Builtin,
                 }],
                 ..Default::default()
@@ -8032,6 +8222,7 @@ mod tests {
                         text: source.clone(),
                         entry: Some(Entry::parse("Long rule.md", &source).unwrap()),
                         error: None,
+                        fault: None,
                         owner: Owner::Builtin,
                     }],
                     ..Default::default()
@@ -8258,6 +8449,7 @@ mod tests {
                         text: source.into(),
                         entry: Some(entry.clone()),
                         error: None,
+                        fault: None,
                         owner: Owner::Builtin,
                     }],
                     diagnostics: vec![],
@@ -8874,6 +9066,7 @@ mod tests {
             text: String::new(),
             entry: None,
             error: None,
+            fault: None,
             owner: Owner::Package(module.clone()),
         };
         let discarded = (Some(first.id), "a.md".to_string(), "words".to_string());
@@ -9090,5 +9283,405 @@ mod tests {
             "{:?}",
             loaded.diagnostic_texts()
         );
+    }
+    /// Bytes that are not UTF-8 text, as a file saved in another encoding holds.
+    const NOT_TEXT: [u8; 3] = [0xff, 0xfe, b'\n'];
+
+    fn sd1_campaign(root: &Path) -> Campaign {
+        let campaign = Campaign {
+            id: Uuid::new_v4(),
+            name: "Test campaign".into(),
+            path: root.join("campaign"),
+            dndbeyond_campaign_id: None,
+            dndbeyond_campaign_name: None,
+        };
+        fs::create_dir_all(campaign.path.join("Notes")).unwrap();
+        CampaignDocument::new(&campaign).unwrap().save().unwrap();
+        campaign
+    }
+
+    /// The text the reader paints for the selected note, after two frames.
+    fn sd1_painted(library: &mut Library) -> String {
+        let ctx = egui::Context::default();
+        crate::design::theme::install(&ctx);
+        let mut texts = Vec::new();
+        for _ in 0..2 {
+            let output = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(900.0, 1400.0),
+                    )),
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        library.editor(ui, "Entry", &Campaigns::default());
+                    });
+                },
+            );
+            texts = output
+                .shapes
+                .into_iter()
+                .filter_map(|shape| match shape.shape {
+                    egui::Shape::Text(text) => Some(text.galley.job.text.clone()),
+                    _ => None,
+                })
+                .collect();
+        }
+        texts.join("\n")
+    }
+
+    fn sd1_select(loaded: Loaded, owner: Option<Uuid>, path: &str) -> Library {
+        let selected = loaded
+            .notes
+            .iter()
+            .position(|note| note.path == path && note.owner.id() == owner)
+            .unwrap_or_else(|| panic!("{path} is listed"));
+        let draft = loaded.notes[selected].text.clone();
+        Library {
+            loaded: Some(loaded),
+            selected: Some(selected),
+            draft,
+            ..Default::default()
+        }
+    }
+
+    /// SD1: both load paths (package and campaign) keep why a file could not be read. The plain
+    /// cases of the same callers stay as they were: a readable entry has no fault, and a file with
+    /// a YAML fault keeps its parse message and its text for repair.
+    #[test]
+    fn iter20_e_sd1_both_load_paths_keep_the_read_fault() {
+        let temp = tempfile::tempdir().unwrap();
+        let module = create_module(&temp.path().join("package"), "Test", "test").unwrap();
+        let campaign = sd1_campaign(temp.path());
+        let wolf = note_text("Wolf", "creature", None);
+        fs::write(module.path.join("Wolf.md"), &wolf).unwrap();
+        fs::write(module.path.join("Bad.md"), NOT_TEXT).unwrap();
+        let yaml = wolf.replace("splat_kind: creature", "splat_kind: [");
+        fs::write(module.path.join("Yaml.md"), &yaml).unwrap();
+        fs::write(campaign.path.join("Notes/Bad.md"), NOT_TEXT).unwrap();
+        fs::write(campaign.path.join("Notes/Yaml.md"), &yaml).unwrap();
+        let rule = note_text("Rule", "rule", None);
+        fs::write(campaign.path.join("Notes/Rule.md"), &rule).unwrap();
+
+        let loaded = load_all(std::slice::from_ref(&module), Some(&campaign)).unwrap();
+        let note = |owner: Uuid, path: &str| {
+            loaded
+                .notes
+                .iter()
+                .find(|note| note.owner.id() == Some(owner) && note.path == path)
+                .unwrap_or_else(|| panic!("{path} is listed"))
+        };
+        for (owner, path) in [(module.id, "Bad.md"), (campaign.id, "Notes/Bad.md")] {
+            let bad = note(owner, path);
+            let fault = bad.fault.as_ref().expect("SD1-kind-kept");
+            assert_eq!(
+                fault.kind,
+                crate::world::file_fault::Kind::NotText,
+                "{path}"
+            );
+            assert_eq!(fault.path, path, "SD1-fault-names-the-file");
+            assert_eq!(
+                bad.error.as_deref(),
+                Some("Text format cannot be read"),
+                "SD1-plain-cause: {path}"
+            );
+            assert!(bad.text.is_empty() && bad.entry.is_none());
+            // The list's problem text is the plain cause, never the system's words.
+            assert!(
+                !loaded
+                    .diagnostic_texts()
+                    .iter()
+                    .any(|text| text.contains("UTF-8") || text.contains("stream")),
+                "{:?}",
+                loaded.diagnostic_texts()
+            );
+        }
+        for (owner, path) in [(module.id, "Yaml.md"), (campaign.id, "Notes/Yaml.md")] {
+            let broken = note(owner, path);
+            assert!(broken.fault.is_none(), "a YAML fault is not a read fault");
+            assert_eq!(broken.text, yaml, "a YAML fault keeps its text for repair");
+            assert!(
+                broken
+                    .error
+                    .as_deref()
+                    .is_some_and(|e| e != "Text format cannot be read")
+            );
+        }
+        for (owner, path) in [(module.id, "Wolf.md"), (campaign.id, "Notes/Rule.md")] {
+            let plain = note(owner, path);
+            assert!(plain.fault.is_none() && plain.error.is_none() && plain.entry.is_some());
+        }
+        assert_eq!(fs::read(module.path.join("Bad.md")).unwrap(), NOT_TEXT);
+        assert_eq!(
+            fs::read(campaign.path.join("Notes/Bad.md")).unwrap(),
+            NOT_TEXT
+        );
+    }
+
+    /// SD1: a file the system refuses to read names that cause, from the error's kind.
+    #[cfg(unix)]
+    #[test]
+    fn iter20_e_sd1_a_refused_read_names_its_own_cause() {
+        use std::os::unix::fs::PermissionsExt;
+        let temp = tempfile::tempdir().unwrap();
+        let module = create_module(&temp.path().join("package"), "Test", "test").unwrap();
+        let file = module.path.join("Locked.md");
+        fs::write(&file, note_text("Locked", "creature", None)).unwrap();
+        fs::set_permissions(&file, fs::Permissions::from_mode(0o000)).unwrap();
+        if fs::read(&file).is_ok() {
+            // Root reads every file; this case cannot be made here.
+            fs::set_permissions(&file, fs::Permissions::from_mode(0o644)).unwrap();
+            return;
+        }
+        let loaded = load(Some(&module));
+        fs::set_permissions(&file, fs::Permissions::from_mode(0o644)).unwrap();
+        let loaded = loaded.unwrap();
+        let note = loaded.notes.iter().find(|n| n.path == "Locked.md").unwrap();
+        assert_eq!(
+            note.fault.as_ref().map(|fault| fault.kind),
+            Some(crate::world::file_fault::Kind::ReadDenied)
+        );
+        assert_eq!(note.error.as_deref(), Some("No permission to read"));
+    }
+
+    /// SD1: the reader names the real cause with Show file, Try again and Technical details, and
+    /// offers no editor link, no repair of empty text and no source editing. A campaign note with
+    /// a YAML fault, in the same reader, still offers both: the check can fail.
+    #[test]
+    fn iter20_e_sd1_reader_names_the_fault_and_blocks_source_repair() {
+        let temp = tempfile::tempdir().unwrap();
+        let campaign = sd1_campaign(temp.path());
+        fs::write(campaign.path.join("Notes/Bad.md"), NOT_TEXT).unwrap();
+        let yaml = note_text("Yaml", "rule", None).replace("splat_kind: rule", "splat_kind: [");
+        fs::write(campaign.path.join("Notes/Yaml.md"), &yaml).unwrap();
+
+        let loaded = load_all(&[], Some(&campaign)).unwrap();
+        let mut library = sd1_select(loaded, Some(campaign.id), "Notes/Yaml.md");
+        let yaml_painted = sd1_painted(&mut library);
+        for words in ["Edit in Obsidian", "Fix in Edit Markdown", "Show file"] {
+            assert!(
+                yaml_painted.contains(words),
+                "control: {words}\n{yaml_painted}"
+            );
+        }
+
+        let loaded = load_all(&[], Some(&campaign)).unwrap();
+        let mut library = sd1_select(loaded, Some(campaign.id), "Notes/Bad.md");
+        // Edit Markdown was chosen before (for example by a repair link): it does not open.
+        library.source = true;
+        let painted = sd1_painted(&mut library);
+        assert!(!library.source, "SD1-no-source-editing");
+        for words in [
+            "Splat cannot read Notes/Bad.md as text.",
+            "Splat reads notes as UTF-8 text.",
+            "Then choose Try again.",
+            "Try again",
+            "Show file",
+            "Technical details",
+            "Campaign · Cannot be read",
+        ] {
+            assert!(painted.contains(words), "SD1-shows: {words}\n{painted}");
+        }
+        for words in [
+            "Edit in Obsidian",
+            "Fix in Edit Markdown",
+            "Missing YAML frontmatter",
+            "Missing frontmatter",
+            "Save",
+        ] {
+            assert!(!painted.contains(words), "SD1-hides: {words}\n{painted}");
+        }
+        assert_eq!(
+            fs::read(campaign.path.join("Notes/Bad.md")).unwrap(),
+            NOT_TEXT
+        );
+    }
+
+    /// SD1: a package manifest that is not text is never replaced by the manifest repair.
+    #[test]
+    fn iter20_e_sd1_an_unreadable_manifest_offers_no_replacement() {
+        let temp = tempfile::tempdir().unwrap();
+        let module = create_module(&temp.path().join("package"), "Test", "test").unwrap();
+        fs::write(module.path.join("Package.md"), NOT_TEXT).unwrap();
+        let loaded = load(Some(&module)).unwrap();
+        let mut library = sd1_select(loaded, Some(module.id), "Package.md");
+        assert!(
+            library.loaded.as_ref().unwrap().notes[library.selected.unwrap()].is_manifest(),
+            "the manifest is found by its file name"
+        );
+        let painted = sd1_painted(&mut library);
+        assert!(
+            painted.contains("Splat cannot read Package.md as text."),
+            "{painted}"
+        );
+        assert!(painted.contains("Try again"), "{painted}");
+        assert!(
+            !painted.contains("Replace with a basic"),
+            "SD1-no-replace\n{painted}"
+        );
+        assert!(!painted.contains("Write the manifest again"), "{painted}");
+        assert_eq!(fs::read(module.path.join("Package.md")).unwrap(), NOT_TEXT);
+    }
+
+    /// SD1, action-time failure: a note that read as text when opened stops reading. Save, a
+    /// later disk check and Reload each keep the draft or its Undo, name the cause, and never
+    /// change the file's bytes. When the file reads again, the fault ends.
+    #[test]
+    fn iter20_e_sd1_a_file_that_stops_reading_keeps_the_draft_and_its_bytes() {
+        let temp = tempfile::tempdir().unwrap();
+        // A package in an Obsidian vault, so its file line offers Edit in Obsidian while it reads.
+        fs::create_dir(temp.path().join(".obsidian")).unwrap();
+        let module = create_module(&temp.path().join("package"), "Test", "test").unwrap();
+        let file = module.path.join("Wolf.md");
+        let text = note_text("Wolf", "creature", None);
+        fs::write(&file, &text).unwrap();
+        let ctx = egui::Context::default();
+        let mut library = sd1_select(load(Some(&module)).unwrap(), Some(module.id), "Wolf.md");
+        let draft = format!("{text}\nMy draft.\n");
+        library.draft = draft.clone();
+        let painted = sd1_painted(&mut library);
+        assert!(
+            painted.contains("Edit in Obsidian"),
+            "control: the vault link shows\n{painted}"
+        );
+        fs::write(&file, NOT_TEXT).unwrap();
+
+        // Save: the write reads the file first and refuses it.
+        library.save_selected(false);
+        let fault = |library: &Library| {
+            library
+                .disk_change
+                .as_ref()
+                .and_then(|change| change.fault.as_ref())
+                .map(|fault| fault.kind)
+        };
+        assert_eq!(
+            fault(&library),
+            Some(crate::world::file_fault::Kind::NotText),
+            "SD1-save"
+        );
+        assert!(library.error.is_none(), "{:?}", library.error);
+        assert_eq!(library.draft, draft, "SD1-save-keeps-draft");
+        assert_eq!(fs::read(&file).unwrap(), NOT_TEXT, "SD1-save-keeps-bytes");
+        let painted = sd1_painted(&mut library);
+        for words in [
+            "Splat cannot read Wolf.md as text. Your draft is safe here until you choose.",
+            "Try again",
+            "Reload and lose my draft",
+            "Technical details",
+        ] {
+            assert!(
+                painted.contains(words),
+                "SD1-conflict-shows: {words}\n{painted}"
+            );
+        }
+        for words in [
+            "Save my draft again",
+            "Overwrite with my draft",
+            "has gone from disk",
+            "Edit in Obsidian",
+        ] {
+            assert!(
+                !painted.contains(words),
+                "SD1-conflict-hides: {words}\n{painted}"
+            );
+        }
+
+        // A later disk check (focus, or Try again) finds the same fault, not a deleted file.
+        library.disk_change = None;
+        library.refresh_destination(&module.path, &ctx);
+        assert_eq!(
+            fault(&library),
+            Some(crate::world::file_fault::Kind::NotText),
+            "SD1-check"
+        );
+        assert!(library.disk_change.as_ref().unwrap().text.is_none());
+
+        // The file reads as before again: the fault ends and the draft stays.
+        fs::write(&file, &text).unwrap();
+        library.refresh_destination(&module.path, &ctx);
+        assert!(library.disk_change.is_none(), "SD1-fault-ends");
+        assert_eq!(library.draft, draft);
+
+        // Reload and lose my draft: the note becomes the unreadable file; Undo keeps the draft.
+        fs::write(&file, NOT_TEXT).unwrap();
+        library.refresh_destination(&module.path, &ctx);
+        let selected = library.selected.unwrap();
+        library.reload_note_from_disk(selected);
+        let note = &library.loaded.as_ref().unwrap().notes[selected];
+        assert_eq!(
+            note.fault.as_ref().map(|fault| fault.kind),
+            Some(crate::world::file_fault::Kind::NotText),
+            "SD1-reload"
+        );
+        assert!(note.text.is_empty() && note.entry.is_none());
+        assert_eq!(
+            library.discarded.as_ref().map(|(_, _, text)| text.as_str()),
+            Some(draft.as_str()),
+            "SD1-reload-undo"
+        );
+        assert!(library.stale, "the next frame reads every file again");
+        assert_eq!(fs::read(&file).unwrap(), NOT_TEXT, "SD1-reload-keeps-bytes");
+
+        // With no draft, a disk check reloads, and the new reading keeps the fault.
+        let mut library = sd1_select(
+            {
+                fs::write(&file, &text).unwrap();
+                load(Some(&module)).unwrap()
+            },
+            Some(module.id),
+            "Wolf.md",
+        );
+        fs::write(&file, NOT_TEXT).unwrap();
+        library.refresh_destination(&module.path, &ctx);
+        assert!(library.disk_change.is_none() && library.stale);
+        let loaded = load(Some(&module)).unwrap();
+        let note = loaded.notes.iter().find(|n| n.path == "Wolf.md").unwrap();
+        assert!(note.fault.is_some(), "SD1-reread");
+        assert_eq!(fs::read(&file).unwrap(), NOT_TEXT);
+    }
+
+    /// FD2: the choice after a package copy's registration names what it changes (encounters),
+    /// in the words of its result.
+    #[test]
+    fn iter20_e_fd2_the_copy_choice_names_what_it_changes() {
+        assert!(
+            USE_COPY.contains("encounters"),
+            "FD2-names-encounters: {USE_COPY}"
+        );
+        let choice = USE_COPY.trim_end_matches(" in encounters").to_lowercase();
+        assert!(
+            USE_COPY_RESULT
+                .to_lowercase()
+                .contains(&format!("encounters now {choice}")),
+            "FD2-same-words: {USE_COPY} / {USE_COPY_RESULT}"
+        );
+    }
+
+    /// SD1: a save that looks for its moved file names an unreadable file in plain words.
+    #[test]
+    fn iter20_e_sd1_a_moved_file_search_names_an_unreadable_file() {
+        let temp = tempfile::tempdir().unwrap();
+        let module = create_module(&temp.path().join("package"), "Test", "test").unwrap();
+        let text = note_text("Wolf", "creature", None);
+        fs::write(module.path.join("Wolf.md"), &text).unwrap();
+        let mut library = sd1_select(load(Some(&module)).unwrap(), Some(module.id), "Wolf.md");
+        library.draft = format!("{text}\nMy draft.\n");
+        fs::remove_file(module.path.join("Wolf.md")).unwrap();
+        fs::write(module.path.join("Other.md"), NOT_TEXT).unwrap();
+        library.save_selected(false);
+        let error = library
+            .error
+            .clone()
+            .expect("the search stops at the unreadable file");
+        assert!(
+            error.starts_with("Splat cannot read Other.md as text."),
+            "SD1-moved: {error}"
+        );
+        assert!(!error.contains("stream"), "{error}");
+        assert!(!module.path.join("Wolf.md").exists(), "nothing is written");
+        assert_eq!(fs::read(module.path.join("Other.md")).unwrap(), NOT_TEXT);
     }
 }
