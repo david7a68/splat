@@ -2096,6 +2096,16 @@ struct IdentityUndo {
 
 type ParsedDraft = std::sync::Arc<Result<Entry, String>>;
 
+/// A missing link Campaign's repair sent to a file: the file, the typed reference and the
+/// fault's words. `found` is the row that links it in one parse of the draft; the draft's
+/// parse is rebuilt only when its text changes, so the row is looked up again only then.
+struct RepairLink {
+    path: PathBuf,
+    target: splat::content::Reference,
+    words: String,
+    found: Option<(ParsedDraft, Option<usize>)>,
+}
+
 #[derive(Default)]
 pub struct Library {
     /// The draft as last parsed, with its path. The editor needs the parse on every frame,
@@ -2162,13 +2172,13 @@ pub struct Library {
     pub open_world_npc: Option<Uuid>,
     pending_edit: Option<Entry>,
     pending_repair: Option<PathBuf>,
-    /// A missing link that Campaign's repair opened this file for: the file, the reference and
-    /// the fault's words. Edit Markdown names it at its line while the draft still holds it; it
-    /// ends when another note opens or the file saves.
-    repair_link: Option<(PathBuf, splat::content::Reference, String)>,
-    /// A Save that failed on the disk, with the draft it tried to write: its reason stays in
-    /// the state slot until the next edit or a Save that writes.
-    save_failure: Option<(String, String)>,
+    /// A missing link that Campaign's repair opened this file for. Edit Markdown names it at its
+    /// line while the draft still holds it; it ends when another note opens or a Save writes.
+    repair_link: Option<RepairLink>,
+    /// How many times the repair link's row was looked up, for the test that unchanged frames
+    /// do not look again.
+    #[cfg(test)]
+    repair_lookups: usize,
     scope_notice: Option<String>,
     new_form: bool,
     focus_new_name: bool,
@@ -2624,9 +2634,13 @@ impl Library {
         let Some(note) = self.loaded.as_ref().and_then(|l| l.notes.get(index)) else {
             return;
         };
-        if self.repair_link.as_ref().is_some_and(|(path, _, _)| {
-            note.owner.root().map(|root| root.join(&note.path)).as_ref() != Some(path)
-        }) {
+        if self
+            .repair_link
+            .as_ref()
+            .is_some_and(|RepairLink { path, .. }| {
+                note.owner.root().map(|root| root.join(&note.path)).as_ref() != Some(path)
+            })
+        {
             self.repair_link = None;
         }
         if self.selected != Some(index) {
@@ -2715,12 +2729,21 @@ impl Library {
         self.pending_edit = Some(entry);
     }
     /// Open a file for repair; with a missing link's reference and words, at that link.
+    #[cfg(test)]
+    pub(crate) fn repair_lookups(&self) -> usize {
+        self.repair_lookups
+    }
     pub fn repair_file_link(
         &mut self,
         path: PathBuf,
         link: Option<(splat::content::Reference, String)>,
     ) {
-        self.repair_link = link.map(|(reference, words)| (path.clone(), reference, words));
+        self.repair_link = link.map(|(target, words)| RepairLink {
+            path: path.clone(),
+            target,
+            words,
+            found: None,
+        });
         self.pending_repair = Some(path);
         self.stale = true;
     }
@@ -4749,9 +4772,7 @@ impl Library {
         let loaded = self.loaded.as_ref().unwrap();
         let note = &loaded.notes[i];
         let root = note.owner.root().expect("an editable note").to_path_buf();
-        let refusal = loaded.draft_refusal(i, &Entry::parse(&note.path, &self.draft));
-        let refused = refusal.is_some();
-        let result = match refusal {
+        let result = match loaded.draft_refusal(i, &Entry::parse(&note.path, &self.draft)) {
             Some(error) => Err(error),
             None => {
                 let baseline = (!file_gone).then_some(note.text.as_str());
@@ -4795,9 +4816,8 @@ impl Library {
                 self.content_changed = Some(root);
                 l.refresh_diagnostics();
                 self.error = None;
-                // Written: the repair it was opened for is done, and so is any earlier failure.
+                // Written: the repair it was opened for is done. A failed Save keeps it.
                 self.repair_link = None;
-                self.save_failure = None;
             }
             Err(e) => match read_disk(&root, &note.path) {
                 // The file is there but cannot be read: the draft stays, the file keeps its bytes.
@@ -4815,9 +4835,7 @@ impl Library {
                         fault: None,
                     });
                 }
-                // A refusal is the draft's own; a write that failed is Save's, in the state slot.
-                Ok(_) if refused => self.error = Some(e),
-                Ok(_) => self.save_failure = Some((self.draft.clone(), e)),
+                Ok(_) => self.error = Some(e),
             },
         }
     }
@@ -5085,14 +5103,29 @@ impl Library {
         let (repair_problem, repair_line) =
             draft_repair_problem(note, &self.draft, refusal, recovery.as_ref());
         // A missing link Campaign sent here: the row that holds it in the parsed draft.
+        let here = note.owner.root().map(|root| root.join(&note.path));
         let missing_link = self
             .repair_link
-            .as_ref()
-            .filter(|(path, _, _)| {
-                note.owner.root().map(|root| root.join(&note.path)).as_ref() == Some(path)
-            })
-            .and_then(|(_, target, words)| {
-                let line = splat::content::list_formats::row_linking(parsed.as_ref().ok()?, target)?;
+            .as_mut()
+            .filter(|link| here.as_ref() == Some(&link.path))
+            .and_then(|link| {
+                // Looked up again only for a new parse, that is, new draft text.
+                let stale = !link
+                    .found
+                    .as_ref()
+                    .is_some_and(|(seen, _)| std::sync::Arc::ptr_eq(seen, &parsed_draft));
+                if stale {
+                    #[cfg(test)]
+                    {
+                        self.repair_lookups += 1;
+                    }
+                    let line = parsed.as_ref().ok().and_then(|entry| {
+                        splat::content::list_formats::row_linking(entry, &link.target)
+                    });
+                    link.found = Some((parsed_draft.clone(), line));
+                }
+                let line = link.found.as_ref()?.1?;
+                let words = &link.words;
                 Some((
                     line,
                     format!(
@@ -5107,17 +5140,6 @@ impl Library {
             Status {
                 icon: icons::ERROR,
                 word: "Invalid",
-                color: d.invalid,
-            }
-        } else if let Some((_, reason)) = self
-            .save_failure
-            .as_ref()
-            .filter(|(tried, _)| *tried == self.draft)
-        {
-            // Save's own failure, until the next edit or a Save that writes.
-            Status {
-                icon: icons::ERROR,
-                word: reason,
                 color: d.invalid,
             }
         } else if conflict {

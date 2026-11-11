@@ -12529,7 +12529,8 @@ pub mod session_plan_groups {
         d.click("Technical details");
         d.expect(&missing_id);
         d.state("missing-member-technical-details", Sizes::All);
-        // A lookalike: the notes mention the missing id before its member row, in words only.
+        // Lookalikes before the member row: the notes mention the missing id in words, and an
+        // example table links it in another section.
         let lost = d
             .app_mut()
             .campaigns
@@ -12540,7 +12541,9 @@ pub mod session_plan_groups {
         let lost_text = std::fs::read_to_string(&lost).unwrap();
         let with_note = lost_text.replacen(
             "\n## Members",
-            &format!("\nScouts last saw {missing_id} at the ford.\n\n## Members"),
+            &format!(
+                "\nScouts last saw {missing_id} at the ford.\n\n## Example\n\n| Count | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| 1 | [[{missing_id}]] |  |  |  |\n\n## Members"
+            ),
             1,
         );
         assert_ne!(with_note, lost_text);
@@ -12554,30 +12557,52 @@ pub mod session_plan_groups {
             "Repair opens the referring member's file without changing it",
         );
         d.state("missing-member-repair", Sizes::All);
-        // The notice and the caret go to the member row that links the id, not to the notes.
-        let place = |d: &Driver<'_>, wanted: fn(&str) -> bool| {
-            d.editor_text().and_then(|text| {
-                text.lines()
-                    .position(|line| line.contains(&missing_id) && wanted(line))
-                    .map(|at| at + 1)
-            })
+        // Lines that name the id: the notes' words, the example row, and the member row, which
+        // is the one after `## Members`.
+        let lines = |d: &Driver<'_>| -> Vec<(usize, bool)> {
+            let text = d.editor_text().unwrap_or_default();
+            let members = text.lines().position(|line| line.trim() == "## Members");
+            text.lines()
+                .enumerate()
+                .filter(|(_, line)| line.contains(&missing_id))
+                .map(|(at, line)| {
+                    (
+                        at + 1,
+                        line.trim_start().starts_with('|') && members.is_some_and(|m| at > m),
+                    )
+                })
+                .collect()
         };
-        let row = place(d, |line| line.trim_start().starts_with('|'));
-        let notes = place(d, |line| !line.trim_start().starts_with('|'));
+        let named_ids = lines(d);
+        let row = named_ids
+            .iter()
+            .find(|(_, member)| *member)
+            .map(|(at, _)| *at);
         let named = row
             .map(|line| format!("Line {line}: Lost Patrol needs a creature that cannot be found."));
         let caret = d.editor_caret_line();
         d.observe(
             "iter-23-B-FK1",
-            notes.zip(row).is_some_and(|(notes, row)| notes < row)
+            named_ids.len() == 3
+                && named_ids[..2].iter().all(|(_, member)| !member)
                 && named.as_deref().is_some_and(|named| d.visible_text(named))
                 && caret == row,
             format!(
-                "The repair names the member row {named:?}; caret {caret:?}; notes line {notes:?}"
+                "The repair names the member row {named:?}; caret {caret:?}; lines naming the id {named_ids:?}"
             ),
         );
-        // Repair A stays through an unrelated edit B and a Save that fails on the disk; the
-        // failure shows Save's reason in the state slot until the next edit.
+        // Unchanged frames do not look the row up again.
+        let lookups = d.app_mut().library.repair_lookups();
+        d.settle();
+        d.at_size(LARGE, |_| ());
+        let again = d.app_mut().library.repair_lookups();
+        d.observe(
+            "iter-23-B-FK1-cached",
+            lookups >= 1 && again == lookups,
+            format!("Repair lookups: {lookups} at open, {again} after unchanged frames"),
+        );
+        // Repair A stays through an unrelated edit B and a Save that fails on the disk: the
+        // guidance, the draft and the file stay as they were.
         d.press_ctrl(Key::End);
         d.type_text("Arrive at dusk.");
         let original = std::fs::metadata(&lost).unwrap().permissions();
@@ -12586,28 +12611,21 @@ pub mod session_plan_groups {
         std::fs::set_permissions(&lost, read_only).unwrap();
         d.press_ctrl(Key::S);
         let failed = (
-            // In the state slot: the error icon, then Save's reason.
-            d.has_label(&format!(
-                "{} This file is read only.",
-                crate::design::icons::ERROR
-            )),
             named.as_deref().is_some_and(|named| d.visible_text(named)),
             d.editor_text()
                 .is_some_and(|text| text.contains("Arrive at dusk.")),
             std::fs::read_to_string(&lost).is_ok_and(|text| text == with_note),
         );
         std::fs::set_permissions(&lost, original).unwrap();
-        d.type_text(" ");
         d.observe(
             "iter-23-B-FK1-save-failed",
-            failed == (true, true, true, true) && !d.visible_text("This file is read only."),
-            format!(
-                "After a failed Save (reason shown, guidance kept, B kept, file unchanged): {failed:?}; the next edit ends the reason"
-            ),
+            failed == (true, true, true),
+            format!("After a failed Save (guidance kept, B kept, file unchanged): {failed:?}"),
         );
-        // Replace only the member link: the notice ends though the notes still name the id.
+        // Replace only the member link: the notice ends though the notes and the example still
+        // name the id.
         d.press_ctrl(Key::Home);
-        for _ in 0..40 {
+        for _ in 0..60 {
             if d.editor_caret_line() >= row {
                 break;
             }
@@ -12616,20 +12634,17 @@ pub mod session_plan_groups {
         d.press(Key::Home);
         d.press_shift(Key::End);
         d.type_text("| 1 | [[Goblin Warrior]] |  |  |  |");
-        let replaced = d.editor_text();
-        let gone = replaced.as_deref().is_some_and(|text| {
-            !text
-                .lines()
-                .any(|line| line.trim_start().starts_with('|') && line.contains(&missing_id))
-                && text.contains(&format!("Scouts last saw {missing_id}"))
-        }) && !d.visible_text("needs a creature that cannot be found. Replace the link");
+        let replaced = lines(d);
+        let gone = replaced.len() == 2
+            && replaced.iter().all(|(_, member)| !member)
+            && !d.visible_text("needs a creature that cannot be found. Replace the link");
         d.click("Discard");
         d.expect("Markdown editor");
         d.observe(
             "iter-23-B-FK1-lifetime",
             gone && named.as_deref().is_some_and(|named| d.visible_text(named)),
             format!(
-                "The notice goes with the member link, not the notes' mention, and comes back with Discard: {replaced:?}"
+                "The notice goes with the member link, not the notes' or example's mention, and comes back with Discard: {replaced:?}"
             ),
         );
         std::fs::write(&lost, &lost_text).unwrap();
