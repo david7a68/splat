@@ -1205,11 +1205,7 @@ impl CampaignContent {
         }
         if (!errors.is_empty() || !campaign_flags.is_empty()) && issues_shown {
             let heading = if affected.is_empty() {
-                design::count(
-                    errors.len() + campaign_flags.len(),
-                    "content issue to repair",
-                    "content issues to repair",
-                )
+                crate::encounters::content_issue_count(errors.len() + campaign_flags.len())
             } else {
                 let gone = format!(
                     "{} need a creature that is gone",
@@ -1229,15 +1225,7 @@ impl CampaignContent {
                 }
             };
             // A fault count is a status: the warning icon and colour, then the count.
-            let format = egui::TextFormat {
-                font_id: egui::TextStyle::Button.resolve(ui.style()),
-                color: c.result.warning,
-                ..Default::default()
-            };
-            let mut job = egui::text::LayoutJob::default();
-            job.append(icons::WARN, 0.0, format.clone());
-            job.append(" ", 0.0, format.clone());
-            job.append(&heading, 0.0, format);
+            let job = crate::encounters::issue_count_title(ui, &heading);
             let issues = egui::CollapsingHeader::new(job)
                 .icon(design::section_icon)
                 .default_open(!campaign_flags.is_empty())
@@ -1278,7 +1266,16 @@ impl CampaignContent {
                                                 data.insert_temp(
                                                     egui::Id::new("open_library_repair"),
                                                     path.to_path_buf(),
-                                                )
+                                                );
+                                                // The editor names the missing link and opens
+                                                // at its line.
+                                                data.insert_temp(
+                                                    egui::Id::new("open_library_repair_link"),
+                                                    (
+                                                        issue.reference.clone(),
+                                                        issue.message.clone(),
+                                                    ),
+                                                );
                                             });
                                         }
                                     }

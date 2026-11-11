@@ -75,7 +75,19 @@ pub(super) struct GroupDraft {
     repair: Option<(usize, Mapping)>,
     removed_unread: Option<(usize, String, String)>,
     removed_member: Option<(usize, MemberDraft, String)>,
+    /// The last `Use` on a member this campaign could not find. It owns the result line until
+    /// its Undo, a newer member result, or a move or removal that changes the members' places.
+    replaced: Option<Replaced>,
     repair_error: Option<String>,
+}
+
+/// A member's creature before and after `Use`, with the result's words.
+#[derive(Clone)]
+struct Replaced {
+    index: usize,
+    before: EntryRef,
+    after: EntryRef,
+    words: String,
 }
 
 impl GroupDraft {
@@ -105,6 +117,7 @@ impl GroupDraft {
             repair: None,
             removed_unread: None,
             removed_member: None,
+            replaced: None,
             repair_error: None,
         }
     }
@@ -136,6 +149,7 @@ impl GroupDraft {
             repair: None,
             removed_unread: None,
             removed_member: None,
+            replaced: None,
             repair_error: None,
             saved_name: entry.name.clone(),
             name: entry.name,
@@ -263,6 +277,7 @@ impl GroupDraft {
                 .find('\n')
                 .map_or(source.len(), |at| row[0].range.start + at + 1);
             self.removed_member = None;
+            self.replaced = None;
             self.removed_unread = Some((
                 line,
                 source[start..end].to_owned(),
@@ -702,7 +717,8 @@ fn resolve_group(
         };
         warnings.push(MemberFault::new(
             FaultKind::CannotJoin,
-            format!("{fault_name} needs fixing (line {})", member.flag.line),
+            // `(line 15)` wraps whole.
+            format!("{fault_name} needs fixing (line\u{a0}{})", member.flag.line),
         ));
         let count = member.count.unwrap_or(1);
         unavailable = unavailable.saturating_add(count);
@@ -1024,10 +1040,12 @@ pub(super) fn of_encounter(
             } else {
                 egui::Stroke::new(1.0, colors().rule)
             };
+            // The stroke is inside the frame, so a thinner one takes a wider margin: every
+            // frame's content keeps one inset whether or not it is the Add target.
             let frame = egui::Frame::new()
                 .stroke(stroke)
                 .corner_radius(design::RADIUS_CONTROL)
-                .inner_margin(design::S)
+                .inner_margin(design::S + design::FOCUS_WIDTH - stroke.width)
                 .show(ui, |ui| {
                     let mut name_right = f32::INFINITY;
                     ui.horizontal(|ui| {
@@ -1049,9 +1067,16 @@ pub(super) fn of_encounter(
                                     discard = Some((index, true));
                                 }
                             });
+                            // The slot keeps the wider word's width, so every frame's name
+                            // field ends at one edge and does not move with the Add target.
+                            let slot = Action::quiet("Adding here")
+                                .icon(icons::OK)
+                                .density(Density::Read)
+                                .natural_width(ui);
                             if Action::quiet(if adding { "Adding here" } else { "Add here" })
                                 .icon(if adding { icons::OK } else { icons::ADD })
                                 .density(Density::Read)
+                                .min_width(slot)
                                 .name(&format!("Add creatures to {}", group.name))
                                 .selected(adding)
                                 .show(ui)
@@ -1215,23 +1240,20 @@ fn belongs_to(
     if current.is_some() && current == open.map(|(id, _)| id) {
         return;
     }
-    ui.add(
-        egui::Label::new(
-            Type::Small
-                .rich(
-                    ui,
-                    match current {
-                        None => "A run of any encounter offers this group.",
-                        Some(_) if shown == MISSING_ENCOUNTER => {
-                            "No fight offers this group now. Choose an encounter, or Any encounter."
-                        }
-                        Some(_) => "Only runs of this encounter offer this group.",
-                    },
-                )
-                .color(colors().muted),
-        )
-        .wrap(),
-    );
+    let help = match current {
+        None => "A run of any encounter offers this group.",
+        // A group no fight can offer is a fault, not field help.
+        Some(_) if shown == MISSING_ENCOUNTER => {
+            design::small_message(
+                ui,
+                Tone::Warning,
+                "No fight offers this group now. Choose an encounter, or Any encounter.",
+            );
+            return;
+        }
+        Some(_) => "Only runs of this encounter offer this group.",
+    };
+    ui.add(egui::Label::new(Type::Small.rich(ui, help).color(colors().muted)).wrap());
 }
 
 /// The line under a creature's name in an editor, with the values this block gives it.
@@ -1385,6 +1407,7 @@ fn change_row(
     add: std::ops::RangeInclusive<i64>,
     base: &Base,
 ) {
+    let mut fault = None;
     ui.horizontal(|ui| {
         let (rect, _) = ui.allocate_exact_size(
             egui::vec2(LABEL_WIDTH, Density::Read.control()),
@@ -1442,43 +1465,65 @@ fn change_row(
             }
             None => {}
         }
-        let mut preview = Overrides::default();
-        match label {
-            "Maximum HP" => preview.max_hp = *value,
-            "AC" => preview.armor_class = *value,
-            "Initiative bonus" => preview.initiative_bonus = *value,
-            "Speed" => preview.speed = *value,
-            "Attack bonus" => {
-                preview.attack_bonus = value.and_then(|c| {
-                    if let Change::Add(n) = c {
-                        Some(n)
-                    } else {
-                        None
-                    }
-                })
-            }
-            "Damage bonus" => {
-                preview.damage_bonus = value.and_then(|c| {
-                    if let Change::Add(n) = c {
-                        Some(n)
-                    } else {
-                        None
-                    }
-                })
-            }
-            _ => {}
-        }
+        let preview = single_change(label, *value);
+        fault = preview.resolve(base).err();
         if let Some(row) = preview.rows(base).first() {
-            ui.add(
-                egui::Label::new(
-                    Type::Small
-                        .rich(ui, crate::encounter_run::change_preview(row))
-                        .color(colors().muted),
+            // An invalid value marks the place where the DM typed it.
+            let (words, color) = if fault.is_some() {
+                (
+                    format!(
+                        "{} {}",
+                        icons::ERROR,
+                        crate::encounter_run::change_preview(row)
+                    ),
+                    colors().result.error,
                 )
-                .wrap(),
-            );
+            } else {
+                (crate::encounter_run::change_preview(row), colors().muted)
+            };
+            ui.add(egui::Label::new(Type::Small.rich(ui, words).color(color)).wrap());
         }
     });
+    // The reason sits under its own field, at the field's left edge, not at the form's top.
+    if let Some(error) = fault {
+        ui.horizontal(|ui| {
+            ui.add_space(LABEL_WIDTH + ui.spacing().item_spacing.x);
+            ui.vertical(|ui| {
+                design::small_message(ui, FaultKind::InvalidChange.tone(), &override_error(&error));
+            });
+        });
+    }
+}
+
+/// One change on its own, for its row's preview and its own fault.
+fn single_change(label: &str, value: Option<Change>) -> Overrides {
+    let mut preview = Overrides::default();
+    match label {
+        "Maximum HP" => preview.max_hp = value,
+        "AC" => preview.armor_class = value,
+        "Initiative bonus" => preview.initiative_bonus = value,
+        "Speed" => preview.speed = value,
+        "Attack bonus" => {
+            preview.attack_bonus = value.and_then(|c| {
+                if let Change::Add(n) = c {
+                    Some(n)
+                } else {
+                    None
+                }
+            })
+        }
+        "Damage bonus" => {
+            preview.damage_bonus = value.and_then(|c| {
+                if let Change::Add(n) = c {
+                    Some(n)
+                } else {
+                    None
+                }
+            })
+        }
+        _ => {}
+    }
+    preview
 }
 
 /// One line of words, or nothing. Blank means no change.
@@ -1553,7 +1598,21 @@ pub(super) fn overrides_form(
         rect.min.y -= design::S;
         ui.scroll_to_rect(rect, Some(egui::Align::Min));
     }
-    if let Err(error) = overrides.resolve_for(entry, side) {
+    // A value that cannot stand says so under its own field; only a fault no field explains
+    // (a change that a linked sheet decides) stays at the top.
+    let on_a_field = [
+        ("Maximum HP", overrides.max_hp),
+        ("AC", overrides.armor_class),
+        ("Initiative bonus", overrides.initiative_bonus),
+        ("Speed", overrides.speed),
+        ("Attack bonus", overrides.attack_bonus.map(Change::Add)),
+        ("Damage bonus", overrides.damage_bonus.map(Change::Add)),
+    ]
+    .into_iter()
+    .any(|(label, value)| single_change(label, value).resolve(&base).is_err());
+    if let Err(error) = overrides.resolve_for(entry, side)
+        && !on_a_field
+    {
         design::message(ui, FaultKind::InvalidChange.tone(), &override_error(&error));
     }
     text_row(ui, "Display name", &mut overrides.name, &entry.name);
@@ -1727,45 +1786,22 @@ fn conditions_row(ui: &mut egui::Ui, conditions: &mut Vec<String>) {
         .filter(|c| !official(c))
         .cloned()
         .collect();
-    for effect in custom {
-        ui.horizontal(|ui| {
-            ui.label(Type::Small.rich(ui, &effect).color(colors().muted));
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                design::row_menu(ui, &effect, |ui| {
-                    if ui.button("Remove").clicked() {
-                        conditions.retain(|c| c != &effect);
-                        ui.close();
-                    }
-                });
-            });
-        });
+    if let Some(at) =
+        crate::encounter_run::view::other_effects_list(ui, custom.iter().map(String::as_str))
+    {
+        conditions.retain(|c| c != &custom[at]);
     }
     let id = ui.id().with("starting_other_effect");
     let mut text = ui
         .data(|data| data.get_temp::<String>(id))
         .unwrap_or_default();
-    ui.horizontal(|ui| {
-        let field = design::text_input(
-            ui,
-            "Other effect",
-            &mut text,
-            "Other effect",
-            design::FORM_WIDTH.min(ui.available_width() - design::L * 8.0),
-        );
-        let enter = field.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
-        if (Action::secondary("Add")
-            .density(Density::Read)
-            .show(ui)
-            .clicked()
-            || enter)
-            && !text.trim().is_empty()
-        {
-            if !conditions.iter().any(|c| same_condition(c, text.trim())) {
-                conditions.push(text.trim().to_owned());
-            }
-            text.clear();
+    let width = design::FORM_WIDTH.min(ui.available_width() - design::L * 8.0);
+    if crate::encounter_run::view::other_effect_field(ui, &mut text, width) {
+        if !conditions.iter().any(|c| same_condition(c, text.trim())) {
+            conditions.push(text.trim().to_owned());
         }
-    });
+        text.clear();
+    }
     ui.data_mut(|data| data.insert_temp(id, text));
 }
 
@@ -2307,7 +2343,19 @@ fn members_heading(draft: &GroupDraft, snapshot: &Snapshot) -> String {
         &snapshot.creatures,
         Uuid::nil(),
     )
-    .map_or_else(|| "XP not known".into(), |group| group.xp_label())
+    .map_or_else(
+        || "XP not known".into(),
+        |group| {
+            // When not all can join, the XP is for those who can, and the heading says so.
+            if group.unavailable_members.is_empty() {
+                group.xp_label()
+            } else if group.joinable_count() == 0 {
+                "None can join".into()
+            } else {
+                format!("{} can join · {}", group.joinable_count(), group.xp_label())
+            }
+        },
+    )
 }
 
 fn members(
@@ -2316,7 +2364,7 @@ fn members(
     snapshot: &Snapshot,
     expanded: &mut Option<String>,
 ) {
-    let (mut remove, mut raise, mut lower) = (None, None, None);
+    let (mut remove, mut raise, mut lower, mut replaced) = (None, None, None, None);
     let total = draft.setup.members.len();
     let side = draft.setup.side.clone();
     let path = draft.path.clone();
@@ -2408,7 +2456,15 @@ fn members(
                     ui.data_mut(|data| data.insert_temp(egui::Id::new("open_campaign_packages"), true));
                 }
                 if is_open && let Some(creature) = super::choose_replacement_creature(ui, snapshot) {
-                    member.creature = creature;
+                    let chosen = snapshot.catalogue.resolve_ref(&creature).ok()
+                        .and_then(|id| snapshot.catalogue.entries.get(&id))
+                        .map_or_else(|| creature.label(), |entry| entry.entry.name.clone());
+                    replaced = Some(Replaced {
+                        index,
+                        before: std::mem::replace(&mut member.creature, creature.clone()),
+                        after: creature,
+                        words: format!("Replaced {name} with {chosen}."),
+                    });
                     *expanded = None;
                 }
             }
@@ -2420,6 +2476,23 @@ fn members(
             }
             design::rule(ui);
         });
+    }
+    // The replacement's result stays while its member still holds the chosen creature.
+    if let Some(result) = &draft.replaced
+        && draft
+            .setup
+            .members
+            .get(result.index)
+            .is_some_and(|member| member.creature == result.after)
+    {
+        if design::undo_message(ui, Tone::Info, &result.words, "Undo replacement")
+            && let Some(result) = draft.replaced.take()
+        {
+            draft.setup.members[result.index].creature = result.before;
+            *expanded = None;
+        }
+    } else {
+        draft.replaced = None;
     }
     if let Some((_, _, name)) = &draft.removed_member {
         let words = format!("Removed {name}.");
@@ -2455,6 +2528,13 @@ fn members(
     // An open form is keyed by place. Left open, it would now edit another member.
     if remove.or(raise).or(lower).is_some() {
         *expanded = None;
+        draft.replaced = None;
+    }
+    // One result line: the newest member result takes it.
+    if let Some(result) = replaced {
+        draft.removed_member = None;
+        draft.removed_unread = None;
+        draft.replaced = Some(result);
     }
     if let Some(index) = remove {
         let member = draft.setup.members.remove(index);
@@ -3187,7 +3267,7 @@ mod tests {
             group
                 .warnings
                 .iter()
-                .any(|warning| warning.contains("Lookout (as Scout) needs fixing (line 13)"))
+                .any(|warning| warning.contains("Lookout (as Scout) needs fixing (line\u{a0}13)"))
         );
         assert_eq!(group.xp_label(), "XP 100");
         let draft = GroupDraft::open(dir.path(), "Broken row.md").unwrap();
@@ -3214,7 +3294,13 @@ mod tests {
             .iter()
             .find(|group| group.name == "Broken row")
             .expect("a group with only unread members stays visible");
-        assert!(group.summary().contains("0 of 7 can join"));
+        // iter-23 FH3: nobody can join, so the summary ends at the count.
+        assert!(
+            group.summary().ends_with("0 of 7 can join"),
+            "{}",
+            group.summary()
+        );
+        assert!(!group.summary().contains("XP") && !group.summary().contains("Will add"));
         assert!(group.problem.is_some());
     }
 
@@ -3378,7 +3464,11 @@ mod tests {
         assert_eq!(group.member_summary(), "Will add: 1 × Scout");
         assert_eq!(group.xp_label(), "XP 50");
         let draft = GroupDraft::open(dir.path(), "Patrol.md").unwrap();
-        assert_eq!(members_heading(&draft, &snapshot), group.xp_label());
+        // iter-23 FC3: the heading's XP is for the one who can join, and it says so.
+        assert_eq!(
+            members_heading(&draft, &snapshot),
+            format!("1 can join · {}", group.xp_label())
+        );
     }
 
     #[test]

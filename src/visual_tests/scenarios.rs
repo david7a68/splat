@@ -2475,6 +2475,15 @@ pub mod encounter_build {
         }
         d.state_prepared("encounter-changed-on-disk", Sizes::All, |d| {
             conflict_choices_read_height(d, "iter-15-B2-density", OVERWRITE, RELOAD);
+            // Each part that differs has a line in the DM's words, above the raw lines.
+            let size = d.window_size();
+            d.observe(
+                "iter-23-B-FB1",
+                d.visible_text("your draft adds “Ash on the water.”")
+                    && d.visible_text("the file adds “Written outside Splat.”")
+                    && d.visible_text("the file names the same 8 rows in another form."),
+                format!("At {size:?}, the conflict names what differs"),
+            );
         });
         d.click(OVERWRITE);
         d.expect(SAVED_NOTE);
@@ -10442,6 +10451,22 @@ pub mod encounter_groups {
         d.click(CHANGES);
         d.expect("Maximum HP: how it changes");
         d.state("group-member-changes", Sizes::All);
+        // The change form lists other effects as the run's Conditions tab does: one label, Body
+        // text in the text colour, and one placeholder.
+        let (label, color, placeholder) = d.at_size(LARGE, |d| {
+            (
+                d.visible_text("OTHER EFFECTS"),
+                d.painted_color("Blessed"),
+                d.visible_text("Other effect…"),
+            )
+        });
+        d.observe(
+            "iter-23-B-FI2",
+            label && color == Some(crate::design::colors().text) && placeholder,
+            format!(
+                "Other effects: label {label}, Blessed colour {color:?}, placeholder {placeholder}"
+            ),
+        );
         d.check_tab_order("group editor, changes open");
         d.click("Done with changes");
         d.observe(
@@ -10532,6 +10557,43 @@ pub mod encounter_groups {
             "At the minimum window, an open form says in view that its change cannot stand",
         );
         d.state("group-invalid-change", Sizes::Default);
+        // The fault sits under the Maximum HP field at its left edge, once, and the preview
+        // beside the field takes the error colour.
+        for size in [SMALL, DEFAULT] {
+            let (placed, detail) = d.at_size(size, |d| {
+                let field = d.place_of("Maximum HP: how it changes");
+                let mut faults = Vec::new();
+                let mut preview = None;
+                d.each_painted_text(|text, clip| {
+                    let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                    let words = &text.galley.job.text;
+                    if !clip.intersects(rect) {
+                        return;
+                    }
+                    if words.contains("Maximum HP would become −28") {
+                        faults.push(rect);
+                    }
+                    if words.contains("22 → −28") {
+                        preview = text.galley.job.sections.last().map(|s| s.format.color);
+                    }
+                });
+                let placed = field.is_some_and(|field| {
+                    faults.len() == 1
+                        && faults[0].top() >= field.bottom() - 0.5
+                        && faults[0].top() < field.bottom() + crate::design::XL
+                        && faults[0].left() >= field.left() - 0.5
+                }) && preview == Some(crate::design::colors().result.error);
+                (
+                    placed,
+                    format!("field {field:?}, faults {faults:?}, preview {preview:?}"),
+                )
+            });
+            d.observe(
+                "iter-23-B-FI3",
+                placed,
+                format!("At {size:?}, the HP fault is under its field: {detail}"),
+            );
+        }
         d.click("Back to encounters");
 
         // A new group cannot be saved empty, and it says so.
@@ -10606,7 +10668,29 @@ pub mod encounter_groups {
         d.state("group-member-replacement-search", Sizes::Default);
         d.click("Use Ember Cultist");
         d.expect("Changes for Ember Cultist");
+        // Use gives a result and its Undo on the member result line, as Remove does.
+        const REPLACED: &str = "Replaced Unknown creature with Ember Cultist.";
+        d.observe(
+            "iter-23-B-FI1",
+            d.visible_text(REPLACED) && d.has("Undo replacement"),
+            "Use names the replacement and offers Undo replacement",
+        );
         d.state("group-member-replaced", Sizes::Default);
+        // An unrelated edit keeps the result; Undo puts back only the creature, and its words
+        // go with it.
+        d.type_into(&format!("Group notes for {GROUP_LOST}"), " Arrive at dusk.");
+        let typed = d.visible_text("Arrive at dusk.");
+        d.click("Undo replacement");
+        d.expect("Replace Unknown creature");
+        d.observe(
+            "iter-23-B-FI1-undo",
+            typed
+                && d.visible_text("Arrive at dusk.")
+                && !d.has("Changes for Ember Cultist")
+                && !d.visible_text(REPLACED)
+                && !d.has("Undo replacement"),
+            "Undo replacement keeps the notes typed after it and clears its own result",
+        );
         d.click("Discard");
         d.click("Back to encounters");
 
@@ -10709,7 +10793,7 @@ pub mod encounter_groups {
             "T13.1",
             d.visible_text("XP 50")
                 && d.has_containing("Member 1, Unknown creature: not in this campaign's packages")
-                && d.visible_text("Will\u{a0}add:\u{a0}1\u{a0}×\u{a0}Goblin\u{a0}Warrior"),
+                && d.visible_text("Will\u{a0}add: 1\u{a0}×\u{a0}Goblin\u{a0}Warrior"),
             "The summary names the joining member; excluded members stay under Cannot join",
         );
         d.observe(
@@ -11084,6 +11168,15 @@ pub mod encounter_owned_groups {
             d.has_containing("FOR SHRINE OF CINDERS") && d.has_containing("FOR ARENA FINAL"),
             "Opened, the section says who each group is for",
         );
+        // One look and one wording for a page's content issue count, as Campaign's.
+        d.observe(
+            "iter-23-B-FA7",
+            d.has(&format!(
+                "{} 2 content issues to repair",
+                crate::design::icons::WARN
+            )),
+            "Encounters counts its content issues in Campaign's words",
+        );
 
         // A group whose encounter is gone says so in its editor.
         d.click(&edit_group(GROUP_ORPHAN));
@@ -11102,6 +11195,13 @@ pub mod encounter_owned_groups {
                 "iter-19-B-FD3-value",
                 d.visible_text("Deleted encounter"),
                 "Belongs to still shows Deleted encounter",
+            );
+            // A group no fight can offer says so as a warning, not as field help.
+            let tones = tones_beside(d, "No fight offers this group now.");
+            d.observe(
+                "iter-23-B-FB2",
+                tones == ["warning"],
+                format!("The line under Belongs to is a warning: {tones:?}"),
             );
         });
         let inset = notes_inset(
@@ -11166,6 +11266,21 @@ pub mod encounter_owned_groups {
             "A new group belongs to this encounter, and takes what the search adds",
         );
         d.state("new-group-in-the-encounter", Sizes::All);
+        // Two frames, one adding and one not: both name fields end at one edge at every size.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let edges = d.at_size(size, |d| {
+                d.place_of(&format!("Group name: {GROUP_SHRINE}"))
+                    .zip(d.place_of(&format!("Group name: {NEW_NAME}")))
+                    .map(|(shrine, new)| (shrine.right(), new.right()))
+            });
+            d.observe(
+                "iter-23-B-FB4",
+                d.has(&format!("Add creatures to {GROUP_SHRINE}"))
+                    && d.has(&format!("Add creatures to {NEW_NAME}"))
+                    && edges.is_some_and(|(shrine, new)| (shrine - new).abs() <= 0.5),
+                format!("At {size:?}, the name fields end at one x: {edges:?}"),
+            );
+        }
         let roster_before = d.has_containing("ROSTER 7");
         d.type_into(FIND_CREATURE, "wolf");
         d.click_beside_exact("Wolf", ADD);
@@ -11485,6 +11600,13 @@ pub mod run_overrides {
         open_saved_encounter(d, RUN_ARENA);
         d.expect(FIRST_SLOT);
         d.state("slot-with-changes", Sizes::All);
+        // Must stay true (iter-23 FJ1): with no changes, Resume keeps the primary.
+        let primary = super::session_recording::accent_filled(d);
+        d.observe(
+            "iter-23-B-FJ1-clean",
+            d.visible_text("No changes") && primary == ["Resume"],
+            format!("A clean editor's primary is Resume: {primary:?}"),
+        );
         d.observe_both(
             "FT-10",
             "A changed roster slot keeps its base creature",
@@ -11586,6 +11708,13 @@ pub mod run_loot {
         d.type_into(ADD, "roll");
         d.expect("gems · 1d4 · Treasure.md");
         d.state("loot-table-suggestion", Sizes::Default);
+        // The DM has just typed loot into a paused fight's encounter: Save is the one primary.
+        let primary = super::session_recording::accent_filled(d);
+        d.observe(
+            "iter-23-B-FJ1",
+            d.has("Resume") && primary == ["Save encounter"],
+            format!("An unsaved draft owns the primary over Resume: {primary:?}"),
+        );
         d.observe(
             "T14.8",
             d.has_containing("the encounter loot line 1"),
@@ -12279,6 +12408,29 @@ pub mod session_plan_groups {
             "Repair opens the referring member's file without changing it",
         );
         d.state("missing-member-repair", Sizes::All);
+        // The editor names the missing link at its line, and keeps it while the draft holds it.
+        let line = d.editor_text().and_then(|text| {
+            text.lines()
+                .position(|line| line.contains(&missing_id))
+                .map(|at| at + 1)
+        });
+        let named = line
+            .map(|line| format!("Line {line}: Lost Patrol needs a creature that cannot be found."));
+        d.observe(
+            "iter-23-B-FK1",
+            named.as_deref().is_some_and(|named| d.visible_text(named)),
+            format!("The repair names the missing link's line: {named:?}"),
+        );
+        d.press_ctrl(Key::A);
+        d.type_text("Lost Patrol");
+        let gone = !d.visible_text("needs a creature that cannot be found. Replace the link");
+        d.click("Discard");
+        d.expect("Markdown editor");
+        d.observe(
+            "iter-23-B-FK1-lifetime",
+            gone && named.as_deref().is_some_and(|named| d.visible_text(named)),
+            "The notice goes with the link and comes back with Discard",
+        );
 
         // Astra review of PR 231: a plan group none of whose members can join keeps each member
         // fault's own tone, then says so as a warning. In another group, a member named like
@@ -12293,6 +12445,11 @@ pub mod session_plan_groups {
             (
                 "Mill Watch",
                 "  - creature: {key: 'dnd2024:creatures/goblin_warrior'}\n    overrides: {name: 'Maximum HP would become −28'}\n".to_owned(),
+            ),
+            // iter-23 FH1: some members can join and one cannot.
+            (
+                "Split Watch",
+                format!("  - creature: {{id: {wolf}}}\n  - creature: {{key: 'dnd2024:creatures/goblin_warrior'}}\n    overrides: {{armor_class: {{add: -50}}}}\n"),
             ),
         ] {
             let relative = format!("Encounter Groups/{name}.md");
@@ -12312,7 +12469,7 @@ pub mod session_plan_groups {
         d.click(NAV_SESSIONS);
         d.click_starting("Session 1: The Crossing ·");
         show_plan(d);
-        for name in ["Ash Remnant", "Mill Watch"] {
+        for name in ["Ash Remnant", "Mill Watch", "Split Watch"] {
             d.click("Add a group");
             d.click(&format!("Plan {name}"));
         }
@@ -12348,7 +12505,64 @@ pub mod session_plan_groups {
                     tones.0, tones.1, tones.2
                 ),
             );
+            // A group none of whose members can join offers its repair, not Add to fight; a
+            // group that can join keeps Add to fight.
+            d.observe(
+                "iter-23-B-FH1",
+                d.has("Edit group Ash Remnant")
+                    && !d.has("Add Ash Remnant to fight")
+                    && d.has("Add Mill Watch to fight"),
+                format!("At {size:?}: Ash Remnant offers Edit group, Mill Watch Add to fight"),
+            );
+            // Nobody can join, so the summary ends at the count.
+            let summary = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name.contains("0 of 1 can join"))
+                .map(|node| node.name);
+            d.observe(
+                "iter-23-B-FH3",
+                summary
+                    .as_deref()
+                    .is_some_and(|name| !name.contains("XP") && !name.contains("Will add")),
+                format!("At {size:?}: Ash Remnant's summary {summary:?}"),
+            );
+            // A member wider than the plan column breaks at its own spaces, never inside a word
+            // or after an opening bracket.
+            let mut rows = Vec::new();
+            d.each_painted_text(|text, _| {
+                let words = text.galley.job.text.replace('\u{a0}', " ");
+                if words.contains("× Maximum HP would become −28 (as Goblin Warrior)") {
+                    rows = text
+                        .galley
+                        .rows
+                        .iter()
+                        .map(|row| row.glyphs.iter().map(|glyph| glyph.chr).collect::<String>())
+                        .collect();
+                }
+            });
+            let whole = "Maximum HP would become −28 (as Goblin Warrior)"
+                .split(' ')
+                .all(|word| {
+                    rows.iter()
+                        .any(|row| row.split([' ', '\u{a0}']).any(|part| part == word))
+                });
+            d.observe(
+                "iter-23-B-FH4",
+                !rows.is_empty() && whole && rows.iter().all(|row| !row.trim_end().ends_with('(')),
+                format!("At {size:?}: Mill Watch's summary rows {rows:?}"),
+            );
         });
+        // Some members can join: Add to fight keeps its place, and the row menu holds the
+        // repair its fault names.
+        d.click("More actions for Split Watch");
+        d.observe(
+            "iter-23-B-FH1-menu",
+            d.has("Add Split Watch to fight") && d.in_view("Edit group Split Watch"),
+            "A group that can partly join keeps Add to fight and offers Edit group in its menu",
+        );
+        d.click("Edit group Split Watch");
+        d.expect("Group name: Split Watch");
     }
 }
 

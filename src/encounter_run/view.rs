@@ -48,6 +48,59 @@ const TIGHT_ROW: f32 = 25.0;
 const NAME_ROOM: f32 = 8.0;
 /// A long name wraps to at most this many lines; the last one ends in `…`.
 const NAME_LINES: usize = 3;
+/// A creature's effects beyond the official conditions, in the run's Conditions tab and in a
+/// change form alike: the `Other effects` label, then each in Body text with its row menu.
+/// Returns the position in `effects` of the one the DM removed.
+pub(crate) fn other_effects_list<'a>(
+    ui: &mut egui::Ui,
+    effects: impl IntoIterator<Item = &'a str>,
+) -> Option<usize> {
+    let effects: Vec<_> = effects.into_iter().collect();
+    if effects.is_empty() {
+        return None;
+    }
+    let mut removed = None;
+    design::group_label(ui, "Other effects");
+    for (at, effect) in effects.into_iter().enumerate() {
+        ui.horizontal(|ui| {
+            let menu_width = Density::Read.control() + design::S;
+            ui.allocate_ui(
+                vec2((ui.available_width() - menu_width).max(design::L), 0.0),
+                |ui| {
+                    ui.add(
+                        egui::Label::new(Type::Body.rich(ui, effect).color(colors().text)).wrap(),
+                    );
+                },
+            );
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                design::row_menu(ui, effect, |ui| {
+                    if ui.button("Remove").clicked() {
+                        removed = Some(at);
+                        ui.close();
+                    }
+                });
+            });
+        });
+    }
+    removed
+}
+
+/// The field that adds an other effect, and its Add. True when the DM adds the typed words.
+pub(crate) fn other_effect_field(ui: &mut egui::Ui, text: &mut String, width: f32) -> bool {
+    ui.horizontal(|ui| {
+        let response = design::text_input(ui, "Other effect", text, "Other effect…", width);
+        let enter = response.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
+        (Action::secondary("Add")
+            .density(Density::Read)
+            .blocked_if(text.trim().is_empty(), "Type an effect first.")
+            .show(ui)
+            .clicked()
+            || enter)
+            && !text.trim().is_empty()
+    })
+    .inner
+}
+
 /// Run toggles use a selected surface; the turn action keeps the accent fill.
 pub(crate) fn toggle(
     ui: &mut egui::Ui,
@@ -2399,50 +2452,20 @@ impl Run {
                     .enumerate()
                     .filter(|(_, c)| !official(c))
                     .collect();
-                if !custom.is_empty() {
-                    design::group_label(ui, "Other effects");
-                    for (i, condition) in custom {
-                        ui.horizontal(|ui| {
-                            let menu_width = Density::Read.control() + design::S;
-                            ui.allocate_ui(vec2((ui.available_width() - menu_width).max(design::L), 0.0), |ui| {
-                                ui.add(egui::Label::new(Type::Body.rich(ui, condition).color(colors().text)).wrap());
-                            });
-                            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                                design::row_menu(ui, condition, |ui| {
-                                    if ui.button("Remove").clicked() {
-                                        command = Some(Command::RemoveCondition(index, i));
-                                        ui.close();
-                                    }
-                                });
-                            });
-                        });
-                    }
+                if let Some(at) =
+                    other_effects_list(ui, custom.iter().map(|(_, condition)| condition.as_str()))
+                {
+                    command = Some(Command::RemoveCondition(index, custom[at].0));
                 }
-                ui.horizontal(|ui| {
-                    let response = design::text_input(
-                        ui,
-                        "Other effect",
-                        &mut self.condition,
-                        "Other effect…",
-                        (ui.available_width() - 80.0).max(100.0),
-                    );
-                    let enter = response.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
-                    if (Action::secondary("Add")
-                        .density(Density::Read)
-                        .blocked_if(self.condition.trim().is_empty(), "Type an effect first.")
-                        .show(ui)
-                        .clicked()
-                        || enter)
-                        && !self.condition.trim().is_empty()
-                    {
-                        // Typed as a level, it is still the one Exhaustion a creature has.
-                        let typed = self.condition.trim();
-                        command = Some(match exhausted.filter(|_| typed.starts_with("Exhaustion")) {
-                            Some(at) => set_exhaustion(index, at, exhaustion_level(typed)),
-                            None => Command::Condition(index, self.condition.clone()),
-                        });
-                    }
-                });
+                let width = (ui.available_width() - 80.0).max(100.0);
+                if other_effect_field(ui, &mut self.condition, width) {
+                    // Typed as a level, it is still the one Exhaustion a creature has.
+                    let typed = self.condition.trim();
+                    command = Some(match exhausted.filter(|_| typed.starts_with("Exhaustion")) {
+                        Some(at) => set_exhaustion(index, at, exhaustion_level(typed)),
+                        None => Command::Condition(index, self.condition.clone()),
+                    });
+                }
                 ui.add(
                     egui::Label::new(
                         Type::Small
@@ -3573,35 +3596,47 @@ impl Run {
         if !totals_in_heading {
             ui.add(egui::Label::new(Type::Small.rich(ui, totals_text).color(c.muted)).wrap());
         }
-        let members = group.member_summary_wrapped();
         let mut add = false;
         let add_word = arrival_add_word(group);
         // Initiative and Add end at the panel's inner right edge in every group, so they share
         // one column. The summary takes what is left.
         let right = ui.max_rect().right();
+        let gap = ui.spacing().item_spacing.x;
+        // The field's margins draw it a little wider than it asks for; XS covers that, and
+        // the space before Add takes up whatever is left, so Add ends at the edge.
+        let controls = design::number_width(ui, "Initiative", &Type::Small.font(ui))
+            + gap
+            + ARRIVAL_FIELD_WIDTH
+            + design::XS
+            + gap
+            + add_width;
+        let width = (right - ui.cursor().left() - controls - gap).max(design::XXL);
+        let members = group.member_summary_wrapped(ui, &Type::Small.font(ui), width);
+        let status_shown = if status_in_heading {
+            ""
+        } else {
+            status.as_str()
+        };
+        // A status that cannot fit the member slot whole takes a full-width line above the
+        // members and controls, where it wraps at its spaces.
+        let status_above = arrival_summary(ui, status_shown, &members, width).is_none();
+        if status_above {
+            ui.add(egui::Label::new(Type::Small.rich(ui, status_shown).color(c.muted)).wrap());
+        }
         ui.horizontal(|ui| {
-            let gap = ui.spacing().item_spacing.x;
-            // The field's margins draw it a little wider than it asks for; XS covers that, and
-            // the space before Add takes up whatever is left, so Add ends at the edge.
-            let controls = design::number_width(ui, "Initiative", &Type::Small.font(ui))
-                + gap
-                + ARRIVAL_FIELD_WIDTH
-                + design::XS
-                + gap
-                + add_width;
-            let width = (right - ui.cursor().left() - controls - gap).max(design::XXL);
             ui.allocate_ui(vec2(width, Density::Read.control()), |ui| {
                 ui.set_min_width(width);
                 ui.set_max_width(width);
                 let summary = arrival_summary(
                     ui,
-                    if status_in_heading { "" } else { &status },
+                    if status_above { "" } else { status_shown },
                     &members,
                     width,
-                );
+                )
+                .unwrap_or_default();
                 let response =
                     ui.add(egui::Label::new(Type::Small.rich(ui, &summary).color(c.muted)).wrap());
-                let name = if status.is_empty() {
+                let name = if status.is_empty() || status_above {
                     members.clone()
                 } else {
                     format!("{status} · {members}")
@@ -5803,22 +5838,26 @@ pub(crate) fn hanging_link(
     .inner
 }
 
-fn arrival_summary(ui: &egui::Ui, status: &str, members: &str, width: f32) -> String {
+/// An Arrivals row's status and members for a slot `width` wide. None when a part of the status
+/// cannot fit the slot whole: then the status takes a full-width line of its own.
+fn arrival_summary(ui: &egui::Ui, status: &str, members: &str, width: f32) -> Option<String> {
     if status.is_empty() {
-        return members.to_owned();
+        return Some(members.to_owned());
     }
+    let font = Type::Small.font(ui);
     let status = status.replace(' ', "\u{a0}");
     let first = members.split(", ").next().unwrap_or(members);
     let joined = format!("{status}\u{a0}·\u{a0}{first}");
-    if design::number_width(ui, &joined, &Type::Small.font(ui)) <= width {
-        format!("{status}\u{a0}·\u{a0}{members}")
-    } else if design::number_width(ui, &status, &Type::Small.font(ui)) <= width {
-        format!("{status}\n{members}")
+    if design::number_width(ui, &joined, &font) <= width {
+        Some(format!("{status}\u{a0}·\u{a0}{members}"))
+    } else if design::number_width(ui, &status, &font) <= width {
+        Some(format!("{status}\n{members}"))
     } else {
-        format!(
-            "{}\n{members}",
-            status.split("\u{a0}·\u{a0}").collect::<Vec<_>>().join("\n")
-        )
+        let parts: Vec<_> = status.split("\u{a0}·\u{a0}").collect();
+        parts
+            .iter()
+            .all(|part| design::number_width(ui, part, &font) <= width)
+            .then(|| format!("{}\n{members}", parts.join("\n")))
     }
 }
 
@@ -8440,19 +8479,43 @@ mod tests {
         design::theme::install(&ctx);
         let _ = ctx.run(egui::RawInput::default(), |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
-                for width in [150.0, 180.0, 400.0] {
+                let font = Type::Small.font(ui);
+                for width in [90.0, 150.0, 180.0, 400.0] {
                     for status in [
                         "Changed",
                         "Added in round 2 · Changed",
                         "Added before combat",
                     ] {
-                        let summary = arrival_summary(ui, status, "2 × Wolf, Captain Varra", width);
-                        let galley = ui.painter().layout(
-                            summary,
-                            Type::Small.font(ui),
-                            colors().muted,
-                            width,
-                        );
+                        // iter-23 SA1: a status part that cannot fit the slot whole goes to a
+                        // line of its own above the row; it never breaks inside a word here.
+                        let Some(summary) =
+                            arrival_summary(ui, status, "2 × Wolf, Captain Varra", width)
+                        else {
+                            assert!(
+                                status.split(" · ").any(|part| {
+                                    design::number_width(ui, &part.replace(' ', "\u{a0}"), &font)
+                                        > width
+                                }),
+                                "{status} at {width}"
+                            );
+                            continue;
+                        };
+                        let galley =
+                            ui.painter()
+                                .layout(summary, font.clone(), colors().muted, width);
+                        let rows: Vec<String> = galley
+                            .rows
+                            .iter()
+                            .map(|row| row.glyphs.iter().map(|glyph| glyph.chr).collect())
+                            .collect();
+                        for word in status.split([' ', '·']).filter(|word| !word.is_empty()) {
+                            assert!(
+                                rows.iter().any(|row| row
+                                    .split([' ', '\u{a0}'])
+                                    .any(|shown| shown == word)),
+                                "{word} is split in {rows:?} at {width}"
+                            );
+                        }
                         for row in &galley.rows {
                             assert_ne!(row.glyphs.last().map(|glyph| glyph.chr), Some('·'));
                             assert!(
@@ -8482,6 +8545,35 @@ mod tests {
                         if width == 400.0 {
                             assert_eq!(galley.rows.len(), 1);
                         }
+                    }
+                }
+                // iter-23 FH4: a member wider than its line breaks first before `(as …)`, then
+                // at its own spaces, never inside a word; one that fits stays whole.
+                let member = "1 × Maximum HP would become −28 (as Goblin Warrior)";
+                assert_eq!(
+                    super::super::keep_whole(ui, &font, "2 × Wolf", 150.0),
+                    "2\u{a0}×\u{a0}Wolf"
+                );
+                for width in [100.0, 150.0, 260.0] {
+                    let shown = super::super::keep_whole(ui, &font, member, width);
+                    let galley =
+                        ui.painter()
+                            .layout(shown.clone(), font.clone(), colors().muted, width);
+                    let rows: Vec<String> = galley
+                        .rows
+                        .iter()
+                        .map(|row| row.glyphs.iter().map(|glyph| glyph.chr).collect())
+                        .collect();
+                    for word in member.split(' ') {
+                        assert!(
+                            rows.iter()
+                                .any(|row| row.split([' ', '\u{a0}']).any(|part| part == word)),
+                            "{word} is split in {rows:?} at {width}"
+                        );
+                    }
+                    assert!(rows.iter().all(|row| !row.trim_end().ends_with('(')));
+                    if width == 260.0 {
+                        assert!(shown.contains(" (as\u{a0}Goblin\u{a0}Warrior)"), "{shown}");
                     }
                 }
             });

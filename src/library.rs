@@ -2156,6 +2156,10 @@ pub struct Library {
     pub open_world_npc: Option<Uuid>,
     pending_edit: Option<Entry>,
     pending_repair: Option<PathBuf>,
+    /// A missing link that Campaign's repair opened this file for: the file, the reference and
+    /// the fault's words. Edit Markdown names it at its line while the draft still holds it; it
+    /// ends when another note opens or the file saves.
+    repair_link: Option<(PathBuf, String, String)>,
     scope_notice: Option<String>,
     new_form: bool,
     focus_new_name: bool,
@@ -2611,6 +2615,11 @@ impl Library {
         let Some(note) = self.loaded.as_ref().and_then(|l| l.notes.get(index)) else {
             return;
         };
+        if self.repair_link.as_ref().is_some_and(|(path, _, _)| {
+            note.owner.root().map(|root| root.join(&note.path)).as_ref() != Some(path)
+        }) {
+            self.repair_link = None;
+        }
         if self.selected != Some(index) {
             self.trail.leave(self.here());
         }
@@ -2696,7 +2705,9 @@ impl Library {
     pub fn edit_copy(&mut self, entry: Entry) {
         self.pending_edit = Some(entry);
     }
-    pub fn repair_file(&mut self, path: PathBuf) {
+    /// Open a file for repair; with a missing link's reference and words, at that link.
+    pub fn repair_file_link(&mut self, path: PathBuf, link: Option<(String, String)>) {
+        self.repair_link = link.map(|(reference, words)| (path.clone(), reference, words));
         self.pending_repair = Some(path);
         self.stale = true;
     }
@@ -4656,6 +4667,7 @@ impl Library {
         let Some(i) = self.selected else {
             return;
         };
+        self.repair_link = None;
         let note = &self.loaded.as_ref().unwrap().notes[i];
         let mut file_gone = file_gone;
         if self.loaded.as_ref().unwrap().duplicates(i).is_empty()
@@ -5053,6 +5065,29 @@ impl Library {
             .and_then(|_| self.loaded.as_ref().unwrap().draft_refusal(i, parsed));
         let (repair_problem, repair_line) =
             draft_repair_problem(note, &self.draft, refusal, recovery.as_ref());
+        // A missing link Campaign sent here: its line, while the draft still holds it.
+        let missing_link = self
+            .repair_link
+            .as_ref()
+            .filter(|(path, _, _)| {
+                note.owner.root().map(|root| root.join(&note.path)).as_ref() == Some(path)
+            })
+            .and_then(|(_, reference, words)| {
+                // A reference by id is found by its id, whatever form its link takes.
+                let target = reference
+                    .split(|c: char| !(c.is_ascii_hexdigit() || c == '-'))
+                    .find(|word| uuid::Uuid::parse_str(word).is_ok())
+                    .unwrap_or(reference);
+                let line = self.draft.lines().position(|line| line.contains(target))?;
+                Some((
+                    line + 1,
+                    format!(
+                        "Line {}: {words} Replace the link on this line with another creature, or remove its row.",
+                        line + 1
+                    ),
+                ))
+            });
+        let repair_line = repair_line.or(missing_link.as_ref().map(|(line, _)| *line));
         // A parse fault ends with the draft that parses: the saved file stays unreadable on the
         // owner line until Save, but the draft is not Invalid.
         let state = if fault.is_some() || repair_problem.is_some() {
@@ -5438,8 +5473,18 @@ impl Library {
                     });
                 });
             });
-            if let Some(problem) = &repair_problem {
-                repair_pressed = repair_notice(ui, problem, recovery.as_ref(), draft_reason, true);
+            // A repair problem, or the missing link Campaign sent here, takes the reason line.
+            let link_words = missing_link
+                .as_ref()
+                .filter(|_| repair_problem.is_none())
+                .map(|(_, words)| words);
+            if repair_problem.is_some() || link_words.is_some() {
+                if let Some(problem) = &repair_problem {
+                    repair_pressed =
+                        repair_notice(ui, problem, recovery.as_ref(), draft_reason, true);
+                } else if let Some(words) = link_words {
+                    design::message(ui, Tone::Warning, words);
+                }
                 if discard_is_for(self.discarded.as_ref(), note)
                     && self.draft == note.text
                     && design::draft_discarded(ui, note.name())
