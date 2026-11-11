@@ -81,6 +81,10 @@ pub struct CampaignContent {
     /// of. A missing or changed Campaign.md ends it.
     discarded_selections: Option<(Vec<PackageSelection>, Option<String>)>,
     discarded_repair: Option<(String, String)>,
+    /// A Save that failed on the disk: the campaign, the repair's path, the draft text it tried
+    /// to write and Save's reason. Only that draft owns it. It ends with the next edit of that
+    /// draft, a successful Save, a reload that replaces the draft, or another campaign.
+    repair_save_failure: Option<(Uuid, String, String, String)>,
     /// The repair the DM edited or focused last. It owns the primary Save while it is open and
     /// changed; other changed repairs keep their drafts with a secondary Save.
     active_repair: Option<String>,
@@ -398,6 +402,7 @@ impl CampaignContent {
             self.discarded_repair = None;
             self.removed_package = None;
             self.campaign_write = None;
+            self.repair_save_failure = None;
         }
     }
     /// Undo package removal checks the package choices only. If the file's choices changed since
@@ -429,6 +434,8 @@ impl CampaignContent {
         self.refresh_pending = false;
         self.reconcile.checked_at = None;
         self.disabled_selections.clear();
+        // A reload replaces every draft, so a failed Save no longer describes one.
+        self.repair_save_failure = None;
         self.repairs.clear();
         let modules = campaigns.modules().to_vec();
         self.active = Some(campaign.clone());
@@ -761,9 +768,31 @@ impl CampaignContent {
                         // The Library rule: the draft is checked as Save checks it. While Save
                         // would refuse it, the state says Invalid and Save names the cause.
                         let c = colors();
+                        // An action-time failure on the disk holds the slot until the draft
+                        // changes: an edit ends it, even one that types the same text again.
+                        if self.repair_save_failure.as_ref().is_some_and(
+                            |(campaign, failed_path, text, _)| {
+                                *campaign == active.id && failed_path == path && text != draft
+                            },
+                        ) {
+                            self.repair_save_failure = None;
+                        }
+                        let failed = self
+                            .repair_save_failure
+                            .as_ref()
+                            .filter(|(campaign, failed_path, text, _)| {
+                                *campaign == active.id && failed_path == path && text == draft
+                            })
+                            .map(|(_, _, _, reason)| format!("Not saved. {reason}"));
                         design::save_row_state(
                             ui,
-                            if refusal.is_some() {
+                            if let Some(failed) = &failed {
+                                design::Status {
+                                    icon: icons::ERROR,
+                                    word: failed,
+                                    color: c.document.invalid,
+                                }
+                            } else if refusal.is_some() {
                                 design::Status {
                                     icon: icons::ERROR,
                                     word: "Invalid",
@@ -848,8 +877,13 @@ impl CampaignContent {
                                     Ok(_) => {
                                         *baseline = draft.clone();
                                         repaired = true;
+                                        self.repair_save_failure = None;
                                     }
-                                    Err(e) => self.error = Some(e),
+                                    // The cause stays with this draft, in its state slot.
+                                    Err(reason) => {
+                                        self.repair_save_failure =
+                                            Some((active.id, path.clone(), draft.clone(), reason));
+                                    }
                                 }
                             }
                         });

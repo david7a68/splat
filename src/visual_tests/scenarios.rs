@@ -1900,6 +1900,38 @@ pub mod campaign_content {
             "Save repaired note is the only accent-filled action while the draft has changes",
             |d| super::session_recording::accent_filled(d) == ["Save repaired note"],
         );
+        // Lead ruling on round 23 FA3: Save that fails on the disk (here a read-only file) is
+        // an action-time failure. The state slot names Save's reason, not Unsaved, until the
+        // next edit of that draft.
+        let file = d.root.join(BROKEN_NOTE);
+        let set_read_only = |read_only: bool| {
+            let mut permissions = std::fs::metadata(&file).unwrap().permissions();
+            permissions.set_readonly(read_only);
+            std::fs::set_permissions(&file, permissions).unwrap();
+        };
+        set_read_only(true);
+        d.click("Save repaired note");
+        d.settle();
+        const READ_ONLY: &str = "Not saved. This file is read only.";
+        let unchanged = std::fs::read(&file).unwrap() == on_disk;
+        d.observe(
+            "iter-23-C-FA3-disk",
+            d.visible_text(READ_ONLY) && !d.visible_text("Unsaved") && unchanged,
+            format!(
+                "After a read-only Save: reason shown {}, Unsaved shown {}, file unchanged {unchanged}",
+                d.visible_text(READ_ONLY),
+                d.visible_text("Unsaved")
+            ),
+        );
+        d.state("repair-save-failed", Sizes::Default);
+        // The next edit ends it: the draft is a new one that Save has not tried.
+        d.replace_text_in("Note text", &format!("{valid}\nOne more line.\n"));
+        d.observe(
+            "iter-23-C-FA3-disk-ends",
+            d.visible_text("Unsaved") && !d.visible_text(READ_ONLY),
+            "An edit of the draft ends the failed Save's reason",
+        );
+        set_read_only(false);
         d.click("Discard");
         two_changed_repairs_have_one_primary(d);
         std::fs::remove_file(d.root.join(BROKEN_NOTE)).unwrap();
