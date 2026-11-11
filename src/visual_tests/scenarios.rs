@@ -2622,7 +2622,9 @@ pub mod encounter_build {
     const LIVE_ROW: &str = "HP\u{a0}11/41";
     const LOCAL_ONLY: &str = "Nothing in this encounter reaches D&D Beyond";
     const VIRTUALISED_LIMIT: usize = 100;
-    const CHANGED_ON_DISK: &str = "changed on disk. Your draft is safe until you choose.";
+    // One disk-change form, as World and Library: it names the encounter, never its file.
+    const CHANGED_ON_DISK: &str =
+        "This encounter changed on disk. Your draft is safe until you choose.";
     const OVERWRITE: &str = "Overwrite with my draft";
     const RELOAD: &str = "Reload and lose my draft";
     const OUTSIDE_WORDS: &str = "\nWritten outside Splat.\n";
@@ -2664,7 +2666,7 @@ pub mod encounter_build {
         d.expect(READY_TO_RUN);
         let sizes = [SMALL, DEFAULT, LARGE];
         let encounters = sizes.map(|size| d.at_size(size, |d| page_title_left(d, NAV_ENCOUNTERS)));
-        // Must stay true: the content below the header keeps the page's `L` gutter.
+        // FA5 (round 25 replaces round 24's gutter): the first column starts at the title's x.
         let content = sizes.map(|size| d.at_size(size, |d| d.painted_left(READY_TO_RUN)));
         d.click(NAV_PARTY);
         d.expect("Party");
@@ -2682,14 +2684,14 @@ pub mod encounter_build {
             ),
         );
         d.observe(
-            "iter-24-B-FE4-gutter",
+            "iter-25-B-FA5",
             encounters.iter().zip(&content).all(|(title, content)| {
-                title.zip(*content).is_some_and(|(title, content)| {
-                    (content - title - (crate::design::L - crate::design::M)).abs() < 0.5
-                })
+                title
+                    .zip(*content)
+                    .is_some_and(|(title, content)| (content - title).abs() < 0.5)
             }),
             format!(
-                "Title x {encounters:?}, list heading x {content:?}: the list keeps its gutter"
+                "Title x {encounters:?}, list heading x {content:?}: one edge at 960, 1200, 1920"
             ),
         );
         // T5.3 measures the whole build, so it starts from the cold start.
@@ -2947,6 +2949,29 @@ pub mod encounter_build {
         );
         d.click(SYNC_OPTION);
         d.expect(PARTY_NOW);
+        // AD1: the help under Sync party and Keep in Ready wraps at the reader measure at 1920.
+        let widths = d.at_size(LARGE, |d| {
+            [
+                "The party starts with the HP",
+                "Lists this encounter under Ready",
+            ]
+            .map(|words| {
+                let mut width = None;
+                d.each_painted_text(|text, _| {
+                    if text.galley.job.text.starts_with(words) {
+                        width = Some(text.galley.size().x);
+                    }
+                });
+                width
+            })
+        });
+        d.observe(
+            "iter-25-B-AD1",
+            widths.iter().all(|width| {
+                width.is_some_and(|width| width <= crate::design::READER_MEASURE + 0.5)
+            }),
+            format!("At 1920, the Sync party and Keep in Ready help widths: {widths:?}"),
+        );
 
         // Another program changes the encounter while the DM edits it. The choices start at the
         // message text: the safe one first, then exactly `L` before the red one.
@@ -2958,6 +2983,19 @@ pub mod encounter_build {
         d.type_into("Read-aloud and notes", DRAFT_WORDS);
         d.click(SAVE_ENCOUNTER);
         d.expect(CHANGED_ON_DISK);
+        d.observe(
+            "iter-25-B-FE3",
+            {
+                let named: Vec<String> = d
+                    .nodes()
+                    .into_iter()
+                    .filter(|node| node.name.contains("changed on disk"))
+                    .map(|node| node.name)
+                    .collect();
+                !named.is_empty() && named.iter().all(|name| name == CHANGED_ON_DISK)
+            },
+            "The disk-change warning names the encounter, not its file",
+        );
         d.observe(
             "iter-15-B-EC-safe",
             std::fs::read_to_string(&file).is_ok_and(|text| text == outside)
@@ -5431,6 +5469,23 @@ pub mod nav_state {
         go_campaign(d);
         let campaign = d.in_view_containing(CAMPAIGN_TAB_TEXT);
         d.state("campaign-returned", Sizes::All);
+        // AF1: the save state and Save run settings share one row, with Save at its end, at
+        // 960, 1200 and 1920.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (state, save) = d.at_size(size, |d| {
+                (
+                    d.painted_rect_in("No changes", egui::Rect::EVERYTHING),
+                    d.place_of("Save run settings"),
+                )
+            });
+            d.observe(
+                "iter-25-B-AF1",
+                state.zip(save).is_some_and(|(state, save)| {
+                    (state.center().y - save.center().y).abs() <= 1.0 && state.right() < save.left()
+                }),
+                format!("At {size:?}: No changes {state:?}, Save run settings {save:?}"),
+            );
+        }
 
         go_party(d);
         let party = d.in_view_containing(MEMBER) && d.in_view_containing(SHEET_PAGE_TEXT);
@@ -6743,6 +6798,28 @@ pub mod run_edge_states {
             "Recovery selection",
             d.has_containing("Changed on disk") && d.has_containing("Copy 2"),
             "Recovery copies show their number, and the preserved file is marked Changed on disk",
+        );
+        // FJ6: every paused run's line two starts with the run icon, also the one whose first
+        // part is the disk warning.
+        let mut details = Vec::new();
+        d.each_painted_text(|text, _| {
+            let words = &text.galley.job.text;
+            if words.contains("Paused") && !words.contains('\n') && words.contains(" · ") {
+                details.push(words.clone());
+            }
+        });
+        let run = crate::design::icons::RUN;
+        d.observe(
+            "iter-25-B-FJ6",
+            details.len() >= 3
+                && details.iter().any(|words| {
+                    words.starts_with(&format!(
+                        "{run} {} Changed on disk",
+                        crate::design::icons::WARN
+                    ))
+                })
+                && details.iter().all(|words| words.starts_with(run)),
+            format!("Each paused run's line two starts with the run icon: {details:?}"),
         );
         d.click(RESUME);
         let resumed_copy = d
@@ -12126,7 +12203,7 @@ pub mod encounter_groups {
         d.expect("Unknown creature");
         let (found, invalid) = d.at_size(SMALL, |d| {
             (
-                d.in_view_containing("cannot find this creature"),
+                d.in_view_containing("Unknown creature: not in this campaign’s packages."),
                 d.in_view_containing("would become −28"),
             )
         });
@@ -12137,7 +12214,18 @@ pub mod encounter_groups {
         );
         let tones = (
             tones_beside(d, "would become −28"),
-            tones_beside(d, "cannot find this creature"),
+            tones_beside(d, "Unknown creature: not in this campaign’s packages."),
+        );
+        // FA1 (Astra review of PR 259): the editor names the missing member in the one form,
+        // and its help follows on a line of its own.
+        d.observe(
+            "iter-25-B-FA1-missing",
+            d.has("Unknown creature: not in this campaign’s packages.")
+                && d.has(
+                    "Choose a replacement, check the packages it uses, or remove this member.",
+                )
+                && !d.has_containing("This campaign cannot find this creature"),
+            "The group editor's missing member says the one member-fault form, then its help",
         );
         d.observe(
             "iter-22-B-FT1-editor",
@@ -12150,29 +12238,20 @@ pub mod encounter_groups {
             ),
         );
         d.expect("Replace Unknown creature");
-        // The repair link is a notice action: its words start at the warning text, and its icon
-        // hangs in the gutter before them.
+        // The repair is a notice action. FB5 (round 25): it is a bordered secondary button, and
+        // its frame starts at the warning text, below it.
         for size in [SMALL, DEFAULT, LARGE] {
             let (aligned, detail) = d.at_size(size, |d| {
                 let text = d.painted_rect_in(
-                    "This campaign cannot find this creature",
+                    "Unknown creature: not in this campaign’s packages.",
                     egui::Rect::EVERYTHING,
                 );
-                let mut words = None;
-                d.each_painted_text(|shape, _| {
-                    let job = &shape.galley.job.text;
-                    if let Some(at) = job.find("Campaign → Packages")
-                        && let Some(row) = shape.galley.rows.first()
-                        && let Some(glyph) = row.glyphs.get(job[..at].chars().count())
-                    {
-                        words = Some(shape.pos.x + row.pos.x + glyph.pos.x);
-                    }
-                });
+                let words = d.painted_rect_in("Campaign → Packages", egui::Rect::EVERYTHING);
                 let link = d.place_of("Campaign → Packages");
                 let aligned = match (text, words, link) {
                     (Some(text), Some(words), Some(link)) => {
-                        (words - text.left()).abs() < 1.0
-                            && link.left() < text.left() - 1.0
+                        (link.left() - text.left()).abs() < 1.0
+                            && words.left() > link.left() + 1.0
                             && link.top() >= text.bottom() - 0.5
                     }
                     _ => false,
@@ -12243,7 +12322,44 @@ pub mod encounter_groups {
         d.type_text("Ash Pack");
         assert!(d.is_disabled(SAVE_GROUP));
         d.expect("Add a creature first");
+        // AH1: Save refuses the empty group, so the state says Invalid, not Unsaved.
+        d.observe(
+            "iter-25-B-AH1-list",
+            d.visible_text("Invalid") && !d.visible_text("Unsaved"),
+            "An empty new group says Invalid beside its blocked Save",
+        );
         d.state("group-rejected-empty", Sizes::Default);
+        // FH3, SH2: a tall window shows every result and a short one scrolls them; each `Add`
+        // keeps its x either way.
+        // A proof aside: the search is empty again after it.
+        let lanes = d.aside(|d| {
+            d.type_into(FIND, "adult");
+            let lanes = [(DEFAULT.0, 2000.0), (DEFAULT.0, SMALL.1)].map(|size| {
+                d.at_size(size, |d| {
+                    let adds = right_edges(d, ADD);
+                    let bar = adds
+                        .iter()
+                        .copied()
+                        .reduce(f32::max)
+                        .is_some_and(|edge| scroll_bar_right_of(d, edge));
+                    (adds, bar)
+                })
+            });
+            d.clear_text_in(FIND);
+            lanes
+        });
+        d.observe(
+            "iter-25-B-FH3",
+            !lanes[0].1
+                && lanes[1].1
+                && !lanes[0].0.is_empty()
+                && !lanes[1].0.is_empty()
+                && lanes
+                    .iter()
+                    .flat_map(|(adds, _)| adds)
+                    .all(|x| (x - lanes[0].0[0]).abs() <= 0.5),
+            format!("Add right edges and scroll bar, tall then short: {lanes:?}"),
+        );
         d.type_into(FIND, "wolf");
         d.state("group-find-creature", Sizes::Default);
         d.click_beside_exact("Wolf", ADD);
@@ -12362,6 +12478,14 @@ pub mod encounter_groups {
             d.visible_text(REPLACED) && d.has("Undo replacement"),
             "Use names the replacement and offers Undo replacement",
         );
+        // FH5, SH1: a finished change is a success message, with the success bar.
+        let replaced = d.painted_rect_in(REPLACED, egui::Rect::EVERYTHING);
+        d.observe(
+            "iter-25-B-FH5",
+            replaced
+                .is_some_and(|words| d.has_tone_bar(words, crate::design::colors().result.success)),
+            format!("The replacement result {replaced:?} has the success bar"),
+        );
         d.state("group-member-replaced", Sizes::Default);
         // An unrelated edit keeps the result; Undo puts back only the creature, and its words
         // go with it.
@@ -12407,9 +12531,9 @@ pub mod encounter_groups {
                 ),
             );
             let painted = d.painted_size(discarded, "Lost Patrol draft discarded.");
-            let icon = |text: egui::Rect| {
+            let icon = |text: egui::Rect, icon: &str| {
                 d.painted_rect_in(
-                    crate::design::icons::INFO,
+                    icon,
                     egui::Rect::from_min_max(
                         pos2(text.left() - crate::design::XXL, text.top() - 2.0),
                         pos2(text.left(), text.bottom() + 2.0),
@@ -12418,10 +12542,14 @@ pub mod encounter_groups {
                 .is_some()
             };
             let colour = d.painted_color("Lost Patrol draft discarded.");
+            // Round 25 (FH5's family): the removal is a finished change, so it has the success
+            // icon; the discard wrote nothing, so it keeps the info icon.
+            let info = crate::design::icons::INFO;
+            let success = crate::design::icons::SUCCESS;
             d.observe(
                 "iter11-B-FT4",
-                icon(discarded) && icon(removed) && colour == Some(text),
-                format!("At {size:?}, both notices have the info icon, and the discard words use the text colour: {colour:?}"),
+                icon(discarded, info) && icon(removed, success) && colour == Some(text),
+                format!("At {size:?}, the discard has the info icon, the removal the success icon, and the discard words use the text colour: {colour:?}"),
             );
             d.observe(
                 "iter11-B-FT4",
@@ -12494,7 +12622,9 @@ pub mod encounter_groups {
         d.observe(
             "T13.1",
             d.visible_text("XP 50")
-                && d.has_containing("Member 1, Unknown creature: not in this campaign’s packages")
+                && d.has_containing(
+                    "Unknown creature · line\u{a0}13: not in this campaign’s packages.",
+                )
                 && d.visible_text("Will\u{a0}add: 1\u{a0}×\u{a0}Goblin\u{a0}Warrior"),
             "The summary names the joining member; excluded members stay under Cannot join",
         );
@@ -12507,7 +12637,7 @@ pub mod encounter_groups {
             "T13.1",
             d.visible_text("1 of 3 can join")
                 && d.has_containing("not in this campaign’s packages")
-                && d.has_containing("Member 2, Cinder Wolf:"),
+                && d.has_containing("Cinder Wolf · line\u{a0}14: Maximum HP would become −28."),
             "A group counts a creature it cannot find, and gives every reason it cannot be added",
         );
         let tones = (
@@ -12905,6 +13035,27 @@ fn member_column_xs(d: &Driver<'_>, group: &str) -> Vec<(String, f32)> {
     xs
 }
 
+/// Egui's scroll bar just right of `edge`: an unnamed thin node with no role.
+fn scroll_bar_right_of(d: &Driver<'_>, edge: f32) -> bool {
+    d.nodes().iter().any(|node| {
+        node.role == egui::accesskit::Role::Unknown
+            && node.name.is_empty()
+            && node.rect.width() <= crate::design::M
+            && node.rect.height() >= crate::design::XXL
+            && node.rect.left() >= edge - 0.5
+            && node.rect.left() <= edge + crate::design::XL
+    })
+}
+
+/// The right edges of every control named `name`, top to bottom.
+fn right_edges(d: &Driver<'_>, name: &str) -> Vec<f32> {
+    d.nodes()
+        .into_iter()
+        .filter(|node| node.name == name && node.in_view())
+        .map(|node| node.rect.right())
+        .collect()
+}
+
 /// Egui's scroll bar beside a group editor's members column: an unnamed thin node with no
 /// role, just right of the member menus.
 fn members_scroll_bar(d: &Driver<'_>) -> bool {
@@ -12962,8 +13113,35 @@ pub mod encounter_owned_groups {
     pub fn run(d: &mut Driver<'_>) {
         // The page lists what can arrive anywhere. An encounter's own stay out of the way.
         d.expect("GROUPS");
+        // FB2: opening Groups makes the page scroll at 960, and no row action moves.
+        let actions = |d: &Driver<'_>| {
+            let menus: Vec<f32> = d
+                .nodes()
+                .into_iter()
+                .filter(|node| node.name.starts_with("More actions for ") && node.in_view())
+                .map(|node| node.rect.right())
+                .collect();
+            let bar = menus
+                .iter()
+                .copied()
+                .reduce(f32::max)
+                .is_some_and(|edge| scroll_bar_right_of(d, edge));
+            (right_edges(d, "Resume"), menus, bar)
+        };
+        let closed = d.at_size(SMALL, actions);
         d.state("groups-for-encounters-closed", Sizes::All);
         d.click_starting("GROUPS");
+        let open = d.at_size(SMALL, actions);
+        d.observe(
+            "iter-25-B-FB2",
+            !closed.2
+                && open.2
+                && !closed.0.is_empty()
+                && closed.0.first() == open.0.first()
+                && !closed.1.is_empty()
+                && closed.1.first() == open.1.first(),
+            format!("At 960, Resume, row menus and scroll bar, closed {closed:?}, open {open:?}"),
+        );
         d.check_tab_order("encounters, with groups for encounters closed");
         d.observe(
             "T13.5",
@@ -13188,9 +13366,92 @@ pub mod encounter_owned_groups {
         d.click(&edit_group(GROUP_WATCH));
         d.expect("A run of any encounter offers this group.");
         d.open_combo_at(BELONGS_DROPDOWN);
+        // FB8: the open menu's painted frame is as wide as its control at 960, 1200 and 1920,
+        // and back at 960, while it stays open through each resize.
+        const BELONGS_TO_LABEL: &str = "Belongs to";
+        const CONTROL: &str = "Belongs to: Any encounter";
+        for size in [SMALL, DEFAULT, LARGE, SMALL] {
+            let (control, frame) = d.at_size(size, |d| {
+                let choices = ["Any encounter", RUN_ARENA]
+                    .map(|name| d.place_of(name))
+                    .into_iter()
+                    .collect::<Option<Vec<_>>>()
+                    .map(|rects| {
+                        rects
+                            .into_iter()
+                            .fold(egui::Rect::NOTHING, |a, b| a.union(b))
+                    });
+                (
+                    d.place_of(CONTROL),
+                    choices.and_then(|choices| d.painted_frame_around(choices)),
+                )
+            });
+            d.observe(
+                "iter-25-B-FB8",
+                control.zip(frame).is_some_and(|(control, frame)| {
+                    (frame.left() - control.left()).abs() <= 1.0
+                        && (frame.right() - control.right()).abs() <= 1.0
+                }),
+                format!(
+                    "At {size:?} the Belongs to menu frame {frame:?} spans the control {control:?}"
+                ),
+            );
+        }
+        // A proof aside (revision 17 menu checks): the control owns its menu, and the focus
+        // comes back to it when the menu closes. Mouse open (above), then Escape; Enter opens it
+        // by the keys, then Escape; Tab leaves and Shift+Tab comes back; a click on an outside
+        // field closes it and the focus stays on that field. The group stays unchanged, and the
+        // menu is opened once more for the capture. A choice is checked after the capture.
+        const NOTES: &str = "Group notes for Watch Detail";
+        d.aside(|d| {
+            d.press(Key::Escape);
+            let closed = !d.has(RUN_ARENA) && d.has(CONTROL);
+            let after_escape = d.focused_name();
+            d.press(Key::Enter);
+            let opened = d.has(RUN_ARENA);
+            d.press(Key::Escape);
+            let closed_again = !d.has(RUN_ARENA);
+            let after_keys = d.focused_name();
+            d.press(Key::Tab);
+            let after_tab = d.focused_name();
+            d.press_shift(Key::Tab);
+            let back = d.focused_name();
+            d.open_combo_at(BELONGS_DROPDOWN);
+            let reopened = d.has(RUN_ARENA);
+            d.click(NOTES);
+            let outside = d.focused_name();
+            let closed_by_click = !d.has(RUN_ARENA);
+            let clean = !d.visible_text("Unsaved");
+            d.observe(
+                "iter-25-B-FB8-escape",
+                closed
+                    && after_escape.as_deref() == Some(CONTROL)
+                    && opened
+                    && closed_again
+                    && after_keys.as_deref() == Some(CONTROL)
+                    && after_tab.is_some()
+                    && after_tab.as_deref() != Some(CONTROL)
+                    && back.as_deref() == Some(CONTROL)
+                    && reopened
+                    && closed_by_click
+                    && outside.as_deref() == Some(NOTES)
+                    && clean,
+                format!(
+                    "Escape closes {closed} (focus {after_escape:?}); Enter opens {opened}, Escape closes {closed_again} (focus {after_keys:?}); Tab {after_tab:?}, Shift+Tab {back:?}; a click on the notes closes {closed_by_click} (focus {outside:?}); unchanged {clean}"
+                ),
+            );
+            d.open_combo_at(BELONGS_DROPDOWN);
+        });
         d.state("belongs-to-open", Sizes::Default);
         d.click(RUN_ARENA);
         d.expect("Only runs of this encounter offer this group.");
+        // A choice closes the menu and gives the focus back to its control.
+        let after_choice = d.focused_name();
+        d.observe(
+            "iter-25-B-FB8-choice",
+            after_choice.as_deref() == Some(&format!("{BELONGS_TO_LABEL}: {RUN_ARENA}")[..]),
+            format!("After a choice the focus is on {after_choice:?}"),
+        );
         d.click("Save group");
         d.expect("Saved");
         d.click("Back to encounters");
@@ -13294,8 +13555,8 @@ pub mod encounter_owned_groups {
                 let mut placed = true;
                 let mut detail = String::new();
                 for (fault, link) in [
-                    ("Member 1, Unknown creature", "Campaign → Packages"),
-                    ("Member 2, Cinder Wolf: Maximum HP", "Edit group"),
+                    ("Unknown creature · line\u{a0}13:", "Campaign → Packages"),
+                    ("Cinder Wolf · line\u{a0}14: Maximum HP", "Edit group"),
                 ] {
                     let text = d.painted_rect_in(fault, egui::Rect::EVERYTHING);
                     let near = |at: &Pos2| {
@@ -14157,9 +14418,34 @@ pub mod session_plan_groups {
             d.has_containing("Session 1: The Crossing"),
             "Assembling a group stays on the session's page",
         );
+        // AK1: the empty group's reason has a reserved place, so adding the first creature moves
+        // no field. AH1: Save refuses an empty group, so it says Invalid.
+        let sizes = [SMALL, DEFAULT, LARGE];
+        let empty =
+            sizes.map(|size| d.at_size(size, |d| d.place_of(FIND_CREATURE).map(|r| r.top())));
+        d.observe(
+            "iter-25-B-AH1",
+            d.visible_text("Invalid")
+                && !d.visible_text("Unsaved")
+                && d.has("Add a creature first")
+                && d.visible_text(crate::encounters::blocked_draft_switch_reason())
+                && !d.visible_text(crate::encounters::draft_switch_reason()),
+            "An empty new group says Invalid beside its blocked Save, and Discard is the way to switch (FB6)",
+        );
         d.type_into(FIND_CREATURE, "wolf");
         d.click_beside_exact("Wolf", ADD);
         d.click_beside_exact("Wolf", ADD);
+        let assembled =
+            sizes.map(|size| d.at_size(size, |d| d.place_of(FIND_CREATURE).map(|r| r.top())));
+        d.observe(
+            "iter-25-B-AK1",
+            !d.has("Add a creature first")
+                && empty.iter().all(Option::is_some)
+                && empty == assembled
+                && d.visible_text("Unsaved")
+                && d.visible_text(crate::encounters::draft_switch_reason()),
+            format!("Find a creature top, empty {empty:?}, with members {assembled:?}"),
+        );
         d.state("plan-group-assembled", Sizes::All);
         for size in [DEFAULT, LARGE] {
             let edges = d.at_size(size, |d| group_field_edges(d, "Ash Pack"));
@@ -14293,6 +14579,30 @@ pub mod session_plan_groups {
         d.click(&format!("Edit group {GROUP_RIVALS}"));
         d.expect("Back to the plan");
         d.state("plan-group-edit", Sizes::Default);
+        // FK1: the first edit adds the campaign-switch reason in its reserved place, so no field
+        // moves. A proof aside: Discard puts the clean group back.
+        d.aside(|d| {
+            let sizes = [SMALL, DEFAULT, LARGE];
+            // The first member's menu: in the members column, or on the Members tab at 960.
+            let member = |d: &Driver<'_>| {
+                d.nodes()
+                    .into_iter()
+                    .find(|node| node.name.starts_with("More actions for ") && node.in_view())
+                    .map(|node| node.rect.top())
+            };
+            let clean = sizes.map(|size| d.at_size(size, member));
+            d.type_into(&format!("Group name: {GROUP_RIVALS}"), " 2");
+            let changed = sizes.map(|size| d.at_size(size, member));
+            d.observe(
+                "iter-25-B-FK1",
+                d.has_containing("Save or discard to switch campaign.")
+                    && clean.iter().all(Option::is_some)
+                    && clean == changed,
+                format!("First member menu top, clean {clean:?}, changed {changed:?}"),
+            );
+            d.click("Discard");
+            d.expect(&format!("Group name: {GROUP_RIVALS}"));
+        });
         d.click("Back to the plan");
         d.expect(&format!("Edit group {GROUP_RIVALS}"));
 
@@ -14787,7 +15097,7 @@ pub mod session_plan_groups {
             d.click(&format!("Plan {name}"));
         }
         const FAULT: &str =
-            "Member 1, Cinder Wolf: Maximum HP would become −28. It must be 1 or more.";
+            "Cinder Wolf · line\u{a0}13: Maximum HP would become −28. It must be 1 or more.";
         d.expect(FAULT);
         d.state_prepared("plan-group-no-member-can-join", Sizes::All, |d| {
             show_plan(d);
@@ -14799,18 +15109,20 @@ pub mod session_plan_groups {
             let size = d.window_size();
             let tones = (
                 tones_where(d, |text| text == FAULT),
+                // FK5: `0 of 1 can join` and the member's fault say it; no third line does.
                 tones_where(d, |text| text.starts_with("No members can join")),
                 // The summary joins a member's words with no-break spaces.
                 tones_where(d, |text| {
                     text.replace('\u{a0}', " ")
                         .contains("Maximum HP would become −28")
-                        && !text.starts_with("Member 1")
+                        && text != FAULT
                 }),
             );
             d.observe(
                 "iter-22-B-FT1-plan",
                 tones.0 == ["error"]
-                    && tones.1 == ["warning"]
+                    && tones.1.is_empty()
+                    && d.has_containing("0 of 1 can join")
                     && !tones.2.is_empty()
                     && tones.2.iter().all(|tone| *tone == "none"),
                 format!(
@@ -16192,6 +16504,25 @@ pub mod session_plan {
         d.click("Make it yours");
         d.expect("6. Werewolf copy");
         d.state("make-it-yours", Sizes::All);
+        // AK2, FK3: the Name field and Save creature end at one edge, at every size.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (name, save) = d.at_size(size, |d| {
+                let field = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| {
+                        node.name == "Name" && node.role == egui::accesskit::Role::TextInput
+                    })
+                    .map(|node| node.rect);
+                (field, d.place_of("Save creature"))
+            });
+            d.observe(
+                "iter-25-B-AK2",
+                name.zip(save)
+                    .is_some_and(|(name, save)| (name.right() - save.right()).abs() <= 0.5),
+                format!("At {size:?}: Name {name:?}, Save creature {save:?}"),
+            );
+        }
         d.observe(
             "T12.0",
             d.has("Save creature") && d.has_containing("Hit points"),
