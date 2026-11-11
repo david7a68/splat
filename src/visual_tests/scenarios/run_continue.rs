@@ -15,6 +15,7 @@ const UNREAD: &str = "Splat could not read this run’s saved Undo steps";
 const DISMISS: &str = "Dismiss the Undo message";
 const LATER: &str = "A later fight or rest was played. Start a new run to play this one again.";
 const NO_TIMELINE: &str = "Splat cannot read Timeline.md. Fix that on the Timeline page first.";
+const DISK_CHANGED: &str = "Timeline.md changed on disk. Settle that on the Timeline page first.";
 
 /// The Undo control's whole action, which its accessible name keeps when its words are cut.
 fn undo_step(d: &Driver<'_>) -> String {
@@ -380,6 +381,58 @@ pub fn run(d: &mut Driver<'_>) {
         d.has(CONTINUE) && !d.visible_passage(NO_TIMELINE),
         "When Timeline.md can be read again, Continue fight is offered again",
     );
+    // A Timeline note waits for its save, and another copy of Splat changes Timeline.md: first
+    // with nothing that matters to the rule, then with a later rest. Continue fight cannot be
+    // sure which fight was played last, so it refuses and says so in its place. The save that
+    // settles it works the rule out again, and only the true sentence stays.
+    let notes = d.app_mut().timeline.events[0].notes.clone();
+    for later in [false, true] {
+        d.app_mut().timeline.events[0].notes = format!("A note that waits for its save, {later}");
+        d.app_mut().timeline.touch();
+        if later {
+            let mut other = crate::timeline::Book::default();
+            other.open(timeline.parent());
+            other.add_long_rest(None);
+            other.save();
+        } else {
+            let mut bytes = std::fs::read(&timeline).unwrap();
+            bytes.push(b'\n');
+            std::fs::write(&timeline, bytes).unwrap();
+        }
+        d.click(CONTINUE);
+        let ended = d.app_mut().encounters.run().unwrap().ended();
+        d.observe(
+            "T17.8",
+            ended && d.visible_passage(DISK_CHANGED) && !d.has(CONTINUE),
+            format!(
+                "A file changed under an unsaved note refuses Continue fight (later rest {later})"
+            ),
+        );
+        d.app_mut().timeline.save();
+        let settled = !d.app_mut().timeline.unsaved() && !d.app_mut().timeline.conflict;
+        d.click(NAV_TIMELINE);
+        d.click(BACK_TO_RUN);
+        d.observe(
+            "T17.8",
+            settled
+                && !d.visible_passage(DISK_CHANGED)
+                && if later {
+                    d.visible_passage(LATER) && !d.has(CONTINUE)
+                } else {
+                    d.has(CONTINUE)
+                },
+            format!("A settled save must clear the disk-change instruction (later rest {later})"),
+        );
+    }
+    // The rest and the note go again, so the fight is the last one, as before.
+    d.app_mut()
+        .timeline
+        .events
+        .retain(|event| event.kind != crate::timeline::Kind::LongRest);
+    d.app_mut().timeline.events[0].notes = notes;
+    d.app_mut().timeline.touch();
+    d.app_mut().timeline.save();
+    d.settle();
     let told = story(d);
     d.observe(
         "T17.4",

@@ -862,7 +862,8 @@ const CONTINUE_NO_EVENT: &str =
 const CONTINUE_NEEDS_TIMELINE: &str =
     "Splat cannot read Timeline.md. Fix that on the Timeline page first.";
 /// Why the act refused: `Timeline.md` changed on disk under an edit that is not saved yet, so
-/// Splat cannot be sure which fight was played last.
+/// Splat cannot be sure which fight was played last. It is never a run error, so it goes when
+/// the Timeline's next change works the rule out again.
 const CONTINUE_DISK_CHANGED: &str =
     "Timeline.md changed on disk. Settle that on the Timeline page first.";
 
@@ -1810,13 +1811,18 @@ impl Run {
         if !self.ended() {
             return;
         }
-        self.continue_blocked = if timeline.read_if_changed() {
+        let current = timeline.read_if_changed();
+        self.continue_blocked = if current {
             continue_blocked(&timeline.events, timeline.unreadable.is_none(), self.id)
         } else {
             Some(CONTINUE_DISK_CHANGED)
         };
         if let Some(reason) = self.continue_blocked {
-            self.error = Some(reason.into());
+            // A file that changed under an edit is only the rule's answer, in the control's
+            // place: the Timeline's next change, the save that settles it, works it out again.
+            if current {
+                self.error = Some(reason.into());
+            }
             return;
         }
         match act {
@@ -8309,7 +8315,7 @@ mod tests {
             again.ended(),
             "an unsaved note must not skip a later rest on disk"
         );
-        assert_eq!(again.error.as_deref(), Some(CONTINUE_DISK_CHANGED));
+        assert_eq!(again.continue_blocked, Some(CONTINUE_DISK_CHANGED));
         assert_eq!(noted.events[0].notes, "A note waiting to save");
         noted.save();
         again.unend(Unend::Continue, &mut noted);
