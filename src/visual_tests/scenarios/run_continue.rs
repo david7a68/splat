@@ -167,6 +167,17 @@ pub fn run(d: &mut Driver<'_>) {
         "Ended · Round 2",
     );
     d.state("ended-undo-is-the-way-on", Sizes::All);
+    // iter-25-R, results family: `Loot copied.` shows beside the loot's buttons and moves
+    // neither of them.
+    let buttons = |d: &Driver<'_>| (d.place_of("Roll all 2"), d.place_of("Copy loot"));
+    let before = buttons(d);
+    d.click("Copy loot");
+    let after = buttons(d);
+    d.observe(
+        "iter-25-R-loot-copied",
+        d.visible_text("Loot copied.") && before.0.is_some() && before == after,
+        format!("Loot copied shows and the buttons stay: {before:?} then {after:?}"),
+    );
     // A long rest is ruled, and the app starts again. The ending now comes from the run file,
     // so its Undo goes by the rule, as Continue fight does: no Undo of the ending, and the
     // reason in its place. An Undo that reaches the run anyway leaves the fight ended.
@@ -704,9 +715,13 @@ pub fn run(d: &mut Driver<'_>) {
     );
     // iter-25-R AI3, FI2: the warning says the cause, so Undo's reason does not repeat it.
     const UNREAD_REASON: &str = "Nothing to undo. Splat could not read the saved Undo steps.";
+    // At 1920, where the whole reason would fit, as the report saw it.
+    let short = d.at_size((1920.0, 1080.0), |d| {
+        d.visible_text("Nothing to undo") && !d.visible_text("could not read the saved Undo steps")
+    });
     d.observe(
         "iter-25-R-AI3-short",
-        d.visible_text("Nothing to undo") && !d.visible_text("could not read the saved Undo steps"),
+        short,
         "While the warning shows, Undo's reason says only Nothing to undo",
     );
     d.state("undo-steps-unread", Sizes::All);

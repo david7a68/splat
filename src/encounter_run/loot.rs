@@ -415,9 +415,6 @@ impl Run {
                     ui.ctx().copy_text(self.loot_markdown(&copied));
                     ui.data_mut(|data| data.insert_temp(copied_id, self.state.log.len()));
                 }
-                if copied {
-                    ui.label(Type::Small.rich(ui, "Loot copied.").color(c.muted));
-                }
                 if left > 1
                     && Action::secondary(&format!("Roll all {left}"))
                         .icon(icons::DICE)
@@ -430,6 +427,11 @@ impl Run {
                         .into_iter()
                         .map(|(holder, at)| (holder.clone(), at))
                         .collect();
+                }
+                // A result never moves what the DM works on: it goes after Roll all, in the
+                // room on its left, so neither button moves when it shows.
+                if copied {
+                    ui.label(Type::Small.rich(ui, "Loot copied.").color(c.muted));
                 }
             });
         });

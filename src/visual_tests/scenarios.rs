@@ -7109,6 +7109,12 @@ pub mod run_roster_conflict {
             .simulate_sync_state(SYNCED, SyncState::Conflict);
         d.settle();
         d.state("roster-of-12-with-conflict", Sizes::All);
+        // iter-25-R FJ4: the dock's place with no notice below the roster.
+        let amount_at = |d: &mut Driver<'_>| {
+            [SMALL, DEFAULT, LARGE]
+                .map(|size| d.at_size(size, |d| d.place_of("Amount").map(|rect| rect.top())))
+        };
+        let with_none = amount_at(d);
         // On the compact row, the conflict's icon starts where Bloodied's icon starts on the
         // rows below: the second lines share one left edge.
         let (aligned, detail) = d.at_size(SMALL, |d| {
@@ -7180,10 +7186,6 @@ pub mod run_roster_conflict {
         }
         d.state("message-on-one-line", Sizes::Default);
         // iter-25-R FJ4: the dock's place with a warning notice, to compare with an error.
-        let amount_at = |d: &mut Driver<'_>| {
-            [SMALL, DEFAULT, LARGE]
-                .map(|size| d.at_size(size, |d| d.place_of("Amount").map(|rect| rect.top())))
-        };
         let with_warning = amount_at(d);
         let cut = rows_cut(d);
         d.observe(
@@ -7210,6 +7212,8 @@ pub mod run_roster_conflict {
         d.click(ONE_MORE_CONDITION);
         d.click_row(LOADED_ROW);
         let errored = LOADED_CONDITIONS.len() + 1;
+        // With no notice at all, too: the dock's place does not depend on any notice.
+        let no_notice = (!d.has("Dismiss this message")).then(|| amount_at(d));
         d.app_mut().encounters.simulate_run_error(
             "Ember Cultist's stat block could not be read. Its row still works. Repair it in",
         );
@@ -7219,8 +7223,10 @@ pub mod run_roster_conflict {
             "iter-25-R-FJ4",
             d.has_containing("stat block could not be read")
                 && with_warning.iter().all(Option::is_some)
-                && with_error == with_warning,
-            format!("Amount keeps its y with an error notice {with_error:?} as with a warning {with_warning:?}"),
+                && with_error == with_warning
+                && no_notice == Some(with_error)
+                && with_none == with_error,
+            format!("Amount keeps its y with an error notice {with_error:?} as with a warning {with_warning:?} and none {no_notice:?} {with_none:?}"),
         );
         d.state("loaded-roster-of-12", Sizes::All);
         let fault = "Ember Cultist's stat block could not be read.";
