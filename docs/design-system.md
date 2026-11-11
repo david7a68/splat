@@ -175,7 +175,7 @@ eye during long sessions.
 | Message | `message`, `small_message`, `message_with_action`, `Tone` | Inline icon and bar; `message`, `message_with_action` and `undo_message` start the words `XS` after the icon whatever the caller's spacing; cap the notice at `LIST_MEASURE`; actions follow text after an `L` gap or wrap below, aligned with the text; measure the whole action with padding; move it below and align it with the text if it cannot fit; actions without icons use a secondary border. `message_with_actions` puts several choices below the words: the first starts at the text edge, wrapped lines start there too, and a red or dismissing choice keeps exactly `L` from the one before it (subtract the row's item spacing) |
 | Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup, Notes and the run; separate participant and fight tabs |
 | Column | `Column::left / right / panel` | Rail, page lists and panels; inner-edge drag handle; natural width until dragged or moved with keys, then saved width across restarts; preserve page room and `RUN_LIST_KEEPS`; adjacent content reaches the column edge, with text measured inside it |
-| Link | `link` | Real `Link` role, at least 24 px high. A word narrower than 24 px reserves 24 px of layout width from the link's own minimum size, never from spaces in the text: the word starts at the text edge, the underline covers only the word, and the next item starts after the whole target, so two short links side by side never share a press area |
+| Link | `link` | Real `Link` role, at least 24 px high. A word narrower than 24 px reserves 24 px of layout width from the link's own minimum size, never from spaces in the text: the word starts at the text edge, the underline covers only the word, and the next item starts after the whole target, so two short links side by side never share a press area. An icon before the words is not part of the underline: draw it as its own glyph, as `status_link` does |
 | Number | `number`, `number_width` | Right-aligned digits |
 | Count | `count` | `1 entry`, `2,108 entries`; zero gives no text; empty unit words give only the formatted number |
 
@@ -202,7 +202,12 @@ reason after Unsaved and Discard in the save row. Reserve its height so the firs
 settings keep their full save actions on a second line at the right edge, so neither action is cut short.
 
 A quiet action at the start of a line uses `line_start`: align its text with the line above and extend
-its target into the gutter. This also applies to an icon-bearing quiet message action below its message.
+its target into the gutter. This also applies to an icon-bearing quiet message action below its message. In a
+wrapping row, the first action uses it, and a later one uses it only when it wraps to a line of its own. Lookup's
+`Show all N`, `N results`, `New NPC “<name>”`, `New location “<name>”` and `Generate NPC`, Arrivals' `Show all`, and
+World's type choices, `Make <type>`, picker actions (`Remove <group>`, `Clear value`, `Cancel`) and message choices
+(`Copy text`, `Cancel`) start at the text edge above them. UI text that names a thing uses curly quotation marks
+(`New NPC “Miller”`); file content, such as YAML and shell lines, keeps straight quotes.
 A pane that can hold such an action at its text edge keeps a gutter at least `L` wide, so the target never
 reaches a column splitter. The World page's centre has an `L` left gutter for this.
 Other message actions use a secondary border. Undo messages use `undo_message`: a quiet action and undo
@@ -573,12 +578,15 @@ it is a link that opens the NPC's card on World from any page.
 
 A World result is one message form in one place: `message` (or the shared Undo message) below the file line, where
 `<file> is now a separate note.` sits, so the title never moves. `Note repaired.` is a success message there, and
-`<name> draft discarded.` sits there below the open note's file line. In an edit form, which has no file line, a result
+`<name> draft discarded.` sits there below the open note's file line. The edit form's save result (`Changes saved.`
+with `Undo changes`, or `Your changes are already in the note.`) sits there too, and a later result on the same note
+replaces `Note repaired.`. An Undo message centres its words on its Undo target's line, so its words start 4 px lower
+than a message without an action. In an edit form, which has no file line, a result
 sits below the title. With no note open, it sits below the empty state's words.
 
 Set values show labelled rows: Stat block, In, Part of and Status. An NPC also shows its empty Stat block row. A full NPC reader's kind line shows NPC and its owner; Status stays in its own row. A compact reader keeps status on the kind line because it has no Status row. A compact reader has no file line either: while a duplicate-note repair message shows, its kind line drops the fault and names the open file instead (`NPC · Campaign · NPCs/Rook Ambry copy.md`). The result rows keep the fault. Use a fixed label column, aligned
 values and a 32 px pitch. Change uses one column at the widest visible value in the block plus an `L`
-gap, capped at the value measure. Values wrap within their column, with Change on the first line. Read mode hides empty relationship and status values. An NPC keeps its empty Stat block row and Change action, so assigning its first stat block still takes three interactions from the reader. This row says `not set`. Edit on the title line opens all fields, including empty ones. A typed page with no set values shows its prose directly, except for this NPC Stat block row. Missing links retain names and keep `Not found` on one line. The value column measures each value as it
+gap, capped at the value measure. Values wrap within their column, with Change on the first line. Read mode hides empty relationship and status values. An NPC keeps its empty Stat block row and Change action, so assigning its first stat block still takes three interactions from the reader. This row says `not set`. Edit on the title line opens all fields, including empty ones. A typed page with no set values shows its prose directly, except for this NPC Stat block row: with no row, the value block adds no gap, so the prose starts as far below the file line as a plain note's does. Missing links retain names and keep `Not found` on one line. The value column measures each value as it
 is drawn, including a missing group's icon and ` · Not found`. Empty or whitespace-only place, stat block and group values, and a Part of key with no value, are unset and give no warning. Broken links have a
 warning icon, list warning and count in the header. A Part of target that is not found is a broken link
 (`Group not found`); the header counts its note once, and the count's menu opens it. A place link that
@@ -597,7 +605,10 @@ Change pickers focus search. Place choices start at the value column beside In, 
 bordered `Always use this one` action on each row. Change and the choice actions share one column: the
 widest value or file link in the block plus an `L` gap. A saved choice changes only its key and has Undo,
 which checks the file before writing. Always use this one saves a path with Undo. Change messages name
-both values and follow Change when they fit, otherwise sit below the whole row block. Different file and
+both values and follow Change when they fit, otherwise sit below the whole row block. Only a Change message that
+names a row value sits there; every other World result sits below the file line. A place that matches more than one
+note is the link `⚠ <name> · N matches`: the warning icon is its own glyph in the warning colour before the link
+words, so the underline covers only the words, as in `status_link`. Its accessible name keeps the icon. Different file and
 stored names offer `Rename the note to <file name>`, with a guarded update and Undo. New NPCs show their
 future path below the name. A compact NPC reader puts Fights as and In on one read-only line; both open
 Lookup.
