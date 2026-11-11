@@ -761,12 +761,6 @@ impl Reader {
             Conflict::Overwrite => true,
             Conflict::None => false,
         };
-        if draft.reloaded.is_some()
-            && design::reloaded_draft(ui)
-            && let Some((_, previous)) = draft.reloaded.take()
-        {
-            draft.now = previous;
-        }
         let mut focused = false;
         // The Read order: Stat block, In, Part of, then Status.
         let npc = super::fights(&item.entry);
@@ -1057,6 +1051,18 @@ impl Reader {
             } else {
                 ui.add_space(Type::Small.line() + ui.spacing().item_spacing.y);
             }
+        }
+        // The reload result sits below the save row, where nothing the DM works on follows it:
+        // the first edit ends it without moving a field (round 25 results family).
+        if draft.reloaded.is_some() {
+            ui.scope(|ui| {
+                ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
+                if design::reloaded_draft(ui)
+                    && let Some((_, previous)) = draft.reloaded.take()
+                {
+                    draft.now = previous;
+                }
+            });
         }
         if cancel {
             self.error = None;

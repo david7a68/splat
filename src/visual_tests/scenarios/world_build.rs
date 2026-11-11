@@ -1208,6 +1208,17 @@ pub fn broken(d: &mut Driver<'_>) {
     d.wait_for_text("The watchkeeper is back.");
     d.click("Edit Repaired watchkeeper");
     d.replace_text_in("Status", "ready");
+    // The form's Status field, not a Status label elsewhere on screen.
+    let status_field = |d: &Driver<'_>| {
+        let fields: Vec<_> = d
+            .nodes()
+            .into_iter()
+            .filter(|node| node.name == "Status" && node.role == Role::TextInput)
+            .map(|node| node.rect)
+            .collect();
+        (fields.len() == 1).then(|| fields[0])
+    };
+    let status_before = status_field(d);
     let outside = format!("{fixed}\nAn outside line.\n");
     fs::write(&path, &outside).unwrap();
     d.click("Save changes");
@@ -1216,6 +1227,23 @@ pub fn broken(d: &mut Driver<'_>) {
     d.click("Reload and lose my draft");
     d.settle();
     d.expect("Undo reload");
+    // Round 25 results family: the edit form's reload result sits below its save row, so it does
+    // not move the fields; the first edit ends it without moving them back.
+    let (status, undo, save) = (
+        status_field(d),
+        d.place_of("Undo reload"),
+        d.place_of("Save changes"),
+    );
+    d.observe(
+        "iter-25-D-edit-reload-below",
+        status_before
+            .zip(status)
+            .is_some_and(|(before, after)| (before.top() - after.top()).abs() <= 0.5)
+            && undo
+                .zip(save)
+                .is_some_and(|(undo, save)| undo.top() >= save.bottom()),
+        format!("Status {status_before:?} → {status:?}; Undo reload {undo:?} below Save {save:?}"),
+    );
     let copy = d.root.join("campaigns/quiet-harbor/Notes/Broken.md");
     fs::write(&copy, &outside).unwrap();
     switch_campaign(d, QUIET_CAMPAIGN);

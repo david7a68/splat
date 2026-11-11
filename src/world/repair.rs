@@ -397,14 +397,13 @@ impl Repair {
         )
         .unwrap_or(false);
         if pressed {
-            match undo {
-                Some(UndoResult::Discard) => {
-                    self.draft = self.discarded.take().unwrap_or_default();
-                }
-                Some(UndoResult::Reload) => {
-                    self.draft = self.reloaded.take().unwrap_or_default();
-                }
-                None => {}
+            let back = match undo {
+                Some(UndoResult::Discard) => self.discarded.take(),
+                Some(UndoResult::Reload) => self.reloaded.take(),
+                None => None,
+            };
+            if let Some(back) = back {
+                self.draft = back;
             }
             self.failed = None;
         }
