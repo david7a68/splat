@@ -546,7 +546,7 @@ impl WorldPage {
             .show_inside(ui, |ui| {
                 self.held_row(ui);
                 if let Some(repair) = &mut self.repair {
-                    if repair.show(ui, campaign) {
+                    if repair.show(ui, campaign, self.run_open) {
                         self.view = View::Reader;
                         self.selected = repair.entry_id();
                         self.repaired = self.selected;
