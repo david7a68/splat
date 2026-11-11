@@ -725,8 +725,8 @@ and Lookup's link open its card again; Reroll on the card replaces it. Discard s
 asks about the NPC as it does for other drafts. The rail shows `Unsaved NPC` with the draft icon while the NPC is held;
 it is a link that opens the NPC's card on World from any page.
 
-Every World result with an Undo (a value, name, edit, identity or file change, and a discarded edit draft) belongs to
-the campaign that made it: Lookup keeps its reader across a campaign change, and the result shows, and its Undo acts,
+Every World result with an Undo (a value, name, edit, identity or file change, and a discarded edit draft) and every
+edit form with its `Undo reload` belong to the campaign that made them: Lookup keeps its reader across a campaign change, and the result shows, and its Undo acts,
 only in that campaign. A World result is one message form in one place: `message` (or the shared Undo message) below the file line, where
 `<file> is now a separate note.` sits, so the title never moves. `Note repaired.` is a success message there, and
 `<name> draft discarded.` sits there below the open note's file line. The edit form's save result (`Changes saved.`
@@ -782,7 +782,9 @@ words, so the underline covers only the words, as in `status_link`. Its accessib
 stored names offer two safe choices below the warning's words, `L` apart: `Rename the note to <file name>`, with a
 guarded update and `Undo name change`, then `Rename the file to <name>.md`, which keeps the name the DM typed. The file
 move never replaces a file, not even one that arrives during the move, and checks that the note still holds the text the
-reader came from; its result `The file is now
+reader came from (the file's own text, before links become reader links). Where the folder's file system offers no
+move that refuses an existing file, a hard link and the removal of the old name move it; where it offers neither, the
+choice says `Splat cannot rename files safely in this folder, so nothing was moved.`; its result `The file is now
 <name>.md.` has `Undo file rename`, which checks the same before it moves the file back, and only in the campaign that made the move. The file choice is left out
 while the note's edit form is open, or when the name cannot be a file name. New NPCs show their
 future path below the name. A compact NPC reader puts Fights as and In on one read-only line; both open

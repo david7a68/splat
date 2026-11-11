@@ -1423,11 +1423,51 @@ fn renamed_path(path: &str, name: &str) -> Option<String> {
     (to != path && crate::library::note_path_rule(&to).is_none()).then_some(to)
 }
 
+/// How a note file moves. `rename` never replaces a file; `link` makes a second name and fails
+/// when the target exists. Tests give other ones to stand in for a file system.
+struct Moves {
+    rename: fn(&Path, &Path) -> std::io::Result<()>,
+    link: fn(&Path, &Path) -> std::io::Result<()>,
+}
+
+const SYSTEM_MOVES: Moves = Moves {
+    #[cfg(target_os = "linux")]
+    rename: |source, target| crate::sessions::rename_no_replace(source, target),
+    #[cfg(not(target_os = "linux"))]
+    rename: |source, target| std::fs::rename(source, target),
+    link: |source, target| std::fs::hard_link(source, target),
+};
+
+/// The words when this folder's file system has no move that is safe for an existing file.
+const NO_SAFE_MOVE: &str = "Splat cannot rename files safely in this folder, so nothing was moved.";
+
+/// The file system does not offer this kind of move (not a fault of these files).
+fn move_unsupported(error: &std::io::Error) -> bool {
+    error.kind() == std::io::ErrorKind::Unsupported
+        || matches!(
+            error.raw_os_error(),
+            Some(libc::EINVAL | libc::ENOSYS | libc::EOPNOTSUPP)
+        )
+}
+
 /// Moves a note file within the campaign. It refuses when `from` no longer holds `expected` or
 /// a file is at `to`, so it never replaces or loses a file. The move itself never replaces a
 /// file either (`RENAME_NOREPLACE`), so a file that arrives at `to` after the check keeps its
-/// bytes. `before_move` runs between the checks and the move, for tests.
+/// bytes. Where the file system does not offer that move, a hard link (which also refuses an
+/// existing target) and then the removal of the old name move it; where it offers neither, it
+/// refuses and nothing moves. `before_move` runs between the checks and the move, for tests.
 fn move_note(
+    root: &Path,
+    from: &str,
+    to: &str,
+    expected: &str,
+    before_move: impl FnOnce(),
+) -> Result<(), String> {
+    move_note_with(&SYSTEM_MOVES, root, from, to, expected, before_move)
+}
+
+fn move_note_with(
+    moves: &Moves,
     root: &Path,
     from: &str,
     to: &str,
@@ -1444,17 +1484,28 @@ fn move_note(
         return Err(exists());
     }
     before_move();
-    #[cfg(target_os = "linux")]
-    let moved = crate::sessions::rename_no_replace(&source, &target);
-    #[cfg(not(target_os = "linux"))]
-    let moved = std::fs::rename(&source, &target);
-    moved.map_err(|error| {
+    let failed = |error: std::io::Error| {
         if error.kind() == std::io::ErrorKind::AlreadyExists {
             exists()
         } else {
             file_fault::FileFault::write(from, &error).message()
         }
-    })
+    };
+    match (moves.rename)(&source, &target) {
+        Ok(()) => Ok(()),
+        Err(error) if move_unsupported(&error) => match (moves.link)(&source, &target) {
+            Ok(()) => std::fs::remove_file(&source).map_err(|error| {
+                // Both names hold the same file; drop the new one, so nothing moved.
+                let _ = std::fs::remove_file(&target);
+                file_fault::FileFault::write(from, &error).message()
+            }),
+            Err(error) if move_unsupported(&error) || error.raw_os_error() == Some(libc::EPERM) => {
+                Err(NO_SAFE_MOVE.into())
+            }
+            Err(error) => Err(failed(error)),
+        },
+        Err(error) => Err(failed(error)),
+    }
 }
 
 /// World notes and Library entries share identity repair, but keep their own nouns.
@@ -1757,10 +1808,12 @@ impl Reader {
         let text = file_fault::read_note(&campaign.path, &item.entry.path)
             .ok()
             .filter(|text| {
+                // Raw source against raw source: the reader's body has its links converted, so
+                // the body compares by the hash of the file's own text, taken before that.
                 Entry::parse(&item.entry.path, text).is_ok_and(|disk| {
                     disk.name == item.entry.name
                         && *disk.fields == *item.entry.fields
-                        && disk.body == item.entry.body
+                        && item.source_body() == Some(crate::lookup::body_hash(&disk.body))
                 })
             });
         self.rename_seen = Some(RenameSeen {
@@ -1922,7 +1975,8 @@ impl Reader {
             .flatten()
             .map_or_else(|| item.entry.name.clone(), |reading| reading.title);
         let id = item.entry.id;
-        let edit = campaign.filter(|_| edit::editable(item, index) && !self.editing(id));
+        let edit =
+            campaign.filter(|campaign| edit::editable(item, index) && !self.editing(id, campaign));
         // Lookup has no file line. While the repair message names the fault, the kind line
         // names the open file in place of the fault.
         let kind_line = if self.compact
@@ -1991,7 +2045,7 @@ impl Reader {
             }
         });
         self.form_focused = false;
-        let editing = campaign.is_some() && self.editing(id);
+        let editing = campaign.is_some_and(|campaign| self.editing(id, campaign));
         if !editing && let Some(campaign) = campaign {
             self.refresh_group_fault(item, index.generation(), || {
                 note_path(&campaign.path, &item.entry.path)
@@ -2083,7 +2137,7 @@ impl Reader {
                     // note's name (FD5). An open edit form keeps its file, so the file keeps
                     // its name while one is open.
                     let file = renamed_path(&item.entry.path, &item.entry.name)
-                        .filter(|_| !self.editing(id));
+                        .filter(|_| !self.editing(id, campaign));
                     if file.is_some() {
                         self.see_rename_source(index, campaign, item);
                     }
@@ -3811,6 +3865,77 @@ mod tests {
             "review-2-race-source-bytes"
         );
         std::fs::remove_file(&to).unwrap();
+        // Review re-check 3: a file system that does not offer RENAME_NOREPLACE (EINVAL). A hard
+        // link and the removal of the old name move the note instead.
+        let einval = |_: &Path, _: &Path| Err(std::io::Error::from_raw_os_error(libc::EINVAL));
+        let link_moves = Moves {
+            rename: einval,
+            link: |source, target| std::fs::hard_link(source, target),
+        };
+        move_note_with(
+            &link_moves,
+            root,
+            "Notes/Broken.md",
+            "Notes/Rook.md",
+            text,
+            || {},
+        )
+        .expect("re-check-3-fallback");
+        assert!(!from.exists(), "re-check-3-fallback-moved");
+        assert_eq!(
+            std::fs::read_to_string(&to).unwrap(),
+            text,
+            "re-check-3-fallback-bytes"
+        );
+        move_note_with(
+            &link_moves,
+            root,
+            "Notes/Rook.md",
+            "Notes/Broken.md",
+            text,
+            || {},
+        )
+        .expect("re-check-3-fallback-back");
+        // The fallback never replaces a file that arrives during the move.
+        let raced = move_note_with(
+            &link_moves,
+            root,
+            "Notes/Broken.md",
+            "Notes/Rook.md",
+            text,
+            || std::fs::write(&to, "Arrived during the move.").unwrap(),
+        );
+        assert!(raced.is_err(), "re-check-3-fallback-race");
+        assert_eq!(
+            std::fs::read_to_string(&to).unwrap(),
+            "Arrived during the move."
+        );
+        assert_eq!(std::fs::read_to_string(&from).unwrap(), text);
+        std::fs::remove_file(&to).unwrap();
+        // Neither move is offered (hard links refused with EPERM, as on FAT): a plain refusal,
+        // and both names keep what they held.
+        let no_moves = Moves {
+            rename: einval,
+            link: |_, _| Err(std::io::Error::from_raw_os_error(libc::EPERM)),
+        };
+        assert_eq!(
+            move_note_with(
+                &no_moves,
+                root,
+                "Notes/Broken.md",
+                "Notes/Rook.md",
+                text,
+                || {}
+            ),
+            Err(NO_SAFE_MOVE.to_owned()),
+            "re-check-3-refused"
+        );
+        assert_eq!(
+            std::fs::read_to_string(&from).unwrap(),
+            text,
+            "re-check-3-source"
+        );
+        assert!(!to.exists(), "re-check-3-target");
         // The note changed on disk after the DM saw it.
         let refused = FileRename::apply(&campaign, "Notes/Broken.md", "Notes/Rook.md", "Old text");
         assert!(refused.is_err() && !to.exists(), "fd5-changed");

@@ -852,6 +852,21 @@ pub fn broken(d: &mut Driver<'_>) {
     // Round 24 FD5: the DM typed a new name in the repair. Beside `Rename the note to Broken`,
     // the second safe choice keeps that name and renames the file, with Undo.
     d.expect("Rename the note to Broken");
+    // Review re-check 2: the DM saves a link into the note. The reader's body has its links
+    // converted, and the rename compares the file's own text, so it still works after the DM's
+    // own Save (below), while an outside edit still blocks it.
+    d.click("Edit Repaired watchkeeper");
+    d.click("Text");
+    d.press_ctrl(Key::End);
+    d.type_text(" See [[Verori]].");
+    d.click("Save changes");
+    d.wait_for_text("Changes saved.");
+    let fixed = fs::read_to_string(&path).unwrap();
+    assert!(
+        fixed.contains("See [[Verori]]."),
+        "fixture: the note has a link"
+    );
+    d.expect("Rename the file to Repaired watchkeeper.md");
     let moved = root(d).join("Notes/Repaired watchkeeper.md");
     // Review repair 1: the file changes outside Splat while the choice shows. The change keeps
     // the file's length and time, so nothing reloads. The move compares with the text the
@@ -986,6 +1001,38 @@ pub fn broken(d: &mut Driver<'_>) {
         fs::read_to_string(&quiet_note).ok().as_deref() == Some(quiet_before.as_str())
             && fs::read_to_string(&path).ok().as_deref() == Some(fixed.as_str()),
         "Undo name change in Quiet Harbor restores its note; Emberfall's note stays",
+    );
+    // Review re-check 1: an edit draft belongs to its campaign. In Lookup, Emberfall's form
+    // reloads after an outside change, so its draft is clean and the switch is allowed. Quiet
+    // Harbor has a copy of the note (same id, same disk text). It never offers Emberfall's
+    // form or `Undo reload`, and keeps its bytes.
+    switch_campaign(d, CAMPAIGN);
+    d.settle();
+    look_up_again(d, "Repaired watchkeeper");
+    d.wait_for_text("The watchkeeper is back.");
+    d.click("Edit Repaired watchkeeper");
+    d.replace_text_in("Status", "ready");
+    let outside = format!("{fixed}\nAn outside line.\n");
+    fs::write(&path, &outside).unwrap();
+    d.click("Save changes");
+    d.expect("This note changed on disk. Your draft is safe until you choose.");
+    d.settle();
+    d.click("Reload and lose my draft");
+    d.settle();
+    d.expect("Undo reload");
+    let copy = d.root.join("campaigns/quiet-harbor/Notes/Broken.md");
+    fs::write(&copy, &outside).unwrap();
+    switch_campaign(d, QUIET_CAMPAIGN);
+    d.settle();
+    look_up_again(d, "Repaired watchkeeper");
+    d.wait_for_text("The watchkeeper is back.");
+    d.observe(
+        "re-check-1-D-draft-owner",
+        !d.has("Undo reload")
+            && !d.has("Save changes")
+            && d.has("Edit Repaired watchkeeper")
+            && fs::read_to_string(&copy).ok().as_deref() == Some(outside.as_str()),
+        "Quiet Harbor's copy offers neither Emberfall's form nor its Undo reload, and keeps its bytes",
     );
 }
 

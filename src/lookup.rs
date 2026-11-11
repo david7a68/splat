@@ -145,6 +145,9 @@ pub struct Item {
     /// The words of `lower`, and the different words of `lower_body`, for a search by words.
     name_words: Vec<String>,
     body_words: Vec<String>,
+    /// A world entry's body as its file has it, before links become reader links: a hash, so
+    /// a check can tell whether the file still holds the note on screen.
+    source_body: Option<u64>,
 }
 
 /// A line on one page that links to another page or names it. With no line, only the page
@@ -153,6 +156,14 @@ pub struct Item {
 pub struct Mention {
     pub source: usize,
     pub line: Option<usize>,
+}
+
+/// A hash of a note body's text, for comparing a file with the one the index read.
+pub(crate) fn body_hash(body: &str) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    body.hash(&mut hasher);
+    hasher.finish()
 }
 
 fn next_generation() -> u64 {
@@ -273,6 +284,12 @@ impl Item {
         matches!(self.source, Source::Note(_))
     }
 
+    /// The hash of this world entry's body as its file had it (`body_hash`), when the index
+    /// read it from a campaign.
+    pub(crate) fn source_body(&self) -> Option<u64> {
+        self.source_body
+    }
+
     pub fn is_world_note(&self) -> bool {
         self.source == Source::Note(Role::World)
     }
@@ -353,6 +370,7 @@ fn note_items(
         lines: Vec::new(),
         name_words: Vec::new(),
         body_words: Vec::new(),
+        source_body: None,
         entry,
     };
     // The reader already shows the name as the title.
@@ -480,6 +498,7 @@ impl ContentIndex {
                     },
                     name_words: Vec::new(),
                     body_words: Vec::new(),
+                    source_body: None,
                     entry: {
                         let mut entry = e.entry.clone();
                         if e.private
@@ -503,6 +522,7 @@ impl ContentIndex {
             let scan = world::scan(&campaign.path, &sessions);
             for item in &mut items {
                 if item.entry.kind == "world" {
+                    item.source_body = Some(body_hash(&item.entry.body));
                     item.entry.body = world::with_links(&item.entry.body, &scan.images);
                 }
             }

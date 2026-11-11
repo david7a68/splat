@@ -235,6 +235,10 @@ impl EditDraft {
         index: &ContentIndex,
         log_as: Option<&str>,
     ) -> Result<Saved, String> {
+        // A draft writes only into its own campaign's note.
+        if campaign.id != self.campaign {
+            return Err("This draft belongs to another campaign. Nothing was saved.".into());
+        }
         let disk = super::file_fault::read_note(&campaign.path, &self.path)?;
         if disk != self.baseline {
             let theirs = Fields::read(&self.path, &disk);
@@ -573,8 +577,12 @@ impl Reader {
         }
     }
 
-    pub(super) fn editing(&self, id: Uuid) -> bool {
-        self.edits.contains_key(&id)
+    /// A form is open for this campaign's note. A draft from another campaign with the same
+    /// note id (a copied note) is never selected: Lookup keeps its reader across a change.
+    pub(super) fn editing(&self, id: Uuid, campaign: &Campaign) -> bool {
+        self.edits
+            .get(&id)
+            .is_some_and(|draft| draft.campaign == campaign.id)
     }
 
     pub fn has_unsaved_edits(&self) -> bool {
@@ -706,6 +714,10 @@ impl Reader {
         let id = item.entry.id;
         // The draft leaves the map while the form draws, and goes back unless it closes.
         let mut draft = self.edits.remove(&id)?;
+        if draft.campaign != campaign.id {
+            self.edits.insert(id, draft);
+            return None;
+        }
         // A rename in Obsidian keeps the identity, so the draft follows the file.
         draft.path.clone_from(&item.entry.path);
         draft.name.clone_from(&item.entry.name);
