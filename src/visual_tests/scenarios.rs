@@ -2962,7 +2962,15 @@ pub mod encounter_build {
         d.expect(CHANGED_ON_DISK);
         d.observe(
             "iter-25-B-FE3",
-            !d.has_containing("Bridge Ambush.md changed on disk"),
+            {
+                let named: Vec<String> = d
+                    .nodes()
+                    .into_iter()
+                    .filter(|node| node.name.contains("changed on disk"))
+                    .map(|node| node.name)
+                    .collect();
+                !named.is_empty() && named.iter().all(|name| name == CHANGED_ON_DISK)
+            },
             "The disk-change warning names the encounter, not its file",
         );
         d.observe(
