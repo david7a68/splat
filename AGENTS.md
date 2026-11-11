@@ -18,8 +18,9 @@ Past reviews found the same kinds of fault again and again. Check your own chang
 - **The baseline hides faults.** `src/visual_tests/baseline.json` may hold only egui chrome counts, and a green
   gate means only "no worse than the baseline". Know the cause of every count you change: read both controls of
   each new overlap in the gate's `ergonomics.json`. An app control or text over a splitter or scroll bar is an
-  app fault whatever bucket it is filed in; fix the clearance. The gate does not compare the content of a menu
-  or popup with a splitter under it, so look at a new or wider menu in the 960 px capture yourself.
+  app fault whatever bucket it is filed in; fix the clearance. The gate compares a menu's or popup's content
+  with a splitter or scroll bar under it, but only at the sizes its state checks (`Sizes::Default` checks only
+  960 px), so look at a new or wider menu at the other sizes yourself.
 - **A proof must be able to fail.** Break the code once and see each new check go red; say so in the PR. Do the
   same for an existing check when you edit its setup. A check that also passes on the old code proves nothing.
   Watch for a filtered assertion that passes on an empty match, `expect_same` with no asserted change before
