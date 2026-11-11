@@ -1964,7 +1964,14 @@ pub fn undo_message_with_links(
         ui.horizontal_top(|ui| {
             let start = ui.cursor().min;
             ui.add_space(S + 1.0);
-            ui.label(Type::Body.rich(ui, icon).color(color));
+            // The sentence starts with a link, so its first line is a link's height. The icon
+            // centres on that line, as `message` centres it on its words.
+            let first_line = XL.max(Type::Body.line());
+            ui.allocate_ui_with_layout(
+                vec2(number_width(ui, icon, &Type::Body.font(ui)), first_line),
+                Layout::left_to_right(Align::Center),
+                |ui| ui.label(Type::Body.rich(ui, icon).color(color)),
+            );
             ui.add_space(-XS);
             let content = ui.vertical(|ui| linked_sentence(ui, names, suffix));
             let bar =

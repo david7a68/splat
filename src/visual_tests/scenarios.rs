@@ -1174,14 +1174,28 @@ pub mod library_author {
             "Overwrite puts the draft on disk in place of the other change",
         );
 
-        // Invalid note: the save is refused, the words stay, and the reason is on screen.
+        // Invalid note: Save would refuse it, so the state says Invalid with Save's reason and
+        // Save is blocked before any write; the words stay. (Round 23: a ready state means Save
+        // would accept the draft.)
         d.type_into_editor(THIRD_WORDS);
         d.replace_editor_text("no front matter at all");
-        d.click(SAVE);
+        let reason = crate::campaign_content::repair_problem(
+            "Rules/Ash Exposure.md",
+            "no front matter at all",
+        )
+        .0
+        .or_else(|| {
+            splat::content::Entry::parse("Rules/Ash Exposure.md", "no front matter at all").err()
+        })
+        .expect("the draft is refused");
         d.observe(
             "T8.3",
-            d.has_containing("Error: ") && draft_here(d, "no front matter at all"),
-            "An invalid note keeps the draft and states why",
+            d.is_disabled(SAVE)
+                && d.visible_text("Invalid")
+                && !d.visible_text("Unsaved")
+                && d.has_containing(&reason)
+                && draft_here(d, "no front matter at all"),
+            format!("An invalid note blocks Save, keeps the draft and states why: {reason}"),
         );
         d.click(DISCARD);
         d.observe(
@@ -1496,11 +1510,63 @@ pub mod reader_tables {
             "| Level | Proficiency Bonus | Features | Cantrips | Prepared Spells | 1st | 2nd | 3rd | 4th | 5th | 6th | 7th | 8th | 9th |\n\
              | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n\
              | 5 | +3 | Memorize Spell | 4 | 9 | 4 | 3 | 2 | 0 | 0 | 0 | 0 | 0 | Ninth-slot |\n\n\
-             The table leaves this note readable.\n",
+             The table leaves this note readable.\n\n\
+             Read the row for your class level. A slot is spent when you cast a spell of that \
+             level or higher, and every slot comes back when you finish a Long Rest, so plan the \
+             hardest fights of the day around the slots you still have.\n",
         );
         d.click("Save");
         d.click("Read");
         d.state("wide-table-in-library", Sizes::All);
+        // Round 23 AE1: at 1920 the table takes the pane past the prose measure and needs no
+        // sideways scroll; the prose after it keeps the measure.
+        // The pane's inner edge is the page's right edge, where `New entry` ends.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let seen = d.at_size(size, |d| {
+                let read = d.place_of("Read")?;
+                let edge = d.place_of("New entry")?.right();
+                let row = d.place_of("Memorize Spell")?;
+                let last = d.place_of("Ninth-slot")?;
+                // The prose keeps the measure: a paragraph that wraps fills it, and no more.
+                let prose = d.painted_rect_in(
+                    "Read the row for your class level.",
+                    egui::Rect::EVERYTHING,
+                )?;
+                // Where the table scrolls, its visible part is its scroll surface.
+                let surface = d.horizontal_scroll_regions().into_iter().find(|region| {
+                    region.top() <= row.center().y && region.bottom() >= row.center().y
+                });
+                Some((
+                    read.left(),
+                    edge,
+                    last.right(),
+                    prose.width(),
+                    surface,
+                    d.has_containing("More columns"),
+                ))
+            });
+            let measure = crate::design::READER_MEASURE;
+            let ok = seen.is_some_and(|(left, edge, last, prose, surface, hint)| {
+                prose <= measure + 0.5
+                    && prose >= measure - crate::design::XXL
+                    && match surface {
+                        // It scrolls: the surface ends at or before the pane's inner edge.
+                        // At 1920 the table must not scroll at all.
+                        Some(surface) => size != LARGE && hint && surface.right() <= edge + 0.5,
+                        // It fits: past the prose measure, inside the pane, with no scroll hint.
+                        None => {
+                            !hint && size == LARGE && last > left + measure && last <= edge + 0.5
+                        }
+                    }
+            });
+            d.observe(
+                "iter-23-L-AE1",
+                ok,
+                format!(
+                    "At {size:?} the prose wraps at the measure and the table stays inside the pane: reader left, pane edge, last cell right, prose width, scroll surface, hint = {seen:?}"
+                ),
+            );
+        }
         let table = d.place_of("Memorize Spell").expect("feature cell");
         d.scroll_at(table.center(), 1);
         d.observe(
@@ -1520,7 +1586,9 @@ pub mod reader_tables {
             d.visible_text("Ninth-slot"),
             "The table keeps its sideways position when resized to 1200x800",
         );
-        d.state("last-column-in-library", Sizes::All);
+        // At 1920 the whole table shows without a sideways scroll (round 23 AE1), so only the
+        // sizes where it scrolls have a last-column state.
+        d.state("last-column-in-library", Sizes::Standard);
         d.set_base(SMALL);
 
         go_encounters(d);
@@ -6688,7 +6756,29 @@ pub mod library_scope {
         let before = d.app_mut().active_campaign_name();
         d.open_combo_at(LIBRARY_PACKAGE_DROPDOWN);
         d.expect(USES);
-        d.state("scope-menu", Sizes::Default);
+        // Round 23 AC1: the menu is checked against the splitter beside its column at 960 and
+        // 1200, and every choice ends at the control's right edge, `S` before that splitter.
+        d.state("scope-menu", Sizes::Standard);
+        for size in [SMALL, DEFAULT] {
+            let (control, choices) = d.at_size(size, |d| {
+                (
+                    d.place_of(&format!("What the Library shows: {USES}")),
+                    [USES, EVERYTHING, MODULE, "Campaign entries"]
+                        .map(|name| d.place_of(name).map(|rect| (name, rect))),
+                )
+            });
+            d.observe(
+                "iter-23-L-AC1",
+                control.is_some_and(|control| {
+                    choices.iter().all(|choice| {
+                        choice.is_some_and(|(_, rect)| rect.right() <= control.right() + 0.5)
+                    })
+                }),
+                format!(
+                    "At {size:?} every scope choice {choices:?} ends inside the scope control {control:?}"
+                ),
+            );
+        }
         d.click(EVERYTHING);
         d.observe(
             "Library scope search",
@@ -6742,6 +6832,26 @@ pub mod library_scope {
             format!(
                 "The reader title is the same distance below Read for every owner (960, 1200, 1920): built-in {built_in:?}, campaign {campaign:?}, package About {about:?}"
             ),
+        );
+        // Round 23 FC5, FD9: the empty search names its scope, and quiet `Search Everything`
+        // keeps the words and shows the matches in Everything.
+        d.observe(
+            "iter-23-L-FC5-words",
+            d.field_text("Search the Library").as_deref() == Some("fireball")
+                && d.has(&format!(
+                    "No entries match in {MODULE}. Try fewer words, or search Everything."
+                ))
+                && d.in_view(crate::library::SEARCH_EVERYTHING),
+            "The empty search names the package scope and offers Search Everything",
+        );
+        d.click(crate::library::SEARCH_EVERYTHING);
+        d.expect("Fireball · Spell · Level 3");
+        d.observe(
+            "iter-23-L-FC5",
+            d.field_text("Search the Library").as_deref() == Some("fireball")
+                && d.has(&format!("What the Library shows: {EVERYTHING}"))
+                && !d.has_containing("No entries match"),
+            "Search Everything keeps the words, sets the scope to Everything and lists the matches",
         );
     }
 
@@ -14899,6 +15009,20 @@ pub mod remove_package_in_use {
                 "iter-6-C-FD3",
                 d.has_message_bar(first, crate::design::colors().result.warning),
                 "The linked missing-creatures warning keeps the shared warning bar and icon",
+            );
+            // Round 23 FF4: the warning icon centres on the first line, whose words are the
+            // links'. A link's press area is centred on its words.
+            let band = egui::Rect::from_min_max(
+                egui::pos2(first.left() - crate::design::XXL, first.top() - crate::design::S),
+                egui::pos2(first.left(), first.bottom() + crate::design::S),
+            );
+            let icon = d.painted_word_rect(crate::design::icons::WARN, band);
+            d.observe(
+                "iter-23-L-FF4",
+                icon.is_some_and(|icon| (icon.center().y - first.center().y).abs() <= 1.0),
+                format!(
+                    "The warning icon {icon:?} centres on the first line of the message, beside {first:?}"
+                ),
             );
         });
         d.click("Undo package removal");
