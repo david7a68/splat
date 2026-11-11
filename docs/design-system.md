@@ -221,8 +221,9 @@ reaches a column splitter. The World page's centre has an `L` left gutter for th
 Other message actions use a secondary border. Undo messages use `undo_message`: a quiet action and undo
 icon on the message line, or below when needed. An Undo never stands alone: its result is a short message
 that it follows (`Links now say <name>.` with `Undo link update`, `The first heading now says <name>.` with
-`Undo heading change`, `Encounters now use the copy's entries.` with `Undo source change`, and `<stat> is now
-<value>.` with `Undo stat change`). On reload, a result whose Undo would rewrite files checks
+`Undo heading change`, `Encounters now use the copy's entries.` with `Undo source change`, and `The stat
+block now says Hit Points 24.` with `Undo stat change`). One exception is still open: `Undo register campaign`
+in Campaign stands alone. On reload, a result whose Undo would rewrite files checks
 those files. If one no longer holds what the action wrote, the result and its Undo go away. A result that also
 offers another action stays, and its Undo is blocked with the reason. Discard recovery is an Undo message too: info icon, bar,
 `Body` text that names the draft, and quiet `Undo discard`, whose accessible name also names the draft. Inline creation uses a Label title, fields, a named Create
@@ -345,7 +346,8 @@ creatures store identity, CR, speed and ability scores there; printed source tex
 saving throw leaves an empty cell. Bad cells warn with their file line; valid values still lead in the reader
 and run panel. Rejected vitals keep their original text and warning in the vitals area. Unknown rows remain
 readable. Stat warnings name the field, bad value, line and repair. List rows and the file warning count
-include flagged stat cells. The editor warns when prose AC or HP disagrees with the table and offers `Use
+include flagged stat cells. The editor warns when prose AC or HP disagrees with the table, in the DM's words
+(`Hit Points line says 24, but the stat block says 22. The fight uses the stat block.`), and offers `Use
 <value>` with Undo.
 
 Converted spells and items show facts once, with no empty rows or machine lines. Spells use Casting Time,

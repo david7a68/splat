@@ -5537,7 +5537,7 @@ impl Library {
         }
         if self.source && !conflict {
             if editable && let Ok(entry) = &parsed {
-                for (key, value, message) in creature::vital_checks(entry) {
+                for (key, label, value, message) in creature::vital_checks(entry) {
                     if design::message_with_action(
                         ui,
                         Tone::Warning,
@@ -5550,7 +5550,7 @@ impl Library {
                                     note.path.clone(),
                                     self.draft.clone(),
                                     after.clone(),
-                                    format!("{key} is now {value}."),
+                                    format!("The stat block now says {label} {value}."),
                                 ));
                                 self.draft = after;
                             }

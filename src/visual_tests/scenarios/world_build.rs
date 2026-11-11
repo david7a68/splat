@@ -2497,7 +2497,6 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
     }
 }
 
-/// A rename on disk keeps an identity-based package link working.
 /// AD3: a result's Undo follows its message, drawn by `undo_message`, at each size. It has the
 /// undo icon, sits on the message line after the words, or starts the next line with its words
 /// at the message words and its icon in the message's icon column, and its press area is clear.
@@ -2552,6 +2551,7 @@ fn undo_follows_message(d: &mut Driver<'_>, id: &str, message: &str, undo: &str)
     }
 }
 
+/// A rename on disk keeps an identity-based package link working.
 pub fn package_rename(d: &mut Driver<'_>) {
     let package = d.root.join("modules/ashen-marches");
     let (entries, _) = splat::content::read_directory(&package).unwrap();
@@ -2677,11 +2677,19 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.click(EDIT_MARKDOWN);
     let draft = d.editor_text().unwrap();
     // AD3: a stat fix's result is a message, and its Undo follows it with its icon.
-    // The DM types a Hit Points line that disagrees with max_hp (22).
+    // The DM types a Hit Points line that disagrees with the stat block (22). The warning and
+    // the result use the DM's words, not the schema key.
     let typed = format!("{draft}\nHit Points 24 (4d8 + 4)\n");
     d.replace_text_in("Markdown editor", &typed);
     d.wait_for_text("Use 24");
-    assert!(!d.has_containing("max_hp is now"));
+    d.observe(
+        "iter-19-E-AD3-stat-words",
+        d.has(
+            "Hit Points line says 24, but the stat block says 22. The fight uses the stat block.",
+        ) && !d.has_containing("max_hp"),
+        "The stat warning names Hit Points and the stat block, not max_hp",
+    );
+    assert!(!d.has_containing("The stat block now says"));
     d.click("Use 24");
     d.wait_for_text("Undo stat change");
     let fixed = d.editor_text().unwrap();
@@ -2689,7 +2697,7 @@ pub fn package_rename(d: &mut Driver<'_>) {
     undo_follows_message(
         d,
         "iter-19-E-AD3-stat",
-        "max_hp is now 24.",
+        "The stat block now says Hit Points 24.",
         "Undo stat change",
     );
     d.state("stat-fix-undo-message", Sizes::All);
@@ -2698,7 +2706,7 @@ pub fn package_rename(d: &mut Driver<'_>) {
     let restored = d.editor_text().unwrap();
     d.observe(
         "iter-19-E-AD3-stat-undone",
-        !d.has_containing("max_hp is now") && restored == typed,
+        !d.has_containing("The stat block now says") && restored == typed,
         "Undo stat change gives back the draft before the fix, and its result goes away",
     );
     let renamed =
@@ -5025,6 +5033,20 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     d.state("campaign-after-copy-registration", Sizes::All);
     go_library(d);
     d.expect("Use the copy's entries");
+    // The campaign's notes before the change, to find the encounter files that it writes.
+    fn notes_in(folder: &std::path::Path, out: &mut Vec<(std::path::PathBuf, Vec<u8>)>) {
+        for item in fs::read_dir(folder).unwrap().flatten() {
+            let path = item.path();
+            if path.is_dir() {
+                notes_in(&path, out);
+            } else if path.extension().is_some_and(|ext| ext == "md") {
+                out.push((path.clone(), fs::read(&path).unwrap()));
+            }
+        }
+    }
+    let campaign_folder = d.app_mut().campaigns.active_campaign().unwrap().path;
+    let mut notes_before = Vec::new();
+    notes_in(&campaign_folder, &mut notes_before);
     d.click("Use the copy's entries");
     d.wait_for_text("Undo source change");
     // AD3: the result is a message, and its Undo follows it with its icon.
@@ -5035,6 +5057,49 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
         "Undo source change",
     );
     d.state("copy-entries-used", Sizes::All);
+    // AD3, a result with another action: an outside change to an encounter that the change wrote
+    // blocks Undo source change with its reason, inside its message. Restoring the bytes and
+    // reloading brings it back, so the later steps see the usual state.
+    {
+        let reload_library = |d: &mut Driver<'_>| {
+            d.click("Packages");
+            d.click("Reload from disk");
+            d.wait_for_text("Undo source change");
+        };
+        let (changed, written) = notes_before
+            .iter()
+            .find_map(|(path, before)| {
+                let now = fs::read(path).unwrap();
+                (now != *before).then(|| (path.clone(), now))
+            })
+            .expect("Use the copy's entries wrote an encounter file");
+        assert!(
+            !d.is_disabled("Undo source change"),
+            "fixture: Undo source change starts available"
+        );
+        let mut outside = written.clone();
+        outside.extend_from_slice(b"\nAn outside note.\n");
+        fs::write(&changed, &outside).unwrap();
+        reload_library(d);
+        let blocked = d.is_disabled("Undo source change");
+        let reason = d.tooltip_contains("Undo source change", crate::content_workspace::UNDO_ENDED);
+        let kept = d.has("Encounters now use the copy's entries.");
+        d.observe(
+            "iter-19-E-AD3-source-blocked",
+            blocked && reason && kept && fs::read(&changed).unwrap() == outside,
+            format!(
+                "After an outside change to {}, Undo source change is blocked ({blocked}) and says why ({reason}); its message stays ({kept}); the file keeps the outside bytes",
+                changed.display()
+            ),
+        );
+        fs::write(&changed, &written).unwrap();
+        reload_library(d);
+        d.observe(
+            "iter-19-E-AD3-source-back",
+            !d.is_disabled("Undo source change"),
+            "With the written bytes back, a reload makes Undo source change available again",
+        );
+    }
     go_encounters(d);
     if d.has("Back to encounters") {
         d.click("Back to encounters");

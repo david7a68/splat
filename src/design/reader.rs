@@ -91,8 +91,8 @@ fn detail_row(ui: &mut Ui, label: &str, value: impl FnOnce(&mut Ui)) {
         let own = first_baseline(&galley).unwrap_or(0.0);
         // The move can be up as well as down: a value's words can sit higher in their line than
         // the label's own words do.
-        let drop =
-            first_painted_baseline(ui, slot).map_or(0.0, |baseline| baseline - rect.top() - own);
+        let drop = first_painted_baseline(ui, slot, rect.top())
+            .map_or(0.0, |baseline| baseline - rect.top() - own);
         ui.painter().set(
             slot,
             egui::Shape::galley(rect.min + vec2(0.0, drop), galley, c.text),
@@ -109,19 +109,21 @@ fn first_baseline(galley: &egui::Galley) -> Option<f32> {
 }
 
 /// The baseline of the first words painted on this layer after `slot`. Only the shapes after the
-/// slot are read, so the cost follows the value, not the page.
-fn first_painted_baseline(ui: &Ui, slot: egui::layers::ShapeIdx) -> Option<f32> {
+/// slot are read, so the cost follows the value, not the page. Words whose top is more than one
+/// control height from the row's `top` are not the value's first line (for example a wrapped value
+/// that a scroll area has moved), so they give no baseline.
+fn first_painted_baseline(ui: &Ui, slot: egui::layers::ShapeIdx, top: f32) -> Option<f32> {
     ui.ctx().graphics(|layers| {
-        layers.get(ui.layer_id()).and_then(|list| {
+        let list = layers.get(ui.layer_id())?;
+        let (text_top, baseline) =
             list.all_entries()
                 .skip(slot.0 + 1)
                 .find_map(|clipped| match &clipped.shape {
-                    egui::Shape::Text(text) => {
-                        first_baseline(&text.galley).map(|baseline| text.pos.y + baseline)
-                    }
+                    egui::Shape::Text(text) => first_baseline(&text.galley)
+                        .map(|baseline| (text.pos.y, text.pos.y + baseline)),
                     _ => None,
-                })
-        })
+                })?;
+        ((text_top - top).abs() <= Density::Read.control()).then_some(baseline)
     })
 }
 
@@ -298,6 +300,28 @@ mod tests {
         assert!(
             (label - value).abs() <= 0.5,
             "the Skills label baseline {label} differs from Perception's {value}"
+        );
+    }
+
+    #[test]
+    fn words_far_below_the_row_do_not_pull_the_label_down() {
+        // A value whose first painted words start more than a control height below the row's
+        // top, as a scrolled or wrapped value can: the label stays on its own line.
+        let (label, value) = baselines(
+            |ui| {
+                linked_detail(ui, "Skills", |ui| {
+                    ui.vertical(|ui| {
+                        ui.add_space(Density::Read.control() * 3.0);
+                        ui.label(Type::Stat.rich(ui, "Perception +11"));
+                    });
+                });
+            },
+            "Skills",
+            "Perception",
+        );
+        assert!(
+            value - label > Density::Read.control() * 2.0,
+            "the Skills label {label} followed words {value} that are not on its line"
         );
     }
 
