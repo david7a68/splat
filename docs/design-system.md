@@ -683,7 +683,8 @@ Broken notes stay under Cannot be read. Each row's second line states the cause;
 warn before app close or a campaign switch. The unreadable count in the header opens the first broken
 note's repair, keeping other repair drafts. A note that the system will not read (not UTF-8 text, or no
 permission) cannot open in the source editor. Its pane keeps the title and a file line with only `Show file`: no
-editor link, because no editor can open the file either. It leads with an error that names
+editor link, because no editor can open the file either. When a change such as Part of finds an open note that can no
+longer be read, its error and the note's file line also offer no editor link until the file reads again. It leads with an error that names
 the file (`Splat cannot read Notes/Broken.md as text.`), then gives the recovery in plain words with Try again and
 Cancel at the message text. Technical details below holds the system's words. Its row's cause is short
 (`Text format cannot be read`). Try again reads the folder again: a fixed note opens in the reader, a note that is

@@ -563,6 +563,92 @@ pub fn broken(d: &mut Driver<'_>) {
         d.has("Show file") && d.has("Edit in Obsidian"),
         "A note read as text again offers Edit in Obsidian beside Show file",
     );
+    // FD6, Part of: an open typed note that Splat can no longer read as text. The outside edit
+    // keeps the file's length and time, so nothing reloads. Part of reads the file again first;
+    // its error offers no editor link, and neither does the file line. (The visual suite runs
+    // as root in its namespace, so a permission change cannot make a file unreadable here.)
+    {
+        flat_entry(
+            d,
+            "Factions/Lantern Guild.md",
+            "Lantern Guild",
+            "splat_type: faction",
+            "Keeps the lamps.\n",
+        );
+        flat_entry(
+            d,
+            "Factions/Ash Court.md",
+            "Ash Court",
+            "splat_type: faction",
+            "Judges the ash.\n",
+        );
+        flat_entry(
+            d,
+            "NPCs/Mira Vell.md",
+            "Mira Vell",
+            "splat_type: npc\nsplat_part_of: ['[[Lantern Guild]]']\nsplat_status: alive",
+            "Trims the wicks.\n",
+        );
+        reload(d);
+        d.click_containing("Mira Vell · ");
+        d.expect("Change Part of");
+        d.expect("Edit in Obsidian");
+        let npc = root(d).join("NPCs/Mira Vell.md");
+        let text = fs::read(&npc).unwrap();
+        let time = fs::metadata(&npc).unwrap().modified().unwrap();
+        // Same length, same time: the reader cannot tell that the bytes changed.
+        let outside = |bytes: &[u8]| {
+            fs::write(&npc, bytes).unwrap();
+            fs::File::options()
+                .write(true)
+                .open(&npc)
+                .unwrap()
+                .set_modified(time)
+                .unwrap();
+        };
+        let mut not_text = text.clone();
+        let wick = not_text.len() - 2;
+        not_text[wick] = 0xff;
+        outside(&not_text);
+        d.click("Change Part of");
+        d.type_into("Find a group", "Ash");
+        d.click("Ash Court");
+        let refused = "Splat cannot read NPCs/Mira Vell.md as text.";
+        d.observe(
+            "iter-19-D-FD6-part-of-unread",
+            d.has_containing(refused) && !d.has("Edit in Obsidian") && d.has("Show file"),
+            "A Part of change that cannot read the note says so and offers no editor link",
+        );
+        // Must stay true: once the file is text again, the same change saves, its error goes,
+        // and the editor link comes back.
+        outside(&text);
+        d.click("Change Part of");
+        d.type_into("Find a group", "Ash");
+        d.click("Ash Court");
+        d.observe(
+            "iter-19-D-FD6-part-of-recovers",
+            !d.has_containing(refused)
+                && d.has("Edit in Obsidian")
+                && fs::read_to_string(&npc).unwrap().contains("Ash Court"),
+            "With the file text again, the change saves and the editor link returns",
+        );
+        // Leave the page as the steps below expect it.
+        d.click("Undo group change");
+        for path in [
+            "NPCs/Mira Vell.md",
+            "Factions/Lantern Guild.md",
+            "Factions/Ash Court.md",
+        ] {
+            fs::remove_file(root(d).join(path)).unwrap();
+        }
+        // Folders this step made go too; a seed folder that still holds notes stays.
+        for folder in ["NPCs", "Factions"] {
+            let _ = fs::remove_dir(root(d).join(folder));
+        }
+        reload(d);
+        d.click_containing("Repaired watchkeeper");
+        d.expect("Edit Repaired watchkeeper");
+    }
 
     fs::write(&path, "---\nsplat_schema: 2\nsplat_id: [\n---\n").unwrap();
     reload(d);

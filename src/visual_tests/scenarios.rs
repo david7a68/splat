@@ -13232,13 +13232,13 @@ fn show_all_count(d: &Driver<'_>) -> Option<usize> {
     })
 }
 
-/// FT2: a quiet Lookup action that starts a line uses `line_start`. See `action_at_text_edge`.
 /// The painted words of Lookup's action that opens the closed result list.
 pub(super) fn lookup_results_words(d: &Driver<'_>) -> Option<String> {
     d.place_of("Show the results")
         .map(|place| d.painted_in(place).trim().to_owned())
 }
 
+/// FT2: a quiet Lookup action that starts a line uses `line_start`. See `action_at_text_edge`.
 fn lookup_action_at_text_edge(
     d: &mut Driver<'_>,
     id: &str,
