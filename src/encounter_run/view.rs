@@ -3675,16 +3675,10 @@ impl Run {
         // The members' faults come first in `problem`; the lines after them are the group's own
         // reason, such as no member that can join.
         let own: Vec<super::MemberFault> = group
-            .problem
-            .as_deref()
-            .map(|problem| {
-                problem
-                    .lines()
-                    .skip(warnings.iter().map(|fault| fault.lines().count()).sum())
-                    .map(|line| super::MemberFault::new(super::FaultKind::CannotJoin, line.into()))
-                    .collect()
-            })
-            .unwrap_or_default();
+            .own_problems()
+            .into_iter()
+            .map(|line| super::MemberFault::new(super::FaultKind::CannotJoin, line.into()))
+            .collect();
         if !warnings.is_empty() || !own.is_empty() {
             for fault in warnings.iter().chain(&own) {
                 if group_fault(ui, fault) {

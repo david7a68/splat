@@ -795,15 +795,10 @@ fn list_row(
             }
         }
     }
-    // A group with no member that can join says so after its member faults.
-    if let Some(none) = group
-        .problem
-        .as_deref()
-        .and_then(|problem| problem.lines().last())
-        .filter(|line| line.starts_with("No members can join"))
-    {
-        // A message, in the same form as the member faults above it.
-        design::message(ui, Tone::Warning, none);
+    // A group with no member that can join says so after its member faults, as a message in
+    // the same form as the faults above it.
+    for reason in group.own_problems() {
+        design::message(ui, Tone::Warning, reason);
     }
 }
 

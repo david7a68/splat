@@ -173,6 +173,21 @@ impl From<&str> for MemberFault {
 }
 
 impl RunGroup {
+    /// The group's own reasons it cannot join, such as `No members can join.`: the lines of
+    /// `problem` after the ones its member faults wrote. Every view draws the member faults with
+    /// their own tone, then these as warnings.
+    pub(crate) fn own_problems(&self) -> Vec<&str> {
+        let members = self
+            .warnings
+            .iter()
+            .map(|fault| fault.lines().count())
+            .sum();
+        self.problem
+            .as_deref()
+            .map(|problem| problem.lines().skip(members).collect())
+            .unwrap_or_default()
+    }
+
     /// The first member's bonus decides a shared roll, as it does for any initiative group.
     pub(crate) fn leader(&self) -> Option<Resolved> {
         let member = self.members.first()?;

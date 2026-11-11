@@ -4508,13 +4508,15 @@ impl Sessions {
                                 let response = ui.add(egui::Label::new(Type::Small.rich(ui, &summary).color(c.muted)).wrap());
                                 design::named(ui, &response, &summary.replace('\u{a0}', " "));
                             }
-                            if let Some(problem) = &group.problem { wrapped_words(ui, Type::Small, problem, c.result.warning); }
-                            // Name each member left out, its base and its line, beside Edit group.
-                            else {
-                                for warning in &group.warnings {
-                                    ui.add_space(design::XS);
-                                    design::small_message(ui, warning.tone(), warning);
-                                }
+                            // Name each member left out, its base and its line, beside Edit group, each
+                            // in its own fault's tone; then the group's own reason, as a warning.
+                            for warning in &group.warnings {
+                                ui.add_space(design::XS);
+                                design::small_message(ui, warning.tone(), warning);
+                            }
+                            for reason in group.own_problems() {
+                                ui.add_space(design::XS);
+                                design::small_message(ui, Tone::Warning, reason);
                             }
                         }, |ui| {
                             design::row_menu(ui, &group.name, |ui| {

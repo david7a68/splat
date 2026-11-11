@@ -11,14 +11,46 @@ pub(super) fn blocked_reason(ui: &mut egui::Ui, reason: Option<&str>) {
 
 pub(super) fn row_menu(ui: &mut egui::Ui, name: &str, add: impl FnOnce(&mut egui::Ui)) {
     let name = format!("More actions for {name}");
+    // The pane the menu opens from: the menu stays inside it, as its submenus do.
+    let inside = ui.clip_rect();
     let button = Action::quiet(icons::EXPAND)
         .density(Density::Read)
         .name(&name)
         .hint(&name)
         .show(ui);
-    egui::Popup::menu(&button)
-        .align(egui::RectAlign::BOTTOM_END)
+    let popup = egui::Popup::menu(&button);
+    // An open menu keeps its button in view: when the window shrinks, the pane scrolls the
+    // button back, so the menu never hangs from a button the DM cannot see.
+    if egui::Popup::is_id_open(ui.ctx(), popup.get_id()) && !inside.contains_rect(button.rect) {
+        ui.scroll_to_rect(button.rect, None);
+    }
+    let size = egui::AreaState::load(ui.ctx(), popup.get_id()).and_then(|state| state.size);
+    let aligns = menu_aligns(button.interact_rect, size, inside);
+    popup
+        .align(aligns[0])
+        .align_alternatives(&aligns[1..])
         .show(add);
+}
+
+/// Where a row menu may open: below or above its button, ending at the button's right edge, or
+/// starting at its left edge when only that keeps the menu `S` inside the pane. egui picks the
+/// first of these that fits the window, and the first one when none does, so the menu never
+/// opens beside its button, over a splitter or scroll bar.
+fn menu_aligns(
+    button: egui::Rect,
+    size: Option<egui::Vec2>,
+    inside: egui::Rect,
+) -> [egui::RectAlign; 2] {
+    use egui::RectAlign;
+    let start_only = size.is_some_and(|size| {
+        button.right() - size.x < inside.left() + design::S
+            && button.left() + size.x <= inside.right() - design::S
+    });
+    if start_only {
+        [RectAlign::BOTTOM_START, RectAlign::TOP_START]
+    } else {
+        [RectAlign::BOTTOM_END, RectAlign::TOP_END]
+    }
 }
 
 fn menu_icon(word: &str) -> Option<&'static str> {

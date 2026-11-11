@@ -387,10 +387,15 @@ fn note_starts_at_choice_words(d: &Driver<'_>, choice: &str, note: &str) -> Resu
 /// The tones of the bars beside each visible painted paragraph that holds `words`, in paint
 /// order: "error", "warning" or "none". Empty when no such paragraph is visible.
 pub(super) fn tones_beside(d: &Driver<'_>, words: &str) -> Vec<&'static str> {
+    tones_where(d, |text| text.contains(words))
+}
+
+/// The tones of the bars beside each visible painted paragraph whose text passes `wanted`.
+fn tones_where(d: &Driver<'_>, wanted: impl Fn(&str) -> bool) -> Vec<&'static str> {
     let mut paragraphs = Vec::new();
     d.each_painted_text(|text, clip| {
         let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
-        if text.galley.job.text.contains(words) && clip.intersects(rect) {
+        if wanted(&text.galley.job.text) && clip.intersects(rect) {
             paragraphs.push(rect);
         }
     });
@@ -410,8 +415,9 @@ pub(super) fn tones_beside(d: &Driver<'_>, words: &str) -> Vec<&'static str> {
         .collect()
 }
 
-/// A submenu and its choices keep `S` clear of every scroll bar and column splitter beside them,
-/// and stay in the window. Requires every choice. Returns the submenu's frame.
+/// A group's `Move to…` submenu and its parent menu stay in the window and never overlap a scroll
+/// bar or column splitter, and their choice targets keep `S` clear of every one beside them.
+/// Requires every choice of both menus. Returns the submenu's frame.
 fn submenu_clear_of_chrome(
     d: &Driver<'_>,
     choices: &[&str],
@@ -421,51 +427,67 @@ fn submenu_clear_of_chrome(
     let opener = d
         .place_of("Move to…")
         .ok_or("Move to… is not in view".to_owned())?;
+    let margin = egui::Frame::menu(&d.app_style()).total_margin();
     // A page can show the same words elsewhere: each choice is the one level with the opener's
     // row or below it, nearest to it.
-    let mut targets = Vec::new();
-    for choice in choices {
-        targets.push(
-            nodes
-                .iter()
-                .filter(|node| {
-                    node.name == *choice && node.in_view() && node.rect.top() >= opener.top() - 1.0
-                })
-                .min_by(|a, b| {
-                    (a.rect.top() - opener.top()).total_cmp(&(b.rect.top() - opener.top()))
-                })
-                .ok_or(format!("{choice} is not in view beside Move to…"))?
-                .rect,
-        );
-    }
-    let margin = egui::Frame::menu(&d.app_style()).total_margin();
-    let frame = targets
-        .iter()
-        .fold(egui::Rect::NOTHING, |all, rect| all.union(*rect))
-        + margin;
+    let targets_of = |names: &[&str]| -> Result<egui::Rect, String> {
+        let mut frame = egui::Rect::NOTHING;
+        for name in names {
+            frame = frame.union(
+                nodes
+                    .iter()
+                    .filter(|node| {
+                        node.name == *name
+                            && node.in_view()
+                            && node.rect.top() >= opener.top() - 1.0
+                    })
+                    .min_by(|a, b| {
+                        (a.rect.top() - opener.top()).total_cmp(&(b.rect.top() - opener.top()))
+                    })
+                    .ok_or(format!("{name} is not in view beside Move to…"))?
+                    .rect,
+            );
+        }
+        Ok(frame)
+    };
+    let submenu = targets_of(choices)?;
+    let menu = targets_of(&[
+        "Move to…",
+        "Make available to any encounter",
+        "Delete group…",
+    ])?;
     let window = d.window_size();
-    if frame.left() < 0.0 || frame.right() > window.0 {
-        return Err(format!("submenu {frame:?} leaves the window {window:?}"));
-    }
     let lanes = d.chrome_lanes();
-    let beside: Vec<_> = lanes
-        .iter()
-        .filter(|lane| lane.bottom() > frame.top() && lane.top() < frame.bottom())
-        .collect();
-    if beside_a_lane && beside.is_empty() {
-        return Err(format!(
-            "no scroll bar or splitter beside {frame:?}: {lanes:?}"
-        ));
-    }
-    for lane in beside {
-        let clear = (lane.left() - frame.right()).max(frame.left() - lane.right());
-        if clear < crate::design::S - 0.5 {
+    for (what, targets) in [("submenu", submenu), ("menu", menu)] {
+        let frame = targets + margin;
+        if frame.left() < 0.0
+            || frame.right() > window.0
+            || frame.top() < 0.0
+            || frame.bottom() > window.1
+        {
+            return Err(format!("{what} {frame:?} leaves the window {window:?}"));
+        }
+        let beside: Vec<_> = lanes
+            .iter()
+            .filter(|lane| lane.bottom() > frame.top() && lane.top() < frame.bottom())
+            .collect();
+        if beside_a_lane && beside.is_empty() {
             return Err(format!(
-                "submenu {frame:?} is {clear} from {lane:?}; lanes {lanes:?}"
+                "no scroll bar or splitter beside the {what} {frame:?}: {lanes:?}"
             ));
         }
+        for lane in beside {
+            let clear =
+                |rect: egui::Rect| (lane.left() - rect.right()).max(rect.left() - lane.right());
+            if clear(frame) < 0.0 || clear(targets) < crate::design::S - 0.5 {
+                return Err(format!(
+                    "{what} {frame:?} (choices {targets:?}) is {} from {lane:?}; lanes {lanes:?}",
+                    clear(targets)
+                ));
+            }
+        }
     }
-    Ok(frame)
+    Ok(submenu + margin)
 }
 
 /// A warning's file line starts at the message words: the path, whole, then `Edit in Obsidian`
@@ -11048,16 +11070,24 @@ pub mod encounter_owned_groups {
         assert!(!d.has("Any encounter"));
         // SD2/AD1: in each capture, the submenu is clear of the roster's scroll bar and the
         // splitter before Add participants.
-        d.state_prepared("move-encounter-group-menu", Sizes::All, |d| {
+        let clear = |d: &mut Driver<'_>| {
             let size = d.window_size();
             let clear = super::submenu_clear_of_chrome(d, &[RUN_ARENA, RUN], true)
                 .map(|frame| (frame, d.place_of("Move to…")));
             d.observe(
                 "iter-22-B-SD2",
                 clear.is_ok(),
-                format!("At {size:?}, the Move to… submenu and its opener: {clear:?}"),
+                format!("At {size:?}, the Move to… submenu and its menu: {clear:?}"),
             );
-        });
+        };
+        d.state_prepared("move-encounter-group-menu", Sizes::All, clear);
+        // Astra review of PR 231: shrunk from 1920 with both menus open, the menu and its
+        // submenu stay inside the editor, clear of its scroll bar and splitter.
+        d.state_prepared(
+            "move-encounter-group-menu-after-shrink",
+            Sizes::Small,
+            clear,
+        );
         d.click("Make available to any encounter");
         d.expect("Undo move");
         let notice = format!("{NEW_NAME} moves to any encounter when you save.");
@@ -12089,6 +12119,76 @@ pub mod session_plan_groups {
             "Repair opens the referring member's file without changing it",
         );
         d.state("missing-member-repair", Sizes::All);
+
+        // Astra review of PR 231: a plan group none of whose members can join keeps each member
+        // fault's own tone, then says so as a warning. In another group, a member named like
+        // that fault stays plain words.
+        let campaign = d.app_mut().campaigns.active_campaign().unwrap();
+        let wolf = splat::character::stable_id("visual:module:cinder_wolf");
+        for (name, member) in [
+            (
+                "Ash Remnant",
+                format!("  - creature: {{id: {wolf}}}\n    overrides: {{max_hp: {{add: -50}}}}\n"),
+            ),
+            (
+                "Mill Watch",
+                "  - creature: {key: 'dnd2024:creatures/goblin_warrior'}\n    overrides: {name: 'Maximum HP would become −28'}\n".to_owned(),
+            ),
+        ] {
+            let relative = format!("Encounter Groups/{name}.md");
+            let text = splat::content::formats::fixture(
+                &relative,
+                &format!(
+                    "splat_id: {}\nsplat_kind: encounter_group\nsplat_name: {name}\nsplat_encounter_group:\n  side: enemies\n  members:\n{member}",
+                    splat::character::stable_id(&format!("visual:group:{name}"))
+                ),
+                "",
+            )
+            .unwrap();
+            crate::library::write_note(&campaign.path, &relative, None, &text).unwrap();
+        }
+        go_encounters(d);
+        d.click("Reload from disk");
+        d.click(NAV_SESSIONS);
+        d.click_starting("Session 1: The Crossing ·");
+        show_plan(d);
+        for name in ["Ash Remnant", "Mill Watch"] {
+            d.click("Add a group");
+            d.click(&format!("Plan {name}"));
+        }
+        const FAULT: &str =
+            "Member 1, Cinder Wolf: Maximum HP would become −28. It must be 1 or more.";
+        d.expect(FAULT);
+        d.state_prepared("plan-group-no-member-can-join", Sizes::All, |d| {
+            show_plan(d);
+            // At 960 the plan scrolls to show both new groups.
+            if !d.in_view("Edit group Mill Watch") && !d.in_view_containing("Mill Watch to fight") {
+                d.scroll_until(pos2(650.0, 500.0), "Mill Watch", 10);
+                d.scroll_at(pos2(650.0, 500.0), 1);
+            }
+            let size = d.window_size();
+            let tones = (
+                tones_where(d, |text| text == FAULT),
+                tones_where(d, |text| text.starts_with("No members can join")),
+                // The summary joins a member's words with no-break spaces.
+                tones_where(d, |text| {
+                    text.replace('\u{a0}', " ")
+                        .contains("Maximum HP would become −28")
+                        && !text.starts_with("Member 1")
+                }),
+            );
+            d.observe(
+                "iter-22-B-FT1-plan",
+                tones.0 == ["error"]
+                    && tones.1 == ["warning"]
+                    && !tones.2.is_empty()
+                    && tones.2.iter().all(|tone| *tone == "none"),
+                format!(
+                    "At {size:?}: invalid maximum HP {:?}, group reason {:?}, lookalike name {:?}",
+                    tones.0, tones.1, tones.2
+                ),
+            );
+        });
     }
 }
 
