@@ -10636,6 +10636,8 @@ pub mod encounter_owned_groups {
         open_saved_encounter(d, SHRINE);
         d.expect("GROUPS FOR THIS ENCOUNTER 1");
         d.expect("Adding to the roster");
+        // Add participants says where party members come from in the DM's words.
+        d.expect("Party members come from the sheets Splat saved last.");
         d.state_prepared("encounter-with-its-groups", Sizes::All, |d| {
             // FD3 family: a group's name in the encounter's frame starts at the frame's left edge,
             // where its notes start, at every width.
