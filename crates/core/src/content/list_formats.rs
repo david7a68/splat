@@ -269,7 +269,7 @@ pub fn unread_group_members(text: &str, flags: &[Flag]) -> Vec<UnreadGroupMember
         for row in table.rows {
             if let Some(flag) = flags.iter().find(|flag| {
                 row.first().is_some_and(|c| c.line == flag.line)
-                    && !flag.message.starts_with("Creature ")
+                    && flag.kind != FlagKind::CreatureNotFound
             }) {
                 let label = row.get(1).map_or("", |cell| cell.value.as_str());
                 unread.push(UnreadGroupMember {
@@ -1731,10 +1731,9 @@ pub fn write_references<'a>(
 
 /// Resolve Obsidian links after all files have been read; no bytes are written.
 pub fn resolve(entry: &mut Entry, entries: &[Entry], source: &str) {
-    entry.flags.retain(|flag| {
-        !(flag.message.starts_with("Creature ")
-            && flag.message.ends_with(" not found or ambiguous"))
-    });
+    entry
+        .flags
+        .retain(|flag| flag.kind != FlagKind::CreatureNotFound);
     fn visit(value: &mut Value, entries: &[Entry], kind: Option<&str>) {
         match value {
             Value::Mapping(m) => {
@@ -1800,7 +1799,8 @@ pub fn resolve(entry: &mut Entry, entries: &[Entry], source: &str) {
                     && formats::resolve_readable(raw, entries.iter()).is_err()
                     && !entry.flags.iter().any(|flag| flag.line == cell.line)
                 {
-                    entry.flags.push(Flag::new(
+                    entry.flags.push(Flag::of(
+                        FlagKind::CreatureNotFound,
                         cell.line,
                         format!("Creature {raw} not found or ambiguous"),
                     ));

@@ -738,7 +738,8 @@ loop says `Place loop` on its list row, the header count and its menu include it
 problem says `2 broken links` only when every target is missing; when one of them waits for a choice or is in
 a loop, it says `2 links need fixing`. Table faults use the
 same list warning and header repair link. Unread values name field, bad value, source line and repair, in
-the form `<Field> "<text on that line>" not read (line N). <How to write it>.` When the shape is not
+the form `Line N: <Field> "<text on that line>" was not read. <How to write it>.` Every reader, World and
+Library alike, starts each line warning with `Line N:`. When the shape is not
 obvious, the repair gives an example: Hit Points says `Start with a number, such as 22 (4d8 + 4).` Every unread-value warning
 sits in one place: below the file line, above the value rows. It wraps at the reader measure in Read and at
 `FORM_WIDTH` in Edit, so it keeps the right edge of the rows and fields. Every other World warning sits below the file
@@ -780,7 +781,7 @@ write does; the draft stays as it is until the DM chooses. Below the
 choices, one Small line for each field that differs says what Overwrite does to it, including the groups it
 adds, removes and keeps.
 If Part of could not be read, block its Change action with the unread-value message, for example
-`Part of "{link: '[[Lost Guild]]'}" not read (line 9). Write each group as a link, such as [[Arena Guild]].`
+`Line 9: Part of "{link: '[[Lost Guild]]'}" was not read. Write each group as a link, such as [[Arena Guild]].`
 A list written below its key names its first value that is not text, and that value's line.
 In Edit, a quiet `Edit in Obsidian` link follows the reason. Read shows the reason in the same warning
 tone below the file line, whose link is the one `Edit in Obsidian`; a reader with no file line puts the link
@@ -945,7 +946,9 @@ faults and their repair links may use the list's width (`LIST_MEASURE`), so a li
 Flagged members name their line, with a file line (path, Edit in Obsidian, Show file), Edit and a Remove member row menu
 aligned with other actions. Show Count once, in the action row; retain `Count not read` in a faulty stat summary. Put each repair link at the end of its own member fault, without repeating the link words in the sentence. Edit opens the normal change form with readable values, unread text, reason and
 example. Done keeps name and note; Remove has Undo. Groups, Arrivals and plan state how many can join and name
-each creature needing repair: shown name, base creature when different, and source line. In the plan, each
+each creature needing repair with its cause, in the roster row's form: `Scout (as Goblin Warrior) · line 15: the change
+"HP lots" was not read. Use a number, such as HP +5.` (shown name, base creature when different, source line, cause).
+In the plan, each
 such member is a warning `small_message` below the row's summary, with Edit group in the row's action column. Readable members can
 still join. While a fight is open, a group that some members can join keeps `Add to fight…` in its action column and
 puts `Edit group` in its row menu; a group none of whose members can join keeps `Edit group` there, because Arrivals

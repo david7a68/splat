@@ -3,7 +3,7 @@
 //! are ignored. All edits use the shared cell editor and check the complete model.
 use super::{
     Entry, Mapping, Value,
-    layout::{self, Document, Flag, Table},
+    layout::{self, Document, Flag, FlagKind, Table},
 };
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 
@@ -131,13 +131,12 @@ fn checked<T>(
                         .trim_end_matches('.')
                 ),
             };
-            flags.push(Flag::new(
-                line,
-                format!(
-                    "{name} {} not read (line {line}). {fix}",
-                    super::formats::quoted(&raw)
-                ),
-            ));
+            let field = match name {
+                "Hit Points" => layout::Field::HitPoints,
+                "Rarity" => layout::Field::Rarity,
+                _ => layout::Field::Other,
+            };
+            flags.push(Flag::unread(field, line, name, &raw, &fix));
             None
         }
     }
@@ -378,7 +377,9 @@ pub fn read_tables(kind: &str, source: &str, fields: &mut Mapping, flags: &mut V
         {
             item.insert("rarity".into(), raw.to_lowercase().replace(' ', "_").into());
             if let Some(row) = table.as_ref().and_then(|t| t.row("Rarity")) {
-                flags.retain(|f| f.line != row[0].line || !f.message.starts_with("Rarity "));
+                flags.retain(|f| {
+                    f.line != row[0].line || f.kind != FlagKind::Unread(layout::Field::Rarity)
+                });
             }
         }
         if let Some(spell) = parsed
@@ -791,7 +792,8 @@ fn creature(table: &Table, source: &str, fields: &mut Mapping, flags: &mut Vec<F
                 // CR 0 can award either 0 or 10 XP in the books.
                 && !(cr == "0" && printed == 0)
             {
-                flags.push(Flag::new(
+                flags.push(Flag::of(
+                    FlagKind::PrintedValueUsed,
                     line,
                     format!("CR {cr} is XP {xp}; XP {printed} is used"),
                 ));
@@ -799,7 +801,8 @@ fn creature(table: &Table, source: &str, fields: &mut Mapping, flags: &mut Vec<F
             if let Some(printed) = printed_pb(&raw)
                 && printed != pb
             {
-                flags.push(Flag::new(
+                flags.push(Flag::of(
+                    FlagKind::PrintedValueUsed,
                     line,
                     format!("CR {cr} is PB {pb:+}; PB {printed:+} is used"),
                 ));

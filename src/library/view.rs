@@ -238,11 +238,7 @@ fn show_inner(
             design::message(
                 ui,
                 crate::design::Tone::Warning,
-                &if flag.message.contains(" not read (line ") {
-                    flag.message.clone()
-                } else {
-                    format!("Line {}: {}", flag.line, flag.message)
-                },
+                &format!("Line {}: {}", flag.line, flag.message),
             );
         }
     }

@@ -9,16 +9,18 @@ use serde::{Deserialize, Serialize};
 use serde_yaml_ng::Value;
 use std::ops::Range;
 
+/// One fault in a note, at its source line. A screen shows it as `Line <line>: <message>`, so
+/// the message never names its line.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Flag {
     pub line: usize,
     pub message: String,
-    /// What the flag is about, so a screen can offer its repair without reading the words.
-    #[serde(default, skip_serializing_if = "FlagKind::is_plain")]
+    /// What the flag is about, so a screen can find or repair it without reading the words.
+    #[serde(default, skip_serializing_if = "FlagKind::is_unsaved")]
     pub kind: FlagKind,
 }
 
-/// What a flag is about, when a screen offers a repair for it.
+/// What a flag is about. Code that looks for a flag matches its kind, never its words.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FlagKind {
     #[default]
@@ -27,21 +29,58 @@ pub enum FlagKind {
     RuleChoice,
     /// A `Rule choices` row without a readable id. Reading the row by its rule name replaces it.
     RuleChoiceId,
+    /// A value that was not read, so the note uses no value for it.
+    // The kinds below are never saved: a run's saved entry copies keep their old JSON shape, and
+    // every one of them is set again when its note is read.
+    #[serde(skip)]
+    Unread(Field),
+    /// A roster or member link that names no single creature. Resolving links makes it again.
+    #[serde(skip)]
+    CreatureNotFound,
+    /// A printed XP or PB that is not the challenge's own. The printed value is used.
+    #[serde(skip)]
+    PrintedValueUsed,
+}
+
+/// The value of an [`FlagKind::Unread`] flag, where a screen looks for that one value.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Field {
+    Status,
+    PartOf,
+    HitPoints,
+    Rarity,
+    Other,
 }
 
 impl FlagKind {
-    fn is_plain(&self) -> bool {
-        *self == Self::Plain
+    fn is_unsaved(&self) -> bool {
+        !matches!(self, Self::RuleChoice | Self::RuleChoiceId)
     }
 }
 
 impl Flag {
     pub fn new(line: usize, message: String) -> Self {
+        Self::of(FlagKind::Plain, line, message)
+    }
+
+    pub fn of(kind: FlagKind, line: usize, message: String) -> Self {
         Self {
             line,
             message,
-            kind: FlagKind::Plain,
+            kind,
         }
+    }
+
+    /// `<value> “<text>” was not read. <help>`, the one form for a value the note cannot use.
+    pub fn unread(field: Field, line: usize, label: &str, text: &str, help: &str) -> Self {
+        Self::of(
+            FlagKind::Unread(field),
+            line,
+            format!(
+                "{label} {} was not read. {help}",
+                super::formats::quoted(text)
+            ),
+        )
     }
 }
 

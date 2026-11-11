@@ -6159,7 +6159,7 @@ fn unread_reason(groups: &str) -> String {
         .find_map(|line| line.strip_prefix("- {id:"))
         .expect("fixture: an object group");
     format!(
-        "Part of “{{id:{value}” not read (line 9). Write each group as a link, such as [[Arena Guild]]."
+        "Line 9: Part of “{{id:{value}” was not read. Write each group as a link, such as [[Arena Guild]]."
     )
 }
 
@@ -6330,12 +6330,14 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
     for size in [SMALL, DEFAULT, LARGE] {
         let (inside, detail) = d.at_size(size, |d| {
             d.expect(reason);
-            let warning = d.place_of(reason).unwrap();
+            // The painted words, not the label's rect: a wrapped row's rect also holds the
+            // space after its last word.
+            let warning = d.painted_right(reason).unwrap();
             let pane = d.place_of("Resize World notes column").unwrap().right();
             let measure = pane + design::S + design::READER_MEASURE;
             (
-                warning.right() <= measure + 1.0,
-                format!("warning ends at {}, measure at {measure}", warning.right()),
+                warning <= measure + 1.0,
+                format!("warning words end at {warning}, measure at {measure}"),
             )
         });
         d.observe(
