@@ -594,8 +594,8 @@ until the next note or plan edit.
 Readers show the relative path, Edit in Obsidian and Show file for every note that the system reads as text. Duplicate readers keep
 the path on this file line only; search results keep paths to distinguish names. A duplicate Lookup row
 puts the path right after the name, so the part that differs is cut last. Plain notes use
-one-line rows. A plain note's `Give this note a type` section says what the choice does for the DM: `Gives this note a
-type. Its text stays the same.` How Splat stores the type waits in Technical details at the end of the section. Help
+one-line rows. A plain note's `Give this note a type` section says what a type gives the DM, and does not repeat the heading:
+`A type adds the fields for that kind of note, such as an NPC's place and stat block. Its text stays the same.` How Splat stores the type waits in Technical details at the end of the section. Help
 text states the purpose in the DM's words; file formats and field names go to Technical details. Typed names that match show each filename on the second line. Copied typed notes remain
 visible with duplicate warnings. A duplicate NPC still has its existing name-only roster override; its
 warning does not imply changed stats. Encounter repair opens World for World notes. A note with no
@@ -620,6 +620,12 @@ with `Undo changes`, or `Your changes are already in the note.`) sits there too,
 replaces `Note repaired.`. An Undo message centres its words on its Undo target's line, so its words start 4 px lower
 than a message without an action. In an edit form, which has no file line, a result
 sits below the title. With no note open, it sits below the empty state's words.
+A finished change has the success tone, as Library's results have: `Changes saved.`, a value change beside its row
+(`In: … → …`, `Stat block: … → …`, Status, Part of), `Name changed to <name>.`, `Note repaired.` and
+`<file> is now a separate note.` (`world::CHANGED`). A result that wrote nothing keeps the info tone:
+`Your changes are already in the note.` and `<name> draft discarded.`. The unread `Part of` warning draws
+`Edit in Obsidian` with `message_with_actions`, so the link starts at the warning's words, in the edit form and in a
+reader with no file line.
 
 Set values show labelled rows: Stat block, In, Part of and Status. An NPC also shows its empty Stat block row. A full NPC reader's kind line shows NPC and its owner; Status stays in its own row. A compact reader keeps status on the kind line because it has no Status row. A compact reader has no file line either: while a duplicate-note repair message shows, its kind line drops the fault and names the open file instead (`NPC · Campaign · NPCs/Rook Ambry copy.md`). The result rows keep the fault. Use a fixed label column, aligned
 values and a 32 px pitch. Change uses one column at the widest visible value in the block plus an `L`
