@@ -1923,8 +1923,8 @@ impl Lookup {
             && !matches.is_empty()
             && !self.results_open
             && (self.current.is_some() || self.reading_written.is_some())
+            // Outside a message, a line-start action has no icon: its words start at the edge.
             && Action::quiet(&design::count(matches.len(), "result", "results"))
-                .icon(icons::DOWN)
                 .density(Density::Read)
                 .name("Show the results")
                 .line_start()
@@ -2118,9 +2118,9 @@ impl Lookup {
                         .enumerate()
                     {
                         let label = format!("{word} “{name}”");
-                        let action = Action::quiet(&label)
-                            .icon(icons::ADD)
-                            .density(Density::Read);
+                        // No plus: a line-start action outside a message has no icon, so its
+                        // words start at the result names. The second keeps the same form.
+                        let action = Action::quiet(&label).density(Density::Read);
                         // The second action starts a line only when it wraps.
                         if world::starts_line(ui, action, at == 0).show(ui).clicked() {
                             made = Some(world::create_entry(&campaign, &name, kind));
@@ -2131,7 +2131,6 @@ impl Lookup {
                     && self.current.is_none()
                     && self.generated.is_none()
                     && Action::quiet("Generate NPC")
-                        .icon(icons::DICE)
                         .density(Density::Read)
                         .line_start()
                         .show(ui)
@@ -2503,9 +2502,9 @@ pub(crate) fn generator_card(
                 if copied {
                     design::message(ui, Tone::Success, MARKER_COPIED);
                 } else {
-                    // A quiet action that starts a line keeps the card's text edge.
+                    // A quiet action that starts a line, outside a message, has no icon: its
+                    // words start at the card's text edge.
                     let response = Action::quiet(COPY_MARKER)
-                        .icon(icons::COPY)
                         .density(Density::Read)
                         .line_start()
                         .show(ui)

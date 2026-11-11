@@ -4204,8 +4204,9 @@ impl Encounters {
             .data_mut(|data| data.get_temp::<ReplacementUndo>(undo_key));
         if let Some(undo) = undo {
             if undo.after == draft.setup.roster {
+                // Outside a message, a line-start action has no icon: its words start at the
+                // slot rows' words.
                 if Action::quiet("Undo replacement")
-                    .icon(icons::UNDO)
                     .line_start()
                     .show(ui)
                     .clicked()
