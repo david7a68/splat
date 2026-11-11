@@ -326,11 +326,12 @@ fn content(
         });
     } else {
         // A creature the DM wrote has no source text to style. Its numbers still lead.
-        // The stat head is above the prose, so the gap after it stays.
+        // The stat head ends with its own gap, as a styled stat block does, so the reader
+        // adds no second gap after it: the first heading sits where a styled one does.
         let mut lead_gap = lead_gap;
         if let Some(entry) = entry.filter(|entry| reading.is_none() && creature::has_stats(entry)) {
             creature::stat_head(ui, entry, values);
-            lead_gap = true;
+            lead_gap = false;
         }
         reader::show(ui, entry, sections, builtin, reading.is_some(), lead_gap);
     }
@@ -484,6 +485,108 @@ mod tests {
                 _ => None,
             })
             .expect("the prose is painted")
+    }
+
+    /// The tops of a creature's opening stat block rule and of its first section heading, and
+    /// the bottom of the closing rule above that heading, through `show_with_related`.
+    fn stat_block_rules(entry: &Entry, heading: &str) -> (f32, f32, f32) {
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let output = ctx.run(Default::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                show_with_related(
+                    ui,
+                    &entry.name,
+                    Some(entry),
+                    &entry.body,
+                    &Origin {
+                        path: &entry.path,
+                        owner: "Campaign",
+                        builtin: false,
+                    },
+                    &NoLinks,
+                    false,
+                    |_| None,
+                );
+            });
+        });
+        let heading_top = output
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.job.text == heading => Some(text.pos.y),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("{heading} is painted"));
+        // A stat block opens and closes with a heavy rule: a 2 px bar in the rule colour.
+        let heavy: Vec<egui::Rect> = output
+            .shapes
+            .iter()
+            .filter_map(|shape| match &shape.shape {
+                egui::Shape::Rect(rect)
+                    if (rect.rect.height() - 2.0).abs() < 0.1
+                        && rect.fill == design::colors().rule =>
+                {
+                    Some(rect.rect)
+                }
+                _ => None,
+            })
+            .collect();
+        let opening = heavy
+            .first()
+            .expect("the stat block opens with a heavy rule");
+        let closing = heavy
+            .iter()
+            .filter(|rule| rule.bottom() <= heading_top)
+            .last()
+            .expect("a heavy rule closes the stat block above the heading");
+        assert!(closing.top() > opening.top(), "two heavy rules");
+        (opening.top(), closing.bottom(), heading_top)
+    }
+
+    /// FD5 (round 21): a converted creature (Slate Wolf) has no source text to style. Its
+    /// first heading starts as far below the stat block's closing rule as a styled creature's
+    /// does, also with a line warning. Must stay true: the stat block opens at the same height.
+    #[test]
+    fn iter21_e_fd5_converted_creature_heading_gap_matches_a_styled_creature() {
+        let styled = Entry::parse(
+            "Aboleth.md",
+            splat::content::definitions::source_file("definitions/creatures/aboleth.md").unwrap(),
+        )
+        .unwrap();
+        assert!(
+            creature::supports(&styled, &presentation::reading_sections(&styled.body, "")),
+            "fixture: the Aboleth reads as a styled stat block"
+        );
+        let old = "---\nsplat_schema: 1\nsplat_id: 00000000-0000-0000-0000-000000000009\nsplat_kind: creature\nsplat_name: Slate Wolf\nsplat_creature: {size: medium, type: beast, alignment: Unaligned, hit_points_text: '22 (4d8 + 4)', cr_text: '1 (XP 200; PB +2)'}\nsplat_stats: {max_hp: {value: 22}, armor_class: {value: 13}, initiative: {value: 2}, speed: {value: 40, unit: ft}, strength: {value: 12}, dexterity: {value: 15}}\n---\n\n# Slate Wolf\n\n## Actions\n\nBite. Melee Attack Roll: +4, reach 5 ft. Hit: 7 Piercing damage.\n";
+        let converted = splat::content::formats::convert("Creatures/Slate Wolf.md", old).unwrap();
+        let slate = Entry::parse("Creatures/Slate Wolf.md", &converted).unwrap();
+        assert!(
+            creature::has_stats(&slate)
+                && !creature::supports(&slate, &presentation::reading_sections(&slate.body, "")),
+            "fixture: Slate Wolf has a stat head and no source text to style"
+        );
+        let mut flagged = slate.clone();
+        flagged.flags = vec![splat::content::layout::Flag {
+            line: 19,
+            message: "Hit Points not read".into(),
+        }];
+        let (styled_open, styled_close, styled_heading) = stat_block_rules(&styled, "Traits");
+        let styled_gap = styled_heading - styled_close;
+        for (name, entry) in [("Slate Wolf", &slate), ("flagged Slate Wolf", &flagged)] {
+            let (open, close, heading) = stat_block_rules(entry, "Actions");
+            assert!(
+                (heading - close - styled_gap).abs() <= 0.5,
+                "iter21-E-FD5-gap: {name}'s Actions starts {} below the closing rule; a styled creature's Traits starts {styled_gap} below",
+                heading - close
+            );
+            if entry.flags.is_empty() {
+                assert_eq!(
+                    open, styled_open,
+                    "iter21-E-FD5-open: {name}'s stat block opens where a styled one does"
+                );
+            }
+        }
     }
 
     fn note(flags: Vec<splat::content::layout::Flag>) -> Entry {

@@ -1222,6 +1222,11 @@ impl Loaded {
                 };
                 let line = note.entry.as_ref().map_or_else(
                     || {
+                        // A file the system will not read names its short cause, as World's
+                        // row does. Its owner line in the reader keeps `Cannot be read`.
+                        if let Some(fault) = &note.fault {
+                            return fault.cause().to_owned();
+                        }
                         let (_, line) =
                             crate::campaign_content::repair_problem(&note.path, &note.text);
                         if note.error.as_deref().is_some_and(crate::formats_ui::is_old) {
@@ -1347,6 +1352,15 @@ impl view::Links for Loaded {
             .map(|(index, note)| (index, note.name().to_owned()))
             .collect()
     }
+}
+
+/// The result after a copied package is registered: two sentences, the second says whether the
+/// open campaign uses it.
+fn package_registered(name: &str, used: bool) -> String {
+    format!(
+        "{name} is registered. This campaign {} it.",
+        if used { "uses" } else { "does not use" }
+    )
 }
 
 const ENTRY_ROW_HEIGHT: f32 = 44.0;
@@ -3203,15 +3217,7 @@ impl Library {
             }
         }
         let (undo_copy, use_copy) = if let Some(copy) = &self.package_copy {
-            let words = format!(
-                "{} is registered · {}",
-                copy.module.name,
-                if self.copy_campaign_before.is_some() {
-                    "Used here"
-                } else {
-                    "Not used here"
-                }
-            );
+            let words = package_registered(&copy.module.name, self.copy_campaign_before.is_some());
             // The Undo sits on the message line, as every Undo after a message does. After an
             // outside change it stays there, blocked, and says why.
             let undo = design::locked(
@@ -8945,6 +8951,15 @@ mod tests {
             ..Default::default()
         };
         library.register_copy(&mut app.campaigns).unwrap();
+        // FD6: the result is two sentences, and says that this campaign uses the copy.
+        assert_eq!(
+            package_registered(
+                &library.package_copy.as_ref().unwrap().module.name,
+                library.copy_campaign_before.is_some()
+            ),
+            "Reaches is registered. This campaign uses it.",
+            "iter21-E-FD6-uses"
+        );
         library.forget_changed_undos();
         assert!(!library.registration_changed);
         let manifest = copied.join("Module.md");
@@ -9388,6 +9403,17 @@ mod tests {
                 "SD1-plain-cause: {path}"
             );
             assert!(bad.text.is_empty() && bad.entry.is_none());
+            // FD2 (round 21): the row's second line names the short cause, as World's row does.
+            let at = loaded
+                .notes
+                .iter()
+                .position(|n| std::ptr::eq(n, bad))
+                .unwrap();
+            assert!(
+                loaded.subtitles()[at].starts_with("Text format cannot be read"),
+                "iter21-E-FD2-row: {path}: {}",
+                loaded.subtitles()[at]
+            );
             // The list's problem text is the plain cause, never the system's words.
             assert!(
                 !loaded
@@ -9401,6 +9427,17 @@ mod tests {
         for (owner, path) in [(module.id, "Yaml.md"), (campaign.id, "Notes/Yaml.md")] {
             let broken = note(owner, path);
             assert!(broken.fault.is_none(), "a YAML fault is not a read fault");
+            // Must stay true: a YAML fault's row still names its line.
+            let at = loaded
+                .notes
+                .iter()
+                .position(|n| std::ptr::eq(n, broken))
+                .unwrap();
+            assert!(
+                loaded.subtitles()[at].starts_with("Line "),
+                "iter21-E-FD2-yaml-line: {path}: {}",
+                loaded.subtitles()[at]
+            );
             assert_eq!(broken.text, yaml, "a YAML fault keeps its text for repair");
             assert!(
                 broken

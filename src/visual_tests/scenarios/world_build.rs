@@ -4894,6 +4894,13 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     d.expect("This campaign keeps the original. The copy is registered but not used.");
     d.click("Register Ashen Reaches");
     d.wait_for_text("Undo package registration");
+    // Round 21 FD6: the result is two sentences, and says that this campaign does not use it.
+    d.observe(
+        "iter21-E-FD6",
+        d.visible_text("Ashen Reaches is registered. This campaign does not use it.")
+            && !d.has_containing("is registered ·"),
+        "The registration result is two sentences with no status phrase",
+    );
     search_library(d, "Cinder Wolf");
     d.expect("Ashen Marches");
     d.expect("Ashen Reaches");
@@ -6375,6 +6382,16 @@ fn file_fault_reader(d: &mut Driver<'_>, id: &str, headline: &str, campaign: boo
             && d.visible_text("Splat reads notes as UTF-8 text.")
             && d.has_containing("Cannot be read"),
         "The reader names the cause, the recovery, Show file and Technical details",
+    );
+    // Round 21 FD2: the Library row names the short cause, as World's row does. The owner line
+    // keeps `Cannot be read` (checked above).
+    d.observe(
+        &format!(
+            "iter21-E-FD2-{}",
+            if campaign { "campaign" } else { "package" }
+        ),
+        d.visible_text("Text format cannot be read"),
+        "The Library row names the short cause, Text format cannot be read",
     );
     d.observe(
         &format!("{id}-no-repair"),
