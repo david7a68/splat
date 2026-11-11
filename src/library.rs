@@ -10047,7 +10047,7 @@ mod tests {
         assert!(Entry::parse("Notes/Yaml.md", &moved_id).is_ok());
         library.draft = moved_id.clone();
         let painted = sd1_painted(&mut library);
-        let reason = "Keep this entry's UUID and kind unchanged.";
+        let reason = "Keep this entry’s UUID and kind unchanged.";
         assert!(painted.contains(reason), "ready-refused-reason\n{painted}");
         assert!(
             painted.contains("Invalid"),
