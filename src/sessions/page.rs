@@ -217,6 +217,9 @@ thread_local! {
     /// Tests: runs after a link update writes a note, to change the next one under it.
     static AFTER_LINK_WRITE: std::cell::RefCell<Option<LinkWriteHook>> =
         std::cell::RefCell::new(None);
+    /// Tests: runs right before Undo reads a note it wrote, to replace it under the read.
+    static BEFORE_UNDO_READ: std::cell::RefCell<Option<LinkWriteHook>> =
+        std::cell::RefCell::new(None);
     /// Tests: how many notes `note_bodies` read.
     static NOTE_READS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
@@ -2128,6 +2131,10 @@ impl Sessions {
     }
 
     fn update_event_link_notes(&mut self, changes: Vec<(Draft, String)>) {
+        // A new update ends the last one's result: its warning, its Undo and its hold.
+        self.link_problem = None;
+        self.updated_links = None;
+        self.link_partial = false;
         // Every target is checked before the first write: its draft, the open draft of the same
         // note (its owner here), and its file on disk. One blocked target writes nothing.
         let blocked = changes.iter().find(|(before, _)| {
@@ -2229,22 +2236,31 @@ impl Sessions {
         let mut remaining = Vec::new();
         let mut refused = Vec::new();
         for write in self.updated_links.take().unwrap_or_default() {
-            // Undo writes only into the file it wrote: the same bytes and the same session.
-            let now = fs::read_to_string(&write.before.path).ok();
-            let same_file = now.as_deref() == Some(write.bytes.as_str())
-                && now
-                    .as_deref()
-                    .and_then(|text| super::note_identity(&write.before.path, text))
-                    == write.id;
+            // Undo writes only into the file it wrote: the draft it saves through must hold the
+            // same bytes and the same session, and `save` checks the file against them again
+            // right before writing.
+            #[cfg(test)]
+            BEFORE_UNDO_READ.with(|hook| {
+                if let Some(hook) = hook.borrow_mut().as_mut() {
+                    hook(&write.before.path);
+                }
+            });
             let current = self
                 .draft
                 .as_ref()
                 .filter(|draft| draft.path == write.before.path)
                 .cloned()
                 .or_else(|| Draft::open(&write.before.path).ok());
-            match current
-                .filter(|draft| same_file && draft.body == write.after && !draft.needs_attention())
-            {
+            let same_file = |draft: &Draft| {
+                draft.file_text() == Some(write.bytes.as_str())
+                    && draft
+                        .file_text()
+                        .and_then(|text| super::note_identity(&draft.path, text))
+                        == write.id
+            };
+            match current.filter(|draft| {
+                same_file(draft) && draft.body == write.after && !draft.needs_attention()
+            }) {
                 Some(mut current) => {
                     current.body = write.before.body.clone();
                     current.edited();
@@ -7194,6 +7210,22 @@ mod tests {
         assert_eq!(fs::read_to_string(&note_a).unwrap(), replaced);
         let problem = sessions.link_problem.clone().unwrap_or_default();
         assert!(problem.contains(&a_name), "{problem}");
+        // (e) Re-check 3: A holds the written bytes again, and is replaced right before Undo
+        // reads it. Undo refuses the replacement and names A.
+        fs::write(&note_a, &a_written).unwrap();
+        sessions.link_problem = None;
+        let a_path = note_a.clone();
+        let swap = replaced.clone();
+        super::BEFORE_UNDO_READ.with(|hook| {
+            *hook.borrow_mut() = Some(Box::new(move |_: &std::path::Path| {
+                fs::write(&a_path, &swap).unwrap();
+            }));
+        });
+        sessions.undo_event_link_notes();
+        super::BEFORE_UNDO_READ.with(|hook| *hook.borrow_mut() = None);
+        assert_eq!(fs::read_to_string(&note_a).unwrap(), replaced);
+        let problem = sessions.link_problem.clone().unwrap_or_default();
+        assert!(problem.contains(&a_name), "{problem}");
         // (c) After A is written, B's folder takes no new file. B is not written, A's result
         // stays, and no temporary file is left in either folder.
         fs::write(&note_a, &original[0]).unwrap();
@@ -7217,9 +7249,25 @@ mod tests {
                 .contains("|Rest at the mill]]")
         );
         assert_eq!(sessions.updated_links.as_ref().map(Vec::len), Some(1));
-        // Undo of an unchanged A puts its bytes back and ends the result.
+        // Re-check 3: the retry writes B. The old "only A" warning ends, and Undo now puts back
+        // only B; A keeps its links.
+        let a_linked = fs::read(&note_a).unwrap();
+        sessions.update_event_link_notes(vec![open(&note_b)]);
+        assert!(
+            sessions.link_problem.is_none(),
+            "{:?}",
+            sessions.link_problem
+        );
+        assert!(
+            fs::read_to_string(&note_b)
+                .unwrap()
+                .contains("|Rest at the mill]]")
+        );
+        sessions.expire_event_link_undo(true, &book);
+        assert_eq!(sessions.updated_links.as_ref().map(Vec::len), Some(1));
         sessions.undo_event_link_notes();
-        assert_eq!(fs::read(&note_a).unwrap(), original[0]);
+        assert_eq!(fs::read(&note_b).unwrap(), original[1]);
+        assert_eq!(fs::read(&note_a).unwrap(), a_linked);
         assert!(sessions.updated_links.is_none() && sessions.link_problem.is_none());
     }
 
