@@ -274,8 +274,8 @@ and Timeline. Every closed long-rest row shows **Everyone at full** or **Not at 
 ruling's colour. Both pages let you turn the ruling off or on, with Undo, and the message says what the next
 fight starts with.
 Both pages name only saved, unfinished fights past Setup as keeping their saved HP.
-A saved Setup resumed after the rest starts at full. **Use the saved HP** puts back its saved HP and
-says **Party HP set to the saved values.**, with **Undo** to go back to full.
+A saved Setup resumed after the rest starts at full. That fill is not an Undo step: **Use the saved HP** puts
+back its saved HP and says **Party HP set to the saved values.**, with **Undo use saved HP** to go back to full.
 
 Library has **New entry** in its header. Its form opens in the reader column and closes after creation. World has **New ▾** for a plain note, a note with a type, an NPC, a location, or a generated NPC. Type headings use capitals and a count. World folder headings keep normal-case paths. Page headers show state or nonzero counts beside the title, with a rule and an `L` gap below. Counts use thousands separators.
 
@@ -998,7 +998,7 @@ from before this field loads with no steps. If Splat cannot read a file's steps,
 version wrote them, the run still opens. It says once that Undo starts again from there, the Log keeps that
 line, and the next save leaves the unread steps out. Two things are not in the file: after a restart, Undo of a
 save's damage restores the HP and does not arm the save again, and **Use the saved HP** is offered only in the
-session that made the long rest's step.
+session that filled the party's HP after the long rest.
 
 The same settings select how the campaign rolls NPC initiative: in groups of
 identical NPCs (the D&D default), individually, in one group per side, or in the

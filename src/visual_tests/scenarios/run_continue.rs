@@ -14,6 +14,8 @@ const SESSION: &str = "The Vault";
 const UNREAD: &str = "Splat could not read this run’s saved Undo steps";
 const DISMISS: &str = "Dismiss the Undo message";
 const LATER: &str = "A later fight or rest was played. Start a new run to play this one again.";
+/// The same reason for a fight whose encounter is deleted: only its cause.
+const LATER_GONE: &str = "A later fight or rest was played.";
 const NO_TIMELINE: &str = "Splat cannot read Timeline.md. Fix that on the Timeline page first.";
 const DISK_CHANGED: &str = "Timeline.md changed on disk. Settle that on the Timeline page first.";
 
@@ -165,6 +167,17 @@ pub fn run(d: &mut Driver<'_>) {
         "Ended · Round 2",
     );
     d.state("ended-undo-is-the-way-on", Sizes::All);
+    // iter-25-R, results family: `Loot copied.` shows beside the loot's buttons and moves
+    // neither of them.
+    let buttons = |d: &Driver<'_>| (d.place_of("Roll all 2"), d.place_of("Copy loot"));
+    let before = buttons(d);
+    d.click("Copy loot");
+    let after = buttons(d);
+    d.observe(
+        "iter-25-R-loot-copied",
+        d.visible_text("Loot copied.") && before.0.is_some() && before == after,
+        format!("Loot copied shows and the buttons stay: {before:?} then {after:?}"),
+    );
     // A long rest is ruled, and the app starts again. The ending now comes from the run file,
     // so its Undo goes by the rule, as Continue fight does: no Undo of the ending, and the
     // reason in its place. An Undo that reaches the run anyway leaves the fight ended.
@@ -251,6 +264,28 @@ pub fn run(d: &mut Driver<'_>) {
         &[CONTINUE, CLOSE_RUN],
         "Ended · Round 2",
     );
+    // iter-25-R SI1: Final state comes before loot, so every row of it is in view beside
+    // Lookup, at every size, after two loot rolls.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let rows = d.at_size(size, |d| {
+            let rows: Vec<_> = d
+                .nodes()
+                .into_iter()
+                .filter(|node| node.name.contains(", HP ") && node.name.contains(", AC "))
+                .collect();
+            let hidden: Vec<_> = rows
+                .iter()
+                .filter(|row| !row.fully_in_view())
+                .map(|row| row.name.clone())
+                .collect();
+            (rows.len(), hidden)
+        });
+        d.observe(
+            "iter-25-R-SI1",
+            rows.0 >= 6 && rows.1.is_empty(),
+            format!("At {size:?} every Final state row is in view above the loot: {rows:?}"),
+        );
+    }
     d.state("ended-with-loot-beside-lookup", Sizes::All);
     close_lookup(d);
     whole_at_every_size(
@@ -699,6 +734,17 @@ pub fn run(d: &mut Driver<'_>) {
         d.visible_passage(UNREAD) && d.in_view(NEXT_TURN) && d.in_view(DISMISS),
         "The run opens on its turn and says that its Undo steps could not be read",
     );
+    // iter-25-R AI3, FI2: the warning says the cause, so Undo's reason does not repeat it.
+    const UNREAD_REASON: &str = "Nothing to undo. Splat could not read the saved Undo steps.";
+    // At 1920, where the whole reason would fit, as the report saw it.
+    let short = d.at_size((1920.0, 1080.0), |d| {
+        d.visible_text("Nothing to undo") && !d.visible_text("could not read the saved Undo steps")
+    });
+    d.observe(
+        "iter-25-R-AI3-short",
+        short,
+        "While the warning shows, Undo's reason says only Nothing to undo",
+    );
     d.state("undo-steps-unread", Sizes::All);
     open_lookup(d);
     whole_at_every_size(
@@ -716,6 +762,13 @@ pub fn run(d: &mut Driver<'_>) {
         "Dismiss removes the message and leaves Lookup on its entry",
     );
     close_lookup(d);
+    // The header has room for the whole reason only when wide.
+    let whole = d.at_size((1920.0, 1080.0), |d| d.visible_text(UNREAD_REASON));
+    d.observe(
+        "iter-25-R-AI3-after-dismiss",
+        whole,
+        "After Dismiss, Undo's reason gives the cause, with a full stop",
+    );
     d.click(NEXT_TURN);
     d.restart();
     d.observe(
@@ -735,16 +788,21 @@ pub fn run(d: &mut Driver<'_>) {
     }
     d.click_starting("Open the run of Sunken Vault");
     d.expect("Read-only");
+    // iter-25-R FI1: the vault's encounter is deleted, so no new run can start from it. The
+    // reason gives only its cause.
     d.observe(
-        "T17.8",
-        !d.has(CONTINUE) && d.visible_passage(LATER),
-        "After a later fight, History offers no Continue fight and says why",
+        "iter-25-R-FI1",
+        d.visible_text("Encounter deleted")
+            && !d.has(CONTINUE)
+            && d.visible_passage(LATER_GONE)
+            && !d.visible_text("Start a new run"),
+        "After a later fight, History offers no Continue fight and says why, with no step a deleted encounter cannot take",
     );
     whole_at_every_size(
         d,
         "T17.6",
         "The History run that is not the last fight",
-        &[LATER],
+        &[LATER_GONE],
         "",
     );
     d.state("history-not-the-last-fight", Sizes::All);
@@ -753,7 +811,7 @@ pub fn run(d: &mut Driver<'_>) {
         d,
         "T17.6",
         "The History run that is not the last fight, beside Lookup",
-        &[LATER, "New encounter", "Reload from disk"],
+        &[LATER_GONE, "New encounter", "Reload from disk"],
         "",
     );
     d.state("history-not-the-last-fight-beside-lookup", Sizes::All);
