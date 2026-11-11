@@ -1748,8 +1748,62 @@ pub mod campaign_content {
             |d| d.visible_text(crate::encounters::draft_switch_reason()),
         );
         d.state("selection-changed", Sizes::All);
+        // Round 25 review: the page's results and errors sit in the message space below
+        // `Save selections`, so the package rows keep their y through a draft, its discard, Undo
+        // discard, a failed Save and a saved one.
+        let package_tops = |d: &mut Driver<'_>| {
+            [SMALL, DEFAULT, LARGE].map(|size| {
+                d.at_size(size, |d| {
+                    d.nodes()
+                        .into_iter()
+                        .find(|node| node.name.starts_with("D&D 2024"))
+                        .map(|node| node.rect.top())
+                })
+            })
+        };
+        let draft_tops = package_tops(d);
         d.click(DISCARD_SELECTION);
         d.goal("change and discard a selection");
+        let discarded_tops = package_tops(d);
+        let discarded = d.in_view("Undo discard of Campaign packages");
+        d.click("Undo discard of Campaign packages");
+        d.expect(CHANGED);
+        let undone_tops = package_tops(d);
+        let manifest = d.root.join("campaigns/emberfall/Campaign.md");
+        let on_disk = std::fs::read(&manifest).unwrap();
+        let set_read_only = |read_only: bool| {
+            let mut permissions = std::fs::metadata(&manifest).unwrap().permissions();
+            permissions.set_readonly(read_only);
+            std::fs::set_permissions(&manifest, permissions).unwrap();
+        };
+        set_read_only(true);
+        d.click(SAVE_SELECTIONS);
+        d.settle();
+        let failed_tops = package_tops(d);
+        let failed = std::fs::read(&manifest).unwrap() == on_disk && d.visible_text("read only");
+        set_read_only(false);
+        d.click(SAVE_SELECTIONS);
+        d.settle();
+        let saved_tops = package_tops(d);
+        let saved = d.visible_text("Campaign selections saved.");
+        d.observe(
+            "iter-25-C-page-results",
+            draft_tops.iter().all(Option::is_some)
+                && [discarded_tops, undone_tops, failed_tops, saved_tops] == [draft_tops; 4]
+                && discarded
+                && failed
+                && saved,
+            format!(
+                "Package row tops: draft {draft_tops:?}, discarded {discarded_tops:?}, undone {undone_tops:?}, failed Save {failed_tops:?}, saved {saved_tops:?}; results shown {discarded}, {failed}, {saved}"
+            ),
+        );
+        // Back to the fixture's choices, then a draft and its discard, as before.
+        d.click(&format!("Use {UNSELECTED_ENTRY}"));
+        d.click(SAVE_SELECTIONS);
+        d.settle();
+        d.click(&format!("Use {UNSELECTED_ENTRY}"));
+        d.expect(CHANGED);
+        d.click(DISCARD_SELECTION);
 
         d.click(TAB_ENTRIES);
         d.expect(CAMPAIGN_ENTRY);
@@ -1950,7 +2004,9 @@ pub mod campaign_content {
                 .into_iter()
                 .find(|node| node.name == crate::world::repair::editor_name("Notes/Broken.md"))
                 // A long draft scrolls inside the editor; its visible viewport must stay put.
-                .map(|node| node.shown.top())
+                // The page scrolls too, so the top is measured from the page's save row.
+                .zip(d.place_of(SAVE_SELECTIONS))
+                .map(|(node, save)| node.shown.top() - save.top())
         };
         const REPAIR_SIZES: [(f32, f32); 3] = [SMALL, DEFAULT, LARGE];
         let before = REPAIR_SIZES.map(|size| {
@@ -2194,7 +2250,19 @@ pub mod campaign_content {
             format!("Editor tops with a valid draft {valid_tops:?}"),
         );
         d.click("Discard");
+        // Round 25 review: Reload re-reads the repairs; the open one keeps its editor's place,
+        // and its discard result lives on with the repair.
+        d.click(RELOAD);
+        d.settle();
+        d.expect("Note text");
+        let reloaded_tops = editor_tops(d);
+        d.observe(
+            "iter-25-C-FD1-reload",
+            reloaded_tops == clean_tops && d.has(UNDO_DISCARD),
+            format!("Editor tops after Reload {reloaded_tops:?}, clean {clean_tops:?}"),
+        );
         two_changed_repairs_have_one_primary(d);
+        message_space_overflows_and_scrolls(d);
         std::fs::remove_file(d.root.join(BROKEN_NOTE)).unwrap();
         let manifest = d.root.join("campaigns/emberfall/Campaign.md");
         let before = std::fs::read_to_string(&manifest).unwrap();
@@ -2241,6 +2309,120 @@ pub mod campaign_content {
         d.click("Write a new Campaign.md");
         d.wait_for_text("Undo write Campaign.md");
         assert!(manifest.exists());
+    }
+
+    /// Round 25 review: a repair whose discard result and cause need more than the message
+    /// space's two lines. The part stays two lines high; its words scroll inside it by keyboard
+    /// and wheel; Tab reaches it by its whole message, and its focus ring stays clear of its
+    /// scroll bar. At 960, 1200 and 1920. Starts and ends with only Broken.md's repair.
+    fn message_space_overflows_and_scrolls(d: &mut Driver<'_>) {
+        const NAME: &str = "The ledger of the toll keeper at the old Ashford bridge and every name he wrote down.md";
+        let path = format!("Notes/{NAME}");
+        let file = d.root.join("campaigns/emberfall").join(&path);
+        let broken = "---\nsplat_schema: 2\nsplat_id: [\n---\n";
+        std::fs::write(&file, broken).unwrap();
+        d.click(RELOAD);
+        d.wait_for_text(NAME);
+        let message = format!("{path} cannot be read");
+        d.click_below(&message, REPAIR);
+        let editor = crate::world::repair::editor_name(&path);
+        d.replace_text_in(&editor, &format!("{broken}extra\n"));
+        d.click_below(&message, "Discard");
+        let words =
+            format!("{NAME} draft discarded. Line 3 opens a list with [ that never closes.");
+        let base = d.window_size();
+        // The part's own scroll bar lane, as `design::fixed_part` keeps it.
+        let lane = {
+            let style = d.app_style();
+            style.spacing.scroll.bar_width + style.spacing.scroll.bar_outer_margin
+        };
+        let mut results = Vec::new();
+        for size in [SMALL, DEFAULT, LARGE] {
+            d.set_base(size);
+            // Tab first: focus scrolls the page to the part. Then back to the part's start.
+            let focused = d.tab_to(&words);
+            for _ in 0..4 {
+                d.press(Key::ArrowUp);
+            }
+            // The part's texts, by their clip inside it: the result's top and the content's
+            // bottom, measured from the part's top.
+            let inside = |d: &Driver<'_>| {
+                let part = d.nodes().into_iter().find(|node| node.name == words)?.rect;
+                let (mut result, mut bottom) = (None, f32::MIN);
+                d.each_painted_text(|text, clip| {
+                    // The part's scroll area clips its texts to the part's lines (its clip is
+                    // wider than the part).
+                    if (clip.top() - part.top()).abs() <= 4.0
+                        && (clip.bottom() - part.bottom()).abs() <= 4.0
+                        && part.x_range().contains(text.pos.x)
+                    {
+                        let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                        bottom = bottom.max(rect.bottom() - part.top());
+                        if text.galley.job.text.contains("draft discarded.") {
+                            result = Some(rect.top() - part.top());
+                        }
+                    }
+                });
+                Some((part, result, bottom))
+            };
+            // Where the result's first line sits in the part: `Some(None)` once it has scrolled
+            // out of the part's view (a line out of view is not painted); `None` without a part.
+            let top = |d: &Driver<'_>| inside(d).map(|(_, top, _)| top);
+            let Some((part, Some(before), bottom)) = inside(d) else {
+                results.push((size, false, focused, None, None, None, None, None));
+                continue;
+            };
+            // The words need more than two lines: they end below the part's end.
+            let overflows = (part.height() - crate::design::message_space_height()).abs() < 1.0
+                && bottom > part.height() + 1.0;
+            let ring = d
+                .focus_rings()
+                .into_iter()
+                .find(|(ring, _)| part.expand(2.0).contains_rect(*ring))
+                .map(|(ring, _)| ring);
+            let ring_clear = ring.is_some_and(|ring| ring.right() <= part.right() - lane + 1.0);
+            d.press(Key::ArrowDown);
+            let keyboard = top(d);
+            for _ in 0..4 {
+                d.press(Key::ArrowUp);
+            }
+            d.press(Key::Escape);
+            let wheel_start = top(d);
+            d.scroll_at(part.center(), 1);
+            let wheel = top(d);
+            results.push((
+                size,
+                overflows,
+                focused,
+                ring.filter(|_| ring_clear),
+                Some(Some(before)),
+                keyboard,
+                wheel_start,
+                wheel,
+            ));
+        }
+        d.set_base(base);
+        // Moved up inside the part, or out of its view; the part itself is still there.
+        let moved = |from: Option<Option<f32>>, to: Option<Option<f32>>| match (from, to) {
+            (Some(Some(from)), Some(Some(to))) => to < from,
+            (Some(Some(_)), Some(None)) => true,
+            _ => false,
+        };
+        d.observe(
+            "iter-25-C-space-overflow",
+            results.iter().all(|(_, overflows, focused, ring, before, keyboard, start, wheel)| {
+                *overflows
+                    && *focused
+                    && ring.is_some()
+                    && moved(*before, *keyboard)
+                    && moved(*start, *wheel)
+            }),
+            format!("Per size (overflows, Tab, ring clear of the bar, result top before, after ArrowDown, before wheel, after wheel): {results:?}"),
+        );
+        std::fs::remove_file(&file).unwrap();
+        d.click(RELOAD);
+        d.settle();
+        assert!(!d.has_containing(NAME));
     }
 
     /// Every `Save repaired note` in view, top to bottom, and whether it is accent-filled.
@@ -2313,21 +2495,79 @@ pub mod campaign_content {
                 && upper_active[0].1,
             format!("Upper repair focused: saves {upper_active:?}"),
         );
-        // Two open repairs, each with its reserved message space, are taller than a small
-        // window, and the page does not scroll above the package list. The steps below run where
-        // both fit (a known limit, named in round 25's PR).
-        let base = d.window_size();
-        d.set_base(LARGE);
+        // Round 25 review: two open repairs are taller than 960x640, so the page scrolls. Tab
+        // reaches each Save and brings it into view; so does the wheel.
+        let b_message_top = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .find(|node| {
+                    node.name.contains("Notes/Cracked.md cannot be read")
+                        && node.role != egui::accesskit::Role::TextRun
+                })
+                .map(|node| node.rect)
+        };
+        let ring_in_view = |d: &Driver<'_>| {
+            let (width, height) = d.window_size();
+            let window = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width, height));
+            d.focus_rings()
+                .into_iter()
+                .any(|(ring, _)| window.contains_rect(ring))
+        };
+        d.press(Key::Escape);
+        let b_hidden = !d
+            .nodes()
+            .into_iter()
+            .filter(|node| node.name == "Save repaired note")
+            .all(|node| node.in_view());
+        let a_tab = d.tab_to("Save repaired note") && ring_in_view(d);
+        let b_tab = d.tab_to("Save repaired note") && ring_in_view(d);
+        let lower = d
+            .focus_rings()
+            .into_iter()
+            .any(|(ring, _)| b_message_top(d).is_some_and(|message| ring.top() > message.top()));
+        d.observe(
+            "iter-25-C-page-tab",
+            b_hidden && a_tab && b_tab && lower,
+            format!(
+                "B's Save hidden at first {b_hidden}; Tab to A's Save in view {a_tab}; Tab to B's Save in view {b_tab}, below B's message {lower}"
+            ),
+        );
+        d.press(Key::Escape);
+        let page = b_message_top(d).map(|rect| rect.center()).unwrap();
+        d.scroll_up_at(page, 20);
+        let a_wheel = d.nodes().into_iter().any(|node| {
+            node.name == "Save repaired note"
+                && node.in_view()
+                && b_message_top(d).is_some_and(|message| node.rect.top() < message.top())
+        });
+        d.scroll_at(page, 20);
+        let b_wheel = d.nodes().into_iter().any(|node| {
+            node.name == "Save repaired note"
+                && node.in_view()
+                && b_message_top(d).is_some_and(|message| node.rect.top() > message.top())
+        });
+        d.observe(
+            "iter-25-C-page-wheel",
+            a_wheel && b_wheel,
+            format!("The wheel brings A's Save into view {a_wheel}, then B's Save {b_wheel}"),
+        );
         // Round 25 FD1: A's discard result belongs to A. B's edit leaves it, and Undo discard
-        // brings back A's draft only; B's edit stays. Each draft's words are in its own editor.
+        // brings back A's draft only; B's edit stays.
         let b_name = crate::world::repair::editor_name("Notes/Cracked.md");
+        let draft = |d: &mut Driver<'_>, path: &str| {
+            d.app_mut()
+                .campaign_content
+                .repair_draft(path)
+                .map(str::to_owned)
+                .unwrap_or_default()
+        };
         d.click_below("Notes/Broken.md cannot be read", "Discard");
-        let a_discarded = !d.visible_text("First draft.") && d.visible_text("Second draft.");
+        let a_discarded = !draft(d, "Notes/Broken.md").contains("First draft.");
         // B's edit keeps its line count, so its editor shows the same lines.
         let b_draft = second.replacen("Second draft.", "Second draft. Kept B line.", 1);
         d.replace_text_in(&b_name, &b_draft);
-        let b_changed = d.visible_text("Kept B line.");
-        let a_result = d.in_view("Undo discard of Broken.md");
+        let b_changed = draft(d, "Notes/Cracked.md").contains("Kept B line.");
+        let a_result = d.has("Undo discard of Broken.md");
         if a_result {
             d.click("Undo discard of Broken.md");
         } else {
@@ -2338,8 +2578,9 @@ pub mod campaign_content {
                 &first,
             );
         }
-        let a_back = d.visible_text("First draft.") && !d.has("Undo discard of Broken.md");
-        let b_kept = d.visible_text("Kept B line.");
+        let a_back = draft(d, "Notes/Broken.md").contains("First draft.")
+            && !d.has("Undo discard of Broken.md");
+        let b_kept = draft(d, "Notes/Cracked.md").contains("Kept B line.");
         d.observe(
             "iter-25-C-FD1-owner",
             a_discarded && b_changed && a_result && a_back && b_kept,
@@ -2347,7 +2588,6 @@ pub mod campaign_content {
                 "A discarded {a_discarded}, B changed {b_changed}, A's Undo kept through B {a_result}, A back {a_back}, B kept {b_kept}"
             ),
         );
-        d.set_base(base);
         // An open run owns `Next turn`: no repair Save is primary, and both drafts stay.
         go_encounters(d);
         run_saved_encounter(d, SIBLING_ENTRY);
@@ -2419,9 +2659,6 @@ pub mod campaign_content {
             permissions.set_readonly(read_only);
             std::fs::set_permissions(file, permissions).unwrap();
         };
-        // B's steps run where both repairs fit (see above).
-        let base = d.window_size();
-        d.set_base(DEFAULT);
         set_read_only(&a_file, true);
         d.click_first("Save repaired note");
         d.settle();
@@ -2483,7 +2720,6 @@ pub mod campaign_content {
         d.click(RELOAD);
         d.settle();
         assert!(!d.visible_text("Notes/Cracked.md"));
-        d.set_base(base);
     }
 }
 
@@ -7907,6 +8143,48 @@ pub mod signed_in {
                 })
             },
         );
+        // Round 25 review: the sync panel's help keeps the reader measure at every size. A label
+        // out of view is not painted, so each is scrolled into view first.
+        let base = d.window_size();
+        for size in [SMALL, DEFAULT, LARGE] {
+            d.set_base(size);
+            let sheet_at = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name.contains("Combat sync"))
+                .map(|node| egui::pos2(node.rect.center().x, size.1 * 0.6))
+                .unwrap();
+            let widths = [
+                "are editable. Splat sends a change",
+                "Concentration, custom effects",
+            ]
+            .map(|words| {
+                d.scroll_up_at(sheet_at, 30);
+                d.scroll_until(sheet_at, words, 60);
+                let mut width = None;
+                d.each_painted_text(|text, _| {
+                    if text.galley.job.text.contains(words) {
+                        width = Some(text.galley.size().x);
+                    }
+                });
+                width
+            });
+            d.observe(
+                "iter-25-C-sync-help",
+                widths.iter().all(|width| {
+                    width.is_some_and(|width| width <= crate::design::READER_MEASURE + 0.5)
+                }),
+                format!("At {size:?}, the sync help widths are {widths:?}"),
+            );
+        }
+        d.set_base(base);
+        let sheet_at = d
+            .nodes()
+            .into_iter()
+            .find(|node| node.name.contains("Combat sync"))
+            .map(|node| node.rect.center())
+            .unwrap();
+        d.scroll_up_at(sheet_at, 30);
         d.state("party-sync-editable", Sizes::All);
         let shown = d.has("Increase Gold") && d.has("Increase Grit temporary HP");
         let result = wells.warm(d, shown, 1);

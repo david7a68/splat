@@ -119,8 +119,35 @@ struct Reconcile {
     error: Option<String>,
     message: Option<String>,
 }
+/// The error that says Campaign.md is missing, as `Campaigns` words it.
+const MISSING_CAMPAIGN: &str = "Campaign.md is missing";
+
+/// A new result on the Campaign page ends the earlier one and its Undo: the page keeps one
+/// latest result, in the message space below `Save selections`. A macro, so the fields clear
+/// while other fields of the page are borrowed.
+macro_rules! end_results {
+    ($page:expr) => {
+        let _ = $page.campaign_write.take();
+        let _ = $page.recovered.take();
+        let _ = $page.discarded_selections.take();
+        let _ = $page.message.take();
+        let _ = $page.manifest_write.take();
+        let _ = $page.removed_package.take();
+        let _ = $page.reconcile.message.take();
+    };
+}
+
+/// What the DM pressed in the page's result.
+enum ResultPress {
+    Undo,
+    Link(usize),
+}
+
 #[derive(Default)]
 pub struct CampaignContent {
+    /// Where each open repair's editor sits this frame. Focus scrolling leaves them to the
+    /// editor, which scrolls the page to its own viewport.
+    editor_rects: Vec<egui::Rect>,
     reconcile: Reconcile,
     active: Option<Campaign>,
     pending: Option<mpsc::Receiver<Loaded>>,
@@ -281,6 +308,15 @@ fn relocated_package(module: &Module, registered: &[Module]) -> Option<Module> {
     (found.len() == 1).then(|| found.into_values().next().unwrap())
 }
 
+/// The words after the encounter names when a removed package leaves them without creatures.
+fn removed_suffix(names: usize) -> &'static str {
+    if names == 1 {
+        "now has creatures Splat cannot find."
+    } else {
+        "now have creatures Splat cannot find."
+    }
+}
+
 /// A package row's count, in one form: `All chosen · 2,065 entries`, `None chosen · 6 entries`,
 /// `3 of 6 chosen`, `5 of 6 chosen · 1 needed`, `None chosen · 3 needed`. `chosen` counts only
 /// the DM's own choices, as the page header does; `needed` counts the entries that other choices
@@ -394,6 +430,14 @@ impl CampaignContent {
             Err(error) => self.error = Some(error),
         }
     }
+    /// A repair's draft, by its path, for checks of who owns a result.
+    #[cfg(test)]
+    pub fn repair_draft(&self, path: &str) -> Option<&str> {
+        self.repairs
+            .iter()
+            .find(|repair| repair.path == path)
+            .map(|repair| repair.draft.as_str())
+    }
     /// How often a frame checked a repair draft again.
     #[cfg(test)]
     pub fn repair_checks(&self) -> usize {
@@ -490,6 +534,7 @@ impl CampaignContent {
         }
         match checked.applied {
             Some(Ok(count)) => {
+                end_results!(self);
                 self.reconcile.message = Some(design::count(
                     count,
                     "change applied. The old note is archived beside its path.",
@@ -639,6 +684,13 @@ impl CampaignContent {
                 Ok((repairs, result)) => {
                     self.pending = None;
                     self.repairs = repairs;
+                    // A repair's discard result ends with its repair: Saved, fixed in World or
+                    // deleted. It lives through a reload that finds the repair again.
+                    if self.discarded_repair.as_ref().is_some_and(|(path, _)| {
+                        !self.repairs.iter().any(|repair| &repair.path == path)
+                    }) {
+                        self.discarded_repair = None;
+                    }
                     self.forget_discard_of_changed_file(result.as_ref().map(|s| &s.document));
                     match result {
                         Ok(snapshot) => {
@@ -663,57 +715,69 @@ impl CampaignContent {
         if self.dirty() {
             self.message = None;
         }
+        // Round 25 review: the page scrolls, as the other pages do, so every repair and its Save
+        // stay in reach at any window size. The page keeps the scroll bar's lane whether or not
+        // the bar shows, so nothing moves when it starts to scroll.
+        let page_height = ui.available_height();
+        let width = ui.available_width() - ui.spacing().scroll.allocated_width();
+        egui::ScrollArea::vertical()
+            .id_salt("campaign_packages_page")
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                ui.set_max_width(width);
+                self.editor_rects.clear();
+                self.page(ui, campaigns, &active, page_height);
+                self.scroll_to_focus(ui);
+            });
+    }
+
+    /// Keyboard and screen-reader focus bring the focused control into view. egui scrolls to a
+    /// focused text cursor, not to a focused button, so the page does it.
+    fn scroll_to_focus(&self, ui: &mut egui::Ui) {
+        let id = egui::Id::new("campaign_page_focus");
+        let focused = ui.memory(|memory| memory.focused());
+        let last = ui
+            .data(|data| data.get_temp::<Option<egui::Id>>(id))
+            .flatten();
+        if focused == last {
+            return;
+        }
+        ui.data_mut(|data| data.insert_temp(id, focused));
+        let page = ui.min_rect();
+        if let Some(rect) = focused
+            .and_then(|focused| ui.ctx().read_response(focused))
+            .map(|response| response.rect)
+            .filter(|rect| page.x_range().contains(rect.center().x))
+            .filter(|rect| page.y_range().contains(rect.center().y))
+            .filter(|rect| {
+                !self
+                    .editor_rects
+                    .iter()
+                    .any(|editor| editor.intersects(*rect))
+            })
+        {
+            ui.scroll_to_rect(rect, None);
+        }
+    }
+
+    /// The Packages page below the tabs, inside its scroll area.
+    fn page(
+        &mut self,
+        ui: &mut egui::Ui,
+        campaigns: &Campaigns,
+        active: &Campaign,
+        page_height: f32,
+    ) {
+        let top = ui.cursor().top();
+        let active = active.clone();
         if self.snapshot.is_some() {
             self.selection_bar(ui, campaigns, &active);
         }
         self.repair_section(ui, campaigns, &active);
-        if let Some(error) = &self.error {
-            // One cause, one message: a missing Campaign.md says what Splat can write
-            // and offers it on the same line.
-            let missing = error.contains("Campaign.md is missing");
-            if !missing {
-                design::message(ui, Tone::Error, error);
-            }
-            let (preview, action) = campaigns.campaign_write_preview(&active);
-            if missing && design::message_with_action(ui, Tone::Error, &preview, action) {
-                match campaigns.write_campaign_again(&active) {
-                    Ok(write) => {
-                        self.campaign_write = Some(write);
-                        self.refresh_pending = true;
-                    }
-                    Err(error) => self.error = Some(error),
-                }
-            }
-        }
-        if let Some(write) = &self.campaign_write
-            && design::undo_message(
-                ui,
-                Tone::Success,
-                "Campaign.md was written again.",
-                "Undo write Campaign.md",
-            )
-        {
-            match write.undo() {
-                Ok(_) => {
-                    self.campaign_write = None;
-                    self.refresh_pending = true;
-                }
-                Err(error) => self.error = Some(error),
-            }
-        }
-        if let Some(message) = &self.message {
-            design::message(ui, Tone::Success, message);
-        }
-        if let Some((module, previous)) = self.recovered.clone() {
-            let message = format!("{} found in {}/.", module.name, folder_words(&module.path));
-            if design::undo_message(ui, Tone::Success, &message, "Undo folder recovery") {
-                if let Some(previous) = previous {
-                    self.found_package = Some(previous);
-                } else {
-                    self.forget_package = Some(module.id);
-                }
-                self.recovered = None;
-            }
+        // With the selection save row, the page's results and errors sit in its message space.
+        // Without it (nothing loaded), nothing below them can move.
+        if self.snapshot.is_none() {
+            self.inline_messages(ui, campaigns, &active);
         }
         if !active.path.exists() {
             design::message(
@@ -737,19 +801,263 @@ impl CampaignContent {
         }
         self.reconcile_section(ui, campaigns, &active);
         if self.snapshot.is_some() {
-            self.packages(ui, campaigns, &active);
+            // The package list fills the rest of the window, and keeps room for a few rows when
+            // repairs above it are tall; then the page scrolls.
+            let rows = 4.0 * (Density::Glance.row() + design::XS) + design::XXL;
+            let height = (page_height - (ui.cursor().top() - top)).max(rows);
+            ui.allocate_ui_with_layout(
+                egui::vec2(ui.available_width(), height),
+                egui::Layout::top_down(egui::Align::Min),
+                |ui| {
+                    ui.set_min_height(height);
+                    self.packages(ui, campaigns, &active);
+                },
+            );
+        }
+    }
+
+    /// Results and errors when no selection save row is on the page.
+    fn inline_messages(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
+        let mut write = false;
+        self.draw_reason(ui, campaigns, active, &mut write);
+        if write {
+            self.write_campaign(campaigns, active);
+        }
+        let press = self.draw_result(ui, active, None);
+        self.press_result(press);
+    }
+
+    /// The page's errors, in one part: Save's or a load's error and the change check's error.
+    /// Their words, for the part's accessible name.
+    fn reason_words(&self, campaigns: &Campaigns, active: &Campaign) -> String {
+        let error = self.error.as_deref().map(|error| {
+            if error.contains(MISSING_CAMPAIGN) {
+                campaigns.campaign_write_preview(active).0
+            } else {
+                error.to_owned()
+            }
+        });
+        [error.as_deref(), self.reconcile.error.as_deref()]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
+    /// Draw the page's errors. `write` is set when the DM asks to write Campaign.md again.
+    fn draw_reason(
+        &self,
+        ui: &mut egui::Ui,
+        campaigns: &Campaigns,
+        active: &Campaign,
+        write: &mut bool,
+    ) {
+        if let Some(error) = &self.error {
+            // One cause, one message: a missing Campaign.md says what Splat can write
+            // and offers it on the same line.
+            if error.contains(MISSING_CAMPAIGN) {
+                let (preview, action) = campaigns.campaign_write_preview(active);
+                *write = design::message_with_action(ui, Tone::Error, &preview, action);
+            } else {
+                design::message(ui, Tone::Error, error);
+            }
+        }
+        if let Some(error) = &self.reconcile.error {
+            design::message(ui, Tone::Error, error);
+        }
+    }
+
+    /// The page's latest result: its words and whether its Undo is live. One action's result
+    /// ends the one before it (`end_results!`), so at most one is ever kept.
+    fn result_words(&self, active: &Campaign) -> Option<(String, bool)> {
+        if self.campaign_write.is_some() {
+            Some(("Campaign.md was written again.".into(), true))
+        } else if let Some((module, _)) = &self.recovered {
+            Some((
+                format!("{} found in {}/.", module.name, folder_words(&module.path)),
+                true,
+            ))
+        } else if self.discarded_selections.is_some() {
+            Some(("Campaign packages draft discarded.".into(), true))
+        } else if let Some(write) = &self.manifest_write {
+            Some((write.message(), true))
+        } else if let Some(removed) = self
+            .removed_package
+            .as_ref()
+            .filter(|removed| removed.campaign == active.id)
+        {
+            Some((
+                if removed.users.is_empty() {
+                    format!("{} removed from this campaign.", removed.name)
+                } else {
+                    let names: Vec<_> = removed
+                        .users
+                        .iter()
+                        .map(|(_, name)| name.as_str())
+                        .collect();
+                    format!("{} {}", names.join(", "), removed_suffix(names.len()))
+                },
+                true,
+            ))
+        } else if let Some(message) = &self.message {
+            Some((message.clone(), false))
+        } else {
+            self.reconcile
+                .message
+                .clone()
+                .map(|message| (message, false))
+        }
+    }
+
+    /// Draw the page's latest result. While a draft waits, a manifest write's Undo greys
+    /// (`locked`): the write happened, so its words keep the text colour.
+    fn draw_result(
+        &self,
+        ui: &mut egui::Ui,
+        active: &Campaign,
+        locked: Option<&str>,
+    ) -> Option<ResultPress> {
+        let undo = |pressed: bool| pressed.then_some(ResultPress::Undo);
+        if self.campaign_write.is_some() {
+            undo(design::undo_message(
+                ui,
+                Tone::Success,
+                "Campaign.md was written again.",
+                "Undo write Campaign.md",
+            ))
+        } else if let Some((module, _)) = &self.recovered {
+            let message = format!("{} found in {}/.", module.name, folder_words(&module.path));
+            undo(design::undo_message(
+                ui,
+                Tone::Success,
+                &message,
+                "Undo folder recovery",
+            ))
+        } else if self.discarded_selections.is_some() {
+            undo(design::draft_discarded(ui, "Campaign packages"))
+        } else if let Some(write) = &self.manifest_write {
+            undo(crate::library::kept_undo_message(
+                ui,
+                Tone::Success,
+                &write.message(),
+                &format!("Undo write {}", write.path()),
+                locked,
+                false,
+            ))
+        } else if let Some(removed) = self
+            .removed_package
+            .as_ref()
+            .filter(|removed| removed.campaign == active.id)
+        {
+            if removed.users.is_empty() {
+                undo(design::undo_message(
+                    ui,
+                    Tone::Success,
+                    &format!("{} removed from this campaign.", removed.name),
+                    "Undo package removal",
+                ))
+            } else {
+                let names: Vec<_> = removed
+                    .users
+                    .iter()
+                    .map(|(_, name)| name.as_str())
+                    .collect();
+                let (pressed, link) = design::undo_message_with_links(
+                    ui,
+                    Tone::Warning,
+                    &names,
+                    removed_suffix(names.len()),
+                    "Undo package removal",
+                );
+                link.map(ResultPress::Link).or(undo(pressed))
+            }
+        } else if let Some(message) = self.message.as_ref().or(self.reconcile.message.as_ref()) {
+            design::message(ui, Tone::Success, message);
+            None
+        } else {
+            None
+        }
+    }
+
+    /// Act on a press in the page's result.
+    fn press_result(&mut self, press: Option<ResultPress>) {
+        match press {
+            Some(ResultPress::Link(at)) => {
+                if let Some(removed) = &self.removed_package {
+                    self.open_lookup = Some(removed.users[at].0);
+                }
+            }
+            Some(ResultPress::Undo) => self.undo_result(),
+            None => {}
+        }
+    }
+
+    /// Undo the page's latest result.
+    fn undo_result(&mut self) {
+        if let Some(write) = self.campaign_write.take() {
+            match write.undo() {
+                Ok(_) => self.refresh_pending = true,
+                Err(error) => self.error = Some(error),
+            }
+        } else if let Some((module, previous)) = self.recovered.take() {
+            if let Some(previous) = previous {
+                self.found_package = Some(previous);
+            } else {
+                self.forget_package = Some(module.id);
+            }
+        } else if let Some((selections, _)) = self.discarded_selections.take() {
+            if let Some(snapshot) = self.snapshot.as_mut() {
+                snapshot.document.selections = selections;
+            }
+        } else if let Some(write) = &self.manifest_write {
+            match write.undo() {
+                Ok(_) => {
+                    self.manifest_write = None;
+                    self.refresh_pending = true;
+                }
+                Err(error) => self.error = Some(error),
+            }
+        } else if let Some(removed) = &self.removed_package
+            && let Some(snapshot) = self.snapshot.as_mut()
+        {
+            let document = &mut snapshot.document;
+            if document.selections != removed.after {
+                self.error = Some(
+                    "Campaign choices changed. Keep them and edit the package choices here.".into(),
+                );
+            } else {
+                let after = document.selections.clone();
+                document.selections = removed.before.clone();
+                match document.save() {
+                    Ok(()) => {
+                        self.saved_selections = document.selections.clone();
+                        self.removed_package = None;
+                        self.reconcile.checked_at = None;
+                    }
+                    Err(error) => {
+                        document.selections = after;
+                        self.error = Some(error);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Write Campaign.md again from the copy Splat last read.
+    fn write_campaign(&mut self, campaigns: &Campaigns, active: &Campaign) {
+        match campaigns.write_campaign_again(active) {
+            Ok(write) => {
+                end_results!(self);
+                self.campaign_write = Some(write);
+                self.refresh_pending = true;
+            }
+            Err(error) => self.error = Some(error),
         }
     }
 
     /// Each change waits for the DM. A blocked one says what they must decide first.
     fn reconcile_section(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
         let reconcile = &mut self.reconcile;
-        if let Some(error) = &reconcile.error {
-            design::message(ui, Tone::Error, error);
-        }
-        if let Some(message) = &reconcile.message {
-            design::message(ui, Tone::Success, message);
-        }
         if reconcile.applying {
             ui.horizontal(|ui| {
                 crate::design::spinner(ui);
@@ -916,26 +1224,16 @@ impl CampaignContent {
                 ui.scope(|ui| {
                     // What is wrong comes first, and stays true as the DM edits.
 
-                    // Round 25: in a short window the editor gives way. Below it, the save row,
-                    // the reserved message space, the gap and a few package rows keep their
-                    // size, so the package list stays in view. Only the window size changes this
-                    // height, never the draft's state, and the editor's top never moves.
-                    let below = Density::Read.control()
-                        + design::message_space_height()
-                        + design::L
-                        + 3.0 * (Density::Glance.row() + design::XS)
-                        + design::XXL;
-                    let room = (ui.available_height() - below).max(design::XXL * 3.0);
-                    let (edited, focused) = ui
-                        .allocate_ui(egui::vec2(ui.available_width(), room), |ui| {
-                            crate::world::repair::editor_events(
-                                ui,
-                                path,
-                                &mut repair.draft,
-                                repair.error_line,
-                            )
-                        })
-                        .inner;
+                    let editor = ui.scope(|ui| {
+                        crate::world::repair::editor_events(
+                            ui,
+                            path,
+                            &mut repair.draft,
+                            repair.error_line,
+                        )
+                    });
+                    self.editor_rects.push(editor.response.rect);
+                    let (edited, focused) = editor.inner;
                     if edited || focused {
                         self.active_repair = Some(path.clone());
                     }
@@ -943,76 +1241,9 @@ impl CampaignContent {
                         repair.draft_changed(active, checks);
                     }
 
+                    // Save first, at the right edge, so a long state or reason wraps beside it
+                    // and never cuts it.
                     ui.horizontal(|ui| {
-                        let dirty = repair.dirty();
-                        // The Library rule: the draft is checked as Save checks it. While Save
-                        // would refuse it, the state says Invalid and Save names the cause.
-                        let c = colors();
-                        // An action-time failure on the disk holds this repair's slot until its
-                        // draft changes or a Save of it works.
-                        let failed = repair
-                            .failure
-                            .as_ref()
-                            .map(|reason| format!("Not saved. {reason}"));
-                        design::save_row_state(
-                            ui,
-                            if let Some(failed) = &failed {
-                                design::Status {
-                                    icon: icons::ERROR,
-                                    word: failed,
-                                    color: c.document.invalid,
-                                }
-                            } else if repair.refusal.is_some() {
-                                design::Status {
-                                    icon: icons::ERROR,
-                                    word: "Invalid",
-                                    color: c.document.invalid,
-                                }
-                            } else if dirty {
-                                design::Status {
-                                    icon: icons::DRAFT,
-                                    word: "Unsaved",
-                                    color: c.document.unsaved,
-                                }
-                            } else {
-                                design::Status {
-                                    icon: icons::OK,
-                                    word: "No changes",
-                                    color: c.muted,
-                                }
-                            },
-                            false,
-                            None,
-                        );
-                        if repair.dirty()
-                            && Action::quiet("Discard")
-                                .density(Density::Read)
-                                .show(ui)
-                                .clicked()
-                        {
-                            self.discarded_repair = Some((path.clone(), repair.draft.clone()));
-                            repair.draft = repair.baseline.clone();
-                            repair.draft_changed(active, checks);
-                        }
-                        if repair.dirty()
-                            && self
-                                .discarded_repair
-                                .as_ref()
-                                .is_some_and(|(p, _)| p == path)
-                        {
-                            self.discarded_repair = None;
-                        }
-                        if repair.dirty() {
-                            // Save refuses the draft: Discard is the one way to switch.
-                            design::blocked_reason(
-                                ui,
-                                Some(if repair.refusal.is_some() {
-                                    crate::encounters::blocked_draft_switch_reason()
-                                } else {
-                                    crate::encounters::draft_switch_reason()
-                                }),
-                            );
-                        }
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             // One weight for a save row: primary while the draft has
                             // changes, unless an open run owns `Next turn` or another
@@ -1042,6 +1273,81 @@ impl CampaignContent {
                             {
                                 repaired |= repair.save(active);
                             }
+                            ui.with_layout(
+                                egui::Layout::left_to_right(egui::Align::Center),
+                                |ui| {
+                                    let dirty = repair.dirty();
+                                    // The Library rule: the draft is checked as Save checks it. While Save
+                                    // would refuse it, the state says Invalid and Save names the cause.
+                                    let c = colors();
+                                    // An action-time failure on the disk holds this repair's slot until its
+                                    // draft changes or a Save of it works.
+                                    let failed = repair
+                                        .failure
+                                        .as_ref()
+                                        .map(|reason| format!("Not saved. {reason}"));
+                                    design::save_row_state(
+                                        ui,
+                                        if let Some(failed) = &failed {
+                                            design::Status {
+                                                icon: icons::ERROR,
+                                                word: failed,
+                                                color: c.document.invalid,
+                                            }
+                                        } else if repair.refusal.is_some() {
+                                            design::Status {
+                                                icon: icons::ERROR,
+                                                word: "Invalid",
+                                                color: c.document.invalid,
+                                            }
+                                        } else if dirty {
+                                            design::Status {
+                                                icon: icons::DRAFT,
+                                                word: "Unsaved",
+                                                color: c.document.unsaved,
+                                            }
+                                        } else {
+                                            design::Status {
+                                                icon: icons::OK,
+                                                word: "No changes",
+                                                color: c.muted,
+                                            }
+                                        },
+                                        false,
+                                        None,
+                                    );
+                                    if repair.dirty()
+                                        && Action::quiet("Discard")
+                                            .density(Density::Read)
+                                            .show(ui)
+                                            .clicked()
+                                    {
+                                        self.discarded_repair =
+                                            Some((path.clone(), repair.draft.clone()));
+                                        repair.draft = repair.baseline.clone();
+                                        repair.draft_changed(active, checks);
+                                    }
+                                    if repair.dirty()
+                                        && self
+                                            .discarded_repair
+                                            .as_ref()
+                                            .is_some_and(|(p, _)| p == path)
+                                    {
+                                        self.discarded_repair = None;
+                                    }
+                                    if repair.dirty() {
+                                        // Save refuses the draft: Discard is the one way to switch.
+                                        design::blocked_reason(
+                                            ui,
+                                            Some(if repair.refusal.is_some() {
+                                                crate::encounters::blocked_draft_switch_reason()
+                                            } else {
+                                                crate::encounters::draft_switch_reason()
+                                            }),
+                                        );
+                                    }
+                                },
+                            );
                         });
                     });
                     // Round 25 FD1: one message space below the save row, two lines high
@@ -1116,7 +1422,7 @@ impl CampaignContent {
         }
         let mut reload = false;
         let c = colors();
-        let mut reason_below = None;
+        let mut repair_reason = None;
         ui.horizontal(|ui| {
             let dirty = document.selections != self.saved_selections || document.baseline.is_none();
             let repair_text = self
@@ -1143,6 +1449,7 @@ impl CampaignContent {
                     .show(ui)
                     .clicked()
                 {
+                    end_results!(self);
                     self.discarded_selections = Some((
                         std::mem::replace(&mut document.selections, self.saved_selections.clone()),
                         document.baseline.clone(),
@@ -1159,13 +1466,6 @@ impl CampaignContent {
                     false,
                     None,
                 );
-            }
-            if !changed
-                && self.discarded_selections.is_some()
-                && design::draft_discarded(ui, "Campaign packages")
-                && let Some((selections, _)) = self.discarded_selections.take()
-            {
-                document.selections = selections;
             }
             if !dirty && !self.repairs.iter().any(Repair::dirty) {
                 reload = Action::quiet("Reload from disk")
@@ -1199,8 +1499,8 @@ impl CampaignContent {
                     .show(ui)
                     .clicked();
                     // One place at every width: beside Save it would fit only once `Reload from
-                    // disk` hides, so the first repair edit would move the editor.
-                    reason_below = repair.map(str::to_owned);
+                    // disk` hides, so it goes to the message space below.
+                    repair_reason = repair.map(str::to_owned);
                     pressed
                 })
                 .inner;
@@ -1218,6 +1518,7 @@ impl CampaignContent {
                     Ok(()) => {
                         self.saved_selections = document.selections.clone();
                         self.reconcile.checked_at = None;
+                        end_results!(self);
                         self.message = Some("Campaign selections saved.".into());
                         self.error = None;
                     }
@@ -1225,14 +1526,38 @@ impl CampaignContent {
                 }
             }
         });
-        if let Some(reason) = reason_below {
+        // The repair that blocks Save keeps its own line below Save at every width: it stays while
+        // the repair does, so it never comes and goes under the DM's work.
+        if let Some(reason) = &repair_reason {
             ui.horizontal(|ui| {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    design::blocked_reason(ui, Some(&reason));
+                    design::blocked_reason(ui, Some(reason));
                 });
             });
         }
-
+        // Round 25 review: one message space below the save row holds the page's latest result
+        // (first while its Undo is live) and its errors: Save's or a load's, and the change
+        // check's. So no result or error moves the repairs or the package list below.
+        let locked = self
+            .dirty()
+            .then_some("Save or discard campaign changes first.");
+        let reason = self.reason_words(campaigns, active);
+        let result = self.result_words(active);
+        let mut write = false;
+        let mut space = design::MessageSpace::new("campaign_page_message", ui.available_width());
+        if let Some((words, has_undo)) = &result {
+            space = space.result(words, *has_undo, |ui| self.draw_result(ui, active, locked));
+        }
+        if !reason.is_empty() {
+            space = space.reason(&reason, |ui| {
+                self.draw_reason(ui, campaigns, active, &mut write);
+            });
+        }
+        let press = space.show(ui).flatten();
+        self.press_result(press);
+        if write {
+            self.write_campaign(campaigns, active);
+        }
         if reload {
             self.reload(ui.ctx(), campaigns, active.clone());
         }
@@ -1298,6 +1623,7 @@ impl CampaignContent {
                 if pressed {
                     match crate::content_workspace::ManifestWrite::write_as(module, path, exists) {
                         Ok(write) => {
+                            end_results!(self);
                             self.manifest_write = Some(write);
                             self.refresh_pending = true;
                         }
@@ -1314,26 +1640,6 @@ impl CampaignContent {
                 }
             }
         }
-        // While a draft waits, only Undo greys: the write happened, so its words keep the text
-        // colour, and the draft's own save row says why.
-        if let Some(write) = &self.manifest_write
-            && crate::library::kept_undo_message(
-                ui,
-                Tone::Success,
-                &write.message(),
-                &format!("Undo write {}", write.path()),
-                manifest_locked,
-                false,
-            )
-        {
-            match write.undo() {
-                Ok(_) => {
-                    self.manifest_write = None;
-                    self.refresh_pending = true;
-                }
-                Err(error) => self.error = Some(error),
-            }
-        }
         let affected: Vec<_> = catalogue
             .entries
             .values()
@@ -1345,61 +1651,6 @@ impl CampaignContent {
             })
             .map(|entry| (entry.entry.id, entry.entry.name.clone()))
             .collect();
-        if let Some(removed) = &self.removed_package
-            && removed.campaign == active.id
-        {
-            let undo = if removed.users.is_empty() {
-                design::undo_message(
-                    ui,
-                    Tone::Success,
-                    &format!("{} removed from this campaign.", removed.name),
-                    "Undo package removal",
-                )
-            } else {
-                let names: Vec<_> = removed
-                    .users
-                    .iter()
-                    .map(|(_, name)| name.as_str())
-                    .collect();
-                let (undo, link) = design::undo_message_with_links(
-                    ui,
-                    Tone::Warning,
-                    &names,
-                    if names.len() == 1 {
-                        "now has creatures Splat cannot find."
-                    } else {
-                        "now have creatures Splat cannot find."
-                    },
-                    "Undo package removal",
-                );
-                if let Some(at) = link {
-                    self.open_lookup = Some(removed.users[at].0);
-                }
-                undo
-            };
-            if undo {
-                if document.selections != removed.after {
-                    self.error = Some(
-                        "Campaign choices changed. Keep them and edit the package choices here."
-                            .into(),
-                    );
-                } else {
-                    let after = document.selections.clone();
-                    document.selections = removed.before.clone();
-                    match document.save() {
-                        Ok(()) => {
-                            self.saved_selections = document.selections.clone();
-                            self.removed_package = None;
-                            self.reconcile.checked_at = None;
-                        }
-                        Err(error) => {
-                            document.selections = after;
-                            self.error = Some(error);
-                        }
-                    }
-                }
-            }
-        }
         let campaign_flags = catalogue
             .entries
             .get(&active.id)
@@ -1671,6 +1922,7 @@ impl CampaignContent {
                                 .show(ui)
                                 .clicked()
                         {
+                            end_results!(self);
                             self.recovered = Some((module.clone(), registered.clone()));
                             self.found_package = Some(module.clone());
                         }
@@ -1689,6 +1941,7 @@ impl CampaignContent {
                                 &known.path,
                             ) {
                                 Ok(module) => {
+                                    end_results!(self);
                                     self.recovered = Some((module.clone(), registered.clone()));
                                     self.found_package = Some(module);
                                 }
@@ -1716,6 +1969,7 @@ impl CampaignContent {
                                 &folder,
                             ) {
                                 Ok(module) => {
+                                    end_results!(self);
                                     self.recovered = Some((module.clone(), registered.clone()));
                                     self.found_package = Some(module);
                                 }
@@ -1747,6 +2001,7 @@ impl CampaignContent {
             match document.save() {
                 Ok(()) => {
                     self.saved_selections = document.selections.clone();
+                    end_results!(self);
                     self.removed_package = Some(RemovedPackage {
                         campaign: active.id,
                         name: selection.display_name().to_owned(),

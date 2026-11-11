@@ -1604,19 +1604,29 @@ impl CombatSync {
                 )
             };
             ui.label(Type::Small.rich(ui, icon).color(color));
-            ui.add(egui::Label::new(Type::Small.rich(ui, words).color(colors().muted)).wrap());
+            // Round 25 review: help keeps the reader measure.
+            design::help(ui, words);
         });
+        // Round 25 review: a rest's result has a reserved place above the fields, two lines high
+        // whatever it holds, so neither the result nor its dismissal or the next read moves them.
+        // Round 25 FD3: a dismiss is the close icon at the message end, in the one Party form.
+        let mut space = design::MessageSpace::<bool>::new(
+            "combat_sync_result",
+            ui.available_width().min(design::LIST_MEASURE),
+        );
         if let Some(notice) = &self.action_notice {
             let (tone, words) = match notice {
-                ActionNotice::Taken(words) => (Tone::Success, words),
-                ActionNotice::Failed(words) => (Tone::Error, words),
+                ActionNotice::Taken(words) => (Tone::Success, words.as_str()),
+                ActionNotice::Failed(words) => (Tone::Error, words.as_str()),
             };
-            // Round 25 FD3: a dismiss is the close icon at the message end, in the one Party form.
-            if crate::party::dismissable(ui, |ui| {
-                design::message(ui, tone, words);
-            }) {
-                self.action_notice = None;
-            }
+            space = space.result(words, false, move |ui| {
+                crate::party::dismissable(ui, |ui| {
+                    design::message(ui, tone, words);
+                })
+            });
+        }
+        if space.show(ui) == Some(true) {
+            self.action_notice = None;
         }
         let wells = self.wells(ui, max_hp);
         let before = self.desired.groups.clone();
@@ -1633,13 +1643,9 @@ impl CombatSync {
             self.desired.touch();
             self.changed = Some(Instant::now());
         }
-        ui.label(
-            Type::Small
-                .rich(
-                    ui,
-                    "Concentration, custom effects, initiative and DM notes stay in Splat. D&D Beyond has no place for them.",
-                )
-                .color(colors().muted),
+        design::help(
+            ui,
+            "Concentration, custom effects, initiative and DM notes stay in Splat. D&D Beyond has no place for them.",
         );
     }
     /// The conflict heading for a group: its name on the sheet, where it has one.
@@ -3077,6 +3083,47 @@ mod tests {
         ctx.enable_accesskit();
         // Round 25 FD3: the action notice ends with its close icon, after its words.
         const TAKEN: &str = "D&D Beyond took the long rest.";
+        // Round 25 review: the result has a reserved place, so the first editable field keeps
+        // its y before the result, while it shows, after an error result and after it ends.
+        let field_top = |sync: &mut CombatSync| {
+            let out = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(700.0, 600.0),
+                    )),
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| sync.show(ui));
+                },
+            );
+            out.platform_output.accesskit_update.and_then(|update| {
+                update.nodes.iter().find_map(|(_, node)| {
+                    (node.label() == Some("Increase Current HP"))
+                        .then(|| node.bounds().map(|bounds| bounds.y0))
+                        .flatten()
+                })
+            })
+        };
+        let mut tops = Vec::new();
+        for notice in [
+            None,
+            Some(ActionNotice::Taken(TAKEN.into())),
+            Some(ActionNotice::Failed(
+                "D&D Beyond did not take the long rest. Check the sheet in D&D Beyond, then read it again before you send another change.".into(),
+            )),
+            None,
+        ] {
+            sync.action_notice = notice;
+            // Two passes: the first lays out, the second reads the settled place.
+            field_top(&mut sync);
+            tops.push(field_top(&mut sync));
+        }
+        assert!(
+            tops[0].is_some() && tops.iter().all(|top| *top == tops[0]),
+            "Increase Current HP top with no result, a result, an error and none again: {tops:?}"
+        );
         sync.action_notice = Some(ActionNotice::Taken(TAKEN.into()));
         let before = sync.desired.clone();
         for form in [

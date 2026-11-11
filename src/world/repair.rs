@@ -21,7 +21,7 @@ pub(crate) fn editor_events(
     draft: &mut String,
     error_line: Option<usize>,
 ) -> (bool, bool) {
-    egui::ScrollArea::vertical()
+    let editor = egui::ScrollArea::vertical()
         .max_height(design::XXL * 6.0 + design::L + design::S + design::XS)
         .id_salt(("repair", path))
         .show(ui, |ui| {
@@ -48,9 +48,23 @@ pub(crate) fn editor_events(
                     egui::Stroke::new(design::FOCUS_WIDTH, colors().result.error),
                 );
             }
-            active
+            (active, output.response.id)
+        });
+    let (active, id) = editor.inner;
+    // The editor's own scroll area takes a scroll target set inside it, so a page that scrolls
+    // around the editor never sees it. When the editor gains focus or a screen reader asks to
+    // show it, scroll the page to the editor's viewport.
+    let reveal = ui.input(|input| {
+        input.events.iter().any(|event| {
+            matches!(event, egui::Event::AccessKitActionRequest(request)
+                if request.action == egui::accesskit::Action::ScrollIntoView
+                    && request.target == egui::accesskit::NodeId::from(id.value()))
         })
-        .inner
+    });
+    if active.1 || reveal {
+        ui.scroll_to_rect(editor.inner_rect, None);
+    }
+    active
 }
 
 /// Why Save would not write this draft: a path outside its folder, a fault in its text and the
