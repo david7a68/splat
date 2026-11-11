@@ -782,9 +782,11 @@ words, so the underline covers only the words, as in `status_link`. Its accessib
 stored names offer two safe choices below the warning's words, `L` apart: `Rename the note to <file name>`, with a
 guarded update and `Undo name change`, then `Rename the file to <name>.md`, which keeps the name the DM typed. The file
 move never replaces a file, not even one that arrives during the move, and checks that the note still holds the text the
-reader came from (the file's own text, before links become reader links). Where the folder's file system offers no
-move that refuses an existing file, a hard link and the removal of the old name move it; where it offers neither, the
-choice says `Splat cannot rename files safely in this folder, so nothing was moved.`; its result `The file is now
+reader came from: the whole file the index read, byte order mark, line ends and comments included. Where the folder's
+file system offers no move that refuses an existing file, a hard link and the removal of the old name move it; if the
+old name cannot be removed, the new one goes again and nothing moved; if neither can, the message names both files and
+says to delete the new one by hand. Where the file system offers neither move, the choice says `Splat cannot rename
+files safely in this folder, so nothing was moved.`; its result `The file is now
 <name>.md.` has `Undo file rename`, which checks the same before it moves the file back, and only in the campaign that made the move. The file choice is left out
 while the note's edit form is open, or when the name cannot be a file name. New NPCs show their
 future path below the name. A compact NPC reader puts Fights as and In on one read-only line; both open

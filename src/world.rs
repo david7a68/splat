@@ -1396,15 +1396,6 @@ impl FileRename {
     }
 }
 
-/// The file text that produced the reader's note, for `Rename the file to …` (FD5). The
-/// reader reads it once per index, and keeps it only when it parses to the note on screen.
-struct RenameSeen {
-    generation: u64,
-    campaign: Uuid,
-    id: Uuid,
-    text: Option<String>,
-}
-
 /// The file beside `path` for a note named `name`, when the name can be a file name.
 fn renamed_path(path: &str, name: &str) -> Option<String> {
     let name = name.trim();
@@ -1428,6 +1419,7 @@ fn renamed_path(path: &str, name: &str) -> Option<String> {
 struct Moves {
     rename: fn(&Path, &Path) -> std::io::Result<()>,
     link: fn(&Path, &Path) -> std::io::Result<()>,
+    remove: fn(&Path) -> std::io::Result<()>,
 }
 
 const SYSTEM_MOVES: Moves = Moves {
@@ -1436,10 +1428,18 @@ const SYSTEM_MOVES: Moves = Moves {
     #[cfg(not(target_os = "linux"))]
     rename: |source, target| std::fs::rename(source, target),
     link: |source, target| std::fs::hard_link(source, target),
+    remove: |path| std::fs::remove_file(path),
 };
 
 /// The words when this folder's file system has no move that is safe for an existing file.
 const NO_SAFE_MOVE: &str = "Splat cannot rename files safely in this folder, so nothing was moved.";
+
+/// The words when a move left one file with two names and Splat could remove neither.
+fn two_names(from: &str, to: &str) -> String {
+    format!(
+        "{from} and {to} are now two names for one note, and Splat could remove neither. Delete {to} in your file manager to keep the note as it was."
+    )
+}
 
 /// The file system does not offer this kind of move (not a fault of these files).
 fn move_unsupported(error: &std::io::Error) -> bool {
@@ -1494,11 +1494,18 @@ fn move_note_with(
     match (moves.rename)(&source, &target) {
         Ok(()) => Ok(()),
         Err(error) if move_unsupported(&error) => match (moves.link)(&source, &target) {
-            Ok(()) => std::fs::remove_file(&source).map_err(|error| {
-                // Both names hold the same file; drop the new one, so nothing moved.
-                let _ = std::fs::remove_file(&target);
-                file_fault::FileFault::write(from, &error).message()
-            }),
+            // Both names now hold one file. The old name goes; if it cannot, the new one goes,
+            // so nothing moved; if neither can, the DM is told both names and what to do.
+            Ok(()) => match (moves.remove)(&source) {
+                Ok(()) => Ok(()),
+                Err(error) => match (moves.remove)(&target) {
+                    Ok(()) => Err(format!(
+                        "{} Nothing was renamed.",
+                        file_fault::FileFault::write(from, &error).headline()
+                    )),
+                    Err(_) => Err(two_names(from, to)),
+                },
+            },
             Err(error) if move_unsupported(&error) || error.raw_os_error() == Some(libc::EPERM) => {
                 Err(NO_SAFE_MOVE.into())
             }
@@ -1735,8 +1742,6 @@ pub struct Reader {
     name_undo: Option<Change>,
     /// The last `Rename the file to …` on this page, until it is undone or another replaces it.
     file_undo: Option<FileRename>,
-    /// The file text behind the note whose `Rename the file to …` shows.
-    rename_seen: Option<RenameSeen>,
     error: Option<String>,
     /// Source lookup is cached by note and index generation, including repairs and moves.
     group_fault: Option<GroupFault>,
@@ -1794,36 +1799,6 @@ pub(crate) fn page_result(ui: &mut egui::Ui, result: &PageResult) -> bool {
 }
 
 impl Reader {
-    /// Reads the note's file once per index and campaign, and keeps its text only when it
-    /// parses to the note on screen: the version that produced the reader.
-    fn see_rename_source(&mut self, index: &ContentIndex, campaign: &Campaign, item: &Item) {
-        let generation = index.generation();
-        if self.rename_seen.as_ref().is_some_and(|seen| {
-            seen.generation == generation
-                && seen.campaign == campaign.id
-                && seen.id == item.entry.id
-        }) {
-            return;
-        }
-        let text = file_fault::read_note(&campaign.path, &item.entry.path)
-            .ok()
-            .filter(|text| {
-                // Raw source against raw source: the reader's body has its links converted, so
-                // the body compares by the hash of the file's own text, taken before that.
-                Entry::parse(&item.entry.path, text).is_ok_and(|disk| {
-                    disk.name == item.entry.name
-                        && *disk.fields == *item.entry.fields
-                        && item.source_body() == Some(crate::lookup::body_hash(&disk.body))
-                })
-            });
-        self.rename_seen = Some(RenameSeen {
-            generation,
-            campaign: campaign.id,
-            id: item.entry.id,
-            text,
-        });
-    }
-
     /// Offer the same short chooser to links opened outside the World page.
     pub fn choose_link(&mut self, positions: Vec<usize>, target: &str) {
         self.many = positions;
@@ -2138,9 +2113,6 @@ impl Reader {
                     // its name while one is open.
                     let file = renamed_path(&item.entry.path, &item.entry.name)
                         .filter(|_| !self.editing(id, campaign));
-                    if file.is_some() {
-                        self.see_rename_source(index, campaign, item);
-                    }
                     let (note, rename_file) =
                         design::message_with_actions(ui, Tone::Warning, &message, |ui| {
                             // A choice whose words do not fit the message's width says only
@@ -2187,24 +2159,20 @@ impl Reader {
                             .inner
                         });
                     if rename_file && let Some(to) = &file {
-                        // The move compares the file with the text the reader came from, not
-                        // with what is on disk now, so an outside change is never moved.
-                        let seen = self
-                            .rename_seen
-                            .as_ref()
-                            .filter(|seen| {
-                                seen.generation == index.generation()
-                                    && seen.campaign == campaign.id
-                                    && seen.id == id
-                            })
-                            .and_then(|seen| seen.text.clone());
-                        let result = match seen {
-                            Some(text) => FileRename::apply(campaign, &item.entry.path, to, &text),
-                            None => Err(format!(
-                                "{} changed on disk. Nothing was renamed.",
-                                item.entry.path
-                            )),
-                        };
+                        // The whole file must still be the whole file the index read, which
+                        // produced the reader: a changed comment, line end or byte order mark
+                        // counts as a change. The move checks the same text again.
+                        let result = file_fault::read_note(&campaign.path, &item.entry.path)
+                            .and_then(|text| {
+                                if item.source_text() == Some(crate::lookup::text_hash(&text)) {
+                                    FileRename::apply(campaign, &item.entry.path, to, &text)
+                                } else {
+                                    Err(format!(
+                                        "{} changed on disk. Nothing was renamed.",
+                                        item.entry.path
+                                    ))
+                                }
+                            });
                         match result {
                             Ok(rename) => {
                                 self.file_undo = Some(rename);
@@ -3871,6 +3839,7 @@ mod tests {
         let link_moves = Moves {
             rename: einval,
             link: |source, target| std::fs::hard_link(source, target),
+            remove: |path| std::fs::remove_file(path),
         };
         move_note_with(
             &link_moves,
@@ -3917,6 +3886,7 @@ mod tests {
         let no_moves = Moves {
             rename: einval,
             link: |_, _| Err(std::io::Error::from_raw_os_error(libc::EPERM)),
+            remove: |path| std::fs::remove_file(path),
         };
         assert_eq!(
             move_note_with(
@@ -3936,6 +3906,67 @@ mod tests {
             "re-check-3-source"
         );
         assert!(!to.exists(), "re-check-3-target");
+        // Re-check 2, repair 1: the link works, then the old name cannot be removed (a folder
+        // made read only). The new name goes again, so nothing moved, and the words say so.
+        let keep_old = Moves {
+            rename: einval,
+            link: |source, target| std::fs::hard_link(source, target),
+            remove: |path| {
+                if path.ends_with("Broken.md") {
+                    Err(std::io::Error::from(std::io::ErrorKind::PermissionDenied))
+                } else {
+                    std::fs::remove_file(path)
+                }
+            },
+        };
+        let refused = move_note_with(
+            &keep_old,
+            root,
+            "Notes/Broken.md",
+            "Notes/Rook.md",
+            text,
+            || {},
+        );
+        assert_eq!(
+            refused,
+            Err("Splat has no permission to save Notes/Broken.md. Nothing was renamed.".to_owned()),
+            "re-check-2-1-new-name-removed"
+        );
+        assert!(
+            std::fs::read_to_string(&from).unwrap() == text && !to.exists(),
+            "re-check-2-1-one-name"
+        );
+        // Neither name can be removed: both stay, and the words name both and the way out.
+        let keep_both = Moves {
+            rename: einval,
+            link: |source, target| std::fs::hard_link(source, target),
+            remove: |_| Err(std::io::Error::from(std::io::ErrorKind::PermissionDenied)),
+        };
+        let refused = move_note_with(
+            &keep_both,
+            root,
+            "Notes/Broken.md",
+            "Notes/Rook.md",
+            text,
+            || {},
+        );
+        assert_eq!(
+            refused,
+            Err(two_names("Notes/Broken.md", "Notes/Rook.md")),
+            "re-check-2-1-two-names"
+        );
+        assert!(
+            refused
+                .unwrap_err()
+                .contains("Delete Notes/Rook.md in your file manager"),
+            "re-check-2-1-way-out"
+        );
+        assert!(
+            std::fs::read_to_string(&from).unwrap() == text
+                && std::fs::read_to_string(&to).unwrap() == text,
+            "re-check-2-1-both-names"
+        );
+        std::fs::remove_file(&to).unwrap();
         // The note changed on disk after the DM saw it.
         let refused = FileRename::apply(&campaign, "Notes/Broken.md", "Notes/Rook.md", "Old text");
         assert!(refused.is_err() && !to.exists(), "fd5-changed");

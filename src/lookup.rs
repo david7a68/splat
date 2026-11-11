@@ -145,9 +145,9 @@ pub struct Item {
     /// The words of `lower`, and the different words of `lower_body`, for a search by words.
     name_words: Vec<String>,
     body_words: Vec<String>,
-    /// A world entry's body as its file has it, before links become reader links: a hash, so
-    /// a check can tell whether the file still holds the note on screen.
-    source_body: Option<u64>,
+    /// A world entry's whole file text as the index read it: a hash, so a check can tell
+    /// whether the file still holds the note on screen.
+    source_text: Option<u64>,
 }
 
 /// A line on one page that links to another page or names it. With no line, only the page
@@ -158,11 +158,11 @@ pub struct Mention {
     pub line: Option<usize>,
 }
 
-/// A hash of a note body's text, for comparing a file with the one the index read.
-pub(crate) fn body_hash(body: &str) -> u64 {
+/// A hash of a file's whole text, for comparing a file with the one the index read.
+pub(crate) fn text_hash(text: &str) -> u64 {
     use std::hash::{Hash, Hasher};
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    body.hash(&mut hasher);
+    text.hash(&mut hasher);
     hasher.finish()
 }
 
@@ -284,10 +284,9 @@ impl Item {
         matches!(self.source, Source::Note(_))
     }
 
-    /// The hash of this world entry's body as its file had it (`body_hash`), when the index
-    /// read it from a campaign.
-    pub(crate) fn source_body(&self) -> Option<u64> {
-        self.source_body
+    /// The hash of this world entry's whole file text as the index read it (`text_hash`).
+    pub(crate) fn source_text(&self) -> Option<u64> {
+        self.source_text
     }
 
     pub fn is_world_note(&self) -> bool {
@@ -370,7 +369,7 @@ fn note_items(
         lines: Vec::new(),
         name_words: Vec::new(),
         body_words: Vec::new(),
-        source_body: None,
+        source_text: None,
         entry,
     };
     // The reader already shows the name as the title.
@@ -498,7 +497,7 @@ impl ContentIndex {
                     },
                     name_words: Vec::new(),
                     body_words: Vec::new(),
-                    source_body: None,
+                    source_text: None,
                     entry: {
                         let mut entry = e.entry.clone();
                         if e.private
@@ -520,9 +519,29 @@ impl ContentIndex {
             let sessions = crate::sessions::folder(campaign)
                 .unwrap_or_else(|_| campaign.path.join(crate::sessions::DEFAULT_FOLDER));
             let scan = world::scan(&campaign.path, &sessions);
+            // Each World entry's whole file text, as the folder reading saw it (byte order mark
+            // and line ends included), kept as a hash. It is kept only when that reading's entry
+            // is the one on screen, so a file that changed between the two readings has none.
+            let folder = splat::content::read_folder(&campaign.path)?;
+            let read: HashMap<&str, &splat::content::Entry> = folder
+                .entries
+                .iter()
+                .map(|entry| (entry.path.as_str(), entry))
+                .collect();
             for item in &mut items {
                 if item.entry.kind == "world" {
-                    item.source_body = Some(body_hash(&item.entry.body));
+                    item.source_text = read
+                        .get(item.entry.path.as_str())
+                        .filter(|read| {
+                            read.name == item.entry.name
+                                && (std::ptr::eq::<serde_yaml_ng::Mapping>(
+                                    &*read.fields,
+                                    &*item.entry.fields,
+                                ) || *read.fields == *item.entry.fields)
+                                && read.body == item.entry.body
+                        })
+                        .and(folder.text(&item.entry.path))
+                        .map(text_hash);
                     item.entry.body = world::with_links(&item.entry.body, &scan.images);
                 }
             }

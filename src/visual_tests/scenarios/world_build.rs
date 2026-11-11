@@ -867,6 +867,60 @@ pub fn broken(d: &mut Driver<'_>) {
         "fixture: the note has a link"
     );
     d.expect("Rename the file to Repaired watchkeeper.md");
+    // Re-check 2, repair 2: the rename compares the whole file with the whole file the index
+    // read. An unchanged note with a byte order mark and CRLF line ends renames.
+    let crlf_path = root(d).join("NPCs/Crlf Note.md");
+    let crlf_text = format!(
+        "\u{feff}---\r\nsplat_schema: 2\r\nsplat_id: {}\r\nsplat_kind: world\r\nsplat_name: Crlf Keeper\r\nsplat_type: npc\r\n---\r\n\r\nKept with Windows line ends.\r\n",
+        splat::character::stable_id("crlf-keeper")
+    );
+    fs::create_dir_all(crlf_path.parent().unwrap()).unwrap();
+    fs::write(&crlf_path, &crlf_text).unwrap();
+    reload(d);
+    d.click_starting("Crlf Keeper · ");
+    d.click("Rename the file to Crlf Keeper.md");
+    d.wait_for_text("The file is now Crlf Keeper.md.");
+    d.observe(
+        "re-check-2-2-crlf",
+        !crlf_path.exists()
+            && fs::read_to_string(root(d).join("NPCs/Crlf Keeper.md"))
+                .ok()
+                .as_deref()
+                == Some(crlf_text.as_str()),
+        "An unchanged note with a byte order mark and CRLF line ends renames, bytes kept",
+    );
+    // A YAML comment that changes outside Splat before the reader reads the file. The index
+    // reads the note with its comment while another note is open, so no reader has seen it.
+    // Then the comment changes, with the same length and file time, and the DM opens the note.
+    let with_comment = fixed.replacen("---\n", "---\n# watch notes\n", 1);
+    assert_ne!(with_comment, fixed, "fixture: a comment line");
+    d.click_containing("Setting · ");
+    fs::write(&path, &with_comment).unwrap();
+    reload(d);
+    let comment_time = fs::metadata(&path).unwrap().modified().unwrap();
+    let keep_time = |text: &str| {
+        fs::write(&path, text).unwrap();
+        fs::File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_modified(comment_time)
+            .unwrap();
+    };
+    let changed_comment = with_comment.replace("# watch notes", "# watch NOTES");
+    keep_time(&changed_comment);
+    d.click_starting("Repaired watchkeeper · ");
+    d.click("Rename the file to Repaired watchkeeper.md");
+    d.settle();
+    d.observe(
+        "re-check-2-2-comment",
+        fs::read_to_string(&path).ok().as_deref() == Some(changed_comment.as_str())
+            && !root(d).join("Notes/Repaired watchkeeper.md").exists()
+            && d.has_containing("Notes/Broken.md changed on disk. Nothing was renamed."),
+        "A comment changed before the reader read the file blocks the rename",
+    );
+    keep_time(&with_comment);
+    let fixed = with_comment;
     let moved = root(d).join("Notes/Repaired watchkeeper.md");
     // Review repair 1: the file changes outside Splat while the choice shows. The change keeps
     // the file's length and time, so nothing reloads. The move compares with the text the
