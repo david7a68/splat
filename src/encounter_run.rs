@@ -539,7 +539,7 @@ pub(crate) struct Run {
     /// The last d20 rolled for a player, which their inspiration can reroll.
     reroll: Option<rolling::Reroll>,
     /// The armed save's rolled damage, until it is applied or the action ends.
-    save_total: Option<i64>,
+    save_total: Option<rolling::SaveDamage>,
     /// Participants, by key, whose inspiration the run spent and whose sheet does not show it
     /// yet. Saved with the run.
     spent_inspiration: BTreeSet<String>,
@@ -1525,10 +1525,22 @@ impl Run {
         }
     }
     fn apply(&mut self, command: Command) -> Result<(), String> {
-        // Inspiration rerolls a die immediately after the roll, not after the next step. A
-        // save's damage that was applied is not put in Amount again.
+        let amount = matches!(
+            command,
+            Command::Damage(..) | Command::Heal(..) | Command::TempHp(..) | Command::Several(_)
+        );
+        self.apply_step(command)?;
+        // Inspiration rerolls a die immediately after the roll, not after the next step that
+        // the run takes. A save's damage that was applied is not put in Amount again; another
+        // step, such as a note, leaves it for the targets as they change.
         self.reroll = None;
-        self.save_total = None;
+        if amount {
+            self.save_total = None;
+        }
+        Ok(())
+    }
+
+    fn apply_step(&mut self, command: Command) -> Result<(), String> {
         if matches!(command, Command::Begin) {
             self.roster_stamp = None;
             self.refresh_roster_faults();

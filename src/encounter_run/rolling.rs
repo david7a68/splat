@@ -36,6 +36,14 @@ pub(super) struct Asking {
     pub choices: Vec<(String, Vec<DamagePart>)>,
 }
 
+/// An armed save's rolled damage, and the Amount the run made from it. An Amount that the DM
+/// typed over it is theirs, and the run does not replace it.
+#[derive(Clone, Debug)]
+pub(super) struct SaveDamage {
+    total: i64,
+    shown: String,
+}
+
 /// A question for the DM, and its choices of damage.
 type Question = (String, Vec<(String, Vec<DamagePart>)>);
 
@@ -827,18 +835,44 @@ impl Run {
         self.halved.remove(&row);
         self.saves.remove(&row);
         self.badges.remove(&row);
-        self.refresh_save_damage();
+        self.save_targets_changed();
     }
 
     /// Make `row` one of a save's targets. The targets before it stay.
     fn add_save_target(&mut self, row: usize) {
+        if self.save_targets().contains(&row) {
+            return;
+        }
         let actor = self.armed.as_ref().map(|armed| armed.actor);
         if Some(self.selected) == actor {
             self.aim(row);
-        } else if self.selected != row {
+        } else {
             self.also.insert(row);
         }
-        self.refresh_save_damage();
+        self.save_targets_changed();
+    }
+
+    /// After a save's targets changed. A roll kept for a reroll was for the targets before,
+    /// and ends for good. Damage that a condition settled for those targets is rolled again
+    /// for these; other damage stays, and Amount is made again from it.
+    fn save_targets_changed(&mut self) {
+        if self.reroll.as_ref().is_some_and(|kept| kept.save.is_some()) {
+            self.reroll = None;
+        }
+        let conditional = self
+            .armed
+            .as_ref()
+            .is_some_and(|armed| !dice_text::conditions(damage_of(&armed.link)).is_empty());
+        if !conditional {
+            self.refresh_save_damage();
+        } else if let Some(save) = self.save_total.take() {
+            if self.amount == save.shown {
+                self.amount.clear();
+            }
+            for row in self.save_targets() {
+                self.badges.remove(&row);
+            }
+        }
     }
 
     /// Roll a creature target's save, in place of one it rolled before. A player rolls their
@@ -1018,7 +1052,12 @@ impl Run {
     /// The armed save's rolled damage, in Amount and on each target's row.
     fn show_save_damage(&mut self, outcome: &Outcome) {
         if let Some(rolled) = &outcome.damage {
-            self.save_total = Some(rolled.total.max(0));
+            // A new roll takes the place of an amount from before.
+            self.amount.clear();
+            self.save_total = Some(SaveDamage {
+                total: rolled.total.max(0),
+                shown: String::new(),
+            });
             self.refresh_save_damage();
         }
     }
@@ -1027,12 +1066,13 @@ impl Run {
     /// they are now. Enter applies Amount as it is to one target and by the half marks to
     /// several, so a change of targets, of a save or of a mark must not leave an older amount.
     fn refresh_save_damage(&mut self) {
-        let (Some(total), Some(RollLink::SaveDc { dc, half, .. })) = (
-            self.save_total,
+        let (Some(save), Some(RollLink::SaveDc { dc, half, .. })) = (
+            self.save_total.clone(),
             self.armed.as_ref().map(|armed| armed.link.clone()),
         ) else {
             return;
         };
+        let total = save.total;
         // One target shows no half mark, so its half goes straight into Amount.
         let lone_half = half
             && self.also.is_empty()
@@ -1041,8 +1081,16 @@ impl Run {
                     .saves
                     .get(&self.selected)
                     .is_some_and(|save| *save >= dc));
-        self.amount = if lone_half { total / 2 } else { total }.to_string();
-        self.focus_amount = true;
+        let amount = if lone_half { total / 2 } else { total }.to_string();
+        // An amount the DM typed over the run's own stays.
+        if self.amount.is_empty() || self.amount == save.shown {
+            self.amount.clone_from(&amount);
+            self.focus_amount = true;
+            self.save_total = Some(SaveDamage {
+                total,
+                shown: amount,
+            });
+        }
         for row in self.save_targets() {
             self.badges.insert(row, format!("{total} damage"));
         }
@@ -1485,10 +1533,18 @@ mod tests {
         run.save_damage(&armed).unwrap();
         assert!(offers_reroll(&run, others[0]) && offers_reroll(&run, others[1]));
         let die = run.reroll.as_ref().unwrap().outcome.dice()[0].1;
-        // A target taken away: the roll was for both, so no row offers it now.
+        // A target taken away: the roll was for both, so no row offers it now. Making it a
+        // target again does not bring the roll back, by the menu or by the choice itself.
         let kept = run.reroll.clone();
         run.target(others[0], None);
         assert!(!offers_reroll(&run, others[0]) && !offers_reroll(&run, others[1]));
+        run.target(others[0], None);
+        assert_eq!(run.sorted_save_targets(), others);
+        assert!(!offers_reroll(&run, others[0]) && !offers_reroll(&run, others[1]));
+        let lines = run.state.log.len();
+        run.row_choice(others[1], RowChoice::Reroll(die));
+        assert_eq!(run.state.log.len(), lines, "nothing rolls");
+        assert!(run.has_inspiration(actor), "nothing was spent");
         // Stop, then select the caster: a reroll must not put the damage on the caster.
         run.reroll = kept;
         run.disarm();
@@ -1559,6 +1615,60 @@ mod tests {
         run.apply(Command::Damage(others[0], 3)).unwrap();
         run.amount.clear();
         run.target(others[0], None);
+        assert_eq!(run.amount, "");
+    }
+
+    #[test]
+    fn a_step_that_applies_no_amount_and_a_typed_amount_leave_the_saves_damage_right() {
+        let mut run = live();
+        let actor = run.current().unwrap();
+        let (armed, others) = armed_save(&mut run, actor);
+        run.saves.insert(others[0], 9);
+        run.saves.insert(others[1], 15);
+        run.half_made(&armed);
+        run.state.random = Random::controlled([1, 2, 3]);
+        run.save_damage(&armed).unwrap();
+        assert_eq!(run.amount, "6");
+        // A note is a step of the run, but it applies no amount.
+        run.apply(Command::Note(actor, "Out of breath.".into()))
+            .unwrap();
+        run.target(others[0], None);
+        assert_eq!(run.amount, "3", "the one target left made its save");
+        // A step that is refused changes nothing either.
+        assert!(run.apply(Command::Damage(99, 1)).is_err());
+        run.target(others[0], None);
+        assert_eq!(run.amount, "6");
+        // An amount that the DM typed over the run's own stays through a change.
+        run.amount = "12".into();
+        run.target(others[0], None);
+        assert_eq!(run.amount, "12");
+    }
+
+    #[test]
+    fn damage_that_a_condition_settled_is_rolled_again_for_new_targets() {
+        let glare = "Death Glare. Wisdom Saving Throw: DC 11, one Frightened creature. Failure: If the target has 20 Hit Points or fewer, it drops to 0 Hit Points. Otherwise, the target takes 13 (3d8) Psychic damage.";
+        let link = dice_text::find(glare, "Death Glare")
+            .into_iter()
+            .find_map(|span| matches!(span.link, RollLink::SaveDc { .. }).then_some(span.link))
+            .unwrap();
+        let mut run = live();
+        let actor = run.current().unwrap();
+        let others: Vec<usize> = (0..3).filter(|row| *row != actor).collect();
+        run.state.participants[others[0]].hp = Some(30);
+        run.state.participants[others[1]].hp = Some(20);
+        run.roll_link(ask(link, actor));
+        let armed = run.armed.clone().unwrap();
+        run.target(others[0], None);
+        run.state.random = Random::controlled([2, 3, 4]);
+        run.save_damage(&armed).unwrap();
+        assert_eq!(run.amount, "9");
+        // The other target takes no damage by the condition, and the first is taken away:
+        // the 9 was settled for the first, so it must not wait for Enter.
+        run.target(others[1], None);
+        assert_eq!(run.amount, "");
+        assert_eq!(run.badges.get(&others[0]), None);
+        run.target(others[0], None);
+        assert_eq!(run.save_targets(), vec![others[1]]);
         assert_eq!(run.amount, "");
     }
 

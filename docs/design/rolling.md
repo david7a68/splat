@@ -144,8 +144,9 @@ in the panel that still waits to be sent is spent with it.
   the d20 begins or ends a critical hit. A save's damage rolled for a player is
   one roll for all of its targets: each target's row offers its dice, and the
   targets and half marks stay. That roll stands only while the same save is
-  armed against the same targets; `Stop` or a change of targets ends it. The
-  next step of the run (an applied amount, Next turn) ends the chance to reroll.
+  armed against the same targets; `Stop` or a change of targets ends it for
+  good. The next step of the run that succeeds (an applied amount, Next turn)
+  ends the chance to reroll.
 - **Advantage rule.** The tile, number or target menu offers `with inspiration
   (advantage)`; the roll has advantage and the Log says inspiration was expended.
   It pays for one roll: the armed action's next roll has no advantage from it.
@@ -160,11 +161,14 @@ in the panel that still waits to be sent is spent with it.
 2. `Half for those at or above DC` marks them to take half, and takes the mark
    from a target whose save is now under the DC. `Roll damage` rolls the damage
    once, for every target, into Amount; Enter applies it, halving where marked.
-3. The run keeps that rolled damage until it is applied or the action ends.
-   When a target is added or taken away, a save is rolled again, or the marks
-   change, Amount is made again from it: Enter applies Amount as it is to one
-   target, so one target that made its save has half in Amount. A save rolled
-   again loses the half mark of the save before it.
+3. The run keeps that rolled damage until an amount is applied or the action
+   ends; a step that applies no amount, such as a note, leaves it. When a target
+   is added or taken away, a save is rolled again, or the marks change, Amount
+   is made again from it: Enter applies Amount as it is to one target, so one
+   target that made its save has half in Amount. A save rolled again loses the
+   half mark of the save before it. An amount that the DM typed over the run's
+   own stays. Damage that a condition settled for the targets before is not
+   kept for new targets: Amount is cleared, and `Roll damage` rolls it again.
 
 ### A player's attack
 

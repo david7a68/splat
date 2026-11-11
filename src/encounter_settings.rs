@@ -109,6 +109,17 @@ impl Options {
                 .collect::<Vec<_>>(),
             &document.text,
         );
+        Self::read(&entry, campaign, catalogue, &document)
+    }
+
+    /// The options in the campaign's entry, once its links are resolved. A saved choice that
+    /// names no rule the campaign has is not an error here.
+    fn read(
+        entry: &Entry,
+        campaign: &Campaign,
+        catalogue: &Catalogue,
+        document: &CampaignDocument,
+    ) -> Result<Self, String> {
         let folder = match entry
             .fields
             .get("splat_run_storage")
@@ -165,7 +176,7 @@ impl Options {
                 return Err("Unsupported initiative group order.".into());
             }
         }
-        result.inspiration_rules = inspiration_rules(campaign, catalogue, &document);
+        result.inspiration_rules = inspiration_rules(campaign, catalogue, document);
         result.inspiration_choice = chosen_inspiration(
             entry
                 .fields
@@ -495,9 +506,30 @@ mod tests {
         let left = load();
         assert_eq!(left.inspiration_choice, None);
         assert_eq!(left.inspiration(), Some(Inspiration::Reroll));
-        // The same at the loader's own boundary, where a choice names an entry by its ID: one
-        // that is gone, and one that is not an inspiration rule, are each no choice.
+        // The same through the loader, with a choice that reaches it unresolved: it names an
+        // entry by an ID that no entry has. The load must not stop on it.
         let catalogue = Catalogue::load(&[], Some(&campaign)).unwrap();
+        let document = CampaignDocument::load(&campaign).unwrap();
+        let mut entry = Entry::parse(&document.path, &document.text).unwrap();
+        let mut choices = serde_yaml_ng::Mapping::new();
+        choices.insert(
+            inspiration::CHOICE.into(),
+            serde_yaml_ng::to_value(EntryRef {
+                id: Some(Uuid::new_v4()),
+                key: None,
+                link: None,
+            })
+            .unwrap(),
+        );
+        entry
+            .fields
+            .insert("splat_rule_choices".into(), choices.into());
+        let read = Options::read(&entry, &campaign, &catalogue, &document)
+            .expect("a choice that is gone does not stop the load");
+        assert_eq!(read.inspiration_choice, None);
+        assert_eq!(read.inspiration(), Some(Inspiration::Reroll));
+        // And at the choice's own boundary: one that is gone, and one that is not an
+        // inspiration rule, are each no choice.
         let saved = |id: Uuid| {
             serde_yaml_ng::to_value(EntryRef {
                 id: Some(id),
