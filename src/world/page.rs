@@ -13,24 +13,32 @@ const ROW: f32 = 40.0;
 const LIST_WIDTH: f32 = 260.0;
 /// More rows than this in one check are counted, not shown.
 const CHECK_ROWS: usize = 40;
+/// What the Problems page lists, in the words of its sections.
+const PROBLEMS_INTRO: &str = "These lists show notes with a date outside an event, a link to no note, no summary, no links, or a name or sentence on two notes. Splat only lists them. You change the notes.";
 /// The words for a held NPC, in the rail and in the row above another view. The rail's link
 /// is found by this constant.
 pub const UNSAVED_NPC: &str = "Unsaved NPC";
 
 /// A repair cause must stay whole even when Lookup narrows the list. So must the path: a long
-/// one wraps, because a cut path cannot tell two files in one folder apart.
+/// one wraps, because a cut path cannot tell two files in one folder apart. A note that cannot
+/// be read is an error, so its cause follows the error icon in the error colour; the words stay
+/// muted, as every row's do.
 fn broken_row(ui: &mut egui::Ui, selected: bool, path: &str, cause: &str) -> egui::Response {
     let width = (ui.available_width() - design::S * 2.0).max(design::XXL);
     let font = if selected { Type::Strong } else { Type::Body };
     let title = ui
         .painter()
         .layout(path.to_owned(), font.font(ui), colors().text, width);
-    let detail = ui.painter().layout(
-        cause.to_owned(),
-        Type::Small.font(ui),
-        colors().muted,
-        width,
-    );
+    let format = |color| egui::TextFormat {
+        font_id: Type::Small.font(ui),
+        color,
+        ..Default::default()
+    };
+    let mut job = egui::text::LayoutJob::default();
+    job.append(icons::ERROR, 0.0, format(colors().result.error));
+    job.append(&format!(" {cause}"), 0.0, format(colors().muted));
+    job.wrap.max_width = width;
+    let detail = ui.fonts_mut(|fonts| fonts.layout_job(job));
     let height = (title.size().y + detail.size().y + design::S).max(ROW);
     design::row(
         ui,
@@ -44,6 +52,34 @@ fn broken_row(ui: &mut egui::Ui, selected: bool, path: &str, cause: &str) -> egu
                 position + egui::vec2(0.0, title.size().y),
                 detail,
                 colors().muted,
+            );
+        },
+    )
+}
+
+/// `design::two_line_row`, with each warning mark in the detail in its own tone before the
+/// muted words, as Library's rows have.
+fn marked_row(ui: &mut egui::Ui, selected: bool, title: &str, detail: &str) -> egui::Response {
+    design::row(
+        ui,
+        ROW,
+        selected,
+        &format!("{title} · {detail}"),
+        |ui, rect| {
+            let c = colors();
+            let width = rect.width() - 2.0 * design::S;
+            let font = if selected { Type::Strong } else { Type::Body };
+            let galley = design::one_line(ui, title, font.font(ui), c.text, width);
+            let total = galley.size().y + Type::Small.line();
+            let top = rect.center().y - total / 2.0;
+            ui.painter()
+                .galley(egui::pos2(rect.left() + design::S, top), galley, c.text);
+            let detail =
+                crate::library::marked_line(ui, detail, Type::Small.font(ui), c.muted, width);
+            ui.painter().galley(
+                egui::pos2(rect.left() + design::S, top + total - Type::Small.line()),
+                detail,
+                c.muted,
             );
         },
     )
@@ -393,16 +429,18 @@ impl WorldPage {
                         }
                     });
                 }
+                // Every note this count holds cannot be read, which is an error in its row,
+                // this count and its repair alike.
                 if broken > 0
                     && design::status_link(
                         ui,
                         design::Status {
-                            icon: icons::WARN,
+                            icon: icons::ERROR,
                             word: &format!(
                                 "{} cannot be read",
                                 design::count(broken, "note", "notes")
                             ),
-                            color: colors().result.warning,
+                            color: colors().result.error,
                         },
                     )
                     .clicked()
@@ -558,7 +596,7 @@ impl WorldPage {
                             .reader
                             .name_undo
                             .as_ref()
-                            .is_some_and(|change| change.path == repair.path)
+                            .is_some_and(|change| change.shows_on(campaign, &repair.path))
                         {
                             self.reader.name_undo = None;
                         }
@@ -619,7 +657,7 @@ impl WorldPage {
                         .show(ui, |ui| {
                             // A later result on the repaired note replaces `Note repaired.`.
                             if self.repaired == Some(item.entry.id)
-                                && self.reader.has_change_result(&item.entry.path)
+                                && self.reader.has_change_result(campaign, &item.entry.path)
                             {
                                 self.repaired = None;
                             }
@@ -764,16 +802,22 @@ impl WorldPage {
         design::reader::title(ui, fault.path.rsplit('/').next().unwrap_or(&fault.path));
         // No editor link: an editor cannot open a file that Splat cannot read either.
         super::entry_file_actions(ui, &campaign.path, &fault.path, false);
+        // The title and file line name the file, so the error says `this note` (FG6).
         let (again, cancel) =
-            design::message_with_actions(ui, design::Tone::Error, &fault.headline(), |ui| {
-                ui.add(
-                    egui::Label::new(
-                        Type::Body
-                            .rich(ui, fault.recovery_with_try_again())
-                            .color(colors().text),
-                    )
-                    .wrap(),
-                );
+            design::message_with_actions(ui, design::Tone::Error, &fault.pane_headline(), |ui| {
+                // The recovery is prose: it keeps the reader measure inside the message's
+                // list measure, so its last step does not wrap across a long return.
+                ui.scope(|ui| {
+                    ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
+                    ui.add(
+                        egui::Label::new(
+                            Type::Body
+                                .rich(ui, fault.recovery_with_try_again())
+                                .color(colors().text),
+                        )
+                        .wrap(),
+                    );
+                });
                 ui.horizontal_wrapped(|ui| {
                     // Both choices start at the message text, as every message's choices do.
                     let again = super::starts_line(ui, design::Action::quiet("Try again"), true)
@@ -873,8 +917,11 @@ impl WorldPage {
                     Type::Small
                         .rich(
                             ui,
+                            // Two NPCs: the one Lookup keeps and the one on this card. Each is
+                            // named, so the DM knows which to save and which moves here.
                             format!(
-                                "Lookup keeps {name}. Save or discard this NPC to move it here."
+                                "Lookup keeps {name}. Save or discard {} to move {name} here.",
+                                npc.name
                             ),
                         )
                         .color(colors().muted),
@@ -1019,10 +1066,7 @@ impl WorldPage {
             return open;
         }
         design::reader::title(ui, "Problems");
-        design::reader::subtitle(
-            ui,
-            "Where a fact has no home, or has two. Splat only lists them. You change the notes.",
-        );
+        design::reader::subtitle(ui, PROBLEMS_INTRO);
         if !checks.loose_dates.is_empty() {
             design::reader::section_heading(ui, "Dates outside events");
             note(
@@ -1203,8 +1247,7 @@ impl WorldPage {
                             },
                         )
                     } else {
-                        design::two_line_row(ui, ROW, selected, &name, &detail)
-                            .on_hover_text(&entry.path)
+                        marked_row(ui, selected, &name, &detail).on_hover_text(&entry.path)
                     };
                     if response.clicked() {
                         self.open_note(entry.id);
@@ -1366,7 +1409,7 @@ mod tests {
                 Box::new(|harness| {
                     click_starting(harness, "Problems · ");
                     harness.state().view == View::Problems
-                        && harness.query_by_label("Where a fact has no home, or has two. Splat only lists them. You change the notes.").is_some()
+                        && harness.query_by_label(PROBLEMS_INTRO).is_some()
                 }),
             ),
             (

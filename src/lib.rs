@@ -2259,7 +2259,8 @@ impl Splat {
             None => {}
         }
         if let Some(entry) = self.lookup.open_in_library.take() {
-            if entry.kind == "world"
+            // Lookup offers this for typed World notes and plain ones alike.
+            if (entry.kind == "world" || entry.kind == world::NOTE_KIND)
                 && let Some(campaign) = self.campaigns.active_campaign()
             {
                 self.world_page.reveal(campaign.id, entry.id);

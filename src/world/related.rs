@@ -30,21 +30,75 @@ pub(crate) fn page_group(item: &Item) -> (u8, String) {
     }
 }
 
-/// A page's name as a link, then what it is, in words that wrap.
+/// A page's name as a link, then what it is, in words that wrap. The name and the words are one
+/// paragraph with one line pitch, `Small`'s (FG2): the words' first line follows the name, and
+/// each wrapped line starts at the name's edge. The name keeps its `XL` target, centred on the
+/// first line, so the paragraph has that room above and below it and no target overlaps.
 fn page_row(ui: &mut egui::Ui, index: &ContentIndex, position: usize) -> bool {
     let item = &index.items[position];
     let detail = match item.summary() {
         "" if item.entry.kind == "world" => type_label(world_type(&item.entry)),
         summary => summary.to_owned(),
     };
-    ui.horizontal_wrapped(|ui| {
-        let clicked = design::link(ui, &item.entry.name).clicked();
-        if !detail.is_empty() {
-            ui.label(Type::Small.rich(ui, detail).color(colors().muted));
+    let c = colors();
+    let width = ui.available_width().max(1.0);
+    let name = &item.entry.name;
+    let name_galley = design::one_line(ui, name, Type::Body.font(ui), c.accent, width);
+    let name_width = name_galley.size().x;
+    let target_width = name_width.max(design::XL);
+    let line = Type::Small.line();
+    let detail_galley = (!detail.is_empty()).then(|| {
+        let mut job = egui::text::LayoutJob::default();
+        job.append(
+            &detail,
+            target_width + ui.spacing().item_spacing.x,
+            egui::TextFormat {
+                font_id: Type::Small.font(ui),
+                line_height: Some(line),
+                color: c.muted,
+                ..Default::default()
+            },
+        );
+        job.wrap.max_width = width;
+        ui.fonts_mut(|fonts| fonts.layout_job(job))
+    });
+    let lines = detail_galley
+        .as_ref()
+        .map_or(line, |galley| galley.size().y.max(line));
+    // The target's room above and below the first line.
+    let pad = (design::XL - line) / 2.0;
+    let (rect, row) =
+        ui.allocate_exact_size(egui::vec2(width, lines + pad * 2.0), egui::Sense::hover());
+    let first = rect.top() + pad;
+    let target = egui::Rect::from_min_size(rect.min, egui::vec2(target_width, design::XL));
+    let response = ui.interact(target, row.id.with("link"), egui::Sense::click());
+    response
+        .widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Link, ui.is_enabled(), name));
+    if ui.is_rect_visible(rect) {
+        let color = if response.hovered() {
+            c.focus
+        } else {
+            c.accent
+        };
+        let top = first + line / 2.0 - name_galley.size().y / 2.0;
+        ui.painter().hline(
+            rect.left()..=rect.left() + name_width,
+            top + name_galley.size().y - 1.0,
+            egui::Stroke::new(1.0, color),
+        );
+        ui.painter()
+            .galley(egui::pos2(rect.left(), top), name_galley, color);
+        if let Some(galley) = detail_galley {
+            ui.painter()
+                .galley(egui::pos2(rect.left(), first), galley, c.muted);
         }
-        clicked
-    })
-    .inner
+        if response.has_focus() {
+            design::focus_ring(ui, target);
+        }
+    }
+    response
+        .on_hover_cursor(egui::CursorIcon::PointingHand)
+        .clicked()
 }
 
 /// History rows put each date in one column, as wide as the widest date plus an `S` gap, so
@@ -73,7 +127,7 @@ fn history_rows(ui: &mut egui::Ui, index: &ContentIndex, history: &[usize]) -> O
             .horizontal_top(|ui| {
                 let gap = ui.spacing().item_spacing.x;
                 ui.spacing_mut().item_spacing.x = design::S;
-                let size = egui::vec2(column, ui.spacing().interact_size.y);
+                let size = egui::vec2(column, design::XL);
                 ui.allocate_ui_with_layout(size, egui::Layout::top_down(egui::Align::Min), |ui| {
                     ui.set_min_size(size);
                     ui.set_max_width(column);

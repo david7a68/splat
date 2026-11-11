@@ -202,7 +202,8 @@ on other pages; `Back to run` is secondary. Use a `status_link`, such as `Runnin
 state. An on toggle uses `selected`, its word and an icon or check, without accent fill. Use red only for an
 action that loses something. Keep Delete and Remove in row menus.
 
-A save row keeps its state and quiet `Discard` at the left and `Save` at the right. Clean rows say `No
+A save row keeps its state and quiet `Discard` at the left and `Save` at the right. A draft that Save's own check
+refuses says `Invalid`, changed or not: validity comes before whether the text changed. Other clean rows say `No
 changes`, unless Save is enabled to repair something the file holds: then the state names the write with the warning
 icon (`Save replaces the unread choice on line 23 with these settings`), and `Ctrl+S` saves exactly when the button
 can. `No changes to save.` belongs only to blocked Save's hover text and accessible description. A save row
@@ -219,7 +220,7 @@ Saved and errors keep that left slot. When one cause blocks several controls, st
 save row, run strip or recording row. Other controls use its hover text and accessible description. The rail
 never repeats the sentence. Its campaign switcher keeps its height and a lock; the popup starts with the
 reason and disables campaign choices. The popup stays inside the navigation column, clear of its splitter; in a
-narrow column its choices wrap. Package, encounter, group, repair and run-settings drafts keep their campaign-switch
+narrow column its choices wrap. Package, encounter, group, repair, World edit and run-settings drafts keep their campaign-switch
 reason after Unsaved and Discard in the save row. Reserve its height so the first edit moves no content. Run
 settings keep their full save actions on a second line at the right edge, so neither action is cut short.
 
@@ -540,11 +541,12 @@ keep the whole row. The kind and other parts before a fault go first, then parts
 duplicate rows apart, stays whole while the fault shortens to whole words and then to its warning mark; only then is
 the file cut. No cut is inside a word, and a cut ends with `…`, never on a separator. Results never scroll sideways.
 Clicking a result or scrolling into its reader closes the list. While the list is closed, the quiet `Show 1 result`
-or `Show N results` opens it again. An action that shows hidden items starts with a verb; a bare count reads as a
+or `Show N results` opens it again. One result that is the entry on screen has nothing more to show, so it has no
+such line. An action that shows hidden items starts with a verb; a bare count reads as a
 label. Its accessible name stays `Show the results`. `Show all N` is quiet and lists every match in place,
 in Lookup and in Arrivals: a scroll list at most eight rows tall that follows Tab and the arrow keys. New words
-return to five. Clear sits beside nonempty search only. Back, Open in Library and the close
-icon share the title line. Creation actions follow results with the proposed name, only without an exact
+return to five. Clear sits beside nonempty search only. Back, Open in Library (Open in World for every World note,
+typed or plain; a session note has neither) and the close icon share the title line. Creation actions follow results with the proposed name, only without an exact
 match. Generate NPC appears only for empty search. When no creation action shows, their row takes no room: the rule
 above the entry follows the results or `Show N results` at the normal gap.
 
@@ -724,7 +726,9 @@ until the next note or plan edit.
 The header's New menu lists `Note…`, `NPC…`, `Location…` and `Generate NPC`. `…` marks each choice that asks for a
 name before it creates anything; Generate NPC makes its card at once, so it has no mark.
 
-Readers show the relative path, Edit in Obsidian and Show file for every note that the system reads as text. Duplicate readers keep
+Readers show the relative path, Edit in Obsidian and Show file for every note that the system reads as text. The path
+shortens from the front and keeps its file name whole; when `…/<file name>` does not fit beside the links, the path
+takes its own Read row and the links the row below, as in Library. Duplicate readers keep
 the path on this file line only; search results keep paths to distinguish names. A duplicate Lookup row
 puts the path right after the name, so the part that differs is cut last. Plain notes use
 one-line rows. A plain note's `Give this note a type` section says what a type gives the DM, and does not repeat the heading:
@@ -736,8 +740,11 @@ readable body says `Nothing written yet.` only. The file line keeps the one `Edi
 A History list gives its dates one column, as wide as the widest date in the list plus an `S` gap, so event
 names share one left edge and a wrapped summary stays right of the dates. The column takes at most a third of
 the width; a longer date wraps in it, with its first line on the name's line. A row without a date keeps the
-column empty. Lookup's `Use your own names` never replaces an unsaved NPC on the World page. World opens on its own card,
-which says `Lookup keeps <name>. Save or discard this NPC to move it here.` while Lookup holds that NPC.
+column empty. A row in Here, Members or History is one paragraph: the name's link, then what the note is, wrapping at
+the name's edge with one `Small` line pitch; the link keeps its 24 px target on the first line, with that room above and
+below the paragraph. Lookup's `Use your own names` never replaces an unsaved NPC on the World page. World opens on its own card,
+which says `Lookup keeps <Lookup’s NPC>. Save or discard <this card’s NPC> to move <Lookup’s NPC> here.` while Lookup
+holds that NPC, so each of the two NPCs has its name.
 An unsaved generated NPC on the World page is a held draft. Only Save NPC and Discard end it. Every other path keeps
 it: Problems, Open questions, another note, a repair, New, a reveal from another page and Lookup's link. While another
 view is open, one row above that view says `Unsaved NPC: <name> · Show`, so the view stays usable. Show, Generate NPC
@@ -746,7 +753,9 @@ and Lookup's link open its card again; Reroll on the card replaces it. Discard s
 asks about the NPC as it does for other drafts. The rail shows `Unsaved NPC` with the draft icon while the NPC is held;
 it is a link that opens the NPC's card on World from any page.
 
-A World result is one message form in one place: `message` (or the shared Undo message) below the file line, where
+Every World result with an Undo (a value, name, edit, identity or file change, and a discarded edit draft) and every
+edit form with its `Undo reload` belong to the campaign that made them: Lookup keeps its reader across a campaign change, and the result shows, and its Undo acts,
+only in that campaign. A World result is one message form in one place: `message` (or the shared Undo message) below the file line, where
 `<file> is now a separate note.` sits, so the title never moves. `Note repaired.` is a success message there, and
 `<name> draft discarded.` sits there below the open note's file line. The edit form's save result (`Changes saved.`
 with `Undo changes`, or `Your changes are already in the note.`) sits there too, and a later result on the same note
@@ -762,10 +771,12 @@ reader with no file line.
 
 Set values show labelled rows: Stat block, In, Part of and Status. An NPC also shows its empty Stat block row. A full NPC reader's kind line shows NPC and its owner; Status stays in its own row. A compact reader keeps status on the kind line because it has no Status row. A compact reader has no file line either: while a duplicate-note repair message shows, its kind line drops the fault and names the open file instead (`NPC · Campaign · NPCs/Rook Ambry copy.md`). The result rows keep the fault. Use a fixed label column, aligned
 values and a 32 px pitch. Change uses one column at the widest visible value in the block plus an `L`
-gap, capped at the value measure. Values wrap within their column, with Change on the first line. Read mode hides empty relationship and status values. An NPC keeps its empty Stat block row and Change action, so assigning its first stat block still takes three interactions from the reader. This row says `not set`. Edit on the title line opens all fields, including empty ones. A typed page with no set values shows its prose directly, except for this NPC Stat block row: with no row, the value block adds no gap, so the prose starts as far below the file line as a plain note's does. Missing links retain names and keep `Not found` on one line. In a narrow pane (Lookup beside World), each label stands
+gap, capped at the value measure. Values wrap within their column, with Change on the first line. Read mode hides empty relationship and status values. An NPC keeps its empty Stat block row and Change action, so assigning its first stat block still takes three interactions from the reader. This row says `not set`. Edit on the title line opens all fields, including empty ones. A typed page with no set values shows its prose directly, except for this NPC Stat block row: with no row, the value block adds no gap, so the prose starts as far below the file line as a plain note's does. Missing links retain names and keep `Not found` on one line beside a label column. In a narrow pane (Lookup beside World), each label stands
 above its value with an `S` gap above the label. The value then keeps the label column's room, and only Change and its
-`L` gap come off its width, so a missing link stays on one line where it fits and otherwise wraps by whole words. The value column measures each value as it
-is drawn, including a missing group's icon and ` · Not found`. Empty or whitespace-only place, stat block and group values, and a Part of key with no value, are unset and give no warning. Broken links have a
+`L` gap come off its width; there a missing link's name keeps its line, wrapping by whole words only when it must, and
+`Not found` has its own line directly below it. The value column measures each value as it is drawn, including a
+missing group's icon and ` · Not found`, and each wrapped line of Part of apart: Change follows the widest drawn line,
+and a group is measured by the name its link shows, not the words in the file. Empty or whitespace-only place, stat block and group values, and a Part of key with no value, are unset and give no warning. Broken links have a
 warning icon, list warning and count in the header. A Part of target that is not found is a broken link
 (`Group not found`); the header counts its note once, and the count's menu opens it. A place link that
 matches more than one note also needs fixing: its list row says `Place has 2 matches`, and the header
@@ -786,27 +797,40 @@ keep their place when a warning comes or goes. Folder groups use normal-case pat
 type groups. The empty Status field in Edit shows the faint placeholder `A short word, such as alive.`
 
 Change pickers focus search. Place choices start at the value column beside In, with one file link and a
-bordered `Always use this one` action on each row. Change and the choice actions share one column: the
+bordered `Always use this one` action on each row; the link centres on the action's line. Change and the choice actions share one column: the
 widest value or file link in the block plus an `L` gap. A saved choice changes only its key and has Undo,
 which checks the file before writing. Always use this one saves a path with Undo. Change messages name
 both values as the rows show them: the name of the note a link opens, else the words in the file
-(`In: Ashfall Keep → not set.`, not the alias written in the file). They follow Change when they fit, otherwise sit below the whole row block. Only a Change message that
+(`In: Ashfall Keep → not set.`, not the alias written in the file). When another World note has the same name, a
+result and a picker name the folder too (`In: Watch House → Watch House (Locations).`), so the DM can tell which file
+the change chose. They follow Change when they fit, otherwise sit below the whole row block. Only a Change message that
 names a row value sits there; every other World result sits below the file line. A place that matches more than one
 note is the link `⚠ <name> · N matches`: the warning icon is its own glyph in the warning colour before the link
 words, so the underline covers only the words, as in `status_link`. Its accessible name keeps the icon. Different file and
-stored names offer `Rename the note to <file name>`, with a guarded update and Undo. New NPCs show their
+stored names offer two safe choices below the warning's words, `L` apart: `Rename the note to <file name>`, with a
+guarded update and `Undo name change`, then `Rename the file to <name>.md`, which keeps the name the DM typed. The file
+move never replaces a file, not even one that arrives during the move, and checks that the note still holds the text the
+reader came from: the whole file the index read, byte order mark, line ends and comments included. Where the folder's
+file system offers no move that refuses an existing file, a hard link and the removal of the old name move it; if the
+old name cannot be removed, the new one goes again and nothing moved; if neither can, the message names both files and
+says to delete the new one by hand. Where the file system offers neither move, the choice says `Splat cannot rename
+files safely in this folder, so nothing was moved.`; its result `The file is now
+<name>.md.` has `Undo file rename`, which checks the same before it moves the file back, and only in the campaign that made the move. The file choice is left out
+while the note's edit form is open, or when the name cannot be a file name. New NPCs show their
 future path below the name. A compact NPC reader puts Fights as and In on one read-only line; both open
-Lookup.
+Lookup. A missing link there reads as its other values: the muted label, then `⚠ <name> · Not found` in the warning
+tone (`In` `⚠ Watch House · Not found`).
 
 A campaign world entry has a quiet Edit action, with a pencil icon and the word Edit, on its title line in Lookup and World. Its icon sits one `L` after the measured title at every title width, so a kind line wider than a short title does not push it away; a title with art keeps Edit after the art. Edit replaces the rows and
 the text with one form. Read and Edit show Stat block, In, Part of, then Status, so a value keeps its place when the DM
 presses Edit; conflict lines after Overwrite use the same order. Text follows in the reader's prose type,
 without the title line. The Text field ends at the same `FORM_WIDTH` edge as Status. One frame holds
-the editor and its scrollbar, so scrolling does not shorten the field. The shared save row
+the editor and its scrollbar, so scrolling does not shorten the field. Stat block, In and Part of share one Change
+column, an `L` gap after the widest of their values, which wrap within it. The shared save row
 keeps the state at the left, then quiet `Cancel` while the form has no changes or quiet `Discard` while it
 has changes, and Save changes at that right edge. Save changes is primary unless a live run owns Next turn;
 then it is secondary. Cancel closes the form. Discard closes the form and offers Undo discard.
-A draft whose note is gone (deleted, or given a new identity outside Splat) warns below the open note's file line, with
+A draft whose note is gone (deleted, or another note took its place outside Splat) warns below the open note's file line, with
 `Copy text` and, an `L` gap after it, `Discard draft`. Discard draft lets the words go with `<name> draft discarded.`
 and `Undo discard` in the same place, until the next Edit, the next Discard or the Undo.
 The rail shows World draft while an edit is unsaved. If a repair is also unsaved, it shows World repair draft once.
@@ -845,24 +869,30 @@ Task marks at the start of a list item show an empty box for `[ ]` and a checked
 A note row has selected fill only while its reader is open. Open questions, Problems, creation and repair
 keep the remembered note without selected fill.
 
-Broken notes stay under Cannot be read. Each row's second line states the cause; a long path wraps and is never cut. The group uses the same gap as folder headings. They use the Campaign repair source editor. The editor and its save row end together at `LIST_MEASURE` (880 px),
+Broken notes stay under Cannot be read. A note that cannot be read is an error in its row, the header count (and
+Lookup's) and its pane: each row's second line is the error icon in the error colour, then the cause in muted words; a
+long path wraps and is never cut. Every other World row fault (a broken link, `Same note in two files`, unread values,
+table faults) is the warning icon in the warning colour before the muted words, as Library's rows are. The group uses the same gap as folder headings. They use the Campaign repair source editor. The editor and its save row end together at `LIST_MEASURE` (880 px),
 anchored left, as Campaign's do, so Save stays near the state and Discard; the two-version comparison after an outside
-change keeps the pane's width. The save row says `Invalid` while Save would refuse a changed draft (the message
-above it names the cause), as Library's does: a path outside the folder, text that cannot be read, or an identity the
-campaign does not allow. These checks read no file. Otherwise it says `Unsaved`. A Save that then fails on the disk
+change keeps the pane's width. The save row says `Invalid` while Save would refuse the draft, changed or not (the
+message above it names the cause), as Campaign's and Library's do: a path outside the folder, text that cannot be read,
+or an identity the campaign does not allow. These checks read no file. A readable unchanged draft says `No changes`;
+otherwise it says `Unsaved`. An Overwrite that these checks refuse writes nothing and shows only the cause: `Not
+saved.` is only for a failure on the disk. A Save that then fails on the disk
 (read only, missing, a write error) says `Not saved` with Save's reason above the editor, and Save is no longer
-primary. That cause belongs to the draft: it stays until the draft changes or a Save succeeds. Keep drafts in memory and
+primary. That cause belongs to the draft: an edit, Discard, Reload (also when the file holds the draft's words), the
+file followed from disk, or a successful Save ends it. Keep drafts in memory and
 warn before app close or a campaign switch. The unreadable count in the header opens the first broken
 note's repair, keeping other repair drafts. A note that the system will not read (not UTF-8 text, or no
 permission) cannot open in the source editor. Its pane keeps the title and a file line with only `Show file`: no
 editor link, because no editor can open the file either. When a change such as Part of finds an open note that can no
-longer be read, its error and the note's file line also offer no editor link until the file reads again. It leads with an error that names
-the file (`Splat cannot read Notes/Broken.md as text.`), then gives the recovery in plain words with Try again and
-Cancel at the message text. Technical details below holds the system's words. Its row's cause is short
+longer be read, its error and the note's file line also offer no editor link until the file reads again. Its pane leads with an error that
+names the file only as `this note`, because the title and file line name it (`Splat cannot read this note as text.`),
+then gives the recovery in plain words at the reader measure, with Try again and Cancel at the message text. Technical details below holds the system's words. Its row's cause is short
 (`Text format cannot be read`). Try again reads the folder again: a fixed note opens in the reader, a note that is
 still broken opens its repair, and a file moved or deleted outside Splat ends the pane. Splat never writes that file.
-Every World message about a file that the system will not read or write names the file and the recovery, never the
-system's words. A rolled table selects the matching row, marks it with dice and
+Every other World message about a file that the system will not read or write, away from that file's pane, names the
+file and the recovery, never the system's words. A rolled table selects the matching row, marks it with dice and
 states the result below in UI sans. Typed rolls use well fill, a centred placeholder and dice as the column
 heading. Fixed headers cover passing rows with page fill and a hairline. Generator cards name their table
 sources below attributes. Every card's `Will save <path>` is the path Save NPC writes: the folder that holds most of
