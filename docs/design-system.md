@@ -605,7 +605,8 @@ shows the check icon and No changes. Locked controls have no clean-state reason.
 and permits a folder in an Obsidian vault. Disconnected campaign-link help opens Settings from an inline link.
 Its state says Not connected · showing the name saved on this computer.
 
-A session-folder change counts notes, events, templates and recordings left behind. Offer Move files and save
+A session-folder change counts notes, events, templates and recordings left behind, and says what the safe
+choice costs: `If you save without moving, Splat no longer shows these files.` Offer Move files and save
 or Save without moving. Move files and save is primary when no other primary is in view; it is secondary while a
 run is open or the campaign details form is open. Refuse collisions and copy every owned file before changing the manifest. A run-folder
 change counts saved files left behind. Move runs and save is primary when no other primary is in view; it
@@ -1106,7 +1107,10 @@ uses muted recovery text; failed Connect retains error state. Sync stopped links
 Footer and strip Close run close at once only when saved with nothing unsent; otherwise ask for a choice. List
 lost changes on separate lines, up to three, then the remaining count. Deleted runs with unsent changes use
 warning. App close says Keep running, Keep recording or Keep processing for each task; recording and job
-titles name the unfinished session. Sync conflicts name the character and offer Review conflict.
+titles name the unfinished session. Sync conflicts name the character and offer Review conflict. The run's
+conflict dialog offers to `close and choose next time` only when Close now works. While a sync change is not
+confirmed, it says `Choose which HP to keep before you close.`, and the cause shows once in muted `Small` text
+above the actions, which all wait for it.
 The app-close and run-close dialogs draw their recovery actions through one shared function: quiet, on one line,
 Connect to sync before Review conflict, and the first one starts at the dialog text. Stop and
 close is secondary when saved work remains.
@@ -1187,14 +1191,17 @@ A line never ends with a separator: the `·` moves to the next line with the par
 name, to at most three lines, then shorten with full hover text. A flagged group's summary wraps the same way and
 shows every fact, however many lines it takes. Plan and Timeline share fight summaries: open fights show round as a run status link
 without Paused; ended, named and custom results keep stored words. Played fights show result and last round
-once on line two, then final party HP in a grid of two or three first-name cells, quiet Log, Whole run and
+once on line two, then final party HP in a grid of two or three first-name cells in the party bar's order
+(players the party no longer has come last), quiet Log, Whole run and
 Timeline links. Hover keeps full names and conditions; Remove stays in the name-aligned row menu.
 
 Remove from tonight removes one fight or group link, retaining surrounding words, with Undo remove below that
 row after `S`. Removed groups leave message and Undo in their old place, keeping other rows still, until the
 next note or plan edit. Removing a timeline event names it by its state or result, `Removed “Bridge Ambush”
 (Round 2 · Paused).`, and, when another row of that name stays in the session, says so: `The other “Bridge
-Ambush” and its result stay.` Plan additions offer Undo add. A recording count stays muted inside its tab and
+Ambush” and its result stay.` The book owns that message and its Undo remove, on the plan and on Timeline;
+both end at the next note, plan or Timeline edit, and when a run starts (combat begins, so its event reaches
+Timeline). Opening another note is not an edit. Plan additions offer Undo add. A recording count stays muted inside its tab and
 accessible name. Duplicate saved-run names first add session name; only same-name, same-session rows or rows
 without a known session need a date. Same-date copies also show time. Such rows omit Saved … so time appears
 once. When the second line is too long, its `Last:` part gives up whole words first (`Last: 1 damage to
@@ -1204,11 +1211,17 @@ the run icon.
 Session and Timeline add long rests with the same full-HP ruling, message and Undo add. Every closed
 long-rest row shows an icon and either Everyone at full or Not at full. Open rows hide that summary so the
 ruling stays in place. Actions say Mark everyone at full
-or Mark not at full; states say Everyone at full or Not at full. Keep one Undo ruling until the next edit.
+or Mark not at full; states say Everyone at full or Not at full, with the ruling's icon and colour on the
+plan row, the Timeline row and the detail alike. Keep one Undo ruling until the next edit. Its message says the
+ruling now in force: `Everyone starts the next fight at full.` or `The next fight starts from the HP the party
+has now.`
 Resuming a saved Setup after a restoring rest starts party HP full, says `Party HP is full after the long
 rest.` and offers Use the saved HP. Use the saved HP is its own named step, not an Undo: the header then says
 `Undo: use the saved HP`, and the same place says `Party HP set to the saved values.` with Undo, which gives
-back the full HP. Combat retains saved HP; the rest message names those fights.
+back the full HP. Combat retains saved HP; the rest message names those fights. A run started after a
+restoring rest with no fight since logs `Party HP is full after the long rest.`, and its saved row says `Last:
+full HP after long rest`; `carried over` is only for HP from a fight. Every `Last:` value that Splat writes
+starts in lower case.
 
 ### Party bar
 
@@ -1270,14 +1283,16 @@ conflict. Completed link updates use success.
 Version 2 stores event lists and day IDs in comments below headings. Every write renumbers days to the
 displayed clock. File items use Fight and Major event; accept Encounter and Event in any case, with or without
 a colon. Preserve outside prose, unknown properties and event fields. Separate app and outside event edits
-save together with a quiet notice; same-event edits need a choice. Compare at the first difference, with
+save together with an info message in the list column, as other results there; same-event edits need a choice. Compare at the first difference, with
 Overwrite before destructive Reload and lose my timeline. Flags name their line (`Line 9: …`); the file line
 below the last flag starts at its words and holds `Timeline.md` with the shared file actions; a flagged day keeps its Day icon and adds a muted `Small` word after the heading with a warning icon (`⚠ Written as Day 5`). Rail conflicts use warning Timeline changed on disk; write failures
 use error Timeline not saved. Run updates change only the Result line and never convert Timeline.
 
 Copied sessions say `<first file> and <second file> claim to be the same session.` They offer
-Make <file> a separate session with Undo separate session. Moved or deleted note drafts
-offer the new path, a new file and red `Discard`; Discard says `Draft discarded.` with `Undo discard`. After
+Make <file> a separate session with Undo separate session. The header names the clock (`Now: Day 1, 00:10`) only once a day sets it. Moved or deleted note drafts
+offer the new path, a new file and red `Discard`. When Splat found the note under a new name, the warning
+says so: `This note was moved or renamed. It is now <file>. Your draft is still here.`; `gone from the folder`
+is only for a note with no new place; Discard says `Draft discarded.` with `Undo discard`. After
 `Reload and lose my draft`, a note says `Reloaded from disk.` with `Undo reload`, as World does. Missing session and run folders offer Choose folder.
 
 ### Notes panel
@@ -1336,10 +1351,11 @@ rows own failures, stops and stalls; other pages use a bottom banner that does n
 stops offer Open the session. Failures stay in banner and rail until dismissed or retried. Record again is
 primary when no open run owns it. Unresolved recording recovery takes priority over processing: Choose an
 input when the input is missing, otherwise Record again. A blocked action never owns primary. Audio removed
-stays visible in results after WAV deletion. Recordings and their events keep LIST_MEASURE; result readers
+stays visible in results after WAV deletion. A recording row's sentences (stop, failure, cancel and result
+warnings) keep READER_MEASURE; its rule, menu and events keep LIST_MEASURE; result readers
 fill the pane. The session list omits the date during recording, jobs or a processed result. State and Playing
 share line two when they fit; otherwise Playing starts a line without a separator. Equal titles and dates show
-each note's file name on line two and in its accessible name. The rail says Processing cancelled; the list
+each note's file name on line two (it wraps at a space, and each of its lines starts at the first line's x) and in its accessible name. The rail says Processing cancelled; the list
 keeps Cancelled.
 
 ### Processing and results
@@ -1351,7 +1367,9 @@ Continue processing are primary when no open run owns Next turn and no other pri
 Only the first recording that needs processing owns that primary action; later rows use secondary actions.
 An enabled recovery action in a row or bottom banner takes priority over processing. A visible row's
 recording recovery also takes priority over a processing retry in another session's banner. A blocked
-banner action does not take primary from an enabled row.
+banner action does not take primary from an enabled row. A blocked banner `Continue processing` shows its reason
+beside it in `Small` text, then an `L` gap to the next choice. With the audio removed, the banner drops the
+failure's advice to process again, so the words and the blocked control agree.
 While recording consent is open, Start recording owns primary.
 They are secondary while a run is open. An unresolved recording recovery keeps Choose an input or Record
 again primary. Put destination below the first enabled Process or Continue processing only, in Small muted

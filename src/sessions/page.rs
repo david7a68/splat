@@ -101,6 +101,8 @@ pub struct Plan<'a> {
     pub open_run: Option<Uuid>,
     pub open_state: String,
     pub open_encounter: Option<&'a str>,
+    /// The party's identities in the party bar's order.
+    pub party: &'a [Uuid],
 }
 
 /// Source-ID matches take priority. Legacy names must identify one planned encounter.
@@ -266,6 +268,9 @@ pub struct Sessions {
     removed_fight: Option<(Option<Uuid>, usize, String, String, String)>,
     plan_notice_state: Option<(String, Vec<timeline::Event>)>,
     removed_event_in_plan: bool,
+    /// The removed event, and the open note's file and words when it was first seen. A later
+    /// edit of that note ends the removal's result and Undo.
+    removal_note: Option<(String, Option<(PathBuf, String)>)>,
     removed_group: Option<(Option<Uuid>, usize, String, String, f32, String)>,
     /// The fight behind the open event, read once.
     fight: Option<(Uuid, Result<FightSummary, String>)>,
@@ -441,6 +446,22 @@ pub fn processed_warning() -> Status<'static> {
         word: "Processed, with a warning",
         color: colors().result.warning,
     }
+}
+
+/// A fight's players in the party bar's order, so the two read alike side by side. A player the
+/// party no longer has follows, in the fight's order.
+fn in_party_order<'a>(
+    rows: &'a [crate::encounter_run::FightRow],
+    party: &[Uuid],
+) -> Vec<&'a crate::encounter_run::FightRow> {
+    let mut players: Vec<_> = rows.iter().filter(|row| row.player).collect();
+    players.sort_by_key(|row| {
+        party
+            .iter()
+            .position(|id| *id == row.id)
+            .unwrap_or(usize::MAX)
+    });
+    players
 }
 
 /// Words that wrap at the width they are given.
@@ -1136,6 +1157,8 @@ fn session_row(
     ui: &mut egui::Ui,
     selected: bool,
     title: &str,
+    // The note's file name, when another row has the same title and date.
+    file: Option<&str>,
     detail: &str,
     // The detail in full words, when the drawn one is short.
     spoken: Option<&str>,
@@ -1147,14 +1170,18 @@ fn session_row(
     let galley = ui
         .painter()
         .layout(title.to_owned(), font.font(ui), c.text, width);
-    let second = session_detail(ui, detail, state, width);
+    let second = session_detail(ui, file, detail, state, width);
     let lines = galley.size().y + second.size().y;
     let height = (lines + design::M).max(Density::Glance.control() + design::S);
+    let spoken = spoken.unwrap_or(detail);
     design::row(
         ui,
         height,
         selected,
-        &format!("{title} · {}", spoken.unwrap_or(detail)),
+        &match file {
+            Some(file) => format!("{title} · {file}\n{spoken}"),
+            None => format!("{title} · {spoken}"),
+        },
         |ui, rect| {
             let top = rect.center().y - lines / 2.0;
             let x = rect.left() + design::S;
@@ -1168,13 +1195,17 @@ fn session_row(
 
 fn session_detail(
     ui: &egui::Ui,
+    file: Option<&str>,
     detail: &str,
     state: Option<Status<'_>>,
     width: f32,
 ) -> std::sync::Arc<egui::Galley> {
-    let detail = detail
-        .lines()
-        .map(plan_summary)
+    // Summary parts stay whole. A file name is words: it wraps at a space, and its next line
+    // starts where the first did.
+    let detail = file
+        .into_iter()
+        .map(str::to_owned)
+        .chain(detail.lines().map(plan_summary))
         .collect::<Vec<_>>()
         .join("\n");
     let word = state.map(|state| {
@@ -1188,6 +1219,15 @@ fn session_detail(
         &detail,
         word.as_ref().map(|(word, color)| (word.as_str(), *color)),
         width,
+    )
+}
+
+/// A missing note's words. A known new place says why it is offered; with none, the file is
+/// only gone.
+fn missing_note_words(moved_to: Option<String>) -> String {
+    moved_to.map_or_else(
+        || "This file is gone from the folder. Your draft is still here. Choose where to save it, or discard it.".to_owned(),
+        |path| format!("This note was moved or renamed. It is now {path}. Your draft is still here."),
     )
 }
 
@@ -1256,6 +1296,16 @@ fn recording_detail(words: &str, missing_input: bool) -> String {
     detail.to_owned()
 }
 
+/// A recording row's sentence wraps at the reader's line length, as its destination does. The
+/// row's rule and menu keep the list's width.
+fn row_sentence(ui: &mut egui::Ui, words: egui::RichText) -> egui::Response {
+    ui.scope(|ui| {
+        ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
+        ui.add(egui::Label::new(words).wrap())
+    })
+    .inner
+}
+
 fn clock(seconds: u64) -> String {
     if seconds < 3600 {
         format!("{}:{:02}", seconds / 60, seconds % 60)
@@ -1283,6 +1333,32 @@ fn megabytes(bytes: u64) -> String {
 }
 
 impl Sessions {
+    /// A removed event's result and Undo end at the next edit of the note, from any page.
+    /// Book edits and a run that starts end them in the book itself.
+    fn end_removal_on_note_edit(&mut self, book: &mut Book) {
+        let Some(removed) = book.removed_event().map(|event| event.id.clone()) else {
+            self.removal_note = None;
+            return;
+        };
+        let note = self
+            .draft
+            .as_ref()
+            .map(|draft| (draft.path.clone(), draft.body.clone()));
+        match &self.removal_note {
+            Some((id, Some((path, body)))) if *id == removed => {
+                if note
+                    .as_ref()
+                    .is_some_and(|(now, words)| now == path && words != body)
+                {
+                    book.forget_removed();
+                    self.removal_note = None;
+                }
+            }
+            Some((id, None)) if *id == removed && note.is_none() => {}
+            _ => self.removal_note = Some((removed, note)),
+        }
+    }
+
     /// Follow the active campaign, watch the recorder and the job, and save what is due.
     pub fn poll(&mut self, ctx: &egui::Context, active: Option<&Campaign>, book: &mut Book) {
         if self.campaign.as_ref().map(|c| (c.id, &c.path)) != active.map(|c| (c.id, &c.path)) {
@@ -1294,6 +1370,7 @@ impl Sessions {
             .map(|note| (note.id, note.link()))
             .collect();
         book.open(self.folder.as_deref());
+        self.end_removal_on_note_edit(book);
         if self.just_saved() {
             ctx.request_repaint_after(SAVED_WORD_FOR);
         }
@@ -1539,6 +1616,21 @@ impl Sessions {
                     } else {
                         alert.words.clone()
                     };
+                    // With the audio gone, no advice to process again is true. The reason
+                    // stands beside the blocked action instead.
+                    let audio_gone = alert.retry.as_ref().is_some_and(|path| !path.exists());
+                    let words = if audio_gone {
+                        processing::without_retry_advice(&words)
+                    } else {
+                        words
+                    };
+                    let retry_blocked = if audio_gone {
+                        Some("Audio removed. Restore the WAV file to process it.")
+                    } else if self.job.is_some() || self.live.is_some() {
+                        Some("Stop recording or wait for processing to finish.")
+                    } else {
+                        None
+                    };
                     // The choices start at the message text, and wrap there too. The words keep
                     // their hover: what the recorder itself said.
                     let top = ui.cursor().min;
@@ -1565,22 +1657,28 @@ impl Sessions {
                                 } else {
                                     Action::secondary("Continue processing")
                                 })
-                                .blocked(if !path.exists() {
-                                    Some("Audio removed. Restore the WAV file to process it.")
-                                } else if self.job.is_some() || self.live.is_some() {
-                                    Some("Stop recording or wait for processing to finish.")
-                                } else {
-                                    None
-                                })
+                                .blocked(retry_blocked)
                                 .show(ui)
                                 .clicked()
                             {
                                 retry = Some((alert.session, path.clone()));
                             }
+                            // One blocked control says why beside it, then `L` to the next. Before
+                            // Dismiss, Dismiss's own `L` gap is that gap.
+                            let mut gap = false;
+                            if alert.retry.is_some() && retry_blocked.is_some() {
+                                design::blocked_reason(ui, retry_blocked);
+                                gap = true;
+                            }
+                            let mut gap_before = |ui: &mut egui::Ui| {
+                                if std::mem::take(&mut gap) {
+                                    ui.add_space(design::L - ui.spacing().item_spacing.x);
+                                }
+                            };
                             drawn |= alert.retry.is_some();
-                            if alert.can_record
-                                && self.live.is_none()
-                                && (if missing_input {
+                            if alert.can_record && self.live.is_none() {
+                                gap_before(ui);
+                                if (if missing_input {
                                     Action::quiet("Record again")
                                 } else if banner_primary {
                                     Action::primary("Record again")
@@ -1589,15 +1687,19 @@ impl Sessions {
                                 })
                                 .show(ui)
                                 .clicked()
-                            {
-                                record_again = Some(alert.session);
+                                {
+                                    record_again = Some(alert.session);
+                                }
                             }
                             drawn |= alert.can_record && self.live.is_none();
                             let here = self.on_page
                                 && self.selected == Some(alert.session)
                                 && self.tab == Tab::Recordings;
-                            if !here && Action::quiet("Open the session").show(ui).clicked() {
-                                open = Some(alert.session);
+                            if !here {
+                                gap_before(ui);
+                                if Action::quiet("Open the session").show(ui).clicked() {
+                                    open = Some(alert.session);
+                                }
                             }
                             drawn |= !here;
                             // The `L` gap separates Dismiss from a choice before it. Alone, it
@@ -1747,8 +1849,7 @@ impl Sessions {
                     retry: failed_recording,
                     said: None,
                     word: PROCESSING_CANCELLED,
-                    words: "Processing cancelled. Continue processing goes on from there."
-                        .to_owned(),
+                    words: format!("Processing cancelled. {}", processing::CONTINUE_ADVICE),
                 });
             }
             Err(error) => {
@@ -2935,37 +3036,38 @@ impl Sessions {
                 );
             }
             DraftState::Missing => {
-                design::message_with_actions(
-                    ui,
-                    Tone::Warning,
-                    "This file is gone from the folder. Your draft is still here. Choose where to save it, or discard it.",
-                    |ui| {
-                        ui.horizontal_wrapped(|ui| {
-                            ui.spacing_mut().item_spacing.y = design::M;
-                            if let Some(path) = &draft.moved_to {
-                                let label = format!(
-                                    "Save my draft to {}",
-                                    path.strip_prefix(&draft.search_folder)
-                                        .unwrap_or(path)
-                                        .display()
-                                );
-                                if Action::secondary(&label).show(ui).clicked() {
-                                    draft.save_moved();
-                                }
+                let words = missing_note_words(draft.moved_to.as_ref().map(|path| {
+                    path.strip_prefix(&draft.search_folder)
+                        .unwrap_or(path)
+                        .display()
+                        .to_string()
+                }));
+                design::message_with_actions(ui, Tone::Warning, &words, |ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.spacing_mut().item_spacing.y = design::M;
+                        if let Some(path) = &draft.moved_to {
+                            let label = format!(
+                                "Save my draft to {}",
+                                path.strip_prefix(&draft.search_folder)
+                                    .unwrap_or(path)
+                                    .display()
+                            );
+                            if Action::secondary(&label).show(ui).clicked() {
+                                draft.save_moved();
                             }
-                            if Action::secondary("Save my draft as a new file")
-                                .show(ui)
-                                .clicked()
-                            {
-                                draft.save_again();
-                            }
-                            ui.add_space(design::L - ui.spacing().item_spacing.x);
-                            if Action::destructive("Discard").show(ui).clicked() {
-                                draft.discard();
-                            }
-                        });
-                    },
-                );
+                        }
+                        if Action::secondary("Save my draft as a new file")
+                            .show(ui)
+                            .clicked()
+                        {
+                            draft.save_again();
+                        }
+                        ui.add_space(design::L - ui.spacing().item_spacing.x);
+                        if Action::destructive("Discard").show(ui).clicked() {
+                            draft.discard();
+                        }
+                    });
+                });
             }
             DraftState::Failed(error) => {
                 let again = design::message_with_actions(ui, Tone::Error, &error, |ui| {
@@ -3337,14 +3439,13 @@ impl Sessions {
                                 && other.label() == note.label()
                                 && other.date == note.date
                         });
-                        let detail = if duplicate {
-                            format!(
-                                "{}\n{detail}",
-                                note.path.file_name().unwrap_or_default().to_string_lossy()
-                            )
-                        } else {
-                            detail
-                        };
+                        let file = duplicate.then(|| {
+                            note.path
+                                .file_name()
+                                .unwrap_or_default()
+                                .to_string_lossy()
+                                .into_owned()
+                        });
                         // The name speaks words, not the icon's private character.
                         let full = if warned {
                             let short = format!("{} Processed", icons::WARN);
@@ -3359,6 +3460,7 @@ impl Sessions {
                             ui,
                             self.selected == Some(note.id),
                             &note.label(),
+                            file.as_deref(),
                             &detail,
                             full.as_deref(),
                             state,
@@ -4856,7 +4958,7 @@ impl Sessions {
                 let known = |n: Option<i64>| n.map_or_else(|| "?".to_owned(), |n| n.to_string());
                 let mut cells = Vec::new();
                 let mut widest = 0.0_f32;
-                for row in summary.rows.iter().filter(|row| row.player) {
+                for row in in_party_order(&summary.rows, plan.party) {
                     let first = row.name.split_whitespace().next().unwrap_or(&row.name);
                     let hp = format!("{}/{}", known(row.hp), known(row.max_hp));
                     let mut detail = format!("{}: {hp} HP", row.name);
@@ -5122,16 +5224,18 @@ impl Sessions {
             );
         }
         if stalled && let Some(live) = &self.live {
-            ui.add(egui::Label::new(Type::Small.rich(ui, format!("Stopped saving after {}. What was saved is kept. Record again starts a new file.", spoken_length(live.recorder.seconds()))).color(c.muted)).wrap());
+            let words = format!(
+                "Stopped saving after {}. What was saved is kept. Record again starts a new file.",
+                spoken_length(live.recorder.seconds())
+            );
+            row_sentence(ui, Type::Small.rich(ui, words).color(c.muted));
         }
         if let Some(words) = stored.as_ref().filter(|_| !live && !processing) {
-            let shown = ui.add(
-                egui::Label::new(
-                    Type::Small
-                        .rich(ui, recording_detail(words, missing_input))
-                        .color(c.muted),
-                )
-                .wrap(),
+            let shown = row_sentence(
+                ui,
+                Type::Small
+                    .rich(ui, recording_detail(words, missing_input))
+                    .color(c.muted),
             );
             if let Some(said) = words
                 .strip_prefix("Stopped by itself:")
@@ -5142,7 +5246,7 @@ impl Sessions {
         }
         let warning_shown = !live && !processing;
         if let Some(warning) = recording.warning.as_ref().filter(|_| warning_shown) {
-            ui.add(egui::Label::new(Type::Small.rich(ui, warning).color(c.muted)).wrap());
+            row_sentence(ui, Type::Small.rich(ui, warning).color(c.muted));
         }
         let job_here = self
             .job
@@ -6903,7 +7007,7 @@ impl Sessions {
                 ui,
                 Tone::Warning,
                 &format!(
-                    "The current folder keeps {counts}. Splat will not show these files from the new folder."
+                    "The current folder keeps {counts}. If you save without moving, Splat no longer shows these files."
                 ),
             );
         }
@@ -7324,6 +7428,97 @@ mod tests {
             ),
             "Removed “Bridge Ambush” (Round 2 · Paused). The other “Bridge Ambush” and its result stay."
         );
+        // iter-23-S FK2: the removal's result and Undo end at the next edit of the note. Opening
+        // another note is not an edit of this one.
+        let dir = tempfile::tempdir().unwrap();
+        let (one, two) = (dir.path().join("One.md"), dir.path().join("Two.md"));
+        fs::write(&one, "# One\n").unwrap();
+        fs::write(&two, "# Two\n").unwrap();
+        book.events.insert(0, fight("a", "Round 2"));
+        book.remove("a");
+        let mut sessions = Sessions {
+            draft: Some(Draft::open(&one).unwrap()),
+            ..Default::default()
+        };
+        sessions.end_removal_on_note_edit(&mut book);
+        sessions.draft = Some(Draft::open(&two).unwrap());
+        sessions.end_removal_on_note_edit(&mut book);
+        sessions
+            .draft
+            .as_mut()
+            .unwrap()
+            .body
+            .push_str("Another note's words.\n");
+        sessions.end_removal_on_note_edit(&mut book);
+        assert_eq!(
+            book.removed(),
+            Some("Bridge Ambush"),
+            "only that note's edit ends it"
+        );
+        sessions.draft = Some(Draft::open(&one).unwrap());
+        sessions.end_removal_on_note_edit(&mut book);
+        assert_eq!(
+            book.removed(),
+            Some("Bridge Ambush"),
+            "coming back is not an edit"
+        );
+        sessions
+            .draft
+            .as_mut()
+            .unwrap()
+            .body
+            .push_str("[[Bridge Ambush]]\n");
+        sessions.end_removal_on_note_edit(&mut book);
+        assert!(book.removed().is_none());
+        assert!(book.undo_remove().is_none());
+    }
+
+    #[test]
+    fn iter23_s_fk4_final_hp_follows_the_party_order() {
+        let row = |name: &str, id: u128, player: bool| crate::encounter_run::FightRow {
+            id: Uuid::from_u128(id),
+            name: name.to_owned(),
+            player,
+            hp: Some(1),
+            max_hp: Some(2),
+            temporary_hp: 0,
+            conditions: Vec::new(),
+            present: true,
+        };
+        let rows = [
+            row("Kestrel Dunmoor", 3, true),
+            row("Cinder Wolf", 9, false),
+            row("Former Member", 8, true),
+            row("Iselle Marrowind", 2, true),
+            row("Brannoch Vale", 1, true),
+        ];
+        let party = [1, 2, 3].map(Uuid::from_u128);
+        let names: Vec<_> = in_party_order(&rows, &party)
+            .into_iter()
+            .map(|row| row.name.as_str())
+            .collect();
+        assert_eq!(
+            names,
+            [
+                "Brannoch Vale",
+                "Iselle Marrowind",
+                "Kestrel Dunmoor",
+                "Former Member"
+            ]
+        );
+    }
+
+    #[test]
+    fn iter23_s_fl2_a_missing_note_names_its_new_place_only_when_known() {
+        assert_eq!(
+            missing_note_words(Some("Renamed in Obsidian.md".to_owned())),
+            "This note was moved or renamed. It is now Renamed in Obsidian.md. Your draft is still here."
+        );
+        // Outside the rule: with no new place, the file is only gone.
+        assert_eq!(
+            missing_note_words(None),
+            "This file is gone from the folder. Your draft is still here. Choose where to save it, or discard it."
+        );
     }
 
     #[test]
@@ -7481,6 +7676,7 @@ mod tests {
                         open_run: *open,
                         open_state: "Round 2".into(),
                         open_encounter: None,
+                        party: &[],
                     };
                     egui::CentralPanel::default().show(ctx, |ui| page.plan_pane(ui, book, &plan));
                 },
@@ -7514,7 +7710,7 @@ mod tests {
                 for status in ["Processed", "Processed, with a warning"] {
                     let detail = format!("2026-01-01 · {status} · {} Playing", icons::RUN);
                     for width in [170.0, 200.0, 216.0, 330.0] {
-                        let galley = session_detail(ui, &detail, None, width);
+                        let galley = session_detail(ui, None, &detail, None, width);
                         let rows: Vec<String> = galley
                             .rows
                             .iter()
@@ -7527,6 +7723,29 @@ mod tests {
                             rows.iter()
                                 .any(|row| row.replace('\u{a0}', " ").contains(status)),
                             "State stays whole: {width}: {rows:?}"
+                        );
+                    }
+                }
+                // iter-23-S FA11: a file name wraps at a space, and each of its lines starts
+                // where the first does, with no blank before it.
+                let file = "Session 1 - A long meeting name.md";
+                for width in [100.0, 140.0, 170.0] {
+                    let galley = session_detail(ui, Some(file), "2026-01-01", None, width);
+                    let rows: Vec<(String, f32)> = galley
+                        .rows
+                        .iter()
+                        .map(|row| {
+                            (
+                                row.glyphs.iter().map(|g| g.chr).collect(),
+                                row.pos.x + row.glyphs.first().map_or(0.0, |g| g.pos.x),
+                            )
+                        })
+                        .collect();
+                    assert!(rows.len() > 2, "{width}: the name wraps: {rows:?}");
+                    for (words, x) in &rows {
+                        assert!(
+                            !words.starts_with(char::is_whitespace) && x.abs() <= 0.5,
+                            "{width}: {rows:?}"
                         );
                     }
                 }

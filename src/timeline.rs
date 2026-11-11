@@ -1198,12 +1198,22 @@ impl Book {
     /// so does the DM's undo, because a new round is not an edit.
     /// What a run says now. `played` means it changed while open, and it was not only opened.
     pub fn record_run(&mut self, fact: &RunFact, session: Option<Uuid>, played: bool) {
-        // It stays in place for this, because what comes next must follow its order.
-        let removed = self.removed.clone();
+        // A run that starts begins the next part of the story, so a removal's result and Undo
+        // end there. Otherwise it stays in place, because what comes next must follow its order.
+        let starts = !self.events.iter().any(|event| {
+            event.run == Some(fact.id)
+                || (fact.copied_from.is_some() && event.run == fact.copied_from)
+        });
+        let removed = self.removed.clone().filter(|_| !starts);
         let dm_edit = self.dirty && !self.run_write;
         self.apply_run(fact, session, played);
         self.run_write = !dm_edit;
         self.removed = removed;
+    }
+
+    /// The removal's result and Undo end: a note was edited after it.
+    pub fn forget_removed(&mut self) {
+        self.removed = None;
     }
 
     /// The order for what is played or ruled on next.
@@ -2136,7 +2146,24 @@ mod tests {
         };
         book.record_run(&next, None, true);
         assert_eq!(book.events[0].result, "Round 4");
-        assert_eq!(book.undo_remove(), Some(rest));
+        assert_eq!(book.undo_remove(), Some(rest.clone()));
+        // iter-23-S FK2: a run that starts ends the removal's result and Undo. The run that
+        // was already on the timeline changed (B), and its new event stays after the end.
+        book.remove(&rest);
+        // A run reaches the timeline when combat begins.
+        let started = RunFact {
+            id: Uuid::from_u128(8),
+            ..fact(RunState::Running)
+        };
+        book.record_run(&started, None, true);
+        assert!(
+            book.events
+                .iter()
+                .any(|event| event.run == Some(started.id))
+        );
+        assert!(book.removed().is_none());
+        assert!(book.undo_remove().is_none());
+        assert!(!book.events.iter().any(|event| event.id == rest));
     }
 
     #[test]
