@@ -1457,9 +1457,10 @@ once on line two, then final party HP in a grid of two or three first-name cells
 (players the party no longer has come last), quiet Log, Whole run and
 Timeline links. Hover keeps full names and conditions; Remove stays in the name-aligned row menu.
 
-An act that changes a session note's words goes through `Draft::apply`, the one path for a note act: it reads the
-file first, changes one fragment, and its Undo lasts while the note's words are the words it left, with no time
-limit. A new act saves at once; with unsaved typed words and a changed file it writes nothing, and its place says
+An act that changes a session note's words goes through `Draft::apply`, the one path for a note act: it is for one
+session, by its ID, and the file must still hold that note; it reads the file first, changes one fragment, and its
+Undo lasts while that note's words are the words it left, with no time limit. The Undo follows the note when it is
+renamed, never a copy. A fragment that waits in the draft, unsaved, is taken back from the draft alone. A new act saves at once; with unsaved typed words and a changed file it writes nothing, and its place says
 `The note changed on disk. Choose in the note first.` Today's plan acts, a planned fight's line and Remove from
 tonight, join the draft as typed words do and save with them after the pause.
 
