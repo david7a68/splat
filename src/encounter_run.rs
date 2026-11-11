@@ -7544,6 +7544,18 @@ mod tests {
             moved.starts_with("Ghost 1 and Ghost 2 moved before "),
             "iter-24-R-FH6-by-hand: {moved}"
         );
+        run.undo();
+        run.undo();
+        // A group with one joining member is still the group, not that member.
+        run.apply(Command::AddGroup(guard_group("Lone", 1), Some(15)))
+            .unwrap();
+        let first = run.state.participants.len() - 1;
+        run.apply(Command::MoveArrivalBefore(first, 1)).unwrap();
+        let moved = run.state.log.last().unwrap().clone();
+        assert!(
+            moved.starts_with("Lone moved before "),
+            "iter-24-R-FH6-one-member: {moved}"
+        );
     }
 
     #[test]
