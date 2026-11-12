@@ -745,7 +745,7 @@ fn after_the_session(a: &mut Audit<'_, '_>) {
 
     // F6 of the session-cycle design: what an NPC said goes in the NPC's own Log, from the
     // scene that the DM marked done. Counted from the plan, as the design counts it.
-    a.setup("the plan holds a done scene with Hobb the Miller", |d| {
+    a.setup("the plan holds a done scene with Hobb the Miller, in view", |d| {
         let campaign = d.app_mut().campaigns.active_campaign().expect("a campaign");
         let npc = campaign.path.join(HOBB_PATH);
         fs::create_dir_all(npc.parent().expect("a folder")).expect("make the NPC folder");
@@ -768,6 +768,20 @@ fn after_the_session(a: &mut Audit<'_, '_>) {
         ));
         d.press_ctrl(Key::S);
         show_plan(d);
+        // By now the plan holds an opened fight with its rewards, so its rows pass the pane and
+        // the scenes fold to `N scenes` (F3). The DM opens them with that link.
+        let fold = d
+            .nodes()
+            .into_iter()
+            .find(|node| {
+                node.name.split_once(' ').is_some_and(|(n, word)| {
+                    n.parse::<usize>().is_ok() && ["scene", "scenes"].contains(&word)
+                })
+            })
+            .map(|node| node.name);
+        if let Some(fold) = fold {
+            d.click(&fold);
+        }
         d.expect(&format!("Done: {HOBB}"));
     });
     a.task("Put what an NPC said in the NPC's own note");
