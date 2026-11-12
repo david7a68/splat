@@ -1186,6 +1186,17 @@ impl Book {
         })
     }
 
+    /// Why this event is not in `Timeline.md`, in the words the Timeline page shows, or none.
+    pub fn event_not_saved(&self, id: &str) -> Option<String> {
+        if !self.not_saved() || !self.event_unsaved(id) {
+            return None;
+        }
+        Some(match &self.error {
+            Some(error) if !self.conflict => error.clone(),
+            _ => "Timeline changed on disk.".to_owned(),
+        })
+    }
+
     pub fn not_saved(&self) -> bool {
         self.dirty && (self.conflict || self.error.is_some())
     }
