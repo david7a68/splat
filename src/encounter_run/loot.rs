@@ -84,6 +84,13 @@ pub(super) fn describe(rolls: &[LootRoll]) -> String {
     }
 }
 
+/// A loot step's words and its table, from `describe`'s words: `2 loot rolls` and `gems`, so
+/// an Undo too narrow for the table keeps the act (`Undo: 2 loot rolls`).
+pub(super) fn describe_parts(action: &str) -> Option<(&str, &str)> {
+    let (words, table) = action.split_once(" on ")?;
+    (words == "loot roll" || words.ends_with(" loot rolls")).then_some((words, table))
+}
+
 /// `3`, `3 and 4`, `3, 4 and 1`.
 fn values(found: &[Found]) -> String {
     let words: Vec<String> = found.iter().map(|f| f.value.to_string()).collect();

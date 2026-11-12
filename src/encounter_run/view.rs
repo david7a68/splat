@@ -2,7 +2,7 @@
 //! round and current turn, then every row's HP and conditions, then the actions.
 //! Rows never move when the selection changes: the entry controls have a fixed dock.
 use super::{
-    Command, MAX_FROM_SHEET, Panel, Participant, PartySync, Phase, Run, SAVED_HP_USED,
+    Command, END_STEP, MAX_FROM_SHEET, Panel, Participant, PartySync, Phase, Run, SAVED_HP_USED,
     SHEET_SOURCE, Unend, display, effect::Time, mode_label,
 };
 use crate::{
@@ -5650,10 +5650,12 @@ impl Run {
             + design::number_width(ui, &saved, &small)
     }
 
-    /// The width of the ended header's actions on the title's line. Beside Continue fight or
-    /// its reason, Undo keeps its target, so the actions take the second line when the whole
-    /// target does not fit (V26, V27). Undo is at the roster's right edge, so beside the log
-    /// panel the actions to its right take at least the panel's width.
+    /// The width of the ended header's actions on the title's line: Close run, Continue fight
+    /// or the sentence in its place, and Undo with the ending's target. It is the same whichever
+    /// of them shows now and whatever Undo's target is, so no act changes the header's height
+    /// (X38): where a later step could need the second line, the header has it from the start,
+    /// and the lone Undo there names its target (W6-D2). Undo is at the roster's right edge, so
+    /// beside the log panel the actions to its right take at least the panel's width.
     fn ended_actions_width(&self, ui: &egui::Ui) -> f32 {
         let gap = ui.spacing().item_spacing.x;
         let glance = |action: Action<'_>| action.density(Density::Glance).natural_width(ui) + gap;
@@ -5662,40 +5664,37 @@ impl Run {
         } else {
             "Close run"
         }));
-        if !self.undo_continues() || self.undo_blocked().is_some() {
-            actions += match self.continue_words() {
-                Some(reason) => continue_reason_width(ui, reason) + gap,
-                None => glance(continue_action()),
-            };
+        actions += match self.continue_words() {
+            Some(reason) => continue_reason_width(ui, reason) + gap,
+            None => glance(continue_action()),
+        };
+        if !self.hide_panel {
+            let panel = design::side_panel_width(ui.ctx().content_rect().width());
+            actions = actions.max(panel + design::S);
         }
-        match self.ended_undo_whole(ui) {
-            Some(whole) => {
-                if !self.hide_panel {
-                    let panel = design::side_panel_width(ui.ctx().content_rect().width());
-                    actions = actions.max(panel + design::S);
-                }
-                actions + whole + gap
-            }
-            None if !self.history.is_empty() && self.undo_blocked().is_none() => {
-                actions + glance(self.undo_action("Undo"))
-            }
-            None => actions,
-        }
+        actions + self.ended_undo_room(ui) + gap
+    }
+
+    /// The room the ended header keeps for Undo: Undo with the ending's target. A longer
+    /// target shortens in it by the rule of every Undo label (`undo_forms`).
+    fn ended_undo_room(&self, ui: &egui::Ui) -> f32 {
+        self.undo_action(&format!("Undo: {END_STEP}"))
+            .density(Density::Glance)
+            .natural_width(ui)
     }
 
     /// The header's second line, when the actions take it: the room for the sentence that
-    /// stands where Continue fight would be, beside Undo's whole target, and the line's
-    /// height. The sentence wraps narrower there, so Undo keeps its target (V27).
+    /// stands where Continue fight would be, beside Undo's room, and the line's height. The
+    /// sentence wraps narrower there, so Undo keeps its target (V27). Both come from the
+    /// sentence and Undo's kept room, never from Undo's target now, so the line keeps its
+    /// height when a step changes the target or Continue fight comes (X38).
     fn ended_second_line(&self, ui: &egui::Ui, width: f32) -> (f32, f32) {
         let control = Density::Glance.control();
-        let Some(reason) = self
-            .continue_words()
-            .filter(|_| !self.undo_continues() || self.undo_blocked().is_some())
-        else {
+        let Some(reason) = self.continue_words() else {
             return (f32::INFINITY, control);
         };
         let gap = ui.spacing().item_spacing.x;
-        let undo = self.ended_undo_whole(ui).map_or(0.0, |undo| undo + gap);
+        let undo = self.ended_undo_room(ui) + gap;
         let room = continue_reason_width(ui, reason)
             .min(width - undo - gap)
             .max(design::L * 6.0);
@@ -5761,29 +5760,39 @@ impl Run {
             return;
         }
         let full = self.undo_label();
-        if self.ended_undo_action(ui, &full, room).show(ui).clicked() {
+        let words = self.ended_undo_words(ui, &full, room);
+        if self
+            .undo_action(&words)
+            .density(Density::Glance)
+            .name(&full)
+            .hint(&full)
+            .show(ui)
+            .clicked()
+        {
             self.undo();
             self.return_focus = self.lookup_open;
         }
     }
 
-    /// Undo as the ended header's line has `room` for it. Whole when it fits. Beside Continue
-    /// fight or its reason, Undo keeps its target in the line's room, and a target that is
-    /// still too long ends in `…`; alone, Undo gives up its target. A cut target keeps its
-    /// whole words in hover and in the accessible name.
-    fn ended_undo_action<'a>(&'a self, ui: &egui::Ui, full: &'a str, room: f32) -> Action<'a> {
-        let whole = self.undo_action(full).density(Density::Glance);
-        // The one-line header gives Undo exactly its whole width.
-        if whole.natural_width(ui) <= room + 0.5 {
-            whole
-        } else if self.ended_undo_whole(ui).is_some() {
-            whole.name(full).hint(full)
-        } else {
-            self.undo_action("Undo")
+    /// Undo's words as the ended header's line has `room` for them: whole when they fit, else
+    /// the first form of the one rule (`undo_forms`) that fits, and `Undo` alone last.
+    fn ended_undo_words(&self, ui: &egui::Ui, full: &str, room: f32) -> String {
+        let fits = |words: &str| {
+            self.undo_action(words)
                 .density(Density::Glance)
-                .name(full)
-                .hint(full)
+                .natural_width(ui)
+                <= room + 0.5
+        };
+        if fits(full) {
+            return full.to_owned();
         }
+        let forms = undo_forms(full, self.undo_from_sheet(), &self.state.participants);
+        forms
+            .target
+            .into_iter()
+            .chain(forms.bare)
+            .find(|words| fits(words))
+            .unwrap_or_else(|| "Undo".to_owned())
     }
 }
 
@@ -6208,52 +6217,11 @@ fn move_words(
     })
 }
 
-/// A move's words with its arrival's copy number kept, for Undo. SJ1: Undo is not beside the
-/// message that names the arrival, so the copy number tells two same-name groups apart; the
-/// member's name goes first, then the group's and the other name's last words:
-/// `move Rival… (… 2) before Rival…`. None when the arrival has no copy number or no form fits.
-fn move_copy_words(
-    ui: &egui::Ui,
-    verb: &str,
-    arrival: &str,
-    before: &str,
-    font: &egui::FontId,
-    width: f32,
-) -> Option<String> {
-    let full = format!("{verb} {arrival} before {before}");
-    if design::number_width(ui, &full, font) <= width {
-        return Some(full);
-    }
-    let (group, member) = arrival.strip_suffix(')')?.rsplit_once(" (")?;
-    let copy = member
-        .rsplit_once(' ')
-        .map(|(_, last)| last)
-        .filter(|last| !last.is_empty() && last.chars().all(|c| c.is_ascii_digit()))?;
-    shortened_names(group, before).find_map(|(group, before)| {
-        let short = format!("{verb} {group} (…\u{a0}{copy}) before {before}");
-        (design::number_width(ui, &short, font) <= width).then_some(short)
-    })
-}
-
 /// Two names with their last words given up in turn, the other name's last: each pair from
 /// both whole to both at their first word and `…`.
 fn shortened_names<'a>(group: &'a str, before: &'a str) -> impl Iterator<Item = (String, String)> {
-    let words = |name: &str| -> Vec<String> {
-        let all: Vec<&str> = name.split_whitespace().collect();
-        (1..=all.len())
-            .rev()
-            .map(|n| {
-                let kept = all[..n].join(" ");
-                if n == all.len() {
-                    kept
-                } else {
-                    format!("{kept}…")
-                }
-            })
-            .collect()
-    };
-    let groups = words(group);
-    words(before).into_iter().flat_map(move |before| {
+    let groups = name_words(group);
+    name_words(before).into_iter().flat_map(move |before| {
         groups
             .clone()
             .into_iter()
@@ -6261,8 +6229,56 @@ fn shortened_names<'a>(group: &'a str, before: &'a str) -> impl Iterator<Item = 
     })
 }
 
-/// Cut only the target, keeping action words, amounts and copy numbers.
-/// `from_sheet`: a sheet made this step, so its source can go before its target.
+/// The forms of one Undo label, longest first: see `undo_forms`.
+pub(super) struct UndoForms {
+    /// Forms that name the act's target, from the whole label to its shortest telling form.
+    pub(super) target: Vec<String>,
+    /// Forms without the target, for an Undo too narrow for any of `target`:
+    /// `Undo: 8 damage × 3`. After them, the caller shows `Undo` alone.
+    pub(super) bare: Vec<String>,
+}
+
+/// The one rule of the run's Undo labels. A label names its act and its target. A long
+/// effect keeps four of its words, then two (`Undo: effect Wis save… on Cinder Wolf 2`). Then
+/// the target shortens by whole words and keeps the part that tells it from another row: its
+/// copy number or letter (`Cinder… 2`), else its last word. A sheet's step gives up its source
+/// before its target's short forms. When no telling form fits, the target goes (`bare`). No
+/// form cuts a name to only `…` and its number. Hover and the accessible name keep the whole
+/// label.
+pub(super) fn undo_forms(label: &str, from_sheet: bool, participants: &[Participant]) -> UndoForms {
+    let (prefix, action) = label
+        .strip_prefix("Undo: ")
+        .map_or(("", label), |action| ("Undo: ", action));
+    let mut actions = vec![action];
+    if from_sheet && let Some(rest) = action.strip_prefix(SHEET_SOURCE) {
+        actions.push(rest);
+    }
+    let mut seen = std::collections::HashSet::new();
+    let target = actions
+        .iter()
+        .flat_map(|action| action_forms(action, participants))
+        .filter(|words| keeps_names(words) && seen.insert(words.clone()))
+        .map(|words| format!("{prefix}{words}"))
+        .collect();
+    let bare = if let Some((verb, ..)) = move_parts(action) {
+        vec![format!("{prefix}{verb}")]
+    } else if let Some((words, _)) = super::loot::describe_parts(action) {
+        vec![format!("{prefix}{words}")]
+    } else if let Some((words, _)) =
+        row_target(action, participants).and_then(|(before, _)| effect_words(before))
+    {
+        words
+            .iter()
+            .map(|words| format!("{prefix}{words}"))
+            .collect()
+    } else {
+        undo_compact(label, participants).into_iter().collect()
+    };
+    UndoForms { target, bare }
+}
+
+/// The first of `undo_forms`' target forms that fits `width`, else its shortest one. The
+/// caller measures it, and goes on to the bare forms, then `Undo` alone.
 pub(super) fn undo_words(
     ui: &egui::Ui,
     label: &str,
@@ -6271,63 +6287,167 @@ pub(super) fn undo_words(
     font: &egui::FontId,
     width: f32,
 ) -> String {
-    let mut shortened = label.to_owned();
-    for direction in [" on ", " off "] {
-        if let Some((effect, target)) = label
-            .strip_prefix("Undo: ")
-            .and_then(|s| s.rsplit_once(direction))
-            && effect.split_whitespace().count() > 4
-            && participants.iter().any(|p| p.name == target)
-        {
-            let effect = effect
-                .split_whitespace()
-                .take(4)
-                .collect::<Vec<_>>()
-                .join(" ");
-            shortened = format!("Undo: {effect}…{direction}{target}");
-            break;
-        }
+    let forms = undo_forms(label, from_sheet, participants).target;
+    forms
+        .iter()
+        .find(|words| design::number_width(ui, words, font) <= width)
+        .or(forms.last())
+        .map_or_else(|| label.to_owned(), Clone::clone)
+}
+
+/// The row an action names, as its words before and after the name. The longest name wins,
+/// so `Cinder Wolf 2` is not read as `Cinder Wolf`.
+fn row_target<'a>(
+    action: &'a str,
+    participants: &'a [Participant],
+) -> Option<(&'a str, &'a Participant)> {
+    let target = participants
+        .iter()
+        .filter(|p| !p.name.is_empty() && action.ends_with(&p.name))
+        .max_by_key(|p| p.name.len())?;
+    Some((action.strip_suffix(&target.name)?, target))
+}
+
+/// One action's forms with its target, longest first.
+fn action_forms(action: &str, participants: &[Participant]) -> Vec<String> {
+    if let Some(forms) = move_forms(action) {
+        return forms;
     }
-    let label = shortened.as_str();
-    if design::number_width(ui, label, font) <= width {
-        return label.to_owned();
+    if let Some((words, table)) = super::loot::describe_parts(action) {
+        return name_words(table)
+            .into_iter()
+            .map(|table| format!("{words} on {table}"))
+            .collect();
     }
-    let compact_effect = [" on ", " off "].into_iter().find_map(|direction| {
-        let (effect, target) = label.strip_prefix("Undo: ")?.rsplit_once(direction)?;
-        if !effect.ends_with('…') || !participants.iter().any(|p| p.name == target) {
-            return None;
-        }
-        let effect = effect
-            .split_whitespace()
-            .take(2)
-            .collect::<Vec<_>>()
-            .join(" ");
-        let verb = if direction == " on " { "add" } else { "remove" };
-        Some(format!(
-            "Undo {verb}: {}…{direction}{target}",
-            effect.trim_end_matches('…')
-        ))
-    });
-    // The button always says Undo: the target is shortened, never the verb.
-    let (prefix, action) = match &compact_effect {
-        Some(compact) => ("", compact.as_str()),
-        None => label
-            .strip_prefix("Undo: ")
-            .map_or(("", label), |action| ("Undo: ", action)),
+    let Some(target) = participants
+        .iter()
+        .filter(|p| !p.name.is_empty() && action.contains(&p.name))
+        .max_by_key(|p| p.name.len())
+    else {
+        return vec![action.to_owned()];
     };
-    let width = width - design::number_width(ui, prefix, font);
-    let shown = shortened_action(ui, action, participants, font, width);
-    // A sheet's step gives up its source before its target: `HP for Brannoch…`.
-    if from_sheet
-        && (design::number_width(ui, &shown, font) > width || !keeps_names(&shown))
-        && let Some(rest) = action.strip_prefix(SHEET_SOURCE)
-    {
-        let without = shortened_action(ui, rest, participants, font, width);
-        if design::number_width(ui, &without, font) <= width && keeps_names(&without) {
-            return format!("{prefix}{without}");
+    let (before, after) = action.split_once(&target.name).expect("target in action");
+    let words: Vec<String> = match effect_words(before).filter(|_| after.is_empty()) {
+        Some((words, joining)) => words
+            .into_iter()
+            .map(|words| format!("{words}{joining}"))
+            .collect(),
+        None => vec![before.to_owned()],
+    };
+    let shortest = words.last().expect("one form of the words");
+    let mut forms: Vec<String> = words
+        .iter()
+        .map(|words| format!("{words}{}{after}", target.name))
+        .collect();
+    forms.extend(
+        target_forms(&target.name, participants)
+            .into_iter()
+            .skip(1)
+            .map(|name| format!("{shortest}{name}{after}")),
+    );
+    forms
+}
+
+/// The words of an effect's step before its target (`effect Wis save DC 15 (Hold Person) on `)
+/// when they are more than four: four of them, then two, each with `…`, and the joining word.
+/// The verb (`effect`, `remove`) stays and is not counted. None for any other step's words,
+/// which stay whole.
+fn effect_words(before: &str) -> Option<(Vec<String>, &'static str)> {
+    let (words, joining) = [" on ", " off ", " from "]
+        .into_iter()
+        .find_map(|joining| Some((before.strip_suffix(joining)?, joining)))?;
+    let (verb, words) = match words.split_once(' ') {
+        Some((verb @ ("effect" | "remove"), rest)) => (format!("{verb} "), rest),
+        _ => (String::new(), words),
+    };
+    let words: Vec<&str> = words.split_whitespace().collect();
+    (words.len() > 4).then(|| {
+        let forms = [4, 2]
+            .into_iter()
+            .map(|n| format!("{verb}{}…", words[..n].join(" ")))
+            .collect();
+        (forms, joining)
+    })
+}
+
+/// A row's name by whole words, longest first, each form telling it from every other row:
+/// `Cinder Wolf 2` then `Cinder… 2`; `Brannoch Vale` then `Brannoch…`. A form that another
+/// row's name also gives (`Rival…` beside `Rival Captain 2`) keeps the last word instead, or is
+/// left out.
+fn target_forms(name: &str, participants: &[Participant]) -> Vec<String> {
+    let words: Vec<&str> = name.split_whitespace().collect();
+    let mut forms = vec![name.to_owned()];
+    let Some(last) = words.last().copied() else {
+        return forms;
+    };
+    let copy =
+        words.len() > 1 && (last.chars().all(|c| c.is_ascii_digit()) || last.chars().count() == 1);
+    let tells = |kept: &str, end: Option<&str>| {
+        !participants.iter().any(|p| {
+            p.name != name
+                && p.name.starts_with(&format!("{kept} "))
+                && end.is_none_or(|end| p.name.ends_with(&format!(" {end}")))
+        })
+    };
+    let longest = words.len().saturating_sub(if copy { 2 } else { 1 });
+    for count in (1..=longest).rev() {
+        let kept = words[..count].join(" ");
+        if !copy && tells(&kept, None) {
+            forms.push(format!("{kept}…"));
+        } else if count + 1 < words.len() && tells(&kept, Some(last)) {
+            forms.push(format!("{kept}… {last}"));
         }
     }
-    format!("{prefix}{shown}")
+    forms
+}
+
+/// A move's verb, its arrival and the name it moved before: `move <arrival> before <name>`.
+fn move_parts(action: &str) -> Option<(&'static str, &str, &str)> {
+    let (verb, words) = action
+        .strip_prefix("move ")
+        .map(|words| ("move", words))
+        .or_else(|| action.strip_prefix("Move ").map(|words| ("Move", words)))?;
+    let (moved, before) = words.split_once(" before ")?;
+    Some((verb, moved, before))
+}
+
+/// A move's forms with its target, longest first. SJ1: Undo is not beside the message that
+/// names the arrival, so an arrival with a copy number keeps it and gives up the member's
+/// name, `move Rival… (… 2) before Rival…`; then the place goes, `move Rival… (… 2)`. An
+/// arrival with no copy number shortens with the other name by whole words. None for any
+/// other step.
+fn move_forms(action: &str) -> Option<Vec<String>> {
+    let (verb, moved, before) = move_parts(action)?;
+    let parts = moved
+        .strip_suffix(')')
+        .and_then(|rest| rest.rsplit_once(" ("));
+    let copy = parts.and_then(|(group, member)| {
+        let (_, last) = member.rsplit_once(' ')?;
+        (!last.is_empty() && last.chars().all(|c| c.is_ascii_digit())).then_some((group, last))
+    });
+    let mut forms = vec![action.to_owned()];
+    match copy {
+        Some((group, copy)) => {
+            forms.extend(
+                shortened_names(group, before).map(|(group, before)| {
+                    format!("{verb} {group} (…\u{a0}{copy}) before {before}")
+                }),
+            );
+            forms.extend(
+                name_words(group)
+                    .into_iter()
+                    .map(|group| format!("{verb} {group} (…\u{a0}{copy})")),
+            );
+        }
+        None => {
+            let moved = parts.map_or(moved, |(group, _)| group);
+            forms.extend(
+                shortened_names(moved, before)
+                    .map(|(moved, before)| format!("{verb} {moved} before {before}")),
+            );
+        }
+    }
+    Some(forms)
 }
 
 /// A step's words without its target, for an Undo too narrow for any shortened target:
@@ -6353,75 +6473,27 @@ pub(super) fn undo_compact(label: &str, participants: &[Participant]) -> Option<
     (!words.trim().is_empty()).then(|| format!("Undo: {}", words.trim()))
 }
 
-/// False when shortening left a name as only `…` and its copy number (`move … 2 before`):
-/// then the target cannot fit, and Undo shows its word alone.
+/// False when shortening left a name as only `…` and its copy number (`move … 2 before`,
+/// `effect Wis… on … 2`): such a form tells the DM nothing, so `undo_forms` never gives it.
 pub(super) fn keeps_names(words: &str) -> bool {
-    let mut parts = words.split("… ");
-    let first = parts.next().unwrap_or_default();
-    words == first || !(first.is_empty() || first.ends_with(' '))
+    !words.split(' ').any(|word| word == "…")
 }
 
-/// An action's words shortened to `width`, its target name first.
-fn shortened_action(
-    ui: &egui::Ui,
-    action: &str,
-    participants: &[Participant],
-    font: &egui::FontId,
-    width: f32,
-) -> String {
-    if design::number_width(ui, action, font) <= width {
-        return action.to_owned();
-    }
-    if let Some((moved, target)) = action
-        .strip_prefix("move ")
-        .or_else(|| action.strip_prefix("Move "))
-        .and_then(|words| words.split_once(" before "))
-    {
-        let verb = if action.starts_with("Move ") {
-            "Move"
-        } else {
-            "move"
-        };
-        if let Some(words) = move_copy_words(ui, verb, moved, target, font, width) {
-            return words;
-        }
-        let room = width - design::number_width(ui, "move  before ", font);
-        let target_room = design::number_width(ui, target, font).min(room / 2.0);
-        let moved = dock_name(ui, moved, font, room - target_room);
-        let target = dock_name(
-            ui,
-            target,
-            font,
-            room - design::number_width(ui, &moved, font),
-        );
-        return format!("{verb} {moved} before {target}");
-    }
-    let target = participants
-        .iter()
-        .filter(|p| action.contains(&p.name))
-        .max_by_key(|p| p.name.len());
-    if let Some(target) = target {
-        let (before, after) = action.split_once(&target.name).expect("target in action");
-        let words: Vec<_> = target.name.split_whitespace().collect();
-        let suffix = words
-            .last()
-            .copied()
-            .filter(|last| last.chars().all(|c| c.is_ascii_digit()) || last.chars().count() == 1);
-        for count in (1..words.len()).rev() {
-            let name = if let Some(last) = suffix {
-                format!("{}… {last}", words[..count].join(" "))
+/// A name with its last words given up in turn, by whole words: from the whole name to its
+/// first word and `…`.
+fn name_words(name: &str) -> Vec<String> {
+    let all: Vec<&str> = name.split_whitespace().collect();
+    (1..=all.len())
+        .rev()
+        .map(|n| {
+            let kept = all[..n].join(" ");
+            if n == all.len() {
+                kept
             } else {
-                format!("{}…", words[..count].join(" "))
-            };
-            let candidate = format!("{before}{name}{after}");
-            if design::number_width(ui, &candidate, font) <= width {
-                return candidate;
+                format!("{kept}…")
             }
-        }
-        let room = width - design::number_width(ui, &format!("{before}{after}"), font);
-        return format!("{before}{}{after}", dock_name(ui, &target.name, font, room));
-    }
-    action.to_owned()
+        })
+        .collect()
 }
 
 /// Keep the character's name; give up later values before shortening a sheet notice.
@@ -8390,8 +8462,10 @@ fn optional_number(
 #[cfg(test)]
 mod tests {
     /// V26, V27 and the review of PR 275: beside Continue fight on the ended header's second
-    /// line, a target too long for the line ends in `…` inside the line, and the hover and the
-    /// accessible name hold the whole words, as the one-line header does.
+    /// line, a target too long for the line stays inside the line, and the hover and the
+    /// accessible name hold the whole words, as the one-line header does. X6: it shortens by
+    /// the one rule of Undo labels, so a table name that is one long word goes whole and the
+    /// act stays (`Undo: 2 loot rolls`), never cut inside a word.
     #[test]
     fn ended_undo_long_target_ends_in_view_with_its_whole_words_in_hover_and_name() {
         use egui_kittest::kittest::Queryable;
@@ -8442,9 +8516,9 @@ mod tests {
             clip.contains_rect(*rect),
             "Undo is cut by its clip: {painted:?}"
         );
-        assert!(
-            glyphs.starts_with("Undo: 2 loot rolls on treasure") && glyphs.ends_with('…'),
-            "Undo keeps its target in the line's room and ends in …: {glyphs:?}"
+        assert_eq!(
+            glyphs, "Undo: 2 loot rolls",
+            "Undo keeps its act in the line's room: {glyphs:?}"
         );
         // The accessible name, and the hover, hold the whole words.
         harness.get_by_label(&full).hover();
@@ -10454,6 +10528,18 @@ mod tests {
                     roomy,
                     "iter-26-R-SJ1-roomy"
                 );
+                // X46: narrower, the place goes before the copy number does; with no room
+                // for that either, the target goes: never `move Rival… before Rival…`.
+                let placeless = "Undo: move Rival Team (…\u{a0}2)";
+                let width = design::number_width(ui, placeless, &font) + 0.5;
+                assert_eq!(undo_words(ui, &undo, false, &[], &font, width), placeless);
+                let forms = undo_forms(&undo, false, &[]);
+                assert!(
+                    forms.target.iter().all(|words| words.contains('2')),
+                    "{:?}",
+                    forms.target
+                );
+                assert_eq!(forms.bare, ["Undo: move"]);
                 // An arrival named by its group alone has no member to give up.
                 let plain = "Move Shrine Reserve before Brannoch Vale";
                 let plain_width = design::number_width(ui, plain, &font);
@@ -10542,14 +10628,41 @@ mod tests {
                         "Undo: Wreathed in the cinders of the old shrine {direction} {}",
                         p.name
                     );
-                    let verb = if direction == "on" { "add" } else { "remove" };
-                    let expected = format!("Undo {verb}: Wreathed in… {direction} Cinder… 3");
+                    // X6: one form, `Undo: <words>`, never `Undo add:` or `Undo remove:`.
+                    let expected = format!("Undo: Wreathed in… {direction} Cinder… 3");
                     let width = design::number_width(ui, &expected, &font);
                     assert_eq!(
                         undo_words(ui, &full, false, std::slice::from_ref(&p), &font, width),
                         expected
                     );
                 }
+                // X6: an added effect's Undo has one form, `Undo: effect <words>`: four words,
+                // then two, then the target by whole words with its copy number, then no
+                // target. Never a name cut to `…` and its number.
+                let effect = format!("Undo: effect Wis save DC 15 (Hold Person) on {}", p.name);
+                let rows = std::slice::from_ref(&p);
+                let forms = undo_forms(&effect, false, rows);
+                assert_eq!(
+                    forms.target,
+                    [
+                        "Undo: effect Wis save DC 15… on Cinder Wolf 3",
+                        "Undo: effect Wis save… on Cinder Wolf 3",
+                        "Undo: effect Wis save… on Cinder… 3",
+                    ]
+                );
+                assert_eq!(
+                    forms.bare,
+                    ["Undo: effect Wis save DC 15…", "Undo: effect Wis save…"]
+                );
+                let narrow = "Undo: effect Wis save… on Cinder… 3";
+                let width = design::number_width(ui, narrow, &font) + 0.5;
+                assert_eq!(undo_words(ui, &effect, false, rows, &font, width), narrow);
+                // A form that another row's name also gives does not tell the row apart.
+                let mut plain = p.clone();
+                plain.name = "Cinder Wolf".into();
+                let both = [p.clone(), plain];
+                assert_eq!(target_forms("Cinder Wolf", &both), ["Cinder Wolf"]);
+                assert_eq!(target_forms(&p.name, &both), ["Cinder Wolf 3", "Cinder… 3"]);
             });
         });
         // SJ1, SH1: when no target fits, Undo keeps the step's words without the row. A step
@@ -11328,6 +11441,7 @@ mod tests {
             ("Undo: next turn", true),
             ("Undo: move … 2 before Rival Team", false),
             ("Undo: … 3", false),
+            ("Undo add: effect Wis… on … 2", false),
             ("… 2", false),
         ] {
             assert_eq!(keeps_names(words), keeps, "iter10-B-FT2-lost-name: {words}");

@@ -252,6 +252,35 @@ fn undo_keeps_a_target(d: &mut Driver<'_>, notice: &str, sheet: Option<&str>) {
     }
 }
 
+/// X6, X46: the run's Undo paints one form of the one rule (`undo_forms`): it starts with
+/// `start` (the act's words), names no row as only `…` and its number, and, when it names
+/// `row` at all, keeps that row's telling part `keeps` (a copy number). Its accessible name
+/// keeps the whole action.
+fn undo_paints_a_form(d: &mut Driver<'_>, start: &str, row: &str, keeps: &str) {
+    let size = d.window_size();
+    let undo = d
+        .nodes()
+        .into_iter()
+        .find(|node| node.in_view() && node.name.starts_with("Undo: "));
+    let painted = undo
+        .as_ref()
+        .map_or_else(String::new, |node| d.painted_in(node.rect));
+    let words = painted
+        .split_once("Undo")
+        .map_or("", |(_, words)| words.trim_end_matches(" U"));
+    let words = format!("Undo{words}");
+    let whole = !words.split([' ', '\u{a0}']).any(|word| word == "…");
+    let telling = !words.contains(row) || words.contains(keeps);
+    d.observe(
+        "X6-X46-undo-form",
+        words.starts_with(start) && whole && telling,
+        format!(
+            "At {size:?}, Undo for {:?} paints {words:?}: starts {start:?}, no lone `…`, keeps {keeps:?} with {row:?}",
+            undo.map(|node| node.name)
+        ),
+    );
+}
+
 /// Recovery actions keep the shared Undo icon, inside their own target.
 fn check_undo_icon(d: &mut Driver<'_>, action: &str, id: &str) {
     let target = d.place_of(action).expect("The Undo action is visible");
@@ -4312,6 +4341,31 @@ pub mod encounter_run {
         );
         d.state("next-turn", Sizes::Default);
         d.goal_within("T1.1", "advance the turn", 1);
+        // X49: at 960x640 the current turn's name takes the room of Next turn's `N` before
+        // it is cut: a cut name never stands beside the key letter.
+        let turn = after.clone().unwrap_or_default();
+        let (heading, key) = d.at_size(SMALL, |d| {
+            let first = turn.split(' ').next().unwrap_or_default();
+            let mut heading = None;
+            d.each_painted_text(|text, clip| {
+                let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                let words = &text.galley.job.text;
+                if clip.intersects(rect) && rect.top() < 48.0 && words.starts_with(first) {
+                    heading = Some(words.clone());
+                }
+            });
+            let next = d.place_of(NEXT_TURN).map(|rect| d.painted_in(rect));
+            (heading, next.unwrap_or_default())
+        });
+        let cut = heading
+            .as_deref()
+            .is_none_or(|words| !words.starts_with(&turn));
+        let keyed = key.split(' ').any(|word| word == "N");
+        d.observe(
+            "X49-turn-name-room",
+            !(cut && keyed),
+            format!("At 960x640 the turn paints {heading:?} beside Next turn's {key:?}"),
+        );
         let after = d.row_node(ANCHOR_ROW).map(|row| row.rect.min.y);
         d.observe(
             "Stable rows",
@@ -5491,6 +5545,39 @@ pub mod run_lookup {
     pub fn run(d: &mut Driver<'_>) {
         resume_run_from_cold_start(d);
         d.click_row(PARTICIPANT);
+        // X54: a tile's key hint says the keys, `Ctrl+1`; a tile with no room for it paints
+        // no bare digit that reads as a key.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (hints, bare) = d.at_size(size, |d| {
+                let tiles: Vec<egui::Rect> = d
+                    .nodes()
+                    .into_iter()
+                    .filter(|node| node.in_view() && node.name.contains(" Ctrl+"))
+                    .map(|node| node.rect)
+                    .collect();
+                let (mut hints, mut bare) = (Vec::new(), Vec::new());
+                d.each_painted_text(|text, clip| {
+                    let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                    let words = &text.galley.job.text;
+                    if clip.intersects(rect)
+                        && tiles.iter().any(|tile| tile.contains(rect.center()))
+                    {
+                        if words.starts_with("Ctrl+") {
+                            hints.push(words.clone());
+                        }
+                        if !words.is_empty() && words.chars().all(|c| c.is_ascii_digit()) {
+                            bare.push(words.clone());
+                        }
+                    }
+                });
+                (hints, bare)
+            });
+            d.observe(
+                "X54-tile-keys",
+                !hints.is_empty() && bare.is_empty(),
+                format!("At {size:?} the tiles paint key hints {hints:?} and bare digits {bare:?}"),
+            );
+        }
         d.state("in-the-run", Sizes::All);
         d.goal("be in a run, with a participant selected");
 
@@ -6887,6 +6974,25 @@ pub mod run_sync_conflict {
         d.app_mut().encounters.simulate_sync_conflict(SYNCED);
         d.settle();
         d.state("conflict-with-nothing-expanded", Sizes::All);
+        // X47: the sheet-change notice keeps its count of removed Undo steps wherever it
+        // shows; at 1920x1080 the notice line has the room for it.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let painted = d.at_size(size, |d| {
+                let mut found = Vec::new();
+                d.each_painted_text(|text, clip| {
+                    let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                    if clip.intersects(rect) && text.galley.job.text.contains("HP 58 → 54") {
+                        found.push(text.galley.job.text.clone());
+                    }
+                });
+                found
+            });
+            d.observe(
+                "X47-removed-steps",
+                !painted.is_empty() && painted.iter().all(|words| words.contains(" removed")),
+                format!("At {size:?} the sheet-change notice paints {painted:?}"),
+            );
+        }
         // The footer's main way out says why it is off, with no hover.
         d.observe(
             "G1",
@@ -7091,7 +7197,8 @@ pub mod run_sync_conflict {
                 .zip(review)
                 .zip(undo)
                 .is_some_and(|((conflict, review), undo)| {
-                    conflict.right() <= review.left() + 1.0
+                    // X69: the conflict's name ends `S` before `Review`.
+                    conflict.right() + crate::design::S <= review.left() + 1.0
                         && review.right() < undo.left()
                         && reminders.is_none_or(|place| {
                             place.left() > review.right() && place.right() < undo.left()
@@ -15691,6 +15798,9 @@ pub mod encounter_groups {
                 && d.has_containing("Undo: move Rival Team (Rival Captain 2) before Rival Team"),
             "Move before keeps the current turn and offers Undo",
         );
+        for size in [SMALL, DEFAULT] {
+            d.at_size_mut(size, |d| undo_paints_a_form(d, "Undo: move", "Rival", "2"));
+        }
         d.state("tied-arrival-moved-before", Sizes::All);
         d.click_containing("Undo: move Rival Team (Rival Captain 2) before Rival Team");
         d.click_containing("Undo: add Rival Team");

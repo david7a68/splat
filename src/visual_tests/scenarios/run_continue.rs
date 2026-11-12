@@ -110,6 +110,31 @@ fn undo_keeps_its_target(d: &mut Driver<'_>, what: &str, beside: &str) {
     }
 }
 
+/// X38: the top of `FINAL STATE` at the minimum and the default size, which the ended
+/// header's height sets.
+fn final_state_tops(d: &mut Driver<'_>) -> Vec<Option<f32>> {
+    [SMALL, DEFAULT]
+        .into_iter()
+        .map(|size| {
+            d.at_size(size, |d| {
+                painted_paragraph(d, "FINAL STATE").map(|r| r.top())
+            })
+        })
+        .collect()
+}
+
+/// X38: the ended header has one height in every ended state at a size, whatever Undo's
+/// target is and whether Continue fight or its reason shows, so no act moves the final state,
+/// the loot or the next `Roll` under the pointer.
+fn same_header(d: &mut Driver<'_>, first: &[Option<f32>], what: &str) {
+    let tops = final_state_tops(d);
+    d.observe(
+        "X38-ended-header-height",
+        tops.iter().all(Option::is_some) && tops == first,
+        format!("{what}: FINAL STATE at {tops:?}, the first ended view at {first:?}"),
+    );
+}
+
 /// V11: in History, the line under Read-only (Continue fight, or the reason) is `S` below the
 /// Read-only line and `M` above `FINAL STATE`, at every size.
 fn history_line_gaps(d: &mut Driver<'_>, line: &str) {
@@ -240,6 +265,7 @@ pub fn run(d: &mut Driver<'_>) {
         "Ended · Round 2",
     );
     d.state("ended-undo-is-the-way-on", Sizes::All);
+    let closed_tops = final_state_tops(d);
     // iter-25-R, results family: `Loot copied.` shows beside the loot's buttons and moves
     // neither of them.
     let buttons = |d: &Driver<'_>| (d.place_of("Roll all 2"), d.place_of("Copy loot"));
@@ -266,6 +292,11 @@ pub fn run(d: &mut Driver<'_>) {
         "T17.8",
         shown,
         "After a later rest and a restart, the saved ending has no Undo and says why",
+    );
+    same_header(
+        d,
+        &closed_tops,
+        "The saved ending of a fight that is not the last",
     );
     d.app_mut().encounters.run_mut().unwrap().wants_unend = Some(crate::encounter_run::Unend::Undo);
     d.settle();
@@ -297,6 +328,17 @@ pub fn run(d: &mut Driver<'_>) {
         &[CLOSE_RUN],
         "Ended · Round 2",
     );
+    // W6-D2: beside Lookup, where the header has its second line, the lone Undo there names
+    // what it takes back.
+    for size in [SMALL, DEFAULT] {
+        let shown = d.at_size(size, |d| d.visible_text(END_STEP));
+        d.observe(
+            "W6-D2-undo-names-the-ending",
+            shown,
+            format!("The ended view beside Lookup at {size:?} shows {END_STEP:?}: {shown}"),
+        );
+    }
+    let open_tops = final_state_tops(d);
     d.state("ended-beside-lookup", Sizes::All);
     d.begin_task();
     d.click_starting("Undo");
@@ -360,6 +402,7 @@ pub fn run(d: &mut Driver<'_>) {
         );
     }
     undo_keeps_its_target(d, "The ended view with loot beside Lookup", CONTINUE);
+    same_header(d, &open_tops, "The ended view with loot beside Lookup");
     d.state("ended-with-loot-beside-lookup", Sizes::All);
     close_lookup(d);
     whole_at_every_size(
@@ -370,6 +413,7 @@ pub fn run(d: &mut Driver<'_>) {
         "Ended · Round 2",
     );
     undo_keeps_its_target(d, "The ended view with loot", CONTINUE);
+    same_header(d, &closed_tops, "The ended view with loot");
     d.state("ended-continue-fight", Sizes::All);
 
     // Continue fight is for the fight that was played last. A long rest ruled after the
@@ -392,6 +436,11 @@ pub fn run(d: &mut Driver<'_>) {
         "Ended · Round 2",
     );
     undo_keeps_its_target(d, "The ended view of a fight that is not the last", LATER);
+    same_header(
+        d,
+        &closed_tops,
+        "The ended view of a fight that is not the last",
+    );
     d.state("ended-not-the-last-fight", Sizes::All);
     open_lookup(d);
     whole_at_every_size(
@@ -405,6 +454,11 @@ pub fn run(d: &mut Driver<'_>) {
         d,
         "The ended view of a fight that is not the last, beside Lookup",
         LATER,
+    );
+    same_header(
+        d,
+        &open_tops,
+        "The ended view of a fight that is not the last, beside Lookup",
     );
     d.state("ended-not-the-last-fight-beside-lookup", Sizes::All);
     close_lookup(d);

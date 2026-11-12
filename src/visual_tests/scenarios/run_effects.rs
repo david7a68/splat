@@ -83,6 +83,15 @@ pub fn run(d: &mut Driver<'_>) {
         d.place_of("Next turn") == next_turn,
         "Next turn keeps its place beside the reminders",
     );
+    // X6: the added effect's Undo has one form, `Undo: effect <words>`; a shortened target
+    // keeps the copy number that tells Cinder Wolf 2 from Cinder Wolf 1, or goes.
+    let first = current.split(' ').next().unwrap_or_default();
+    let copy = current.rsplit(' ').next().unwrap_or_default();
+    for size in [SMALL, DEFAULT] {
+        d.at_size_mut(size, |d| {
+            undo_paints_a_form(d, "Undo: effect Wis save", first, copy)
+        });
+    }
     d.state("effects-on-its-turn", Sizes::All);
 
     // A label with no time is as today: it shows on no notice and does not count.
