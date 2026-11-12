@@ -330,7 +330,8 @@ above it. World uses this, so a typed note with no set values starts its prose w
 Lookup has no file line: there an empty value block draws nothing, and the prose keeps the reader's gap below
 the kind line, as a spell's does, and so does a plain note's prose. Lookup's reader keeps the app's row spacing whether a search or a link
 opened the entry. Library draws no value block. `design::reader` holds the typographic parts. Library shows quiet Back whenever it has reading
-history. Its toolbar stays on one line: Read and Edit Markdown at the left, then visible copy, creation and
+history. Every way to open another entry records the entry it leaves: a link, a list row, the About row and the header
+count's menu. Back returns to the entry just left in one action, and a new entry ends Forward. Its toolbar stays on one line: Read and Edit Markdown at the left, then visible copy, creation and
 campaign-choice actions (`Choose for this campaign`, `Choose every entry`), then Back. Drop Back's key hint first; fold Copy, Make NPC note and the campaign choice into quiet More when needed, with
 Back before More. Every toolbar action, Make NPC note and the actions in More included, is a Read control
 (28 px), so the toolbar row has one height and a campaign creature's title sits where a campaign spell's does. Lookup keeps its Back hint; its Back is a Read control (28 px), as its title line's icon buttons are, so the title line has one height with or without Back and the search field below never moves. Both use Alt+Left, and Alt+Right for Forward, which has no button. Lookup takes the key when focus is there. Beside the Library, the mouse's Back and Forward buttons act on the side under the pointer.
@@ -480,7 +481,8 @@ Draw the manifest error with `message_with_action`, then its muted `Small` conse
 text edge below the action. The consequence wraps at the pane's notice measure, not at the action's width. In Edit
 Markdown the error is in the message space below the save row, and the bordered action and its consequence follow
 directly below that space, at the message text edge: they depend on the saved file only, so they stay while the DM
-edits. Show the chosen and total entries (`5 of 6 entries chosen`, `All entries chosen`) and `Choose every entry`
+edits. Show the chosen and total entries (`4 of 6 entries chosen · 1 still needed`, `All entries chosen`) and `Choose every entry`. `chosen` counts only the DM's own choices, as Campaign's package row does; `still needed` counts the entries
+those choices need that the DM did not choose, and is left out when it is 0
 with Undo. Its result
 and Undo sit in the reader's results place, after the title, like manifest-write results (see Files and recovery). Omit the entry breadcrumb and Engine support. Empty package counts have no separator.
 
@@ -489,7 +491,8 @@ many files need fixing: a validation message, a broken link, a duplicate identit
 once, and both files of a duplicate identity count. It has the tone of the most severe fault it counts: amber with
 the warning icon, or red with the error icon when a counted file cannot be read. A file is
 its owner and its path, so two packages that each have `Rules/Watch.md` count as two files. Its menu
-lists the messages, then a link for each file with broken links (`<path>: N broken links`) that opens it.
+lists the messages, then a link for each file with broken links (`<path>: N broken links`) that opens it. The menu is as wide as its
+content, up to `READER_MEASURE`, and ends at the count's right edge, so it stays clear of the list's splitter.
 When two owners have the same path, the message and link name the owner first (`Ashen Marches ·
 Rules/Watch.md`). Unreadable notes use CANNOT BE READ. Rows name
 their kind, path and error line; the owner line says Cannot be read. The reader's title is the file name, and its
