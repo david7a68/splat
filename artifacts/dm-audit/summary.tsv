@@ -2,8 +2,8 @@ Phase totals
 phase	tasks	transitions	interactions	nav	sub	panel	find	do
 before	9	5	35	5	0	1	7	22
 during	31	9	193	9	2	15	44	123
-after	8	5	22	5	4	0	1	12
-total	48	19	250	19	6	16	52	157
+after	9	5	26	5	4	2	1	14
+total	49	19	254	19	6	18	52	159
 
 Tasks
 phase	task	transitions	interactions	overhead	path
@@ -55,6 +55,7 @@ after	Write the wrap-up in the note	0	4	1	Session
 after	Link the fight in the note	2	6	2	Session > Timeline > Session
 after	Put the fight's rewards in the note	0	1	0	Session
 after	Check the party's HP for next time	1	1	1	Session > Party
+after	Put what an NPC said in the NPC's own note	0	4	2	Session
 
 Set-up, not counted
 before	play last week's session, then quit and open the app
@@ -66,6 +67,7 @@ during	the campaign has a marked road table
 during	the campaign has a house rule note in play
 after	save, quit and open the app after the session
 after	the recording service has its keys
+after	the plan holds a done scene with Hobb the Miller, in view
 
 Blocked
 
@@ -98,3 +100,4 @@ after / Review how the fight went: log and final HP: final HP reads in place: tr
 after / Link the fight in the note: the note holds the fight's link: true
 after / Put the fight's rewards in the note: the note holds the fight's rewards block: true
 after / Check the party's HP for next time: Kestrel on Party after the evening: [Kestrel Dunmoor · Level 5 Rogue · Per 11 · Ins 11 · HP 9/41 · AC 15 · Poisoned]
+after / Put what an NPC said in the NPC's own note: the NPC's note holds the line: true
