@@ -49,6 +49,19 @@ fn torch_rules(id: uuid::Uuid) -> String {
     )
 }
 
+/// The folder where `audit-freeze` stages what a freeze writes. It copies the folder into the
+/// tree only when every scenario of the command passed, so a refused freeze writes nothing.
+const STAGE: &str = "SPLAT_FREEZE_STAGE";
+
+/// Where a freeze writes the frozen file at `relative`, a path from the repository's root: the
+/// staging folder when `audit-freeze` names one, else the tree.
+pub(super) fn frozen_out(relative: &str) -> PathBuf {
+    std::env::var_os(STAGE).map_or_else(
+        || Path::new(env!("CARGO_MANIFEST_DIR")).join(relative),
+        |stage| PathBuf::from(stage).join(relative),
+    )
+}
+
 /// The one way a feature adds its tasks.
 const ADD_COMMAND: &str = "devenv shell -- audit-freeze add";
 /// How an author records counts that change on purpose.
@@ -190,6 +203,17 @@ impl<'a> Audit<'_, 'a> {
 
     fn click(&mut self, kind: Kind, name: &str) {
         self.act(kind, name, |d| d.click(name));
+    }
+
+    /// An outcome that the journey states, read from the saved record after the act. A wrong
+    /// record stops the journey here, so its counts are never frozen or passed.
+    fn outcome(&mut self, what: &str, holds: bool, read: impl std::fmt::Debug) {
+        assert!(
+            holds,
+            "{} / {}: the saved record is wrong: {what}. It reads: {read:?}",
+            self.phase, self.task
+        );
+        self.fact(format!("{what}: holds"));
     }
 
     fn fact(&mut self, text: impl Into<String>) {
@@ -1211,6 +1235,7 @@ fn measure(d: &mut Driver<'_>, files: &FrozenFiles, record: &Record) {
             about,
             tasks: measured,
         };
+        let dir = frozen_out(&files.folder);
         fs::create_dir_all(&dir).expect("make the folder of the frozen files");
         fs::write(dir.join("steps.tsv"), steps(&record.rows)).expect("write steps.tsv");
         fs::write(dir.join("summary.tsv"), summary(record)).expect("write summary.tsv");

@@ -1556,8 +1556,9 @@ fn add_to_reference(reference: Reference, ev: &Evening) {
         acts,
         ..reference
     };
-    fs::write(folder().join("reference.json"), reference_text(&reference))
-        .expect("write the reference");
+    let path = super::dm_audit::frozen_out("src/visual_tests/plain_evening/reference.json");
+    fs::create_dir_all(path.parent().expect("a folder")).expect("make the reference's folder");
+    fs::write(path, reference_text(&reference)).expect("write the reference");
 }
 
 /// G7. The scenario `plain-evening`.
