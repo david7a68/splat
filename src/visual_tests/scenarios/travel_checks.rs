@@ -264,17 +264,25 @@ pub fn run(d: &mut Driver<'_>) {
     d.click(PLAN_AMBUSH);
     d.expect("“Bridge Ambush” is in tonight’s plan.");
     d.goal_within("T11.10", "plan a result as a fight", 1);
-    // The message and its Undo take the offer's line, so nothing below the checks moves.
-    let undo = d.place_of("Undo plan line");
+    // The message and its Undo take the offer's place, so nothing below the checks moves.
+    let message = d.place_of("“Bridge Ambush” is in tonight’s plan.");
     let after = below_checks(d);
     d.observe(
         "T11.10",
         below.iter().all(Option::is_some)
             && after == below
-            && matches!((offer, undo), (Some(offer), Some(undo)) if offer.y_range().contains(undo.center().y)),
-        format!("The plan line's message is on the check's line ({offer:?}, {undo:?}), and moves nothing ({below:?}, {after:?})"),
+            && d.has("Undo plan line")
+            && matches!((offer, message), (Some(offer), Some(at)) if offer.y_range().contains(at.top())),
+        format!("The plan line's message is on the check's line ({offer:?}, {message:?}), and moves nothing ({below:?}, {after:?})"),
     );
     d.state("travel-checks-planned", Sizes::Small);
+    d.state_prepared("travel-checks-planned-lookup", Sizes::Small, |d| {
+        if !d.has("Close Lookup") {
+            d.click(NAV_LOOKUP);
+        }
+        d.expect("Undo plan line");
+    });
+    d.click("Close Lookup");
     let parts = [
         d.has_containing("in tonight’s plan"),
         !d.has(PLAN_AMBUSH),

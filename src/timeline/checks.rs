@@ -43,13 +43,18 @@ pub struct Planned {
 impl Planned {
     /// The plan line's message.
     pub fn words(&self) -> String {
-        format!("“{}” is in tonight’s plan.", self.name)
+        plan_line_words(&self.name)
     }
 
     /// Whether this is the check the DM clicked.
     pub fn on(&self, check: &Check) -> bool {
         self.check.0 == check.label && self.check.1 == check.words
     }
+}
+
+/// The message of `Plan “<name>”`.
+fn plan_line_words(name: &str) -> String {
+    format!("“{name}” is in tonight’s plan.")
 }
 
 /// Whether this journey shows its checks: the DM chose `Roll for encounters` on it.
@@ -629,42 +634,50 @@ fn result(ui: &mut egui::Ui, label: &str, check: &Check, view: &View<'_>) -> Opt
             );
             let mut names = crate::sessions::linked_names(&check.words);
             names.retain(|name| planned(name).is_some());
-            // Each name keeps one line of one height: its offer, then the plan line's message
-            // and Undo, then `In the plan`. So nothing moves when the message comes or goes.
+            // Each name keeps one place of one height: its offer, then the plan line's message
+            // and Undo, then `In the plan`. The place is as high as the message needs here, so
+            // nothing moves when the message comes or goes, and the message is never cut.
             for name in names.into_iter().take(MOST_OFFERS) {
-                let line = view
-                    .plan_line
-                    .filter(|line| line.name == name && line.on(check));
-                if let Some(line) = line {
-                    let words = line.words();
-                    if design::undo_line(ui, Tone::Success, Some((&words, "Undo plan line"))) {
-                        act = Some(Act::UndoPlan);
+                let words = plan_line_words(&name);
+                let width = ui.available_width();
+                let height =
+                    design::undo_message_height(ui, Tone::Success, &words, "Undo plan line", width);
+                let size = egui::vec2(width, height);
+                let top = egui::Layout::top_down(egui::Align::Min);
+                ui.allocate_ui_with_layout(size, top, |ui| {
+                    ui.set_min_size(size);
+                    if view
+                        .plan_line
+                        .is_some_and(|line| line.name == name && line.on(check))
+                    {
+                        if design::undo_message(ui, Tone::Success, &words, "Undo plan line") {
+                            act = Some(Act::UndoPlan);
+                        }
+                    } else if planned(&name) == Some(true) {
+                        let line = egui::vec2(ui.available_width(), Density::Read.control());
+                        let left = egui::Layout::left_to_right(egui::Align::Center);
+                        ui.allocate_ui_with_layout(line, left, |ui| {
+                            design::status(
+                                ui,
+                                Status {
+                                    icon: icons::OK,
+                                    word: "In the plan",
+                                    color: c.document.saved,
+                                },
+                            );
+                        });
+                    } else if Action::quiet(&format!("Plan “{name}”"))
+                        .line_start()
+                        .density(Density::Read)
+                        .show(ui)
+                        .clicked()
+                    {
+                        act = Some(Act::Plan(Planned {
+                            name: name.clone(),
+                            check: (check.label.clone(), check.words.clone()),
+                        }));
                     }
-                } else if planned(&name) == Some(true) {
-                    let size = egui::vec2(ui.available_width(), Density::Read.control());
-                    let left = egui::Layout::left_to_right(egui::Align::Center);
-                    ui.allocate_ui_with_layout(size, left, |ui| {
-                        ui.set_min_size(size);
-                        design::status(
-                            ui,
-                            Status {
-                                icon: icons::OK,
-                                word: "In the plan",
-                                color: c.document.saved,
-                            },
-                        );
-                    });
-                } else if Action::quiet(&format!("Plan “{name}”"))
-                    .line_start()
-                    .density(Density::Read)
-                    .show(ui)
-                    .clicked()
-                {
-                    act = Some(Act::Plan(Planned {
-                        name,
-                        check: (check.label.clone(), check.words.clone()),
-                    }));
-                }
+                });
             }
         },
     );
