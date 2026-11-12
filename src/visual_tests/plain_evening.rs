@@ -100,8 +100,8 @@ const ADD_COMMAND: &str = "devenv shell -- audit-freeze add";
 const SCENARIO: &str = "plain-evening";
 const WIDE: (f32, f32) = (1200.0, 800.0);
 const NARROW: (f32, f32) = (960.0, 640.0);
-/// Section 2.5 numbers its rows 1 to 22.
-const CONTRACT_ROWS: std::ops::RangeInclusive<u32> = 1..=24;
+/// Section 2.5 numbers its rows 1 to 27.
+const CONTRACT_ROWS: std::ops::RangeInclusive<u32> = 1..=27;
 /// What the test folder becomes in a run's `splat_run_source_path`.
 const WORLD: &str = "<world>";
 const SAME: &str = "the same as at the start";
@@ -1914,6 +1914,27 @@ mod allowed_classes {
             name: "P4 c: an act shows or hides only `Effect`'s words",
             fits: |d, _| effect::act_words(d),
         },
+        // R3a, F2: rows 25 to 27, by the lead's ruling after app round 2.
+        Class {
+            row: 25,
+            name: "R3a a: `Effect` in the room after Absent, also beside a cut name (X9)",
+            fits: r3a::effect,
+        },
+        Class {
+            row: 25,
+            name: "R3a b: an act shows or hides only R3a's words",
+            fits: |d, _| r3a::act_words(d),
+        },
+        Class {
+            row: 26,
+            name: "R3a c: the dock's cut name keeps its last word, at its place (X53)",
+            fits: r3a::dock_name,
+        },
+        Class {
+            row: 27,
+            name: "R3a d: the Conditions help and field words, at their place (X7, X8)",
+            fits: r3a::conditions,
+        },
     ];
 
     /// P4's classes: the dock's `Effect`, its icon, word and key letter, and acts that show or
@@ -1964,6 +1985,294 @@ mod allowed_classes {
                         .iter()
                         .find_map(|prefix| part.strip_prefix(prefix))
                         .is_some_and(|word| WORDS.contains(&word))
+                })
+        }
+    }
+
+    /// R3a's classes: rows 25 to 27 of section 2.5, by the lead's ruling after app round 2. Each
+    /// proves itself from its view. `Effect` is new only as P4's is (X9). The dock's cut name
+    /// keeps its place and height and gains its last word (X53). The Conditions help and the
+    /// field's words change in place (X7, X8). An old form goes only where its new form stands
+    /// at the same place; nothing of today moves or narrows.
+    mod r3a {
+        use super::super::{AllowedRow, Difference};
+        use super::{rect_of, rects};
+
+        const OLD_HELP: &str = "These record your ruling. No number changes by itself. Other effects stay local and do not sync.";
+        const NEW_HELP: &str = "No HP, AC or roll changes by itself. A time you type counts down on that creature’s turns. Other effects stay local and do not sync.";
+        const OLD_FIELD: &str = "Other effect…";
+        const NEW_FIELD: &str = "Other effect, such as Bless 10 rounds";
+        const EFFECT: &str = "Button: Effect: words for this row";
+        const EFFECT_WORDS: [&str; 3] = ["\u{e3e2}", "Effect", "E"];
+
+        fn run_view(d: &Difference) -> bool {
+            d.screen.starts_with("run-")
+        }
+
+        fn same_view(o: &Difference, d: &Difference) -> bool {
+            (&o.screen, &o.view) == (&d.screen, &d.view)
+        }
+
+        /// A text's words, or a control's: without `Label: ` or `TextRun: `.
+        fn words(name: &str) -> &str {
+            name.strip_prefix("TextRun: ")
+                .or_else(|| name.strip_prefix("Label: "))
+                .unwrap_or(name)
+        }
+
+        /// `Ashfang, Eldest… Ridge`: first whole words, `…` and one last word. Its first words.
+        fn telling(words: &str) -> Option<&str> {
+            let (first, last) = words.rsplit_once("… ")?;
+            (!first.is_empty() && !first.contains('…') && !last.is_empty() && !last.contains(' '))
+                .then_some(first)
+        }
+
+        /// `Ashfang, Eldest Wolf…`: today's cut, whole words and `…`. Its words.
+        fn cut(words: &str) -> Option<&str> {
+            let first = words.strip_suffix('…')?;
+            (!first.is_empty() && !first.contains('…')).then_some(first)
+        }
+
+        /// `shorter` is the first whole words of `longer`; the comma of its last word may go.
+        fn first_words(longer: &str, shorter: &str) -> bool {
+            let (longer, shorter): (Vec<_>, Vec<_>) =
+                (longer.split(' ').collect(), shorter.split(' ').collect());
+            let last = shorter.len() - 1;
+            shorter.len() <= longer.len()
+                && shorter
+                    .iter()
+                    .zip(&longer)
+                    .enumerate()
+                    .all(|(at, (short, long))| {
+                        short == long
+                            || (at == last && *short == long.trim_end_matches([',', ';', ':']))
+                    })
+        }
+
+        /// The new form keeps the old form's first whole words, or fewer, and adds a last word.
+        /// The comma of the word before `…` may go: `Ashfang,…` is `Ashfang… Ridge`.
+        fn pair(old: &str, new: &str) -> bool {
+            cut(old)
+                .zip(telling(new))
+                .is_some_and(|(old, new)| first_words(old, new))
+        }
+
+        /// A cut or telling form of this whole name.
+        fn form_of(name: &str, shown: &str) -> bool {
+            match (telling(shown), cut(shown)) {
+                (Some(first), _) => {
+                    first_words(name, first) && shown.rsplit(' ').next() == name.rsplit(' ').next()
+                }
+                (None, Some(first)) => first_words(name, first),
+                _ => false,
+            }
+        }
+
+        /// The dock's selected-name label of this view whose box starts where `at` does, before
+        /// (`old`) or after the change, holding the name that `shown` is a form of.
+        fn in_slot(
+            d: &Difference,
+            rows: &[AllowedRow],
+            at: [f32; 4],
+            old: bool,
+            shown: &str,
+        ) -> bool {
+            rows.iter().map(|row| &row.difference).any(|o| {
+                same_view(o, d)
+                    && o.what == "control"
+                    && o.change == "width"
+                    && o.name
+                        .strip_prefix("Label: Selected: ")
+                        .is_some_and(|name| form_of(name, shown))
+                    && rects(&o.detail).is_some_and(|(before, after)| {
+                        same_start(if old { before } else { after }, at)
+                    })
+            })
+        }
+
+        fn place(d: &Difference) -> Option<[f32; 4]> {
+            rect_of(&d.detail, "at ").or_else(|| rect_of(&d.detail, "was "))
+        }
+
+        /// Two items that start at one place: the same left edge and top.
+        fn same_start(a: [f32; 4], b: [f32; 4]) -> bool {
+            (a[0] - b[0]).abs() < 0.5 && (a[1] - b[1]).abs() < 0.5
+        }
+
+        /// Two items at one place: the same left edge, top and height.
+        fn at_place(a: [f32; 4], b: [f32; 4]) -> bool {
+            (a[0] - b[0]).abs() < 0.5 && (a[1] - b[1]).abs() < 0.5 && (a[3] - b[3]).abs() < 0.5
+        }
+
+        /// X9: `Effect`, new in the room after Absent, and its own words inside it.
+        pub(super) fn effect(d: &Difference, rows: &[AllowedRow]) -> bool {
+            let control = |d: &Difference| {
+                run_view(d) && d.what == "control" && d.change == "new" && d.name == EFFECT
+            };
+            if control(d) {
+                return true;
+            }
+            let Some(at) = rect_of(&d.detail, "at ") else {
+                return false;
+            };
+            run_view(d)
+                && d.what == "text"
+                && d.change == "new"
+                && EFFECT_WORDS.contains(&d.name.as_str())
+                && rows.iter().any(|row| {
+                    let o = &row.difference;
+                    control(o)
+                        && same_view(o, d)
+                        && rect_of(&o.detail, "at ").is_some_and(|button| {
+                            at[0] >= button[0]
+                                && at[1] >= button[1]
+                                && at[0] + at[2] <= button[0] + button[2]
+                                && at[1] + at[3] <= button[1] + button[3]
+                        })
+                })
+        }
+
+        /// X53: the dock's cut name in its new form at the old form's place, one for the other,
+        /// and its label at the same place and height.
+        pub(super) fn dock_name(d: &Difference, rows: &[AllowedRow]) -> bool {
+            if !run_view(d) || !["control", "text"].contains(&d.what.as_str()) {
+                return false;
+            }
+            let other = |change: &str, fits: &dyn Fn(&str) -> bool| {
+                let here = place(d);
+                rows.iter().map(|row| &row.difference).any(|o| {
+                    same_view(o, d)
+                        && o.what == d.what
+                        && o.change == change
+                        && fits(words(&o.name))
+                        && place(o)
+                            .zip(here)
+                            .is_some_and(|(o, here)| at_place(o, here))
+                })
+            };
+            let name = words(&d.name);
+            let slot = |old: bool| place(d).is_some_and(|at| in_slot(d, rows, at, old, name));
+            match d.change.as_str() {
+                "gone" => cut(name).is_some() && slot(true) && other("new", &|new| pair(name, new)),
+                "new" => {
+                    telling(name).is_some() && slot(false) && other("gone", &|old| pair(old, name))
+                }
+                "width" => {
+                    d.name.starts_with("Label: Selected: ")
+                        && rects(&d.detail).is_some_and(|(old, new)| at_place(old, new))
+                        && rows.iter().map(|row| &row.difference).any(|o| {
+                            same_view(o, d)
+                                && o.what == "text"
+                                && o.change == "new"
+                                && telling(&o.name).is_some()
+                                && rects(&d.detail)
+                                    .zip(place(o))
+                                    .is_some_and(|((_, new), o)| at_place(new, o))
+                        })
+                }
+                _ => false,
+            }
+        }
+
+        /// X7, X8: the Conditions help's words and the field's words, each new at the old
+        /// one's place; the help's later lines below its first.
+        pub(super) fn conditions(d: &Difference, rows: &[AllowedRow]) -> bool {
+            if !run_view(d) || !["control", "text"].contains(&d.what.as_str()) {
+                return false;
+            }
+            let name = words(&d.name);
+            let help =
+                |words: &str, all: &str| !words.trim().is_empty() && all.contains(words.trim());
+            let Some(here) = place(d) else {
+                return false;
+            };
+            // The first line's place of the old or new help, or the field's words, in this view.
+            let start = |change: &str, all: &str| {
+                rows.iter().map(|row| &row.difference).find_map(|o| {
+                    (same_view(o, d) && o.change == change && o.name == format!("Label: {all}"))
+                        .then(|| place(o))
+                        .flatten()
+                })
+            };
+            match d.change.as_str() {
+                "gone" if name == OLD_FIELD => rows.iter().map(|row| &row.difference).any(|o| {
+                    same_view(o, d)
+                        && o.change == "new"
+                        && words(&o.name) == NEW_FIELD
+                        && place(o).is_some_and(|o| at_place(o, here))
+                }),
+                "new" if name == NEW_FIELD => rows.iter().map(|row| &row.difference).any(|o| {
+                    same_view(o, d)
+                        && o.change == "gone"
+                        && words(&o.name) == OLD_FIELD
+                        && place(o).is_some_and(|o| at_place(o, here))
+                }),
+                // The help's lines lie inside its box, before and after. The new box starts at
+                // the old one, is no wider, and is at most one line taller.
+                "gone" => {
+                    help(name, OLD_HELP)
+                        && start("gone", OLD_HELP).is_some_and(|old| inside(here, old))
+                        && new_help(start("gone", OLD_HELP), start("new", NEW_HELP))
+                }
+                "new" => {
+                    help(name, NEW_HELP)
+                        && start("new", NEW_HELP).is_some_and(|new| inside(here, new))
+                        && new_help(start("gone", OLD_HELP), start("new", NEW_HELP))
+                }
+                _ => false,
+            }
+        }
+
+        /// One line of the help, as the reference measures it.
+        const HELP_LINE: f32 = 16.0;
+
+        fn new_help(old: Option<[f32; 4]>, new: Option<[f32; 4]>) -> bool {
+            old.zip(new).is_some_and(|(old, new)| {
+                same_start(new, old) && new[2] <= old[2] + 0.5 && new[3] <= old[3] + HELP_LINE + 0.5
+            })
+        }
+
+        fn inside(r: [f32; 4], outer: [f32; 4]) -> bool {
+            r[0] >= outer[0] - 0.5
+                && r[1] >= outer[1] - 0.5
+                && r[0] + r[2] <= outer[0] + outer[2] + 0.5
+                && r[1] + r[3] <= outer[1] + outer[3] + 0.5
+        }
+
+        /// An act that shows or hides only these classes' words: `Effect`'s, the dock name's new
+        /// form (and its old form only beside a new one that pairs with it), and the help's.
+        pub(super) fn act_words(d: &Difference) -> bool {
+            if d.what != "act" || d.change != "changed" {
+                return false;
+            }
+            let parts: Vec<(&str, char, &str)> = d
+                .detail
+                .split(" | ")
+                .filter_map(|part| {
+                    let (when, rest) = part.split_once(' ')?;
+                    let (sign, word) = rest.split_once(' ').unwrap_or((rest, ""));
+                    Some((when, sign.chars().next()?, word))
+                })
+                .collect();
+            parts.len() == d.detail.split(" | ").count()
+                && parts.iter().all(|&(when, sign, word)| {
+                    ["appeared", "went"].contains(&when)
+                        && match sign {
+                            '+' => {
+                                EFFECT_WORDS.contains(&word)
+                                    || word == NEW_HELP
+                                    || telling(word).is_some()
+                            }
+                            '-' => {
+                                EFFECT_WORDS.contains(&word)
+                                    || word == OLD_HELP
+                                    || (cut(word).is_some()
+                                        && parts.iter().any(|&(w, s, new)| {
+                                            w == when && s == '+' && pair(word, new)
+                                        }))
+                            }
+                            _ => false,
+                        }
                 })
         }
     }
@@ -4434,6 +4743,193 @@ mod allowed_classes {
             };
             assert!(
                 class_of(&row, &allowed.rows).is_none(),
+                "a class allows {}",
+                row.difference
+            );
+        }
+        // R3a's classes refuse a dock name that goes with no new form at its place, a new form
+        // elsewhere or of other words, a label that moved, the help or the field's words
+        // elsewhere, another word gone, a moved toggle, and an act where a name goes alone.
+        let view =
+            |screen: &str, view: &str, what: &str, change: &str, name: &str, detail: &str| {
+                Difference {
+                    screen: screen.into(),
+                    view: view.into(),
+                    what: what.into(),
+                    change: change.into(),
+                    name: name.into(),
+                    detail: detail.into(),
+                }
+            };
+        let (twelve, closed) = ("run-twelve", "1200x800 Lookup closed");
+        let (conditions, small) = ("run-conditions", "960x640 Lookup closed");
+        let help = "No HP, AC or roll changes by itself. A time you type counts down on that creature’s turns. Other effects stay local and do not sync.";
+        let r3a_faults = [
+            (
+                26,
+                view(
+                    "run-arrivals",
+                    closed,
+                    "text",
+                    "gone",
+                    "Ashfang, Eldest Wolf…",
+                    "was 156 730 147.2x18",
+                ),
+            ),
+            (
+                26,
+                view(
+                    twelve,
+                    closed,
+                    "text",
+                    "new",
+                    "Ashfang, Eldest… Ridge",
+                    "at 170 730 153.8x18",
+                ),
+            ),
+            (
+                26,
+                view(
+                    twelve,
+                    closed,
+                    "text",
+                    "new",
+                    "Brannoch… Vale",
+                    "at 156 730 153.8x18",
+                ),
+            ),
+            (
+                26,
+                view(
+                    twelve,
+                    closed,
+                    "control",
+                    "width",
+                    "Label: Selected: Ashfang, Eldest Wolf of the Southern Ridge",
+                    "156 730 147.2x18 -> 160 730 153.8x18",
+                ),
+            ),
+            (
+                27,
+                view(
+                    conditions,
+                    small,
+                    "text",
+                    "new",
+                    help,
+                    "at 630 429 314.8x48",
+                ),
+            ),
+            (
+                27,
+                view(
+                    conditions,
+                    small,
+                    "text",
+                    "gone",
+                    "Add",
+                    "was 900 401 40x28",
+                ),
+            ),
+            (
+                27,
+                view(
+                    conditions,
+                    small,
+                    "text",
+                    "new",
+                    "Other effect, such as Bless 10 rounds",
+                    "at 626 420 233.8x18",
+                ),
+            ),
+            (
+                25,
+                view(
+                    twelve,
+                    closed,
+                    "control",
+                    "moved",
+                    "Button: Absent",
+                    "540 725 80x28 -> 560 725 80x28",
+                ),
+            ),
+            (
+                25,
+                view(
+                    "act 81",
+                    "",
+                    "act",
+                    "changed",
+                    "close the run",
+                    "went - Ashfang, Eldest Wolf…",
+                ),
+            ),
+            (
+                25,
+                view(
+                    "act 81",
+                    "",
+                    "act",
+                    "changed",
+                    "close the run",
+                    "appeared + Conc",
+                ),
+            ),
+            // The same name change in the header, outside the dock's slot (Astra's review).
+            (
+                26,
+                view(
+                    twelve,
+                    closed,
+                    "text",
+                    "gone",
+                    "Ashfang, Eldest Wolf…",
+                    "was 241 15 178.8x22",
+                ),
+            ),
+            (
+                26,
+                view(
+                    twelve,
+                    closed,
+                    "text",
+                    "new",
+                    "Ashfang, Eldest… Ridge",
+                    "at 241 15 186.5x22",
+                ),
+            ),
+            // A text outside the help's box, also one with the help's words.
+            (
+                27,
+                view(conditions, small, "text", "gone", "HP", "was 700 200 20x16"),
+            ),
+            (
+                27,
+                view(
+                    conditions,
+                    small,
+                    "text",
+                    "gone",
+                    "do not sync.",
+                    "was 700 200 60x16",
+                ),
+            ),
+        ];
+        let faults: Vec<AllowedRow> = r3a_faults
+            .into_iter()
+            .map(|(row, difference)| AllowedRow {
+                row,
+                why: String::new(),
+                difference,
+            })
+            .collect();
+        // Each fault is refused also beside every other fault, so a pair such as the header's
+        // gone and new name cannot vouch for each other.
+        let mut with_faults = allowed.rows.clone();
+        with_faults.extend(faults.iter().cloned());
+        for row in &faults {
+            assert!(
+                class_of(row, &with_faults).is_none(),
                 "a class allows {}",
                 row.difference
             );

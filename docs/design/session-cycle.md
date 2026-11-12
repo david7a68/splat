@@ -214,14 +214,15 @@ Case D: a conflict, and three reminders that start with the same words
 ```
 
 **A row's effect words (rule P).** An effect never adds a line or height: a row has the lines and the height
-that the same row has with no effect. Its second line ends before the HP column (`view.rs:6430-6446`): it has
+that the same row has with each time taken away, where each effect is its plain words (the ruling on pull
+request 276, X5 after app round 2). Its second line ends before the HP column (`view.rs:6430-6446`): it has
 about 260 px at case D, and about 285 at case A, where the row has a state column.
 
 | Rule | What it means |
 |---|---|
 | Timed effects take the place of the conditions in today's order, before plain conditions. Every other word of today keeps its place: `No initiative`, `Bloodied`, `0 HP`, `Absent`, `Conc`, the side's word, `as <name>`, `Changed` with its bonuses, `Loot` and the sync word (`view.rs:6477-6583`) | Plain conditions fold into `N more`, as today. With `Bloodied` before them: `Bloodied · Wis save DC 15… · ⚑ +2` |
 | A count has a slot as wide as the widest of its three forms at the row's scale and font, with the warning icon of `time is up`: about 75 to 98 px. P4 measures it when the effect or the width changes | A change from `9` to `last round` to `time is up` moves no word |
-| An effect shows whole while the line has room. The first effect shortens its words from their end (`design::words_that_fit`) when it alone is too wide. The effects that do not fit are one count, `⚑ +2`. When no effect's words fit, the row shows the count of all its timed effects, with no plus: `⚑ 3`. When that count does not fit on the row's lines, it does not show on the row | At case D, with no other word, the line holds one long reminder and a count, or one counted effect and a count. `End Wis save DC 15 (Hold…  2` keeps its place through every count |
+| An effect shows whole while the line has room. The first effect shortens its words from their end (`design::words_that_fit`) when it alone is too wide. The effects that do not fit are one count, `⚑ +2`. When no effect's words fit, the row shows the count of all its timed effects, with no plus: `⚑ 3`. When that count does not fit on the row's lines, the row shows the effects as their plain words, as the row with no time does. On the row that has the turn, an effect shown on each turn comes first and keeps its first words before the last plain condition folds (W1-D1). The count of the rest follows the last slot after a space, with no dot (X10) | At case D, with no other word, the line holds one long reminder and a count, or one counted effect and a count. `End Wis save DC 15 (Hold…  2` keeps its place through every count |
 | `Conc save DC 12` takes only the room that the timed effects leave at their slot widths | Else it is in the hover and the accessible name |
 | The whole words | The hover and accessible name of the line; **Conditions**, which lists each effect; and the notice line on that participant's turn, while they fit |
 | A row with no timed effect | As today |
@@ -426,6 +427,9 @@ that G7 allows.
 | 22 | History on the Encounters page, after `Whole run` or `Open` | The list scrolls once, at that act, so the opened run's row is at its top and its outcome, the line under Read-only and the whole Final state are in view below it (V31). The line under Read-only is `S` below it and `M` above `FINAL STATE` (V11), so what is under Read-only moves up by at most 8 px more, and the Read-only line's words are as tall as a line. Otherwise only the list's scroll offset differs: what it holds is as today, and nothing moves sideways, is cut or is resized | By the lead's ruling after app round 1 |
 | 23 | A scene's row on the plan | Its words start at the fights' title column (12 px further left) and are drawn at the plan row title's size, `Body`, at every window size; its box's 24 px target ends at that column; its second line sits at a fight row's pitch (V2, V8). So a scene row's height changes, and every item below a changed scene row moves straight up by the sum of the height changes of the scene rows above it; nothing moves sideways, changes size, is cut or goes. A done scene's `Add to Log` (row 8's feature on the plan) is on its row where its words now keep their rows beside it. A done scene's words are muted (V1), which G7 does not measure | By the lead's ruling after app round 1 |
 | 24 | The **Tonight** line, with the scenes folded | `N scenes` has the section caret of a folded section before it, as `HISTORY` has (V14): the link is wider by the caret, at its place and height | By the lead's ruling after app round 1 |
+| 25 | Run dock, line two | `Effect` (row 6) is decided by the room after **Absent** alone, so it shows also beside a selected name that its slot cut (X9). Nothing of today's dock moves; an act shows or hides only `Effect`'s and rows 26 and 27's words | By the lead's ruling after app round 2 |
+| 26 | Run dock, the selected name | A name that its slot cuts keeps its last word after its first whole words, `Ashfang, Eldest… Ridge` for `Ashfang, Eldest Wolf…`, at the same place and height in the same slot (X53). The run header's names, the notice line's and Undo's are as today | By the lead's ruling after app round 2 |
+| 27 | The **Conditions** tab | Its help says `No HP, AC or roll changes by itself. A time you type counts down on that creature’s turns. Other effects stay local and do not sync.` at its place, and may take one more line below its first (X7). Where the dock has no room for `Effect`, the field's words are `Other effect, such as Bless 10 rounds` (X8) | By the lead's ruling after app round 2 |
 
 Nothing else differs. A free-words effect from an encounter or an older run gives no reminder. A Travel row
 shows no checks and no new field until the DM asks. The rail says nothing about trackers unless a notice is
@@ -575,10 +579,12 @@ the DM gave the effect a time: a count of rounds, or `on its turn`.** Words with
 - **The dock** gets the quick way, `Effect` (key `E`): a quiet action on the dock's second line, `L` after
   **Absent**. That line is laid out from the left (the name, `L`, Conditions, Conc, Absent), so the spare room
   is after Absent, and there `Effect` moves no control (measured in P4; an earlier draft put it left of
-  Conditions, which moved the three controls after it). **The fit rule for `Effect`, stated once:** it shows with its word while the selected
-  name keeps its size and its words; with its icon only while the name keeps both beside the icon; and not at
-  all otherwise. `Death saves` and a roll's total, which that line holds at times (`dock.rs:109-143`), keep
-  their places first. With several rows selected, the line is one sentence today (`target_words`, `dock.rs:197-213`) and has no
+  Conditions, which moved the three controls after it). **The fit rule for `Effect`, stated once:** the room after Absent alone decides (by the
+  lead's ruling after app round 2, X9): it shows with its word while that room holds it, also beside a name that
+  its slot cut; with its icon while the room holds the icon; and not at all otherwise, where the Conditions
+  field says `Other effect, such as Bless 10 rounds` (X8). A roll's total keeps its place first. `Death saves`
+  is first on the action tiles' line above the dock, so it moves no control of the dock and takes no room from
+  the name (X65). With several rows selected, the line is one sentence today (`target_words`, `dock.rs:197-213`) and has no
   `Effect`. The field in the Conditions tab is then the way, as today: `E` opens the tab with focus in the
   field, for 4. By the pointer with Lookup open it is 5 (select, **Conditions**, the field, the words, Enter),
   and Ctrl+K shows Lookup again.
@@ -628,8 +634,9 @@ more room. Case C is case A with the run's panel at 346 px.
 - **On its turn.** The words show on each of that participant's turns, until the DM removes the effect.
 - **A condition's name.** Words that are an official condition, such as `Frightened 10 rounds`, add that
   condition with a count. Words that are already on the row change their time and add nothing.
-- **A recharge roll** uses the run's dice. The result words say `Rolled 5 · ready again` or `Rolled 2 · still
-  spent`.
+- **A recharge roll** uses the run's dice. The Log says `Rolled 5 · ready again` or `Rolled 2 · still spent`.
+  The die shows in the dock's dice total place, and the run's footer says `Rolled 2 for Cinder Drake: Fire
+  Breath still spent.` until the next act (X4, by the lead's ruling after app round 2).
 - **Concentration.** When a row marked `Conc` takes damage, the row's second line ends with `Conc save DC 12`
   until the next step: 10, or half the damage if that is more, and at most 30. With no room on that line, the
   words are in the row's hover and accessible name only. Splat does not roll the save or clear `Conc`. It
@@ -655,7 +662,9 @@ A count is its own target, 24 px wide or more, so the name beside it keeps its a
 
 **Exact words.** `Effect`. Dock field: `Effect on <name>, such as Bless 10 rounds`. On the row and the notice
 line: `Bless 9`, `Bless · last round`,
-`Bless · time is up`. The Conditions tab's words are as today.
+`Bless · time is up`. The Conditions tab's help says `No HP, AC or roll changes by itself. A time you type
+counts down on that creature’s turns. Other effects stay local and do not sync.` (X7); an official condition's
+count is on its tick, `✓ Frightened 10`, and Other effects lists other words only (X11).
 
 | State | What shows |
 |---|---|

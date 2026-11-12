@@ -29,7 +29,6 @@ impl Run {
         let index = self.selected;
         let mut command = None;
         let mut open_conditions = false;
-        let mut open_side = false;
         let mut open_effect = false;
         let mut in_dock = false;
         let frame = egui::Frame::new()
@@ -100,7 +99,6 @@ impl Run {
                 }
                 let widest = self.widest_name(ui);
                 let p = &self.state.participants[index];
-                let death_saves = self.hide_panel && p.hp == Some(0);
                 let conditions_key = if self.lookup_open { "" } else { "C" };
                 // The selected name, `L`, then its controls: one block after the creature.
                 let (presence, hint) = presence_action(p.present);
@@ -110,14 +108,6 @@ impl Run {
                     + design::S
                     + toggle_width(ui, "Conc", icons::CONCENTRATING)
                     + gap
-                    + if death_saves {
-                        Action::quiet("Death saves")
-                            .density(Density::Read)
-                            .natural_width(ui)
-                            + gap
-                    } else {
-                        0.0
-                    }
                     + Action::quiet("Conditions")
                         .density(Density::Read)
                         .key(conditions_key)
@@ -154,8 +144,6 @@ impl Run {
                     let room = ui.available_width() - controls - design::L - result_slot;
                     let slot = widest.min(12.0 * design::L).min(room).max(0.0);
                     let (role, shown) = dock_name_shown(ui, &p.name, slot);
-                    // A name that lost a word or its size has no room to give.
-                    let whole = role == Type::Heading && shown == p.name;
                     ui.allocate_ui_with_layout(
                         vec2(slot, height),
                         Layout::left_to_right(Align::Center),
@@ -176,15 +164,6 @@ impl Run {
                         .clicked()
                     {
                         open_conditions = true;
-                    }
-                    // Notes hide the panel with the saves, so one word leads there.
-                    if death_saves
-                        && Action::quiet("Death saves")
-                            .density(Density::Read)
-                            .show(ui)
-                            .clicked()
-                    {
-                        open_side = true;
                     }
                     if toggle(
                         ui,
@@ -216,10 +195,11 @@ impl Run {
                     // `Effect` takes only the room that is spare after Absent, `L` after it and
                     // short of the dice total's place, so no control of the line moves and the
                     // name keeps all its room: with its word, else with its icon, else not at all.
+                    // X9: that room alone decides; a name its slot already cut gives none.
                     let spare = ui.available_width() - design::L + gap - result_slot;
-                    if running && whole && spare >= effect_word {
+                    if running && spare >= effect_word {
                         effect = EffectFit::Word;
-                    } else if running && whole && spare >= effect_icon {
+                    } else if running && spare >= effect_icon {
                         effect = EffectFit::Icon;
                     }
                     if effect != EffectFit::None {
@@ -259,9 +239,6 @@ impl Run {
         }
         if open_effect {
             self.open_effect_field();
-        }
-        if open_side {
-            self.close_lookup = true;
         }
         if let Some(command) = command {
             let applied = matches!(
@@ -425,9 +402,13 @@ impl Run {
     }
 
     /// The dice field's last roll: its total and its Log line.
-    fn dock_roll(&self) -> Option<(i64, String)> {
-        let rolled = self.dock_roll.as_ref()?;
-        Some((rolled.total, rolled.line()))
+    /// The last roll beside the dice: a recharge's until the next act (X4), else the dice
+    /// field's.
+    pub(super) fn dock_roll(&self) -> Option<(i64, String)> {
+        match (&self.recharged, &self.dock_roll) {
+            (Some(recharged), _) => Some((recharged.die, recharged.line.clone())),
+            (None, rolled) => rolled.as_ref().map(|rolled| (rolled.total, rolled.line())),
+        }
     }
 
     /// The last roll in the slot that `ui` is: the total after the first of `prefixes` that
@@ -693,6 +674,18 @@ mod tests {
             BTreeSet::from(["icon", "none", "word"]),
             "each form at some width"
         );
+        // X9: the room after Absent alone decides. Beside a name that its slot cut, `Effect`
+        // shows with its word, and the cut name keeps its telling last word (X53).
+        let long = "Seraphina Thornwood-Ashgrave of the Ninth Bell";
+        let (_, harness) = dock(long, 1200.0);
+        let (shown, _) = name_shown(&harness, long).unwrap();
+        assert!(
+            harness
+                .query_by_label("Effect: words for this row")
+                .is_some(),
+            "Effect beside {shown:?}"
+        );
+        assert!(shown.ends_with("… Bell"), "{shown}");
     }
 
     /// F2: the dock's field adds one effect to the row it opened for. Enter adds and puts

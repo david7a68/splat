@@ -1391,7 +1391,26 @@ impl Run {
         rolls::set_roller(ui.ctx(), Some(row));
         rolls::set_entry(ui.ctx(), &self.state.participants[row].name.clone());
         self.armed_tiles_begin(ui.ctx());
-        rolls::compact_tiles(ui, &chips);
+        // X65: notes and Lookup hide the panel with the saves, so one word leads there. It is
+        // first on this line, so no control of the dock moves and the selected name keeps
+        // its slot when a row drops to 0 HP.
+        let death_saves = self.state.participants[self.selected].hp == Some(0);
+        let open_side = ui
+            .horizontal(|ui| {
+                let open = death_saves && {
+                    ui.add_space(crate::design::S);
+                    crate::design::Action::quiet("Death saves")
+                        .density(crate::design::Density::Read)
+                        .show(ui)
+                        .clicked()
+                };
+                rolls::compact_tiles(ui, &chips);
+                open
+            })
+            .inner;
+        if open_side {
+            self.close_lookup = true;
+        }
         rolls::set_roller(ui.ctx(), None);
         rolls::set_inspired(ui.ctx(), false);
     }

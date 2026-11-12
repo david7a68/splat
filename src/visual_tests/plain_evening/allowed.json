@@ -1,4 +1,1637 @@
 {
   "about": "G7's allowed differences from reference.json. Each row names its row of docs/design/session-cycle.md section 2.5 and one difference, whole, as the G7 failure prints it. A row that matches nothing fails. Add rows only for a change that section 2.5 lists.",
-  "rows": []
+  "rows": [
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "act 53",
+        "view": "",
+        "what": "act",
+        "change": "changed",
+        "name": "resume the 12-person fight",
+        "detail": "appeared + Ashfang, Eldest… Ridge | appeared + E | appeared + Effect | appeared + "
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "act 54",
+        "view": "",
+        "what": "act",
+        "change": "changed",
+        "name": "Ctrl+K opens Lookup",
+        "detail": "went + E"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "act 55",
+        "view": "",
+        "what": "act",
+        "change": "changed",
+        "name": "Ctrl+K closes Lookup",
+        "detail": "appeared + E"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "act 57",
+        "view": "",
+        "what": "act",
+        "change": "changed",
+        "name": "Ctrl+K opens Lookup",
+        "detail": "went + E"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "act 58",
+        "view": "",
+        "what": "act",
+        "change": "changed",
+        "name": "Ctrl+K closes Lookup",
+        "detail": "appeared + E"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "act 60",
+        "view": "",
+        "what": "act",
+        "change": "changed",
+        "name": "select Brannoch",
+        "detail": "appeared - E | appeared - Effect | appeared -  | went + Ashfang, Eldest… Ridge"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "act 61",
+        "view": "",
+        "what": "act",
+        "change": "changed",
+        "name": "Conditions",
+        "detail": "appeared + No HP, AC or roll changes by itself. A time you type counts down on that creature’s turns. Other effects stay local and do not sync. | appeared - These record your ruling. No number changes by itself. Other effects stay local and do not sync."
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "act 62",
+        "view": "",
+        "what": "act",
+        "change": "changed",
+        "name": "Ctrl+K opens Lookup",
+        "detail": "went + No HP, AC or roll changes by itself. A time you type counts down on that creature’s turns. Other effects stay local and do not sync. | went - These record your ruling. No number changes by itself. Other effects stay local and do not sync."
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "act 63",
+        "view": "",
+        "what": "act",
+        "change": "changed",
+        "name": "Ctrl+K closes Lookup",
+        "detail": "appeared + No HP, AC or roll changes by itself. A time you type counts down on that creature’s turns. Other effects stay local and do not sync. | appeared - These record your ruling. No number changes by itself. Other effects stay local and do not sync."
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "act 64",
+        "view": "",
+        "what": "act",
+        "change": "changed",
+        "name": "Add to fight",
+        "detail": "went + No HP, AC or roll changes by itself. A time you type counts down on that creature’s turns. Other effects stay local and do not sync. | went - These record your ruling. No number changes by itself. Other effects stay local and do not sync."
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "act 78",
+        "view": "",
+        "what": "act",
+        "change": "changed",
+        "name": "Next turn 12",
+        "detail": "appeared + Ashfang, Eldest… Ridge | went - E | went - Effect | went - "
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "act 79",
+        "view": "",
+        "what": "act",
+        "change": "changed",
+        "name": "Ctrl+K opens Lookup",
+        "detail": "went + E"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "act 80",
+        "view": "",
+        "what": "act",
+        "change": "changed",
+        "name": "Ctrl+K closes Lookup",
+        "detail": "appeared + E"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "act 81",
+        "view": "",
+        "what": "act",
+        "change": "changed",
+        "name": "close the run",
+        "detail": "went + Ashfang, Eldest… Ridge | went + E | went + Effect | went + "
+      }
+    },
+    {
+      "row": 27,
+      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "difference": {
+        "screen": "run-conditions",
+        "view": "1200x800 Lookup closed",
+        "what": "control",
+        "change": "gone",
+        "name": "Label: These record your ruling. No number changes by itself. Other effects stay local and do not sync.",
+        "detail": "was 772 333 394.8x32"
+      }
+    },
+    {
+      "row": 27,
+      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "difference": {
+        "screen": "run-conditions",
+        "view": "1200x800 Lookup closed",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: local and do not sync.",
+        "detail": "was 772 349 117.3x16"
+      }
+    },
+    {
+      "row": 27,
+      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "difference": {
+        "screen": "run-conditions",
+        "view": "1200x800 Lookup closed",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: These record your ruling. No number changes by itself. Other effects stay ",
+        "detail": "was 772 333 394.8x16"
+      }
+    },
+    {
+      "row": 27,
+      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "difference": {
+        "screen": "run-conditions",
+        "view": "1200x800 Lookup closed",
+        "what": "control",
+        "change": "new",
+        "name": "Label: No HP, AC or roll changes by itself. A time you type counts down on that creature’s turns. Other effects stay local and do not sync.",
+        "detail": "at 772 333 387.8x32"
+      }
+    },
+    {
+      "row": 27,
+      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "difference": {
+        "screen": "run-conditions",
+        "view": "1200x800 Lookup closed",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: creature’s turns. Other effects stay local and do not sync.",
+        "detail": "at 772 349 306.3x16"
+      }
+    },
+    {
+      "row": 27,
+      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "difference": {
+        "screen": "run-conditions",
+        "view": "1200x800 Lookup closed",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: No HP, AC or roll changes by itself. A time you type counts down on that ",
+        "detail": "at 772 333 387.8x16"
+      }
+    },
+    {
+      "row": 27,
+      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "difference": {
+        "screen": "run-conditions",
+        "view": "1200x800 Lookup closed",
+        "what": "text",
+        "change": "gone",
+        "name": "These record your ruling. No number changes by itself. Other effects stay local and do not sync.",
+        "detail": "was 772 333 394.8x32"
+      }
+    },
+    {
+      "row": 27,
+      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "difference": {
+        "screen": "run-conditions",
+        "view": "1200x800 Lookup closed",
+        "what": "text",
+        "change": "new",
+        "name": "No HP, AC or roll changes by itself. A time you type counts down on that creature’s turns. Other effects stay local and do not sync.",
+        "detail": "at 772 333 387.8x32"
+      }
+    },
+    {
+      "row": 27,
+      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "difference": {
+        "screen": "run-conditions",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "gone",
+        "name": "Label: These record your ruling. No number changes by itself. Other effects stay local and do not sync.",
+        "detail": "was 618 429 328.8x32"
+      }
+    },
+    {
+      "row": 27,
+      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "difference": {
+        "screen": "run-conditions",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: effects stay local and do not sync.",
+        "detail": "was 618 445 182.3x16"
+      }
+    },
+    {
+      "row": 27,
+      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "difference": {
+        "screen": "run-conditions",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: These record your ruling. No number changes by itself. Other ",
+        "detail": "was 618 429 328.8x16"
+      }
+    },
+    {
+      "row": 27,
+      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "difference": {
+        "screen": "run-conditions",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "new",
+        "name": "Label: No HP, AC or roll changes by itself. A time you type counts down on that creature’s turns. Other effects stay local and do not sync.",
+        "detail": "at 618 429 314.8x48"
+      }
+    },
+    {
+      "row": 27,
+      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "difference": {
+        "screen": "run-conditions",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: do not sync.",
+        "detail": "at 618 461 65.3x16"
+      }
+    },
+    {
+      "row": 27,
+      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "difference": {
+        "screen": "run-conditions",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: down on that creature’s turns. Other effects stay local and ",
+        "detail": "at 618 445 314.8x16"
+      }
+    },
+    {
+      "row": 27,
+      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "difference": {
+        "screen": "run-conditions",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: No HP, AC or roll changes by itself. A time you type counts ",
+        "detail": "at 618 429 313.8x16"
+      }
+    },
+    {
+      "row": 27,
+      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "difference": {
+        "screen": "run-conditions",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "gone",
+        "name": "Other effect…",
+        "detail": "was 626 401 86.3x18"
+      }
+    },
+    {
+      "row": 27,
+      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "difference": {
+        "screen": "run-conditions",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "gone",
+        "name": "These record your ruling. No number changes by itself. Other effects stay local and do not sync.",
+        "detail": "was 618 429 328.8x32"
+      }
+    },
+    {
+      "row": 27,
+      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "difference": {
+        "screen": "run-conditions",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "new",
+        "name": "No HP, AC or roll changes by itself. A time you type counts down on that creature’s turns. Other effects stay local and do not sync.",
+        "detail": "at 618 429 314.8x48"
+      }
+    },
+    {
+      "row": 27,
+      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "difference": {
+        "screen": "run-conditions",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "new",
+        "name": "Other effect, such as Bless 10 rounds",
+        "detail": "at 626 401 233.8x18"
+      }
+    },
+    {
+      "row": 27,
+      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "difference": {
+        "screen": "run-conditions: Conditions hover",
+        "view": "1200x800",
+        "what": "control",
+        "change": "gone",
+        "name": "Label: These record your ruling. No number changes by itself. Other effects stay local and do not sync.",
+        "detail": "was 772 333 394.8x32"
+      }
+    },
+    {
+      "row": 27,
+      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "difference": {
+        "screen": "run-conditions: Conditions hover",
+        "view": "1200x800",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: local and do not sync.",
+        "detail": "was 772 349 117.3x16"
+      }
+    },
+    {
+      "row": 27,
+      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "difference": {
+        "screen": "run-conditions: Conditions hover",
+        "view": "1200x800",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: These record your ruling. No number changes by itself. Other effects stay ",
+        "detail": "was 772 333 394.8x16"
+      }
+    },
+    {
+      "row": 27,
+      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "difference": {
+        "screen": "run-conditions: Conditions hover",
+        "view": "1200x800",
+        "what": "control",
+        "change": "new",
+        "name": "Label: No HP, AC or roll changes by itself. A time you type counts down on that creature’s turns. Other effects stay local and do not sync.",
+        "detail": "at 772 333 387.8x32"
+      }
+    },
+    {
+      "row": 27,
+      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "difference": {
+        "screen": "run-conditions: Conditions hover",
+        "view": "1200x800",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: creature’s turns. Other effects stay local and do not sync.",
+        "detail": "at 772 349 306.3x16"
+      }
+    },
+    {
+      "row": 27,
+      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "difference": {
+        "screen": "run-conditions: Conditions hover",
+        "view": "1200x800",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: No HP, AC or roll changes by itself. A time you type counts down on that ",
+        "detail": "at 772 333 387.8x16"
+      }
+    },
+    {
+      "row": 27,
+      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "difference": {
+        "screen": "run-conditions: Conditions hover",
+        "view": "1200x800",
+        "what": "text",
+        "change": "gone",
+        "name": "These record your ruling. No number changes by itself. Other effects stay local and do not sync.",
+        "detail": "was 772 333 394.8x32"
+      }
+    },
+    {
+      "row": 27,
+      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "difference": {
+        "screen": "run-conditions: Conditions hover",
+        "view": "1200x800",
+        "what": "text",
+        "change": "new",
+        "name": "No HP, AC or roll changes by itself. A time you type counts down on that creature’s turns. Other effects stay local and do not sync.",
+        "detail": "at 772 333 387.8x32"
+      }
+    },
+    {
+      "row": 27,
+      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "difference": {
+        "screen": "run-conditions: Conditions hover",
+        "view": "960x640",
+        "what": "control",
+        "change": "gone",
+        "name": "Label: These record your ruling. No number changes by itself. Other effects stay local and do not sync.",
+        "detail": "was 618 429 328.8x32"
+      }
+    },
+    {
+      "row": 27,
+      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "difference": {
+        "screen": "run-conditions: Conditions hover",
+        "view": "960x640",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: effects stay local and do not sync.",
+        "detail": "was 618 445 182.3x16"
+      }
+    },
+    {
+      "row": 27,
+      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "difference": {
+        "screen": "run-conditions: Conditions hover",
+        "view": "960x640",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: These record your ruling. No number changes by itself. Other ",
+        "detail": "was 618 429 328.8x16"
+      }
+    },
+    {
+      "row": 27,
+      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "difference": {
+        "screen": "run-conditions: Conditions hover",
+        "view": "960x640",
+        "what": "control",
+        "change": "new",
+        "name": "Label: No HP, AC or roll changes by itself. A time you type counts down on that creature’s turns. Other effects stay local and do not sync.",
+        "detail": "at 618 429 314.8x48"
+      }
+    },
+    {
+      "row": 27,
+      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "difference": {
+        "screen": "run-conditions: Conditions hover",
+        "view": "960x640",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: do not sync.",
+        "detail": "at 618 461 65.3x16"
+      }
+    },
+    {
+      "row": 27,
+      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "difference": {
+        "screen": "run-conditions: Conditions hover",
+        "view": "960x640",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: down on that creature’s turns. Other effects stay local and ",
+        "detail": "at 618 445 314.8x16"
+      }
+    },
+    {
+      "row": 27,
+      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "difference": {
+        "screen": "run-conditions: Conditions hover",
+        "view": "960x640",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: No HP, AC or roll changes by itself. A time you type counts ",
+        "detail": "at 618 429 313.8x16"
+      }
+    },
+    {
+      "row": 27,
+      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "difference": {
+        "screen": "run-conditions: Conditions hover",
+        "view": "960x640",
+        "what": "text",
+        "change": "gone",
+        "name": "Other effect…",
+        "detail": "was 626 401 86.3x18"
+      }
+    },
+    {
+      "row": 27,
+      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "difference": {
+        "screen": "run-conditions: Conditions hover",
+        "view": "960x640",
+        "what": "text",
+        "change": "gone",
+        "name": "These record your ruling. No number changes by itself. Other effects stay local and do not sync.",
+        "detail": "was 618 429 328.8x32"
+      }
+    },
+    {
+      "row": 27,
+      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "difference": {
+        "screen": "run-conditions: Conditions hover",
+        "view": "960x640",
+        "what": "text",
+        "change": "new",
+        "name": "No HP, AC or roll changes by itself. A time you type counts down on that creature’s turns. Other effects stay local and do not sync.",
+        "detail": "at 618 429 314.8x48"
+      }
+    },
+    {
+      "row": 27,
+      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "difference": {
+        "screen": "run-conditions: Conditions hover",
+        "view": "960x640",
+        "what": "text",
+        "change": "new",
+        "name": "Other effect, such as Bless 10 rounds",
+        "detail": "at 626 401 233.8x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-keys",
+        "view": "1200x800 Lookup closed",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: Ashfang, Eldest Wolf…",
+        "detail": "was 156 730 147.2x18"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "run-keys",
+        "view": "1200x800 Lookup closed",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Effect: words for this row",
+        "detail": "at 644.3 725 88.1x28"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-keys",
+        "view": "1200x800 Lookup closed",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: Ashfang, Eldest… Ridge",
+        "detail": "at 156 730 153.8x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-keys",
+        "view": "1200x800 Lookup closed",
+        "what": "control",
+        "change": "width",
+        "name": "Label: Selected: Ashfang, Eldest Wolf of the Southern Ridge",
+        "detail": "156 730 147.2x18 -> 156 730 153.8x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-keys",
+        "view": "1200x800 Lookup closed",
+        "what": "text",
+        "change": "gone",
+        "name": "Ashfang, Eldest Wolf…",
+        "detail": "was 156 730 147.2x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-keys",
+        "view": "1200x800 Lookup closed",
+        "what": "text",
+        "change": "new",
+        "name": "Ashfang, Eldest… Ridge",
+        "detail": "at 156 730 153.8x18"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "run-keys",
+        "view": "1200x800 Lookup closed",
+        "what": "text",
+        "change": "new",
+        "name": "E",
+        "detail": "at 717.4 731 7x16"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "run-keys",
+        "view": "1200x800 Lookup closed",
+        "what": "text",
+        "change": "new",
+        "name": "Effect",
+        "detail": "at 672.3 730 37.1x18"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "run-keys",
+        "view": "1200x800 Lookup closed",
+        "what": "text",
+        "change": "new",
+        "name": "",
+        "detail": "at 652.3 730 14x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-keys",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: Ashfang, Eldest Wolf…",
+        "detail": "was 156 730 147.2x18"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "run-keys",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Effect: words for this row",
+        "detail": "at 628.8 725 73.1x28"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-keys",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: Ashfang, Eldest… Ridge",
+        "detail": "at 156 730 153.8x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-keys",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "width",
+        "name": "Label: Selected: Ashfang, Eldest Wolf of the Southern Ridge",
+        "detail": "156 730 147.2x18 -> 156 730 153.8x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-keys",
+        "view": "1200x800 Lookup open",
+        "what": "text",
+        "change": "gone",
+        "name": "Ashfang, Eldest Wolf…",
+        "detail": "was 156 730 147.2x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-keys",
+        "view": "1200x800 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "Ashfang, Eldest… Ridge",
+        "detail": "at 156 730 153.8x18"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "run-keys",
+        "view": "1200x800 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "Effect",
+        "detail": "at 656.8 730 37.1x18"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "run-keys",
+        "view": "1200x800 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "",
+        "detail": "at 636.8 730 14x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-keys",
+        "view": "960x640 Lookup open",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: Ashfang,…",
+        "detail": "was 156 570 69.2x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-keys",
+        "view": "960x640 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: Ashfang… Ridge",
+        "detail": "at 156 570 104.8x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-keys",
+        "view": "960x640 Lookup open",
+        "what": "control",
+        "change": "width",
+        "name": "Label: Selected: Ashfang, Eldest Wolf of the Southern Ridge",
+        "detail": "156 570 69.2x18 -> 156 570 104.8x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-keys",
+        "view": "960x640 Lookup open",
+        "what": "text",
+        "change": "gone",
+        "name": "Ashfang,…",
+        "detail": "was 156 570 69.2x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-keys",
+        "view": "960x640 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "Ashfang… Ridge",
+        "detail": "at 156 570 104.8x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-next-round",
+        "view": "1200x800 Lookup closed",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: Ashfang, Eldest Wolf…",
+        "detail": "was 156 730 147.2x18"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "run-next-round",
+        "view": "1200x800 Lookup closed",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Effect: words for this row",
+        "detail": "at 644.3 725 88.1x28"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-next-round",
+        "view": "1200x800 Lookup closed",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: Ashfang, Eldest… Ridge",
+        "detail": "at 156 730 153.8x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-next-round",
+        "view": "1200x800 Lookup closed",
+        "what": "control",
+        "change": "width",
+        "name": "Label: Selected: Ashfang, Eldest Wolf of the Southern Ridge",
+        "detail": "156 730 147.2x18 -> 156 730 153.8x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-next-round",
+        "view": "1200x800 Lookup closed",
+        "what": "text",
+        "change": "gone",
+        "name": "Ashfang, Eldest Wolf…",
+        "detail": "was 156 730 147.2x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-next-round",
+        "view": "1200x800 Lookup closed",
+        "what": "text",
+        "change": "new",
+        "name": "Ashfang, Eldest… Ridge",
+        "detail": "at 156 730 153.8x18"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "run-next-round",
+        "view": "1200x800 Lookup closed",
+        "what": "text",
+        "change": "new",
+        "name": "E",
+        "detail": "at 717.4 731 7x16"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "run-next-round",
+        "view": "1200x800 Lookup closed",
+        "what": "text",
+        "change": "new",
+        "name": "Effect",
+        "detail": "at 672.3 730 37.1x18"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "run-next-round",
+        "view": "1200x800 Lookup closed",
+        "what": "text",
+        "change": "new",
+        "name": "",
+        "detail": "at 652.3 730 14x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-next-round",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: Ashfang, Eldest Wolf…",
+        "detail": "was 156 730 147.2x18"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "run-next-round",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Effect: words for this row",
+        "detail": "at 628.8 725 73.1x28"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-next-round",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: Ashfang, Eldest… Ridge",
+        "detail": "at 156 730 153.8x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-next-round",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "width",
+        "name": "Label: Selected: Ashfang, Eldest Wolf of the Southern Ridge",
+        "detail": "156 730 147.2x18 -> 156 730 153.8x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-next-round",
+        "view": "1200x800 Lookup open",
+        "what": "text",
+        "change": "gone",
+        "name": "Ashfang, Eldest Wolf…",
+        "detail": "was 156 730 147.2x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-next-round",
+        "view": "1200x800 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "Ashfang, Eldest… Ridge",
+        "detail": "at 156 730 153.8x18"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "run-next-round",
+        "view": "1200x800 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "Effect",
+        "detail": "at 656.8 730 37.1x18"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "run-next-round",
+        "view": "1200x800 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "",
+        "detail": "at 636.8 730 14x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-next-round",
+        "view": "960x640 Lookup open",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: Ashfang,…",
+        "detail": "was 156 570 69.2x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-next-round",
+        "view": "960x640 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: Ashfang… Ridge",
+        "detail": "at 156 570 104.8x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-next-round",
+        "view": "960x640 Lookup open",
+        "what": "control",
+        "change": "width",
+        "name": "Label: Selected: Ashfang, Eldest Wolf of the Southern Ridge",
+        "detail": "156 570 69.2x18 -> 156 570 104.8x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-next-round",
+        "view": "960x640 Lookup open",
+        "what": "text",
+        "change": "gone",
+        "name": "Ashfang,…",
+        "detail": "was 156 570 69.2x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-next-round",
+        "view": "960x640 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "Ashfang… Ridge",
+        "detail": "at 156 570 104.8x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-next-round: Undo hover",
+        "view": "1200x800",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: Ashfang, Eldest Wolf…",
+        "detail": "was 156 730 147.2x18"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "run-next-round: Undo hover",
+        "view": "1200x800",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Effect: words for this row",
+        "detail": "at 644.3 725 88.1x28"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-next-round: Undo hover",
+        "view": "1200x800",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: Ashfang, Eldest… Ridge",
+        "detail": "at 156 730 153.8x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-next-round: Undo hover",
+        "view": "1200x800",
+        "what": "control",
+        "change": "width",
+        "name": "Label: Selected: Ashfang, Eldest Wolf of the Southern Ridge",
+        "detail": "156 730 147.2x18 -> 156 730 153.8x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-next-round: Undo hover",
+        "view": "1200x800",
+        "what": "text",
+        "change": "gone",
+        "name": "Ashfang, Eldest Wolf…",
+        "detail": "was 156 730 147.2x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-next-round: Undo hover",
+        "view": "1200x800",
+        "what": "text",
+        "change": "new",
+        "name": "Ashfang, Eldest… Ridge",
+        "detail": "at 156 730 153.8x18"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "run-next-round: Undo hover",
+        "view": "1200x800",
+        "what": "text",
+        "change": "new",
+        "name": "E",
+        "detail": "at 717.4 731 7x16"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "run-next-round: Undo hover",
+        "view": "1200x800",
+        "what": "text",
+        "change": "new",
+        "name": "Effect",
+        "detail": "at 672.3 730 37.1x18"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "run-next-round: Undo hover",
+        "view": "1200x800",
+        "what": "text",
+        "change": "new",
+        "name": "",
+        "detail": "at 652.3 730 14x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-twelve",
+        "view": "1200x800 Lookup closed",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: Ashfang, Eldest Wolf…",
+        "detail": "was 156 730 147.2x18"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "run-twelve",
+        "view": "1200x800 Lookup closed",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Effect: words for this row",
+        "detail": "at 644.3 725 88.1x28"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-twelve",
+        "view": "1200x800 Lookup closed",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: Ashfang, Eldest… Ridge",
+        "detail": "at 156 730 153.8x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-twelve",
+        "view": "1200x800 Lookup closed",
+        "what": "control",
+        "change": "width",
+        "name": "Label: Selected: Ashfang, Eldest Wolf of the Southern Ridge",
+        "detail": "156 730 147.2x18 -> 156 730 153.8x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-twelve",
+        "view": "1200x800 Lookup closed",
+        "what": "text",
+        "change": "gone",
+        "name": "Ashfang, Eldest Wolf…",
+        "detail": "was 156 730 147.2x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-twelve",
+        "view": "1200x800 Lookup closed",
+        "what": "text",
+        "change": "new",
+        "name": "Ashfang, Eldest… Ridge",
+        "detail": "at 156 730 153.8x18"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "run-twelve",
+        "view": "1200x800 Lookup closed",
+        "what": "text",
+        "change": "new",
+        "name": "E",
+        "detail": "at 717.4 731 7x16"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "run-twelve",
+        "view": "1200x800 Lookup closed",
+        "what": "text",
+        "change": "new",
+        "name": "Effect",
+        "detail": "at 672.3 730 37.1x18"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "run-twelve",
+        "view": "1200x800 Lookup closed",
+        "what": "text",
+        "change": "new",
+        "name": "",
+        "detail": "at 652.3 730 14x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-twelve",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: Ashfang, Eldest Wolf…",
+        "detail": "was 156 730 147.2x18"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "run-twelve",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Effect: words for this row",
+        "detail": "at 628.8 725 73.1x28"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-twelve",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: Ashfang, Eldest… Ridge",
+        "detail": "at 156 730 153.8x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-twelve",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "width",
+        "name": "Label: Selected: Ashfang, Eldest Wolf of the Southern Ridge",
+        "detail": "156 730 147.2x18 -> 156 730 153.8x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-twelve",
+        "view": "1200x800 Lookup open",
+        "what": "text",
+        "change": "gone",
+        "name": "Ashfang, Eldest Wolf…",
+        "detail": "was 156 730 147.2x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-twelve",
+        "view": "1200x800 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "Ashfang, Eldest… Ridge",
+        "detail": "at 156 730 153.8x18"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "run-twelve",
+        "view": "1200x800 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "Effect",
+        "detail": "at 656.8 730 37.1x18"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "run-twelve",
+        "view": "1200x800 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "",
+        "detail": "at 636.8 730 14x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-twelve",
+        "view": "960x640 Lookup open",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: Ashfang,…",
+        "detail": "was 156 570 69.2x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-twelve",
+        "view": "960x640 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: Ashfang… Ridge",
+        "detail": "at 156 570 104.8x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-twelve",
+        "view": "960x640 Lookup open",
+        "what": "control",
+        "change": "width",
+        "name": "Label: Selected: Ashfang, Eldest Wolf of the Southern Ridge",
+        "detail": "156 570 69.2x18 -> 156 570 104.8x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-twelve",
+        "view": "960x640 Lookup open",
+        "what": "text",
+        "change": "gone",
+        "name": "Ashfang,…",
+        "detail": "was 156 570 69.2x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-twelve",
+        "view": "960x640 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "Ashfang… Ridge",
+        "detail": "at 156 570 104.8x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-twelve: row hover",
+        "view": "1200x800",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: Ashfang, Eldest Wolf…",
+        "detail": "was 156 730 147.2x18"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "run-twelve: row hover",
+        "view": "1200x800",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Effect: words for this row",
+        "detail": "at 644.3 725 88.1x28"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-twelve: row hover",
+        "view": "1200x800",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: Ashfang, Eldest… Ridge",
+        "detail": "at 156 730 153.8x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-twelve: row hover",
+        "view": "1200x800",
+        "what": "control",
+        "change": "width",
+        "name": "Label: Selected: Ashfang, Eldest Wolf of the Southern Ridge",
+        "detail": "156 730 147.2x18 -> 156 730 153.8x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-twelve: row hover",
+        "view": "1200x800",
+        "what": "text",
+        "change": "gone",
+        "name": "Ashfang, Eldest Wolf…",
+        "detail": "was 156 730 147.2x18"
+      }
+    },
+    {
+      "row": 26,
+      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "difference": {
+        "screen": "run-twelve: row hover",
+        "view": "1200x800",
+        "what": "text",
+        "change": "new",
+        "name": "Ashfang, Eldest… Ridge",
+        "detail": "at 156 730 153.8x18"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "run-twelve: row hover",
+        "view": "1200x800",
+        "what": "text",
+        "change": "new",
+        "name": "E",
+        "detail": "at 717.4 731 7x16"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "run-twelve: row hover",
+        "view": "1200x800",
+        "what": "text",
+        "change": "new",
+        "name": "Effect",
+        "detail": "at 672.3 730 37.1x18"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "difference": {
+        "screen": "run-twelve: row hover",
+        "view": "1200x800",
+        "what": "text",
+        "change": "new",
+        "name": "",
+        "detail": "at 652.3 730 14x18"
+      }
+    }
+  ]
 }

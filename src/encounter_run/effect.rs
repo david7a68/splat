@@ -146,6 +146,12 @@ impl Condition {
         matches!(self.time()?, Time::Rounds { .. } | Time::OnTurn { .. }).then(|| self.words())
     }
 
+    /// True for words that show on each of the participant's turns, such as a save to make:
+    /// on its turn they lead its row (W1-D1).
+    pub(crate) fn due(&self) -> bool {
+        matches!(self.time(), Some(Time::OnTurn { .. }))
+    }
+
     /// True for an entry with a time, uses or a recharge: it takes the effects' place on its
     /// row, before plain conditions.
     pub(crate) fn is_effect(&self) -> bool {
@@ -222,13 +228,20 @@ pub(super) fn count_down(p: &mut super::Participant) -> Vec<String> {
     lines
 }
 
+/// A recharge click's Log line and, for a roll, the die and the result line that the run's
+/// footer shows until the next act (X4).
+pub(super) struct Recharged {
+    pub line: String,
+    pub roll: Option<(u32, String)>,
+}
+
 /// The click on a recharge's words: a ready one is spent; a spent one rolls a d6 on the run's
 /// dice, and is ready again on a roll in its range.
 pub(super) fn recharge(
     state: &mut super::State,
     index: usize,
     at: usize,
-) -> Result<String, String> {
+) -> Result<Recharged, String> {
     let p = state
         .participants
         .get_mut(index)
@@ -242,16 +255,22 @@ pub(super) fn recharge(
     };
     if !*spent {
         *spent = true;
-        return Ok(format!("{}: {name} spent.", p.name));
+        return Ok(Recharged {
+            line: format!("{}: {name} spent.", p.name),
+            roll: None,
+        });
     }
     let rolled = state.random.die(6)?;
     let ready = (u32::from(recharge[0])..=u32::from(recharge[1])).contains(&rolled);
     *spent = !ready;
-    Ok(format!(
-        "{}: {name}: Rolled {rolled} · {}.",
-        p.name,
-        if ready { "ready again" } else { "still spent" }
-    ))
+    let state = if ready { "ready again" } else { "still spent" };
+    Ok(Recharged {
+        line: format!("{}: {name}: Rolled {rolled} · {state}.", p.name),
+        roll: Some((
+            rolled,
+            format!("Rolled {rolled} for {}: {name} {state}.", p.name),
+        )),
+    })
 }
 
 /// The official name for these words, when they are one: `frightened` is `Frightened`.
