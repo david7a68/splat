@@ -1401,7 +1401,10 @@ an `L` gap, not at the roster's far edge. The slot has one width for the whole f
 `Heading`, at most `12 × L`), so the toggles keep one x whichever row is selected. The selected name keeps `Heading`; it
 uses `Small` only when that shows the name whole. The selected name starts the line. In a dock too narrow for the dice
 total beside the dice, the total (the dice icon and the number, named `Rolled 4`) has a reserved place at the end of the name's line, under
-the dice, never before the name. Fit whole words, retain a distinguishing last word or copy number or
+the dice, never before the name. In a wider dock the total (`= 4`, named `Rolled 4`) has a fixed place after Roll at
+the block's edge, and a total of three digits gives up `=` there. Each place holds three digits whole; a longer total
+ends in `…`, and hover keeps the roll's whole line. No control of the dock moves when a total comes, changes or goes.
+Fit whole words, retain a distinguishing last word or copy number or
 letter, end shortened names with an ellipsis and drop trailing joining words. Hover and accessibility keep
 full names.
 

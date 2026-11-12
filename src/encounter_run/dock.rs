@@ -235,16 +235,18 @@ impl Run {
                     };
                     if narrow {
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            if let Some((total, line)) = self.dock_roll() {
-                                let response = ui
-                                    .label(
-                                        Type::Strong
-                                            .rich(ui, format!("{} {total}", icons::DICE))
-                                            .color(c.text),
-                                    )
-                                    .on_hover_text(&line);
-                                design::named(ui, &response, &format!("Rolled {total}"));
-                            }
+                            ui.allocate_ui_with_layout(
+                                vec2(result_slot - gap, height),
+                                Layout::right_to_left(Align::Center),
+                                |ui| {
+                                    ui.set_width(result_slot - gap);
+                                    self.dock_result(
+                                        ui,
+                                        Type::Strong,
+                                        &[&format!("{} ", icons::DICE)],
+                                    );
+                                },
+                            );
                         });
                     }
                 });
@@ -360,14 +362,8 @@ impl Run {
                 Layout::left_to_right(Align::Center),
                 |ui| {
                     ui.set_width(DICE_RESULT_WIDTH);
-                    if let Some((total, line)) = self.dock_roll() {
-                        ui.label(
-                            Type::Heading
-                                .rich(ui, format!("= {total}"))
-                                .color(colors().text),
-                        )
-                        .on_hover_text(line);
-                    }
+                    // `= 88` fits, and `888` keeps its digits by giving up `=`.
+                    self.dock_result(ui, Type::Heading, &["= ", ""]);
                 },
             );
         }
@@ -400,7 +396,6 @@ impl Run {
         }
     }
 
-    /// The dice field's last roll, beside it.
     /// The widest roster name in the dock's `Heading` (FK1). Measured again only after a step
     /// or an Undo (`revision`, which a rename is), a roster of another size, or another type
     /// size; an unchanged frame reads the kept width.
@@ -429,9 +424,34 @@ impl Run {
         width
     }
 
+    /// The dice field's last roll: its total and its Log line.
     fn dock_roll(&self) -> Option<(i64, String)> {
         let rolled = self.dock_roll.as_ref()?;
         Some((rolled.total, rolled.line()))
+    }
+
+    /// The last roll in the slot that `ui` is: the total after the first of `prefixes` that
+    /// fits, else after the last one and ending in `…`. It never leaves the slot. Hover keeps
+    /// the roll's whole line, and the accessible name its total.
+    fn dock_result(&self, ui: &mut egui::Ui, role: Type, prefixes: &[&str]) {
+        let Some((total, line)) = self.dock_roll() else {
+            return;
+        };
+        let font = role.font(ui);
+        let room = ui.available_width();
+        let shown = prefixes
+            .iter()
+            .map(|prefix| format!("{prefix}{total}"))
+            .find(|form| design::number_width(ui, form, &font) <= room)
+            .unwrap_or_else(|| format!("{}{total}", prefixes[prefixes.len() - 1]));
+        let response = ui
+            .add(
+                egui::Label::new(role.rich(ui, shown).color(colors().text))
+                    .truncate()
+                    .show_tooltip_when_elided(false),
+            )
+            .on_hover_text(line);
+        design::named(ui, &response, &format!("Rolled {total}"));
     }
 
     /// Beside Notes, a letter in Amount means the DM went on writing. It and the digits
@@ -518,8 +538,89 @@ mod tests {
             })
     }
 
+    /// The places of the name and of every control of the dock.
+    fn dock_places(harness: &egui_kittest::Harness<'_>, name: &str) -> Vec<Option<egui::Rect>> {
+        let first = name.split_whitespace().next().unwrap();
+        let painted = harness
+            .output()
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.text().starts_with(first) => {
+                    Some(text.visual_bounding_rect())
+                }
+                _ => None,
+            });
+        [
+            "Amount",
+            "Conditions for this participant",
+            "Concentrating",
+            "Absent",
+            "Effect: words for this row",
+            "Dice",
+            "Roll dice",
+        ]
+        .into_iter()
+        .map(|label| harness.query_by_label(label).map(|node| node.rect()))
+        .chain([painted])
+        .collect()
+    }
+
+    /// V32: the dice total has one slot that belongs to the dice: after Roll at the block's
+    /// edge, or in a narrow dock at the end of the name's line under Roll, never before the
+    /// name. Up to three digits show whole; a longer total ends in `…` inside the slot.
+    fn assert_result_in_its_slot(harness: &egui_kittest::Harness<'_>, total: i64, width: u32) {
+        let name = format!("Rolled {total}");
+        // The accessible name, which kittest's `label` does not read on a `Label`.
+        let rolled = harness
+            .get(
+                egui_kittest::kittest::By::new()
+                    .include_labels()
+                    .predicate(move |node| node.label().as_deref() == Some(name.as_str())),
+            )
+            .rect();
+        let roll = harness.get_by_label("Roll dice").rect();
+        let slot = if rolled.top() < roll.bottom() {
+            egui::Rect::from_x_y_ranges(
+                roll.right()..=roll.right() + design::XS + DICE_RESULT_WIDTH,
+                roll.y_range(),
+            )
+        } else {
+            let last = ["Absent", "Effect: words for this row"]
+                .into_iter()
+                .filter_map(|label| harness.query_by_label(label))
+                .map(|node| node.rect().right())
+                .fold(0.0, f32::max);
+            egui::Rect::from_x_y_ranges(last..=roll.right(), roll.bottom()..=f32::INFINITY)
+        };
+        assert!(
+            slot.expand(0.5).contains_rect(rolled),
+            "{width} {total}: {rolled:?} in {slot:?}"
+        );
+        // The galley keeps the whole text; `elided` says it ends in `…`.
+        let (shown, elided) = harness
+            .output()
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Text(text)
+                    if rolled.contains(text.visual_bounding_rect().center()) =>
+                {
+                    Some((text.galley.text().to_owned(), text.galley.elided))
+                }
+                _ => None,
+            })
+            .unwrap_or_default();
+        let whole = total.abs().to_string().len() <= 3;
+        assert!(
+            shown.ends_with(&total.to_string()) && elided != whole,
+            "{width} {total} shows {shown:?}, elided {elided}"
+        );
+    }
+
     /// F2: `Effect` takes only the room after Absent: with its word, else its icon, else not
-    /// at all. The name and today's controls keep their places at every width.
+    /// at all. The name and today's controls keep their places at every width. V32: they also
+    /// keep them when a dice total comes, changes or goes, and the total keeps to its slot.
     #[test]
     fn effect_gives_up_its_place_before_the_name_loses_a_word_or_its_size() {
         // A name that the dock's name slot (at most `12 × L`, from main) shows whole.
@@ -547,6 +648,29 @@ mod tests {
                     "{width} {form}: the name keeps its size and its words"
                 );
             }
+            let before = dock_places(&harness, name);
+            assert!(
+                before.iter().filter(|place| place.is_none()).count() <= 1,
+                "{width} {before:?}"
+            );
+            let mut harness = harness;
+            for expression in ["1d1+3", "1d1+99", "1d1-100", "1d1+123455"] {
+                run.borrow_mut().roll_dice(expression).unwrap();
+                harness.run_steps(2);
+                assert_eq!(dock_places(&harness, name), before, "{width} {expression}");
+                // From the narrowest dock the app shows: 960x640 beside Lookup, a 426 px block.
+                if width >= 458 {
+                    let total = run.borrow().dock_roll.as_ref().unwrap().total;
+                    assert_result_in_its_slot(&harness, total, width);
+                }
+            }
+            run.borrow_mut().dock_roll = None;
+            harness.run_steps(2);
+            assert_eq!(
+                dock_places(&harness, name),
+                before,
+                "{width}: the total goes"
+            );
             // Conditions, Conc and Absent stay where they are without Effect: in Setup.
             let absent = harness.get_by_label("Absent").rect();
             let (setup, harness) = dock(name, width as f32);
