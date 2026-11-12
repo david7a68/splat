@@ -675,6 +675,50 @@ fn during_the_session(a: &mut Audit<'_, '_>) {
         ledger.contains("why: Burn a torch")
     ));
 
+    // F4: a wrong press of last session, on a tracker with no opposite action, is removed from
+    // the house rule note's history in Lookup's reader.
+    a.setup("last session's ledger holds a wrong press", |d| {
+        use crate::trackers::ledger::{self, Entry, Op};
+        let campaign = d.app_mut().campaigns.active_campaign().expect("a campaign");
+        let wrong = Entry {
+            id: "c-1a57ee00".into(),
+            tracker: Some("torches".into()),
+            add: Some(-1),
+            why: Some("Burn a torch".into()),
+            session: Some(uuid::Uuid::from_u128(7)),
+            ..Entry::default()
+        };
+        ledger::commit(&ledger::path(&campaign.path), |_| {
+            Ok(Op::Restore(vec![(None, wrong)]))
+        })
+        .expect("write last session's press");
+        d.app_mut().trackers.read_disk();
+        d.settle();
+    });
+    a.task("Correct a wrong press of last session from the house rule note");
+    a.act(Panel, "open Lookup", |d| d.press_ctrl(Key::K));
+    a.act(Find, "search: torch rules", |d| d.type_text("Torch Rules"));
+    a.click(Find, "TORCHES HISTORY 2");
+    a.click(Find, "More actions for Burn a torch: -1");
+    a.click(Do, "Remove");
+    a.act(Panel, "close Lookup", |d| d.press(Key::Escape));
+    let ledger =
+        a.d.app_mut()
+            .campaigns
+            .active_campaign()
+            .map(|campaign| campaign.path.join("Trackers.md"))
+            .and_then(|path| fs::read_to_string(path).ok())
+            .unwrap_or_default();
+    let corrected = !ledger.contains("c-1a57ee00") && ledger.contains("why: Burn a torch");
+    a.fact(format!(
+        "last session's press is gone and tonight's stays: {corrected}"
+    ));
+    a.d.observe(
+        "T19.6",
+        corrected,
+        "Remove in the house rule note's history takes last session's press, and tonight's stays",
+    );
+
     a.task("Next fight: start it, with the party as it stands");
     a.click(Nav, &format!("Start fight: {SECOND}"));
     a.fact(format!(
@@ -970,6 +1014,54 @@ fn next_morning(a: &mut Audit<'_, '_>) {
         "the ledger holds the wagon's Done: {}",
         ledger.contains("mark: wagon") && ledger.contains("done: true")
     ));
+
+    settle_a_question(a);
+}
+
+/// X45 of app round 2: the table settles a question that the DM left open in a World note, and
+/// the DM ticks it where Open questions lists it.
+fn settle_a_question(a: &mut Audit<'_, '_>) {
+    const QUESTION: &str = "Who paid the toll collectors?";
+    let note = |d: &mut Driver<'_>| {
+        d.app_mut()
+            .campaigns
+            .active_campaign()
+            .map(|campaign| campaign.path.join(HOBB_PATH))
+            .expect("a campaign")
+    };
+    a.setup("Hobb's note holds an open question", |d| {
+        let path = note(d);
+        let text = fs::read_to_string(&path).expect("Hobb's note");
+        let asked = text.replacen(
+            "Keeps the mill at the ford.\n",
+            &format!("Keeps the mill at the ford.\n\n- [ ] {QUESTION}\n"),
+            1,
+        );
+        fs::write(&path, asked).expect("write Hobb's note");
+        d.app_mut().lookup.refresh();
+        d.settle();
+    });
+    let asked = fs::read_to_string(note(a.d)).expect("Hobb's note");
+    a.task("The table settles an open question: tick it");
+    a.click(Nav, NAV_WORLD);
+    a.act(Sub, "Open questions", |d| {
+        d.click_containing("Open questions · ")
+    });
+    // The act is done when the note holds the tick on that line and nothing else changed: a
+    // box that writes nothing blocks the act, and G6 fails (review round 1 of PR 287).
+    a.act(Do, &format!("Open: {QUESTION}"), |d| {
+        d.click(&format!("Open: {QUESTION}"));
+        let saved = fs::read_to_string(note(d)).expect("Hobb's note");
+        let ticked = asked.replacen(
+            &format!("- [ ] {QUESTION}\n"),
+            &format!("- [x] {QUESTION}\n"),
+            1,
+        );
+        assert!(
+            ticked != asked && saved == ticked,
+            "the tick did not write that line alone: {saved:?}"
+        );
+    });
 }
 
 /// The World NPC of F6's task, whom a done scene links.

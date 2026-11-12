@@ -30,27 +30,71 @@ fn note_path(d: &Driver<'_>, title: &str) -> std::path::PathBuf {
 }
 
 /// Row 11: `Carry over` ends the Last time line, at the line's height and inside the page,
-/// and the line stays one line.
+/// and the line stays one line. It sits `L` after the line's last word: the preview's, or the
+/// link's when no word of the preview fits (X24); a preview with no word draws no dash (X25).
 fn one_line(d: &mut Driver<'_>, id: &str, sizes: &[(f32, f32)]) {
     for &size in sizes {
         let (fits, detail) = d.at_size(size, |d| {
             let label = d.place_of("Last time:");
             let carry = d.place_of(CARRY);
             let width = d.window_size().0;
+            let line = label.zip(carry).map(|(label, carry)| {
+                egui::Rect::from_x_y_ranges(label.right()..=carry.left(), label.y_range())
+            });
+            let last = line.and_then(|line| {
+                d.painted_rect_in("— ", line)
+                    .or_else(|| d.painted_rect_in("Session 1", line))
+            });
+            let bare_dash = line.and_then(|line| d.painted_rect_in("—…", line));
             (
                 label.zip(carry).is_some_and(|(label, carry)| {
                     (carry.center().y - label.center().y).abs() <= 0.5
                         && carry.height() <= crate::design::XL + 0.5
                         && carry.left() > label.right()
                         && carry.right() <= width
+                        && last.is_some_and(|last| {
+                            (carry.left() - last.right() - crate::design::L).abs() <= 0.5
+                        })
+                        && bare_dash.is_none()
                 }),
-                format!("Last time: {label:?}, Carry over: {carry:?}"),
+                format!(
+                    "Last time: {label:?}, Carry over: {carry:?}, the last word ends at {last:?}, a bare dash at {bare_dash:?}"
+                ),
             )
         });
         d.observe(
             id,
             fits,
             format!("At {size:?}, Carry over ends the Last time line on one line: {detail}"),
+        );
+    }
+}
+
+/// X26: one gap, `S`, between `From` and the session's link, in the tab layout and with the
+/// plan beside the note.
+fn from_gap(d: &mut Driver<'_>, id: &str, sizes: &[(f32, f32)]) {
+    for &size in sizes {
+        let (gap, detail) = d.at_size(size, |d| {
+            let window = egui::Rect::from_min_size(egui::Pos2::ZERO, d.window_size().into());
+            let from = d.painted_word_rect("From", window);
+            let link = from.and_then(|from| {
+                d.painted_rect_in(
+                    "Session 1",
+                    egui::Rect::from_x_y_ranges(from.right()..=window.right(), from.y_range()),
+                )
+            });
+            (
+                from.zip(link)
+                    .map(|(from, link)| link.left() - from.right()),
+                format!("From: {from:?}, the link: {link:?}"),
+            )
+        });
+        d.observe(
+            id,
+            gap.is_some_and(|gap| (gap - crate::design::S).abs() <= 0.5),
+            format!(
+                "At {size:?}, one gap of S between From and the session's link: {gap:?}; {detail}"
+            ),
         );
     }
 }
@@ -135,7 +179,9 @@ pub fn run(d: &mut Driver<'_>) {
     d.expect("From");
     d.wait_for_text("Hobb the miller says the toll collectors");
     d.state("carried-recap-in-read", Sizes::Standard);
+    from_gap(d, "T18.3-from", &[SMALL, DEFAULT]);
     d.click(NAV_LOOKUP);
+    from_gap(d, "T18.3-from-lookup", &[SMALL]);
     d.state("carried-recap-in-read-beside-lookup", Sizes::Small);
     d.click(NAV_LOOKUP);
 

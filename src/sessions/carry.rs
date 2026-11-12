@@ -676,26 +676,17 @@ impl Sessions {
                 last.label.clone()
             };
             open = design::link(ui, &label).on_hover_text(&full).clicked();
-            let words = design::words_that_fit(
-                ui,
-                &if preview.is_empty() {
-                    String::new()
-                } else {
-                    format!("— {preview}")
-                },
-                &Type::Small.font(ui),
-                // Muted words keep the reader's measure, as help does.
-                (ui.available_width() - carry_room).min(design::READER_MEASURE),
-            );
+            // Muted words keep the reader's measure, as help does.
+            let room = (ui.available_width() - carry_room).min(design::READER_MEASURE);
+            let words = preview_that_fits(ui, preview, room);
             if !words.is_empty() || action.is_none() {
                 ui.label(Type::Small.rich(ui, words).color(colors().muted))
                     .on_hover_text(&full);
             }
-            // At the line's right end, in the room the link and the preview left it.
+            // `L` after the line's last word, so it reads as this line's action.
             if let Some(action) = action {
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    carry = action.show(ui).clicked();
-                });
+                ui.add_space(design::L - ui.spacing().item_spacing.x);
+                carry = action.show(ui).clicked();
             }
         });
         let id = last.id;
@@ -862,6 +853,31 @@ enum Shown {
     Gone(String),
 }
 
+/// The Last time preview in this room: a dash and the longest run of the preview's whole words
+/// that fits. With no word, nothing: the line never ends in a dash and an ellipsis.
+fn preview_that_fits(ui: &egui::Ui, preview: &str, room: f32) -> String {
+    let words = design::words_that_fit(ui, &format!("— {preview}"), &Type::Small.font(ui), room);
+    // `words_that_fit` keeps a first word that does not fit: here, the dash alone.
+    match words.strip_prefix("— ") {
+        Some(rest) if rest != "…" => words,
+        _ => String::new(),
+    }
+}
+
+/// Whether a link names this file: the link's whole path, by whole folder names, ends the
+/// file's path, as Obsidian reads `Archive/Same`. `Deleted/Same` does not name `Same.md`. A
+/// link's separator is `/` only, as the index reads it.
+fn names_file(path: &Path, link: &str) -> bool {
+    let link = link.to_lowercase();
+    let link = link.trim_start_matches('/').trim_end_matches(".md");
+    let file = path
+        .with_extension("")
+        .to_string_lossy()
+        .replace('\\', "/")
+        .to_lowercase();
+    file == link || file.ends_with(&format!("/{link}"))
+}
+
 /// The target (a note's name or path) and the heading of a line that is only an embed of a
 /// note's heading. An embed inside a callout or a list item is not such a line.
 fn embed_target(line: &str) -> Option<(&str, &str)> {
@@ -949,19 +965,33 @@ impl Sessions {
             {
                 continue;
             }
-            let gone = || Shown::Gone(format!("The recap’s source is gone: {name} › {heading}."));
+            let gone = || {
+                Shown::Gone(format!(
+                    "The recap’s source is gone: {name} › {heading}. Link the session again in Write."
+                ))
+            };
             let shown = match index.resolve_link(name, None) {
-                // The content is read again after a session note comes or goes; until then a
-                // session note that has this name is not called gone (`refresh`).
-                crate::world::Go::Missing(_)
-                    if self.notes.iter().any(|note| {
-                        note.link()
-                            .eq_ignore_ascii_case(name.rsplit('/').next().unwrap_or(name))
-                    }) =>
-                {
-                    continue;
+                // A session note at the link's whole path keeps it a link while it has the
+                // heading: the index has not read the note yet (`refresh`), or the link names
+                // part of its path. Without such a note, or without the heading, it is gone.
+                crate::world::Go::Missing(_) => {
+                    let mut at = self
+                        .notes
+                        .iter()
+                        .filter(|note| names_file(&note.path, name));
+                    match (at.next(), at.next()) {
+                        (None, _) => gone(),
+                        (Some(note), None)
+                            if fs::read_to_string(&note.path)
+                                .ok()
+                                .and_then(|text| section_text(body_of(&text), heading))
+                                .is_none() =>
+                        {
+                            gone()
+                        }
+                        _ => continue,
+                    }
                 }
-                crate::world::Go::Missing(_) => gone(),
                 crate::world::Go::Item(at, _) => {
                     let item = &index.items[at];
                     if item.note_role() != Some(crate::world::Role::Session) {
@@ -1085,6 +1115,8 @@ impl Sessions {
                 Chunk::Embed(at) => match prepared.embeds.get(*at).map(|embed| &embed.shown) {
                     Some(Shown::Words { from, label, words }) => {
                         ui.horizontal(|ui| {
+                            // One gap, `S`, whatever spacing the layout around it has.
+                            ui.spacing_mut().item_spacing.x = design::S;
                             ui.label(Type::Small.rich(ui, "From").color(colors().muted));
                             if design::small_link(ui, label).clicked() {
                                 open = Some(*from);
@@ -1671,7 +1703,8 @@ mod tests {
             "The Crossing",
             &format!(
                 "{own}## Notes\n\n![[{}#What happened]]\n\n![[Sessions/Archive/Same#What happened]]\n\n\
-                 ![[Archive/Same#What happened]]\n\n![[Same#What happened]]\n\n{}",
+                 ![[Archive/Same#What happened]]\n\n![[Same#What happened]]\n\n\
+                 ![[Sessions/Deleted/Same#What happened]]\n\n![[Recent/Same#No such part]]\n\n{}",
                 last.link(),
                 "Some written words.\n".repeat(200)
             ),
@@ -1731,6 +1764,29 @@ mod tests {
         assert!(!has(&harness, "The WRONG second session."));
         assert!(!has(&harness, "The recap’s source is gone: Archive/Same"));
         assert!(!has(&harness, "The recap’s source is gone: Same"));
+        // A path that no note has is gone, though a note has its last name (review of PR 277,
+        // round 2), and Read says how to mend it.
+        assert!(has(
+            &harness,
+            "The recap’s source is gone: Sessions/Deleted/Same › What happened. Link the session again in Write."
+        ));
+        // A part of a path whose note lacks the heading is gone too (review of R3d).
+        assert!(has(
+            &harness,
+            "The recap’s source is gone: Recent/Same › No such part."
+        ));
+        for (link, names) in [
+            ("Archive/SAME.MD", true),
+            ("/Sessions/Archive/Same", true),
+            ("chive/Same", false),
+            ("Archive\\Same", false),
+        ] {
+            assert_eq!(
+                names_file(&dir.join("Archive/Same.md"), link),
+                names,
+                "{link}"
+            );
+        }
         // The DM's kept recap names nothing: Read says so, and nothing offers to rewrite it.
         assert!(has(
             &harness,

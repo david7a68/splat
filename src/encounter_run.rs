@@ -820,6 +820,9 @@ pub(crate) struct Run {
     saves: BTreeMap<usize, i64>,
     /// The dice field's last roll, beside it in the dock.
     dock_roll: Option<crate::rolls::Rolled>,
+    /// A recharge roll's result: its die in the dock's total place and its words in the
+    /// footer, while its act is the DM's newest (`recharge_result`, X4).
+    recharged: Option<Recharged>,
     /// Digits typed so far. Empty after each use, so a wrong number cannot repeat.
     amount: String,
     note: String,
@@ -1138,6 +1141,18 @@ enum Command {
     /// still works once the fight has ended, because that is when the party searches.
     Loot(Vec<loot::LootRoll>),
 }
+/// A recharge roll's result (X4): its die in the dock's total place, with its accessible
+/// name, and the footer's words, which are also the total's hover. It belongs to the DM's
+/// act that rolled it, by `dm_steps`: any later act of the DM (a step, a roll, an Undo) ends
+/// it, in one rule (review of PR 292).
+#[derive(Clone)]
+struct Recharged {
+    die: i64,
+    name: String,
+    words: String,
+    step: usize,
+}
+
 /// A d20 for initiative, with the bonus and the roll mode. Returns the die and the total.
 fn roll_initiative(random: &mut Random, bonus: i64, mode: i8) -> Result<(i64, i64), String> {
     let first = i64::from(random.die(20)?);
@@ -1301,6 +1316,7 @@ impl Run {
             badges: BTreeMap::new(),
             saves: BTreeMap::new(),
             dock_roll: None,
+            recharged: None,
             amount: String::new(),
             note: String::new(),
             dice: String::new(),
@@ -1982,6 +1998,13 @@ impl Run {
         self.dock_roll = Some(rolled);
         Ok(())
     }
+    /// The recharge roll's result while its act is the DM's newest: a step, a roll or an Undo
+    /// after it ends it (X4).
+    fn recharge_result(&self) -> Option<&Recharged> {
+        self.recharged
+            .as_ref()
+            .filter(|recharged| recharged.step == self.dm_steps)
+    }
     /// Roll on a table in a note. The run's log keeps the result, and its Undo takes it back.
     pub(crate) fn roll_table(
         &mut self,
@@ -2170,6 +2193,7 @@ impl Run {
             _ => None,
         };
         let mut next = self.state.clone();
+        let mut recharged = None;
         let label = match command {
             Command::RollNpcs(grouping) => {
                 if next.phase != Phase::Setup {
@@ -2390,7 +2414,11 @@ impl Run {
                 last
             }
             Command::TableRoll(roll) => roll.resolve(&mut next.random)?,
-            Command::Recharge(index, at) => effect::recharge(&mut next, index, at)?,
+            Command::Recharge(index, at) => {
+                let done = effect::recharge(&mut next, index, at)?;
+                recharged = done.roll;
+                done.line
+            }
             Command::Loot(rolls) => {
                 let mut lines = loot::roll(&mut next, rolls)?;
                 let last = lines.pop().ok_or("Choose a loot roll first.")?;
@@ -2414,6 +2442,17 @@ impl Run {
         self.state.cast = cast;
         let before = std::mem::replace(&mut self.state, next);
         self.keep_own_step(before, undo_label, false);
+        // X4: a recharge roll's result, which this act owns; the dice field's last total gives
+        // its place to it.
+        if let Some(roll) = recharged {
+            self.dock_roll = None;
+            self.recharged = Some(Recharged {
+                die: i64::from(roll.die),
+                name: roll.name,
+                words: roll.words,
+                step: self.dm_steps,
+            });
+        }
         if finished {
             self.end_cast();
         }
@@ -3026,6 +3065,12 @@ impl Run {
             .map(|p| (p.definition.id, FightRow::from(p)))
             .collect()
     }
+    /// Words for the notice line about the act the DM just took, from outside the run. The
+    /// next run action clears them, as it clears every notice.
+    pub fn tell(&mut self, words: String) {
+        self.notice = Some(words);
+    }
+
     /// What the timeline records about this run.
     pub fn timeline_fact(&self) -> crate::timeline::RunFact {
         crate::timeline::RunFact {
@@ -4453,6 +4498,7 @@ impl Run {
             badges: BTreeMap::new(),
             saves: BTreeMap::new(),
             dock_roll: None,
+            recharged: None,
             amount: String::new(),
             note: String::new(),
             dice: String::new(),
@@ -4830,6 +4876,8 @@ pub struct FightRow {
     pub temporary_hp: i64,
     pub conditions: Vec<Condition>,
     pub present: bool,
+    /// Concentration was marked when the run was saved.
+    pub concentration: bool,
 }
 
 /// A player's character, rather than a creature.
@@ -4848,6 +4896,7 @@ impl From<&Participant> for FightRow {
             temporary_hp: p.temporary_hp,
             conditions: p.conditions.clone(),
             present: p.present,
+            concentration: p.concentration,
         }
     }
 }
@@ -4995,6 +5044,21 @@ impl Run {
         self.reopened = false;
         self.no_saved_undo = None;
         self.undo_stopped = false;
+    }
+    pub(crate) fn simulate_untimed(&mut self) -> Vec<Vec<Condition>> {
+        self.state
+            .participants
+            .iter_mut()
+            .map(|p| {
+                let untimed = p.conditions.iter().map(|c| c.name().into()).collect();
+                std::mem::replace(&mut p.conditions, untimed)
+            })
+            .collect()
+    }
+    pub(crate) fn simulate_conditions(&mut self, conditions: Vec<Vec<Condition>>) {
+        for (p, conditions) in self.state.participants.iter_mut().zip(conditions) {
+            p.conditions = conditions;
+        }
     }
     pub fn simulate_rename(&mut self, name: &str, to: &str) {
         let participant = self
@@ -5765,6 +5829,28 @@ mod tests {
                 .last()
                 .unwrap()
                 .contains(": Fire Breath: Rolled ")
+        );
+        // X4: the roll is one result, its die in the dock and its words in the footer. Undo,
+        // the next act and a roll of the dice field each end both.
+        // X4, review of PR 292: the total's accessible name and hover name the participant and
+        // the effect.
+        let (die, hover, name) = run.dock_roll().expect("the recharge's die");
+        let words = format!("Rolled {die} for {}: Fire Breath", names[1]);
+        assert_eq!(name, words);
+        assert!(hover.starts_with(&format!("{words} ")), "{hover}");
+        assert!(
+            run.recharge_result()
+                .is_some_and(|recharged| recharged.words == hover)
+        );
+        run.undo();
+        assert!(run.recharge_result().is_none() && run.dock_roll().is_none());
+        run.apply(Command::Recharge(1, 2)).unwrap();
+        assert!(run.recharge_result().is_some());
+        run.roll_dice("1d1+3").unwrap();
+        assert!(run.recharge_result().is_none());
+        assert_eq!(
+            run.dock_roll().map(|(total, _, name)| (total, name)),
+            Some((4, "Rolled 4".to_owned()))
         );
         assert!(
             run.apply(Command::Spend(1, 2)).is_err(),
@@ -6571,9 +6657,9 @@ mod tests {
         let hp = run.state.participants[0].hp;
         let before = run.timeline_fact();
         let mut story = crate::timeline::Book::default();
-        story.record_change(None, &before, None);
+        story.record_change(None, &before, None, None);
         run.save_as_new_run().unwrap();
-        story.record_change(Some(&before), &run.timeline_fact(), None);
+        story.record_change(Some(&before), &run.timeline_fact(), None, None);
         assert_eq!(story.events.len(), 1);
         assert_eq!(story.events[0].run, Some(run.id));
         assert!(!run.has_disk_conflict());
@@ -8894,7 +8980,7 @@ mod tests {
         let fact = run.as_deref().map(Run::timeline_fact);
         if fact != *said {
             match &fact {
-                Some(fact) => book.record_change(said.as_ref(), fact, session),
+                Some(fact) => book.record_change(said.as_ref(), fact, session, None),
                 None => book.save(),
             }
             *said = fact;

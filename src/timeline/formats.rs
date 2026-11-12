@@ -53,6 +53,7 @@ fn event(kind: Kind, id: String, title: String) -> Event {
         played_order: 0,
         checks_table: None,
         checks: Vec::new(),
+        within: None,
         extra: Default::default(),
     }
 }
@@ -81,6 +82,12 @@ fn meta(event: &mut Event, text: &str) {
     }
     if let Some(order) = machine(text, "order").and_then(|raw| raw.parse().ok()) {
         event.played_order = order;
+    }
+    if let (Some(journey), Some(at)) = (
+        machine(text, "journey"),
+        machine(text, "at").and_then(|raw| raw.parse().ok()),
+    ) {
+        event.within = Some(Within { journey, at });
     }
     if let Some(encoded) = machine(text, "data") {
         use base64::Engine;
@@ -348,6 +355,9 @@ fn machine_line(event: &Event) -> String {
     if event.played_order > 0 {
         terms.push(format!("order={}", event.played_order));
     }
+    if let Some(within) = &event.within {
+        terms.push(format!("journey={} at={}", within.journey, within.at));
+    }
     if !event.marker.is_empty() {
         terms.push(format!(
             "marker={}",
@@ -500,6 +510,18 @@ pub fn patch(
             for line in &row.lines {
                 edits.push((line.range.clone(), String::new()));
             }
+            // A fight placed in a journey came in after the journey's last line as a line break
+            // and its own lines (below): its removal takes that line break back too, so its
+            // Undo gives back the file as it was, with or without blank lines between events.
+            // At the file's end with no line break after it, the fight's own last line break
+            // stands in place of the one the file did not have.
+            let start = row.head.range.start;
+            let end = row.lines.last().map_or(row.head.range.end, |l| l.range.end);
+            let gap = text[..start].ends_with(&newline.repeat(2))
+                || (end == text.len() && text[..start].ends_with(newline));
+            if row.event.within.is_some() && gap {
+                edits.push((start - newline.len()..start, String::new()));
+            }
             continue;
         };
         if *event == row.event && !row.missing_id {
@@ -598,6 +620,7 @@ pub fn patch(
             || row.event.continued_in != event.continued_in
             || row.event.played_order != event.played_order
             || row.event.marker != event.marker
+            || row.event.within != event.within
             || row.event.extra != event.extra
             || row.missing_id
         {

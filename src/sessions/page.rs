@@ -693,9 +693,11 @@ fn compact_plan_for_reading(
     let Some(plan) = section_text(body, "Plan for tonight") else {
         return body.to_owned();
     };
+    // A line planned from a journey's check ends with its mark, which no reader shows.
     let lines: Vec<_> = plan
         .lines()
         .filter(|line| !line.trim().is_empty())
+        .map(|line| crate::timeline::checks::marked(line).words)
         .collect();
     let only_planned_links = !lines.is_empty()
         && lines.iter().all(|line| {
@@ -4332,7 +4334,8 @@ impl Sessions {
                 Some(Written {
                     title: note.label(),
                     detail: format!("Session note · {}", note.date),
-                    text: words_to_read(&body, book),
+                    // Search shows found lines as they read: a travel check's mark is no word.
+                    text: words_to_read(&crate::timeline::checks::without_marks(&body), book),
                     place: WrittenIn::Session(note.id),
                 })
             })
@@ -6936,6 +6939,7 @@ mod tests {
             played_order: 0,
             checks_table: None,
             checks: Vec::new(),
+            within: None,
             extra: Default::default(),
         };
         let mut book = Book::default();

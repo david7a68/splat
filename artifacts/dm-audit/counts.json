@@ -59,13 +59,6 @@
     },
     {
       "phase": "before",
-      "task": "Change a planned fight's roster from the plan, and come back",
-      "transitions": 2,
-      "interactions": 6,
-      "path": "Session > Encounters > Session"
-    },
-    {
-      "phase": "before",
       "task": "Carry over what last week left into tonight's note",
       "transitions": 0,
       "interactions": 1,
@@ -255,6 +248,13 @@
     },
     {
       "phase": "during",
+      "task": "Correct a wrong press of last session from the house rule note",
+      "transitions": 0,
+      "interactions": 6,
+      "path": "Session"
+    },
+    {
+      "phase": "during",
       "task": "Next fight: start it, with the party as it stands",
       "transitions": 1,
       "interactions": 1,
@@ -305,9 +305,9 @@
     {
       "phase": "after",
       "task": "Say where the fight happened",
-      "transitions": 0,
-      "interactions": 2,
-      "path": "Session"
+      "transitions": 2,
+      "interactions": 4,
+      "path": "Session > Timeline > Session"
     },
     {
       "phase": "after",
@@ -355,7 +355,7 @@
       "phase": "after",
       "task": "Put what an NPC said in the NPC's own note",
       "transitions": 0,
-      "interactions": 5,
+      "interactions": 4,
       "path": "Session"
     },
     {
@@ -364,6 +364,13 @@
       "transitions": 1,
       "interactions": 5,
       "path": "Session > Timeline"
+    },
+    {
+      "phase": "after",
+      "task": "The table settles an open question: tick it",
+      "transitions": 1,
+      "interactions": 3,
+      "path": "Timeline > World"
     }
   ]
 }
