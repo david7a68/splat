@@ -369,26 +369,12 @@ impl Party {
                 }
             }
         });
-        if self.sync_stopped {
-            let mut dismiss = false;
-            ui.scope(|ui| {
-                ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
-                ui.horizontal_top(|ui| {
-                    let room = ui.available_width() - Density::Read.control() - design::S;
-                    ui.allocate_ui_with_layout(
-                        egui::vec2(room, 0.0),
-                        egui::Layout::top_down(egui::Align::Min),
-                        |ui| {
-                            design::message(ui, Tone::Warning, SYNC_STOPPED);
-                        },
-                    );
-                    dismiss =
-                        design::icon_button(ui, icons::CLOSE, "Dismiss this message").clicked();
-                });
-            });
-            if dismiss {
-                self.sync_stopped = false;
-            }
+        if self.sync_stopped
+            && dismissable(ui, |ui| {
+                design::message(ui, Tone::Warning, SYNC_STOPPED);
+            })
+        {
+            self.sync_stopped = false;
         }
         if linked && session.is_some() {
             design::blocked_reason(ui, can_refresh);
@@ -435,8 +421,10 @@ impl Party {
             self.wants_link_page = open_link;
             return;
         }
+        let mut noticed = false;
         if let Some(e) = &self.reader.error {
             design::message(ui, Tone::Error, e);
+            noticed = true;
         }
         if !self.reader.warnings.is_empty()
             || !self.reader.archived.is_empty()
@@ -447,6 +435,12 @@ impl Party {
                 .max_height(ui.available_height() / 3.0)
                 .auto_shrink([false, true])
                 .show(ui, |ui| self.storage_notices(ui, session.is_some()));
+            noticed = true;
+        }
+        if noticed {
+            // Round 25 FG7: an `L` gap ends the notices, so they do not read as part of the
+            // list or the sheet below them.
+            ui.add_space(design::L);
         }
         ui.ctx().request_repaint_after(Duration::from_secs(1));
         if self.reader.members.is_empty() {
@@ -499,7 +493,7 @@ impl Party {
                 ));
             }
             let words = parts.join(" ");
-            ui.add(egui::Label::new(Type::Small.rich(ui, words).color(c.muted)).wrap());
+            design::help(ui, &words);
         }
         // Each row gives its portrait this much, and keeps the same room for its text.
         let portrait_room = ROW_PORTRAIT + 2.0 * design::S;
@@ -513,12 +507,19 @@ impl Party {
                 bottom: 0,
             }))
             .show_inside(ui, |ui| {
-                member_header(ui);
+                // Round 25 family: the list keeps the scroll bar's lane whether or not the bar
+                // shows, so no row or header column moves when the list starts to scroll.
+                let rows_width = ui.available_width() - ui.spacing().scroll.allocated_width();
+                ui.scope(|ui| {
+                    ui.set_max_width(rows_width);
+                    member_header(ui);
+                });
                 design::rule(ui);
                 egui::ScrollArea::vertical()
                     .id_salt("party_members_list")
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
+                        ui.set_max_width(rows_width);
                         ui.spacing_mut().item_spacing.y = 0.0;
                         for m in &self.reader.members {
                             let record = self.reader.sheets.get(&m.id);
@@ -574,12 +575,12 @@ impl Party {
                 .unwrap_or("This character");
             let words =
                 format!("{name}’s sheet now matches D&D Beyond. Your edited version is kept.");
-            storage_notice(ui, Tone::Success, &words, &["Show file", "Dismiss"], |ui| {
-                show_file(ui, path);
-                dismiss |= Action::quiet("Dismiss")
-                    .density(Density::Read)
-                    .show(ui)
-                    .clicked();
+            // Round 25 FD3: one dismiss form on the page, the close icon at the message end,
+            // as the stopped-sync notice has.
+            dismiss |= dismissable(ui, |ui| {
+                storage_notice(ui, Tone::Success, &words, &["Show file"], |ui| {
+                    show_file(ui, path);
+                });
             });
         }
         if dismiss {
@@ -894,6 +895,26 @@ fn storage_notice(
             });
         }
     });
+}
+
+/// A notice that the DM can dismiss: its words and actions, then the close icon at the right end
+/// of its first line. Every dismissable Party notice uses this one form. Returns whether the DM
+/// dismissed it.
+pub(crate) fn dismissable(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) -> bool {
+    let mut dismiss = false;
+    ui.scope(|ui| {
+        ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
+        ui.horizontal_top(|ui| {
+            let room = ui.available_width() - Density::Read.control() - design::S;
+            ui.allocate_ui_with_layout(
+                egui::vec2(room, 0.0),
+                egui::Layout::top_down(egui::Align::Min),
+                add,
+            );
+            dismiss = design::icon_button(ui, icons::CLOSE, "Dismiss this message").clicked();
+        });
+    });
+    dismiss
 }
 
 fn show_file(ui: &mut egui::Ui, path: &std::path::Path) {
@@ -1354,7 +1375,7 @@ fn source_and_parity(
     local_scope: Option<uuid::Uuid>,
 ) {
     let small = |ui: &mut egui::Ui, text: String| {
-        ui.add(egui::Label::new(Type::Small.rich(ui, text).color(colors().muted)).wrap());
+        design::help(ui, &text);
     };
     small(ui, "D&D Beyond supplies these totals.".into());
     // The first two source notes repeat the totals sentence and internal schema details.
@@ -1588,7 +1609,7 @@ fn background(ui: &mut egui::Ui, record: &EntitySnapshot) {
     }
     if !profile.companions.is_empty() {
         sheet_heading(ui, "Companions", profile.companions.len());
-        ui.weak("Stat blocks are not imported. HP is the printed value.");
+        design::help(ui, "Stat blocks are not imported. HP is the printed value.");
         for companion in profile.companions.values() {
             ui.add_space(design::S);
             ui.label(Type::Strong.rich(ui, &companion.name));
@@ -1677,7 +1698,10 @@ fn campaign_option_status(ui: &mut egui::Ui, entry: &splat::content::Entry) {
                 None => (),
             }
         }
-        ui.weak("Selections follow the D&D Beyond sheet. Active choices can need further details. Simulation support is separate.");
+        design::help(
+            ui,
+            "Selections follow the D&D Beyond sheet. Active choices can need further details. Simulation support is separate.",
+        );
     });
 }
 pub(crate) fn fetch_age(seconds: u64) -> String {
@@ -2337,7 +2361,11 @@ fn detail_intro(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search:
         }
         2 => {
             section_heading(ui, "Spellcasting");
-            ui.weak("Spell text shows the printed numbers. Splat does not work out upcasting or this character’s own bonuses.");
+            // Round 25 AI2: help keeps the reader measure; the spell list below keeps its width.
+            design::help(
+                ui,
+                "Spell text shows the printed numbers. Splat does not work out upcasting or this character’s own bonuses.",
+            );
             for (label, key) in [
                 ("Spell save DC", "saveDcs"),
                 ("Spell attack", "spellAttacks"),

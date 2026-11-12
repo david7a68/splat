@@ -214,6 +214,10 @@ only when it resolves to an entry. Explicit Markdown and wiki links still work. 
 link in a paragraph in turn, and Enter or Space follows it. Each link, even a two-letter name, has its
 own press target at least 24 px square.
 
+A Travel row's menu has `Roll for encounters` while the campaign has a marked table. It adds encounter checks
+to that journey only: one roll a day (or as the table's `per` word says) on the chosen table, each result a
+quoted `Check at <hours>h` line of the event in `Timeline.md`. A result that links an encounter offers to plan it.
+
 Timeline files use `Fight`, `Travel`, `Short rest`, `Long rest` and `Major event`.
 The reader also accepts `Encounter` and `Event`, in any case, with or without a colon.
 Each save renumbers day headings. Separate edits in Splat and in Obsidian save together;

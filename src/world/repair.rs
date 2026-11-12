@@ -21,8 +21,9 @@ pub(crate) fn editor_events(
     draft: &mut String,
     error_line: Option<usize>,
 ) -> (bool, bool) {
-    egui::ScrollArea::vertical()
-        .max_height(design::XXL * 6.0 + design::L + design::S + design::XS)
+    const MAX_HEIGHT: f32 = design::XXL * 6.0 + design::L + design::S + design::XS;
+    let editor = egui::ScrollArea::vertical()
+        .max_height(MAX_HEIGHT)
         .id_salt(("repair", path))
         .show(ui, |ui| {
             let output = egui::TextEdit::multiline(draft)
@@ -48,9 +49,32 @@ pub(crate) fn editor_events(
                     egui::Stroke::new(design::FOCUS_WIDTH, colors().result.error),
                 );
             }
-            active
+            (active, output.response.id)
+        });
+    let (active, id) = editor.inner;
+    // The editor's own scroll area takes a scroll target set inside it, so a page that scrolls
+    // around the editor never sees it. When the editor gains focus or a screen reader asks to
+    // show it, scroll the page to the editor's viewport.
+    let reveal = ui.input(|input| {
+        input.events.iter().any(|event| {
+            matches!(event, egui::Event::AccessKitActionRequest(request)
+                if request.action == egui::accesskit::Action::ScrollIntoView
+                    && request.target == egui::accesskit::NodeId::from(id.value()))
         })
-        .inner
+    });
+    if active.1 || reveal {
+        // The editor's viewport: its text, up to the editor's maximum height.
+        let viewport = egui::Rect::from_min_size(
+            editor.inner_rect.min,
+            egui::vec2(
+                editor.inner_rect.width(),
+                editor.content_size.y.min(MAX_HEIGHT),
+            ),
+        );
+        // At once: an animation would be cut short by the editor's own scroll to its cursor.
+        ui.scroll_to_rect_animation(viewport, None, egui::style::ScrollAnimation::none());
+    }
+    active
 }
 
 /// Why Save would not write this draft: a path outside its folder, a fault in its text and the

@@ -644,7 +644,18 @@ impl Campaigns {
                 }
                 ui.add_enabled_ui(reason.is_none(), |ui| {
                     if self.data.campaigns.is_empty() {
-                        if ui.selectable_label(false, "Add campaign…").clicked() {
+                        // Round 25 FE4: the one command keeps its words on one line, with `S` on
+                        // each side. In the menu's Strong type it needs 119 px and the column
+                        // gives 103, so it uses `Small`, the type of the switcher's own words. A
+                        // column the DM makes narrower still wraps it.
+                        let clicked = ui
+                            .scope(|ui| {
+                                ui.spacing_mut().button_padding.x = design::S;
+                                let words = Type::Small.rich(ui, "Add campaign…");
+                                ui.selectable_label(false, words).clicked()
+                            })
+                            .inner;
+                        if clicked {
                             add = true;
                             ui.close();
                         }
@@ -734,11 +745,7 @@ impl Campaigns {
         ui.add_space(design::S);
         design::quiet_section(ui, "Technical details", |ui| {
             ui.label(format!("ID: {}", campaign.id));
-            ui.label(
-                Type::Small
-                    .rich(ui, "Settings are stored in the campaign manifest.")
-                    .color(c.muted),
-            );
+            design::help(ui, "Settings are stored in the campaign manifest.");
         });
     }
 
@@ -1112,7 +1119,7 @@ impl Campaigns {
                         self.path = path.to_string_lossy().into_owned();
                     }
                 });
-                ui.add(egui::Label::new(Type::Small.rich(ui, "Splat keeps this campaign’s notes, encounters and runs here. A folder in your Obsidian vault works.").color(colors().muted)).wrap());
+                design::help(ui, "Splat keeps this campaign’s notes, encounters and runs here. A folder in your Obsidian vault works.");
                 ui.horizontal(|ui| {
                     let submit = if editing {
                         "Save details"
@@ -1191,21 +1198,32 @@ impl Campaigns {
                         design::blocked_reason(ui, reason.filter(|_| !editing || !unchanged));
                     });
                 });
-                if self.discarded_details.is_some()
-                    && design::draft_discarded(ui, "Campaign details")
+                // Round 25 FG5: one message space below the save row, two lines high whatever it
+                // holds: the discard result with its live Undo first, then Save's error. So
+                // neither moves the rows below the form.
+                const DISCARDED: &str = "Campaign details draft discarded.";
+                let mut space = design::MessageSpace::new("campaign_form_message", ui.available_width());
+                if self.discarded_details.is_some() {
+                    space = space.result(DISCARDED, true, |ui| design::draft_discarded(ui, "Campaign details"));
+                }
+                if let Some(error) = self.error.as_deref() {
+                    space = space.reason(error, move |ui| {
+                        design::message(ui, Tone::Error, error);
+                    });
+                }
+                let undo = space.show(ui);
+                if undo == Some(true)
                     && let Some((name, path)) = self.discarded_details.take()
                 {
                     self.name = name;
                     self.path = path;
                 }
-                if let Some(error) = &self.error {
-                    design::message(ui, Tone::Error, error);
-                    if error.contains("registered at another folder") {
-                        let reason = self.name.trim().is_empty().then_some("Type a name first.");
-                        if Action::secondary("Register as a new campaign").blocked(reason).show(ui).clicked()
-                            && let Err(error) = self.register_campaign_copy() { self.error = Some(error); }
-                        design::blocked_reason(ui, reason);
-                    }
+                // The error’s own recovery follows the space.
+                if self.error.as_deref().is_some_and(|error| error.contains("registered at another folder")) {
+                    let reason = self.name.trim().is_empty().then_some("Type a name first.");
+                    if Action::secondary("Register as a new campaign").blocked(reason).show(ui).clicked()
+                        && let Err(error) = self.register_campaign_copy() { self.error = Some(error); }
+                    design::blocked_reason(ui, reason);
                 }
             };
             let form = if direct {

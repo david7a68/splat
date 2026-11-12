@@ -222,8 +222,11 @@ Saved and errors keep that left slot. When one cause blocks several controls, st
 save row, run strip or recording row. Other controls use its hover text and accessible description. The rail
 never repeats the sentence. Its campaign switcher keeps its height and a lock; the popup starts with the
 reason and disables campaign choices. The popup stays inside the navigation column, clear of its splitter; in a
-narrow column its choices wrap. Package, encounter, group, repair, World edit and run-settings drafts keep their campaign-switch
-reason after Unsaved and Discard in the save row. Reserve its height so the first edit moves no content. Run
+narrow column its choices wrap. With no campaign its one command, `Add campaign…`, stays on one line with `S` on
+each side: it uses `Small`, the type of the switcher's own words, because the menu's Strong type does not fit the
+column. Package, encounter, group, repair, World edit and run-settings drafts keep their campaign-switch
+reason after Unsaved and Discard in the save row. While Save is blocked, Discard is the one way out, so the reason
+says `Discard to switch campaign.`; while Save is open it says `Save or discard to switch campaign.` Reserve its height so the first edit moves no content. Run
 settings keep their full save actions on a second line at the right edge, so neither action is cut short.
 
 A quiet action at the start of a line uses `line_start`: its words start at the text edge of the line above,
@@ -642,11 +645,27 @@ Campaign's header counts chosen entries only. Flags appear once in the content i
 the warning icon and colour before its words (`⚠ 1 content issue to repair`), and it keeps its collapse. Encounters'
 count uses the same helper, words and size. Each flag's
 repair choice and file line start at its words. Packages keeps its save row directly below the tabs, before notices.
+The Packages page scrolls as one page and keeps the scroll bar's lane whether or not the bar shows; the package list
+fills the rest of the window and keeps room for a few rows, so tall repairs make the page scroll. A control that
+gains focus (Tab or a screen reader) scrolls into view, and a repair editor brings its whole viewport into view.
+Below `Save selections`, the page keeps one message space, two text lines high whatever it holds: every live
+result with an Undo (a discard, a written Campaign.md or manifest, a found folder, a removed package), newest
+first, then the latest plain result (`Campaign selections saved.`, applied changes), then the page's errors
+(Save's or a load's, the change check's). Each Undo stays with its own object and action until it is used or its
+object ends it; a failed Undo keeps it. A plain result gives way to any newer result. The space scrolls when they
+need more than two lines. So no result or error moves the repairs or the package list below. With nothing loaded, the errors stand alone.
 The save row, package list and entry search stop at LIST_MEASURE from the tab’s left edge.
-An open repair keeps the same right edge as the save row.
-Repair fills the column with the invalid-note reason above it; an `L` gap and hairline separate its save row
-from the package save row. Below the repair's own save row, an `L` gap and the package list's one hairline
-separate it from the list; the repair adds no second rule. Invalid YAML uses plain words and marks the line to fix.
+An open repair keeps the same right edge as the save row. Its save row lays out `Save repaired note` first at that edge; a long
+state (`Not saved. …`) or lock reason wraps beside it and never cuts it.
+Repair fills the column with the invalid-note message above it; an `L` gap and hairline separate its save row
+from the package save row. While the repair is open, that message keeps the same words (`<path> cannot be read.
+Fix it here or in World.`), so no edit moves the editor. Below the repair's own save row is the one message space,
+two text lines high whatever it holds: a result with a live Undo first (`Broken.md draft discarded.` with `Undo
+discard`), then Save's cause in the same part; with no such result, the cause alone. Discard returns to the
+unreadable file, so its cause follows the result; the next edit ends the result and the cause leads. In a short
+window the repair editor gives way: the save row, the message space and a few package rows keep their size, and
+the editor's top never moves. Below the message space, an `L` gap and the package list's one hairline
+separate the repair from the list; the repair adds no second rule. Invalid YAML uses plain words and marks the line to fix.
 The reason above names the file, so the `REPAIR` heading has no path. A repair draft's save-row state comes from
 the draft as Save checks it, as in Library: while Save would refuse it, the state says Invalid and Save is blocked
 with the cause; Unsaved and a primary Save come only when Save would write it. Save's check without writing is the one World's repair uses (the path rule, YAML, identity,
@@ -663,7 +682,9 @@ first edit in the repair moves nothing.
 
 Needed by your entries sits below packages in the left column. Its right pane has one search and list; rows
 open Lookup. Short package lists fit their rows. A package row's count has one form: `All chosen · 2,065 entries`,
-`None chosen · 6 entries`, `3 of 6 chosen`, `5 of 6 chosen · 1 needed`. An off package with required entries shows
+`None chosen · 6 entries`, `3 of 6 chosen`, `5 of 6 chosen · 1 needed`. `chosen` counts only the DM's own
+choices, as the page header does; `· N needed` counts the entries that other choices need and the DM did not
+choose, and is left out when it is 0. An off package with required entries shows
 `None chosen · 3 needed`, an indeterminate checkbox and encounters that use its creatures. A package whose manifest
 has a fault leads its count with the fault's icon in its tone (amber warning for a deleted manifest, red error for
 one that cannot be read), as the About row does; the message above names the fault, and the row's accessible name
@@ -708,7 +729,8 @@ offers Undo unregister in its success result, which sits in the reader's result 
 reader's place), so the scope, the search and the list never move; Campaign offers Register it again.
 
 Missing-package recovery searches beside known package folders. A unique match gets bordered secondary Use
-this folder; Find the folder… is then quiet. Show one warning naming the old and new folders, followed by
+this folder before Find the folder…; every action on the message, Remove from this campaign too, is bordered
+secondary. Show one warning naming the old and new folders, followed by
 the affected encounter links with word spaces. Align Use this folder, Find the folder… and Remove from this
 campaign on one action line with the warning text. Technical details follows below. Say Splat cannot find the
 package only when there is no match. Use Body text throughout the missing-package sentence. The picker
@@ -941,7 +963,10 @@ Every other World message about a file that the system will not read or write, a
 file and the recovery, never the system's words. A rolled table selects the matching row, marks it with dice and
 states the result below in UI sans, on one line reserved under the Roll row from the start, so a roll moves nothing
 below the table. A longer result ends in `…`; its hover keeps it whole. Typed rolls use well fill, a centred placeholder and dice as the column
-heading. Fixed headers cover passing rows with page fill and a hairline. Generator cards name their table
+heading. A marker's optional `per` word (`day`, `watch`, or hours such as `4h`) says how often a journey's
+encounter checks roll the table; a word that Splat cannot read adds the warning `Interval not read; using one check
+each day.` under that table, which still rolls. `Cannot roll` stays the words for a fault in the dice or the rows.
+Fixed headers cover passing rows with page fill and a hairline. Generator cards name their table
 sources below attributes. Every card's `Will save <path>` is the path Save NPC writes: the folder that holds most of
 the campaign's NPCs, or `NPCs/` when it has none. Without a names table, the World page's card says `Built-in names. To
 use your own, add a table of names to a note. Paste the marker on the line above the table.` with a quiet `Copy the
@@ -1505,7 +1530,30 @@ separate tabs; stacked Timeline says All events. Each row has an icon, link and 
 action on the name line, fixed right-aligned action slot and separate menu slot. Row fields open in place,
 align with the name and use Timeline form parts. A caret and accessible expanded state mark open rows; a
 hairline follows details after `S`. New events stay closed with kind as title. Open rows show Title and Notes;
-duration and place stay on Timeline. The Add strip stays directly below Tonight (or This session), above
+duration and place stay on Timeline.
+
+**Encounter checks** (F9). While the campaign has a marked table, a Travel row's menu (on the plan and on
+Timeline) has `Roll for encounters`. Only that act puts the block on that row: `Encounter checks`, the table
+as a `menu_button` with `· 1d20 each day` (or `each watch`, `every 4 hours`) after it, **How long** (on the plan;
+Timeline's own field above serves there), and one line for each check. Focus goes to **How long** when the
+journey has no length, and the event takes the length on Enter or when the field loses focus, not on each key;
+the lines follow the words as typed. One check at each whole interval from the start, and none at the end; an
+empty or unread length gives one line, `This journey`; a length of zero gives none. A line is its clock name (`Day 3`, or `Day 3, 08:00` for
+a watch or hours), then a secondary `Roll` with the dice icon and an `Enter a roll` number field; `Roll all N`
+follows when two or more wait. A result shows its number and words, a quiet `Clear` at the line's end, and,
+for each encounter or group it links (at most three), a quiet `Plan “<name>”` with `line_start`, or the status
+`In the plan` while the plan has a row still to come for it. A result whose offset is no longer a line stays under
+the muted `Outside this journey now` until cleared. The table menu lists the tables by name, then `No checks`,
+which waits with `Clear the results first.` while a result stands. With several tables the block starts on the
+table of the latest journey with checks, else on `Choose a table`, and `Roll` waits with `Choose a table first.`.
+A journey of more than 31 checks says `This journey has N checks. Split it into shorter journeys to roll them
+here.` Each act's message, with `Undo checks`, `Undo roll` or `Undo clear`, is kept by its journey's event: it
+lasts while that event is as the act left it, until the DM leaves the page, and an act on another journey
+leaves it. The length being typed has one owner, the Timeline book, whichever page shows the field; leaving
+the page gives it to the journey, as a loss of focus does. `Plan “<name>”` is a note act through `Draft::apply`: it writes
+`- [[<name>]]` before the first plan line still to come, says `“<name>” is in tonight’s plan.` and offers `Undo
+plan line`, which is the note's: it lasts while the note's words are what the act left, also through a page
+change, and ends when they change or another session is selected. Splat rolls and offers; it never plans or starts a fight by itself. The Add strip stays directly below Tonight (or This session), above
 messages and scrolling rows. Fight, Group and Long rest stay visible. If all seven actions do not fit on one line,
 a compact `⋯⌄` button, named `More Add actions`, holds Day, Short rest, Travel and Major event. Its hover text names those actions. Keep the strip on one line at all three supported window sizes. Long rest stays one click away (T11.2). Timeline uses the same width rule.
 It stays in place when messages or rows change. Empty plans use empty_state
@@ -1668,6 +1716,10 @@ names the note and changes nothing; custom
 aliases remain. Undo stays only in the list column until a note/event edit or leaving Timeline, never in
 conflict. Completed link updates use success.
 
+A Travel event's checks are lines of the event: `- Checks table: road` (no key while none is chosen) and
+`- Check at 24h: "16 · …"`, one for each result, its words in quotes so that the reader of the format before
+them keeps each as one string. A check's identity is its offset in hours, never a day's name.
+
 Version 2 stores event lists and day IDs in comments below headings. Every write renumbers days to the
 displayed clock. File items use Fight and Major event; accept Encounter and Event in any case, with or without
 a colon. Preserve outside prose, unknown properties and event fields. Separate app and outside event edits
@@ -1729,7 +1781,12 @@ then `Combat sync · On`.
 The Party header states the connection and the sheet's age: `Connected · Fetched 3 h ago`, never `Cached`.
 
 A stopped-sync notice sits below the Party header, across the page. Its bar starts at the pane edge;
-Dismiss sits at the right end of its first line. Sheet pages use Small tabs on one line, with later pages in More.
+Dismiss sits at the right end of its first line. Every dismissable Party notice (stopped sync, a replaced sheet,
+a combat sync action's result) has this one form: the close icon at the right end of the first line, never a
+word. Notices above the member list and the sheet end with an `L` gap. The member list keeps the scroll bar's
+lane whether or not the bar shows, so its rows and header columns never move. A combat sync action's result has
+a reserved place above the editable fields, two text lines high whatever it holds, so the result, its dismissal and
+the next read move no field. The sync panel's help keeps the reader measure. Sheet pages use Small tabs on one line, with later pages in More.
 
 Local-edit notices measure the full message inset, including its bar, icon and gaps. The Party header owns Connect to refresh, except while a signed-out local-edit notice shows: then the notice's secondary `Connect D&D Beyond`, before Show file, is the one way to connect, and the header shows only the state (`Not connected · Fetched 3 h ago`). One action has one control and one name on a screen. Signed-out notices say replacement keeps the DM’s version as a copy. Local-edit warnings name the character and say replacement keeps a copy. Keep each notice within `LIST_MEASURE`. Actions follow its text after an `L` gap, or wrap below, aligned with the text. The affected row says Local edits; replacement names the character, offers Show file for the kept
 version and Dismiss. Empty Party has one Connect D&D Beyond action. An offline Party now line offers Connect
@@ -1834,7 +1891,9 @@ remembered on two lines with full hover and accessible text. Settings states rec
 Campaign add forms close on success; messages follow campaign rows below their heading. Add/edit forms put
 Cancel at the left and commit at the right. An unchanged form blocks Save details with No changes to save.
 Details hides Edit details, uses a plain Details heading, and puts state and Discard at the left, Save details
-at the right. Discard restores saved details with Undo discard; clean forms use Cancel. Import opens below its
+at the right. Discard restores saved details with Undo discard; clean forms use Cancel. Below the save row, the
+form keeps the one message space, two text lines high whatever it holds: the discard result with its live Undo
+first, then Save's error. So neither moves the campaign rows below the form. Import opens below its
 chosen row with a new sibling folder filled in. Keep campaign name in its field; omit remote ID, repeated
 heading and the open row's Add action. Removal dialogs use the shared `dialog` and its top anchor, as every dialog does. Reload from disk names the local reload
 action.
