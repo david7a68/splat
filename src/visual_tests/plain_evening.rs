@@ -2804,12 +2804,78 @@ mod allowed_classes {
 
         /// The frozen view of `d`.
         fn frozen(d: &Difference) -> Option<&'static View> {
+            frozen_view(&d.screen, &d.view)
+        }
+
+        /// A frozen view, by its screen and view.
+        fn frozen_view(screen: &str, view: &str) -> Option<&'static View> {
             static REFERENCE: std::sync::OnceLock<Reference> = std::sync::OnceLock::new();
             REFERENCE
                 .get_or_init(|| super::super::read(&super::super::folder().join("reference.json")))
                 .views
                 .iter()
-                .find(|view| (&view.screen, &view.view) == (&d.screen, &d.view))
+                .find(|frozen| (frozen.screen.as_str(), frozen.view.as_str()) == (screen, view))
+        }
+
+        /// Whether an item that the scroll newly shows is one that the frozen view of the same
+        /// screen at the other size holds: its name (its words), its place across and its size,
+        /// and its height below the same mark (`COMBAT LOG` in the log, else `FINAL STATE`).
+        /// `taken` holds the frozen items already matched, so two new items never share one.
+        fn exposed_is_frozen(
+            d: &Difference,
+            name: &str,
+            b: [f32; 4],
+            (mark, below): (&str, f32),
+            taken: &mut std::collections::BTreeSet<usize>,
+        ) -> bool {
+            let other = if d.view.contains("960x640") {
+                d.view.replace("960x640", "1200x800")
+            } else {
+                d.view.replace("1200x800", "960x640")
+            };
+            let Some(view) = frozen_view(&d.screen, &other) else {
+                return false;
+            };
+            let items = if d.what == "control" {
+                &view.controls
+            } else {
+                &view.texts
+            };
+            let Some(anchor) = items.iter().find(|item| item.0.ends_with(mark)) else {
+                return false;
+            };
+            // A row's actions keep their place from the list's right edge: across, the other
+            // size moves them as far as it moves the opened run's own `Close`.
+            let close = |view: &View| {
+                let items = if d.what == "control" {
+                    &view.controls
+                } else {
+                    &view.texts
+                };
+                items
+                    .iter()
+                    .find(|item| {
+                        item.0.starts_with("Button: Close the run of ") || item.0 == "Close"
+                    })
+                    .map(|item| item.1[0])
+            };
+            let Some(right) = close(view)
+                .zip(frozen(d).and_then(close))
+                .map(|(o, t)| o - t)
+            else {
+                return false;
+            };
+            items
+                .iter()
+                .enumerate()
+                .find(|(at, item)| {
+                    item.0 == name
+                        && (item.1[0] == b[0] || (item.1[0] - right - b[0]).abs() < 0.05)
+                        && item.1[2..4] == b[2..]
+                        && (item.1[1] - anchor.1[1] - below).abs() < 0.05
+                        && !taken.contains(at)
+                })
+                .is_some_and(|(at, _)| taken.insert(at))
         }
 
         /// The frozen place of the first item of `d`'s kind whose name passes `pick`.
@@ -2914,7 +2980,15 @@ mod allowed_classes {
                     .map(|b| b[1] + b[3])
                     .fold(f32::NEG_INFINITY, f32::max)
             });
+            // Where the marks are after: the log's, and Final state's above it.
+            let log_after = log + dy + LOG;
+            let Some(state_after) =
+                frozen_place(d, |name| name.ends_with("FINAL STATE")).map(|place| place[1] + dy)
+            else {
+                return false;
+            };
             let mut names: BTreeMap<&str, (Places, Places)> = BTreeMap::new();
+            let mut taken = std::collections::BTreeSet::new();
             for o in &view {
                 if !cut_at_edges(o, top, edge) {
                     return false;
@@ -2923,14 +2997,24 @@ mod allowed_classes {
                 let (before, after) = names.entry(o.name.as_str()).or_default();
                 // Today's items that stay in view, and the items after that were in view.
                 before.extend(a.filter(|a| a[1] + shift(a[1]) + a[3] > top + 0.5));
-                after.extend(b.filter(|b| {
-                    let back = if b[1] >= log + dy + LOG - 0.5 {
-                        dy + LOG
+                if let Some(b) = b {
+                    let in_log = b[1] >= log_after - 0.5;
+                    let back = if in_log { dy + LOG } else { dy };
+                    if b[1] - back < bottom - 0.5 {
+                        after.push(b);
                     } else {
-                        dy
-                    };
-                    b[1] - back < bottom - 0.5
-                }));
+                        // What the scroll newly shows is checked by itself: its words, size and
+                        // place are those the frozen view of the other size holds.
+                        let mark = if in_log {
+                            ("COMBAT LOG", b[1] - log_after)
+                        } else {
+                            ("FINAL STATE", b[1] - state_after)
+                        };
+                        if !exposed_is_frozen(d, &o.name, b, mark, &mut taken) {
+                            return false;
+                        }
+                    }
+                }
             }
             names.values_mut().all(|(before, after)| {
                 before.sort_by(|a, b| a[1].total_cmp(&b[1]));
@@ -2953,16 +3037,19 @@ mod allowed_classes {
             {
                 return false;
             }
-            let view = view(d, rows);
             let action =
                 |name: &str| name.ends_with("Save encounter") || name.ends_with("Start fight");
             // The line the actions left: Save encounter's own move, straight up.
-            let Some((save, up)) = view.iter().find_map(|o| {
+            // One translation for the editor, from the Save encounter control's own move: its
+            // words and every other text move with their controls.
+            let Some((save, up)) = rows.iter().map(|row| &row.difference).find_map(|o| {
                 let (Some(a), Some(b)) = places(o) else {
                     return None;
                 };
-                (o.change == "moved"
-                    && o.name.ends_with("Save encounter")
+                ((&o.screen, &o.view) == (&d.screen, &d.view)
+                    && o.what == "control"
+                    && o.change == "moved"
+                    && o.name == "Button: Save encounter"
                     && a[0] == b[0]
                     && a[2..] == b[2..]
                     && b[1] < a[1])
@@ -3248,6 +3335,111 @@ mod allowed_classes {
                 let name = fault.difference.to_string();
                 assert!(!fits(&with(&good, fault)), "R3g c takes {name}");
             }
+            // Review 290: the real rows with one fault each. A line the scroll newly shows keeps
+            // its words, its size and its place; the editor's words move with their controls.
+            let allowed: super::super::Allowed =
+                super::super::read(&super::super::folder().join("allowed.json"));
+            let refused =
+                |rows: &[AllowedRow]| rows.iter().any(|row| super::class_of(row, rows).is_none());
+            let kestrel = |detail: Option<&str>, words: Option<&str>| {
+                let mut rows = allowed.rows.clone();
+                let mut changed = 0;
+                for row in &mut rows {
+                    let d = &mut row.difference;
+                    if row.row == 25
+                        && d.view == "960x640 Lookup closed"
+                        && d.screen == "run-ended: played last"
+                        && d.change == "new"
+                        && d.name.contains("Kestrel Dunmoor: Initiative set to 12.")
+                    {
+                        if let Some(detail) = detail {
+                            d.detail = detail.into();
+                        }
+                        if let Some(words) = words {
+                            d.name = d.name.replace("Initiative set to 12.", words);
+                        }
+                        changed += 1;
+                    }
+                }
+                assert_eq!(changed, 3);
+                rows
+            };
+            assert!(
+                refused(&kestrel(None, Some("Initiative set to 99."))),
+                "R3g a takes changed words in a newly shown log line"
+            );
+            assert!(
+                refused(&kestrel(Some("at 180 510 100x16"), None)),
+                "R3g a takes a newly shown log line narrowed and drawn over Oren's line"
+            );
+            let small = [
+                editor(
+                    "moved",
+                    "Button: Save encounter",
+                    "381.8 44 123.4x30 -> 381.8 8 123.4x30",
+                ),
+                editor(
+                    "moved",
+                    "Button: Start fight",
+                    "513.2 44 89.3x30 -> 513.2 8 89.3x30",
+                ),
+                editor(
+                    "width",
+                    "TextInput: Encounter name: Shrine of Cinders",
+                    "186 8 416.4x30 -> 186 8 168.4x30",
+                ),
+                editor(
+                    "moved",
+                    "Button: Roster, 7 participants",
+                    "148 121 69.4x28 -> 148 85 69.4x28",
+                ),
+            ];
+            let words = |name: &str, detail: &str| AllowedRow {
+                difference: Difference {
+                    what: "text".into(),
+                    ..editor("moved", name, detail).difference
+                },
+                ..editor("moved", name, detail)
+            };
+            let mut detached = small.to_vec();
+            detached.extend([
+                words("Save encounter", "393.8 50 99.4x18 -> 393.8 29 99.4x18"),
+                words("Start fight", "525.2 50 65.3x18 -> 525.2 29 65.3x18"),
+                words("Roster", "164 127 36x16 -> 164 106 36x16"),
+            ]);
+            assert!(
+                refused(&detached),
+                "R3g c takes words 15 px below their controls"
+            );
+            let mut rows = allowed.rows.clone();
+            let mut changed = 0;
+            for row in &mut rows {
+                let d = &mut row.difference;
+                if row.row != 26 || d.what != "text" {
+                    continue;
+                }
+                let (a, Some(mut b)) = places(d) else {
+                    panic!("missing after");
+                };
+                b[1] += 15.0;
+                let rect = |b: [f32; 4]| format!("{} {} {}x{}", b[0], b[1], b[2], b[3]);
+                let mut after = rect(b);
+                if b[1] + b[3] > 635.0 {
+                    let mut seen = b;
+                    seen[3] = 635.0 - b[1];
+                    after.push_str(&format!(", seen {}", rect(seen)));
+                }
+                d.detail = match a {
+                    Some(a) => format!("{} -> {after}", rect(a)),
+                    None => format!("at {after}"),
+                };
+                changed += 1;
+            }
+            assert_eq!(changed, 80);
+            assert!(
+                refused(&rows),
+                "R3g c takes the real editor's 80 texts 15 px below their controls"
+            );
         }
     }
 
