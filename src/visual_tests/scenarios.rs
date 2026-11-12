@@ -8228,8 +8228,9 @@ pub mod run_roster_conflict {
                 && d.visible_text("Campaign → Packages"),
             "A stat-block error is an error message, and its repair place is a bordered button",
         );
-        // iter-26-R AI1: the fault's words, the button and the close icon share one centre;
-        // FI11: the button lies whole inside the roster column.
+        // iter-26-R AI1, Astra 3: the error is in the run's message footer, its whole fault
+        // wrapped, the bordered repair under its words with its frame at them, and the close
+        // icon beside the fault; FI11: the button lies whole inside the roster column.
         for size in [SMALL, DEFAULT, LARGE] {
             let places = d.at_size(size, |d| {
                 (
@@ -8242,17 +8243,32 @@ pub mod run_roster_conflict {
             d.observe(
                 "iter-26-R-AI1",
                 matches!(places, (Some(words), Some(button), Some(close), Some(next))
-                    if (words.center().y - button.center().y).abs() <= 1.0
-                        && (close.center().y - button.center().y).abs() <= 1.0
+                    if (button.left() - words.left()).abs() <= 1.0
+                        && button.top() >= words.bottom() - 0.5
+                        && close.top() < words.bottom()
                         && button.right() <= next.right() + 1.0),
                 format!("At {size:?}, error words, repair, close and Next turn: {places:?}"),
             );
         }
+        // Astra 3: at 960 the whole fault is read in view, reached by the keyboard alone.
+        let full_fault = "Ember Cultist's stat block could not be read. Its row still works.";
+        let reached = d.tab_to("Repair in Campaign → Packages");
+        d.observe(
+            "iter-26-R-AI1-whole",
+            d.window_size() == SMALL && reached && d.visible_text(full_fault),
+            format!("At 960, Tab reaches the repair and the whole fault shows: reached {reached}"),
+        );
+        // Astra 3 changes this check on purpose: the error's whole fault wraps in the run's message
+        // footer (the lead's footer ruling: the list keeps its top and only its visible height
+        // shrinks), so at 960 a row may sit behind it. Every such row is counted by the overflow
+        // line, and the dock stays in view. Before, the fault was cut to one line to keep every
+        // row in view.
         let cut = rows_cut(d);
+        let counted = cut.is_empty() || d.visible_text(&format!("{} below", cut.len()));
         d.observe(
             "T1.3",
-            cut.is_empty() && d.in_view(AMOUNT) && d.in_view(APPLY_DAMAGE),
-            format!("At 960x640 with {errored} extra lines and a message not dismissed, rows not in full view: {cut:?}"),
+            counted && d.in_view(AMOUNT) && d.in_view(APPLY_DAMAGE),
+            format!("At 960x640 with {errored} extra lines, a message not dismissed and the error in the footer, rows not in full view are counted: {cut:?}"),
         );
         d.app_mut().encounters.simulate_run_error("");
         d.settle();
@@ -15848,7 +15864,10 @@ pub mod run_add_creature {
             cultist_hp
                 .zip(damaged)
                 .is_some_and(|(before, after)| after == before - 2)
-                && !d.has_containing("Wolf 1 and Wolf 2 joined at"),
+                && !d.has_containing("Wolf 1 and Wolf 2 joined at")
+                // Astra 1: what shows and what Undo reaches agree: Undo names B, not A.
+                && d.has_containing("Undo: 2 damage")
+                && !d.has_containing("Undo: add 2 × Wolf"),
             format!("A later step ends the arrival's result: HP {cultist_hp:?} → {damaged:?}"),
         );
         d.click_containing("Undo: 2 damage");
@@ -18110,6 +18129,9 @@ pub mod session_plan {
             "iter-26-R-FI2-setup-b",
             d.field_text(&field).as_deref() == Some("12")
                 && !d.visible_text(SAVED_HP_SET)
+                // Astra 1: no result shows for a step Undo can no longer reach first.
+                && !d.has(SAVED_HP_UNDO)
+                && d.has_containing("Undo: initiative")
                 && rows_b == rows_result,
             format!("B ends A's result and moves no row: {rows_result:?} then {rows_b:?}"),
         );

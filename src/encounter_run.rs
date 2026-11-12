@@ -312,6 +312,17 @@ impl RunGroup {
         font: &egui::FontId,
         width: f32,
     ) -> String {
+        self.member_summary_fit(ui, font, width).0
+    }
+
+    /// `member_summary_wrapped`, and whether `Will add:` had to stand apart from its first
+    /// member because the two do not fit one line `width` wide (FI8).
+    pub(crate) fn member_summary_fit(
+        &self,
+        ui: &egui::Ui,
+        font: &egui::FontId,
+        width: f32,
+    ) -> (String, bool) {
         let summary = self.member_summary();
         let (lead, members) = match summary.strip_prefix("Will add: ") {
             Some(members) => ("Will\u{a0}add:", members),
@@ -322,7 +333,7 @@ impl RunGroup {
             .map(|member| keep_whole(ui, font, member, width))
             .collect();
         if lead.is_empty() {
-            return members.join(", ");
+            return (members.join(", "), false);
         }
         // FC6: `Will add:` stays on a line with its first member when the two fit one line;
         // only a member too wide for that takes a line of its own.
@@ -330,22 +341,10 @@ impl RunGroup {
         let together = format!("{lead}\u{a0}{first}");
         if crate::design::number_width(ui, &together, font) <= width {
             members[0] = together;
-            members.join(", ")
+            (members.join(", "), false)
         } else {
-            format!("{lead} {}", members.join(", "))
+            (format!("{lead} {}", members.join(", ")), true)
         }
-    }
-
-    /// False when the summary leads with `Will add:` and that lead and its first member do not
-    /// fit one line `width` wide (FI8): then the summary needs a line of its own, or `Will add:`
-    /// would stand alone.
-    pub(crate) fn lead_fits(&self, ui: &egui::Ui, font: &egui::FontId, width: f32) -> bool {
-        let summary = self.member_summary();
-        let Some(members) = summary.strip_prefix("Will add: ") else {
-            return true;
-        };
-        let first = members.split(", ").next().unwrap_or(members);
-        crate::design::number_width(ui, &format!("Will add: {first}"), font) <= width
     }
 
     /// Every creature the note names, whether or not it can be found now.
@@ -685,6 +684,15 @@ struct State {
 /// The state, groups and scale an answer in Arrivals was worked out from: the count of steps
 /// kept or taken back, and the two reads by their address.
 type ArrivalKey = (u64, usize, usize);
+/// The groups' read by its address, and the widths and type size a summary was wrapped for.
+type SummaryKey = (usize, u32, u32, u32);
+/// A group's member summary in Arrivals: the wrapped words, and whether they take a full-width
+/// line above Initiative and Add because `Will add:` and its first member do not fit beside them.
+#[derive(Clone)]
+pub(crate) struct ArrivalSummary {
+    pub members: Arc<str>,
+    pub above: bool,
+}
 /// What each group would make the fight, with the XP its members on the other side add.
 pub(crate) type ArrivalWords = BTreeMap<Uuid, (crate::difficulty::Rating, u64)>;
 /// Each carried player's place in the roster, and HP and temporary HP from their sheet.
@@ -767,6 +775,17 @@ pub(crate) struct Run {
     /// How often frames asked for the Arrivals words, and how often they were worked out.
     #[cfg(test)]
     pub(crate) arrival_counts: (usize, usize),
+    /// Each Arrivals group's member summary, wrapped for its place, worked out for one read of
+    /// the groups, one width and one type size (FI8). Never saved.
+    arrival_summaries: Option<(SummaryKey, BTreeMap<Uuid, ArrivalSummary>)>,
+    /// Bumped by every edit of `group_totals`, so the Arrivals reasons are read again only then.
+    totals_revision: u64,
+    /// The Arrivals reasons for typed totals that cannot be read (FI5), for one
+    /// `totals_revision`, one read of the groups and one encounter. Never saved.
+    arrival_reasons: Option<((u64, usize, Option<Uuid>), Arc<[String]>)>,
+    /// The widest roster name in the dock's `Heading`, for one `revision`, roster size and type
+    /// size (FK1). Never saved.
+    widest_name: Option<((u64, usize, u32), f32)>,
     /// Never saved.
     carried: Option<CarriedHp>,
     rest_order: u64,
@@ -1231,6 +1250,10 @@ impl Run {
             arrival_words: None,
             #[cfg(test)]
             arrival_counts: (0, 0),
+            arrival_summaries: None,
+            totals_revision: 0,
+            arrival_reasons: None,
+            widest_name: None,
             carried: None,
             rest_order: 0,
             armed: None,
@@ -4250,6 +4273,10 @@ impl Run {
             arrival_words: None,
             #[cfg(test)]
             arrival_counts: (0, 0),
+            arrival_summaries: None,
+            totals_revision: 0,
+            arrival_reasons: None,
+            widest_name: None,
             carried: None,
             rest_order: saved.rest_order,
             armed: None,
@@ -4796,6 +4823,8 @@ impl Run {
             .find(|p| p.name == name)
             .expect("participant in this run");
         participant.name = to.to_owned();
+        // A rename in play is a step, which counts in `revision`.
+        self.revision += 1;
     }
     /// A read of this sheet with the damage it had at the last match, plus `more_damage`. Test
     /// builds have no live sheet, so this goes through the same comparison that a live read does.

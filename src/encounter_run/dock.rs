@@ -78,6 +78,7 @@ impl Run {
                     self.target_words(ui);
                     return;
                 }
+                let widest = self.widest_name(ui);
                 let p = &self.state.participants[index];
                 let death_saves = self.hide_panel && p.hp == Some(0);
                 let conditions_key = if self.lookup_open { "" } else { "C" };
@@ -115,16 +116,8 @@ impl Run {
                     0.0
                 };
                 // FK1: the name slot has one width for the whole fight: the widest roster name
-                // in `Heading`, at most `12 × L`, so Conditions, Conc and Absent keep one x
-                // whichever row is selected. Measured as the roster measures its names, each
-                // frame through the galley cache; nothing is kept.
-                let heading = Type::Heading.font(ui);
-                let widest = self
-                    .state
-                    .participants
-                    .iter()
-                    .map(|p| design::number_width(ui, &p.name, &heading))
-                    .fold(0.0_f32, f32::max);
+                // in `Heading` (`widest_name`), at most `12 × L`, so Conditions, Conc and Absent
+                // keep one x whichever row is selected.
                 // Left to right: the name slot, then exactly `L`, then its controls. The
                 // controls' width only limits how wide the slot may be.
                 ui.horizontal(|ui| {
@@ -291,6 +284,34 @@ impl Run {
     }
 
     /// The dice field's last roll, beside it.
+    /// The widest roster name in the dock's `Heading` (FK1). Measured again only after a step
+    /// or an Undo (`revision`, which a rename is), a roster of another size, or another type
+    /// size; an unchanged frame reads the kept width.
+    fn widest_name(&mut self, ui: &egui::Ui) -> f32 {
+        let heading = Type::Heading.font(ui);
+        let key = (
+            self.revision,
+            self.state.participants.len(),
+            heading.size.to_bits(),
+        );
+        if let Some((_, width)) = self.widest_name.filter(|(at, _)| *at == key) {
+            return width;
+        }
+        #[cfg(test)]
+        {
+            let (a, b, c) = super::view::PREPARED.with(std::cell::Cell::get);
+            super::view::PREPARED.with(|count| count.set((a, b, c + 1)));
+        }
+        let width = self
+            .state
+            .participants
+            .iter()
+            .map(|p| design::number_width(ui, &p.name, &heading))
+            .fold(0.0_f32, f32::max);
+        self.widest_name = Some((key, width));
+        width
+    }
+
     fn dock_roll(&self) -> Option<(i64, String)> {
         let rolled = self.dock_roll.as_ref()?;
         Some((rolled.total, rolled.line()))

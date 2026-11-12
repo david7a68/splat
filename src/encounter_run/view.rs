@@ -189,6 +189,14 @@ thread_local! {
 
 #[cfg(test)]
 thread_local! {
+    /// How often the Arrivals summaries, the Arrivals reasons and the dock's widest name were
+    /// worked out (Astra 2): an unchanged frame works out none of them.
+    pub(super) static PREPARED: std::cell::Cell<(usize, usize, usize)> =
+        const { std::cell::Cell::new((0, 0, 0)) };
+}
+
+#[cfg(test)]
+thread_local! {
     /// How many toggle widths the conditions grid measured.
     static CONDITION_MEASURES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
@@ -770,13 +778,12 @@ impl Run {
     /// an error, Undo steps that could not be read) and, in setup, the rest and carry-over
     /// offers and their result, sit in it, pinned below the roster, so a row the DM aims at
     /// never moves when one comes or goes. It is drawn in a child of `ui` over `rect`, at its
-    /// bottom, and the y where the body above it ends is returned. `skip_error`: the live view
-    /// draws a stat-block error in its own band below the roster.
+    /// bottom, and the y where the body above it ends is returned. A stat-block error is one
+    /// of them: its whole fault wraps there, with its repair place under its words.
     fn message_footer(
         &mut self,
         ui: &mut egui::Ui,
         rect: Rect,
-        skip_error: bool,
         setup: bool,
         command: &mut Option<Command>,
     ) -> f32 {
@@ -794,7 +801,19 @@ impl Run {
         let undo_saved = Cell::new(false);
         let use_sheets = Cell::new(false);
         let disk = self.has_disk_conflict();
-        let error = self.error.clone().filter(|_| !disk && !skip_error);
+        let error = self.error.clone().filter(|_| !disk);
+        let to_packages = Cell::new(false);
+        // Astra 3 (FI11, AI1): a stat-block error says its whole fault, wrapped, with its repair
+        // place as a bordered button under its words. Nothing is cut, so nothing hides in hover.
+        let repair = error
+            .as_deref()
+            .filter(|error| error.contains(STAT_BLOCK_UNREAD))
+            .map(|error| {
+                let first = error
+                    .split_once(" Its row")
+                    .map_or(error, |(first, _)| first);
+                format!("{first} Its row still works.")
+            });
         let unread = !disk && self.undo_unread;
         let carry = setup.then(|| self.carry_missing()).flatten();
         let rest = setup && self.rest_filled_saved_hp();
@@ -851,9 +870,31 @@ impl Run {
                     let width = ui.available_width() - 36.0;
                     ui.scope(|ui| {
                         ui.set_max_width(width);
-                        design::message(ui, Tone::Error, error);
+                        if let Some(words) = &repair {
+                            // Top down, so the repair goes under the words.
+                            let clicked = ui
+                                .vertical(|ui| {
+                                    design::message_with_actions(ui, Tone::Error, words, |ui| {
+                                        Action::secondary("Campaign → Packages")
+                                            .name("Repair in Campaign → Packages")
+                                            .density(Density::Read)
+                                            .show(ui)
+                                            .clicked()
+                                    })
+                                })
+                                .inner;
+                            to_packages.set(clicked);
+                        } else {
+                            design::message(ui, Tone::Error, error);
+                        }
                     });
-                    if design::icon_button(ui, icons::CLOSE, "Dismiss this message").clicked() {
+                    // A stat-block error keeps its own name, apart from the sheet notice's.
+                    let close = if repair.is_some() {
+                        "Dismiss this error"
+                    } else {
+                        "Dismiss this message"
+                    };
+                    if design::icon_button(ui, icons::CLOSE, close).clicked() {
                         dismiss_error.set(true);
                     }
                 });
@@ -907,6 +948,9 @@ impl Run {
         }
         if dismiss_error.get() {
             self.error = None;
+        }
+        if to_packages.get() {
+            self.wants_packages = true;
         }
         if dismiss_unread.get() {
             self.undo_unread = false;
@@ -972,31 +1016,17 @@ impl Run {
                         self.state.order.len(),
                     );
                     let sheet_notice_in_header = self.live_header(ui, scale);
-                    let stat_error = self
-                        .error
-                        .as_ref()
-                        .filter(|error| error.contains("stat block could not be read"))
-                        .cloned();
                     let room = ui.available_height()
                         - DOCK_HEIGHT
                         - self.strip_height()
                         - self.footer_height();
-                    // FJ4: the error takes one notice line, as a sheet-change warning does, and
-                    // its band is exactly that high, so the dock keeps one place.
-                    let error_room = if stat_error.is_some() && !self.has_disk_conflict() {
-                        MESSAGE_LINE
-                    } else {
-                        0.0
-                    };
-                    let room = room - error_room;
                     // FI2: notices that come by themselves sit in the message footer at the
                     // bottom of the roster's room, so the roster keeps its top.
                     let region = Rect::from_min_size(
                         ui.cursor().min,
                         vec2(ui.available_width(), room.max(0.0)),
                     );
-                    let body_bottom =
-                        self.message_footer(ui, region, stat_error.is_some(), false, &mut None);
+                    let body_bottom = self.message_footer(ui, region, false, &mut None);
                     let footer_room = (region.bottom() - body_bottom).max(0.0);
                     let room = room - footer_room;
                     // A message goes in the room under the list, so it moves no row while
@@ -1174,68 +1204,6 @@ impl Run {
                     }
                     // Past the message footer, which the roster's room left free.
                     ui.add_space(footer_room);
-                    if let Some(error) = stat_error.as_ref().filter(|_| error_room > 0.0) {
-                        let first = error
-                            .split_once(" Its row")
-                            .map_or(error.as_str(), |(first, _)| first);
-                        // As the sheet-change notice: the fault in an error message, then its
-                        // place to repair it as the action.
-                        let band = vec2(ui.available_width(), error_room);
-                        ui.allocate_ui_with_layout(
-                            band,
-                            Layout::left_to_right(Align::Center),
-                            |ui| {
-                                ui.set_min_height(error_room);
-                                ui.set_max_height(error_room);
-                                let detail = format!(
-                                    "{first} Its row still works. Repair in Campaign → Packages."
-                                );
-                                let font = Type::Small.font(ui);
-                                // FI11, SI2: the repair is the bordered secondary button that
-                                // Arrivals offers for the same place, never a link.
-                                let action = Action::secondary("Campaign → Packages")
-                                    .name("Repair in Campaign → Packages")
-                                    .density(Density::Read);
-                                let lead = design::S
-                                    + design::HAIRLINE_WIDTH
-                                    + design::number_width(ui, icons::ERROR, &font)
-                                    - design::XS;
-                                let gap = ui.spacing().item_spacing.x;
-                                let room = ui.available_width()
-                                    - Density::Read.control()
-                                    - action.natural_width(ui)
-                                    - design::L
-                                    - gap * 3.0
-                                    - lead;
-                                let fitted =
-                                    design::words_that_fit(ui, first, &font, room.max(0.0));
-                                // AI1: the words and bar take one `Small` line, which the band
-                                // centres with the button and the close icon, as the
-                                // sheet-change notice does.
-                                let message_width =
-                                    design::number_width(ui, &fitted, &font) + lead + gap * 2.0;
-                                let message = ui
-                                    .allocate_ui_with_layout(
-                                        vec2(message_width, Type::Small.line()),
-                                        Layout::left_to_right(Align::TOP),
-                                        |ui| design::small_message(ui, Tone::Error, &fitted),
-                                    )
-                                    .inner;
-                                design::named(ui, &message, &detail);
-                                message.on_hover_text(&detail);
-                                ui.add_space(design::L - gap);
-                                let response = action.show(ui);
-                                if response.clicked() {
-                                    self.wants_packages = true;
-                                }
-                                if design::icon_button(ui, icons::CLOSE, "Dismiss this error")
-                                    .clicked()
-                                {
-                                    self.error = None;
-                                }
-                            },
-                        );
-                    }
                     // Each control band starts with fresh bounds. A child above can widen
                     // its parent's minimum rect, which set_width cannot shrink again.
                     // With the panel hidden, its action tiles keep one line above the dock.
@@ -2794,31 +2762,30 @@ impl Run {
         // named by its group. The reason belongs to the typed words: it ends when they change.
         let reasons = self.arrival_reasons();
         let result = self.arrival_result_shown();
-        if result || !reasons.is_empty() {
-            egui::TopBottomPanel::bottom(egui::Id::new(("arrival_result", self.id)))
-                .resizable(false)
-                .show_separator_line(false)
-                .frame(egui::Frame::NONE)
-                .show_inside(ui, |ui| {
-                    ui.spacing_mut().item_spacing.y = design::XS;
-                    design::rule(ui);
-                    ui.add_space(design::XS);
-                    if result {
-                        self.arrival_result(ui);
-                    }
-                    for reason in &reasons {
-                        // The group faults' form: a mark, and words in text colour.
-                        design::small_message(ui, Tone::Warning, reason);
-                    }
-                    ui.add_space(design::XS);
-                });
+        // The shared message footer: as tall as what it holds, at most a third of the panel,
+        // and it scrolls inside beyond that (pointer and keyboard), so ten bad totals at 960
+        // neither clip nor push the list. The result's Undo is live in the header while its
+        // step is the newest, so it leads; the reasons follow.
+        // The message names itself; the footer's own name never takes the Log's words.
+        let words = String::new();
+        let mut footer = design::Footer::new(("arrival_footer", self.id), ui.available_width());
+        if result {
+            footer.result(words, true, |ui| self.arrival_result(ui));
         }
+        for reason in reasons.iter() {
+            footer.reason(reason.as_str(), move |ui| {
+                // The group faults' form: a mark, and words in text colour.
+                design::small_message(ui, Tone::Warning, reason);
+            });
+        }
+        let body_bottom = footer.show(ui);
         // FJ1: the list keeps the scroll bar's lane whether or not the bar shows, as the
         // Encounters list does, so a list that grows long moves no field and no Add.
         let lane = (ui.available_width() - ui.spacing().scroll.allocated_width()).max(0.0);
         egui::ScrollArea::vertical()
             .id_salt("run_groups")
             .auto_shrink([false, false])
+            .max_height((body_bottom - ui.cursor().top()).max(0.0))
             .show(ui, |ui| {
                 ui.set_max_width(lane);
                 ui.spacing_mut().item_spacing.y = design::XS;
@@ -2841,12 +2808,27 @@ impl Run {
     }
 
     /// Each offered group whose typed total cannot be read: `<group>: <reason>`, in list order.
-    fn arrival_reasons(&self) -> Vec<String> {
+    /// Worked out again only after an edit of the typed totals, a new read of the groups or
+    /// another encounter (`totals_revision`, the groups' address, `source`).
+    fn arrival_reasons(&mut self) -> Arc<[String]> {
         let Some(groups) = self.groups.as_ref() else {
-            return Vec::new();
+            return Arc::from([]);
         };
+        let key = (
+            self.totals_revision,
+            Arc::as_ptr(groups) as usize,
+            self.source,
+        );
+        if let Some((_, reasons)) = self.arrival_reasons.as_ref().filter(|(at, _)| *at == key) {
+            return reasons.clone();
+        }
+        #[cfg(test)]
+        {
+            let (a, b, c) = PREPARED.with(std::cell::Cell::get);
+            PREPARED.with(|count| count.set((a, b + 1, c)));
+        }
         let offered = super::OfferedGroups::of(groups, self.source);
-        offered
+        let reasons: Arc<[String]> = offered
             .own
             .iter()
             .chain(&offered.any)
@@ -2856,7 +2838,59 @@ impl Run {
                 let reason = arrival_total(text).err()?;
                 Some(format!("{}: {reason}", group.name))
             })
-            .collect()
+            .collect();
+        self.arrival_reasons = Some((key, reasons.clone()));
+        reasons
+    }
+
+    /// FI8: a group's member summary for its place, wrapped beside Initiative and Add, or on a
+    /// full-width line above them when `Will add:` and its first member do not fit beside them.
+    /// Worked out once for each read of the groups, width and type size; a frame that changes
+    /// none of them reads the kept words.
+    fn arrival_summary(
+        &mut self,
+        ui: &egui::Ui,
+        group: &super::RunGroup,
+        beside: f32,
+        full: f32,
+    ) -> super::ArrivalSummary {
+        let font = Type::Small.font(ui);
+        let key = (
+            self.groups
+                .as_ref()
+                .map_or(0, |groups| Arc::as_ptr(groups) as usize),
+            beside.to_bits(),
+            full.to_bits(),
+            font.size.to_bits(),
+        );
+        if self.arrival_summaries.as_ref().map(|(at, _)| *at) != Some(key) {
+            self.arrival_summaries = Some((key, std::collections::BTreeMap::new()));
+        }
+        let Some((_, kept)) = self.arrival_summaries.as_mut() else {
+            unreachable!("set just above");
+        };
+        if let Some(summary) = kept.get(&group.id) {
+            return summary.clone();
+        }
+        #[cfg(test)]
+        {
+            let (a, b, c) = PREPARED.with(std::cell::Cell::get);
+            PREPARED.with(|count| count.set((a + 1, b, c)));
+        }
+        let (words, alone) = group.member_summary_fit(ui, &font, beside);
+        let summary = if alone {
+            super::ArrivalSummary {
+                members: group.member_summary_wrapped(ui, &font, full).into(),
+                above: true,
+            }
+        } else {
+            super::ArrivalSummary {
+                members: words.into(),
+                above: false,
+            }
+        };
+        kept.insert(group.id, summary.clone());
+        summary
     }
 
     /// What each group would make the fight when it joins, for the groups whose XP is known. The
@@ -3472,13 +3506,13 @@ impl Run {
         let beside = (right - ui.cursor().left() - controls - gap).max(design::XXL);
         // FI8: when `Will add:` and its first member do not fit beside Initiative and Add, the
         // summary takes a full-width line above them, so `Will add:` never stands alone.
-        let summary_above = !group.lead_fits(ui, &Type::Small.font(ui), beside);
-        let width = if summary_above {
-            (right - ui.cursor().left()).max(design::XXL)
-        } else {
-            beside
-        };
-        let members = group.member_summary_wrapped(ui, &Type::Small.font(ui), width);
+        let full = (right - ui.cursor().left()).max(design::XXL);
+        let super::ArrivalSummary {
+            members,
+            above: summary_above,
+        } = self.arrival_summary(ui, group, beside, full);
+        let width = if summary_above { full } else { beside };
+        let members = members.to_string();
         let status_shown = if status_in_heading {
             ""
         } else {
@@ -3629,6 +3663,9 @@ impl Run {
                 node.set_description("Blank rolls initiative")
             });
             let parsed = arrival_total(text);
+            if response.changed() {
+                self.totals_revision += 1;
+            }
             let total = parsed.as_ref().ok().copied().flatten();
             let enter = response.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
             let leader = group.leader();
@@ -3728,6 +3765,7 @@ impl Run {
         self.run_command(Command::AddGroup(group, total));
         if self.error.is_none() {
             self.group_totals.remove(&id);
+            self.totals_revision += 1;
             self.return_focus = self.lookup_open;
         }
     }
@@ -4550,7 +4588,7 @@ impl Run {
         let room = ui.available_height() - self.footer_height() - design::M;
         let region =
             Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), room.max(0.0)));
-        let body_bottom = self.message_footer(ui, region, false, true, &mut command);
+        let body_bottom = self.message_footer(ui, region, true, &mut command);
         let footer_room = (region.bottom() - body_bottom).max(0.0);
         let room = room - footer_room;
         let rows = ui.allocate_ui_with_layout(
@@ -5264,7 +5302,7 @@ impl Run {
         // FI2: errors and a changed file sit in the message footer at the bottom of the view,
         // below the final state and the panel, so neither moves when one comes or goes.
         let region = ui.available_rect_before_wrap();
-        let body_bottom = self.message_footer(ui, region, false, false, &mut None);
+        let body_bottom = self.message_footer(ui, region, false, &mut None);
         if body_bottom < region.bottom() {
             let top = ui.cursor().top();
             ui.set_max_height((body_bottom - top).max(0.0));
@@ -5879,6 +5917,10 @@ fn ordinal(place: usize) -> String {
     };
     format!("{place}{suffix}")
 }
+
+/// The words of an error for a stat block that cannot be read, whose repair is in Campaign →
+/// Packages.
+const STAT_BLOCK_UNREAD: &str = "stat block could not be read";
 
 /// What the DM chose among a close dialog's recovery actions.
 #[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
@@ -7889,7 +7931,15 @@ mod tests {
                 .get_by_label("Initiative total for Lost Patrol")
                 .rect();
             drop(clean);
-            let harness = build(run, true);
+            let mut harness = build(run, true);
+            // Astra 2: an unchanged frame works out no summary and no reason again.
+            let prepared = PREPARED.with(std::cell::Cell::get);
+            harness.run_steps(3);
+            let again = PREPARED.with(std::cell::Cell::get);
+            assert!(
+                prepared.0 > 0 && prepared.1 > 0 && again.0 == prepared.0 && again.1 == prepared.1,
+                "iter-26-R-prepared at {width}: {prepared:?} then {again:?}"
+            );
             let edge = edge.get();
             // FI5: the reason is in the footer, so the group below the bad total keeps its y.
             let field = harness
@@ -7968,6 +8018,120 @@ mod tests {
         assert!(
             (edges[1] - edges[2]).abs() <= 0.5,
             "iter-23-R-AH1: Add follows the group block, not the pane: {edges:?}"
+        );
+        // Astra 4: ten bad totals at 960x640. The reasons sit in the shared footer: at most a
+        // third of the panel, and the last reason is reached by Tab and the arrows, and by the
+        // wheel.
+        let crowded = |_: ()| {
+            let mut run = super::super::tests::run();
+            let groups: Vec<_> = (1..=10)
+                .map(|at| {
+                    Arc::new(super::super::RunGroup {
+                        id: Uuid::new_v4(),
+                        path: format!("Group {at}.md"),
+                        name: format!("Group {at}"),
+                        side: "enemies".into(),
+                        encounter: None,
+                        encounter_name: None,
+                        members: vec![super::super::GroupMember {
+                            entry: run.state.participants[0].definition.clone(),
+                            count: 1,
+                            overrides: Default::default(),
+                        }],
+                        notes: String::new(),
+                        xp: 0,
+                        xp_unknown: vec![],
+                        unavailable: 0,
+                        unavailable_members: vec![],
+                        problem: None,
+                        warnings: vec![],
+                    })
+                })
+                .collect();
+            for group in &groups {
+                run.group_totals.insert(group.id, "2-5".into());
+            }
+            run.groups = Some(Arc::new(groups));
+            let focus = egui::Id::new(("arrival_footer", run.id)).with("focus");
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(vec2(440.0, 640.0))
+                .build(move |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| run.groups_tab(ui));
+                });
+            design::theme::install(&harness.ctx);
+            harness.run_steps(3);
+            (harness, focus)
+        };
+        const LAST: &str = "Group 10: Enter a whole number, or clear the field to roll.";
+        let footer = |harness: &egui_kittest::Harness<'_>, focus: egui::Id| {
+            harness
+                .ctx
+                .read_response(focus)
+                .map(|response| response.rect)
+        };
+        let shown = |harness: &egui_kittest::Harness<'_>, focus: egui::Id| {
+            let footer = footer(harness, focus);
+            harness
+                .output()
+                .shapes
+                .iter()
+                .any(|shape| match &shape.shape {
+                    egui::Shape::Text(text) if text.galley.job.text == LAST => {
+                        let rect = Rect::from_min_size(text.pos, text.galley.size());
+                        footer.is_some_and(|footer| {
+                            shape
+                                .clip_rect
+                                .intersect(footer)
+                                .expand(0.5)
+                                .contains_rect(rect)
+                        })
+                    }
+                    _ => false,
+                })
+        };
+        let (mut keyboard, focus) = crowded(());
+        let rect = footer(&keyboard, focus).expect("the reasons have a footer");
+        assert!(
+            rect.height() <= 640.0 / 3.0 + 1.0 && !shown(&keyboard, focus),
+            "iter-26-R-crowded-cap: footer {rect:?}, last reason hidden before scrolling"
+        );
+        for _ in 0..80 {
+            if keyboard.ctx.memory(|memory| memory.has_focus(focus)) {
+                break;
+            }
+            keyboard.key_press(egui::Key::Tab);
+            keyboard.run_steps(2);
+        }
+        for _ in 0..40 {
+            if shown(&keyboard, focus) {
+                break;
+            }
+            keyboard.key_press(egui::Key::ArrowDown);
+            keyboard.run_steps(2);
+        }
+        assert!(
+            keyboard.ctx.memory(|memory| memory.has_focus(focus)) && shown(&keyboard, focus),
+            "iter-26-R-crowded-keyboard: Tab and the arrows reach the last reason"
+        );
+        let (mut wheel, focus) = crowded(());
+        let over = footer(&wheel, focus)
+            .expect("the reasons have a footer")
+            .center();
+        wheel.event(egui::Event::PointerMoved(over));
+        for _ in 0..40 {
+            if shown(&wheel, focus) {
+                break;
+            }
+            wheel.event(egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: vec2(0.0, -Type::Body.line()),
+                modifiers: egui::Modifiers::NONE,
+            });
+            wheel.run_steps(2);
+        }
+        assert!(
+            shown(&wheel, focus),
+            "iter-26-R-crowded-wheel: the wheel reaches the last reason"
         );
     }
 
@@ -10009,6 +10173,13 @@ mod tests {
                     });
                 design::theme::install(&harness.ctx);
                 harness.run_steps(3);
+                // Astra 2: an unchanged frame measures no roster name for the dock again.
+                let prepared = PREPARED.with(std::cell::Cell::get).2;
+                harness.run_steps(2);
+                assert!(
+                    prepared > 0 && PREPARED.with(std::cell::Cell::get).2 == prepared,
+                    "iter-26-R-widest at {width}x{height}: measured {prepared} before"
+                );
                 let log = harness
                     .query_all_by_label("Log")
                     .map(|n| n.rect())
