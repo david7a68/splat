@@ -1833,9 +1833,18 @@ mod allowed_classes {
             numbers.try_into().ok()
         }
 
+        /// The item after, as written: `x y wxh` with its `seen` part when only part shows.
+        fn after_text(d: &Difference) -> Option<&str> {
+            match d.change.as_str() {
+                "gone" => None,
+                "new" => d.detail.strip_prefix("at "),
+                _ => Some(d.detail.split_once(" -> ")?.1),
+            }
+        }
+
         /// The part of the item in view after: its `seen` part, or the whole item.
         fn shown_after(d: &Difference) -> Option<[f32; 4]> {
-            let after = d.detail.split_once(" -> ")?.1;
+            let after = after_text(d)?;
             match after.split_once(", seen ") {
                 Some((_, seen)) => numbers(seen),
                 None => numbers(after),
@@ -1906,8 +1915,29 @@ mod allowed_classes {
                 .filter(|o| o.name.ends_with("Read-only"))
                 .find_map(|o| places(o).1)
                 .map(|b| b[1]);
+            // An item after may be cut only by the list's own edges, top or bottom: never
+            // across, and never inside the view.
+            let edge = view
+                .iter()
+                .filter_map(|o| shown_after(o))
+                .map(|b| b[1] + b[3])
+                .fold(f32::NEG_INFINITY, f32::max);
+            let whole_across = |o: &Difference| {
+                let (Some(whole), Some(shown)) = (places(o).1, shown_after(o)) else {
+                    return true;
+                };
+                let cut_top = shown[1] > whole[1] + 0.05;
+                let cut_bottom = shown[1] + shown[3] < whole[1] + whole[3] - 0.05;
+                shown[0] == whole[0]
+                    && shown[2] == whole[2]
+                    && (!cut_top || (shown[1] - top).abs() < 0.5)
+                    && (!cut_bottom || (shown[1] + shown[3] - edge).abs() < 0.5)
+            };
             let (mut before, mut after) = (Vec::new(), Vec::new());
             for o in view.iter().filter(|o| o.name == d.name) {
+                if !whole_across(o) {
+                    return false;
+                }
                 let (a, b) = places(o);
                 before.extend(a);
                 after.extend(b);
@@ -1951,12 +1981,29 @@ mod allowed_classes {
             }) else {
                 return false;
             };
-            rows.iter().map(|row| &row.difference).any(|o| {
-                (&o.screen, &o.view) == (&d.screen, &d.view)
-                    && o.what != d.what
-                    && bare(o) == bare(d)
-                    && at(o).is_some_and(|other| (other - x).abs() < 0.05)
-            })
+            // The link's right edge in the frozen view: the link itself does not change.
+            let link = reference()
+                .views
+                .iter()
+                .filter(|view| (&view.screen, &view.view) == (&d.screen, &d.view))
+                .flat_map(|view| &view.controls)
+                .find(|item| item.0 == "Link: Read encounter")
+                .map(|item| item.1[0] + item.1[2]);
+            link.is_some_and(|link| (link - x).abs() < 0.05)
+                && rows.iter().map(|row| &row.difference).any(|o| {
+                    (&o.screen, &o.view) == (&d.screen, &d.view)
+                        && o.what != d.what
+                        && bare(o) == bare(d)
+                        && at(o).is_some_and(|other| (other - x).abs() < 0.05)
+                })
+        }
+
+        /// The frozen plain reference, read once.
+        fn reference() -> &'static super::super::Reference {
+            static REFERENCE: std::sync::OnceLock<super::super::Reference> =
+                std::sync::OnceLock::new();
+            REFERENCE
+                .get_or_init(|| super::super::read(&super::super::folder().join("reference.json")))
         }
 
         /// An act around History whose every changed word is a text that scrolled out of or
@@ -2075,6 +2122,13 @@ mod allowed_classes {
                 words("control", "564.8 549.6 149.4x18 -> 493.1 549.6 149.4x18"),
                 painted.clone(),
             ]));
+            assert!(
+                !fits(&[
+                    words("control", "564.8 549.6 149.4x18 -> 480 549.6 149.4x18"),
+                    words("text", "494.8 549.6 146.4x18 -> 480 549.6 149.4x18"),
+                ]),
+                "V9 words moved together over the link were accepted"
+            );
             for (fault, why) in [
                 (
                     words("control", "564.8 549.6 149.4x18 -> 480 549.6 149.4x18"),
@@ -2106,6 +2160,20 @@ mod allowed_classes {
                 (
                     continued("width", "180 517 134.1x28 -> 180 228 120x28"),
                     "Continue fight narrower",
+                ),
+                (
+                    continued(
+                        "moved",
+                        "180 517 134.1x28 -> 180 228 134.1x28, seen 180 228 60x28",
+                    ),
+                    "Continue fight cut across",
+                ),
+                (
+                    continued(
+                        "moved",
+                        "180 517 134.1x28 -> 180 228 134.1x28, seen 180 240 134.1x16",
+                    ),
+                    "Continue fight cut inside the view",
                 ),
                 (
                     continued("moved", "180 517 134.1x28 -> 180 200 134.1x28"),
