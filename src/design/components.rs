@@ -2300,6 +2300,29 @@ pub fn message_with_actions<R>(
     .inner
 }
 
+/// Where test builds keep the labels that `row_detail` marked in the last pass.
+#[cfg(test)]
+pub const ROW_DETAILS: &str = "design_row_details";
+
+/// Marks a label as a row's own detail line (its second line), not help, so the gate's
+/// `help-measure` check passes it whatever its width. Call it on the label's response. Only test
+/// builds keep the mark.
+pub fn row_detail(ui: &Ui, response: &Response) {
+    #[cfg(test)]
+    {
+        let pass = ui.ctx().cumulative_pass_nr();
+        ui.ctx().data_mut(|data| {
+            let marked = data.get_temp_mut_or_default::<(u64, Vec<Id>)>(Id::new(ROW_DETAILS));
+            if marked.0 != pass {
+                *marked = (pass, Vec::new());
+            }
+            marked.1.push(response.id);
+        });
+    }
+    #[cfg(not(test))]
+    let _ = (ui, response);
+}
+
 /// Help under a field or a section: `Small` muted words that wrap at `READER_MEASURE`, so a long
 /// help line keeps the reader's measure in a wide pane.
 pub fn help(ui: &mut Ui, text: &str) -> Response {
@@ -2433,7 +2456,7 @@ pub const PART_INSET: f32 = FOCUS_WIDTH + HAIRLINE_WIDTH;
 
 /// A part at `rect` whose words wrap and scroll inside it, `PART_INSET` from its edge, beside a
 /// lane kept for its scroll bar. It is one widget named with its whole message, and Tab reaches
-/// it; while it has focus the up and down arrows scroll it by a line and
+/// it and each control in it, scrolling that control into view; while it has focus the up and down arrows scroll it by a line and
 /// Page Up and Page Down by the part, and its ring is at the part's edge, clear of the words.
 /// The wheel scrolls it too. Returns what `add` returned and the height of what it drew.
 fn scroll_part<R>(
@@ -2496,7 +2519,23 @@ fn scroll_part<R>(
             if step != 0.0 {
                 ui.scroll_with_delta(vec2(0.0, -step));
             }
-            add(ui)
+            let out = add(ui);
+            // A control inside that gains keyboard focus scrolls into view, once: Tab to an Undo
+            // the part has scrolled away shows it. A later wheel is not pulled back.
+            let focused = ui.ctx().memory(|memory| memory.focused());
+            let seen = id.with("seen_focus");
+            if ui.ctx().data(|data| data.get_temp::<Option<Id>>(seen)) != Some(focused) {
+                ui.ctx().data_mut(|data| data.insert_temp(seen, focused));
+                if let Some(rect) = focused
+                    .filter(|focused| *focused != focus)
+                    .and_then(|focused| ui.ctx().read_response(focused))
+                    .map(|response| response.rect)
+                    .filter(|rect| ui.min_rect().contains_rect(*rect))
+                {
+                    ui.scroll_to_rect(rect, None);
+                }
+            }
+            out
         });
     let response = ui.interact(rect, focus, Sense::focusable_noninteractive());
     // A named group that holds the message and its actions: a screen reader reads the whole
@@ -2615,6 +2654,7 @@ impl<'a> Footer<'a> {
     /// area's `max_height`, an editor's height). `ui` also ends there when it holds nothing below
     /// the cursor already, but egui keeps a `Ui`'s bottom below what it holds, so do not rely on
     /// `ui.available_height()` alone. `ui` lays out top down.
+    #[must_use = "the body must end at this y: size it with the returned value"]
     pub fn show(mut self, ui: &mut Ui) -> f32 {
         debug_assert!(
             ui.layout().main_dir() == egui::Direction::TopDown,
@@ -4600,12 +4640,17 @@ mod tests {
     /// iter-26-A footer contract: the body's top is the same with 0, 1, 3 and 10 messages, at
     /// 960, 1200 and 1920; the footer is never more than a third of the pane; and with 20, the last
     /// message is reached by Tab with the arrow keys and by the wheel. Its focus ring stays clear
-    /// of every word.
+    /// of every word. The last Undo, reached by keyboard and by pointer, ends its own result only:
+    /// the other 19 stay, with their Undo.
     #[test]
     fn iter26_a_the_footer_keeps_the_body_top_and_reaches_its_last_message() {
+        use egui_kittest::kittest::{NodeT, Queryable};
+        use std::{cell::RefCell, rc::Rc};
         const BODY: &str = "The body starts here.";
         let last = |count: usize| format!("Result {} of {count} kept with its Undo.", count - 1);
-        let harness = |size: Vec2, count: usize| {
+        // Which results are still live; pressing a result's Undo ends that one.
+        let harness_with = |size: Vec2, live: Rc<RefCell<Vec<bool>>>| {
+            let count = live.borrow().len();
             let mut harness =
                 egui_kittest::Harness::builder()
                     .with_size(size)
@@ -4616,15 +4661,19 @@ mod tests {
                         // A save row above the footer, as in a pane: the body starts below it.
                         ui.label("Save row");
                         let mut footer = Footer::new("test_footer", ui.available_width());
-                        for (at, words) in words.iter().enumerate() {
+                        let shown: Vec<bool> = live.borrow().clone();
+                        for (at, words) in words.iter().enumerate().filter(|(at, _)| shown[*at]) {
+                            let live = &live;
                             footer.result(words.as_str(), true, move |ui| {
-                                let _ = undo_message_named(
+                                if undo_message_named(
                                     ui,
                                     Tone::Success,
                                     words,
                                     "Undo",
                                     Some(&format!("Undo {at}")),
-                                );
+                                ) {
+                                    live.borrow_mut()[at] = false;
+                                }
                             });
                         }
                         if count > 1 {
@@ -4647,6 +4696,17 @@ mod tests {
             super::super::theme::install(&harness.ctx);
             harness.run_steps(3);
             harness
+        };
+        let harness =
+            |size: Vec2, count: usize| harness_with(size, Rc::new(RefCell::new(vec![true; count])));
+        // The last Undo ended its result alone: the other 19 stay, with their Undo.
+        let only_last_ended = |harness: &egui_kittest::Harness<'_>,
+                               live: &Rc<RefCell<Vec<bool>>>| {
+            let live = live.borrow();
+            !live[19]
+                && live[..19].iter().all(|live| *live)
+                && harness.query_by_label("Undo 19").is_none()
+                && (0..19).all(|at| harness.query_by_label(&format!("Undo {at}")).is_some())
         };
         let text_at = |harness: &egui_kittest::Harness<'_>, words: &str| {
             harness
@@ -4767,8 +4827,42 @@ mod tests {
                     }
                 }
             }
+            // The last Undo by keyboard: Tab from the start until it has focus, as each Undo is
+            // a stop before the footer group; it is then in view, and Enter presses it.
+            let keyboard_live = Rc::new(RefCell::new(vec![true; 20]));
+            let mut keyboard = harness_with(size, keyboard_live.clone());
+            let undo_id = keyboard
+                .query_by_label("Undo 19")
+                .map(|undo| undo.accesskit_node().id());
+            let focused = |harness: &egui_kittest::Harness<'_>| {
+                harness
+                    .ctx
+                    .memory(|memory| memory.focused())
+                    .map(|id| egui::accesskit::NodeId(id.value()))
+            };
+            for _ in 0..48 {
+                if undo_id.is_some() && focused(&keyboard) == undo_id {
+                    break;
+                }
+                keyboard.key_press(egui::Key::Tab);
+                keyboard.run_steps(2);
+            }
+            assert!(
+                undo_id.is_some() && focused(&keyboard) == undo_id && shown(&keyboard),
+                "Tab reaches the last Undo, in view, at {size:?}: focus {}, shown {}",
+                focused(&keyboard) == undo_id,
+                shown(&keyboard)
+            );
+            keyboard.key_press(egui::Key::Enter);
+            keyboard.run_steps(3);
+            assert!(
+                only_last_ended(&keyboard, &keyboard_live),
+                "Enter on the last Undo ends its result only at {size:?}: {:?}",
+                keyboard_live.borrow()
+            );
             // The wheel over the footer.
-            let mut wheel = harness(size, 20);
+            let wheel_live = Rc::new(RefCell::new(vec![true; 20]));
+            let mut wheel = harness_with(size, wheel_live.clone());
             let over = footer_rect(&wheel).unwrap().center();
             wheel.event(egui::Event::PointerMoved(over));
             for _ in 0..40 {
@@ -4785,6 +4879,29 @@ mod tests {
             assert!(
                 shown(&wheel),
                 "the wheel reaches the last message at {size:?}"
+            );
+            // The last Undo by pointer, where the wheel showed it.
+            let undo = wheel.get_by_label("Undo 19").rect();
+            let footer = footer_rect(&wheel).unwrap();
+            assert!(
+                footer.contains_rect(undo),
+                "the last Undo {undo:?} is in the footer {footer:?} at {size:?}"
+            );
+            wheel.event(egui::Event::PointerMoved(undo.center()));
+            for pressed in [true, false] {
+                wheel.event(egui::Event::PointerButton {
+                    pos: undo.center(),
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: egui::Modifiers::NONE,
+                });
+                wheel.run_steps(1);
+            }
+            wheel.run_steps(2);
+            assert!(
+                only_last_ended(&wheel, &wheel_live),
+                "A click on the last Undo ends its result only at {size:?}: {:?}",
+                wheel_live.borrow()
             );
         }
     }

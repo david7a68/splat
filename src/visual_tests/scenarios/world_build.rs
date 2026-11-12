@@ -8637,6 +8637,28 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
             "With the written bytes back, a reload makes Undo source change available again",
         );
     }
+    // Round 26 (Astra review of A): in Edit Markdown each kept result is its own footer message,
+    // and results with a live Undo are listed newest first: the source change, made after the
+    // registration, comes above it. Both sit below the editor, at 960, 1200 and 1920.
+    d.click(EDIT_MARKDOWN);
+    const REGISTERED: &str = "Ashen Reaches is registered";
+    let newest_first = [SMALL, DEFAULT, LARGE].map(|size| {
+        d.at_size(size, |d| {
+            let editor = d.input_frame("Markdown editor")?.0;
+            let newer =
+                d.painted_rect_in(crate::library::USE_COPY_RESULT, egui::Rect::EVERYTHING)?;
+            let older = d.painted_rect_in(REGISTERED, egui::Rect::EVERYTHING)?;
+            Some((newer.top() >= editor.bottom(), newer.top() < older.top()))
+        })
+    });
+    d.observe(
+        "iter-26-A-footer-newest-first",
+        newest_first == [Some((true, true)); 3],
+        format!(
+            "Edit Markdown's footer lists the source change, then the older registration, below the editor at 960, 1200, 1920 (below, newer above): {newest_first:?}"
+        ),
+    );
+    d.click("Read");
     go_encounters(d);
     if d.has("Back to encounters") {
         d.click("Back to encounters");
