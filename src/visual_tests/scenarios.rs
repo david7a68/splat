@@ -1675,8 +1675,10 @@ pub mod campaign_content {
     use super::*;
     const PAGE_TITLE: &str = "entries chosen";
     const MODULE_ROW: &str = "Ashen Marches · ";
-    const PARTIAL: &str = "5 of 6";
-    const CHANGED: &str = "6 of 6";
+    // Round 25 FA2: `chosen` counts the DM's own choices; the entry the other choices need is
+    // counted once, as needed.
+    const PARTIAL: &str = "4 of 6 chosen · 1 needed";
+    const CHANGED: &str = "5 of 6 chosen · 1 needed";
     const UNSELECTED_ENTRY: &str = "Ash Wraith";
     const DISCARD_SELECTION: &str = "Discard";
     const CAMPAIGN_ENTRY: &str = "Captain Varra";
@@ -1749,6 +1751,11 @@ pub mod campaign_content {
             );
         }
         d.expect(CHANGED);
+        d.observe(
+            "iter-25-C-FA2",
+            !d.has_containing("6 of 6 chosen"),
+            "A needed entry is not counted as chosen as well",
+        );
         d.expect("Include future additions");
         d.expect("2,070 entries chosen · 1 needed");
         d.observe_both(
@@ -1757,8 +1764,62 @@ pub mod campaign_content {
             |d| d.visible_text(crate::encounters::draft_switch_reason()),
         );
         d.state("selection-changed", Sizes::All);
+        // Round 25 review: the page's results and errors sit in the message space below
+        // `Save selections`, so the package rows keep their y through a draft, its discard, Undo
+        // discard, a failed Save and a saved one.
+        let package_tops = |d: &mut Driver<'_>| {
+            [SMALL, DEFAULT, LARGE].map(|size| {
+                d.at_size(size, |d| {
+                    d.nodes()
+                        .into_iter()
+                        .find(|node| node.name.starts_with("D&D 2024"))
+                        .map(|node| node.rect.top())
+                })
+            })
+        };
+        let draft_tops = package_tops(d);
         d.click(DISCARD_SELECTION);
         d.goal("change and discard a selection");
+        let discarded_tops = package_tops(d);
+        let discarded = d.in_view("Undo discard of Campaign packages");
+        d.click("Undo discard of Campaign packages");
+        d.expect(CHANGED);
+        let undone_tops = package_tops(d);
+        let manifest = d.root.join("campaigns/emberfall/Campaign.md");
+        let on_disk = std::fs::read(&manifest).unwrap();
+        let set_read_only = |read_only: bool| {
+            let mut permissions = std::fs::metadata(&manifest).unwrap().permissions();
+            permissions.set_readonly(read_only);
+            std::fs::set_permissions(&manifest, permissions).unwrap();
+        };
+        set_read_only(true);
+        d.click(SAVE_SELECTIONS);
+        d.settle();
+        let failed_tops = package_tops(d);
+        let failed = std::fs::read(&manifest).unwrap() == on_disk && d.visible_text("read only");
+        set_read_only(false);
+        d.click(SAVE_SELECTIONS);
+        d.settle();
+        let saved_tops = package_tops(d);
+        let saved = d.visible_text("Campaign selections saved.");
+        d.observe(
+            "iter-25-C-page-results",
+            draft_tops.iter().all(Option::is_some)
+                && [discarded_tops, undone_tops, failed_tops, saved_tops] == [draft_tops; 4]
+                && discarded
+                && failed
+                && saved,
+            format!(
+                "Package row tops: draft {draft_tops:?}, discarded {discarded_tops:?}, undone {undone_tops:?}, failed Save {failed_tops:?}, saved {saved_tops:?}; results shown {discarded}, {failed}, {saved}"
+            ),
+        );
+        // Back to the fixture's choices, then a draft and its discard, as before.
+        d.click(&format!("Use {UNSELECTED_ENTRY}"));
+        d.click(SAVE_SELECTIONS);
+        d.settle();
+        d.click(&format!("Use {UNSELECTED_ENTRY}"));
+        d.expect(CHANGED);
+        d.click(DISCARD_SELECTION);
 
         d.click(TAB_ENTRIES);
         d.expect(CAMPAIGN_ENTRY);
@@ -1848,6 +1909,18 @@ pub mod campaign_content {
             d.is_disabled(SAVE_SELECTIONS) && d.visible_text("Fix Notes/Broken.md first."),
             "Save disabled by a repair states its reason",
         );
+        // Round 25 FB6: a package change while a repair blocks Save selections names Discard
+        // only in its switch lock.
+        d.click(&format!("Use {UNSELECTED_ENTRY}"));
+        d.expect(CHANGED);
+        d.observe(
+            "iter-25-C-FB6-selections",
+            d.visible_text(crate::encounters::blocked_draft_switch_reason())
+                && !d.visible_text(crate::encounters::draft_switch_reason())
+                && d.is_disabled(SAVE_SELECTIONS),
+            "A package draft that a repair blocks states the switch lock without Save",
+        );
+        d.click(DISCARD_SELECTION);
         // The repair opens here, with the note's text in it.
         d.click(REPAIR);
         d.expect("Note text");
@@ -1863,26 +1936,29 @@ pub mod campaign_content {
                     })
             },
         );
-        // FD2: one rule separates the open repair from the package list, an `L` gap below Save
-        // repaired note. The rule must sit above the first thing drawn after the repair.
+        // FD2: one rule separates the open repair from the package list, an `L` gap below the
+        // repair. Round 25 FD1: the repair ends with its message space below Save repaired note,
+        // so the gap is below that space. The rule must sit above the first thing drawn after
+        // the repair.
         d.observe_both(
             "iter-14-E-FD2",
-            "One rule, an L gap below Save repaired note, separates the repair from the list",
+            "One rule, an L gap below the repair's message space, separates the repair from the list",
             |d| {
                 let Some(save) = d.place_of("Save repaired note") else {
                     return false;
                 };
+                let end = save.bottom() + crate::design::message_space_height();
                 let Some(next) = d
                     .nodes()
                     .into_iter()
-                    .filter(|node| node.in_view() && node.rect.top() > save.bottom() + 1.0)
+                    .filter(|node| node.in_view() && node.rect.top() > end + 1.0)
                     .map(|node| node.rect.top())
                     .min_by(f32::total_cmp)
                 else {
                     return false;
                 };
-                let rules = d.horizontal_rules(save.left(), save.bottom(), next);
-                rules.len() == 1 && rules[0] - save.bottom() >= crate::design::L
+                let rules = d.horizontal_rules(save.left(), end, next);
+                rules.len() == 1 && rules[0] - end >= crate::design::L
             },
         );
         // Round 22 FD3: an unchanged repair has no primary action on the whole screen.
@@ -1943,19 +2019,26 @@ pub mod campaign_content {
             d.nodes()
                 .into_iter()
                 .find(|node| node.name == crate::world::repair::editor_name("Notes/Broken.md"))
-                .map(|node| node.rect.top())
+                // A long draft scrolls inside the editor; its visible viewport must stay put.
+                // The page scrolls too, so the top is measured from the page's save row.
+                .zip(d.place_of(SAVE_SELECTIONS))
+                .map(|(node, save)| node.shown.top() - save.top())
         };
-        let before = [(960.0, 640.0), (1200.0, 800.0)].map(|size| {
+        const REPAIR_SIZES: [(f32, f32); 3] = [SMALL, DEFAULT, LARGE];
+        let before = REPAIR_SIZES.map(|size| {
             d.at_size(size, |d| {
                 (d.place_of(SAVE_SELECTIONS).unwrap().top(), editor_top(d))
             })
         });
+        // Round 25 FD1: the editor's top at each size, in every later state of this repair.
+        let editor_tops = |d: &mut Driver<'_>| REPAIR_SIZES.map(|size| d.at_size(size, editor_top));
+        let clean_tops = before.map(|(_, editor)| editor);
         let draft = d
             .editor_text()
             .unwrap()
             .replacen("splat_id: [", "splat_id: [ ", 1);
         d.replace_text_in("Note text", &draft);
-        for (size, (y, editor)) in [(960.0, 640.0), (1200.0, 800.0)].into_iter().zip(before) {
+        for (size, (y, editor)) in REPAIR_SIZES.into_iter().zip(before) {
             let (after, editor_after) = d.at_size(size, |d| {
                 (d.place_of(SAVE_SELECTIONS).unwrap().top(), editor_top(d))
             });
@@ -1972,10 +2055,14 @@ pub mod campaign_content {
                 format!("At {size:?}, the repair editor top {editor:?} → {editor_after:?}"),
             );
         }
+        // Round 25 FB6: Save refuses this draft, so the lock names Discard only.
         d.observe_both(
             "iter-18-A-repair-lock",
-            "A repair draft states the campaign switch lock",
-            |d| d.visible_text(crate::encounters::draft_switch_reason()),
+            "A repair draft that Save refuses states the campaign switch lock without Save",
+            |d| {
+                d.visible_text(crate::encounters::blocked_draft_switch_reason())
+                    && !d.visible_text(crate::encounters::draft_switch_reason())
+            },
         );
         // Round 23 FA3: the changed draft still fails as Save would fail it. It says Invalid with
         // its cause, Save is blocked, and nothing on the screen is primary.
@@ -2017,6 +2104,14 @@ pub mod campaign_content {
                 std::fs::read(d.root.join(BROKEN_NOTE)).unwrap() == on_disk
             ),
         );
+        // Round 25 FD1: the long refusal sits in the message space, not in the message above
+        // the editor, so it moves the editor at no size.
+        let refused_tops = editor_tops(d);
+        d.observe(
+            "iter-25-C-FD1-refused",
+            refused_tops == clean_tops,
+            format!("Editor tops with a refused draft {refused_tops:?}, clean {clean_tops:?}"),
+        );
         // A draft that Save would write says Unsaved, and its Save is the one primary action.
         let valid = crate::library::note_text("Broken", "rule", None);
         d.replace_text_in("Note text", &valid);
@@ -2026,6 +2121,13 @@ pub mod campaign_content {
                 && !d.visible_text("Invalid")
                 && !d.is_disabled("Save repaired note"),
             "A draft that Save would write says Unsaved, and Save is open",
+        );
+        // Round 25 FB6: with Save open, the lock names Save again.
+        d.observe(
+            "iter-25-C-FB6-valid",
+            d.visible_text(crate::encounters::draft_switch_reason())
+                && !d.visible_text(crate::encounters::blocked_draft_switch_reason()),
+            "A draft that Save would write states the lock with Save",
         );
         // Round 22 FD3: a changed repair's save is the one primary action, as `Save changes` is.
         d.observe_both(
@@ -2090,7 +2192,93 @@ pub mod campaign_content {
         );
         set_read_only(false);
         d.click("Discard");
+        // Round 25 FD1: the discard result sits in the message space below the save row. Its
+        // Undo is live, so it comes first, on the space's first line, and the invalid file's
+        // reason follows it in the same part. The editor keeps its top through the result, Undo
+        // discard, an invalid draft and a valid one, at every size.
+        const DISCARDED: &str = "Broken.md draft discarded.";
+        const UNDO_DISCARD: &str = "Undo discard of Broken.md";
+        let discarded_tops = editor_tops(d);
+        let first_line = REPAIR_SIZES.map(|size| {
+            d.at_size(size, |d| {
+                let save = d
+                    .nodes()
+                    .into_iter()
+                    .filter(|node| node.name == "Save repaired note")
+                    .map(|node| node.rect)
+                    .next();
+                let undo = d.place_of(UNDO_DISCARD);
+                let reason = d.painted_rect_in("Line 3 opens a list", egui::Rect::EVERYTHING);
+                // The space starts below the save row; its first line is one Body line deep.
+                save.zip(undo)
+                    .zip(reason)
+                    .is_some_and(|((save, undo), reason)| {
+                        undo.top() >= save.bottom()
+                            && undo.center().y
+                                < save.bottom()
+                                    + crate::design::Type::Body.line()
+                                    + crate::design::S
+                            && reason.top() > undo.center().y
+                    })
+            })
+        });
+        d.observe(
+            "iter-25-C-FD1-discard",
+            clean_tops.iter().all(Option::is_some)
+                && discarded_tops == clean_tops
+                && first_line.iter().all(|ok| *ok)
+                && d.visible_text(DISCARDED)
+                && d.visible_text("Invalid"),
+            format!(
+                "Editor tops: clean {clean_tops:?}, after Discard {discarded_tops:?}; Undo on the first line, reason after it, at 960/1200/1920: {first_line:?}"
+            ),
+        );
+        d.click(UNDO_DISCARD);
+        let undone_tops = editor_tops(d);
+        d.observe(
+            "iter-25-C-FD1-undo",
+            undone_tops == clean_tops
+                && d.editor_text()
+                    .is_some_and(|text| text.contains("One more line."))
+                && d.visible_text("Unsaved")
+                && !d.visible_text(DISCARDED),
+            format!("Editor tops after Undo discard {undone_tops:?}"),
+        );
+        // An edit ends the result's owner; Save's reason takes the space, and no edit moves the
+        // editor.
+        d.replace_text_in("Note text", &draft);
+        let invalid_tops = editor_tops(d);
+        d.observe(
+            "iter-25-C-FD1-invalid",
+            invalid_tops == clean_tops
+                && d.visible_text("Line 3 opens a list")
+                && !d.visible_text(DISCARDED),
+            format!("Editor tops with an invalid draft {invalid_tops:?}"),
+        );
+        d.replace_text_in("Note text", &valid);
+        let valid_tops = editor_tops(d);
+        d.observe(
+            "iter-25-C-FD1-valid",
+            valid_tops == clean_tops
+                && d.visible_text("Unsaved")
+                && !d.visible_text("Line 3 opens a list")
+                && !d.visible_text(DISCARDED),
+            format!("Editor tops with a valid draft {valid_tops:?}"),
+        );
+        d.click("Discard");
+        // Round 25 review: Reload re-reads the repairs; the open one keeps its editor's place,
+        // and its discard result lives on with the repair.
+        d.click(RELOAD);
+        d.settle();
+        d.expect("Note text");
+        let reloaded_tops = editor_tops(d);
+        d.observe(
+            "iter-25-C-FD1-reload",
+            reloaded_tops == clean_tops && d.has(UNDO_DISCARD),
+            format!("Editor tops after Reload {reloaded_tops:?}, clean {clean_tops:?}"),
+        );
         two_changed_repairs_have_one_primary(d);
+        message_space_overflows_and_scrolls(d);
         std::fs::remove_file(d.root.join(BROKEN_NOTE)).unwrap();
         let manifest = d.root.join("campaigns/emberfall/Campaign.md");
         let before = std::fs::read_to_string(&manifest).unwrap();
@@ -2118,6 +2306,27 @@ pub mod campaign_content {
         d.state_prepared("campaign-manifest-written-with-undo", Sizes::All, |d| {
             check_undo_icon(d, "Undo write Campaign.md", "iter-6-C-SD3-Campaign");
         });
+        // Round 25 review: a failed Undo keeps the write and its Undo; once the fault is gone,
+        // the same Undo works. The test namespace runs as root, so permission bits do not stop
+        // a delete there; the fault is a folder where Campaign.md was, so the Undo cannot read it.
+        let written = std::fs::read(&manifest).unwrap();
+        std::fs::remove_file(&manifest).unwrap();
+        std::fs::create_dir(&manifest).unwrap();
+        d.click("Undo write Campaign.md");
+        d.settle();
+        let kept =
+            d.has("Undo write Campaign.md") && d.visible_text("Campaign.md was written again.");
+        std::fs::remove_dir(&manifest).unwrap();
+        std::fs::write(&manifest, &written).unwrap();
+        d.observe(
+            "iter-25-C-undo-failed",
+            kept,
+            format!(
+                "After a failed Undo: Undo kept {}, result kept {}",
+                d.has("Undo write Campaign.md"),
+                d.visible_text("Campaign.md was written again.")
+            ),
+        );
         d.click("Undo write Campaign.md");
         d.wait_for_text("Write Campaign.md again");
         assert!(!manifest.exists());
@@ -2137,6 +2346,120 @@ pub mod campaign_content {
         d.click("Write a new Campaign.md");
         d.wait_for_text("Undo write Campaign.md");
         assert!(manifest.exists());
+    }
+
+    /// Round 25 review: a repair whose discard result and cause need more than the message
+    /// space's two lines. The part stays two lines high; its words scroll inside it by keyboard
+    /// and wheel; Tab reaches it by its whole message, and its focus ring stays clear of its
+    /// scroll bar. At 960, 1200 and 1920. Starts and ends with only Broken.md's repair.
+    fn message_space_overflows_and_scrolls(d: &mut Driver<'_>) {
+        const NAME: &str = "The ledger of the toll keeper at the old Ashford bridge and every name he wrote down.md";
+        let path = format!("Notes/{NAME}");
+        let file = d.root.join("campaigns/emberfall").join(&path);
+        let broken = "---\nsplat_schema: 2\nsplat_id: [\n---\n";
+        std::fs::write(&file, broken).unwrap();
+        d.click(RELOAD);
+        d.wait_for_text(NAME);
+        let message = format!("{path} cannot be read");
+        d.click_below(&message, REPAIR);
+        let editor = crate::world::repair::editor_name(&path);
+        d.replace_text_in(&editor, &format!("{broken}extra\n"));
+        d.click_below(&message, "Discard");
+        let words =
+            format!("{NAME} draft discarded. Line 3 opens a list with [ that never closes.");
+        let base = d.window_size();
+        // The part's own scroll bar lane, as `design::fixed_part` keeps it.
+        let lane = {
+            let style = d.app_style();
+            style.spacing.scroll.bar_width + style.spacing.scroll.bar_outer_margin
+        };
+        let mut results = Vec::new();
+        for size in [SMALL, DEFAULT, LARGE] {
+            d.set_base(size);
+            // Tab first: focus scrolls the page to the part. Then back to the part's start.
+            let focused = d.tab_to(&words);
+            for _ in 0..4 {
+                d.press(Key::ArrowUp);
+            }
+            // The part's texts, by their clip inside it: the result's top and the content's
+            // bottom, measured from the part's top.
+            let inside = |d: &Driver<'_>| {
+                let part = d.nodes().into_iter().find(|node| node.name == words)?.rect;
+                let (mut result, mut bottom) = (None, f32::MIN);
+                d.each_painted_text(|text, clip| {
+                    // The part's scroll area clips its texts to the part's lines (its clip is
+                    // wider than the part).
+                    if (clip.top() - part.top()).abs() <= 4.0
+                        && (clip.bottom() - part.bottom()).abs() <= 4.0
+                        && part.x_range().contains(text.pos.x)
+                    {
+                        let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                        bottom = bottom.max(rect.bottom() - part.top());
+                        if text.galley.job.text.contains("draft discarded.") {
+                            result = Some(rect.top() - part.top());
+                        }
+                    }
+                });
+                Some((part, result, bottom))
+            };
+            // Where the result's first line sits in the part: `Some(None)` once it has scrolled
+            // out of the part's view (a line out of view is not painted); `None` without a part.
+            let top = |d: &Driver<'_>| inside(d).map(|(_, top, _)| top);
+            let Some((part, Some(before), bottom)) = inside(d) else {
+                results.push((size, false, focused, None, None, None, None, None));
+                continue;
+            };
+            // The words need more than two lines: they end below the part's end.
+            let overflows = (part.height() - crate::design::message_space_height()).abs() < 1.0
+                && bottom > part.height() + 1.0;
+            let ring = d
+                .focus_rings()
+                .into_iter()
+                .find(|(ring, _)| part.expand(2.0).contains_rect(*ring))
+                .map(|(ring, _)| ring);
+            let ring_clear = ring.is_some_and(|ring| ring.right() <= part.right() - lane + 1.0);
+            d.press(Key::ArrowDown);
+            let keyboard = top(d);
+            for _ in 0..4 {
+                d.press(Key::ArrowUp);
+            }
+            d.press(Key::Escape);
+            let wheel_start = top(d);
+            d.scroll_at(part.center(), 1);
+            let wheel = top(d);
+            results.push((
+                size,
+                overflows,
+                focused,
+                ring.filter(|_| ring_clear),
+                Some(Some(before)),
+                keyboard,
+                wheel_start,
+                wheel,
+            ));
+        }
+        d.set_base(base);
+        // Moved up inside the part, or out of its view; the part itself is still there.
+        let moved = |from: Option<Option<f32>>, to: Option<Option<f32>>| match (from, to) {
+            (Some(Some(from)), Some(Some(to))) => to < from,
+            (Some(Some(_)), Some(None)) => true,
+            _ => false,
+        };
+        d.observe(
+            "iter-25-C-space-overflow",
+            results.iter().all(|(_, overflows, focused, ring, before, keyboard, start, wheel)| {
+                *overflows
+                    && *focused
+                    && ring.is_some()
+                    && moved(*before, *keyboard)
+                    && moved(*start, *wheel)
+            }),
+            format!("Per size (overflows, Tab, ring clear of the bar, result top before, after ArrowDown, before wheel, after wheel): {results:?}"),
+        );
+        std::fs::remove_file(&file).unwrap();
+        d.click(RELOAD);
+        d.settle();
+        assert!(!d.has_containing(NAME));
     }
 
     /// Every `Save repaired note` in view, top to bottom, and whether it is accent-filled.
@@ -2208,6 +2531,163 @@ pub mod campaign_content {
                 && upper_active.iter().filter(|(_, filled)| *filled).count() == 1
                 && upper_active[0].1,
             format!("Upper repair focused: saves {upper_active:?}"),
+        );
+        // Round 25 review: two open repairs are taller than 960x640, so the page scrolls. Tab
+        // reaches each Save and brings it into view; so does the wheel.
+        let b_message_top = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .find(|node| {
+                    node.name.contains("Notes/Cracked.md cannot be read")
+                        && node.role != egui::accesskit::Role::TextRun
+                })
+                .map(|node| node.rect)
+        };
+        let ring_in_view = |d: &Driver<'_>| {
+            let (width, height) = d.window_size();
+            let window = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width, height));
+            d.focus_rings()
+                .into_iter()
+                .any(|(ring, _)| window.contains_rect(ring))
+        };
+        d.press(Key::Escape);
+        let b_hidden = !d
+            .nodes()
+            .into_iter()
+            .filter(|node| node.name == "Save repaired note")
+            .all(|node| node.in_view());
+        let tab_save = |d: &mut Driver<'_>| {
+            let reached = d.tab_to("Save repaired note");
+            d.settle();
+            reached && ring_in_view(d)
+        };
+        let a_tab = tab_save(d);
+        let b_tab = tab_save(d);
+        let lower = d
+            .focus_rings()
+            .into_iter()
+            .any(|(ring, _)| b_message_top(d).is_some_and(|message| ring.top() > message.top()));
+        d.observe(
+            "iter-25-C-page-tab",
+            b_hidden && a_tab && b_tab && lower,
+            format!(
+                "B's Save hidden at first {b_hidden}; Tab to A's Save in view {a_tab}; Tab to B's Save in view {b_tab}, below B's message {lower}"
+            ),
+        );
+        d.press(Key::Escape);
+        let page = b_message_top(d).map(|rect| rect.center()).unwrap();
+        d.scroll_up_at(page, 20);
+        let a_wheel = d.nodes().into_iter().any(|node| {
+            node.name == "Save repaired note"
+                && node.in_view()
+                && b_message_top(d).is_some_and(|message| node.rect.top() < message.top())
+        });
+        d.scroll_at(page, 20);
+        let b_wheel = d.nodes().into_iter().any(|node| {
+            node.name == "Save repaired note"
+                && node.in_view()
+                && b_message_top(d).is_some_and(|message| node.rect.top() > message.top())
+        });
+        // Tab into B's editor from the top of the page, where the page cuts it: the editor
+        // scrolls the page until the whole editor is in view.
+        let b_editor_name = crate::world::repair::editor_name("Notes/Cracked.md");
+        let whole = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .find(|node| node.name == b_editor_name)
+                .is_some_and(|node| {
+                    // The editor's own viewport: its text, up to the editor's maximum height.
+                    let viewport = node.rect.height().min(
+                        crate::design::XXL * 6.0
+                            + crate::design::L
+                            + crate::design::S
+                            + crate::design::XS,
+                    );
+                    node.in_view() && node.shown.height() >= viewport - 2.0
+                })
+        };
+        d.scroll_up_at(page, 20);
+        let rects = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .find(|node| node.name == b_editor_name)
+                .map(|node| (node.rect, node.shown))
+        };
+        let before_rects = rects(d);
+        let editor_cut = !whole(d);
+        let editor_tab = d.tab_to(&b_editor_name);
+        // The page scrolls with egui's animation.
+        d.settle();
+        let editor_whole = whole(d);
+        let after_rects = rects(d);
+        d.press(Key::Escape);
+        d.observe(
+            "iter-25-C-page-tab-editor",
+            editor_cut && editor_tab && editor_whole,
+            format!("B's editor cut at the top {editor_cut}; Tab reaches it {editor_tab}; then whole in view {editor_whole}; (rect, shown) before {before_rects:?}, after {after_rects:?}"),
+        );
+        d.observe(
+            "iter-25-C-page-wheel",
+            a_wheel && b_wheel,
+            format!("The wheel brings A's Save into view {a_wheel}, then B's Save {b_wheel}"),
+        );
+        // Round 25 FD1: A's discard result belongs to A. B's edit leaves it, and Undo discard
+        // brings back A's draft only; B's edit stays.
+        let b_name = crate::world::repair::editor_name("Notes/Cracked.md");
+        let draft = |d: &mut Driver<'_>, path: &str| {
+            d.app_mut()
+                .campaign_content
+                .repair_draft(path)
+                .map(str::to_owned)
+                .unwrap_or_default()
+        };
+        d.click_below("Notes/Broken.md cannot be read", "Discard");
+        let a_discarded = !draft(d, "Notes/Broken.md").contains("First draft.");
+        // B's edit keeps its line count, so its editor shows the same lines.
+        let b_draft = second.replacen("Second draft.", "Second draft. Kept B line.", 1);
+        d.replace_text_in(&b_name, &b_draft);
+        let b_changed = draft(d, "Notes/Cracked.md").contains("Kept B line.");
+        let a_result = d.has("Undo discard of Broken.md");
+        if a_result {
+            d.click("Undo discard of Broken.md");
+        } else {
+            // A fault lost A's Undo: put A's words back by hand, so the observation below fails
+            // and the later steps still start from both drafts.
+            d.replace_text_in(
+                &crate::world::repair::editor_name("Notes/Broken.md"),
+                &first,
+            );
+        }
+        let a_back = draft(d, "Notes/Broken.md").contains("First draft.")
+            && !d.has("Undo discard of Broken.md");
+        let b_kept = draft(d, "Notes/Cracked.md").contains("Kept B line.");
+        // The displayed words too: each editor scrolled into view shows its own draft.
+        let shown = |d: &mut Driver<'_>, editor: &str, words: &str| {
+            d.type_into(editor, "");
+            d.settle();
+            let shown = d.visible_passage(words);
+            d.press(Key::Escape);
+            shown
+        };
+        let a_shown = shown(
+            d,
+            &crate::world::repair::editor_name("Notes/Broken.md"),
+            "First draft.",
+        );
+        let b_shown = shown(d, &b_name, "Kept B line.");
+        d.observe(
+            "iter-25-C-FD1-owner-shown",
+            a_shown && b_shown,
+            format!(
+                "A's editor shows First draft. {a_shown}; B's editor shows Kept B line. {b_shown}"
+            ),
+        );
+        d.observe(
+            "iter-25-C-FD1-owner",
+            a_discarded && b_changed && a_result && a_back && b_kept,
+            format!(
+                "A discarded {a_discarded}, B changed {b_changed}, A's Undo kept through B {a_result}, A back {a_back}, B kept {b_kept}"
+            ),
         );
         // An open run owns `Next turn`: no repair Save is primary, and both drafts stay.
         go_encounters(d);
@@ -2540,6 +3020,76 @@ pub mod party {
                     && d.visible_text("Not connected · Fetched")
             },
         );
+        // Round 25 FG7: an `L` gap ends the notice; the list and the sheet start below it.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (gap, detail) = d.at_size(size, |d| {
+                let words =
+                    d.painted_rect_in("so Splat stopped updating it.", egui::Rect::EVERYTHING);
+                let actions = [CONNECT, "Show file"].map(|name| d.place_of(name));
+                let Some(bottom) = words
+                    .into_iter()
+                    .chain(actions.into_iter().flatten())
+                    .map(|rect| rect.bottom())
+                    .reduce(f32::max)
+                else {
+                    return (None, "no notice".to_owned());
+                };
+                let next = d
+                    .nodes()
+                    .into_iter()
+                    .filter(|node| node.in_view() && node.rect.top() > bottom)
+                    .min_by(|a, b| a.rect.top().total_cmp(&b.rect.top()));
+                let heading = d
+                    .painted_rect_in("NAME", egui::Rect::EVERYTHING)
+                    .map(|rect| rect.top());
+                let gap = next
+                    .as_ref()
+                    .map(|node| node.rect.top())
+                    .into_iter()
+                    .chain(heading)
+                    .map(|top| top - bottom)
+                    .reduce(f32::min);
+                (
+                    gap.filter(|_| words.is_some() && actions.iter().all(Option::is_some)),
+                    format!(
+                        "notice bottom {bottom}, next {:?}, NAME {heading:?}",
+                        next.map(|node| (node.name, node.rect.top()))
+                    ),
+                )
+            });
+            d.observe(
+                "iter-25-C-FG7",
+                gap.is_some_and(|gap| gap >= crate::design::L - 0.5),
+                format!("At {size:?}, the gap below the local-edit notice is {gap:?}: {detail}"),
+            );
+        }
+        // Round 25 family: the member list keeps the scroll bar's lane with no bar, so its rows
+        // and header columns do not move when the list starts to scroll.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (kept, detail) = d.at_size(size, |d| {
+                let lane = d.app_style().spacing.scroll.allocated_width();
+                let edge = d.column_edge("party_members");
+                // The member's row in the list: its name holds AC and HP, left of the splitter.
+                let row = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| {
+                        node.name.starts_with(FIRST_MEMBER)
+                            && COMPARE.iter().all(|word| node.name.contains(word))
+                            && node.rect.right() < edge
+                    })
+                    .map(|node| node.rect);
+                (
+                    row.is_some_and(|row| row.right() <= edge - crate::design::M - lane + 1.0),
+                    format!("row {row:?}, column edge {edge}, lane {lane}"),
+                )
+            });
+            d.observe(
+                "iter-25-C-party-lane",
+                kept,
+                format!("At {size:?}, the member rows keep the scroll bar lane: {detail}"),
+            );
+        }
         d.state("copy-has-local-edits-signed-out", Sizes::All);
         d.click(CONNECT);
         d.observe(
@@ -2572,6 +3122,27 @@ pub mod party {
         d.click(FORCE_READ);
         d.settle();
         d.expect(REPLACED);
+        // Round 25 FD3: one dismiss form on the page. The replaced-sheet notice ends its first
+        // line with the close icon, as the stopped-sync notice does; no word `Dismiss` is left.
+        d.observe_both(
+            "iter-25-C-FD3",
+            "The replaced-sheet notice has the close icon at the end of its first line",
+            |d| {
+                let words = d.painted_rect_in(REPLACED, egui::Rect::EVERYTHING);
+                let file = d.place_of("Show file");
+                let close = d.place_of(DISMISS);
+                let word = d.nodes().iter().any(|node| node.name == "Dismiss");
+                match (words, file, close) {
+                    (Some(words), Some(file), Some(close)) => {
+                        !word
+                            && close.left() > file.right()
+                            && close.left() > words.right()
+                            && close.top() < words.top() + crate::design::L
+                    }
+                    _ => false,
+                }
+            },
+        );
         d.state("force-read-replaced", Sizes::Default);
         let archive = note.with_extension("md.splat-archive");
         d.observe(
@@ -2620,7 +3191,7 @@ pub mod party {
     const CONNECT_FIRST: &str = "Connect to refresh";
     const CONNECT: &str = "Connect D&D Beyond";
     const REPLACED: &str = "sheet now matches D&D Beyond. Your edited version is kept.";
-    const DISMISS: &str = "Dismiss";
+    const DISMISS: &str = "Dismiss this message";
     const EDITED_NOTE: &str = "My own words";
 }
 
@@ -3678,16 +4249,44 @@ pub mod settings {
         d.click(EDIT_DETAILS);
         let saved_name = d.field_text(EDIT_FORM).unwrap();
         d.replace_text_in(EDIT_FORM, "Quiet Harbor revised");
+        // Round 25 FG5: the discard result sits in the message space below the save row, so the
+        // campaign rows below the form keep their y through Discard and Undo discard.
+        let rows = |d: &mut Driver<'_>| {
+            [SMALL, DEFAULT].map(|size| {
+                d.at_size(size, |d| {
+                    d.nodes()
+                        .into_iter()
+                        .filter(|node| node.name.contains(UNLINKED_CAMPAIGN) && node.in_view())
+                        .map(|node| node.rect.top())
+                        .reduce(f32::min)
+                })
+            })
+        };
+        let changed = rows(d);
         d.click("Discard");
         assert_eq!(
             d.field_text(EDIT_FORM).as_deref(),
             Some(saved_name.as_str())
+        );
+        let discarded = rows(d);
+        d.observe(
+            "iter-25-C-FG5",
+            changed.iter().all(Option::is_some)
+                && changed == discarded
+                && d.visible_text("Campaign details draft discarded."),
+            format!("{UNLINKED_CAMPAIGN} row y: changed {changed:?}, discarded {discarded:?}"),
         );
         d.state("campaign-details-discarded", Sizes::Default);
         d.click("Undo discard of Campaign details");
         assert_eq!(
             d.field_text(EDIT_FORM).as_deref(),
             Some("Quiet Harbor revised")
+        );
+        let undone = rows(d);
+        d.observe(
+            "iter-25-C-FG5-undo",
+            undone == changed && !d.visible_text("Campaign details draft discarded."),
+            format!("{UNLINKED_CAMPAIGN} row y after Undo discard: {undone:?}"),
         );
         d.click("Discard");
         d.click(CANCEL);
@@ -3934,6 +4533,22 @@ pub mod empty {
         d.check_state("first-launch", Sizes::Default);
         d.click("Active campaign: No campaign");
         d.expect("Add campaign…");
+        // Round 25 FE4: the popup's one command is one line, inside the popup.
+        d.observe_both(
+            "iter-25-C-FE4",
+            "The switcher's Add campaign… is one line, with S on each side, inside the column",
+            |d| {
+                d.painted_rect_in("Add campaign…", egui::Rect::EVERYTHING)
+                    .zip(d.place_of("Add campaign…"))
+                    .is_some_and(|(words, row)| {
+                        words.height() < 1.5 * crate::design::Type::Body.line()
+                            && words.right() <= row.right() - crate::design::S + 0.5
+                            && words.left() >= row.left() + crate::design::S - 0.5
+                            && d.place_of("Active campaign: No campaign")
+                                .is_some_and(|control| row.right() <= control.right() + 0.5)
+                    })
+            },
+        );
         d.state("empty-campaign-switcher", Sizes::Default);
         d.click("Add campaign…");
         assert_eq!(d.current_page(), "Settings");
@@ -5666,6 +6281,20 @@ pub mod party_from_run {
         d.click_row(CASTER);
         d.click(SHEET_SUBPAGE);
         d.expect("Spell text shows the printed numbers. Splat does not work out upcasting or this character’s own bonuses.");
+        // Round 25 AI2: the spell help keeps the reader measure at every size.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let help = d.at_size(size, |d| {
+                d.painted_rect_in(
+                    "Spell text shows the printed numbers.",
+                    egui::Rect::EVERYTHING,
+                )
+            });
+            d.observe(
+                "iter-25-C-AI2",
+                help.is_some_and(|help| help.width() <= crate::design::READER_MEASURE + 0.5),
+                format!("At {size:?}, the spell help is {help:?}"),
+            );
+        }
         d.state("sheet-spells-beside-run", Sizes::All);
         d.observe(
             "Spells beside run",
@@ -7824,6 +8453,48 @@ pub mod signed_in {
                 })
             },
         );
+        // Round 25 review: the sync panel's help keeps the reader measure at every size. A label
+        // out of view is not painted, so each is scrolled into view first.
+        let base = d.window_size();
+        for size in [SMALL, DEFAULT, LARGE] {
+            d.set_base(size);
+            let sheet_at = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name.contains("Combat sync"))
+                .map(|node| egui::pos2(node.rect.center().x, size.1 * 0.6))
+                .unwrap();
+            let widths = [
+                "are editable. Splat sends a change",
+                "Concentration, custom effects",
+            ]
+            .map(|words| {
+                d.scroll_up_at(sheet_at, 30);
+                d.scroll_until(sheet_at, words, 60);
+                let mut width = None;
+                d.each_painted_text(|text, _| {
+                    if text.galley.job.text.contains(words) {
+                        width = Some(text.galley.size().x);
+                    }
+                });
+                width
+            });
+            d.observe(
+                "iter-25-C-sync-help",
+                widths.iter().all(|width| {
+                    width.is_some_and(|width| width <= crate::design::READER_MEASURE + 0.5)
+                }),
+                format!("At {size:?}, the sync help widths are {widths:?}"),
+            );
+        }
+        d.set_base(base);
+        let sheet_at = d
+            .nodes()
+            .into_iter()
+            .find(|node| node.name.contains("Combat sync"))
+            .map(|node| node.rect.center())
+            .unwrap();
+        d.scroll_up_at(sheet_at, 30);
         d.state("party-sync-editable", Sizes::All);
         let shown = d.has("Increase Gold") && d.has("Increase Grit temporary HP");
         let result = wells.warm(d, shown, 1);
@@ -17818,6 +18489,18 @@ pub mod remove_package_in_use {
                 ),
             );
         });
+        // Round 25 review: the removal's words are prepared once, at the removal. Unchanged
+        // frames at two sizes prepare nothing.
+        let prepared = d.app_mut().campaign_content.removal_text_preparations();
+        d.at_size(SMALL, |_| ());
+        d.at_size(LARGE, |_| ());
+        d.settle();
+        let unchanged = d.app_mut().campaign_content.removal_text_preparations();
+        d.observe(
+            "iter-25-C-removal-words-once",
+            prepared == 1 && unchanged == prepared,
+            format!("Removal words prepared {prepared} times at the removal, {unchanged} after unchanged frames"),
+        );
         d.click("Undo package removal");
         d.wait_for_text("Find the folder…");
         d.expect_same("Undo restores the missing-package choice shown before removal.");
