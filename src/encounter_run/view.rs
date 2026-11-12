@@ -1196,8 +1196,6 @@ impl Run {
         })
     }
 
-    /// Every row's layout at this width. Rows with only a name can give up height when
-    /// the list would otherwise scroll, so a wrapped condition costs no other row its view.
     /// A row marked Conc that the newest step damaged: the DC of its save, 10 or half the
     /// damage if that is more, and at most 30. It is read from the newest Undo step, so it
     /// lasts until the next step and the run file gains no field. Splat does not roll it.
@@ -1216,6 +1214,8 @@ impl Run {
         (damage > 0 && before.key == p.key).then(|| (damage / 2).clamp(10, 30) as u32)
     }
 
+    /// Every row's layout at this width. Rows with only a name can give up height when
+    /// the list would otherwise scroll, so a wrapped condition costs no other row its view.
     fn roster_layouts(
         &self,
         ui: &egui::Ui,
@@ -6346,7 +6346,7 @@ fn even_height(heights: &[f32], room: f32, cap: f32) -> f32 {
 const PICTURE_GAP: f32 = 6.0;
 
 /// What a row's second line holds beyond today's words: its effects and a save's DC.
-#[derive(Clone, Default)]
+#[derive(Default)]
 struct Extra {
     effects: EffectPart,
     conc_dc: Option<u32>,
@@ -7281,17 +7281,6 @@ fn effect_links(
     let mut asked = None;
     for (act, at, span) in &layout.effect_spans {
         let condition = p.conditions.get(*at);
-        let words = condition.map_or_else(
-            || {
-                p.conditions
-                    .iter()
-                    .filter(|c| c.is_effect())
-                    .map(super::Condition::words)
-                    .collect::<Vec<_>>()
-                    .join(" · ")
-            },
-            super::Condition::words,
-        );
         let effect = condition.map_or("", super::Condition::name);
         let name = match (act, condition.and_then(super::Condition::time)) {
             (EffectAct::Remove(_), _) => format!("Remove {effect}"),
@@ -7310,7 +7299,21 @@ fn effect_links(
                 };
                 format!("Roll 1d6. {range} makes it ready")
             }
-            _ => format!("{words}. Remove it in Conditions"),
+            // A running count, words shown on each turn, or the count of the rest (no place).
+            _ => {
+                let words = condition.map_or_else(
+                    || {
+                        p.conditions
+                            .iter()
+                            .filter(|c| c.is_effect())
+                            .map(super::Condition::words)
+                            .collect::<Vec<_>>()
+                            .join(" · ")
+                    },
+                    super::Condition::words,
+                );
+                format!("{words}. Remove it in Conditions")
+            }
         };
         let start = galley.pos_from_cursor(egui::text::CCursor::new(span.start));
         // The words end at their last letter, before the room that keeps a count's slot.

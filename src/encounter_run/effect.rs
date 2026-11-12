@@ -86,10 +86,9 @@ impl Condition {
     /// outside the run: `Bless 9`, `Bless · last round`, `Legendary actions 2 of 3`.
     pub(crate) fn words(&self) -> String {
         match self.count() {
-            Some(count) if count.starts_with(|c: char| c.is_ascii_digit()) && self.rounds() => {
-                format!("{} {count}", self.name())
+            Some(count) if self.rounds() && !count.starts_with(|c: char| c.is_ascii_digit()) => {
+                format!("{} · {count}", self.name())
             }
-            Some(count) if self.rounds() => format!("{} · {count}", self.name()),
             Some(count) => format!("{} {count}", self.name()),
             None => self.name().to_owned(),
         }

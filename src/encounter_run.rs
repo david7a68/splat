@@ -2393,6 +2393,8 @@ impl Run {
         // Found before the change, which can make a neighbour of the current row look out of
         // place.
         let waiting = Self::moves_after_turn(state);
+        // The Log's word for an entry: an effect has a time, uses or a recharge.
+        let kind = |c: &Condition| if c.is_effect() { "Effect" } else { "Condition" };
         let index = match &command {
             Command::Npc(i, ..)
             | Command::RollMode(i, ..)
@@ -2545,15 +2547,10 @@ impl Run {
                         format!("Effect changed: {words}.")
                     }
                     Some(_) => return Err("That condition is already recorded.".into()),
-                    None if condition.is_effect() => {
-                        let words = condition.words();
-                        p.conditions.push(condition);
-                        format!("Effect added: {words}.")
-                    }
                     None => {
-                        let words = condition.words();
+                        let line = format!("{} added: {}.", kind(&condition), condition.words());
                         p.conditions.push(condition);
-                        format!("Condition added: {words}.")
+                        line
                     }
                 }
             }
@@ -2562,11 +2559,7 @@ impl Run {
                     return Err("Condition is missing.".into());
                 }
                 let removed = p.conditions.remove(i);
-                if removed.is_effect() {
-                    format!("Effect removed: {}.", removed.words())
-                } else {
-                    format!("Condition removed: {}.", removed.words())
-                }
+                format!("{} removed: {}.", kind(&removed), removed.words())
             }
             Command::Spend(_, at) => {
                 let Some(Condition::Effect(effect::Effect {

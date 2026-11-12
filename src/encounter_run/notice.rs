@@ -514,10 +514,10 @@ impl Run {
                         };
                         // Undo is shortened first. Then the next name goes whole, because
                         // the roster marks NEXT on its row. It gives way to the reminders.
-                        let shown = if reminder.is_some() && !nobody_present {
-                            String::new()
-                        } else if nobody_present {
+                        let shown = if nobody_present {
                             design::words_that_fit(ui, &text, &font, ui.available_width())
+                        } else if reminder.is_some() {
+                            String::new()
                         } else if design::number_width(ui, &text, &font) <= ui.available_width() {
                             text
                         } else {

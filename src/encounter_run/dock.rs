@@ -85,7 +85,6 @@ impl Run {
                     });
                 });
                 if !self.also.is_empty() {
-                    self.effect_in_dock = false;
                     self.target_words(ui);
                     return;
                 }
@@ -207,7 +206,7 @@ impl Run {
                     if effect != EffectFit::None {
                         ui.add_space(design::L - gap);
                     }
-                    let pressed = match effect {
+                    open_effect = match effect {
                         EffectFit::Word => Self::effect_action(effect_key).show(ui).clicked(),
                         EffectFit::Icon => {
                             design::icon_button(ui, icons::PIN, "Effect: words for this row")
@@ -215,9 +214,6 @@ impl Run {
                         }
                         EffectFit::None => false,
                     };
-                    if pressed {
-                        open_effect = true;
-                    }
                 });
                 in_dock = effect != EffectFit::None;
             });
