@@ -1823,6 +1823,22 @@ mod allowed_classes {
             name: "R1c b: an act's words that scrolled out of or into History's view",
             fits: history::act_words,
         },
+        // P7, F7.
+        Class {
+            row: 10,
+            name: "P7 a: `Add rewards` new on a played row, or as the opened row's last link",
+            fits: |d, _| rewards::action(d),
+        },
+        Class {
+            row: 10,
+            name: "P7 b: its word and its `·`, inside or just before a new action of its view",
+            fits: rewards::words,
+        },
+        Class {
+            row: 10,
+            name: "P7 c: an act's words of these classes",
+            fits: |d, _| rewards::act_words(d),
+        },
     ];
 
     /// R1c's classes, row 22. When a run opens in History, the list scrolls once so that the
@@ -2375,23 +2391,8 @@ mod allowed_classes {
                 rows.push(row(LAST, "text", "gone", "Resume", "was 753.1 99 95.8x28"));
                 assert!(!fits(&rows), "{why} was accepted");
             }
-        // P7, F7.
-        Class {
-            row: 10,
-            name: "P7 a: `Add rewards` new on a played row, or as the opened row's last link",
-            fits: |d, _| rewards::action(d),
-        },
-        Class {
-            row: 10,
-            name: "P7 b: its word and its `·`, inside or just before a new action of its view",
-            fits: rewards::words,
-        },
-        Class {
-            row: 10,
-            name: "P7 c: an act's words of these classes",
-            fits: |d, _| rewards::act_words(d),
-        },
-    ];
+        }
+    }
 
     /// P7's classes. Every difference is new, whole and of the plan's views; none lets an item
     /// of today go, move, narrow or be cut.
