@@ -6133,7 +6133,10 @@ impl Encounters {
                     });
                 design::named(ui, &combo.response, "Roll NPC initiative");
             });
-            design::help(ui, "Run setup starts with this choice. You can change it there for one roll. Groups that arrive later use it too.");
+            design::help(
+                ui,
+                "Run setup starts with this choice. You can change it there for one roll. Groups that arrive later use it too.",
+            );
             ui.checkbox(
                 &mut snapshot.options.initiative.roster_ties,
                 "Break initiative ties in roster order",

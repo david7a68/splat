@@ -155,16 +155,9 @@ fn recovery_action(
         if *exists {
             ui.horizontal(|ui| {
                 ui.add_space((inset - ui.spacing().item_spacing.x).max(0.0));
-                ui.add(
-                    egui::Label::new(
-                        Type::Small
-                            .rich(
-                                ui,
-                                crate::content_workspace::manifest_replace_consequence(path),
-                            )
-                            .color(colors().muted),
-                    )
-                    .wrap(),
+                design::help(
+                    ui,
+                    &crate::content_workspace::manifest_replace_consequence(path),
                 );
             });
         }
@@ -214,16 +207,9 @@ fn repair_notice(
                 ui.set_max_width(ui.available_width().min(EDITOR_MAX_WIDTH));
                 ui.horizontal(|ui| {
                     ui.add_space((inset - ui.spacing().item_spacing.x).max(0.0));
-                    ui.add(
-                        egui::Label::new(
-                            Type::Small
-                                .rich(
-                                    ui,
-                                    crate::content_workspace::manifest_replace_consequence(path),
-                                )
-                                .color(colors().muted),
-                        )
-                        .wrap(),
+                    design::help(
+                        ui,
+                        &crate::content_workspace::manifest_replace_consequence(path),
                     );
                 });
             });
@@ -5132,14 +5118,7 @@ impl Library {
                     ));
                 }
             }
-            ui.add(
-                egui::Label::new(
-                    Type::Small
-                        .rich(ui, format!("The files stay in {}.", module.path.display()))
-                        .color(colors().muted),
-                )
-                .wrap(),
-            );
+            design::help(ui, &format!("The files stay in {}.", module.path.display()));
             ui.add_space(design::S);
             design::dialog_actions(
                 ui,

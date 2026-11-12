@@ -7027,19 +7027,21 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
             "The title top with the heading warning ({copy_tops:?}) matches the title top without it ({plain_tops:?}) at 960, 1200 and 1920"
         ),
     );
-    // Must stay true: Edit Markdown still draws the heading warning above the editor.
+    // Must stay true: Edit Markdown still draws the heading warning with its fix. Round 26
+    // lead ruling: both sit in the pane's message footer, below the editor.
     d.click(EDIT_MARKDOWN);
     d.observe_both(
         "iter-16-E-FD7-source",
-        "Edit Markdown keeps the heading warning above the Markdown editor",
+        "Edit Markdown keeps the heading warning and its fix in the footer below the Markdown editor",
         |d| {
-            let Some(editor) = d.place_of("Markdown editor") else {
+            // The editor's frame: its accessible rect follows its scrolled text.
+            let Some((editor, _)) = d.input_frame("Markdown editor") else {
                 return false;
             };
             d.painted_rect_in(COPY_HEADING_WARNING, egui::Rect::EVERYTHING)
-                .is_some_and(|heading| heading.bottom() < editor.top())
+                .is_some_and(|heading| heading.top() > editor.bottom())
                 && d.place_of("Use Cinder Wolf copy").is_some_and(|fix| {
-                    d.in_view("Use Cinder Wolf copy") && fix.bottom() < editor.top()
+                    d.in_view("Use Cinder Wolf copy") && fix.top() > editor.bottom()
                 })
         },
     );
