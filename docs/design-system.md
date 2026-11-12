@@ -1793,7 +1793,8 @@ known says why on that line, in `muted`: `Read encounter · XP not known: Namele
 (`Difficulty::missing`). Its closed row is as before. The encounter editor, where the DM can repair the cause, ends
 its line the same way: `ROSTER 6 · XP not known: Nameless Thing`, or in the tab row below 760 px, where the word
 would be. Without room the names shorten from their end (`XP not known: Nameless Th…`) and go only when no letter
-fits; hover and the accessible name keep the whole reason. A running or played fight's row shows its status, not a word.
+fits; hover and the accessible name keep the whole reason. A roster member whose sheet cannot be read is named by its
+file, and a reason with no name known still shows (`· Level not known`). A running or played fight's row shows its status, not a word.
 
 The first upcoming fight gets primary Start fight when no run is open; later fights use secondary. Use Start
 fight here and in Encounters. Saved unfinished fights offer Resume, including timeline rows whose run
