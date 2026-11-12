@@ -255,8 +255,13 @@ The current session, while a fight is open, a recording is live, or its note is 
 bar and a World entry's Log line follow it.
 
 **Session plan**:
-The encounters a session's note links to under its plan, with what has happened so far. The note holds the
-plan, so that Obsidian sees it too.
+The fights, groups and scenes a session's note lists under its plan, with what has happened so far. The note
+holds the plan, so that Obsidian sees it too.
+
+**Scene**:
+A task line of a session's plan that is not a fight or a group, with a done mark: a talk, a person to meet, a
+place, a secret to reveal.
+_Avoid_: Plan item, task, to-do.
 
 **Carried state**:
 Each player's HP and temporary HP from the last fight of the session being played, which the next run starts

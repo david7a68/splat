@@ -20,6 +20,7 @@ pub mod integrity;
 pub mod list_formats;
 pub mod markdown_links;
 pub mod run_continue;
+pub mod session_plan_scenes;
 pub mod stat_formats;
 pub mod travel_checks;
 pub mod world_build;
@@ -3651,6 +3652,42 @@ pub mod encounter_build {
             "Resume from the editor opens the paused second round",
         );
         d.state("resumed-from-editor", Sizes::All);
+
+        // T12.12: Remove… on a Ready to run row, only for an encounter with no saved run, with
+        // the words and the Undo of a saved group's removal. An unrelated act between them
+        // stays.
+        go_encounters(d);
+        if d.has(BACK_TO_LIST) {
+            d.click(BACK_TO_LIST);
+        }
+        d.expect(READY_TO_RUN);
+        let file = d
+            .root
+            .join(format!("campaigns/emberfall/Encounters/{NEW_NAME}.md"));
+        let text = std::fs::read_to_string(&file).expect("the new encounter");
+        d.click_first(&format!("More actions for {NEW_NAME}"));
+        d.expect("Remove…");
+        d.state("encounter-menu-remove", Sizes::All);
+        d.click("Remove…");
+        d.expect(&format!("Removed encounter {NEW_NAME}."));
+        d.observe(
+            "T12.12",
+            !file.exists() && !d.has(&format!("More actions for {NEW_NAME}")),
+            "Remove… takes the encounter's file away, and its row goes",
+        );
+        d.state("encounter-removed", Sizes::All);
+        d.click(BACK_TO_RUN);
+        d.click(NEXT_TURN);
+        let turn = d.app_mut().encounters.run().unwrap().strip().current;
+        go_encounters(d);
+        d.click("Undo remove encounter");
+        d.expect(&format!("More actions for {NEW_NAME}"));
+        let same_turn = d.app_mut().encounters.run().unwrap().strip().current == turn;
+        d.observe(
+            "T12.12",
+            std::fs::read_to_string(&file).is_ok_and(|back| back == text) && same_turn,
+            "Undo remove encounter writes the same file back, and the turn taken between stays",
+        );
     }
 }
 

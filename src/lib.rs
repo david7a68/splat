@@ -1194,7 +1194,13 @@ impl Splat {
                 None => session,
             }
         });
+        let start_blocked = self.encounters.plan_blocked();
+        let mut start_fight = None;
         for reader in [&mut self.world_page.reader, &mut self.lookup.reader] {
+            reader.start_blocked = start_blocked;
+            if let Some(fight) = reader.start_fight.take() {
+                start_fight = Some(fight);
+            }
             reader.log_as.clone_from(&log_as);
             reader.sides = sides.clone();
             reader.live = live;
@@ -1220,6 +1226,9 @@ impl Splat {
         if refresh {
             self.lookup.refresh();
         }
+        if let Some(fight) = start_fight {
+            self.start_fight_with(&fight);
+        }
         if let Some(roll) = roll_table::take_roll(ctx) {
             let key = roll.key.clone();
             let result = match self.encounters.run_mut() {
@@ -1227,6 +1236,19 @@ impl Splat {
                 _ => roll_table::roll_alone(&roll),
             };
             roll_table::settle_roll(ctx, &key, result.unwrap_or_else(|error| error));
+        }
+    }
+
+    /// A fight that nobody planned, from a reader's `Start fight`: it starts, or Encounters says
+    /// why it cannot, as a planned fight's `Start fight` does.
+    fn start_fight_with(&mut self, fight: &world::StartFight) {
+        let Some(campaign) = self.campaigns.active_campaign() else {
+            return;
+        };
+        self.encounters
+            .start_fight_with(fight, &campaign, self.campaigns.modules());
+        if !self.encounters.go_to_run {
+            self.page = Page::Encounters;
         }
     }
 
@@ -2136,6 +2158,9 @@ impl Splat {
             }
             if let Some(path) = self.sessions.wants_saved_run.take() {
                 self.encounters.open_saved_run(&path, campaign);
+            }
+            if let Some(fight) = self.sessions.wants_start_fight.take() {
+                self.start_fight_with(&fight);
             }
             // Encounters shows why, and a button that seems dead tells the table nothing.
             if asked && !self.encounters.go_to_run {
