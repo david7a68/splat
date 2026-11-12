@@ -349,7 +349,9 @@ pub fn run(d: &mut Driver<'_>) {
     d.settle();
     for (step, wheel) in [("wheel", true), ("keyboard", false)] {
         let pass = d.passes() as u64;
-        d.app_mut().sessions.simulate_pending_reveal(&travel_id, pass);
+        d.app_mut()
+            .sessions
+            .simulate_pending_reveal(&travel_id, pass);
         if wheel {
             // One notch, short enough that a reveal left pending would win the later draws.
             d.scroll_up_at(plan_point, 1);
