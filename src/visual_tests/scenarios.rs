@@ -12792,7 +12792,10 @@ pub mod session_recording {
         };
         d.observe(
             id,
-            row.iter().all(|node| node.fully_in_view() && clear(node)),
+            // The action itself is checked apart, so a row filtered to nothing cannot pass.
+            target.fully_in_view()
+                && clear(target)
+                && row.iter().all(|node| node.fully_in_view() && clear(node)),
             format!(
                 "{action}'s row is whole and above every footer band {bands:?}: {}",
                 detail(&row)
