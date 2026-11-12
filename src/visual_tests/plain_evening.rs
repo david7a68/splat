@@ -2824,6 +2824,28 @@ mod allowed_classes {
             item.1.get(..4)?.try_into().ok()
         }
 
+        /// The list's top and, when the frozen view cut an item there, its bottom: where the
+        /// frozen view's items of `d`'s kind show cut.
+        fn frozen_edges(d: &Difference) -> Option<(f32, Option<f32>)> {
+            let view = frozen(d)?;
+            let items = if d.what == "control" {
+                &view.controls
+            } else {
+                &view.texts
+            };
+            let cut = items.iter().filter(|item| item.1.len() == 8);
+            let top = cut
+                .clone()
+                .filter(|item| item.1[5] > item.1[1] + 0.05)
+                .map(|item| item.1[5])
+                .reduce(f32::max)?;
+            let bottom = cut
+                .filter(|item| item.1[5] + item.1[7] < item.1[1] + item.1[3] - 0.05)
+                .map(|item| item.1[5] + item.1[7])
+                .reduce(f32::min);
+            Some((top, bottom))
+        }
+
         /// The rows of `d`'s view and kind.
         fn view<'a>(d: &Difference, rows: &'a [AllowedRow]) -> Vec<&'a Difference> {
             rows.iter()
@@ -2866,23 +2888,32 @@ mod allowed_classes {
                 .map_or(f32::INFINITY, |place| place[1]);
             let shift = |before: f32| if before >= log - 0.5 { dy + LOG } else { dy };
             let view = view(d, rows);
-            let top = view
-                .iter()
-                .filter_map(|o| shown_after(o))
-                .map(|b| b[1])
-                .fold(f32::INFINITY, f32::min);
-            // The bottom of what showed before; an item after is cut only at the bottom of what
-            // shows after.
+            // The list's edges as the frozen view recorded them, where an item showed cut: the
+            // top always; the bottom where the frozen view cut one, else the bottom of what
+            // shows after. A row never sets the edge it is cut by.
+            let Some((top, frozen_bottom)) = frozen_edges(d) else {
+                return false;
+            };
+            // The run's own row, which sets the scroll, shows whole.
+            let run_whole = view.iter().all(|o| {
+                !(o.name.starts_with("Button: Close the run of ") && o.change == "moved")
+                    || shown_after(o) == places(o).1
+            });
+            if !run_whole {
+                return false;
+            }
+            // The bottom of what showed before; an item after is cut only at the list's bottom.
             let bottom = view
                 .iter()
                 .filter_map(|o| places(o).0)
                 .map(|a| a[1] + a[3])
                 .fold(f32::NEG_INFINITY, f32::max);
-            let edge = view
-                .iter()
-                .filter_map(|o| shown_after(o))
-                .map(|b| b[1] + b[3])
-                .fold(f32::NEG_INFINITY, f32::max);
+            let edge = frozen_bottom.unwrap_or_else(|| {
+                view.iter()
+                    .filter_map(|o| shown_after(o))
+                    .map(|b| b[1] + b[3])
+                    .fold(f32::NEG_INFINITY, f32::max)
+            });
             let mut names: BTreeMap<&str, (Places, Places)> = BTreeMap::new();
             for o in &view {
                 if !cut_at_edges(o, top, edge) {
@@ -2987,12 +3018,18 @@ mod allowed_classes {
             };
             let (a, b) = places(d);
             match (d.change.as_str(), a, b) {
+                // The field takes the rest of line one: it ends at most `XL` before Save
+                // encounter, never under it, and keeps at least a control's width.
                 ("width", Some(a), Some(b)) => {
+                    let end = b[0] + b[2];
                     d.name.starts_with("TextInput: Encounter name")
                         && a[..2] == b[..2]
                         && a[3] == b[3]
                         && b[2] < a[2]
-                        && b[0] + b[2] <= save[0]
+                        && b[2] >= crate::design::Density::Scan.control()
+                        && end <= save[0]
+                        && end >= save[0] - crate::design::XL - crate::design::S
+                        && shown_after(d) == Some(b)
                 }
                 ("moved", Some(a), Some(b)) => {
                     let whole = cut_at_edges(d, f32::NEG_INFINITY, bottom);
@@ -3108,6 +3145,12 @@ mod allowed_classes {
                     "Label: FINAL STATE",
                     "180 324 73.6x14 -> 180 186 73.6x14, seen 180 190 73.6x10",
                 ),
+                // The run's own row cut at the list's top, so that it would set the top.
+                history(
+                    "moved",
+                    "Button: Close the run of Wolves",
+                    "847.2 220 50.8x28 -> 847.2 82 50.8x28, seen 847.2 86 50.8x24",
+                ),
             ] {
                 let name = fault.difference.to_string();
                 assert!(!fits(&with(&good, fault)), "R3g a takes {name}");
@@ -3162,6 +3205,17 @@ mod allowed_classes {
                     "width",
                     "TextInput: Encounter name: Shrine of Cinders",
                     "186 8 416.4x30 -> 186 10 168.4x30",
+                ),
+                // The field gives up the room it should take, or is cut.
+                editor(
+                    "width",
+                    "TextInput: Encounter name: Shrine of Cinders",
+                    "186 8 416.4x30 -> 186 8 1x30",
+                ),
+                editor(
+                    "width",
+                    "TextInput: Encounter name: Shrine of Cinders",
+                    "186 8 416.4x30 -> 186 8 168.4x30, seen 186 8 100x30",
                 ),
                 // An action moves sideways, or stays below the name's line.
                 editor(

@@ -2588,7 +2588,7 @@ pub struct Encounters {
     validation_reached: usize,
     /// The open draft's difficulty, with the snapshot revision, edit epoch and draft it was
     /// worked out for.
-    difficulty: Option<((Uuid, u64, Uuid), crate::difficulty::Difficulty)>,
+    difficulty: Option<((Uuid, u64, Uuid), Arc<crate::difficulty::Difficulty>)>,
     /// How often frames asked for the draft's difficulty, and how often it was worked out.
     #[cfg(test)]
     difficulty_counts: (usize, usize),
@@ -2938,7 +2938,7 @@ impl Encounters {
     }
     /// The open draft's difficulty. Worked out again only when the draft, an edit or the
     /// campaign's read changes.
-    fn draft_difficulty(&mut self) -> Option<&crate::difficulty::Difficulty> {
+    fn draft_difficulty(&mut self) -> Option<Arc<crate::difficulty::Difficulty>> {
         let (snapshot, draft) = (self.snapshot.as_ref()?, self.draft.as_ref()?);
         let key = (snapshot.revision, self.edit_epoch, draft.id);
         #[cfg(test)]
@@ -2951,9 +2951,11 @@ impl Encounters {
                 self.difficulty_counts.1 += 1;
             }
             let difficulty = roster_difficulty(&draft.setup, &snapshot.catalogue, &snapshot.scale);
-            self.difficulty = Some((key, difficulty));
+            self.difficulty = Some((key, Arc::new(difficulty)));
         }
-        self.difficulty.as_ref().map(|(_, difficulty)| difficulty)
+        self.difficulty
+            .as_ref()
+            .map(|(_, difficulty)| Arc::clone(difficulty))
     }
     /// How often frames asked for the open draft's difficulty, and how often it was worked out.
     #[cfg(test)]
@@ -5244,7 +5246,8 @@ impl Encounters {
             self.error = Some(e);
         }
         self.refresh_validation_error(false, edit_input(ui.ctx()));
-        let difficulty = self.draft_difficulty().cloned();
+        // Shared, so an unchanged frame copies no list of names.
+        let difficulty = self.draft_difficulty();
         // FA2, AB1: the editor's results, Save's reason and the unread rows' warning sit in one
         // footer pinned below the panes, so none of them moves the roster, its rows or the
         // search. Results with a live Undo come first, then reasons.
@@ -5429,7 +5432,7 @@ impl Encounters {
                             expanded,
                             linked.then_some(party),
                             &mut make_yours,
-                            Some(difficulty.as_ref()),
+                            Some(difficulty.as_deref()),
                         );
                     });
                 ui.advance_cursor_after_rect(roster_ui.min_rect());
