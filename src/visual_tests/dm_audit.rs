@@ -693,7 +693,7 @@ fn after_the_session(a: &mut Audit<'_, '_>) {
             &note,
             text.replacen(
                 "## Plan for tonight\n",
-                &format!("## Plan for tonight\n\n- [x] [[{HOBB}]]: {HOBB_WORDS}\n"),
+                &format!("## Plan for tonight\n\n- [x] [[{HOBB}]]\n"),
                 1,
             ),
         )
@@ -702,9 +702,10 @@ fn after_the_session(a: &mut Audit<'_, '_>) {
         d.app_mut().sessions.refresh();
         d.click(NAV_SESSIONS);
         show_plan(d);
+        d.expect(&format!("Done: {HOBB}"));
     });
     a.task("Put what an NPC said in the NPC's own note");
-    a.click(Panel, &format!("Add to Log: {HOBB}: {HOBB_WORDS}"));
+    a.click(Panel, &format!("Add to Log: {HOBB}"));
     a.act(Do, "type the line", |d| {
         d.type_text("Named the informer at the ford.")
     });
@@ -720,10 +721,9 @@ fn after_the_session(a: &mut Audit<'_, '_>) {
     ));
 }
 
-/// The World NPC of F6's task, and the done scene's words outside its link.
+/// The World NPC of F6's task, whom a done scene links.
 const HOBB: &str = "Hobb the Miller";
 const HOBB_PATH: &str = "NPCs/Hobb the Miller.md";
-const HOBB_WORDS: &str = "named the informer";
 
 /// Each counted task's cost, in the order played. Set-up rows count for nothing.
 fn counts(record: &Record) -> Vec<TaskCount> {

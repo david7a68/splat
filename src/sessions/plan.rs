@@ -888,21 +888,28 @@ fn scene_row(
             .density(Density::Read)
             .name(&log_name)
     };
-    // The fit rule: on the row only while the words keep their lines beside it, as a plan row's
-    // title does beside `Add rewards`. Else it is a line of the scene's own menu.
+    // The fit rule: on the row only while the words keep their rows beside it, each with the
+    // same words, so no word moves. Else it is a line of the scene's own menu.
     let menu = Density::Read.control();
     let with_log = menu + log_action().natural_width(ui) + design::S;
     let on_row = log.is_some() && {
         // The words' room beside the action place, as `plan_row_with` gives it after the box.
         let room = ui.available_width() - design::XL - 2.0 * design::S;
-        let font = Type::Body.font(ui);
+        // The Reader's type at that width (`prose_type`), and each row's words as it breaks
+        // them there.
         let rows = |action: f32| {
-            ui.fonts_mut(|fonts| {
-                fonts
-                    .layout(plain.clone(), font.clone(), c.text, room - action)
+            let width = room - action;
+            let prose = design::reader::prose_type_at(width);
+            let font = prose.font(ui);
+            let breaks = ui.fonts_mut(|fonts| {
+                let galley = fonts.layout(plain.clone(), font, c.text, width);
+                galley
                     .rows
-                    .len()
-            })
+                    .iter()
+                    .map(|row| row.glyphs.len())
+                    .collect::<Vec<_>>()
+            });
+            (prose == Type::Prose, breaks)
         };
         rows(with_log) == rows(menu)
     };
