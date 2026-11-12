@@ -159,7 +159,12 @@ fn in_play(rules: &Rules, note: Uuid) -> bool {
 
 /// The act whose entries about a notice would be left with nothing to name, when the ledger
 /// becomes `next`: a notice that a change raised in `ledger` and raises no more in `next`.
-fn orphaned(rules: &Rules, today: &Today, ledger: &Ledger, next: &Ledger) -> Option<String> {
+pub(super) fn orphaned(
+    rules: &Rules,
+    today: &Today,
+    ledger: &Ledger,
+    next: &Ledger,
+) -> Option<String> {
     let (before, after) = (replay(rules, ledger, today), replay(rules, next, today));
     let orphan = next.changes.iter().find(|entry| {
         entry

@@ -27,6 +27,15 @@ pub(crate) const RESULTS_LISTED: usize = 8;
 const PANEL_MARGIN: f32 = design::M;
 
 pub const SEARCH_NAME: &str = "Search everything";
+
+/// The search field's placeholder for this width of the panel.
+fn search_hint(width: f32) -> &'static str {
+    if width < design::XXL * 10.0 {
+        "Search…"
+    } else {
+        "Search entries and notes…"
+    }
+}
 /// What an empty search finds, below the search field.
 pub(crate) const SEARCH_HELP: &str = "Search built-in rules, every package, this campaign’s own entries, session notes and the timeline. Press Escape to close.";
 /// How many lines of a long note show where the words were found.
@@ -1993,6 +2002,24 @@ impl Lookup {
             .show(ctx, |ui| self.panel(ui, trackers));
     }
 
+    /// The search field while Trackers is the view: empty, with its placeholder, so it does not
+    /// read as a filter of the trackers. Lookup keeps its words for its own view. Words typed
+    /// here are a new search, which leaves Trackers for its results.
+    fn search_over_trackers(&mut self, ui: &mut egui::Ui, width: f32) -> egui::Response {
+        let mut typed = String::new();
+        let response = ui
+            .horizontal(|ui| {
+                design::search_field(ui, SEARCH_NAME, &mut typed, search_hint(width), width)
+            })
+            .inner;
+        if !typed.is_empty() {
+            self.query = typed;
+            self.leave_trackers();
+            self.results_open = true;
+        }
+        response
+    }
+
     fn panel(&mut self, ui: &mut egui::Ui, trackers: &mut crate::trackers::Trackers) {
         // With the margin, so a press anywhere on the panel counts as here.
         let panel = ui.max_rect().expand(PANEL_MARGIN);
@@ -2083,17 +2110,15 @@ impl Lookup {
         let width = ui.available_width();
         let before = self.query.clone();
         let show_clear = !self.query.is_empty();
-        let response = ui
-            .horizontal(|ui| {
+        let response = if self.trackers_shown {
+            self.search_over_trackers(ui, width)
+        } else {
+            ui.horizontal(|ui| {
                 let response = design::search_field(
                     ui,
                     SEARCH_NAME,
                     &mut self.query,
-                    if width < design::XXL * 10.0 {
-                        "Search…"
-                    } else {
-                        "Search entries and notes…"
-                    },
+                    search_hint(width),
                     width
                         - if show_clear {
                             Action::quiet("Clear").natural_width(ui) + ui.spacing().item_spacing.x
@@ -2110,14 +2135,10 @@ impl Lookup {
                 }
                 response
             })
-            .inner;
+            .inner
+        };
         if std::mem::take(&mut self.focus_search) {
             design::focus_and_select(ui, response.id, &self.query);
-        }
-        // Words typed in the search field leave Trackers for their results.
-        if self.trackers_shown && before != self.query {
-            self.leave_trackers();
-            self.results_open = true;
         }
         if let Some(error) = &self.error {
             design::message(ui, Tone::Error, error);

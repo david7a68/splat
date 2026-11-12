@@ -964,7 +964,11 @@ Seals
 - **A quick action** is one press. An action that asks for a number (`add: ask`) puts a number field in its
   own place; the field holds focus until Enter or Escape.
 - **A wrong press.** `Undo: <label>` takes it back while it is the newest act. Later, the opposite quick
-  action corrects the value in one press, as an erasure does on paper; the history keeps both.
+  action corrects the value in one press, as an erasure does on paper; the history keeps both. A notice that the
+  wrong press raised ends with it when nothing is recorded on the notice (no roll, `Done` or `Dismiss`): a notice
+  at a value is due only while the value is at or past its mark. The result line says `<name> is no longer due.`,
+  and Undo of the opposite press brings the notice back. Nothing is written for it (by the lead's ruling after app
+  round 2, W6-D1).
 - **The result line** names the last act and has `Undo` and `Add to Timeline`. After `Add to Timeline` it says
   `Added to the Timeline.` with `Undo add`.
 - **A tracker's history,** with **Remove**, and the list of problems show in the house rule note's reader. P9
@@ -988,8 +992,9 @@ Seals
 `PINNED`, `MORE TRACKERS 1`. `Roll <table’s name>`. `Done`. `Dismiss`. Result: `<label>: Favor 2.`; with a
 table `… Rolled 4 on 1d6: A healing potion.`; with a new notice `… Due: Bell.`; after `Done`, `Bell done.`;
 after a dismissal `Bell dismissed.` `Undo: <label>`. `Add to Timeline`. A blocked action: `Favor cannot go
-below 0.` With no note in play, Ctrl+T opens the empty state `No house rules are in play.` with `Turn one on
-in Campaign → Rules and runs.`
+below 0.` With no note in play, Ctrl+T opens the empty state `No house rules in play` with `Turn one on
+in Campaign → Rules and runs.` Under **House rules in play** in Campaign → Rules and runs: `Trackers (Ctrl+T) shows
+the trackers of each note in play.`
 
 | State | What shows |
 |---|---|
@@ -1002,8 +1007,10 @@ in Campaign → Rules and runs.`
 
 **What the files store.** Definitions are in the house rule note's Splat data, as before, with one new
 optional word: `for:` on a mark's table. The ledger is one ordered list. Each act is one entry. A notice's
-state is not stored: a notice is open until an entry finishes or dismisses it, and it is worked out from the
-changes. An entry holds what it replaced where that cannot be worked out: `was` on a `set`. `why` holds the
+state is not stored: a notice is open until an entry finishes or dismisses it, or, while no entry of the ledger
+names it, until a later change takes its value back below its mark; it is worked out from the changes, so no act
+and no outside edit hides a notice with a roll. A Remove, an `Undo remove` or an Undo that would leave a recorded
+entry on a notice that no change raises any more writes nothing and names that entry. An entry holds what it replaced where that cannot be worked out: `was` on a `set`. `why` holds the
 action's label, so the result line and `Undo: <label>` name the act after a restart. The changes of one
 press share a `use` and undo together.
 
@@ -1021,7 +1028,7 @@ gift`), or `Undo: Bell done`, `Undo: Bell dismissed`, `Undo: Rival Track roll`. 
 before it, so the DM steps back, newest first. The ledger is a file, so the steps are there after a restart.
 Undo of an entry that raised a notice removes the notice and its entries. An entry with another stamp leaves
 by **Remove** in the tracker's history. `Add to Timeline` is a second act: it makes a Major event with the
-action's label, in the session being played, with the Timeline's own Undo (section 4.1).
+action's label and the line it changed (`Take seal: Old Guard`), in the session being played, with the Timeline's own Undo (section 4.1).
 
 **Keyboard.** Ctrl+T, there and back. Tab walks the Due rows, then the trackers' actions. Enter presses an
 action. Escape closes Lookup.
@@ -1032,8 +1039,8 @@ tracker's number stands for. A proposed change applies only when the DM presses 
 **Day marks (P11).** A day mark (`at`, or `every` with `from`, in days) is open while the day count of the
 Timeline has reached its day and no ledger entry ends it; raising it writes nothing. Its row starts with its day:
 `Day 32: Move the rival powers.` Days of one mark that are due together are one row, as
-[World and house rules](world-and-house-rules.md) says: `End of month ×3. Next: Day 32. …`, with `Next` in the place
-of `Done` (it ends the oldest day) and `Dismiss all` in the row's menu. Day rows come first, oldest day first, then
+[World and house rules](world-and-house-rules.md) says: `End of month ×3. Next: Day 32. …`, whose `Done` names the
+day it ends, the oldest (`Done: Day 32`), and `Dismiss all` in the row's menu. Day rows come first, oldest day first, then
 the notices of marks at a value. The Due count counts rows, so a row of three days is `Due 1`. The result line says
 `End of month, Day 32 done.` and `Undo: End of month, Day 32 done`, or `Undo: End of month ×3 dismissed`. The day
 count has one answer, which the view, the rail's count and every act read (`trackers::today`). It is not known while

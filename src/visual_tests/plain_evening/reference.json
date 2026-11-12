@@ -1,6 +1,6 @@
 {
 "about": "G7 reads this with SPLAT_FROZEN=1. `devenv shell -- audit-freeze reference` writes it on the commit of main in frozen_at; a feature adds its views with `devenv shell -- audit-freeze add`.",
-"frozen_at": "bd7ff4b097b4300f2c079418570f8bc6d6976949",
+"frozen_at": "19cec3d20d2e895a39ab84d6b3a7c409106fee4b",
 "views": [
 {"screen": "start", "view": "1200x800",
 "controls": [

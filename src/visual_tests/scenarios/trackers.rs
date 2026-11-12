@@ -61,12 +61,110 @@ fn write_the_race(d: &Driver<'_>) {
     .unwrap();
 }
 
+/// The lines of Seals: the right edge of each painted value, and the left edge of each line's
+/// first action. A value is the painted text nearest the action, on its line, before it.
+fn seal_columns(d: &Driver<'_>) -> (Vec<f32>, Vec<f32>) {
+    let (mut values, mut actions) = (Vec::new(), Vec::new());
+    for line in ["Party", "Old Guard", "Keyring", "Convicts"] {
+        let Some(action) = d.place_of(&format!("Take seal: {line}")) else {
+            continue;
+        };
+        actions.push(action.left());
+        let mut right: Option<f32> = None;
+        d.each_painted_text(|text, _| {
+            let bounds = text.visual_bounding_rect();
+            if (action.top()..action.bottom()).contains(&bounds.center().y)
+                && bounds.right() < action.left()
+            {
+                right = Some(right.map_or(bounds.right(), |r| r.max(bounds.right())));
+            }
+        });
+        values.extend(right);
+    }
+    (values, actions)
+}
+
+/// Four edges, all the same.
+fn one_edge(edges: &[f32]) -> bool {
+    edges.len() == 4 && edges.iter().all(|edge| (edge - edges[0]).abs() < 0.5)
+}
+
+/// The tops of the painted lines of a Due row's words, from the line that starts them to the
+/// row's `Done`, and the height of one line of the words.
+fn notice_line_tops(d: &Driver<'_>, words: &str, done: &str) -> (Vec<f32>, f32) {
+    let mut tops = Vec::new();
+    let mut line = 0.0;
+    let mut start = None;
+    d.each_painted_text(|text, _| {
+        if text.galley.job.text.starts_with(&words[..20]) {
+            start = Some(text.pos.y);
+        }
+    });
+    let (Some(start), Some(done)) = (start, d.place_of(done)) else {
+        return (tops, line);
+    };
+    d.each_painted_text(|text, _| {
+        let own = &text.galley.job.text;
+        if own.len() > 3
+            && words.contains(own.as_str())
+            && (start - 0.5..done.bottom()).contains(&text.pos.y)
+        {
+            tops.extend(
+                text.galley
+                    .rows
+                    .iter()
+                    .map(|row| text.pos.y + row.rect().top()),
+            );
+            line = text.galley.rows[0].rect().height();
+        }
+    });
+    tops.sort_by(f32::total_cmp);
+    (tops, line)
+}
+
+/// A tracker with an amount the DM types, on two lines, and a mark that the amount can pass.
+const PURSES: &str = "> trackers:\n>   purses:\n>     name: Purses\n>     pin: true\n>     per: [Ann, Bo]\n>     quick:\n>     - {label: Pay, add: ask}\n>     - {label: Tip, add: 1}\n>     marks:\n>     - {at: 3, say: Paid.}\n";
+
+/// Open the amount field of `Pay` on Ann's line: it has the action's place and width and is at
+/// least 24 px high, and `Tip` on both lines stays. Then 3 and Enter raise `Paid` above, and
+/// `Pay` keeps its place. Undo takes the act back.
+fn amount_in_its_column(d: &mut Driver<'_>) -> (bool, String) {
+    let place = |d: &Driver<'_>, name: &str| d.place_of(name).unwrap_or(egui::Rect::NOTHING);
+    let same = |a: egui::Rect, b: egui::Rect| (a.min - b.min).length() < 0.5;
+    let (pay, tip, bo) = (
+        place(d, "Pay: Ann"),
+        place(d, "Tip: Ann"),
+        place(d, "Tip: Bo"),
+    );
+    d.click("Pay: Ann");
+    let field = place(d, "Pay");
+    let (tip_now, bo_now) = (place(d, "Tip: Ann"), place(d, "Tip: Bo"));
+    d.type_text("3");
+    d.press(Key::Enter);
+    d.expect("Due: Paid for Ann.");
+    let pay_now = place(d, "Pay: Ann");
+    d.click("Undo: Pay");
+    let held = same(field, pay)
+        && (field.width() - pay.width()).abs() < 0.5
+        && field.height() >= 24.0
+        && same(tip_now, tip)
+        && same(bo_now, bo)
+        && same(pay_now, pay);
+    (
+        held,
+        format!(
+            "Pay {pay:?}, field {field:?}, Tip {tip:?} then {tip_now:?}, Bo's Tip {bo:?} then {bo_now:?}, Pay after Enter {pay_now:?}"
+        ),
+    )
+}
+
 /// A day mark, as a DM writes one in the note's Splat data: the month's end, every 30 days from
 /// Day 2, with one proposed change.
 const MONTH_END: &str = "> day_marks:\n>   month_end:\n>     name: End of month\n>     every: 30\n>     from: 2\n>     say: Move the rival powers. Pay each team its prize money, and roll Instability if chaos has begun.\n>     changes:\n>     - {tracker: favor, add: 1}\n";
 
 /// Day marks (P11): the Timeline's day count raises a day mark's Due row, with the words, the
-/// rows and the acts of a mark at a value. Days that pass in one step are one row with `Next`;
+/// rows and the acts of a mark at a value. Days that pass in one step are one row whose `Done`
+/// names the day it ends;
 /// a clock that goes back takes the row away and keeps what was done.
 fn day_marks(d: &mut Driver<'_>) {
     use crate::timeline::Kind;
@@ -91,14 +189,15 @@ fn day_marks(d: &mut Driver<'_>) {
     d.observe(
         "T19.5",
         d.has_containing("End of month ×2. Next: Day 32. Move the rival powers.")
-            && d.has("Next: End of month, Day 32")
+            && d.has("Done: End of month, Day 32")
+            && d.painted_left("Done: Day 32").is_some()
             && d.has_label("DUE 3")
             && d.has_containing("3 notices are due")
             && !ledger(d).contains("month_end"),
-        "Days that pass in one step are one Due row that says how many, with Next; raising it writes nothing",
+        "Days that pass in one step are one Due row that says how many, with Done: Day 32; raising it writes nothing",
     );
     let (whole, detail) = d.at_size(SMALL, |d| {
-        let missing: Vec<_> = ["Next: End of month, Day 32", "Undo: Take seal"]
+        let missing: Vec<_> = ["Done: End of month, Day 32", "Undo: Take seal"]
             .into_iter()
             .filter(|name| !d.in_view(name))
             .chain(
@@ -112,17 +211,17 @@ fn day_marks(d: &mut Driver<'_>) {
     d.observe(
         "T19.5",
         whole,
-        format!("At 960x640 with Lookup narrow, the day mark's row, its Next and the result line are in view. {detail}"),
+        format!("At 960x640 with Lookup narrow, the day mark's row, its Done and the result line are in view. {detail}"),
     );
     d.state("trackers-day-mark-due", Sizes::Standard);
-    d.click("Next: End of month, Day 32");
+    d.click("Done: End of month, Day 32");
     d.expect("End of month, Day 32 done.");
     d.observe(
         "T19.5",
         d.has_containing("Day 62: Move the rival powers.")
             && d.has("Done: End of month, Day 62")
             && ledger(d).contains("day: 32"),
-        "Next ends the oldest day and applies its change; the row names the next day",
+        "Done: Day 32 ends the oldest day and applies its change; the row names the next day",
     );
     // The Timeline's Undo takes the road back: Day 62 is no longer reached and its row goes;
     // the Done of Day 32 stays in the ledger.
@@ -164,6 +263,11 @@ pub fn run(d: &mut Driver<'_>) {
     d.click(NAV_CAMPAIGN);
     d.click(TAB_RUN_SETTINGS);
     d.expect("House rules in play");
+    d.observe(
+        "T19.1",
+        d.has_containing("Trackers (Ctrl+T) shows the trackers of each note in play."),
+        "Under House rules in play a help line says where the trackers are",
+    );
     d.click("Tournament");
     d.state("house-rules-in-play-switch", Sizes::Standard);
     d.click("Save run settings");
@@ -188,11 +292,35 @@ pub fn run(d: &mut Driver<'_>) {
         d.has_label("PINNED") && d.has_containing("MORE TRACKERS 2") && !d.has_label("DUE"),
         "The view lists the pinned trackers, then More trackers, and no Due row yet",
     );
+    // The lines of Seals stand in columns: each value ends at one edge and each first action
+    // starts at one edge, at 960x640 beside Lookup and at 1200x800.
+    let (values, actions) = seal_columns(d);
+    let (wide_values, wide_actions) = d.at_size(DEFAULT, seal_columns);
+    d.observe(
+        "T19.2",
+        one_edge(&values)
+            && one_edge(&actions)
+            && one_edge(&wide_values)
+            && one_edge(&wide_actions),
+        format!(
+            "The values of Seals end at one edge and its first actions start at one edge: {values:?} {actions:?} at 960x640, {wide_values:?} {wide_actions:?} at 1200x800"
+        ),
+    );
     d.state("trackers-beside-the-plan", Sizes::All);
 
-    // T19.2: a quick action is one press; a press that passes a mark raises a Due row.
+    // T19.2: a quick action is one press; a press that passes a mark raises a Due row. The
+    // pressed action keeps its place, so a still pointer presses it again, not a roll.
+    let pressed = d.place_of("Cistern or Sands");
     d.click("Cistern or Sands");
     d.expect("Cistern or Sands: Elapsed race time 20. Due: Bell.");
+    let now = d.place_of("Cistern or Sands");
+    d.observe(
+        "T19.2",
+        matches!((pressed, now), (Some(a), Some(b)) if (a.min - b.min).length() < 0.5),
+        format!(
+            "A press that raises a Due row keeps the pressed action under the pointer: {pressed:?}, then {now:?}"
+        ),
+    );
     d.audit_goal_within("T19.2", "open the numbers and record a room", 2);
     d.observe(
         "T19.3",
@@ -260,22 +388,65 @@ pub fn run(d: &mut Driver<'_>) {
         whole,
         format!("Case D beside the Session page: three notices, four rolls and the result line in view. {detail}"),
     );
+    // A Due row's last line, with Done, keeps the words' line pitch; the result line's Undo
+    // starts at its message's words.
+    let seal_words =
+        "Old Guard: First seal. The party reaches level 2. A rival uses its 1-2 seals group.";
+    let pitch = |d: &Driver<'_>| {
+        let (tops, line) = notice_line_tops(d, seal_words, "Done: First seal for Old Guard");
+        let even = tops.len() > 1
+            && tops
+                .windows(2)
+                .all(|pair| (pair[1] - pair[0] - line).abs() < 0.5);
+        (even, tops)
+    };
+    let undo_at_words = |d: &Driver<'_>| {
+        let (undo, words) = (
+            d.painted_left("Undo: Take seal"),
+            d.painted_left("Take seal: Seals (Party) 1."),
+        );
+        (
+            matches!((undo, words), (Some(u), Some(w)) if (u - w).abs() < 0.5),
+            undo,
+            words,
+        )
+    };
+    let ((small_even, small_tops), small_undo) = (pitch(d), undo_at_words(d));
+    let ((wide_even, wide_tops), wide_undo) = d.at_size(DEFAULT, |d| (pitch(d), undo_at_words(d)));
+    d.observe(
+        "T19.4",
+        small_even && wide_even,
+        format!("A Due row's lines, with Done on the last, keep one pitch: {small_tops:?} at 960x640, {wide_tops:?} at 1200x800"),
+    );
+    d.observe(
+        "T19.2",
+        small_undo.0 && wide_undo.0,
+        format!("Undo's words start at the result's words: {small_undo:?} at 960x640, {wide_undo:?} at 1200x800"),
+    );
     d.state("trackers-three-notices", Sizes::All);
 
     // A wrong press seen late: the opposite action corrects the value, and the history keeps
-    // both presses.
+    // both presses. The notice the wrong press raised has nothing on it, so it ends.
     d.click("Lose seal: Party");
-    d.expect("Lose seal: Seals (Party) 0.");
+    d.expect("Lose seal: Seals (Party) 0. First seal for Party is no longer due.");
     d.observe(
         "T19.2",
         ledger(d).matches("why: Take seal").count() == 2
             && ledger(d).contains("why: Lose seal")
-            && d.has_label("DUE 3"),
-        "Lose seal corrects the value in one press; a mark does not fire when a value falls",
+            && !ledger(d).contains("dismissed")
+            && d.has_label("DUE 2")
+            && d.has_containing("2 notices are due")
+            && !d.has("Done: First seal for Party"),
+        "Lose seal corrects the value in one press, and the notice the wrong press raised ends; nothing is written for it",
     );
-    // Undo steps back through tonight's acts, newest first.
+    // Undo steps back through tonight's acts, newest first: the notice comes back.
     d.click("Undo: Lose seal");
     d.expect("Take seal: Seals (Party) 1. Due: First seal for Party.");
+    d.observe(
+        "T19.2",
+        d.has_label("DUE 3") && d.has("Done: First seal for Party"),
+        "Undo of the opposite press brings the notice back",
+    );
     d.click("Undo: Take seal");
     d.expect("Take seal: Seals (Old Guard) 1. Due: First seal for Old Guard.");
     d.observe(
@@ -300,14 +471,31 @@ pub fn run(d: &mut Driver<'_>) {
     d.wait_for_text(VARRA_WORDS);
     d.press_ctrl(Key::T);
     d.expect("Elapsed race time");
+    // The search field does not read as a filter of the trackers: it is empty, with no Clear.
+    d.observe(
+        "T19.1",
+        d.field_text(SEARCH_LOOKUP).unwrap_or_default().is_empty() && !d.has("Clear"),
+        "Over Trackers the search field shows its placeholder, not the last search",
+    );
     d.state("trackers-over-an-entry", Sizes::Small);
+    // Words typed there are a new search, which leaves Trackers for its result.
+    d.type_into(SEARCH_LOOKUP, VARRA);
+    d.wait_for_text(VARRA_WORDS);
+    d.observe(
+        "T19.1",
+        !d.has_containing("Elapsed race time")
+            && d.field_text(SEARCH_LOOKUP).as_deref() == Some(VARRA),
+        "Words typed in the field over Trackers search, whole, and leave Trackers",
+    );
+    d.press_ctrl(Key::T);
     d.press_ctrl(Key::T);
     d.observe(
         "T19.1",
         d.has(SEARCH_LOOKUP)
             && !d.has_containing("Elapsed race time")
-            && d.has_containing(VARRA_WORDS),
-        "Ctrl+T again shows the entry that Lookup held, and Lookup stays open",
+            && d.has_containing(VARRA_WORDS)
+            && d.field_text(SEARCH_LOOKUP).as_deref() == Some(VARRA),
+        "Ctrl+T again shows the entry that Lookup held with its search words, and Lookup stays open",
     );
     d.press_ctrl(Key::T);
     d.click("Back");
@@ -333,12 +521,12 @@ pub fn run(d: &mut Driver<'_>) {
             .timeline
             .events
             .iter()
-            .any(|event| event.title == "Take seal")
+            .any(|event| event.title == "Take seal: Old Guard")
     };
     d.observe(
         "T19.2",
         added(d) && ledger(d).matches("why: Take seal").count() == 1,
-        "Add to Timeline makes a Major event with the act's label, and writes no ledger entry",
+        "Add to Timeline makes a Major event with the act's label and its line, and writes no ledger entry",
     );
     d.click("Undo add");
     d.observe(
@@ -488,6 +676,33 @@ pub fn run(d: &mut Driver<'_>) {
     d.settle();
     d.press(Key::Escape);
     d.press_ctrl(Key::T);
+
+    // An amount field takes exactly its action's column at a target's height, so no action
+    // moves; Enter is the press, and the action keeps its place when that raises a Due row.
+    let note = root(d).join("Tournament.md");
+    let text = fs::read_to_string(&note).unwrap();
+    fs::write(&note, text.replacen("> trackers:\n", PURSES, 1)).unwrap();
+    d.app_mut().lookup.refresh();
+    d.app_mut().lookup.files_changed = true;
+    d.settle();
+    let shown = d.has_containing("Elapsed race time");
+    if !shown {
+        d.press_ctrl(Key::T);
+    }
+    let (held, detail) = amount_in_its_column(d);
+    let (wide_held, wide_detail) = d.act_at_size(DEFAULT, amount_in_its_column);
+    d.observe(
+        "T19.2",
+        held && wide_held,
+        format!("An amount field keeps its action's column and the place of every action: {detail} at 960x640; {wide_detail} at 1200x800"),
+    );
+    if !shown {
+        d.press_ctrl(Key::T);
+    }
+    fs::write(&note, text).unwrap();
+    d.app_mut().lookup.refresh();
+    d.app_mut().lookup.files_changed = true;
+    d.settle();
 
     // A fight starts beside the view; the run shows no tracker part, only the rail's count.
     d.click(&format!("Start fight: {SHRINE}"));
