@@ -5551,7 +5551,7 @@ pub mod run_lookup {
         d.aside(|d| {
             let rail = d.rail_words();
             d.press_ctrl(Key::T);
-            d.expect("No house rules are in play.");
+            d.expect("No house rules in play");
             d.observe(
                 "T19.1",
                 d.has(SEARCH_LOOKUP) && !d.in_view(SPELL) && d.in_view(NEXT_TURN),
@@ -5564,7 +5564,7 @@ pub mod run_lookup {
             d.observe(
                 "T19.3",
                 current_participant(d) == turn
-                    && d.has("No house rules are in play.")
+                    && d.has("No house rules in play")
                     && d.rail_words() == rail
                     && !d.has_containing("due. Open Trackers"),
                 "Beside Trackers the run's letter keys are off, and the rail shows no tracker part",
@@ -5572,7 +5572,7 @@ pub mod run_lookup {
             d.press_ctrl(Key::T);
             d.observe(
                 "T19.1",
-                d.in_view(SPELL) && !d.has_containing("No house rules are in play."),
+                d.in_view(SPELL) && !d.has_containing("No house rules in play"),
                 "Ctrl+T again shows the spell that Lookup held",
             );
         });
@@ -7214,14 +7214,14 @@ pub mod nav_state {
         // shows what Lookup showed before, and Lookup stays open. The page keeps its state.
         d.aside(|d| {
             d.press_ctrl(Key::T);
-            let opened = d.has(SEARCH_LOOKUP) && d.has("No house rules are in play.");
+            let opened = d.has(SEARCH_LOOKUP) && d.has("No house rules in play");
             d.press_ctrl(Key::K);
             let closed = !d.has(SEARCH_LOOKUP);
             d.press_ctrl(Key::K);
-            let reopened = d.has("No house rules are in play.");
+            let reopened = d.has("No house rules in play");
             d.press_ctrl(Key::T);
             let back = d.has(SEARCH_LOOKUP)
-                && !d.has("No house rules are in play.")
+                && !d.has("No house rules in play")
                 && d.has_containing("Search built-in rules");
             d.press_ctrl(Key::K);
             d.observe(

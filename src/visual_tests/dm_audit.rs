@@ -652,6 +652,50 @@ fn during_the_session(a: &mut Audit<'_, '_>) {
         ledger.contains("why: Burn a torch")
     ));
 
+    // F4: a wrong press of last session, on a tracker with no opposite action, is removed from
+    // the house rule note's history in Lookup's reader.
+    a.setup("last session's ledger holds a wrong press", |d| {
+        use crate::trackers::ledger::{self, Entry, Op};
+        let campaign = d.app_mut().campaigns.active_campaign().expect("a campaign");
+        let wrong = Entry {
+            id: "c-1a57ee00".into(),
+            tracker: Some("torches".into()),
+            add: Some(-1),
+            why: Some("Burn a torch".into()),
+            session: Some(uuid::Uuid::from_u128(7)),
+            ..Entry::default()
+        };
+        ledger::commit(&ledger::path(&campaign.path), |_| {
+            Ok(Op::Restore(vec![(None, wrong)]))
+        })
+        .expect("write last session's press");
+        d.app_mut().trackers.read_disk();
+        d.settle();
+    });
+    a.task("Correct a wrong press of last session from the house rule note");
+    a.act(Panel, "open Lookup", |d| d.press_ctrl(Key::K));
+    a.act(Find, "search: torch rules", |d| d.type_text("Torch Rules"));
+    a.click(Find, "TORCHES HISTORY 2");
+    a.click(Find, "More actions for Burn a torch: -1");
+    a.click(Do, "Remove");
+    a.act(Panel, "close Lookup", |d| d.press(Key::Escape));
+    let ledger =
+        a.d.app_mut()
+            .campaigns
+            .active_campaign()
+            .map(|campaign| campaign.path.join("Trackers.md"))
+            .and_then(|path| fs::read_to_string(path).ok())
+            .unwrap_or_default();
+    let corrected = !ledger.contains("c-1a57ee00") && ledger.contains("why: Burn a torch");
+    a.fact(format!(
+        "last session's press is gone and tonight's stays: {corrected}"
+    ));
+    a.d.observe(
+        "T19.6",
+        corrected,
+        "Remove in the house rule note's history takes last session's press, and tonight's stays",
+    );
+
     a.task("Next fight: start it, with the party as it stands");
     a.click(Nav, &format!("Start fight: {SECOND}"));
     a.fact(format!(

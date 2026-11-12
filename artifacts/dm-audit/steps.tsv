@@ -199,6 +199,13 @@ during	Set-up	Setup	the campaign has a house rule note in play	0	Session		false
 during	Mark a house rule's number between fights	Panel	Ctrl+T	1	Session		false
 during	Mark a house rule's number between fights	Do	Burn a torch	1	Session		false
 during	Mark a house rule's number between fights	Panel	Ctrl+T	1	Session		false
+during	Set-up	Setup	last session's ledger holds a wrong press	0	Session		false
+during	Correct a wrong press of last session from the house rule note	Panel	open Lookup	1	Session		false
+during	Correct a wrong press of last session from the house rule note	Find	search: torch rules	1	Session		false
+during	Correct a wrong press of last session from the house rule note	Find	TORCHES HISTORY 2	1	Session		false
+during	Correct a wrong press of last session from the house rule note	Find	More actions for Burn a torch: -1	1	Session		false
+during	Correct a wrong press of last session from the house rule note	Do	Remove	1	Session		false
+during	Correct a wrong press of last session from the house rule note	Panel	close Lookup	1	Session		false
 during	Next fight: start it, with the party as it stands	Nav	Start fight: Shrine of Cinders	1	Session	Run	false
 during	Next fight: roll and begin	Do	Roll NPC initiative	1	Run		false
 during	Next fight: roll and begin	Do	type Brannoch Vale's initiative	1	Run		false
@@ -258,7 +265,3 @@ after	A new day starts: take the supply wagon's torches	Do	Add Day	1	Timeline		f
 after	A new day starts: take the supply wagon's torches	Panel	Ctrl+T	1	Timeline		false
 after	A new day starts: take the supply wagon's torches	Do	Done: Supply wagon, Day 2	1	Timeline		false
 after	A new day starts: take the supply wagon's torches	Panel	Ctrl+T	1	Timeline		false
-after	Set-up	Setup	Hobb's note holds an open question	0	Timeline		false
-after	The table settles an open question: tick it	Nav	World	1	Timeline	World	false
-after	The table settles an open question: tick it	Sub	Open questions	1	World		false
-after	The table settles an open question: tick it	Do	Open: Who paid the toll collectors?	1	World		false

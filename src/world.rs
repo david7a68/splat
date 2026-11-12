@@ -2090,6 +2090,8 @@ pub(crate) enum FooterAct {
     GoneLog(u64),
     /// `Undo tick` of an open question, by its note and its line: the World page's.
     Untick(Uuid, usize),
+    /// `Undo remove` of a row of a tracker's history: the trackers own it, and the pane takes it.
+    Trackers,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -2180,6 +2182,14 @@ impl FooterLine {
             }
         }
     }
+}
+
+/// A pane's footer lines with more from another owner, in the footer's order: results with a
+/// live Undo newest first, then reasons, then notices.
+pub(crate) fn with_lines(mut lines: Vec<FooterLine>, more: Vec<FooterLine>) -> Vec<FooterLine> {
+    lines.extend(more);
+    lines.sort_by_key(|line| (line.rank, std::cmp::Reverse(line.order)));
+    lines
 }
 
 /// Draw a pane's footer lines in its message footer (`design::Footer`), pinned at the bottom of
@@ -2332,12 +2342,26 @@ impl Reader {
         }
     }
 
+    #[cfg(test)]
     pub fn read(
         &mut self,
         ui: &mut egui::Ui,
         item: &Item,
         index: &ContentIndex,
         campaign: Option<&Campaign>,
+    ) -> Option<Nav> {
+        self.read_with(ui, item, index, campaign, None)
+    }
+
+    /// `read`, with the trackers: a house rule note in play shows its problems and each
+    /// tracker's history after its text.
+    pub fn read_with(
+        &mut self,
+        ui: &mut egui::Ui,
+        item: &Item,
+        index: &ContentIndex,
+        campaign: Option<&Campaign>,
+        trackers: Option<&mut crate::trackers::Trackers>,
     ) -> Option<Nav> {
         self.prepare(item);
         if self.undo.as_ref().is_some_and(|change| {
@@ -2364,7 +2388,7 @@ impl Reader {
             None
         };
         crate::markdown_view::want_heading(ui.ctx(), heading);
-        let go = self.draw(ui, item, index, campaign);
+        let go = self.draw(ui, item, index, campaign, trackers);
         // A request lasts one draw, so it cannot reach a heading on another page.
         crate::markdown_view::want_heading(ui.ctx(), None);
         go.and_then(|go| self.settle(go))
@@ -2376,6 +2400,7 @@ impl Reader {
         item: &Item,
         index: &ContentIndex,
         campaign: Option<&Campaign>,
+        trackers: Option<&mut crate::trackers::Trackers>,
     ) -> Option<Go> {
         let mut go = None;
         if self.place_choices_document != Some(item.entry.id) {
@@ -2853,6 +2878,9 @@ impl Reader {
                 index,
                 empty_value_block,
                 |ui| {
+                    if let Some(trackers) = trackers {
+                        crate::trackers::history::show(ui, trackers, &item.entry);
+                    }
                     related(ui, item, index).and_then(|go| {
                         if let Go::Item(at, _) = go {
                             Some(at)
@@ -3850,8 +3878,8 @@ impl Reader {
                 }
                 None
             }
-            // The page takes its own result's Undo.
-            FooterAct::Page => None,
+            // The page takes its own result's Undo, and the pane the trackers'.
+            FooterAct::Page | FooterAct::Trackers => None,
             FooterAct::GoneLog(id) => {
                 self.end_gone_log(id);
                 None

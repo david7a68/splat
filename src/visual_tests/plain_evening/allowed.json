@@ -2,8 +2,8 @@
   "about": "G7's allowed differences from reference.json. Each row names its row of docs/design/session-cycle.md section 2.5 and one difference, whole, as the G7 failure prints it. A row that matches nothing fails. Add rows only for a change that section 2.5 lists.",
   "rows": [
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "1200x800 Lookup open",
@@ -14,8 +14,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "1200x800 Lookup open",
@@ -26,8 +26,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "1200x800 Lookup open",
@@ -38,8 +38,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "1200x800 Lookup open",
@@ -50,8 +50,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "1200x800 Lookup open",
@@ -62,8 +62,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "1200x800 Lookup open",
@@ -74,8 +74,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "1200x800 Lookup open",
@@ -86,8 +86,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "1200x800 Lookup open",
@@ -98,8 +98,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "1200x800 Lookup open",
@@ -110,8 +110,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "1200x800 Lookup open",
@@ -122,8 +122,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "1200x800 Lookup open",
@@ -134,8 +134,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "1200x800 Lookup open",
@@ -146,8 +146,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "1200x800 Lookup open",
@@ -158,8 +158,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "1200x800 Lookup open",
@@ -170,8 +170,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "1200x800 Lookup open",
@@ -182,8 +182,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "1200x800 Lookup open",
@@ -194,8 +194,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "1200x800 Lookup open",
@@ -206,8 +206,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "1200x800 Lookup open",
@@ -218,8 +218,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "1200x800 Lookup open",
@@ -230,8 +230,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
+      "row": 29,
+      "why": "Row 29 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "1200x800 Lookup open",
@@ -242,8 +242,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
+      "row": 29,
+      "why": "Row 29 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "1200x800 Lookup open",
@@ -254,8 +254,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
+      "row": 29,
+      "why": "Row 29 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "1200x800 Lookup open",
@@ -266,8 +266,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "1200x800 Lookup open",
@@ -278,8 +278,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "1200x800 Lookup open",
@@ -290,8 +290,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "1200x800 Lookup open",
@@ -302,8 +302,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
+      "row": 29,
+      "why": "Row 29 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "1200x800 Lookup open",
@@ -314,8 +314,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "960x640 Lookup open",
@@ -326,8 +326,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "960x640 Lookup open",
@@ -338,8 +338,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "960x640 Lookup open",
@@ -350,8 +350,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "960x640 Lookup open",
@@ -362,8 +362,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "960x640 Lookup open",
@@ -374,8 +374,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "960x640 Lookup open",
@@ -386,8 +386,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "960x640 Lookup open",
@@ -398,8 +398,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "960x640 Lookup open",
@@ -410,8 +410,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "960x640 Lookup open",
@@ -422,8 +422,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "960x640 Lookup open",
@@ -434,8 +434,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "960x640 Lookup open",
@@ -446,8 +446,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "960x640 Lookup open",
@@ -458,8 +458,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "960x640 Lookup open",
@@ -470,8 +470,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "960x640 Lookup open",
@@ -482,8 +482,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "960x640 Lookup open",
@@ -494,8 +494,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "960x640 Lookup open",
@@ -506,8 +506,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "960x640 Lookup open",
@@ -518,8 +518,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "960x640 Lookup open",
@@ -530,8 +530,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "960x640 Lookup open",
@@ -542,8 +542,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
+      "row": 29,
+      "why": "Row 29 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "960x640 Lookup open",
@@ -554,8 +554,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
+      "row": 29,
+      "why": "Row 29 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "960x640 Lookup open",
@@ -566,8 +566,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "960x640 Lookup open",
@@ -578,8 +578,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "960x640 Lookup open",
@@ -590,8 +590,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "960x640 Lookup open",
@@ -602,8 +602,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
+      "row": 29,
+      "why": "Row 29 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
       "difference": {
         "screen": "lookup-reader Captain Varra, npc",
         "view": "960x640 Lookup open",
@@ -614,8 +614,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Oren Thistlewick, npc",
         "view": "1200x800 Lookup open",
@@ -626,8 +626,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Oren Thistlewick, npc",
         "view": "1200x800 Lookup open",
@@ -638,8 +638,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Oren Thistlewick, npc",
         "view": "1200x800 Lookup open",
@@ -650,8 +650,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Oren Thistlewick, npc",
         "view": "1200x800 Lookup open",
@@ -662,8 +662,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Oren Thistlewick, npc",
         "view": "1200x800 Lookup open",
@@ -674,8 +674,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Oren Thistlewick, npc",
         "view": "1200x800 Lookup open",
@@ -686,8 +686,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Oren Thistlewick, npc",
         "view": "1200x800 Lookup open",
@@ -698,8 +698,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Oren Thistlewick, npc",
         "view": "1200x800 Lookup open",
@@ -710,8 +710,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Oren Thistlewick, npc",
         "view": "1200x800 Lookup open",
@@ -722,8 +722,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Oren Thistlewick, npc",
         "view": "1200x800 Lookup open",
@@ -734,8 +734,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Oren Thistlewick, npc",
         "view": "1200x800 Lookup open",
@@ -746,8 +746,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
+      "row": 29,
+      "why": "Row 29 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
       "difference": {
         "screen": "lookup-reader Oren Thistlewick, npc",
         "view": "1200x800 Lookup open",
@@ -758,8 +758,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
+      "row": 29,
+      "why": "Row 29 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
       "difference": {
         "screen": "lookup-reader Oren Thistlewick, npc",
         "view": "1200x800 Lookup open",
@@ -770,8 +770,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
+      "row": 29,
+      "why": "Row 29 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
       "difference": {
         "screen": "lookup-reader Oren Thistlewick, npc",
         "view": "1200x800 Lookup open",
@@ -782,8 +782,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Oren Thistlewick, npc",
         "view": "1200x800 Lookup open",
@@ -794,8 +794,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Oren Thistlewick, npc",
         "view": "1200x800 Lookup open",
@@ -806,8 +806,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Oren Thistlewick, npc",
         "view": "1200x800 Lookup open",
@@ -818,8 +818,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
+      "row": 29,
+      "why": "Row 29 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
       "difference": {
         "screen": "lookup-reader Oren Thistlewick, npc",
         "view": "1200x800 Lookup open",
@@ -830,8 +830,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Oren Thistlewick, npc",
         "view": "960x640 Lookup open",
@@ -842,8 +842,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Oren Thistlewick, npc",
         "view": "960x640 Lookup open",
@@ -854,8 +854,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Oren Thistlewick, npc",
         "view": "960x640 Lookup open",
@@ -866,8 +866,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Oren Thistlewick, npc",
         "view": "960x640 Lookup open",
@@ -878,8 +878,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Oren Thistlewick, npc",
         "view": "960x640 Lookup open",
@@ -890,8 +890,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Oren Thistlewick, npc",
         "view": "960x640 Lookup open",
@@ -902,8 +902,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Oren Thistlewick, npc",
         "view": "960x640 Lookup open",
@@ -914,8 +914,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Oren Thistlewick, npc",
         "view": "960x640 Lookup open",
@@ -926,8 +926,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Oren Thistlewick, npc",
         "view": "960x640 Lookup open",
@@ -938,8 +938,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Oren Thistlewick, npc",
         "view": "960x640 Lookup open",
@@ -950,8 +950,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Oren Thistlewick, npc",
         "view": "960x640 Lookup open",
@@ -962,8 +962,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
+      "row": 29,
+      "why": "Row 29 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
       "difference": {
         "screen": "lookup-reader Oren Thistlewick, npc",
         "view": "960x640 Lookup open",
@@ -974,8 +974,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
+      "row": 29,
+      "why": "Row 29 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
       "difference": {
         "screen": "lookup-reader Oren Thistlewick, npc",
         "view": "960x640 Lookup open",
@@ -986,8 +986,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Oren Thistlewick, npc",
         "view": "960x640 Lookup open",
@@ -998,8 +998,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Oren Thistlewick, npc",
         "view": "960x640 Lookup open",
@@ -1010,8 +1010,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Oren Thistlewick, npc",
         "view": "960x640 Lookup open",
@@ -1022,8 +1022,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
+      "row": 29,
+      "why": "Row 29 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
       "difference": {
         "screen": "lookup-reader Oren Thistlewick, npc",
         "view": "960x640 Lookup open",
@@ -1034,8 +1034,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra Black, npc",
         "view": "1200x800 Lookup open",
@@ -1046,8 +1046,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra Black, npc",
         "view": "1200x800 Lookup open",
@@ -1058,8 +1058,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra Black, npc",
         "view": "1200x800 Lookup open",
@@ -1070,8 +1070,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra Black, npc",
         "view": "1200x800 Lookup open",
@@ -1082,8 +1082,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra Black, npc",
         "view": "1200x800 Lookup open",
@@ -1094,8 +1094,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra Black, npc",
         "view": "1200x800 Lookup open",
@@ -1106,8 +1106,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra Black, npc",
         "view": "1200x800 Lookup open",
@@ -1118,8 +1118,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra Black, npc",
         "view": "1200x800 Lookup open",
@@ -1130,8 +1130,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra Black, npc",
         "view": "1200x800 Lookup open",
@@ -1142,8 +1142,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra Black, npc",
         "view": "1200x800 Lookup open",
@@ -1154,8 +1154,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra Black, npc",
         "view": "1200x800 Lookup open",
@@ -1166,8 +1166,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra Black, npc",
         "view": "1200x800 Lookup open",
@@ -1178,8 +1178,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra Black, npc",
         "view": "1200x800 Lookup open",
@@ -1190,8 +1190,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra Black, npc",
         "view": "1200x800 Lookup open",
@@ -1202,8 +1202,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra Black, npc",
         "view": "960x640 Lookup open",
@@ -1214,8 +1214,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra Black, npc",
         "view": "960x640 Lookup open",
@@ -1226,8 +1226,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra Black, npc",
         "view": "960x640 Lookup open",
@@ -1238,8 +1238,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra Black, npc",
         "view": "960x640 Lookup open",
@@ -1250,8 +1250,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra Black, npc",
         "view": "960x640 Lookup open",
@@ -1262,8 +1262,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra Black, npc",
         "view": "960x640 Lookup open",
@@ -1274,8 +1274,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra Black, npc",
         "view": "960x640 Lookup open",
@@ -1286,8 +1286,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra Black, npc",
         "view": "960x640 Lookup open",
@@ -1298,8 +1298,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra Black, npc",
         "view": "960x640 Lookup open",
@@ -1310,8 +1310,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra Black, npc",
         "view": "960x640 Lookup open",
@@ -1322,8 +1322,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra Black, npc",
         "view": "960x640 Lookup open",
@@ -1334,8 +1334,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra Black, npc",
         "view": "960x640 Lookup open",
@@ -1346,8 +1346,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra Black, npc",
         "view": "960x640 Lookup open",
@@ -1358,8 +1358,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "lookup-reader Captain Varra Black, npc",
         "view": "960x640 Lookup open",
@@ -1370,8 +1370,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
+      "row": 29,
+      "why": "Row 29 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
       "difference": {
         "screen": "world-reader",
         "view": "1200x800 Lookup closed",
@@ -1382,8 +1382,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
+      "row": 29,
+      "why": "Row 29 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
       "difference": {
         "screen": "world-reader",
         "view": "1200x800 Lookup closed",
@@ -1394,8 +1394,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
+      "row": 29,
+      "why": "Row 29 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
       "difference": {
         "screen": "world-reader",
         "view": "960x640 Lookup closed",
@@ -1406,8 +1406,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
+      "row": 29,
+      "why": "Row 29 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
       "difference": {
         "screen": "world-reader",
         "view": "960x640 Lookup closed",
@@ -1418,8 +1418,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
+      "row": 29,
+      "why": "Row 29 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
       "difference": {
         "screen": "world-reader",
         "view": "1200x800 Lookup open",
@@ -1430,8 +1430,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
+      "row": 29,
+      "why": "Row 29 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
       "difference": {
         "screen": "world-reader",
         "view": "1200x800 Lookup open",
@@ -1442,8 +1442,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
+      "row": 29,
+      "why": "Row 29 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
       "difference": {
         "screen": "world-reader: Edit hover",
         "view": "1200x800",
@@ -1454,8 +1454,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
+      "row": 29,
+      "why": "Row 29 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
       "difference": {
         "screen": "world-reader: Edit hover",
         "view": "1200x800",
@@ -1466,8 +1466,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
+      "row": 29,
+      "why": "Row 29 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
       "difference": {
         "screen": "world-reader: Edit hover",
         "view": "960x640",
@@ -1478,8 +1478,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
+      "row": 29,
+      "why": "Row 29 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
       "difference": {
         "screen": "world-reader: Edit hover",
         "view": "960x640",
@@ -1490,8 +1490,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "act 86",
         "view": "",
@@ -1502,8 +1502,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "act 87",
         "view": "",
@@ -1514,8 +1514,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "act 90",
         "view": "",
@@ -1526,8 +1526,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "act 91",
         "view": "",
@@ -1538,8 +1538,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "act 94",
         "view": "",
@@ -1550,8 +1550,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
+      "row": 28,
+      "why": "Row 28 (by the lead's ruling after app round 2): Lookup's reader of a campaign NPC shows the Status row with its Change; items below it move straight down by its height",
       "difference": {
         "screen": "act 95",
         "view": "",
@@ -1562,8 +1562,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
+      "row": 29,
+      "why": "Row 29 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
       "difference": {
         "screen": "act 103",
         "view": "",
@@ -1574,8 +1574,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
+      "row": 29,
+      "why": "Row 29 (by the lead's ruling after app round 2): the reader's `Add to Log` has its own glyph, a list with a plus, at the place of its `+`",
       "difference": {
         "screen": "act 106",
         "view": "",

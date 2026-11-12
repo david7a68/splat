@@ -496,7 +496,8 @@ opens the draft beside the current file at the first difference, with disk-confl
 before it can replace those words. A repaired Timeline file is read
 again, and the open fight's latest result is applied.
 
-Session storage remembers each known note path in `.splat-session-paths.json`. A copied session
+Session storage remembers each known note path in `.splat-session-paths.json`, and writes it only when a
+path changes, so an idle campaign's files keep their times. A copied session
 shows both file names and offers **Make <file> a separate entry**, with **Undo separate entry**. A moved draft can save to its new path
 with the same session ID. If a session or run folder is gone, choose its folder before making new
 files. Recording results stay listed as **Audio removed** when their WAV is gone.
@@ -672,7 +673,12 @@ in Obsidian counts at once and is never written over; an act on a definition or 
 nothing and says so. A file that cannot be read (`Trackers.md`, `Campaign.md` or a house rule note in play) blocks every act and
 shows `Trackers not read`. A save that fails records nothing and keeps nothing: the bottom of Trackers says
 `Trackers.md was not saved` with the reason, and you press again. Entries for a tracker that no note in play has are kept and not
-counted; the end of Trackers names them. To take back an entry of an older session, edit `Trackers.md` in Obsidian. In a fight the run shows no tracker part: use Ctrl+T, press, and
+counted; the end of Trackers names them, and so it names a value that an edit forced below its `min`. Each
+tracker's history is in its house rule note's reader (open the note in Lookup): fold open `<NAME> HISTORY` to see
+each entry and the value it left. To take back an entry of an older session, use **Remove** in that row's menu: it
+takes the entry, the others of its press and the entries of any notice it raised, and **Undo remove** puts them
+back where they were. Remove refuses when a later notice's crossing depends on the entry, and names that notice's
+entry to remove first. In a fight the run shows no tracker part: use Ctrl+T, press, and
 go back.
 
 ### Loot

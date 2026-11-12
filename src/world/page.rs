@@ -416,6 +416,7 @@ impl WorldPage {
         ui: &mut egui::Ui,
         index: Option<&Arc<ContentIndex>>,
         campaign: &Campaign,
+        trackers: &mut crate::trackers::Trackers,
     ) {
         self.set_campaign(campaign.id);
         // Lookup's reason line ends with the NPC it explains.
@@ -734,15 +735,19 @@ impl WorldPage {
                 // Every result, reason and Undo of the open note sits in the pane's footer,
                 // pinned below the reader, so none of them moves the note (round 26).
                 let page = self.result(Some(item.entry.id));
-                let lines = self.reader.footer_lines(
-                    item,
-                    index,
-                    Some(campaign),
-                    page.as_ref().map(|(page, order)| (page, *order)),
+                let lines = super::with_lines(
+                    self.reader.footer_lines(
+                        item,
+                        index,
+                        Some(campaign),
+                        page.as_ref().map(|(page, order)| (page, *order)),
+                    ),
+                    crate::trackers::history::footer_lines(trackers, item.entry.id),
                 );
                 let (pressed, bottom) = super::draw_footer(ui, "world_footer", &lines);
                 match pressed {
                     Some(super::FooterAct::Page) => self.undo_discard(),
+                    Some(super::FooterAct::Trackers) => trackers.undo_remove(),
                     Some(act) => nav = self.reader.footer_act(act, item, campaign),
                     None => {}
                 }
@@ -754,7 +759,13 @@ impl WorldPage {
                         .max_height((bottom - ui.cursor().top()).max(0.0))
                         .auto_shrink([false, false])
                         .show(ui, |ui| {
-                            let read = self.reader.read(ui, item, index, Some(campaign));
+                            let read = self.reader.read_with(
+                                ui,
+                                item,
+                                index,
+                                Some(campaign),
+                                Some(&mut *trackers),
+                            );
                             nav = nav.take().or(read);
                         });
                 });
@@ -1668,7 +1679,9 @@ mod tests {
             .build_ui_state(
                 {
                     let index = index.clone();
-                    move |ui, page: &mut WorldPage| page.show(ui, Some(&index), &shown)
+                    move |ui, page: &mut WorldPage| {
+                        page.show(ui, Some(&index), &shown, &mut Default::default())
+                    }
                 },
                 WorldPage::default(),
             );
@@ -1859,7 +1872,9 @@ mod tests {
             .build_ui_state(
                 {
                     let index = index.clone();
-                    move |ui, page: &mut WorldPage| page.show(ui, Some(&index), &campaign)
+                    move |ui, page: &mut WorldPage| {
+                        page.show(ui, Some(&index), &campaign, &mut Default::default())
+                    }
                 },
                 WorldPage::default(),
             );
