@@ -1693,8 +1693,7 @@ impl Splat {
                                 ui.horizontal_top(|ui| {
                                     ui.spacing_mut().item_spacing.x = design::XL;
                                     let layout = egui::Layout::top_down(egui::Align::Min);
-                                    for place in 0..2 {
-                                        let width = widths[place];
+                                    for (place, width) in widths.into_iter().enumerate() {
                                         let column = egui::vec2(width, 0.0);
                                         ui.allocate_ui_with_layout(column, layout, |ui| {
                                             // Both ways, so the second column starts in one place.
