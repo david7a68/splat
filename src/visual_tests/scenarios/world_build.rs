@@ -305,7 +305,7 @@ pub fn broken(d: &mut Driver<'_>) {
                 state
             };
             // Each message is reached on its own: the reason's words, with the result's Undo.
-            let reached = space_reaches(d, &combined, Some(undo));
+            let reached = space_reaches(d, combined, Some(undo));
             let (keyed, wheeled) = (
                 reached.iter().all(|(keyboard, _)| *keyboard),
                 reached.iter().all(|(_, pointer)| *pointer),
@@ -512,7 +512,13 @@ pub fn broken(d: &mut Driver<'_>) {
         below && !d.visible_text("Note repaired."),
         format!("`Changes saved.` replaces `Note repaired.`; {detail}"),
     );
-    body_kept(d, "iter-26-D-FG1", "Change Stat block", &rows, Some("Undo changes"));
+    body_kept(
+        d,
+        "iter-26-D-FG1",
+        "Change Stat block",
+        &rows,
+        Some("Undo changes"),
+    );
     d.state("repaired-note-saved", Sizes::Default);
     d.click("Undo changes");
     d.observe(
@@ -1251,7 +1257,11 @@ pub fn broken(d: &mut Driver<'_>) {
     );
     d.click("Rename the note to Lamp");
     d.wait_for_text("Undo name change");
-    assert_eq!(fs::read_to_string(&lamp).unwrap(), lamp_renamed, "B changed state again");
+    assert_eq!(
+        fs::read_to_string(&lamp).unwrap(),
+        lamp_renamed,
+        "B changed state again"
+    );
     d.click_containing("Repaired watchkeeper · ");
     d.click("Undo file rename");
     d.settle();
@@ -2202,7 +2212,13 @@ pub fn places(d: &mut Driver<'_>) {
             .unwrap()
             .contains("splat_stat_block:")
     );
-    body_kept(d, "iter-26-D-SH1", "Change In", &rows, Some("Undo stat block change"));
+    body_kept(
+        d,
+        "iter-26-D-SH1",
+        "Change In",
+        &rows,
+        Some("Undo stat block change"),
+    );
     d.expect_same("Adding the stat block keeps the note's content and offers Undo.");
     d.state("npc-stat-block-changed", Sizes::All);
     d.click("Undo stat block change");
@@ -2260,7 +2276,13 @@ pub fn places(d: &mut Driver<'_>) {
             .is_some_and(|(undo, row)| undo.top() >= row.bottom()),
         format!("Undo place change at {undo:?}, below the last row at {row:?}"),
     );
-    body_kept(d, "iter-26-D-FH2", "Change Stat block", &rows, Some("Undo place change"));
+    body_kept(
+        d,
+        "iter-26-D-FH2",
+        "Change Stat block",
+        &rows,
+        Some("Undo place change"),
+    );
     let cleared = prose_at(d);
     d.observe(
         "iter-26-D-FH2-prose",
@@ -3670,9 +3692,11 @@ fn body_kept(
         for size in [SMALL, DEFAULT, LARGE] {
             placed.push(d.at_size(size, |d| {
                 let found = d.place_of(result).filter(|_| d.in_view(result));
-                let below = found.zip(d.place_of(anchor)).is_some_and(|(found, anchor)| {
-                    found.top() >= anchor.bottom() && found.top() >= size.1 / 2.0
-                });
+                let below = found
+                    .zip(d.place_of(anchor))
+                    .is_some_and(|(found, anchor)| {
+                        found.top() >= anchor.bottom() && found.top() >= size.1 / 2.0
+                    });
                 (size, found, below)
             }));
         }
@@ -3680,7 +3704,9 @@ fn body_kept(
     d.observe(
         id,
         kept && placed.iter().all(|(_, _, below)| *below),
-        format!("{anchor} keeps its top {before:?} → {now:?}; {result:?} in the footer: {placed:?}"),
+        format!(
+            "{anchor} keeps its top {before:?} → {now:?}; {result:?} in the footer: {placed:?}"
+        ),
     );
 }
 
@@ -4180,7 +4206,13 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
             && !d.has("Change In"),
         "After Save, Lookup reads the NPC again with the new place and text",
     );
-    body_kept(d, "iter-26-D-FJ3", "Add to fight", &add, Some("Undo changes"));
+    body_kept(
+        d,
+        "iter-26-D-FJ3",
+        "Add to fight",
+        &add,
+        Some("Undo changes"),
+    );
     d.state("npc-edit-saved-in-lookup", Sizes::All);
     d.click("Undo changes");
     d.wait_for_text("Watch House");
@@ -9227,7 +9259,10 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
     // Neighbour: the `not set` placeholder in a row above stays muted `Small`.
     let status = |d: &Driver<'_>, words: &str| {
         let row = d.place_of("Change Status")?;
-        let area = egui::Rect::from_x_y_ranges(0.0..=row.left(), row.top() - 4.0 * design::Density::Scan.row()..=row.bottom());
+        let area = egui::Rect::from_x_y_ranges(
+            0.0..=row.left(),
+            row.top() - 4.0 * design::Density::Scan.row()..=row.bottom(),
+        );
         Some((d.painted_size(area, words)?, d.painted_color(words)?))
     };
     let (alive, unset) = (status(d, "alive"), status(d, "not set"));
@@ -9559,7 +9594,9 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
         d.observe(
             "iter-17-D-FD1-kept",
             placed,
-            format!("At {size:?}, the kept-changes message sits in the footer below the rows: {detail}"),
+            format!(
+                "At {size:?}, the kept-changes message sits in the footer below the rows: {detail}"
+            ),
         );
     }
     // Round 24 FG5: with Part of on two lines, Change keeps the column at the widest drawn line

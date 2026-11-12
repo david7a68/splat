@@ -9405,8 +9405,7 @@ pub mod world {
         );
         d.expect("Stat block set to Guard.");
         d.expect("Undo stat block change");
-        let (success, detail) =
-            world_build::finished_change_tone(d, "Stat block set to Guard.");
+        let (success, detail) = world_build::finished_change_tone(d, "Stat block set to Guard.");
         d.observe("iter-20-D-FD5-stat-block", success, detail);
         d.state("world-npc-in-run", Sizes::All);
         d.observe(

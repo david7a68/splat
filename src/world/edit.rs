@@ -695,7 +695,11 @@ impl Reader {
 
     /// Undo for a Discard that dropped changes, while the DM reads that entry again. It sits in
     /// the pane's footer; `FooterAct::Discarded` brings the draft back.
-    pub(super) fn discarded_line(&self, campaign: &Campaign, id: Uuid) -> Option<super::FooterLine> {
+    pub(super) fn discarded_line(
+        &self,
+        campaign: &Campaign,
+        id: Uuid,
+    ) -> Option<super::FooterLine> {
         let (at, draft) = self.discarded.as_ref()?;
         (*at == id && draft.campaign == campaign.id)
             .then(|| super::FooterLine::discarded(&draft.name, super::FooterAct::Discarded))

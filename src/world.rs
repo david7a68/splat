@@ -1443,7 +1443,6 @@ impl ChangeKind {
             Self::Edit => "Undo changes",
         }
     }
-
 }
 
 impl Change {
@@ -1928,9 +1927,12 @@ impl PageResult {
     /// The page's result as a footer line. Its Undo is the page's (`FooterAct::Page`).
     pub(crate) fn line(&self) -> FooterLine {
         match self {
-            Self::Repaired => {
-                FooterLine::new(FooterRank::Notice, CHANGED, "Note repaired.", FooterKind::Plain)
-            }
+            Self::Repaired => FooterLine::new(
+                FooterRank::Notice,
+                CHANGED,
+                "Note repaired.",
+                FooterKind::Plain,
+            ),
             Self::Discarded(name) => FooterLine::discarded(name, FooterAct::Page),
         }
     }
@@ -1966,9 +1968,14 @@ pub(crate) enum FooterKind {
         act: FooterAct,
     },
     /// `<name> draft discarded.` with `Undo discard`, named for its draft.
-    Discarded { name: String, act: FooterAct },
+    Discarded {
+        name: String,
+        act: FooterAct,
+    },
     /// An action's error, with `Edit in Obsidian` for this file when an editor can open it.
-    Error { editor: Option<std::path::PathBuf> },
+    Error {
+        editor: Option<std::path::PathBuf>,
+    },
 }
 
 /// One World or Lookup message for its pane's footer (round 26): a result, reason or notice
@@ -3242,41 +3249,39 @@ impl Reader {
             ui.add_space(design::S);
             ui.label(Type::Small.rich(ui, label).color(colors().muted));
         }
-        ui
-            .horizontal(|ui| {
-                ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
-                    if !stacked {
-                        ui.allocate_ui_with_layout(
-                            egui::vec2(
-                                design::XXL * 3.0 + design::S,
-                                design::Density::Scan.control(),
-                            ),
-                            egui::Layout::left_to_right(egui::Align::Center),
-                            |ui| {
-                                ui.set_min_width(design::XXL * 3.0 + design::S);
-                                ui.label(Type::Small.rich(ui, label).color(colors().muted));
-                            },
-                        );
-                    }
+        ui.horizontal(|ui| {
+            ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
+                if !stacked {
                     ui.allocate_ui_with_layout(
-                        egui::vec2(width, design::Density::Scan.control()),
-                        egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true),
+                        egui::vec2(
+                            design::XXL * 3.0 + design::S,
+                            design::Density::Scan.control(),
+                        ),
+                        egui::Layout::left_to_right(egui::Align::Center),
                         |ui| {
-                            ui.set_width(width);
-                            value(ui);
+                            ui.set_min_width(design::XXL * 3.0 + design::S);
+                            ui.label(Type::Small.rich(ui, label).color(colors().muted));
                         },
                     );
-                    let Some(change) = change else {
-                        return false;
-                    };
-                    ui.add_space((design::L - ui.spacing().item_spacing.x).max(0.0));
-                    change.show(ui).clicked()
-                })
-                .inner
+                }
+                ui.allocate_ui_with_layout(
+                    egui::vec2(width, design::Density::Scan.control()),
+                    egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true),
+                    |ui| {
+                        ui.set_width(width);
+                        value(ui);
+                    },
+                );
+                let Some(change) = change else {
+                    return false;
+                };
+                ui.add_space((design::L - ui.spacing().item_spacing.x).max(0.0));
+                change.show(ui).clicked()
             })
             .inner
+        })
+        .inner
     }
-
 
     /// A change result on this note. It is newer than the page's repair result, so it takes
     /// the one place for results.
@@ -3327,7 +3332,12 @@ impl Reader {
             let editor = campaign
                 .filter(|_| self.group_error && !self.group_error_unread_file)
                 .map(|campaign| campaign.path.join(&item.entry.path));
-            lines.push(FooterLine::new(FooterRank::Reason, Tone::Error, error, FooterKind::Error { editor }));
+            lines.push(FooterLine::new(
+                FooterRank::Reason,
+                Tone::Error,
+                error,
+                FooterKind::Error { editor },
+            ));
         }
         let Some(campaign) = campaign else {
             return lines;
@@ -3344,22 +3354,51 @@ impl Reader {
             return lines;
         }
         let undo = |words: &str, label: &'static str, act| {
-            FooterLine::new(FooterRank::Undo, CHANGED, words, FooterKind::Undo { label, act })
+            FooterLine::new(
+                FooterRank::Undo,
+                CHANGED,
+                words,
+                FooterKind::Undo { label, act },
+            )
         };
-        if let Some(change) = self.undo.as_ref().filter(|change| change.shows_on(campaign, &item.entry.path)) {
-            lines.push(undo(&change.word, change.kind.undo_label(), FooterAct::Change));
+        if let Some(change) = self
+            .undo
+            .as_ref()
+            .filter(|change| change.shows_on(campaign, &item.entry.path))
+        {
+            lines.push(undo(
+                &change.word,
+                change.kind.undo_label(),
+                FooterAct::Change,
+            ));
         }
         lines.extend(self.discarded_line(campaign, id));
         if item.entry.kind == "world" && !index.duplicate_world.contains_key(&item.entry.path) {
-            if let Some(rename) = self.file_undo.as_ref().filter(|rename| rename.shows_on(campaign, &item.entry.path)) {
-                lines.push(undo(&rename.message(), "Undo file rename", FooterAct::FileRename));
+            if let Some(rename) = self
+                .file_undo
+                .as_ref()
+                .filter(|rename| rename.shows_on(campaign, &item.entry.path))
+            {
+                lines.push(undo(
+                    &rename.message(),
+                    "Undo file rename",
+                    FooterAct::FileRename,
+                ));
             }
-            if let Some(change) = self.name_undo.as_ref().filter(|change| change.shows_on(campaign, &item.entry.path)) {
+            if let Some(change) = self
+                .name_undo
+                .as_ref()
+                .filter(|change| change.shows_on(campaign, &item.entry.path))
+            {
                 lines.push(undo(&change.word, "Undo name change", FooterAct::Name));
             }
         }
         if let Some((_, change)) = &self.identity_undo {
-            lines.push(undo(change.message(), change.identity_undo_label(), FooterAct::Identity));
+            lines.push(undo(
+                change.message(),
+                change.identity_undo_label(),
+                FooterAct::Identity,
+            ));
         }
         lines.extend(page.map(|page| page.line()));
         // The form closed because the note already held every change. Nothing to undo.
@@ -3369,7 +3408,12 @@ impl Reader {
                 .as_ref()
                 .is_some_and(|(path, _)| *path == item.entry.path)
         {
-            lines.push(FooterLine::new(FooterRank::Notice, Tone::Info, edit::ALREADY_SAVED, FooterKind::Plain));
+            lines.push(FooterLine::new(
+                FooterRank::Notice,
+                Tone::Info,
+                edit::ALREADY_SAVED,
+                FooterKind::Plain,
+            ));
         }
         lines
     }

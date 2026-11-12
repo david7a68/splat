@@ -682,7 +682,9 @@ impl WorldPage {
                 // Every result, reason and Undo of the open note sits in the pane's footer,
                 // pinned below the reader, so none of them moves the note (round 26).
                 let page = self.result(Some(item.entry.id));
-                let lines = self.reader.footer_lines(item, index, Some(campaign), page.as_ref());
+                let lines = self
+                    .reader
+                    .footer_lines(item, index, Some(campaign), page.as_ref());
                 let (pressed, bottom) = super::draw_footer(ui, "world_footer", &lines);
                 match pressed {
                     Some(super::FooterAct::Page) => self.undo_discard(),
@@ -940,11 +942,7 @@ impl WorldPage {
                 // Two NPCs: the one Lookup keeps and the one on this card. Each is named, so the
                 // DM knows which to save and which moves here. It is a state, so it is an info
                 // message with its icon (round 26 FB8).
-                design::small_message(
-                    ui,
-                    design::Tone::Info,
-                    &kept_in_lookup(name, &npc.name),
-                );
+                design::small_message(ui, design::Tone::Info, &kept_in_lookup(name, &npc.name));
             }
             let choice = crate::lookup::generator_card(
                 ui,
@@ -1599,12 +1597,13 @@ mod tests {
         let npc = held(harness.state()).unwrap();
         let attributes = harness.state().generated.clone().unwrap().attributes;
         let notice = format!("{npc} draft discarded.");
+        // The message and its footer both carry these words (round 26), so count either.
         harness.get_by_label("Discard").click();
         harness.run_steps(2);
         assert!(held(harness.state()).is_none(), "Discard lets the NPC go");
         assert!(harness.query_by_label("Save NPC").is_none());
         assert!(
-            harness.query_by_label(&notice).is_some(),
+            harness.query_all_by_label(&notice).next().is_some(),
             "AD1-discard-notice"
         );
         harness
@@ -1621,12 +1620,12 @@ mod tests {
             "AD1-undo-discard: the same NPC comes back"
         );
         assert!(harness.query_by_label("Save NPC").is_some());
-        assert!(harness.query_by_label(&notice).is_none());
+        assert!(harness.query_all_by_label(&notice).next().is_none());
 
         // Moving on ends the Undo. The NPC is then gone and nothing was written.
         harness.get_by_label("Discard").click();
         harness.run_steps(2);
-        assert!(harness.query_by_label(&notice).is_some());
+        assert!(harness.query_all_by_label(&notice).next().is_some());
         let problems = harness
             .query_all_by_label_contains("Things to check · ")
             .next()
@@ -1637,7 +1636,8 @@ mod tests {
         harness.get_by_label(&problems).click();
         harness.run_steps(2);
         assert!(
-            harness.query_by_label(&notice).is_none() && harness.state().discarded_npc.is_none(),
+            harness.query_all_by_label(&notice).next().is_none()
+                && harness.state().discarded_npc.is_none(),
             "AD1-undo-ends: another view ends the Undo"
         );
         assert!(npc_files(dir.path()).is_empty(), "Discard writes nothing");
