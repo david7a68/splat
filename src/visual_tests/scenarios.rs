@@ -355,26 +355,42 @@ fn click_by_focus(d: &mut Driver<'_>, name: &str) {
 }
 
 /// Round 26: the pane footer whose words hold `words`: the smallest named group that holds them.
-/// R3f X43, X44: a footer's button below a message starts at the message's words, and is whole
-/// inside the footer: its label shortens by whole words, with the whole words on hover.
+/// R3f X43, X44: a footer's button below a message starts at the message's words and is whole
+/// inside the footer. Its label is the whole name, or the name shortened after a whole word with
+/// `…` (the whole name is its hover and accessible name).
 fn move_at_words(d: &mut Driver<'_>, words: &str, name: &str) {
     let text = d.painted_rect_in(words, egui::Rect::EVERYTHING);
-    let footer = footer_with(d, words);
+    let footer = d
+        .footer_bands()
+        .into_iter()
+        .find(|band| text.is_some_and(|text| band.contains_rect(text)));
     let button = d
         .nodes()
         .into_iter()
         .find(|node| node.name == name && node.role == egui::accesskit::Role::Button);
+    let label = button
+        .as_ref()
+        .map(|button| d.painted_in(button.rect))
+        .unwrap_or_default();
+    let whole_words = label == name
+        || label.strip_suffix('…').is_some_and(|start| {
+            name.strip_prefix(start)
+                .is_some_and(|rest| rest.starts_with(' '))
+        });
     d.observe(
         "r3f-X43-X44-move-at-words",
-        text.zip(footer)
-            .zip(button.as_ref())
-            .is_some_and(|((text, footer), button)| {
-                (button.rect.left() - text.left()).abs() < 1.0
-                    && button.fully_in_view()
-                    && footer.contains_rect(button.rect)
-            }),
+        whole_words
+            && text
+                .zip(footer)
+                .zip(button.as_ref())
+                .is_some_and(|((text, footer), button)| {
+                    (button.rect.left() - text.left()).abs() < 1.0
+                        && button.fully_in_view()
+                        && footer.contains_rect(button.rect)
+                }),
         format!(
-            "{name} {:?} starts at \"{words}\" {text:?}, whole in the footer {footer:?}",
+            "{name} {:?} reads `{label}`, starts at \"{words}\" {text:?}, whole in the footer's \
+             room {footer:?}",
             button.as_ref().map(|button| (button.rect, button.shown))
         ),
     );
