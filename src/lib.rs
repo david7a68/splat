@@ -234,6 +234,8 @@ const LIBRARY_DRAFT: &str = "Library draft";
 const WORLD_DRAFT: &str = "World draft";
 const WORLD_REPAIR_DRAFT: &str = "World repair draft";
 const CAMPAIGN_DRAFT: &str = "Campaign draft";
+/// The run's notice when a fight planned from a journey's check begins after that check changed.
+const ROAD_CHANGED: &str = "Its travel check changed, so this fight follows the last event.";
 
 impl Page {
     fn name(self) -> &'static str {
@@ -347,6 +349,33 @@ impl Splat {
             }),
         };
         self.ui_store.save(&state);
+    }
+
+    /// F9, W5-D1: a fight that enters the Timeline now, from a plan line that a journey's check
+    /// wrote, is played at that check. When the journey or the check changed since, it goes
+    /// after the session's last event as any fight does, and the run's notice line says so.
+    fn road_of_entering_fight(&mut self, fact: &timeline::RunFact) -> Option<timeline::Within> {
+        let entering = fact.state == timeline::RunState::Running
+            && !self.timeline.events.iter().any(|event| {
+                event.run == Some(fact.id)
+                    || (fact.copied_from.is_some() && event.run == fact.copied_from)
+            });
+        if !entering {
+            return None;
+        }
+        let session = self.sessions.current();
+        match self
+            .sessions
+            .road_place(session, &fact.name, &self.timeline)?
+        {
+            Ok(within) => Some(within),
+            Err(()) => {
+                if let Some(run) = self.encounters.run_mut() {
+                    run.tell(ROAD_CHANGED.to_owned());
+                }
+                None
+            }
+        }
     }
 
     /// Where the party stands in the session being played, from the timeline and the last
@@ -2652,10 +2681,12 @@ impl eframe::App for Splat {
         if fact != self.run_fact {
             match &fact {
                 Some(fact) => {
+                    let road = self.road_of_entering_fight(fact);
                     self.timeline.record_change(
                         self.run_fact.as_ref(),
                         fact,
                         self.sessions.current(),
+                        road.as_ref(),
                     );
                 }
                 // The run closed, so its last result goes to the file now and not after the

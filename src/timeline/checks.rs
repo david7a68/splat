@@ -57,6 +57,96 @@ fn plan_line_words(name: &str) -> String {
     format!("“{name}” is in tonight’s plan.")
 }
 
+/// The mark that `Plan “<name>”` leaves at the end of its plan line, which no reader shows: the
+/// journey, and the check as read (its offset, and a short sum of its words). Starting the
+/// fight reads it, so the fight is played at that check.
+#[derive(Clone, Debug, PartialEq)]
+pub struct RoadMark {
+    journey: String,
+    at: u64,
+    sum: String,
+}
+
+const ROAD_MARK: &str = "<!-- splat:check ";
+
+impl RoadMark {
+    /// The mark for a check of this journey, when its offset can be read.
+    pub fn new(journey: &str, check: &Check) -> Option<Self> {
+        Some(Self {
+            journey: journey.to_owned(),
+            at: check.at?,
+            sum: words_sum(&check.words),
+        })
+    }
+
+    /// The comment that ends the plan line.
+    pub fn comment(&self) -> String {
+        format!(
+            "{ROAD_MARK}journey={} at={} sum={} -->",
+            self.journey, self.at, self.sum
+        )
+    }
+
+    /// The mark of a plan line, if it has one.
+    pub fn read(line: &str) -> Option<Self> {
+        let inner = line.split_once(ROAD_MARK)?.1.split_once("-->")?.0;
+        let term = |key: &str| {
+            inner
+                .split_whitespace()
+                .find_map(|term| term.strip_prefix(key)?.strip_prefix('='))
+        };
+        Some(Self {
+            journey: term("journey")?.to_owned(),
+            at: term("at")?.parse().ok()?,
+            sum: term("sum")?.to_owned(),
+        })
+    }
+
+    /// A plan line's words without its mark.
+    pub fn bare(line: &str) -> &str {
+        line.split_once(ROAD_MARK)
+            .map_or(line, |(words, _)| words.trim_end())
+    }
+
+    /// Where the fight is played: in this session's journey at the check, while the journey
+    /// still covers the check and the check is as the plan line read it. Else nowhere: the
+    /// fight goes after the session's last event, as any fight does.
+    pub fn place(&self, events: &[Event], session: Option<uuid::Uuid>) -> Option<super::Within> {
+        let journey = events.iter().find(|event| {
+            event.id == self.journey && event.kind == Kind::Travel && event.session == session
+        })?;
+        let inside = self.at == 0 || minutes(&journey.duration).is_some_and(|m| self.at * HOUR < m);
+        let same = journey
+            .checks
+            .iter()
+            .any(|check| check.at == Some(self.at) && words_sum(&check.words) == self.sum);
+        (inside && same).then(|| super::Within {
+            journey: self.journey.clone(),
+            at: self.at,
+        })
+    }
+
+    /// The day the fight is played on, for its plan row: `Day 2 of Road to the ford`, counted
+    /// as the check's name is.
+    pub fn day_words(&self, events: &[Event], session: Option<uuid::Uuid>) -> Option<String> {
+        let within = self.place(events, session)?;
+        let at = events.iter().position(|event| event.id == within.journey)?;
+        let minute = super::clock(events)[at].unwrap_or(0) + within.at * HOUR;
+        Some(format!(
+            "Day {} of {}",
+            minute / DAY + 1,
+            events[at].label(0)
+        ))
+    }
+}
+
+/// A short sum of a check's words, so a mark tells a check rolled again or edited from the one
+/// the DM planned from.
+fn words_sum(words: &str) -> String {
+    use sha2::{Digest, Sha256};
+    format!("{:x}", Sha256::digest(words.as_bytes()))[..8].to_owned()
+}
+
 /// Whether this journey shows its checks: the DM chose `Roll for encounters` on it.
 pub fn shown(event: &Event) -> bool {
     event.kind == Kind::Travel && (event.checks_table.is_some() || !event.checks.is_empty())
@@ -807,6 +897,65 @@ mod tests {
     use super::*;
     use crate::roll_table::RollRow;
 
+    /// F9, W5-D1: the plan line's mark names the journey and the check as read. It places the
+    /// fight only while that journey of this session still covers that check, unchanged.
+    #[test]
+    fn w5_d1_a_road_mark_places_the_fight_only_at_the_check_it_read() {
+        let session = Some(uuid::Uuid::from_u128(1));
+        let mut road = journey("t-road", Some("road"));
+        road.session = session;
+        road.duration = "2 days".into();
+        road.checks = vec![Check::new(
+            24,
+            "16 · [[Wolf Pack]] pick up the trail.".into(),
+        )];
+        let mark = RoadMark::new("t-road", &road.checks[0]).unwrap();
+        let line = format!("- [[Wolf Pack]] {}", mark.comment());
+        assert_eq!(RoadMark::read(&line), Some(mark.clone()));
+        assert_eq!(RoadMark::bare(&line), "- [[Wolf Pack]]");
+        assert_eq!(RoadMark::read("- [[Wolf Pack]]"), None);
+        let within = super::super::Within {
+            journey: "t-road".into(),
+            at: 24,
+        };
+        let day = event_with(Kind::Day);
+        let events = |road: &Event| vec![day.clone(), road.clone()];
+        assert_eq!(mark.place(&events(&road), session), Some(within));
+        assert_eq!(
+            mark.day_words(&events(&road), session).as_deref(),
+            Some("Day 2 of Travel")
+        );
+        // Rolled again, or edited in Obsidian: other words.
+        let mut changed = road.clone();
+        changed.checks[0].words = "17 · [[Wolf Pack]] pick up the trail.".into();
+        // Cleared.
+        let mut cleared = road.clone();
+        cleared.checks.clear();
+        // Shortened, so the check is outside the journey now.
+        let mut short = road.clone();
+        short.duration = "1 day".into();
+        // Another session's journey: a fight carried over is played tonight.
+        let mut other = road.clone();
+        other.session = Some(uuid::Uuid::from_u128(2));
+        for (case, road) in [
+            ("rolled again", changed),
+            ("cleared", cleared),
+            ("shortened", short),
+            ("another session", other),
+        ] {
+            assert_eq!(mark.place(&events(&road), session), None, "{case}");
+            assert_eq!(mark.day_words(&events(&road), session), None, "{case}");
+        }
+        assert_eq!(mark.place(&[day], session), None, "the journey is gone");
+    }
+
+    fn event_with(kind: Kind) -> Event {
+        Event {
+            kind,
+            ..journey("t-day", None)
+        }
+    }
+
     fn table(key: &str, heading: &str, per: Per) -> Table {
         Table {
             key: key.into(),
@@ -851,6 +1000,7 @@ mod tests {
             played_order: 0,
             checks_table: key.map(str::to_owned),
             checks: Vec::new(),
+            within: None,
             extra: Default::default(),
         }
     }
