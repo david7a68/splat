@@ -702,6 +702,7 @@ impl Reader {
                                 && let Some(draft) = self.edits.remove(&id)
                             {
                                 self.discarded = Some((id, draft));
+                                self.stamp(super::FooterAct::Discarded);
                             }
                         });
                     },
@@ -719,16 +720,16 @@ impl Reader {
         }
     }
 
-    /// Undo for a Discard that dropped changes, while the DM reads that entry again.
-    pub(super) fn discarded_notice(&mut self, ui: &mut egui::Ui, campaign: &Campaign, id: Uuid) {
-        if let Some((at, draft)) = &self.discarded
-            && *at == id
-            && draft.campaign == campaign.id
-            && design::draft_discarded(ui, &draft.name)
-            && let Some((id, draft)) = self.discarded.take()
-        {
-            self.edits.insert(id, draft);
-        }
+    /// Undo for a Discard that dropped changes, while the DM reads that entry again. It sits in
+    /// the pane's footer; `FooterAct::Discarded` brings the draft back.
+    pub(super) fn discarded_line(
+        &self,
+        campaign: &Campaign,
+        id: Uuid,
+    ) -> Option<super::FooterLine> {
+        let (at, draft) = self.discarded.as_ref()?;
+        (*at == id && draft.campaign == campaign.id)
+            .then(|| super::FooterLine::discarded(&draft.name, super::FooterAct::Discarded))
     }
 
     /// The form, in place of the entry's rows and text.
@@ -1102,6 +1103,7 @@ impl Reader {
             self.form_focused = false;
             if draft.dirty() {
                 self.discarded = Some((id, draft));
+                self.stamp(super::FooterAct::Discarded);
             }
             return None;
         }
@@ -1111,6 +1113,7 @@ impl Reader {
                     self.picker = None;
                     self.form_focused = false;
                     self.undo = Some(change);
+                    self.stamp(super::FooterAct::Change);
                     self.kept = None;
                     return Some(Go::Reload(id));
                 }

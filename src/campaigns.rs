@@ -31,6 +31,10 @@ pub struct Campaigns {
     added: Option<String>,
     /// The DM asked to go on to Encounters, from that message.
     pub wants_encounters: bool,
+    /// Round 26 AG1: the widest name and link block and the widest action group, as the last
+    /// frame drew them. The list is as wide as these with an `L` gap, so the actions follow
+    /// the block. Drawing the rows measures them; nothing else does.
+    list_measure: (f32, f32),
 }
 
 /// The rail's campaign selector, with a name on two lines.
@@ -60,6 +64,7 @@ impl Default for Campaigns {
             confirm_remove: None,
             added: None,
             wants_encounters: false,
+            list_measure: (0.0, 0.0),
         };
         match Store::user() {
             Ok(store) => {
@@ -329,6 +334,7 @@ impl Campaigns {
             confirm_remove: None,
             added: None,
             wants_encounters: false,
+            list_measure: (0.0, 0.0),
         }
     }
 
@@ -872,7 +878,7 @@ impl Campaigns {
         blocked: Option<&str>,
     ) {
         let c = colors();
-        ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
+        ui.set_max_width(self.list_width(ui.available_width()));
         self.remove_dialog(ui.ctx());
         ui.horizontal(|ui| {
             design::group_heading(ui, "Campaigns", self.data.campaigns.len());
@@ -891,9 +897,8 @@ impl Campaigns {
             });
         });
         design::blocked_reason(ui, blocked);
-        if let Some(error) = &self.error {
-            design::message(ui, Tone::Error, error);
-        }
+        // Round 26: the list's errors and results sit in the Settings footer
+        // (`footer_messages`).
         let unwritable =
             blocked.or((!self.writable).then_some("Reload valid campaign settings first."));
         design::locked(ui, unwritable, |ui| {
@@ -906,16 +911,28 @@ impl Campaigns {
                 );
             }
             let mut open = None;
+            // Round 26 AG1: one action column for every row, an `L` gap after the widest name
+            // and link block, so the DM's eye does not cross an empty band to reach a row's
+            // actions. Until the rows are measured, the actions keep the old room.
+            let (measured_block, measured_actions) = self.list_measure;
+            let actions_room = if measured_actions > 0.0 {
+                measured_actions
+            } else {
+                220.0
+            };
+            let mut widest = (0.0_f32, 0.0_f32);
             for campaign in self.data.campaigns.clone() {
                 let active = self.data.active_campaign_id == Some(campaign.id);
                 ui.push_id(campaign.id, |ui| {
                     ui.horizontal(|ui| {
                         ui.set_min_height(Density::Glance.row() + design::XS);
-                        ui.vertical(|ui| {
+                        let row_left = ui.cursor().left();
+                        let row_right = ui.max_rect().right();
+                        let block = ui.vertical(|ui| {
                             ui.spacing_mut().item_spacing.y = 0.0;
-                            // The active row has one more action to keep room for.
-                            let actions = if active { 150.0 } else { 220.0 };
-                            ui.set_max_width((ui.available_width() - actions).max(120.0));
+                            ui.set_max_width(
+                                (row_right - row_left - actions_room - design::L).max(120.0),
+                            );
                             ui.horizontal(|ui| {
                                 ui.add(
                                     egui::Label::new(
@@ -966,41 +983,61 @@ impl Campaigns {
                                 );
                             }
                         });
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            // Buttons keep every letter. The name and status give way first.
-                            ui.spacing_mut().item_spacing.x = design::XS;
-                            design::row_menu(ui, &campaign.name, |ui| {
-                                if ui.button("Remove…").clicked() {
-                                    self.confirm_remove = Some(campaign.id);
-                                    ui.close();
+                        widest.0 = widest.0.max(block.response.rect.width());
+                        // The action column starts an `L` gap after the widest block, or ends at
+                        // the list's edge when the block must give way.
+                        let actions_left = (row_left + measured_block + design::L)
+                            .min(row_right - actions_room)
+                            .max(ui.cursor().left());
+                        let line = ui.min_rect();
+                        let actions = egui::Rect::from_min_max(
+                            egui::pos2(actions_left, line.top()),
+                            egui::pos2(actions_left + actions_room, line.bottom()),
+                        );
+                        ui.scope_builder(
+                            egui::UiBuilder::new()
+                                .max_rect(actions)
+                                .layout(egui::Layout::right_to_left(egui::Align::Center)),
+                            |ui| {
+                                // Buttons keep every letter. The name and status give way first.
+                                ui.spacing_mut().item_spacing.x = design::XS;
+                                design::row_menu(ui, &campaign.name, |ui| {
+                                    if ui.button("Remove…").clicked() {
+                                        self.confirm_remove = Some(campaign.id);
+                                        ui.close();
+                                    }
+                                });
+                                if self.editing != Some(campaign.id)
+                                    && Action::quiet("Edit details")
+                                        .density(Density::Read)
+                                        .show(ui)
+                                        .clicked()
+                                {
+                                    if self.editing.is_none() {
+                                        self.add_name = self.name.clone();
+                                        self.add_path = self.path.clone();
+                                    }
+                                    self.remote = None;
+                                    self.editing = Some(campaign.id);
+                                    self.discarded_details = None;
+                                    self.name = campaign.name.clone();
+                                    self.path = campaign.path.to_string_lossy().into_owned();
                                 }
-                            });
-                            if self.editing != Some(campaign.id)
-                                && Action::quiet("Edit details")
-                                    .density(Density::Read)
-                                    .show(ui)
-                                    .clicked()
-                            {
-                                if self.editing.is_none() {
-                                    self.add_name = self.name.clone();
-                                    self.add_path = self.path.clone();
+                                if !active
+                                    && Action::secondary("Open")
+                                        .density(Density::Read)
+                                        .name(&format!(
+                                            "Make {} the active campaign",
+                                            campaign.name
+                                        ))
+                                        .show(ui)
+                                        .clicked()
+                                {
+                                    open = Some(campaign.id);
                                 }
-                                self.remote = None;
-                                self.editing = Some(campaign.id);
-                                self.discarded_details = None;
-                                self.name = campaign.name.clone();
-                                self.path = campaign.path.to_string_lossy().into_owned();
-                            }
-                            if !active
-                                && Action::secondary("Open")
-                                    .density(Density::Read)
-                                    .name(&format!("Make {} the active campaign", campaign.name))
-                                    .show(ui)
-                                    .clicked()
-                            {
-                                open = Some(campaign.id);
-                            }
-                        });
+                                widest.1 = widest.1.max(ui.min_rect().width());
+                            },
+                        );
                     });
                     if self.editing == Some(campaign.id) {
                         self.form(ui, false, true);
@@ -1008,36 +1045,13 @@ impl Campaigns {
                 });
                 design::rule(ui);
             }
+            if (widest.0 - measured_block).abs() > 0.5 || (widest.1 - measured_actions).abs() > 0.5
+            {
+                self.list_measure = widest;
+                ui.ctx().request_discard("the campaign list was measured");
+            }
             if let Some(id) = open {
                 self.select(Some(id));
-            }
-            if let Some(added) = self.added.clone() {
-                if self.campaign_copy.is_some() {
-                    // The registration result and its Undo are one message. Build an encounter
-                    // is another choice: it starts below, at the message words, with the same
-                    // border as after a plain add. Only Undo is quiet.
-                    if design::undo_message(ui, Tone::Success, &added, "Undo register campaign")
-                        && let Err(error) = self.undo_campaign_copy()
-                    {
-                        self.error = Some(error);
-                    }
-                    let build = design::message_choice_row(ui, Tone::Success, |ui| {
-                        Action::secondary("Build an encounter")
-                            .density(Density::Read)
-                            .show(ui)
-                            .clicked()
-                    });
-                    if build {
-                        self.build_encounter();
-                    }
-                } else if design::message_with_action(
-                    ui,
-                    Tone::Success,
-                    &added,
-                    "Build an encounter",
-                ) {
-                    self.build_encounter();
-                }
             }
             ui.add_space(design::S);
             dndbeyond.show_import(ui, session.clone(), self);
@@ -1045,6 +1059,140 @@ impl Campaigns {
                 self.form(ui, false, true);
             }
         });
+    }
+
+    /// The campaign list's width within `room`: its widest name and link block, an `L` gap and
+    /// its action column, and never narrower than the campaign form below it (round 26 AG1).
+    pub fn list_width(&self, room: f32) -> f32 {
+        let (block, actions) = self.list_measure;
+        let content = if block > 0.0 && actions > 0.0 {
+            block + design::L + actions
+        } else {
+            design::LIST_MEASURE
+        };
+        room.min(design::LIST_MEASURE)
+            .min(content.max(design::FORM_WIDTH))
+    }
+
+    /// Round 26: the campaign form's and the campaign list's messages, in the footer of the pane
+    /// that shows them (Settings, or Campaign → Link and folder), so none of them moves the form
+    /// or the rows. A discarded details draft with its live Undo first (while its form is open:
+    /// it ends with an edit, Save, Cancel or the next Discard), then a registered copy with
+    /// `Undo register campaign`; then the error and its own recovery; then the plain add result.
+    /// `list` is true in Settings, where the add results belong.
+    /// `blocked` is the page's lock (a run, a recording, an unsaved draft): the footer is outside
+    /// the list's lock, so an action here that changes the campaigns takes it too.
+    pub fn footer_messages<'a>(
+        me: &'a std::cell::RefCell<&mut Campaigns>,
+        footer: &mut design::Footer<'a>,
+        list: bool,
+        blocked: Option<&'a str>,
+    ) {
+        const DISCARDED: &str = "Campaign details draft discarded.";
+        let (discarded, added, copy, error, locked) = {
+            let this = me.borrow();
+            let locked =
+                blocked.or((!this.writable).then_some("Reload valid campaign settings first."));
+            (
+                this.editing.is_some() && this.discarded_details.is_some(),
+                this.added.clone().filter(|_| list),
+                this.campaign_copy.is_some(),
+                this.error.clone(),
+                locked,
+            )
+        };
+        if discarded {
+            footer.result(DISCARDED, true, move |ui| {
+                if design::draft_discarded(ui, "Campaign details") {
+                    let mut this = me.borrow_mut();
+                    if let Some((name, path)) = this.discarded_details.take() {
+                        this.name = name;
+                        this.path = path;
+                    }
+                }
+            });
+        }
+        if let Some(added) = added.clone().filter(|_| copy) {
+            footer.result(added.clone(), true, move |ui| {
+                // The registration result and its Undo are one message. Build an encounter is
+                // another choice: it starts below, at the message words. Only Undo is quiet.
+                // Review round 26: Undo changes the registration and can change the active
+                // campaign, so it waits for what blocks a campaign change, with the reason.
+                if crate::library::kept_undo_message(
+                    ui,
+                    Tone::Success,
+                    &added,
+                    "Undo register campaign",
+                    locked,
+                    true,
+                ) {
+                    let mut this = me.borrow_mut();
+                    if let Err(error) = this.undo_campaign_copy() {
+                        this.error = Some(error);
+                    }
+                }
+                let build = design::message_choice_row(ui, Tone::Success, |ui| {
+                    Action::secondary("Build an encounter")
+                        .density(Density::Read)
+                        .show(ui)
+                        .clicked()
+                });
+                if build {
+                    me.borrow_mut().build_encounter();
+                }
+            });
+        }
+        if let Some(error) = error {
+            footer.reason(error.clone(), move |ui| {
+                Self::draw_error(me, ui, &error, locked)
+            });
+        }
+        if let Some(added) = added.filter(|_| !copy) {
+            footer.result(added.clone(), false, move |ui| {
+                if design::message_with_action(ui, Tone::Success, &added, "Build an encounter") {
+                    me.borrow_mut().build_encounter();
+                }
+            });
+        }
+    }
+
+    /// An error, and its own recovery after it.
+    fn draw_error(
+        me: &std::cell::RefCell<&mut Campaigns>,
+        ui: &mut egui::Ui,
+        error: &str,
+        locked: Option<&str>,
+    ) {
+        design::message(ui, Tone::Error, error);
+        if error.contains("registered at another folder") {
+            let reason = locked.or(me
+                .borrow()
+                .name
+                .trim()
+                .is_empty()
+                .then_some("Type a name first."));
+            if Action::secondary("Register as a new campaign")
+                .blocked(reason)
+                .show(ui)
+                .clicked()
+            {
+                let mut this = me.borrow_mut();
+                if let Err(error) = this.register_campaign_copy() {
+                    this.error = Some(error);
+                }
+            }
+            design::blocked_reason(ui, reason);
+        }
+    }
+
+    /// The form's error where its page has no footer: the first campaign's form on an empty
+    /// page, which has no scroll area, so nothing below it can move.
+    pub fn form_error_inline(&mut self, ui: &mut egui::Ui) {
+        let error = self.error.clone();
+        let cell = std::cell::RefCell::new(self);
+        if let Some(error) = error {
+            Self::draw_error(&cell, ui, &error, None);
+        }
     }
 
     pub fn importing(&self, remote: &str) -> bool {
@@ -1097,11 +1245,49 @@ impl Campaigns {
                 if std::mem::take(&mut self.focus_name) {
                     name.request_focus();
                 }
-                // The button sits on the field's line, and ends where the fields above end.
+                let submit = if editing {
+                    "Save details"
+                } else {
+                    "Add campaign"
+                };
+                let unchanged = self
+                    .editing
+                    .and_then(|id| {
+                        self.data
+                            .campaigns
+                            .iter()
+                            .find(|campaign| campaign.id == id)
+                    })
+                    .is_some_and(|campaign| {
+                        campaign.name == self.name.trim()
+                            && campaign.path == std::path::Path::new(self.path.trim())
+                    });
+                let reason = match (self.name.trim().is_empty(), self.path.trim().is_empty()) {
+                    (true, true) => Some("Enter a campaign name and a folder first."),
+                    (true, false) => Some("Enter a campaign name first."),
+                    (false, true) => Some("Choose a folder first."),
+                    (false, false) if unchanged => Some("No changes to save."),
+                    (false, false) => None,
+                };
+                let missing = reason.is_some();
+                let action = || {
+                    if primary {
+                        Action::primary(submit)
+                    } else {
+                        Action::secondary(submit)
+                    }
+                };
+                // The buttons sit on the field's line, and end where the fields above end. Round 26
+                // FB6: in the add form, Add campaign follows the last field on its line.
+                let create_width = if editing {
+                    0.0
+                } else {
+                    action().natural_width(ui) + design::S
+                };
                 let room = ui.available_width();
                 let field = ui
                     .vertical(|ui| {
-                        ui.set_max_width((room - BROWSE_WIDTH - design::S).max(120.0));
+                        ui.set_max_width((room - BROWSE_WIDTH - design::S - create_width).max(120.0));
                         design::small_text_field(ui, "Folder", &mut self.path, None, None)
                     })
                     .inner;
@@ -1119,41 +1305,39 @@ impl Campaigns {
                         self.path = path.to_string_lossy().into_owned();
                     }
                 });
-                design::help(ui, "Splat keeps this campaign’s notes, encounters and runs here. A folder in your Obsidian vault works.");
-                ui.horizontal(|ui| {
-                    let submit = if editing {
-                        "Save details"
-                    } else {
-                        "Add campaign"
-                    };
-                    let unchanged = self
-                        .editing
-                        .and_then(|id| {
-                            self.data
-                                .campaigns
-                                .iter()
-                                .find(|campaign| campaign.id == id)
-                        })
-                        .is_some_and(|campaign| {
-                            campaign.name == self.name.trim()
-                                && campaign.path == std::path::Path::new(self.path.trim())
-                        });
-                    let reason = match (self.name.trim().is_empty(), self.path.trim().is_empty()) {
-                        (true, true) => Some("Enter a campaign name and a folder first."),
-                        (true, false) => Some("Enter a campaign name first."),
-                        (false, true) => Some("Choose a folder first."),
-                        (false, false) if unchanged => Some("No changes to save."),
-                        (false, false) => None,
-                    };
-                    let missing = reason.is_some();
-                    let action = || {
-                        if primary {
-                            Action::primary(submit)
-                        } else {
-                            Action::secondary(submit)
+                let mut commit = false;
+                if !editing {
+                    let create = egui::Rect::from_min_size(
+                        egui::pos2(browse.right() + design::S, field.rect.top()),
+                        egui::vec2(create_width - design::S, field.rect.height()),
+                    );
+                    ui.scope_builder(egui::UiBuilder::new().max_rect(create).layout(egui::Layout::left_to_right(egui::Align::Center)), |ui| {
+                        commit = action().blocked(reason).density(Density::Read).show(ui).clicked();
+                    });
+                    // The reason sits on its own line below, which stays when empty, so typing
+                    // moves nothing; quiet Cancel starts that line when there is something to
+                    // cancel.
+                    ui.horizontal(|ui| {
+                        // As tall as Cancel, so Cancel coming moves nothing.
+                        ui.set_min_height(Density::Read.control());
+                        if !missing || self.remote.is_some() {
+                            if Action::quiet("Cancel")
+                                .density(Density::Read)
+                                .line_start()
+                                .show(ui)
+                                .clicked()
+                            {
+                                self.clear_form();
+                            }
+                            ui.add_space(design::L - ui.spacing().item_spacing.x);
                         }
-                    };
-                    if editing {
+                        design::blocked_reason(ui, reason);
+                    });
+                }
+                design::help(ui, "Splat keeps this campaign’s notes, encounters and runs here. A folder in your Obsidian vault works.");
+                if editing {
+                    // A save row: state and Discard at the left, Save details at the right edge.
+                    ui.horizontal(|ui| {
                         design::save_row_state(
                             ui,
                             design::Status {
@@ -1172,58 +1356,30 @@ impl Campaigns {
                             false,
                             None,
                         );
-                    }
-                    if editing && !unchanged {
-                        self.discarded_details = None;
-                        if Action::quiet("Discard").show(ui).clicked()
-                            && let Some(saved) = self.data.campaigns.iter().find(|c| Some(c.id) == self.editing)
-                        {
-                            self.discarded_details = Some((self.name.clone(), self.path.clone()));
-                            self.name = saved.name.clone();
-                            self.path = saved.path.to_string_lossy().into_owned();
-                        }
-                    } else if (!missing || editing || self.remote.is_some())
-                        && Action::quiet("Cancel").line_start().show(ui).clicked()
-                    {
-                        self.clear_form();
-                    }
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if action().blocked(reason).show(ui).clicked() {
-                            match self.save_form() {
-                                Ok(()) => added = !editing,
-                                Err(error) => self.error = Some(error),
+                        if !unchanged {
+                            self.discarded_details = None;
+                            if Action::quiet("Discard").show(ui).clicked()
+                                && let Some(saved) = self.data.campaigns.iter().find(|c| Some(c.id) == self.editing)
+                            {
+                                self.discarded_details = Some((self.name.clone(), self.path.clone()));
+                                self.name = saved.name.clone();
+                                self.path = saved.path.to_string_lossy().into_owned();
                             }
+                        } else if Action::quiet("Cancel").line_start().show(ui).clicked() {
+                            self.clear_form();
                         }
-                        ui.spacing_mut().item_spacing.x = design::S;
-                        design::blocked_reason(ui, reason.filter(|_| !editing || !unchanged));
-                    });
-                });
-                // Round 25 FG5: one message space below the save row, two lines high whatever it
-                // holds: the discard result with its live Undo first, then Save's error. So
-                // neither moves the rows below the form.
-                const DISCARDED: &str = "Campaign details draft discarded.";
-                let mut space = design::MessageSpace::new("campaign_form_message", ui.available_width());
-                if self.discarded_details.is_some() {
-                    space = space.result(DISCARDED, true, |ui| design::draft_discarded(ui, "Campaign details"));
-                }
-                if let Some(error) = self.error.as_deref() {
-                    space = space.reason(error, move |ui| {
-                        design::message(ui, Tone::Error, error);
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            commit = action().blocked(reason).show(ui).clicked();
+                            ui.spacing_mut().item_spacing.x = design::S;
+                            design::blocked_reason(ui, reason.filter(|_| !unchanged));
+                        });
                     });
                 }
-                let undo = space.show(ui);
-                if undo == Some(true)
-                    && let Some((name, path)) = self.discarded_details.take()
-                {
-                    self.name = name;
-                    self.path = path;
-                }
-                // The error’s own recovery follows the space.
-                if self.error.as_deref().is_some_and(|error| error.contains("registered at another folder")) {
-                    let reason = self.name.trim().is_empty().then_some("Type a name first.");
-                    if Action::secondary("Register as a new campaign").blocked(reason).show(ui).clicked()
-                        && let Err(error) = self.register_campaign_copy() { self.error = Some(error); }
-                    design::blocked_reason(ui, reason);
+                if commit {
+                    match self.save_form() {
+                        Ok(()) => added = !editing,
+                        Err(error) => self.error = Some(error),
+                    }
                 }
             };
             let form = if direct {
@@ -1258,6 +1414,17 @@ impl Campaigns {
             }
         });
     }
+}
+
+/// An inline creation form's blocked reason, on its own `Small` line below the Create action.
+/// The line stays when the reason is empty, so the rows below never move as the DM types
+/// (round 26 FB6). Settings, Manage packages and New entry share it.
+pub(crate) fn creation_reason(ui: &mut egui::Ui, reason: Option<&str>) {
+    // Not a wrapping row: that pads its line to a control's height.
+    ui.vertical(|ui| {
+        ui.set_min_height(Type::Small.line());
+        design::blocked_reason(ui, reason);
+    });
 }
 
 /// The Browse button and the gap before it, beside the folder field.
@@ -1639,6 +1806,7 @@ mod tests {
             confirm_remove: None,
             added: None,
             wants_encounters: false,
+            list_measure: (0.0, 0.0),
         };
         campaigns.select(Some(first));
         campaigns.link(Some("12".into())).unwrap();

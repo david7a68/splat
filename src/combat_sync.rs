@@ -1421,19 +1421,16 @@ impl CombatSync {
         use crate::design::{self, Action, Density, Type, colors};
         for (key, message) in self.blocked.clone() {
             let c = colors();
-            ui.label(
-                Type::Heading
-                    .rich(
-                        ui,
-                        format!(
-                            "{}{} {} conflict",
-                            name.map_or_else(String::new, |n| format!("{n} · ")),
-                            design::icons::WARN,
-                            self.group_name(&key)
-                        ),
-                    )
-                    .color(c.sync.conflict),
-            );
+            let status = format!("{} {} conflict", design::icons::WARN, self.group_name(&key));
+            match name {
+                // FK3: the ended view's one heading form, the name in the text colour.
+                Some(name) => {
+                    sync_heading(ui, name, &status, c.sync.conflict);
+                }
+                None => {
+                    ui.label(Type::Heading.rich(ui, status).color(c.sync.conflict));
+                }
+            }
             if explanation {
                 ui.add(
                     egui::Label::new(Type::Small.rich(ui, message.as_str()).color(c.text)).wrap(),
@@ -1585,7 +1582,7 @@ impl CombatSync {
             });
             return;
         };
-        use crate::design::{self, Tone, Type, colors, icons};
+        use crate::design::{self, Type, colors, icons};
         let max_hp = remote.max_hp;
         let writable = remote.can_edit;
         // Say once, at the top, which values can change and what a change does.
@@ -1607,27 +1604,8 @@ impl CombatSync {
             // Round 25 review: help keeps the reader measure.
             design::help(ui, words);
         });
-        // Round 25 review: a rest's result has a reserved place above the fields, two lines high
-        // whatever it holds, so neither the result nor its dismissal or the next read moves them.
-        // Round 25 FD3: a dismiss is the close icon at the message end, in the one Party form.
-        let mut space = design::MessageSpace::<bool>::new(
-            "combat_sync_result",
-            ui.available_width().min(design::LIST_MEASURE),
-        );
-        if let Some(notice) = &self.action_notice {
-            let (tone, words) = match notice {
-                ActionNotice::Taken(words) => (Tone::Success, words.as_str()),
-                ActionNotice::Failed(words) => (Tone::Error, words.as_str()),
-            };
-            space = space.result(words, false, move |ui| {
-                crate::party::dismissable(ui, |ui| {
-                    design::message(ui, tone, words);
-                })
-            });
-        }
-        if space.show(ui) == Some(true) {
-            self.action_notice = None;
-        }
+        // Round 26: an action's result sits in the sheet's footer (`footer_messages`), so neither
+        // the result nor its dismissal or the next read moves the fields.
         let wells = self.wells(ui, max_hp);
         let before = self.desired.groups.clone();
         ui.add_enabled_ui(writable, |ui| {
@@ -1647,6 +1625,26 @@ impl CombatSync {
             ui,
             "Concentration, custom effects, initiative and DM notes stay in Splat. D&D Beyond has no place for them.",
         );
+    }
+    /// Round 26: a sync action's result (a rest taken, or why it failed), in the footer of the
+    /// sheet pane. It lives until its dismiss, the next action or another character; the
+    /// dismiss is the close icon at the message end, in the one Party form.
+    pub fn footer_messages<'a>(&'a mut self, footer: &mut crate::design::Footer<'a>) {
+        use crate::design::{self, Tone};
+        let Some((tone, words)) = self.action_notice.as_ref().map(|notice| match notice {
+            ActionNotice::Taken(words) => (Tone::Success, words.clone()),
+            ActionNotice::Failed(words) => (Tone::Error, words.clone()),
+        }) else {
+            return;
+        };
+        let notice = &mut self.action_notice;
+        footer.result(words.clone(), false, move |ui| {
+            if crate::party::dismissable(ui, |ui| {
+                design::message(ui, tone, &words);
+            }) {
+                *notice = None;
+            }
+        });
     }
     /// The conflict heading for a group: its name on the sheet, where it has one.
     fn group_name(&self, key: &str) -> String {
@@ -1791,14 +1789,10 @@ impl CombatSync {
             }
         });
         if self.desired.contains_key("hp_bonus") {
-            use crate::design::{Type, colors};
-            ui.label(
-                Type::Small
-                    .rich(
-                        ui,
-                        "The maximum HP modifier raises or lowers maximum HP, as Aid does.",
-                    )
-                    .color(colors().muted),
+            // Round 26 AM2: every help line keeps the reader measure.
+            crate::design::help(
+                ui,
+                "The maximum HP modifier raises or lowers maximum HP, as Aid does.",
             );
         }
     }
@@ -1854,10 +1848,10 @@ impl CombatSync {
                         }
                     }
                 });
-                ui.label(
-                    Type::Small
-                        .rich(ui, "A rest goes to D&D Beyond once, when you take it. D&D Beyond resets the resources by its own rules.")
-                        .color(colors().muted),
+                // Round 26 AM2: help keeps the reader measure.
+                design::help(
+                    ui,
+                    "A rest goes to D&D Beyond once, when you take it. D&D Beyond resets the resources by its own rules.",
                 );
             }
             Some(mut form) => {
@@ -2015,7 +2009,7 @@ impl CombatSync {
     }
     /// Each item's quantity, and the charges spent where it has charges.
     fn inventory(&mut self, ui: &mut egui::Ui, wells: Wells) {
-        use crate::design::{self, Type, colors};
+        use crate::design;
         let Some(remote) = &self.remote else {
             return;
         };
@@ -2062,13 +2056,9 @@ impl CombatSync {
                     });
                     ui.add_space(design::XS);
                 }
-                ui.label(
-                    Type::Small
-                        .rich(
-                            ui,
-                            "Party inventory and the coins in containers stay on D&D Beyond.",
-                        )
-                        .color(colors().muted),
+                design::help(
+                    ui,
+                    "Party inventory and the coins in containers stay on D&D Beyond.",
                 );
             },
         );
@@ -2374,6 +2364,36 @@ fn group_label(key: &str) -> &str {
         key if key.starts_with("creature/") => "Companion HP",
         _ => "Limited-use resource",
     }
+}
+
+/// A character's sync block heading in the ended view, one form for every state (FK3): the
+/// name in `Heading` and the text colour, ` · `, then the status's icon and word in its colour.
+/// A status is an icon, a word and a colour; the name never takes the status colour.
+pub(crate) fn sync_heading(
+    ui: &mut egui::Ui,
+    name: &str,
+    status: &str,
+    color: egui::Color32,
+) -> egui::Response {
+    use crate::design::{Type, colors};
+    let font = Type::Heading.font(ui);
+    let mut job = egui::text::LayoutJob::default();
+    for (text, color) in [
+        (name, colors().text),
+        (" · ", colors().muted),
+        (status, color),
+    ] {
+        job.append(
+            text,
+            0.0,
+            egui::text::TextFormat {
+                font_id: font.clone(),
+                color,
+                ..Default::default()
+            },
+        );
+    }
+    ui.add(egui::Label::new(job).wrap())
 }
 
 #[cfg(test)]
@@ -3083,47 +3103,87 @@ mod tests {
         ctx.enable_accesskit();
         // Round 25 FD3: the action notice ends with its close icon, after its words.
         const TAKEN: &str = "D&D Beyond took the long rest.";
-        // Round 25 review: the result has a reserved place, so the first editable field keeps
-        // its y before the result, while it shows, after an error result and after it ends.
-        let field_top = |sync: &mut CombatSync| {
+        // Round 25 review, round 26: the result sits in the sheet's footer, drawn as Party draws
+        // it (the footer, then the sheet's scroll area sized to the footer's top), so the first
+        // editable field keeps its y before the result, while it shows, after an error result
+        // and after it ends, at 960, 1200 and 1920. The result must be in view while it lives.
+        let field_top = |sync: &mut CombatSync, size: egui::Vec2| {
             let out = ctx.run(
                 egui::RawInput {
-                    screen_rect: Some(egui::Rect::from_min_size(
-                        egui::Pos2::ZERO,
-                        egui::vec2(700.0, 600.0),
-                    )),
+                    screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
                     ..Default::default()
                 },
                 |ctx| {
-                    egui::CentralPanel::default().show(ctx, |ui| sync.show(ui));
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        let rest = ui.available_rect_before_wrap();
+                        ui.scope_builder(egui::UiBuilder::new().max_rect(rest), |ui| {
+                            let width = ui.available_width().min(crate::design::LIST_MEASURE);
+                            let mut footer = crate::design::Footer::new("sync_test_sheet", width);
+                            sync.footer_messages(&mut footer);
+                            let bottom = footer.show(ui);
+                            egui::ScrollArea::vertical()
+                                .id_salt("sync_test_sheet_body")
+                                .max_height((bottom - ui.cursor().top()).max(0.0))
+                                .auto_shrink([false, false])
+                                .show(ui, |ui| sync.show(ui));
+                        });
+                    });
                 },
             );
-            out.platform_output.accesskit_update.and_then(|update| {
+            let notice = out.shapes.iter().find_map(|clipped| match &clipped.shape {
+                egui::Shape::Text(text)
+                    if text.galley.job.text.starts_with("D&D Beyond")
+                        && clipped.clip_rect.contains_rect(egui::Rect::from_min_size(
+                            text.pos,
+                            text.galley.size(),
+                        )) =>
+                {
+                    Some(text.pos.y)
+                }
+                _ => None,
+            });
+            let top = out.platform_output.accesskit_update.and_then(|update| {
                 update.nodes.iter().find_map(|(_, node)| {
                     (node.label() == Some("Increase Current HP"))
                         .then(|| node.bounds().map(|bounds| bounds.y0))
                         .flatten()
                 })
-            })
+            });
+            (top, notice)
         };
-        let mut tops = Vec::new();
-        for notice in [
-            None,
-            Some(ActionNotice::Taken(TAKEN.into())),
-            Some(ActionNotice::Failed(
-                "D&D Beyond did not take the long rest. Check the sheet in D&D Beyond, then read it again before you send another change.".into(),
-            )),
-            None,
+        for size in [
+            egui::vec2(960.0, 640.0),
+            egui::vec2(1200.0, 800.0),
+            egui::vec2(1920.0, 1080.0),
         ] {
-            sync.action_notice = notice;
-            // Two passes: the first lays out, the second reads the settled place.
-            field_top(&mut sync);
-            tops.push(field_top(&mut sync));
+            let mut tops = Vec::new();
+            let mut shown = Vec::new();
+            for notice in [
+                None,
+                Some(ActionNotice::Taken(TAKEN.into())),
+                Some(ActionNotice::Failed(
+                    "D&D Beyond did not take the long rest. Check the sheet in D&D Beyond, then read it again before you send another change.".into(),
+                )),
+                None,
+            ] {
+                let expected = notice.is_some();
+                sync.action_notice = notice;
+                // Two passes: the first lays out, the second reads the settled place.
+                field_top(&mut sync, size);
+                let (top, notice) = field_top(&mut sync, size);
+                tops.push(top);
+                shown.push(notice.is_some() == expected);
+            }
+            assert!(
+                tops[0].is_some() && tops.iter().all(|top| *top == tops[0]),
+                "At {size:?}, Increase Current HP top with no result, a result, an error and none \
+                 again: {tops:?}"
+            );
+            assert!(
+                shown.iter().all(|shown| *shown),
+                "At {size:?}, the result is in view exactly while it lives: {shown:?}"
+            );
         }
-        assert!(
-            tops[0].is_some() && tops.iter().all(|top| *top == tops[0]),
-            "Increase Current HP top with no result, a result, an error and none again: {tops:?}"
-        );
         sync.action_notice = Some(ActionNotice::Taken(TAKEN.into()));
         let before = sync.desired.clone();
         for form in [
@@ -3147,7 +3207,13 @@ mod tests {
                     ..Default::default()
                 },
                 |ctx| {
-                    egui::CentralPanel::default().show(ctx, |ui| sync.show(ui));
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        // Round 26: the result sits in the sheet's footer.
+                        let mut footer = crate::design::Footer::new("sync_test_footer", 600.0);
+                        sync.footer_messages(&mut footer);
+                        let _ = footer.show(ui);
+                        sync.show(ui);
+                    });
                 },
             );
             assert!(!out.shapes.is_empty());

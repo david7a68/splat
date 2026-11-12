@@ -252,12 +252,13 @@ pub fn broken(d: &mut Driver<'_>) {
             && d.is_disabled("Save repaired note"),
         "After Discard the unchanged unreadable draft says Invalid, and Save is blocked",
     );
-    // Round 25 FD1, lead's ruling: a result with a live Undo comes first in the one message
-    // space, so after Discard of a broken repair `Undo discard` is on its first line and Save's
-    // reason follows it, at every size.
+    // Round 25 FD1, lead's ruling: a result with a live Undo comes first, so after Discard of a
+    // broken repair `Undo discard` leads and Save's reason follows it, at every size. Round 26
+    // FA1: both are in the pane's footer, below Save, and the reason shows whole (it was cut at
+    // half height in the two-line space).
     let undo_first = |d: &mut Driver<'_>, undo_name: &str| {
         for size in [SMALL, DEFAULT, LARGE] {
-            let (undo, reason, save) = d.at_size(size, |d| {
+            let (undo, reason, save, whole) = d.at_size(size, |d| {
                 (
                     d.place_of(undo_name),
                     d.nodes()
@@ -265,14 +266,19 @@ pub fn broken(d: &mut Driver<'_>) {
                         .find(|node| node.role == Role::Label && node.name == combined)
                         .map(|node| node.rect),
                     d.place_of("Save repaired note"),
+                    // The reason shows whole in the footer, not cut by it.
+                    d.nodes().iter().any(|node| {
+                        node.role == Role::Label && node.name == combined && node.fully_in_view()
+                    }),
                 )
             });
             d.observe(
                 "iter-25-D-FD1-undo-first",
                 undo.zip(reason).zip(save).is_some_and(|((undo, reason), save)| {
                     undo.top() >= save.bottom()
-                        && undo.top() - save.bottom() < design::Type::Body.line()
                         && reason.top() >= undo.center().y
+                        && reason.bottom() <= size.1
+                        && whole
                 }),
                 format!("At {size:?}, {undo_name} {undo:?} leads, then the reason {reason:?}, below Save {save:?}"),
             );
@@ -288,8 +294,22 @@ pub fn broken(d: &mut Driver<'_>) {
         // Re-check 1: the gestures themselves run at each size, with the window at that size.
         for size in [SMALL, DEFAULT, LARGE] {
             d.set_base(size);
-            let (tabbed, keyed, wheeled, ring) = fixed_part_scrolls(d, message);
+            // Round 26: the footer is as tall as what it holds, so the message is reached,
+            // with its Undo, whether or not it needs to scroll.
+            let (tabbed, _, _, ring) = fixed_part_scrolls(d, message);
             let owner = d.focused_name();
+            // The discard's Undo is named for its draft.
+            let undo = if state == "Undo discard" {
+                "Undo discard of Broken.md"
+            } else {
+                state
+            };
+            // Each message is reached on its own: the reason's words, with the result's Undo.
+            let reached = space_reaches(d, combined, Some(undo));
+            let (keyed, wheeled) = (
+                reached.iter().all(|(keyboard, _)| *keyboard),
+                reached.iter().all(|(_, pointer)| *pointer),
+            );
             d.observe(
                 "iter-25-D-FD1-part-focus",
                 tabbed && owner.as_deref() == Some(message),
@@ -301,7 +321,7 @@ pub fn broken(d: &mut Driver<'_>) {
                 "iter-25-D-FD1-part-scroll",
                 keyed && wheeled,
                 format!(
-                    "{state} at {size:?}: the part scrolls by key {keyed} and by wheel {wheeled}"
+                    "{state} at {size:?}: the keys reach the part {keyed}, the wheel reaches it {wheeled}"
                 ),
             );
             d.observe(
@@ -473,13 +493,13 @@ pub fn broken(d: &mut Driver<'_>) {
     d.expect("Note repaired.");
     // FD1: an edit-form save result takes the same place on the same note. It replaces
     // `Note repaired.`, the older result.
-    let pane = reader_pane(d);
-    let repaired_at = d.painted_rect_in("Note repaired.", pane);
+    // Round 26 FG1: the value rows keep their place from `Note repaired.` to `Changes saved.`
+    // and its Undo; both results sit in the footer.
+    let rows = tops_at_sizes(d, "Change Stat block");
     d.click("Edit Repaired watchkeeper");
     d.type_into("Status", "on watch");
     d.click("Save changes");
     d.wait_for_text("Changes saved.");
-    let saved_at = d.painted_rect_in("Changes saved.", pane);
     // FD5 (round 20): a finished change has the success tone, as `Note repaired.` has.
     let (below, detail) = result_below_file_line(
         d,
@@ -487,17 +507,17 @@ pub fn broken(d: &mut Driver<'_>) {
         "Notes/Broken.md",
         design::colors().result.success,
     );
-    // An Undo message centres its words on its Undo target's line, so its words start that
-    // much below the top of the place.
-    let centred = (design::Density::Read.control() - design::Type::Body.line()) / 2.0;
     d.observe(
         "iter-17-D-FD1-same-place",
-        below
-            && !d.visible_text("Note repaired.")
-            && repaired_at.zip(saved_at).is_some_and(|(repaired, saved)| {
-                (repaired.top() - (saved.top() - centred)).abs() <= 0.5
-            }),
-        format!("`Note repaired.` at {repaired_at:?}, `Changes saved.` at {saved_at:?}; {detail}"),
+        below && !d.visible_text("Note repaired."),
+        format!("`Changes saved.` replaces `Note repaired.`; {detail}"),
+    );
+    body_kept(
+        d,
+        "iter-26-D-FG1",
+        "Change Stat block",
+        &rows,
+        Some("Undo changes"),
     );
     d.state("repaired-note-saved", Sizes::Default);
     d.click("Undo changes");
@@ -513,7 +533,7 @@ pub fn broken(d: &mut Driver<'_>) {
     d.type_into("Status", "on watch");
     d.click("Save changes");
     d.wait_for_text("Changes saved.");
-    d.click_containing("Problems · ");
+    d.click_containing("Things to check · ");
     fs::write(&path, "---\nsplat_schema: 2\nsplat_id: [\n---\n").unwrap();
     reload(d);
     d.click("1 note cannot be read");
@@ -546,7 +566,7 @@ pub fn broken(d: &mut Driver<'_>) {
     d.click("Rename the note to Gate Warden");
     d.wait_for_text("Undo name change");
     let renamed = fs::read_to_string(&warden).unwrap();
-    d.click_containing("Problems · ");
+    d.click_containing("Things to check · ");
     fs::write(&path, "---\nsplat_schema: 2\nsplat_id: [\n---\n").unwrap();
     reload(d);
     d.click("1 note cannot be read");
@@ -714,10 +734,10 @@ pub fn broken(d: &mut Driver<'_>) {
     );
     reload(d);
     d.click("2 notes cannot be read");
-    let row = "Notes/Broken.md · Text format cannot be read";
+    let row = "Notes/Broken.md · Not a text file";
     d.observe(
         "iter-18-D-AD2-list-cause",
-        d.has(row) && d.has(&format!("{long_path} · Text format cannot be read")),
+        d.has(row) && d.has(&format!("{long_path} · Not a text file")),
         "Each unreadable row states the short cause, not the system's words",
     );
     // The click finds the row by its path, so a wrong cause fails only the check above.
@@ -772,9 +792,9 @@ pub fn broken(d: &mut Driver<'_>) {
                 .is_some_and(|(show, words)| show.bottom() <= words.top()),
         "The file line with Show file sits above the message",
     );
-    // Round 25 FG3 (replaces round 18's quiet `line_start` edge): Try again and Cancel are
+    // Round 25 FG3 (replaces round 18's quiet `line_start` edge): Try again and Close note are
     // message actions without an icon, so each has the secondary border. Try again's border, not
-    // its words, starts at the message text; its words sit inside the border. Cancel follows on
+    // its words, starts at the message text; its words sit inside the border. Close note follows on
     // the same line, `L` after it.
     for size in [SMALL, DEFAULT, LARGE] {
         let (again, cancel, edge, words, splitter) = d.at_size(size, |d| {
@@ -782,7 +802,7 @@ pub fn broken(d: &mut Driver<'_>) {
             let words = again.and_then(|again| words_left_in(d, again));
             (
                 again,
-                d.place_of("Cancel"),
+                d.place_of("Close note"),
                 d.painted_left(headline),
                 words,
                 d.place_of("Resize World notes column"),
@@ -809,11 +829,11 @@ pub fn broken(d: &mut Driver<'_>) {
                 frame.stroke.width > 0.0 && frame.stroke.color == design::colors().field_border
             })
         };
-        let framed = border("Try again") && border("Cancel");
+        let framed = border("Try again") && border("Close note");
         d.observe(
             "iter-25-D-FG3-border",
             framed,
-            format!("At {size:?}, Try again and Cancel have the secondary border"),
+            format!("At {size:?}, Try again and Close note have the secondary border"),
         );
         d.observe(
             "iter-18-D-cancel-follows",
@@ -821,7 +841,7 @@ pub fn broken(d: &mut Driver<'_>) {
                 (again.top() - cancel.top()).abs() < 0.5
                     && (cancel.left() - again.right() - design::L).abs() <= 1.0
             }),
-            format!("At {size:?}, Cancel {cancel:?} follows Try again {again:?}, L apart"),
+            format!("At {size:?}, Close note {cancel:?} follows Try again {again:?}, L apart"),
         );
     }
     // Round 24 FG1, FE1, AG1 (L, D contract): a row marks every fault the header counts. The two
@@ -869,11 +889,11 @@ pub fn broken(d: &mut Driver<'_>) {
         "Technical details opens one short line of the system's words under its heading.",
     );
     d.state("repair-cannot-open-details", Sizes::Default);
-    d.click("Cancel");
+    d.click("Close note");
     d.observe(
         "iter-17-D-error-cancel-closes",
         !d.has(headline),
-        "Cancel removes the error",
+        "Close note removes the error",
     );
     d.observe(
         "iter-18-D-AD1-bytes-cancel",
@@ -890,11 +910,11 @@ pub fn broken(d: &mut Driver<'_>) {
         "A note row opens that note in the reader and ends the unreadable pane",
     );
     // The longest path wraps in the list at 960, whole, with its cause below it.
-    let long_row = format!("{long_path} · Text format cannot be read");
+    let long_row = format!("{long_path} · Not a text file");
     let whole = d.at_size(SMALL, |d| {
         d.place_of(&long_row).is_some_and(|row| {
             let painted = d.painted_in(row);
-            painted.contains("Harbour Council.md") && painted.contains("Text format cannot be read")
+            painted.contains("Harbour Council.md") && painted.contains("Not a text file")
         })
     });
     d.observe(
@@ -913,7 +933,7 @@ pub fn broken(d: &mut Driver<'_>) {
             .iter()
             .any(|node| node.name == long_headline && node.fully_in_view())
             && d.in_view("Try again")
-            && d.in_view("Cancel")
+            && d.in_view("Close note")
     });
     d.observe(
         "iter-18-D-long-path-960",
@@ -1189,12 +1209,100 @@ pub fn broken(d: &mut Driver<'_>) {
     entry(d, "NPCs/Lamp.md", "Lamp Warden", "npc", "");
     reload(d);
     d.click_containing("Lamp Warden · ");
+    let lamp_original = fs::read_to_string(&lamp).unwrap();
+    // Round 26 review 3: results with a live Undo are listed newest first, whatever their kind.
+    // Order 1: an edit's Discard, then the name change. Order 2: the name change, then a Discard.
+    let newer_above = |d: &mut Driver<'_>, newer: &str, older: &str| {
+        let (newer_at, older_at) = (d.place_of(newer), d.place_of(older));
+        (
+            newer_at
+                .zip(older_at)
+                .is_some_and(|(newer, older)| newer.top() < older.top()),
+            format!("{newer:?} at {newer_at:?}, {older:?} at {older_at:?}"),
+        )
+    };
+    d.click("Edit Lamp Warden");
+    d.type_into("Status", "awake");
+    d.click("Discard");
+    let discard = d.name_starting("Undo discard of ");
     d.click("Rename the note to Lamp");
     d.wait_for_text("Undo name change");
+    let first = newer_above(d, "Undo name change", &discard);
+    d.click("Undo name change");
+    d.settle();
+    assert_eq!(
+        fs::read_to_string(&lamp).unwrap(),
+        lamp_original,
+        "A's rename undone"
+    );
+    d.click("Rename the note to Lamp");
+    d.wait_for_text("Undo name change");
+    d.click("Edit Lamp");
+    d.type_into("Status", "asleep");
+    d.click("Discard");
+    let discard = d.name_starting("Undo discard of ");
+    let second = newer_above(d, &discard, "Undo name change");
+    d.observe(
+        "iter-26-D-newest-first",
+        first.0 && second.0,
+        format!(
+            "Discard then rename: {}; rename then Discard: {}",
+            first.1, second.1
+        ),
+    );
+    // The next Edit ends the discard's Undo; the clean form closes with Cancel.
+    d.click("Edit Lamp");
+    d.click("Cancel");
+    d.expect("Undo name change");
     let lamp_renamed = fs::read_to_string(&lamp).unwrap();
     assert!(
         lamp_renamed.contains("splat_name: Lamp\n"),
         "B changed state"
+    );
+    // Round 26 contract (revision 18): a newer result on the same note joins the older one in
+    // the footer, newest Undo first in the footer's order. The older Undo refuses while the file
+    // holds the newer write: the bytes stay and the refusal is a reason; then each Undo, newest
+    // first, takes its own write back.
+    d.click("Change Stat block");
+    d.type_text("Guard");
+    d.click("Guard");
+    d.wait_for_text("Stat block set to Guard.");
+    let lamp_both = fs::read_to_string(&lamp).unwrap();
+    let listed = d.in_view("Undo name change") && d.in_view("Undo stat block change");
+    d.click("Undo name change");
+    d.settle();
+    let refused = fs::read_to_string(&lamp).unwrap() == lamp_both
+        && d.has_containing("changed on disk")
+        && d.in_view("Undo stat block change")
+        && d.in_view("Undo name change");
+    d.click("Undo stat block change");
+    d.settle();
+    let stat_back = fs::read_to_string(&lamp).unwrap() == lamp_renamed;
+    d.click("Undo name change");
+    d.settle();
+    let restored = fs::read_to_string(&lamp).unwrap() == lamp_original;
+    let undo_left = d.has("Undo name change");
+    let refusal_left = d.has_containing("changed on disk");
+    d.observe(
+        "iter-26-D-two-results",
+        listed
+            && lamp_both != lamp_renamed
+            && refused
+            && stat_back
+            && fs::read_to_string(&lamp).unwrap() == lamp_original
+            && !d.has("Undo name change")
+            && !d.has_containing("changed on disk"),
+        format!(
+            "Both listed {listed}; older refused {refused}; newer undone {stat_back}; restored \
+             {restored}, Undo name change left {undo_left}, refusal left {refusal_left}"
+        ),
+    );
+    d.click("Rename the note to Lamp");
+    d.wait_for_text("Undo name change");
+    assert_eq!(
+        fs::read_to_string(&lamp).unwrap(),
+        lamp_renamed,
+        "B changed state again"
     );
     d.click_containing("Repaired watchkeeper · ");
     d.click("Undo file rename");
@@ -1920,7 +2028,7 @@ pub fn facts(d: &mut Driver<'_>) {
     d.click("Change Part of");
     d.type_into("Find a group", "Arena");
     d.click("The Arena");
-    d.expect("Part of: Arena Guild → Arena Guild, The Arena.");
+    d.expect("Part of set to Arena Guild, The Arena. It was Arena Guild.");
     let after = fs::read_to_string(&path).unwrap();
     d.observe(
         "T15.4",
@@ -1942,7 +2050,7 @@ pub fn facts(d: &mut Driver<'_>) {
     d.click("Change Part of");
     d.type_into("Find a group", "Arena");
     d.click("The Arena");
-    d.expect("Part of: Arena Guild → Arena Guild, The Arena.");
+    d.expect("Part of set to Arena Guild, The Arena. It was Arena Guild.");
     assert_eq!(fs::read_to_string(&path).unwrap(), after);
     // F6: `Add to Log` beside Edit opens a field with the line's stamp. Enter writes one line
     // in the DM's words, stamped as the change above, and its Undo takes back that line alone.
@@ -2000,7 +2108,7 @@ pub fn facts(d: &mut Driver<'_>) {
         d.click("Change Part of");
         d.type_into("Find a group", "Arena");
         d.click("The Arena");
-        d.expect("Part of: Arena Guild → Arena Guild, The Arena.");
+        d.expect("Part of set to Arena Guild, The Arena. It was Arena Guild.");
         fs::read_to_string(&path).unwrap()
     };
     let later = change_part_of(d, "2999-01-01");
@@ -2057,6 +2165,31 @@ pub fn facts(d: &mut Driver<'_>) {
             format!("Open questions leaves the remembered note without selected fill at {size:?}"),
         );
     }
+    // Round 26 FE4: the question is `Body` and comes first; its note's link follows in `Small`.
+    let (question, source) = d.at_size(DEFAULT, |d| {
+        (
+            d.place_of("Can a horn ring be sold?"),
+            d.place_of("Horn Rings"),
+        )
+    });
+    let sizes = question.zip(source).map(|(question, source)| {
+        (
+            d.painted_size(question, "Can a horn ring be sold?"),
+            d.painted_size(source, "Horn Rings"),
+        )
+    });
+    d.observe(
+        "iter-26-D-FE4",
+        question
+            .zip(source)
+            .is_some_and(|(question, source)| question.bottom() <= source.top() + 0.5)
+            && sizes
+                == Some((
+                    Some(design::Type::Body.size()),
+                    Some(design::Type::Small.size()),
+                )),
+        format!("The question {question:?} is Body above its note {source:?}: {sizes:?}"),
+    );
     d.state("open-questions", Sizes::All);
     d.click("Can a horn ring be sold?");
     d.observe(
@@ -2064,7 +2197,21 @@ pub fn facts(d: &mut Driver<'_>) {
         d.visible_text("Tieflings wear one ring on their horns for each kept ancestor."),
         "An open question opens the page that holds it",
     );
-    d.click_containing("Problems · ");
+    // Round 26 FF3, FH1: the advice row names suggestions, not a fault count, so it never
+    // reads as a second `needs fixing` count. Its page has the same title.
+    let row = d.name_starting("Things to check · ");
+    d.observe(
+        "iter-26-D-FF3-row",
+        (row.ends_with(" suggestion") || row.ends_with(" suggestions"))
+            && !d.has_containing("Problems · "),
+        format!("The advice row says {row:?}"),
+    );
+    d.click_containing("Things to check · ");
+    d.observe(
+        "iter-26-D-FF3-title",
+        d.has_label("Things to check") && !d.has_label("Problems"),
+        "The advice page's title is Things to check",
+    );
     d.expect("No summary");
     d.observe(
         "T15.5",
@@ -2118,6 +2265,8 @@ pub fn places(d: &mut Driver<'_>) {
     );
     d.state("npc-place", Sizes::All);
     let original = fs::read(root(d).join("NPCs/Rook Ambry.md")).unwrap();
+    // Round 26 SH1: the In row below the Stat block row keeps its place while the result shows.
+    let rows = tops_at_sizes(d, "Change In");
     let before = d.interaction_count();
     d.click("Change Stat block");
     d.type_text("Guard");
@@ -2132,14 +2281,35 @@ pub fn places(d: &mut Driver<'_>) {
             .unwrap()
             .contains("splat_stat_block:")
     );
+    body_kept(
+        d,
+        "iter-26-D-SH1",
+        "Change In",
+        &rows,
+        Some("Undo stat block change"),
+    );
     d.expect_same("Adding the stat block keeps the note's content and offers Undo.");
     d.state("npc-stat-block-changed", Sizes::All);
     d.click("Undo stat block change");
+    body_kept(d, "iter-26-D-SH1-undo", "Change In", &rows, None);
     d.observe(
         "W3",
         fs::read(root(d).join("NPCs/Rook Ambry.md")).unwrap() == original,
         "Undo restores the previous content byte for byte",
     );
+    // Round 26 FH2: the rows above keep their place while the cleared place's result shows in
+    // the footer. The cleared In row goes with its value, so the prose moves up by exactly one
+    // row pitch, and the result adds nothing to that.
+    let prose_at = |d: &mut Driver<'_>| {
+        [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                d.painted_rect_in("A note for tonight.", egui::Rect::EVERYTHING)
+                    .map(|words| words.top())
+            })
+        })
+    };
+    let rows = tops_at_sizes(d, "Change Stat block");
+    let prose = prose_at(d);
     d.click("Change In");
     action_at_text_edge(
         d,
@@ -2155,7 +2325,7 @@ pub fn places(d: &mut Driver<'_>) {
     // in the file (`The Keep`).
     d.observe(
         "iter-23-D-FG3-cleared",
-        d.visible_text("In: Ashfall Keep → not set.") && !d.visible_text("The Keep"),
+        d.visible_text("In cleared. It was Ashfall Keep.") && !d.visible_text("The Keep"),
         "The cleared place's message names the note the In row showed",
     );
     d.observe(
@@ -2175,6 +2345,24 @@ pub fn places(d: &mut Driver<'_>) {
             .is_some_and(|(undo, row)| undo.top() >= row.bottom()),
         format!("Undo place change at {undo:?}, below the last row at {row:?}"),
     );
+    body_kept(
+        d,
+        "iter-26-D-FH2",
+        "Change Stat block",
+        &rows,
+        Some("Undo place change"),
+    );
+    let cleared = prose_at(d);
+    d.observe(
+        "iter-26-D-FH2-prose",
+        prose.iter().zip(&cleared).all(|pair| match pair {
+            (Some(before), Some(after)) => {
+                (before - design::Density::Scan.row() - after).abs() <= 0.5
+            }
+            _ => false,
+        }),
+        format!("The prose moves up one row pitch with the In row: {prose:?} → {cleared:?}"),
+    );
     d.state("cleared-place-keeps-undo", Sizes::All);
     d.click("Undo place change");
     assert_eq!(
@@ -2185,8 +2373,8 @@ pub fn places(d: &mut Driver<'_>) {
     d.click("New location…");
     d.type_into("Location name", "Watch House");
     d.click("Create location here");
-    d.expect("In: Ashfall Keep → Watch House.");
-    let (success, detail) = finished_change_tone(d, "In: Ashfall Keep → Watch House.");
+    d.expect("In set to Watch House. It was Ashfall Keep.");
+    let (success, detail) = finished_change_tone(d, "In set to Watch House. It was Ashfall Keep.");
     d.observe("iter-20-D-FD5-place", success, detail);
     d.state("npc-new-place", Sizes::All);
     d.click("Undo place change");
@@ -2463,7 +2651,11 @@ pub fn round_trip(d: &mut Driver<'_>) {
             let statuses: Vec<_> = d
                 .nodes()
                 .into_iter()
-                .filter(|node| node.role == Role::Label && node.name.contains("World repair draft"))
+                // iter-26-B FF2: a rail draft status is a link to its draft.
+                .filter(|node| {
+                    matches!(node.role, Role::Label | Role::Link)
+                        && node.name.contains("World repair draft")
+                })
                 .collect();
             !statuses.is_empty()
                 && statuses.len() == 1
@@ -2796,7 +2988,44 @@ pub fn tables(d: &mut Driver<'_>) {
         d.has("Roll 1d6") && d.has("Close Lookup"),
         "In Lookup, the table's own button says Roll 1d6, as before",
     );
-    d.state("authored-table-in-lookup", Sizes::Default);
+    d.state_prepared("authored-table-in-lookup", Sizes::Default, |d| {
+        // Round 26 AE1: World and Lookup show the same table. Each reader has its own field id
+        // (egui paints no `Second use` id warning) and its own roll state: World's typed 4 does
+        // not show in Lookup. Lookup is the right pane, so its Roll button is the rightmost.
+        let rolls: Vec<_> = d
+            .nodes()
+            .into_iter()
+            .filter(|node| node.name == "Roll 1d6")
+            .map(|node| node.rect)
+            .collect();
+        let fields = d
+            .nodes()
+            .into_iter()
+            .filter(|node| node.name == "Typed roll for Valid")
+            .count();
+        let lookup = rolls
+            .iter()
+            .max_by(|a, b| a.left().total_cmp(&b.left()))
+            .map(|roll| {
+                egui::Rect::from_min_max(
+                    roll.left_top(),
+                    egui::pos2(roll.left() + 600.0, roll.bottom() + 3.0 * design::XL),
+                )
+            });
+        let everything = d.painted_in(egui::Rect::EVERYTHING);
+        d.observe(
+            "iter-26-L-AE1",
+            rolls.len() == 2
+                && fields == 2
+                && !everything.contains("Second use")
+                && !everything.contains("First use")
+                && lookup.is_some_and(|area| !d.painted_in(area).contains("Typed 4")),
+            format!(
+                "World and Lookup each show the table ({} Roll buttons, {fields} fields) with no widget id warning, and Lookup does not show World's typed roll",
+                rolls.len()
+            ),
+        );
+    });
 }
 
 pub fn generator(d: &mut Driver<'_>) {
@@ -2865,6 +3094,11 @@ pub fn generator(d: &mut Driver<'_>) {
         !d.has("Save NPC"),
         "The World page has no generated NPC before Lookup rolls one",
     );
+    // Round 26 FF1: with no note open, the discard result and its Undo sit in the pane's
+    // footer, as below a note, not under the empty state's advice.
+    let empty = tops_at_sizes(d, "No note open");
+    let undo = d.name_starting("Undo discard of ");
+    body_kept(d, "iter-26-D-FF1", "No note open", &empty, Some(&undo));
     look_up(d, "Tally");
     d.click("Clear");
     d.click("Generate NPC");
@@ -2997,12 +3231,22 @@ pub fn generator(d: &mut Driver<'_>) {
     let kept_line = |file: &str| {
         let name = file.strip_suffix(".md").unwrap_or(file);
         let card = world[0].strip_suffix(".md").unwrap_or(&world[0]);
-        format!("Lookup keeps {name}. Save or discard {card} to move {name} here.")
+        crate::world::page::kept_in_lookup(name, card)
     };
     d.observe(
         "iter-14-D3-FD5-reason",
         d.visible_text(&kept_line(&lookup[0])),
         "World's card says why it kept its own NPC, naming Lookup's",
+    );
+    // Round 26 FB8: the line is a state, so it is an info message with its icon and bar.
+    let line = kept_line(&lookup[0]);
+    let info = d
+        .place_of(&line)
+        .is_some_and(|words| d.has_tone_bar(words, design::colors().result.info));
+    d.observe(
+        "iter-26-D-FB8",
+        line.contains(" is not saved. It is in Lookup.") && info,
+        format!("World's card line {line:?} is an info message with its bar ({info})"),
     );
     d.state("generator-world-keeps-its-npc", Sizes::All);
     d.click(NAV_LOOKUP);
@@ -3128,8 +3372,8 @@ pub fn held_npc(d: &mut Driver<'_>) {
             format!("{view} opens below one row that keeps the unsaved NPC"),
         );
     };
-    d.click_containing("Problems · ");
-    kept(d, "iter-15-D-AD1-problems", "Problems");
+    d.click_containing("Things to check · ");
+    kept(d, "iter-15-D-AD1-problems", "Things to check");
     let short = d
         .nodes()
         .into_iter()
@@ -3483,6 +3727,17 @@ pub(super) fn space_reaches(
     reached
 }
 
+/// Round 26 FD2: the y of the wolf's kind line, the first line of its stat block, in the
+/// Library reader at 960, 1200 and 1920.
+fn kind_line_tops(d: &mut Driver<'_>) -> [Option<f32>; 3] {
+    [SMALL, DEFAULT, LARGE].map(|size| {
+        d.at_size(size, |d| {
+            d.painted_rect_in("Medium · Beast · Unaligned", egui::Rect::EVERYTHING)
+                .map(|rect| rect.top())
+        })
+    })
+}
+
 /// Round 24 FC4: the y of the Read tab, `Show file` on the file line and the reader's title, at
 /// 960, 1200 and 1920. A result in the reader's result place moves none of them.
 pub(super) fn reader_frame(d: &mut Driver<'_>, title: &str) -> Vec<Option<(f32, f32, f32)>> {
@@ -3530,6 +3785,50 @@ fn result_below_file_line(
             "{result:?} at {message:?} with a tone bar {bar}, below the file line {file:?} at {file_line:?}"
         ),
     )
+}
+
+/// Round 26 footer: `anchor`'s top at 960, 1200 and 1920.
+fn tops_at_sizes(d: &mut Driver<'_>, anchor: &str) -> [Option<f32>; 3] {
+    [SMALL, DEFAULT, LARGE]
+        .map(|size| d.at_size(size, |d| d.place_of(anchor).map(|rect| rect.top())))
+}
+
+/// Round 26 footer: a pane's results, reasons and Undo sit in its footer, so `anchor` (what the
+/// DM works on) keeps the top it had in `before` at 960, 1200 and 1920. When `result` is given,
+/// it is in view at each size in the footer: below `anchor`, in the pane's lower part.
+fn body_kept(
+    d: &mut Driver<'_>,
+    id: &str,
+    anchor: &str,
+    before: &[Option<f32>; 3],
+    result: Option<&str>,
+) {
+    let now = tops_at_sizes(d, anchor);
+    let kept = before.iter().zip(&now).all(|pair| match pair {
+        (Some(before), Some(now)) => (before - now).abs() <= 0.5,
+        _ => false,
+    });
+    let mut placed = Vec::new();
+    if let Some(result) = result {
+        for size in [SMALL, DEFAULT, LARGE] {
+            placed.push(d.at_size(size, |d| {
+                let found = d.place_of(result).filter(|_| d.in_view(result));
+                let below = found
+                    .zip(d.place_of(anchor))
+                    .is_some_and(|(found, anchor)| {
+                        found.top() >= anchor.bottom() && found.top() >= size.1 / 2.0
+                    });
+                (size, found, below)
+            }));
+        }
+    }
+    d.observe(
+        id,
+        kept && placed.iter().all(|(_, _, below)| *below),
+        format!(
+            "{anchor} keeps its top {before:?} → {now:?}; {result:?} in the footer: {placed:?}"
+        ),
+    );
 }
 
 /// FD5 (round 20): a finished change is a success. Its words have the success tone's bar, and
@@ -3913,6 +4212,9 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
         );
     }
     d.expect("Edit Rook Ambry");
+    // Round 26 FJ3: `Add to fight` keeps its place in Lookup while the save result shows and
+    // after it goes; the result sits in Lookup's footer.
+    let add = tops_at_sizes(d, "Add to fight");
     d.click("Edit Rook Ambry");
     d.wait_for_text("Save changes");
     d.click("Change In");
@@ -4025,10 +4327,18 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
             && !d.has("Change In"),
         "After Save, Lookup reads the NPC again with the new place and text",
     );
+    body_kept(
+        d,
+        "iter-26-D-FJ3",
+        "Add to fight",
+        &add,
+        Some("Undo changes"),
+    );
     d.state("npc-edit-saved-in-lookup", Sizes::All);
     d.click("Undo changes");
     d.wait_for_text("Watch House");
     assert_eq!(fs::read_to_string(&path).unwrap(), before);
+    body_kept(d, "iter-26-D-FJ3-undo", "Add to fight", &add, None);
 
     // FT2, the other half: Bless has no value block. Its prose sets the gap that Watch House
     // must match.
@@ -4395,6 +4705,8 @@ pub fn package_rename(d: &mut Driver<'_>) {
 
     search_library(d, "Cinder Wolf");
     d.click_starting("Cinder Wolf · ");
+    // Round 26 FD2: the stat block's kind line with no message in the reader.
+    let clean_body = kind_line_tops(d);
     d.click(EDIT_MARKDOWN);
     let draft = d.editor_text().unwrap();
     // Round 25 AC3, FC1, SC2: the editor's place with nothing in the message space.
@@ -4509,6 +4821,7 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.state("renamed-creature-offers-link-update", Sizes::All);
     // Round 24 FC4: the offer and its result sit in the reader's result place, below the title.
     let with_offer = reader_frame(d, "Ash Wolf");
+    let body_with_offer = kind_line_tops(d);
     // Round 23 AE2: the offer names the old and the new name, so the DM can check the words
     // before the write.
     let offer = d.painted_word_rect(
@@ -4548,6 +4861,7 @@ pub fn package_rename(d: &mut Driver<'_>) {
     );
     d.state("renamed-creature-links-updated", Sizes::All);
     let with_result = reader_frame(d, "Ash Wolf");
+    let body_with_result = kind_line_tops(d);
 
     // B (Veilglass Lantern), linked from another file (Ash Wraith), is renamed while A's result
     // waits. A's result is hidden in B's reader, not ended; B's offer and result are B's.
@@ -4611,10 +4925,17 @@ pub fn package_rename(d: &mut Driver<'_>) {
     let b_result_shown = d.has_containing(&format!("Links now say “{LAMP}”."));
     let b_result_alone = !d.has_containing("Links now say “Ash Wolf”");
     let b_with_result = editor_below_read(d);
-    // Astra re-check 2: B's long result scrolls by keyboard and by wheel, and its Undo keeps
-    // clear of every scroll bar, splitter and other target at 960, 1200 and 1920.
+    // Astra re-check 2: B's long result is reached by keyboard and by wheel, and its Undo keeps
+    // clear of every scroll bar, splitter and other target at 960, 1200 and 1920. Round 26: the
+    // message footer is as tall as what it holds, so a result that fits needs no scroll; it must
+    // still be reached, with its Undo, at each size.
     let b_message = format!("Links now say “{LAMP}”.");
-    let (tabbed, keyed, wheeled, ring) = fixed_part_scrolls(d, &b_message);
+    let (tabbed, _, _, ring) = fixed_part_scrolls(d, &b_message);
+    let reached = space_reaches(d, &b_message, Some("Undo link update"));
+    let (keyed, wheeled) = (
+        reached.iter().all(|(keyboard, _)| *keyboard),
+        reached.iter().all(|(_, pointer)| *pointer),
+    );
     let undo_clear = [SMALL, DEFAULT, LARGE].map(|size| {
         d.at_size(size, |d| {
             let lanes = d.chrome_lanes();
@@ -4633,7 +4954,7 @@ pub fn package_rename(d: &mut Driver<'_>) {
         "iter-24-L-part-keyboard-result",
         tabbed && keyed && wheeled && undo_clear.iter().all(|clear| *clear) && ring.iter().all(|r| *r),
         format!(
-            "B's result part: Tab {tabbed}, a key scrolls it {keyed}, the wheel scrolls it {wheeled}, Undo clear at 960, 1200, 1920 {undo_clear:?}, its focus ring clear {ring:?}"
+            "B's result part: Tab {tabbed}, the keys reach it {keyed}, the wheel reaches it {wheeled}, Undo clear at 960, 1200, 1920 {undo_clear:?}, its focus ring clear {ring:?}"
         ),
     );
     d.observe(
@@ -4680,7 +5001,30 @@ pub fn package_rename(d: &mut Driver<'_>) {
         !d.has_containing("Links now say") && !d.has("Undo link update"),
         "After Undo link update, its result message goes away",
     );
+    // Round 26 FD6: the links say the old name again, so the rename's offer comes back in the
+    // result's place. B's update stays on disk (checked above).
+    d.settle();
+    d.observe(
+        "iter-26-L-FD6-offer",
+        d.has_containing("Change links from “Cinder Wolf” to “Ash Wolf”.")
+            && d.has("Update 1 link"),
+        "After Undo link update, the rename's offer comes back",
+    );
     let without = reader_frame(d, "Ash Wolf");
+    // Round 26 FD2: the offer and its result sit in the reader's message footer, so the stat
+    // block keeps the place it has with no message: with the offer, with the result, and after
+    // Undo (the offer again).
+    let body_after_undo = kind_line_tops(d);
+    d.observe(
+        "iter-26-L-FD2",
+        clean_body.iter().all(Option::is_some)
+            && [body_with_offer, body_with_result, body_after_undo]
+                .iter()
+                .all(|tops| *tops == clean_body),
+        format!(
+            "The kind line is at {clean_body:?} with no message, {body_with_offer:?} with the offer, {body_with_result:?} with the result and {body_after_undo:?} after Undo"
+        ),
+    );
     d.observe(
         "iter-24-L-FC4-links",
         without.iter().all(Option::is_some) && with_offer == without && with_result == without,
@@ -4688,7 +5032,89 @@ pub fn package_rename(d: &mut Driver<'_>) {
             "The tabs, the file line and the title keep their y with the link offer {with_offer:?}, its result {with_result:?} and neither {without:?}"
         ),
     );
-    d.state("renamed-creature-link-update-undone", Sizes::All);
+    d.assert_state_matches(
+        "renamed-creature-link-update-undone",
+        "renamed-creature-offers-link-update",
+    );
+    // Round 26 FD6: the offer after an Undo is a new action. It writes again, and its own Undo
+    // gives the offer back again. B's update stays throughout.
+    d.click("Update 1 link");
+    d.wait_for_text("Undo link update");
+    let again = fs::read_to_string(&path).unwrap().contains("[[Ash Wolf]]");
+    d.click("Undo link update");
+    d.settle();
+    d.observe(
+        "iter-26-L-FD6-again",
+        again
+            && fs::read_to_string(&path).unwrap().contains("[[Cinder Wolf]]")
+            && fs::read_to_string(&wraith)
+                .unwrap()
+                .contains(&format!("[[{LAMP}]]"))
+            && d.has("Update 1 link"),
+        format!("The offer writes again ({again}), its Undo restores A's links and gives the offer back, and B's links stay"),
+    );
+    // Round 26 re-check: in Read with an unsaved draft, the save row's footer holds the result;
+    // its Undo restores the links, keeps the draft and ends the result. The Library reads the
+    // files again once the draft ends, and then the offer shows again.
+    d.click("Update 1 link");
+    d.wait_for_text("Undo link update");
+    let updated = fs::read_to_string(&path).unwrap().contains("[[Ash Wolf]]");
+    d.click(EDIT_MARKDOWN);
+    let saved_draft = d.editor_text().unwrap();
+    d.type_into_editor("Unsaved ruling.\n");
+    d.click("Read");
+    d.click("Undo link update");
+    d.settle();
+    let links_back = fs::read_to_string(&path)
+        .unwrap()
+        .contains("[[Cinder Wolf]]");
+    let result_ended = !d.has("Undo link update");
+    d.click(EDIT_MARKDOWN);
+    let draft_kept = d
+        .editor_text()
+        .is_some_and(|text| text.contains("Unsaved ruling."));
+    // A fault that keeps the result fails the observation below; its Undo puts the links back.
+    if d.has("Undo link update") {
+        d.click("Undo link update");
+        d.settle();
+    }
+    d.replace_editor_text(&saved_draft);
+    d.click("Read");
+    d.settle();
+    let offer_back = d.has("Update 1 link");
+    d.observe(
+        "iter-26-L-undo-unsaved",
+        updated && links_back && result_ended && draft_kept && offer_back,
+        format!(
+            "With an unsaved draft in Read, Undo link update restores the links ({links_back}), ends its result ({result_ended}) and keeps the draft ({draft_kept}); the offer is back after the draft ({offer_back})"
+        ),
+    );
+    // Round 26 review: the offer that Undo gives back keeps the version of Ash Wolf's file it
+    // was made from. An outside edit of the body, with no reload, makes it refuse: the linking
+    // file keeps its bytes. The file then gets its bytes back for the later steps.
+    let wolf = package.join("Creatures/Cinder Wolf.md");
+    let wolf_saved = fs::read(&wolf).unwrap();
+    let mut edited = wolf_saved.clone();
+    edited.extend_from_slice(b"\nA note added outside Splat.\n");
+    fs::write(&wolf, &edited).unwrap();
+    let linking = fs::read(&path).unwrap();
+    d.click("Update 1 link");
+    d.settle();
+    let refused = d.has_containing(crate::library::LINKS_NOT_CHANGED)
+        && fs::read(&path).unwrap() == linking
+        && !d.has("Undo link update");
+    d.observe(
+        "iter-26-L-offer-version",
+        refused,
+        "After an outside body edit, the offer Undo gave back writes nothing and says why",
+    );
+    // A fault that writes fails the observation above; its Undo puts the links back for the
+    // later steps.
+    if d.has("Undo link update") {
+        d.click("Undo link update");
+        d.settle();
+    }
+    fs::write(&wolf, &wolf_saved).unwrap();
 
     // Astra re-check: a stale offer goes. B is renamed (offer), then renamed again to a name
     // another entry has: the earlier offer ends with that save, though the new rename gives no
@@ -4781,9 +5207,59 @@ pub fn package_rename(d: &mut Driver<'_>) {
     let third_offer = d.has_containing(&format!(
         "Change links from “{LAMP}” to “Veilglass Beacon”."
     ));
+    // Round 26 re-check: a new file with B's identity and its old name, made after the rename
+    // with no reload, is a conflict on disk. Only B's own file is left out of the check, so the
+    // update refuses, writes nothing and gives no result.
+    let twin = lantern_path.with_file_name("Old lamp.md");
+    let beacon = fs::read_to_string(&lantern_path).unwrap();
+    fs::write(
+        &twin,
+        crate::content_workspace::patch_fields(&beacon, &[("splat_name", Some(LAMP.into()))])
+            .unwrap()
+            .replace("# Veilglass Beacon", &format!("# {LAMP}")),
+    )
+    .unwrap();
+    let linking_before = fs::read(&wraith).unwrap();
+    let twin_pressed = d.has("Update 1 link");
+    if twin_pressed {
+        d.click("Update 1 link");
+    }
+    d.settle();
+    let twin_refused = twin_pressed
+        && fs::read(&wraith).unwrap() == linking_before
+        && d.has_containing(crate::library::LINKS_NOT_CHANGED)
+        && !d.has("Undo link update");
+    d.observe(
+        "iter-26-L-offer-identity",
+        twin_refused,
+        "A file made after the rename with B's identity and old name makes the update refuse; the linking file keeps its bytes and no result shows",
+    );
+    // A fault that writes fails the observation above; its Undo puts the links back.
+    if d.has("Undo link update") {
+        d.click("Undo link update");
+        d.settle();
+    }
+    fs::remove_file(&twin).unwrap();
+    // A fresh offer for the next case: B back to its old name, then renamed again. Each Save
+    // also ends the refusal's error.
+    rename_b(d, "Veilglass Beacon", LAMP);
+    rename_b(d, LAMP, "Veilglass Beacon");
     // Astra re-check 2: renamed outside Splat with no reload, Update reads the entry's file
     // first, writes nothing and says why.
     rename_outside("Veilglass Torch");
+    // Round 26: the page's error is a reason in the pane's message footer. Save and the editor
+    // keep their places when it comes, at 960, 1200 and 1920.
+    let save_and_editor = |d: &mut Driver<'_>| {
+        [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                Some((
+                    d.place_of("Save")?.top(),
+                    d.input_frame("Markdown editor")?.0.top(),
+                ))
+            })
+        })
+    };
+    let before_error = save_and_editor(d);
     let pressed = d.has("Update 1 link");
     if pressed {
         d.click("Update 1 link");
@@ -4792,6 +5268,21 @@ pub fn package_rename(d: &mut Driver<'_>) {
     let no_reload_kept = pressed
         && fs::read(&wraith).unwrap() == linking
         && d.has_containing(crate::library::LINKS_NOT_CHANGED);
+    let with_error = save_and_editor(d);
+    let error_below = d
+        .input_frame("Markdown editor")
+        .zip(d.painted_rect_in("No links were changed.", egui::Rect::EVERYTHING))
+        .is_some_and(|((editor, _), error)| error.top() > editor.bottom());
+    d.observe(
+        "iter-26-L-error-footer",
+        no_reload_kept
+            && error_below
+            && before_error.iter().all(Option::is_some)
+            && before_error == with_error,
+        format!(
+            "The error sits below the editor ({error_below}); Save and the editor stay at {before_error:?} → {with_error:?}"
+        ),
+    );
     d.click("Packages");
     d.click("Reload from disk");
     d.settle();
@@ -4979,12 +5470,14 @@ fn check_repair_reason(d: &mut Driver<'_>, manifest: bool) {
         .input_frame("Markdown editor")
         .expect("The source editor is visible")
         .0;
+    // Round 26 lead ruling: the error is in the pane's message footer, below the source, so it
+    // never moves the source, which starts directly below Save.
     d.observe(
         "iter-9-E-FD9",
-        error.top() >= save.bottom()
-            && error.top() - save.bottom() <= design::S * 2.0
-            && editor.top() > error.bottom(),
-        "The error fills the reason line directly below Save and above the source",
+        editor.top() >= save.bottom()
+            && editor.top() - save.bottom() <= design::S * 2.0
+            && error.top() >= editor.bottom() + design::S - 1.0,
+        "The source starts directly below Save, and the error is in the footer below it",
     );
     if manifest {
         let action = d
@@ -5032,13 +5525,13 @@ pub fn package_about(d: &mut Driver<'_>) {
     d.open_combo_at(LIBRARY_PACKAGE_DROPDOWN);
     d.click(MODULE);
     d.click("About Ashen Marches");
-    d.wait_for_text("5 of 6 entries chosen");
+    d.wait_for_text("4 of 6 entries chosen · 1 still needed");
     d.observe(
         "W2 fixture",
-        d.visible_text("5 of 6 entries chosen")
+        d.visible_text("4 of 6 entries chosen · 1 still needed")
             && !d.visible_text("Engine support")
             && !d.visible_text("Library / Other entries"),
-        "Four selected entries and one required entry count as package use",
+        "Four chosen entries count as chosen; the one entry they need counts as still needed",
     );
     d.state("package-about", Sizes::All);
     let title_before = reader_title_tops(d, MODULE);
@@ -5073,7 +5566,7 @@ pub fn package_about(d: &mut Driver<'_>) {
         );
     });
     d.click("Undo package choice");
-    d.wait_for_text("5 of 6 entries chosen");
+    d.wait_for_text("4 of 6 entries chosen · 1 still needed");
     d.expect_same("Undo package choice restores the original package selection and About reader.");
     d.assert_state_matches("package-use-undone", "package-about");
     d.click(EDIT_MARKDOWN);
@@ -5087,6 +5580,8 @@ pub fn package_about(d: &mut Driver<'_>) {
         })
     };
     let no_result = editor_below_read(d);
+    // Round 26 A: with nothing to say, the editor has no footer and runs to the pane's bottom.
+    let footer_empty = footer_in_order(d, &[]);
     let original = d.editor_text().unwrap();
     let renamed = crate::content_workspace::patch_fields(
         &original,
@@ -5197,15 +5692,52 @@ pub fn package_about(d: &mut Driver<'_>) {
         .all(|(keyboard, pointer)| *keyboard && *pointer)
     };
     let refused = (kept(d), editor_below_read(d));
+    // Round 26 A: the footer's one order. The write result's live Undo first, then Save's reason.
+    const WRITTEN: &str = "Module.md was written again.";
+    const REASON: &str = "opens a list";
+    let footer_refused = footer_in_order(d, &[WRITTEN, REASON]);
+    d.state("manifest-footer-undo-then-reason", Sizes::All);
     d.click("Discard");
     assert_eq!(d.editor_text().as_deref(), Some(written.as_str()));
     let discarded = (
         kept(d) && d.has_containing("Undo discard"),
         editor_below_read(d),
     );
+    // Two live Undo results, newest first: Discard's, then the write's. No reason is left.
+    let footer_discarded = footer_in_order(d, &["draft discarded.", WRITTEN]);
+    let reason_gone = !d.has_containing(REASON);
+    d.state("manifest-footer-two-undo-results", Sizes::All);
     d.click_starting("Undo discard");
     assert_eq!(d.editor_text().as_deref(), Some(invalid.as_str()));
     let undone = (kept(d), editor_below_read(d));
+    let footer_undone = footer_in_order(d, &[WRITTEN, REASON]);
+    d.observe(
+        "iter-26-A-footer-order",
+        [&footer_empty, &footer_refused, &footer_discarded, &footer_undone]
+            .iter()
+            .all(|sizes| sizes.iter().all(|ok| *ok))
+            && reason_gone,
+        format!(
+            "Edit Markdown's footer at 960, 1200, 1920: none with nothing to say {footer_empty:?}; the write's Undo, then the reason {footer_refused:?}; Discard's Undo, then the write's {footer_discarded:?}; after Undo discard {footer_undone:?}"
+        ),
+    );
+    // Round 26 follow-up (found by package L): with the footer on screen, Lookup opened from the
+    // rail keeps its search field's focus, and the DM's typed words arrive there, not in the
+    // editor behind it.
+    let draft_before = d.editor_text();
+    d.click("Lookup");
+    d.type_text("Cinder");
+    let focus = d.focused_name();
+    let typed = d.field_text(SEARCH_LOOKUP);
+    let draft_kept = d.editor_text() == draft_before;
+    d.press_ctrl(egui::Key::K);
+    d.observe(
+        "iter-26-A2-lookup-keeps-focus",
+        focus.as_deref() == Some(SEARCH_LOOKUP) && typed.as_deref() == Some("Cinder") && draft_kept,
+        format!(
+            "Lookup from the rail with the footer on screen: focus {focus:?}, search {typed:?}, draft unchanged {draft_kept}"
+        ),
+    );
     d.observe(
         "iter-24-L-FB3-states",
         [&refused, &discarded, &undone]
@@ -5256,7 +5788,14 @@ pub fn package_about(d: &mut Driver<'_>) {
             sizes.push((text.pos, text.galley.size(), clip));
         }
     });
-    let (tabbed, keyed, wheeled, ring) = fixed_part_scrolls(d, &space);
+    // Round 26: the footer is as tall as what it holds, so the reason is reached whether or not
+    // it needs to scroll.
+    let (tabbed, _, _, ring) = fixed_part_scrolls(d, &space);
+    let reached = space_reaches(d, &message, None);
+    let (keyed, wheeled) = (
+        reached.iter().all(|(keyboard, _)| *keyboard),
+        reached.iter().all(|(_, pointer)| *pointer),
+    );
     let clear = [SMALL, DEFAULT, LARGE].map(|size| {
         d.at_size(size, |d| {
             let lanes = d.chrome_lanes();
@@ -5276,7 +5815,7 @@ pub fn package_about(d: &mut Driver<'_>) {
         "iter-24-L-part-keyboard-reason",
         tabbed && keyed && wheeled && clear.iter().all(|clear| *clear) && ring.iter().all(|r| *r),
         format!(
-            "The reason part: Tab {tabbed}, a key scrolls it {keyed}, the wheel scrolls it {wheeled}, its words clear of bars and splitters at 960, 1200, 1920 {clear:?}, its focus ring clear {ring:?}; painted {sizes:?}"
+            "The reason part: Tab {tabbed}, the keys reach it {keyed}, the wheel reaches it {wheeled}, its words clear of bars and splitters at 960, 1200, 1920 {clear:?}, its focus ring clear {ring:?}; painted {sizes:?}"
         ),
     );
     d.click("Discard");
@@ -5389,6 +5928,7 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     d.click("Reload from disk");
     d.expect("Package.md cannot be read (line 4)");
     assert!(!d.has("Find the folder…"));
+    let invalid_tops = package_list_tops(d);
     d.state_prepared("manifest-invalid-campaign", Sizes::All, |d| {
         let open = d.place_of("Open in Library").expect("Safe manifest repair is present");
         let replace = d.place_of("Replace with a basic Package.md").expect("Manifest replacement is present");
@@ -5603,6 +6143,7 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     d.click("Reload from disk");
     d.expect("The package manifest was deleted");
     assert!(!d.has("Find the folder…"));
+    let deleted_tops = package_list_tops(d);
     d.state_prepared("manifest-deleted-campaign", Sizes::All, |d| {
         // Round 23 AE4, outside its scope: a deleted manifest stays a warning.
         let tone = manifest_fault_tone(d, "The package manifest was deleted");
@@ -5651,6 +6192,19 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     );
     d.expect("Package.md was written again.");
     d.expect("Undo write Package.md");
+    // Round 26 FD1: package warnings and results sit in the page's footer, so the package list
+    // keeps one y with an invalid manifest, a deleted one, and the written result with its Undo.
+    let written_tops = package_list_tops(d);
+    d.observe(
+        "iter-26-C-FD1",
+        invalid_tops.iter().all(Option::is_some)
+            && deleted_tops == invalid_tops
+            && written_tops == invalid_tops,
+        format!(
+            "Package list tops at 960, 1200 and 1920: invalid {invalid_tops:?}, deleted \
+             {deleted_tops:?}, written again {written_tops:?}"
+        ),
+    );
     // Round 24 FF5: a missing and a replaced manifest give one result sentence and one Undo, so
     // this capture matches `manifest-replaced-with-undo`. The file above went from missing to
     // written; what differs is only what Undo restores.
@@ -6235,9 +6789,31 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     d.type_into("Replacement creature", "Guard");
     d.expect("Use Guard");
     d.state("deleted-package-entry-choose-replacement", Sizes::All);
+    // iter-26-B FA2: the replacement's result sits in the editor's footer, so the roster's
+    // heading and its first row keep their y with the result, at 960, 1200 and 1920.
+    let roster_tops = |d: &mut Driver<'_>| {
+        [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                // The heading, or the roster's tab where the panes are tabs.
+                ["ROSTER", "1. "].map(|start| {
+                    d.nodes()
+                        .into_iter()
+                        .find(|node| node.name.to_uppercase().starts_with(start))
+                        .map(|node| node.rect.top().round())
+                })
+            })
+        })
+    };
+    let before_result = roster_tops(d);
     d.click("Use Guard");
     d.expect("as\u{a0}Guard");
     d.expect("Undo replacement");
+    let with_result = roster_tops(d);
+    d.observe(
+        "iter-26-B-FA2",
+        before_result.iter().flatten().all(Option::is_some) && with_result == before_result,
+        format!("Roster heading and row 1 tops before {before_result:?} and with the result {with_result:?}"),
+    );
     assert!(!d.has_containing("Not found. Its package entry was deleted."));
     assert!(
         !d.has_containing("have no creature")
@@ -6366,17 +6942,8 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
         (top("7. Cinder Wolf") - top("6. Cinder Wolf") - pitch).abs() < 1.0
             && (top("8. Ember Cultist") - top("7. Cinder Wolf") - pitch).abs() < 1.0
     });
-    d.click("More actions for Bridge Ambush");
-    d.click("Start another fight");
-    d.expect("Begin combat");
-    d.state("replacement-starts-another-fight", Sizes::All);
-    close_run(d);
-    go_encounters(d);
-    d.click("Undo replacement");
-    d.expect("Not found. Its package entry was deleted.");
-    d.expect_same("Undo replacement restores the original missing-creature rows and warning.");
-    // iter-24-B FC1: Save would refuse this changed draft (2 rows have no creature), so it says
-    // Invalid, not Unsaved, and Save and Ctrl+S are blocked: the file keeps its bytes.
+    // iter-26-B FC3: Undo before any Save gives back the file's rows, so the draft is clean:
+    // `No changes`, no Discard, and the campaign switch is open.
     let bridge = d
         .app_mut()
         .campaigns
@@ -6385,6 +6952,32 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
         .path
         .join("Encounters/Bridge Ambush.md");
     let on_disk = fs::read(&bridge).unwrap();
+    let replaced_dirty = d.app_mut().encounters.draft_dirty();
+    d.click("Undo replacement");
+    d.expect("Not found. Its package entry was deleted.");
+    let clean = !d.app_mut().encounters.draft_dirty();
+    d.observe(
+        "iter-26-B-FC3",
+        replaced_dirty
+            && clean
+            && d.visible_text("No changes")
+            && !d.visible_text("Invalid")
+            && !d.visible_text("Unsaved")
+            && !d.has("Discard")
+            && fs::read(&bridge).unwrap() == on_disk,
+        format!(
+            "Undo replacement before Save: dirty before {replaced_dirty}, clean after {clean}; the save row says No changes"
+        ),
+    );
+    // The same roster in the same state as before the replacement: one roster, one state.
+    d.assert_state_matches(
+        "deleted-package-entry-replacement-undone",
+        "deleted-package-blocks-new-fight",
+    );
+    // iter-24-B FC1: Save would refuse a changed draft with these rows (2 rows have no
+    // creature), so it says Invalid, not Unsaved, and Save and Ctrl+S are blocked: the file keeps
+    // its bytes. Putting the name back makes the draft clean again.
+    d.type_into("Encounter name", " at dusk");
     let invalid =
         d.visible_text("Invalid") && !d.visible_text("Unsaved") && d.is_disabled(SAVE_ENCOUNTER);
     d.press_ctrl(Key::S);
@@ -6396,7 +6989,38 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
             && d.has_containing("2 Cinder Wolf rows have no creature."),
         format!("Invalid before Ctrl+S: {invalid}; the file and the state stay after it"),
     );
-    d.state("deleted-package-entry-replacement-undone", Sizes::All);
+    d.replace_text_in("Encounter name", "Bridge Ambush");
+    d.expect("No changes");
+    // A start saves the replacement, and that Save ends the replacement's result and Undo: after
+    // it, Undo would give a draft that differs from the file while it looks like it.
+    d.click_beside(
+        "6. Cinder Wolf",
+        "Options: starting HP, temporary HP, initiative group and changes",
+    );
+    d.expect("Replacement creature");
+    d.replace_text_in("Replacement creature", "Guard");
+    d.click("Use Guard");
+    d.expect("Undo replacement");
+    d.click("More actions for Bridge Ambush");
+    d.click("Start another fight");
+    d.expect("Begin combat");
+    d.state("replacement-starts-another-fight", Sizes::All);
+    close_run(d);
+    go_encounters(d);
+    d.expect("as\u{a0}Guard");
+    let written = fs::read_to_string(&bridge).unwrap();
+    let (changed, undo, clean) = (
+        written != String::from_utf8_lossy(&on_disk),
+        d.has("Undo replacement"),
+        d.visible_text("Saved") && !d.visible_text("Unsaved") && !d.visible_text("Invalid"),
+    );
+    d.observe(
+        "iter-26-B-FC3-save-ends",
+        changed && !undo && clean,
+        format!(
+            "The start saved the replacement ({changed}), and the Save ended its result and Undo (Undo shown: {undo}; Saved and clean: {clean})"
+        ),
+    );
     go_library(d);
     search_library(d, "Ash Exposure");
     d.click_starting("Ash Exposure · ");
@@ -6659,6 +7283,49 @@ pub(super) fn reader_title_tops(d: &mut Driver<'_>, title: &str) -> Vec<Option<f
         .collect()
 }
 
+/// The Markdown editor's message footer at 960, 1200 and 1920 (round 26 lead ruling: one footer
+/// per pane, pinned below the editor). With `words`, at each size: one footer holds them all, it
+/// starts at least `S` below the editor frame and ends in the window, it is at most a third of
+/// the window high, and each of `words` is painted inside it, in this order from the top. With
+/// no `words`: no footer, and the editor runs to the pane's bottom.
+fn footer_in_order(d: &mut Driver<'_>, words: &[&str]) -> [bool; 3] {
+    [SMALL, DEFAULT, LARGE].map(|size| {
+        d.at_size(size, |d| {
+            let Some((editor, _)) = d.input_frame("Markdown editor") else {
+                return false;
+            };
+            let below: Vec<_> = d
+                .nodes()
+                .into_iter()
+                .filter(|node| {
+                    node.role == Role::GenericContainer
+                        && !node.name.is_empty()
+                        && node.rect.is_positive()
+                        && node.rect.top() > editor.bottom()
+                })
+                .collect();
+            if words.is_empty() {
+                return below.is_empty() && editor.bottom() > size.1 - crate::design::XXL * 2.0;
+            }
+            let Some(footer) = below
+                .iter()
+                .find(|node| words.iter().all(|word| node.name.contains(word)))
+            else {
+                return false;
+            };
+            let tops: Vec<_> = words
+                .iter()
+                .map(|word| d.painted_rect_in(word, footer.rect).map(|rect| rect.top()))
+                .collect();
+            footer.rect.top() >= editor.bottom() + crate::design::S - 1.0
+                && footer.rect.bottom() <= size.1
+                && footer.rect.height() <= size.1 / 3.0
+                && tops.iter().all(Option::is_some)
+                && tops.windows(2).all(|pair| pair[0] < pair[1])
+        })
+    })
+}
+
 /// The Markdown editor frame's top at 960, 1200 and 1920. Round 25: the one message space below
 /// the save row keeps it still whatever the space holds.
 fn editor_frame_tops(d: &mut Driver<'_>) -> [Option<f32>; 3] {
@@ -6724,12 +7391,14 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
         "The original's reader title is found at each size: {plain_tops:?}"
     );
     d.click(EDIT_MARKDOWN);
-    // Must stay true with iter-14-E-FD4: Edit Markdown keeps the choices above the editor.
+    // Round 26 FC4: Edit Markdown puts the duplicate warning and its choices in the pane's
+    // message footer, below the editor. Must stay true with iter-14-E-FD4: both choices are
+    // there, in view.
     d.observe_both(
         "iter-14-E-FD4-source",
-        "Edit Markdown keeps both repair choices above the Markdown editor",
+        "Edit Markdown keeps both repair choices in the footer below the Markdown editor",
         |d| {
-            let Some(editor) = d.place_of("Markdown editor") else {
+            let Some(editor) = d.input_frame("Markdown editor").map(|(frame, _)| frame) else {
                 return false;
             };
             [
@@ -6739,11 +7408,12 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
             .iter()
             .all(|name| {
                 d.place_of(name)
-                    .is_some_and(|choice| d.in_view(name) && choice.bottom() < editor.top())
+                    .is_some_and(|choice| d.in_view(name) && choice.top() > editor.bottom())
             })
         },
     );
     d.state("duplicate-original-editor", Sizes::All);
+
     d.type_into_editor("Saved only to the original.\n");
     d.click("Save");
     d.wait_for_text("Saved");
@@ -6786,6 +7456,16 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
         format!("Both Cinder Wolf rows mark the duplicate identity as a warning: {rows:?}"),
     );
     d.click("Open in Library");
+    // The copy's footer holds its heading warning first, so at 960 the duplicate's choices are
+    // reached by scrolling the footer.
+    let heading_fix = d
+        .place_of("Use Cinder Wolf copy")
+        .expect("The heading fix is in the footer");
+    d.scroll_until(
+        heading_fix.center(),
+        "Make Cinder Wolf copy.md a separate entry",
+        12,
+    );
     d.expect("Make Cinder Wolf copy.md a separate entry");
     assert_eq!(
         d.app_mut().library.selected_name(),
@@ -6900,22 +7580,37 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
             "The title top with the heading warning ({copy_tops:?}) matches the title top without it ({plain_tops:?}) at 960, 1200 and 1920"
         ),
     );
-    // Must stay true: Edit Markdown still draws the heading warning above the editor.
+    // Must stay true: Edit Markdown draws the heading warning in the same footer, below the
+    // editor (round 26).
     d.click(EDIT_MARKDOWN);
     d.observe_both(
         "iter-16-E-FD7-source",
-        "Edit Markdown keeps the heading warning above the Markdown editor",
+        "Edit Markdown keeps the heading warning in the footer below the Markdown editor",
         |d| {
-            let Some(editor) = d.place_of("Markdown editor") else {
+            let Some(editor) = d.input_frame("Markdown editor").map(|(frame, _)| frame) else {
                 return false;
             };
             d.painted_rect_in(COPY_HEADING_WARNING, egui::Rect::EVERYTHING)
-                .is_some_and(|heading| heading.bottom() < editor.top())
+                .is_some_and(|heading| heading.top() > editor.bottom())
                 && d.place_of("Use Cinder Wolf copy").is_some_and(|fix| {
-                    d.in_view("Use Cinder Wolf copy") && fix.bottom() < editor.top()
+                    d.in_view("Use Cinder Wolf copy") && fix.top() > editor.bottom()
                 })
         },
     );
+    // Round 26 FC4: Save and the editor's top, from the Read tab, at 960, 1200 and 1920. The
+    // copy has the duplicate warning now, and none after `Make … a separate entry` below.
+    let save_and_editor = |d: &mut Driver<'_>| {
+        [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                let read = d.place_of("Read")?;
+                Some((
+                    d.place_of("Save")?.top() - read.top(),
+                    d.input_frame("Markdown editor")?.0.top() - read.top(),
+                ))
+            })
+        })
+    };
+    let with_duplicate = save_and_editor(d);
     d.click("Read");
     d.expect("Creature · CR 1");
     let title_before = title_below_file_line(d, "Cinder Wolf copy");
@@ -6981,6 +7676,22 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
         d.visible_text("1 file needs fixing") && rows.len() == 1 && warning_marked(&rows),
         format!("The copy's row marks the fault the header counts: {rows:?}"),
     );
+    // Round 26 FC4: the copy with no duplicate has Save and the editor where it had them with
+    // the duplicate warning: the warning gives Save no second place.
+    d.click(EDIT_MARKDOWN);
+    assert!(
+        !d.has_containing(crate::world::DUPLICATE_ENTRY),
+        "the copy is a separate entry now"
+    );
+    let without_duplicate = save_and_editor(d);
+    d.observe(
+        "iter-26-L-FC4",
+        with_duplicate.iter().all(Option::is_some) && with_duplicate == without_duplicate,
+        format!(
+            "Save and the editor keep their places with the duplicate warning {with_duplicate:?} and without it {without_duplicate:?}"
+        ),
+    );
+    d.click("Read");
     d.click("Undo separate entry");
     d.wait_for_text("Same entry in two files");
     assert_eq!(
@@ -7279,7 +7990,7 @@ pub fn world_note_moved(d: &mut Driver<'_>) {
     // folder as the list shows it. The other folder is not named.
     d.observe(
         "iter-24-D-AD2",
-        d.has_containing("In: Watch House → Watch House (Locations).")
+        d.has_containing("In set to Watch House (Locations). It was Watch House.")
             && !d.has_containing("Watch House (Other)"),
         "The place result names the folder of the file the DM chose",
     );
@@ -7447,6 +8158,31 @@ pub fn world_note_deleted(d: &mut Driver<'_>) {
             d.painted_color("In"),
             d.painted_color(&missing)
         ),
+    );
+    // Round 26 AE2: Lookup's result says the fault that World's row says, with its warning
+    // mark, before the note's summary. Neighbour: the stat block's result has no mark.
+    let mark = format!("{} Place not found", design::icons::WARN);
+    let row = d
+        .nodes()
+        .into_iter()
+        .find(|node| node.name.starts_with("Watchkeeper · ") && node.name.contains("NPC"))
+        .map(|node| node.name);
+    // The neighbour is required: the stat block's own result row, a creature, with no mark.
+    let guard = d
+        .nodes()
+        .into_iter()
+        .find(|node| node.name.starts_with("Watchkeeper Guard · "))
+        .map(|node| node.name);
+    d.observe(
+        "iter-26-D-AE2",
+        row.as_ref().is_some_and(|row| {
+            row.find(&mark)
+                .zip(row.find("A note for tonight"))
+                .is_some_and(|(mark, summary)| mark < summary)
+        }) && guard.as_ref().is_some_and(|guard| {
+            guard.contains("Creature") && !guard.contains(design::icons::WARN)
+        }),
+        format!("Lookup's result row is {row:?}; the stat block's row is {guard:?}"),
     );
     d.state("npc-place-deleted-in-lookup", Sizes::All);
     d.press(Key::Escape);
@@ -8131,7 +8867,7 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     d.type_into("Package folder", &copied.to_string_lossy());
     d.click("Add folder");
     d.expect("This folder is a copy of Ashen Marches.");
-    d.expect("Register it as a new package below.");
+    d.expect("This folder is a copy.");
     assert!(d.is_disabled("Add folder"));
     assert_eq!(d.app_mut().campaigns.modules().len(), 1);
     d.state("copied-package-names-duplicate-identity", Sizes::All);
@@ -8456,6 +9192,42 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
         "Undo source change",
     );
     d.state("copy-entries-used", Sizes::All);
+    // Round 26 review: each kept result is its own footer message, newest first: the source
+    // change, then the registration it followed. Both Undos are reached; at 960 the footer
+    // scrolls to the older one.
+    for size in [SMALL, DEFAULT, LARGE] {
+        d.set_base(size);
+        let order = d
+            .nodes()
+            .into_iter()
+            .find(|node| {
+                node.name.contains(crate::library::USE_COPY_RESULT)
+                    && node.name.contains("is registered, with")
+            })
+            .map(|node| node.name)
+            .unwrap_or_default();
+        let newest_first = order
+            .find(crate::library::USE_COPY_RESULT)
+            .zip(order.find("is registered, with"))
+            .is_some_and(|(source, registration)| source < registration);
+        let first_in_view = d.in_view("Undo source change");
+        let footer = d.place_of("Undo source change").map(|undo| undo.center());
+        let older_reached = footer.is_some_and(|at| {
+            d.scroll_until(at, "Undo package registration", 8);
+            d.in_view("Undo package registration")
+        });
+        if let Some(at) = footer {
+            d.scroll_up_at(at, 8);
+        }
+        d.observe(
+            "iter-26-L-results-order",
+            newest_first && first_in_view && older_reached,
+            format!(
+                "At {size:?}: newest first {newest_first} in {order:?}; Undo source change in view {first_in_view}; Undo package registration reached {older_reached}"
+            ),
+        );
+    }
+    d.set_base(SMALL);
     // AD3, a result with another action: an outside change to an encounter that the change wrote
     // blocks Undo source change with its reason, inside its message. Restoring the bytes and
     // reloading brings it back, so the later steps see the usual state.
@@ -8508,6 +9280,28 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
             "With the written bytes back, a reload makes Undo source change available again",
         );
     }
+    // Round 26 (Astra review of A): in Edit Markdown each kept result is its own footer message,
+    // and results with a live Undo are listed newest first: the source change, made after the
+    // registration, comes above it. Both sit below the editor, at 960, 1200 and 1920.
+    d.click(EDIT_MARKDOWN);
+    const REGISTERED: &str = "Ashen Reaches is registered";
+    let newest_first = [SMALL, DEFAULT, LARGE].map(|size| {
+        d.at_size(size, |d| {
+            let editor = d.input_frame("Markdown editor")?.0;
+            let newer =
+                d.painted_rect_in(crate::library::USE_COPY_RESULT, egui::Rect::EVERYTHING)?;
+            let older = d.painted_rect_in(REGISTERED, egui::Rect::EVERYTHING)?;
+            Some((newer.top() >= editor.bottom(), newer.top() < older.top()))
+        })
+    });
+    d.observe(
+        "iter-26-A-footer-newest-first",
+        newest_first == [Some((true, true)); 3],
+        format!(
+            "Edit Markdown's footer lists the source change, then the older registration, below the editor at 960, 1200, 1920 (below, newer above): {newest_first:?}"
+        ),
+    );
+    d.click("Read");
     go_encounters(d);
     if d.has("Back to encounters") {
         d.click("Back to encounters");
@@ -8540,45 +9334,68 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     d.app_mut().campaigns.register_module(module).unwrap();
     d.settle();
     d.wait_for_text("Same entry in two files");
+    // Round 26: the choices sit in the reader's message footer, which scrolls inside when they do
+    // not fit. Each batch choice is reached by scrolling the footer, then checked.
     for size in [SMALL, DEFAULT, LARGE] {
-        let consequences = d.at_size(size, |d| {
-            [
-                (
-                    "ashen-marches-copy",
-                    "Bridge Ambush and Shrine of Cinders keep the files in ashen-marches/.",
-                ),
-                (
-                    "ashen-marches",
-                    "Bridge Ambush and Shrine of Cinders will then use the files in ashen-marches-copy/.",
-                ),
-            ]
-            .iter()
-            .all(|(folder, result)| {
-                let button = d.nodes().into_iter().find(|node| {
-                    node.name.starts_with("Make all ")
-                        && node
-                            .name
-                            .ends_with(&format!("files in {folder}/ separate entries"))
-                });
-                button.is_some_and(|button| {
-                    d.place_of(result).is_some_and(|line| {
-                        d.visible_text(result)
-                            && line.top() >= button.rect.bottom()
-                            && line.top() - button.rect.bottom() <= design::XS + 1.0
-                            && (line.left() - button.rect.left()).abs() < 1.0
-                    })
-                })
-            })
-        });
+        d.set_base(size);
+        let footer = d
+            .painted_rect_in(crate::world::DUPLICATE_ENTRY, egui::Rect::EVERYTHING)
+            .expect("the duplicate warning is in the footer")
+            .center();
+        let mut failed = Vec::new();
+        for (folder, result) in [
+            (
+                "ashen-marches-copy",
+                "Bridge Ambush and Shrine of Cinders keep the files in ashen-marches/.",
+            ),
+            (
+                "ashen-marches",
+                "Bridge Ambush and Shrine of Cinders will then use the files in ashen-marches-copy/.",
+            ),
+        ] {
+            d.scroll_until(footer, result, 12);
+            // In view can mean its first line only: scroll on until all of it shows.
+            for _ in 0..4 {
+                if d.visible_text(result) {
+                    break;
+                }
+                d.scroll_at(footer, 1);
+            }
+            let button = d.nodes().into_iter().find(|node| {
+                node.name.starts_with("Make all ")
+                    && node
+                        .name
+                        .ends_with(&format!("files in {folder}/ separate entries"))
+            });
+            let line = d.place_of(result);
+            let fits = button.as_ref().zip(line).is_some_and(|(button, line)| {
+                d.visible_text(result)
+                    && line.top() >= button.rect.bottom()
+                    && line.top() - button.rect.bottom() <= design::XS + 1.0
+                    && (line.left() - button.rect.left()).abs() < 1.0
+            });
+            if !fits {
+                failed.push(format!(
+                    "{folder}: button {:?}, line {line:?}, painted {}",
+                    button.map(|button| button.rect),
+                    d.visible_text(result)
+                ));
+            }
+        }
+        d.scroll_up_at(footer, 12);
         d.observe(
             "iter-5-D-FD5",
-            consequences,
-            format!("Each batch choice names its encounter and remaining folder at {size:?}"),
+            failed.is_empty(),
+            format!(
+                "Each batch choice names its encounter and remaining folder at {size:?}: {failed:?}"
+            ),
         );
     }
+    d.set_base(SMALL);
     d.state("manifest-only-hand-repair-keeps-both-files", Sizes::All);
-    // FD4: the four choices sit in the reader's scroll area after the title, so a scroll over the
-    // reader moves them with the title and brings the body into view. Checked at 960x640.
+    // FD4, round 26: the four choices sit in the reader's message footer, at most a third of the
+    // pane, so the body above stays in reach: a scroll over the body moves the title and brings
+    // the body into view, and the choices stay where they are. Checked at 960x640.
     {
         let single = "Make Cinder Wolf.md in ashen-marches-copy/ a separate entry";
         let last_choice = |d: &Driver<'_>| {
@@ -8612,11 +9429,11 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
             title >= 0.0
                 && title < choice.top()
                 && moved > 0.0
-                && (choice_moved - moved).abs() < 1.0
-                && (last_moved - moved).abs() < 1.0
+                && choice_moved.abs() < 1.0
+                && last_moved.abs() < 1.0
                 && restored,
             format!(
-                "The copied-folder choices scroll with the reader title: title {title:.0} moved {moved:.0}, single choice moved {choice_moved:.0}, last folder choice moved {last_moved:.0}, restored {restored}"
+                "A scroll over the body moves the reader title and not the copied-folder choices in the footer: title {title:.0} moved {moved:.0}, single choice moved {choice_moved:.0}, last folder choice moved {last_moved:.0}, restored {restored}"
             ),
         );
         // Must stay true: the choices still start at the message text edge.
@@ -8920,6 +9737,23 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
                 && d.has_containing("the Archdevil · Not found")
         },
     );
+    // Round 26 FE5: the set Status value `alive` is `Body` in the text colour, as a set link is.
+    // Neighbour: the `not set` placeholder in a row above stays muted `Small`.
+    let status = |d: &Driver<'_>, words: &str| {
+        let row = d.place_of("Change Status")?;
+        let area = egui::Rect::from_x_y_ranges(
+            0.0..=row.left(),
+            row.top() - 4.0 * design::Density::Scan.row()..=row.bottom(),
+        );
+        Some((d.painted_size(area, words)?, d.painted_color(words)?))
+    };
+    let (alive, unset) = (status(d, "alive"), status(d, "not set"));
+    d.observe(
+        "iter-26-D-FE5",
+        alive == Some((design::Type::Body.size(), design::colors().text))
+            && unset == Some((design::Type::Small.size(), design::colors().muted)),
+        format!("Status alive {alive:?} is Body text; not set {unset:?} stays Small muted"),
+    );
     d.state("missing-group-on-one-line", Sizes::All);
     // From another note, the header count's menu opens the note that needs fixing.
     d.click_containing("Added Guild · ");
@@ -9218,8 +10052,8 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
                 && d.has_containing("Added Guild")
         },
     );
-    // FD1: `Your changes are already in the note.` is a page result too, below the file line
-    // and above the value rows, at every captured size.
+    // FD1, round 26: `Your changes are already in the note.` is a World result too, in the
+    // pane's footer below the value rows, at every captured size.
     for size in [SMALL, DEFAULT, LARGE] {
         let (placed, detail) = d.at_size(size, |d| {
             d.expect("Change Part of");
@@ -9235,14 +10069,16 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
                 below
                     && message
                         .zip(row)
-                        .is_some_and(|(message, row)| message.bottom() <= row.top()),
-                format!("{detail}; first row at {row:?}"),
+                        .is_some_and(|(message, row)| message.top() >= row.bottom()),
+                format!("{detail}; the Part of row at {row:?}"),
             )
         });
         d.observe(
             "iter-17-D-FD1-kept",
             placed,
-            format!("At {size:?}, the kept-changes message sits above the value rows: {detail}"),
+            format!(
+                "At {size:?}, the kept-changes message sits in the footer below the rows: {detail}"
+            ),
         );
     }
     // Round 24 FG5: with Part of on two lines, Change keeps the column at the widest drawn line
@@ -9379,7 +10215,8 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
             !d.has("Save changes")
         },
     );
-    // FD1: the edit-form save result is a page result, below the file line and above the rows.
+    // Round 26 FE2 (replaces round 17 FD1's place above the rows): the edit-form save result
+    // is in the pane's footer, below the value rows, with the success tone.
     for size in [SMALL, DEFAULT, LARGE] {
         let (placed, detail) = d.at_size(size, |d| {
             d.expect("Change Status");
@@ -9396,18 +10233,29 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
                 below
                     && message
                         .zip(row)
-                        .is_some_and(|(message, row)| message.bottom() <= row.top()),
-                format!("{detail}; first row at {row:?}"),
+                        .is_some_and(|(message, row)| message.top() >= row.bottom()),
+                format!("{detail}; status row at {row:?}"),
             )
         });
         d.observe(
-            "iter-17-D-FD1",
+            "iter-26-D-FE2-footer",
             placed,
-            format!("At {size:?}, `Changes saved.` sits above the value rows: {detail}"),
+            format!("At {size:?}, `Changes saved.` sits in the footer below the rows: {detail}"),
         );
     }
+    let rows = tops_at_sizes(d, "Change Status");
+    // The footer checks above assert the change: `Changes saved.` with `Undo changes` and the
+    // saved Status. The rows keep their place now, so this state differs from the read picker's
+    // only by those words at the pane's foot.
+    d.expect_same(
+        "Round 26: the save result sits in the footer and the rows keep their place, so the saved \
+         note differs from the read picker state only by the footer's Changes saved. with Undo \
+         changes and the Status value.",
+    );
     d.state("overwrite-keeps-unread-disk-groups", Sizes::All);
     d.click("Undo changes");
+    // The rows keep their place when the result goes with its Undo.
+    body_kept(d, "iter-26-D-FE2", "Change Status", &rows, None);
     assert_eq!(fs::read(&path).unwrap(), unread.as_bytes());
     reload(d);
     d.click("Edit Safe Rook");
@@ -9997,7 +10845,7 @@ fn file_fault_reader(d: &mut Driver<'_>, id: &str, headline: &str, path: &str, c
         if !clip.intersects(text.visual_bounding_rect()) {
             return;
         }
-        if job.text.contains("Text format cannot be read") {
+        if job.text.contains("Not a text file") {
             rows.push(painted_marks(job));
         }
         if job.text.contains(" need fixing") || job.text.contains(" needs fixing") {
@@ -10060,8 +10908,8 @@ fn file_fault_reader(d: &mut Driver<'_>, id: &str, headline: &str, path: &str, c
             "iter21-E-FD2-{}",
             if campaign { "campaign" } else { "package" }
         ),
-        d.visible_text("Text format cannot be read"),
-        "The Library row names the short cause, Text format cannot be read",
+        d.visible_text("Not a text file"),
+        "The Library row names the short cause, Not a text file",
     );
     d.observe(
         &format!("{id}-no-repair"),
@@ -10145,7 +10993,48 @@ pub fn campaign_copy_registered(d: &mut Driver<'_>) {
     );
     // The return shows the same result and Undo as before Build an encounter.
     d.assert_state_matches("copy-registered-after-build", "copy-registered");
-    d.click("Undo register campaign");
+    // Review round 26: Undo register campaign changes the registration and can change the active
+    // campaign, so it waits for an unsaved campaign draft and for a run, with the reason; the
+    // copy's bytes and the registration stay.
+    const UNDO: &str = "Undo register campaign";
+    let registered = |d: &mut Driver<'_>| {
+        (
+            d.app_mut().campaigns.all().len(),
+            fs::read(copy.join("Campaign.md")).unwrap(),
+        )
+    };
+    let start = registered(d);
+    go_campaign(d);
+    d.click_starting("Ashen Marches · ");
+    d.click("Use Ash Wraith");
+    go_settings(d);
+    d.wait_for_text(&result);
+    let draft_locked = d.is_disabled(UNDO);
+    let draft_kept = registered(d) == start;
+    go_campaign(d);
+    d.click_below("Save selections", "Discard");
+    go_settings(d);
+    d.wait_for_text(&result);
+    let free_again = !d.is_disabled(UNDO);
+    d.click("Make The Emberfall Marches the active campaign");
+    go_encounters(d);
+    resume_run_from_cold_start(d);
+    go_settings(d);
+    d.wait_for_text(&result);
+    let run_locked = d.is_disabled(UNDO) && d.visible_text("Close the run to change campaigns.");
+    let run_kept = registered(d) == start;
+    d.click("Back to run");
+    close_run(d);
+    go_settings(d);
+    d.observe(
+        "iter-26-C-undo-register-locked",
+        draft_locked && draft_kept && free_again && run_locked && run_kept,
+        format!(
+            "Undo locked by a draft {draft_locked} (kept {draft_kept}), free after Discard \
+             {free_again}, locked by a run {run_locked} (kept {run_kept})"
+        ),
+    );
+    d.click(UNDO);
     d.settle();
     let active = d.app_mut().campaigns.active_campaign().map(|c| c.id);
     d.observe(
@@ -10156,4 +11045,16 @@ pub fn campaign_copy_registered(d: &mut Driver<'_>) {
             && fs::read(copy.join("Campaign.md")).unwrap() == manifest,
         "Undo ends the result and its Undo, and puts the copy's file and the active campaign back",
     );
+}
+
+/// Round 26 FD1: the top of Campaign's package list (its first row) at 960, 1200 and 1920.
+fn package_list_tops(d: &mut Driver<'_>) -> [Option<f32>; 3] {
+    [(960.0, 640.0), (1200.0, 800.0), (1920.0, 1080.0)].map(|size| {
+        d.at_size(size, |d| {
+            d.nodes()
+                .into_iter()
+                .find(|node| node.name.starts_with("D&D 2024"))
+                .map(|node| node.rect.top())
+        })
+    })
 }

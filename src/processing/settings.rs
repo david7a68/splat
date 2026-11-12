@@ -608,9 +608,14 @@ impl ProcessingSettings {
 
     /// A value that blocks processing says so below its own field, in the notice's tone, so the
     /// DM need not scroll away from the field to learn why. Reasons follow the config's order.
+    /// Round 26 FM6: a missing value's reason is the plain `Small` line directly below its
+    /// field, as the key row's `Paste a key first.` is. The page's top notice has the icon and
+    /// the bar, and names the first missing value.
     fn field_reason(&mut self, ui: &mut egui::Ui, blocks: bool, words: &str) {
         if blocks {
-            let rect = design::message(ui, Tone::Info, words).rect;
+            let rect = ui
+                .add(egui::Label::new(Type::Small.rich(ui, words).color(colors().muted)).wrap())
+                .rect;
             self.reason_rect.get_or_insert(rect);
         }
     }
@@ -666,17 +671,18 @@ impl ProcessingSettings {
         changed |= response.changed();
         let empty = self.config.speech_url.trim().is_empty();
         self.field_reason(ui, empty, "Enter the address.");
-        let response = design::small_text_field(
-            ui,
-            "Model",
-            &mut self.config.speech_model,
-            Some("The name your service gives it. For OpenAI, gpt-transcribe."),
-            None,
-        );
+        let response =
+            design::small_text_field(ui, "Model", &mut self.config.speech_model, None, None);
         design::named(ui, &response, "Speech model");
         changed |= response.changed();
         let empty = self.config.speech_model.trim().is_empty();
+        // The reason sits directly below the field, as Address's does; the help follows it.
         self.field_reason(ui, empty, "Enter the model’s name.");
+        design::help(
+            ui,
+            "The name your service gives it. For OpenAI, gpt-transcribe.",
+        );
+        ui.add_space(design::XS);
         if changed {
             self.persist();
         }
@@ -734,17 +740,14 @@ impl ProcessingSettings {
             let empty = self.config.llm_url.trim().is_empty();
             self.field_reason(ui, empty, "Enter the address.");
         }
-        let response = design::small_text_field(
-            ui,
-            "Model",
-            &mut self.config.llm_model,
-            Some("The name your service gives it."),
-            None,
-        );
+        let response =
+            design::small_text_field(ui, "Model", &mut self.config.llm_model, None, None);
         design::named(ui, &response, "Transcript and summary model");
         changed |= response.changed();
         let empty = self.config.llm_model.trim().is_empty();
         self.field_reason(ui, empty, "Enter the model’s name.");
+        design::help(ui, "The name your service gives it.");
+        ui.add_space(design::XS);
         if changed {
             self.persist();
         }

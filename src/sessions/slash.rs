@@ -635,13 +635,15 @@ fn search(
     ui.spacing_mut().item_spacing.y = 0.0;
     for (row, position) in found.iter().enumerate() {
         let item = &index.items[*position];
-        let (title, detail) = (item.entry.name.clone(), item.result_detail());
+        // The same detail as a Lookup result, with a World note's link fault (round 26 AE2).
+        let (title, detail) = (item.entry.name.clone(), index.result_detail(*position));
         let full = format!("{title} · {detail}");
         let response = design::row(ui, ROW, row == *highlight, &full, |ui, rect| {
             let name =
                 ui.painter()
                     .layout_no_wrap(title.clone(), Type::Body.font(ui), colors().text);
-            let tail = design::one_line(
+            // A fault mark has its own tone, as on a Lookup result.
+            let tail = crate::library::marked_line(
                 ui,
                 &format!(" · {detail}"),
                 Type::Small.font(ui),

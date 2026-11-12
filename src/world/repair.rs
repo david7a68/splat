@@ -223,6 +223,25 @@ impl Repair {
         }
         // Save's own checks: the state word, its cause and Save's availability all come from them.
         let (problem, line) = refusal(campaign, &self.path, &self.draft);
+        // The y where the body ends: `S` above the footer, or the pane's bottom.
+        let mut bottom = ui.max_rect().bottom();
+        if self.disk.is_none() && {
+            let (pressed, end) = self.footer(ui, problem.as_deref());
+            bottom = end;
+            pressed
+        } {
+            let back = if self.discarded.is_some() {
+                self.discarded.take()
+            } else {
+                self.reloaded.take()
+            };
+            if let Some(back) = back {
+                self.draft = back;
+            }
+            self.failed = None;
+            // The draft changed, so Save's check runs again on the words now in the editor.
+            ui.ctx().request_repaint();
+        }
         design::reader::title(
             ui,
             std::path::Path::new(&self.path)
@@ -244,7 +263,7 @@ impl Repair {
         // save row end together at `LIST_MEASURE`, so Save stays near the state and Discard.
         ui.scope(|ui| {
             ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
-            self.edit(ui, campaign, run_open, problem, line)
+            self.edit(ui, campaign, run_open, problem, line, bottom)
         })
         .inner
     }
@@ -276,7 +295,48 @@ impl Repair {
         }
     }
 
-    /// The editor, its messages and its save row.
+    /// The pane's message footer (round 26 FA1): a result with a live Undo first (Undo discard
+    /// or Undo reload), then Save's reason. It sits at the bottom of the pane, as tall as what it
+    /// holds, so the editor never moves and both messages show whole. Returns whether Undo is
+    /// pressed, and the y where the body ends.
+    fn footer(&self, ui: &mut egui::Ui, problem: Option<&str>) -> (bool, f32) {
+        let name = self.path.rsplit('/').next().unwrap_or(&self.path);
+        let undo = if self.discarded.is_some() {
+            Some(UndoResult::Discard)
+        } else if self.reloaded.is_some() {
+            Some(UndoResult::Reload)
+        } else {
+            None
+        };
+        let reason = problem.or(self.failure());
+        let result = undo.map(|undo| undo.words(name));
+        let pressed = std::cell::Cell::new(false);
+        let mut footer = design::Footer::new(
+            ("world_repair_footer", &self.path),
+            ui.available_width().min(design::LIST_MEASURE),
+        );
+        if let (Some(undo), Some(words)) = (undo, &result) {
+            let pressed = &pressed;
+            footer.result(words.as_str(), true, move |ui| {
+                let undone = match undo {
+                    UndoResult::Discard => design::draft_discarded(ui, name),
+                    UndoResult::Reload => {
+                        design::undo_message(ui, design::Tone::Info, RELOADED, "Undo reload")
+                    }
+                };
+                pressed.set(undone);
+            });
+        }
+        if let Some(reason) = reason {
+            footer.reason(reason, move |ui| {
+                design::message(ui, design::Tone::Error, reason);
+            });
+        }
+        let bottom = footer.show(ui);
+        (pressed.get(), bottom)
+    }
+
+    /// The editor and its save row.
     fn edit(
         &mut self,
         ui: &mut egui::Ui,
@@ -284,10 +344,19 @@ impl Repair {
         run_open: bool,
         problem: Option<String>,
         line: Option<usize>,
+        bottom: f32,
     ) -> bool {
-        // Nothing above the editor comes and goes: its reason and its results share the one
-        // message space below the save row (round 25 FD1), so the editor never moves.
-        let (changed, _) = editor_events(ui, &self.path, &mut self.draft, line);
+        // Nothing above the editor comes and goes: its reason and its results are in the pane's
+        // footer (round 26), so the editor never moves. The editor leaves room for the save row
+        // above `bottom`, where the footer's room starts.
+        let save_row = design::Density::Read.control() + ui.spacing().item_spacing.y;
+        let (changed, _) = ui
+            .scope(|ui| {
+                let room = bottom.min(ui.max_rect().bottom()) - ui.cursor().top();
+                ui.set_max_height((room - save_row).max(design::XXL));
+                editor_events(ui, &self.path, &mut self.draft, line)
+            })
+            .inner;
         if changed {
             // An edit ends both Undo results: Undo would replace the words just typed.
             self.reloaded = None;
@@ -373,64 +442,9 @@ impl Repair {
                 });
             });
         });
-        // Save's own check for the draft that is now in the editor: a Discard in this frame
-        // changed it, so ask again then (the check is cached by draft).
-        let problem = if discarded_now {
-            refusal(campaign, &self.path, &self.draft).0
-        } else {
-            problem
-        };
-        // The one message space below the save row (round 25 FD1 and the lead's ruling): a
-        // result with a live Undo comes first, so Undo discard or Undo reload stays on its first
-        // line; Save's reason follows it in the same part. With no such result, the reason
-        // leads. The part is two lines high whatever it holds and scrolls inside, so nothing
-        // here moves the editor.
-        let name = self
-            .path
-            .rsplit('/')
-            .next()
-            .unwrap_or(&self.path)
-            .to_owned();
-        let undo = if self.discarded.is_some() {
-            Some(UndoResult::Discard)
-        } else if self.reloaded.is_some() {
-            Some(UndoResult::Reload)
-        } else {
-            None
-        };
-        let reason = problem.as_deref().or(self.failure()).map(str::to_owned);
-        let result = undo.map(|undo| undo.words(&name));
-        let mut space = design::MessageSpace::new("world_repair_message", ui.available_width());
-        if let Some(reason) = &reason {
-            space = space.reason(reason, move |ui| {
-                design::message(ui, design::Tone::Error, reason);
-            });
-        }
-        if let (Some(undo), Some(words)) = (undo, &result) {
-            let name = &name;
-            space = space.result(words, true, move |ui| {
-                // The Undo row is a control high; with no gap after it, the reason that follows
-                // it stays in view in the two-line part.
-                ui.spacing_mut().item_spacing.y = 0.0;
-                match undo {
-                    UndoResult::Discard => design::draft_discarded(ui, name),
-                    UndoResult::Reload => {
-                        design::undo_message(ui, design::Tone::Info, RELOADED, "Undo reload")
-                    }
-                }
-            });
-        }
-        let pressed = space.show(ui).unwrap_or(false);
-        if pressed {
-            let back = match undo {
-                Some(UndoResult::Discard) => self.discarded.take(),
-                Some(UndoResult::Reload) => self.reloaded.take(),
-                None => None,
-            };
-            if let Some(back) = back {
-                self.draft = back;
-            }
-            self.failed = None;
+        if discarded_now {
+            // The footer drawn above this frame showed the draft before Discard.
+            ui.ctx().request_repaint();
         }
         saved
     }
