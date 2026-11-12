@@ -2691,9 +2691,7 @@ impl Run {
     /// What each group would make the fight when it joins, for the groups whose XP is known. The
     /// party is the characters who are present; the fight is every present creature against them.
     /// Worked out again only after a step, a new read of the groups or of the scale.
-    pub(super) fn arrival_words(
-        &mut self,
-    ) -> Option<&std::collections::BTreeMap<Uuid, (crate::difficulty::Rating, u64)>> {
+    pub(super) fn arrival_words(&mut self) -> Option<&super::ArrivalWords> {
         let (groups, scale) = (self.groups.as_ref()?, self.scale.as_ref()?);
         let key = (
             self.revision,

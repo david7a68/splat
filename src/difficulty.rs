@@ -243,7 +243,7 @@ pub(crate) fn builtin_budgets() -> Budgets {
     ))
     .unwrap();
     let entry = Entry::parse("rule.md", &text).unwrap();
-    Budgets::of_rule(&entry.fields["splat_rule"]).expect("the package's table reads")
+    Budgets::of_rule(&entry.fields["splat_rule"]).expect("the table in the package reads")
 }
 
 #[cfg(test)]

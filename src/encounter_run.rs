@@ -673,6 +673,8 @@ struct State {
 /// The state, groups and scale an answer in Arrivals was worked out from: the count of steps
 /// kept or taken back, and the two reads by their address.
 type ArrivalKey = (u64, usize, usize);
+/// What each group would make the fight, with the XP its members on the other side add.
+pub(crate) type ArrivalWords = BTreeMap<Uuid, (crate::difficulty::Rating, u64)>;
 /// Each carried player's place in the roster, and HP and temporary HP from their sheet.
 type SheetValues = Vec<(usize, Option<i64>, i64)>;
 /// HP that came from the last fight, not from the sheets.
@@ -748,7 +750,7 @@ pub(crate) struct Run {
     /// What each group in Arrivals would make the fight, worked out for one `revision`, one
     /// read of the groups and one scale. Never saved.
     /// Each with the XP its members on the other side add.
-    arrival_words: Option<(ArrivalKey, BTreeMap<Uuid, (crate::difficulty::Rating, u64)>)>,
+    arrival_words: Option<(ArrivalKey, ArrivalWords)>,
     /// How often frames asked for the Arrivals words, and how often they were worked out.
     #[cfg(test)]
     pub(crate) arrival_counts: (usize, usize),
