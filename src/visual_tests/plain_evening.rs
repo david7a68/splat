@@ -100,14 +100,11 @@ const ADD_COMMAND: &str = "devenv shell -- audit-freeze add";
 const SCENARIO: &str = "plain-evening";
 const WIDE: (f32, f32) = (1200.0, 800.0);
 const NARROW: (f32, f32) = (960.0, 640.0);
-/// Section 2.5 numbers its rows 1 to 22.
-const CONTRACT_ROWS: std::ops::RangeInclusive<u32> = 1..=24;
+/// Section 2.5 numbers its rows 1 to 25.
+const CONTRACT_ROWS: std::ops::RangeInclusive<u32> = 1..=25;
 /// What the test folder becomes in a run's `splat_run_source_path`.
 const WORLD: &str = "<world>";
 const SAME: &str = "the same as at the start";
-/// The app writes this index again with the same bytes on a one-second poll of real time, so
-/// the act in which that write lands is not repeatable. A change of its bytes is still recorded.
-const POLLED: &[&str] = &["emberfall/Sessions/.splat-session-paths.json"];
 
 /// How a screen is seen.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -625,9 +622,7 @@ impl Evening {
         for (path, (time, digest)) in &now {
             match files.get(path) {
                 None => written.push(format!("{path}: new, sha256 {}", &digest[..16])),
-                Some((old_time, old))
-                    if old != digest || (old_time != time && !POLLED.contains(&path.as_str())) =>
-                {
+                Some((old_time, old)) if old != digest || old_time != time => {
                     written.push(format!(
                         "{path}: written, sha256 {}{}",
                         &digest[..16],
@@ -1845,6 +1840,12 @@ mod allowed_classes {
             name: "P8 c: an act shows `Carry over` and nothing else",
             fits: |d, _| carry::act(d),
         },
+        // R3d, row 25: `Carry over` sits `L` after the Last time line's last word (X24).
+        Class {
+            row: 25,
+            name: "R3d a: `Carry over` moves left on its line to `L` after the line's last word",
+            fits: |d, _| carry::carry_over_moved(d),
+        },
         // R1c, row 22: History scrolls once to the run it opens (V31), with V11's line.
         Class {
             row: 2,
@@ -2067,11 +2068,14 @@ mod allowed_classes {
     }
 
     /// P8's classes. Row 16: the Last time preview's words go from the last note's recap to its
-    /// `What happened`, at the same place and height, each old form with its own new form. Row
-    /// 11: `Carry over` is new at the end of the new session's Last time line, at the line's
-    /// top and height and inside the window. No class lets another text or control change.
+    /// `What happened`, at the same place and height, each old form with its own new form, and
+    /// each new form the longest text that fits. Row 11: `Carry over` is new at the end of the
+    /// new session's Last time line, at the line's top and height and inside the window. R3d's
+    /// class, row 25: `Carry over` moves left to `L` after the line's last word. No class lets
+    /// another text or control change.
     mod carry {
         use super::super::{AllowedRow, Difference};
+        use eframe::egui;
 
         /// The plain campaign's Session 7, as its note holds them.
         const RECAP: &str = "The party left Emberfall at dawn with the miller's warning.";
@@ -2081,9 +2085,39 @@ mod allowed_classes {
         const HOVER: &str = "Last time: Session 7: The Road to Emberfall — ";
         /// The Last time line's top, with Lookup closed and open (the reference).
         const LINE_TOPS: [f32; 2] = [140.0, 174.0];
-        /// The widest word and its ellipsis that a cut at `Small` drops (the reference's cuts
-        /// differ by at most 8 px).
-        const CUT_WORD: f32 = 40.0;
+        /// Where the Last time line ends in the reference, by window width and Lookup: the
+        /// right edge of `Record`.
+        const LINE_ENDS: [(&str, bool, f32); 4] = [
+            ("1200", false, 1188.0),
+            ("960", false, 948.0),
+            ("1200", true, 756.0),
+            ("960", true, 602.4),
+        ];
+
+        /// The preview that the app draws from `x` to the line's end with no action: the
+        /// longest whole words of `— What happened` that fit, by the app's own font and
+        /// fitting helper, within the reader's measure.
+        fn longest_that_fits(view: &str, x: f32) -> Option<String> {
+            let end = LINE_ENDS.iter().find_map(|&(width, open, end)| {
+                (view.split('x').next() == Some(width) && view.contains("Lookup open") == open)
+                    .then_some(end)
+            })?;
+            let room = (end - x).min(crate::design::READER_MEASURE);
+            let ctx = egui::Context::default();
+            crate::design::theme::install(&ctx);
+            let mut words = String::new();
+            let _ = ctx.run(egui::RawInput::default(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    words = crate::design::words_that_fit(
+                        ui,
+                        &format!("— {WHAT_HAPPENED}"),
+                        &crate::design::Type::Small.font(ui),
+                        room,
+                    );
+                });
+            });
+            Some(words)
+        }
 
         fn bare(name: &str) -> &str {
             name.strip_prefix("Label: ")
@@ -2155,20 +2189,18 @@ mod allowed_classes {
                 .iter()
                 .filter(|row| here(&row.difference, partner, other))
                 .count();
-            // These screens show no `Carry over`, so a cut new form has today's room: it may be
-            // narrower than the old form only by the word and the ellipsis that the cut drops.
-            let widths = |change: &str, words: &str| {
-                rows.iter()
-                    .map(|row| &row.difference)
-                    .filter(|o| here(o, change, words))
-                    .filter_map(|o| Some((o.name.ends_with('…'), rect(&o.detail)?[2])))
-                    .collect::<Vec<_>>()
-            };
-            let old = widths("gone", RECAP);
-            let in_room = widths("new", WHAT_HAPPENED)
+            // These screens show no `Carry over`, so each new form is the longest text that
+            // fits from its place to the line's end (follow-up (b) of PR 277, X27).
+            let longest = rows
                 .iter()
-                .all(|(cut, new)| !cut || old.iter().all(|(_, old)| old - new <= CUT_WORD));
-            mine == theirs && mine > 0 && in_room
+                .map(|row| &row.difference)
+                .filter(|o| here(o, "new", WHAT_HAPPENED))
+                .all(|o| {
+                    rect(&o.detail).is_some_and(|r| {
+                        longest_that_fits(&o.view, r[0]).as_deref() == Some(bare(&o.name))
+                    })
+                });
+            mine == theirs && mine > 0 && longest
         }
 
         /// An act's parts are only the preview: its new words in this record (`+`), and its old
@@ -2215,6 +2247,33 @@ mod allowed_classes {
 
         pub(super) fn act(d: &Difference) -> bool {
             d.what == "act" && d.change == "changed" && d.detail == "appeared + Carry over"
+        }
+
+        /// Where the new session's Last time line has its last word in the reference, with
+        /// Lookup closed and open (as `LINE_TOPS`): the end of its link, `Session 8: The
+        /// Crossing`, as that note has no preview.
+        const LINK_ENDS: [f32; 2] = [580.9, 356.9];
+
+        /// R3d, row 25 (X24): `Carry over` moves straight left on its line, to `L` after the
+        /// line's last word, at its size; its words move with it, `S` inside the button.
+        pub(super) fn carry_over_moved(d: &Difference) -> bool {
+            let Some((was, now)) = d.detail.split_once(" -> ").and_then(|(was, now)| {
+                Some((rect(&format!("at {was}"))?, rect(&format!("at {now}"))?))
+            }) else {
+                return false;
+            };
+            let (top, inset) = match (d.what.as_str(), d.name.as_str()) {
+                ("control", "Button: Carry over") => (now[1], 0.0),
+                ("text", "Carry over") => (now[1] - 3.0, crate::design::S),
+                _ => return false,
+            };
+            d.screen.starts_with("session-new")
+                && d.change == "moved"
+                && was[1] == now[1]
+                && now[0] < was[0]
+                && LINE_TOPS.iter().zip(LINK_ENDS).any(|(&line, end)| {
+                    line == top && (now[0] - inset - end - crate::design::L).abs() < 0.05
+                })
         }
     }
 
@@ -4167,6 +4226,18 @@ mod allowed_classes {
                 ],
                 "a preview cut to one word with room to spare",
             ),
+            // The review of PR 277, round 2: a small cut with room for the whole preview.
+            (
+                vec![
+                    row16(&old),
+                    row16(&Difference {
+                        name: "— Wolves at the ford. Hobb said the toll collectors…".into(),
+                        detail: "at 647.3 144 300x16".into(),
+                        ..new.clone()
+                    }),
+                ],
+                "a preview cut by one word with room for all of it",
+            ),
         ] {
             assert!(
                 !carry::preview(&rows[0].difference, &rows),
@@ -4205,6 +4276,57 @@ mod allowed_classes {
             },
         ] {
             assert!(!carry::carry_over(&fault), "a class allows {fault}");
+        }
+        // R3d's class refuses `Carry over` that moved anywhere but `L` after the link, on its
+        // line: down, right, short of the gap, and another control or screen.
+        let moved = Difference {
+            change: "moved".into(),
+            detail: "1106.6 140 81.4x24 -> 596.9 140 81.4x24".into(),
+            ..carry.clone()
+        };
+        let words = Difference {
+            what: "text".into(),
+            name: "Carry over".into(),
+            detail: "1114.6 143 65.4x18 -> 604.9 143 65.4x18".into(),
+            ..moved.clone()
+        };
+        assert!(carry::carry_over_moved(&moved) && carry::carry_over_moved(&words));
+        for fault in [
+            Difference {
+                detail: "1106.6 140 81.4x24 -> 596.9 164 81.4x24".into(),
+                ..moved.clone()
+            },
+            Difference {
+                detail: "596.9 140 81.4x24 -> 1106.6 140 81.4x24".into(),
+                ..moved.clone()
+            },
+            Difference {
+                detail: "1106.6 140 81.4x24 -> 588.9 140 81.4x24".into(),
+                ..moved.clone()
+            },
+            Difference {
+                detail: "1114.6 143 65.4x18 -> 596.9 143 65.4x18".into(),
+                ..words.clone()
+            },
+            Difference {
+                name: "Button: Record this session".into(),
+                ..moved.clone()
+            },
+            Difference {
+                screen: "session-tonight".into(),
+                ..moved.clone()
+            },
+            Difference {
+                change: "resized".into(),
+                ..moved.clone()
+            },
+        ] {
+            assert!(
+                CLASSES
+                    .iter()
+                    .all(|class| !(class.fits)(&fault, &allowed.rows)),
+                "a class allows {fault}"
+            );
         }
         assert!(!carry::preview_act(&Difference {
             screen: "act 3".into(),

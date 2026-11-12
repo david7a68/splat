@@ -17,6 +17,31 @@ pub(crate) struct ViewState {
     /// The act pressed in this frame. The shell applies it after Lookup drew, once it has read
     /// the day count again, so an act uses the day at the click.
     pressed: Option<Act>,
+    /// The quick action pressed last, and where it was, for a few passes after the press.
+    keep: Option<Keep>,
+    /// Blank room after the trackers, so the scroll can hold a pressed action in its place
+    /// near the end of the view. It shrinks as the DM scrolls back up.
+    room: f32,
+    /// A name wider than its column, as shortened for that width, so a frame with no change
+    /// does not shorten it again.
+    fitted: std::collections::HashMap<(String, u32), String>,
+    /// How many times a name was shortened.
+    #[cfg(test)]
+    shortened: usize,
+}
+
+/// How many passes after a press the view still holds the pressed action in place. The Due
+/// list can settle over more than one: a scroll bar that comes with it narrows the words.
+const KEEP_PASSES: u64 = 6;
+
+/// A pressed quick action: its line and label, its top on screen at the press, the pass of the
+/// press, its top as drawn in the pass now, and the height of the view's content at the press.
+struct Keep {
+    place: (String, Option<String>, String),
+    top: f32,
+    pass: u64,
+    now: Option<f32>,
+    content: Option<f32>,
 }
 
 impl ViewState {
@@ -35,6 +60,17 @@ impl ViewState {
             amount.to_string(),
         ));
         self.focus_asking = true;
+    }
+
+    /// Hold this quick action in place on screen for the passes after its press.
+    fn hold(&mut self, ui: &egui::Ui, key: &str, instance: &Option<String>, label: &str, top: f32) {
+        self.keep = Some(Keep {
+            place: (key.to_owned(), instance.clone(), label.to_owned()),
+            top,
+            pass: ui.ctx().cumulative_pass_nr(),
+            now: None,
+            content: None,
+        });
     }
 
     /// The words in the amount field, while it is open.
@@ -84,7 +120,7 @@ impl Trackers {
         }
     }
 
-    /// `Done` or `Next` pressed on this row, as a click in the view leaves it for the shell.
+    /// `Done` pressed on this row, as a click in the view leaves it for the shell.
     #[cfg(test)]
     pub(crate) fn press_done_in_view(&mut self, notice: &super::Notice, ticked: Vec<bool>) {
         self.view.pressed = Some(Act::Done(notice.clone(), ticked));
@@ -111,12 +147,13 @@ pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, from_top: bool) {
     }
     if !trackers.in_play() {
         ui.add_space(design::S);
-        for words in [
-            "No house rules are in play.",
+        design::empty_state(
+            ui,
+            icons::BELL,
+            "No house rules in play",
             "Turn one on in Campaign → Rules and runs.",
-        ] {
-            ui.label(Type::Body.rich(ui, words).color(colors().muted));
-        }
+            |_| {},
+        );
         trackers.view.pressed = act;
         return;
     }
@@ -126,9 +163,52 @@ pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, from_top: bool) {
         .auto_shrink([false, false]);
     if from_top {
         area = area.vertical_scroll_offset(0.0);
+        trackers.view.keep = None;
     }
-    area.show(ui, |ui| body(ui, trackers, &mut act));
+    let room = trackers.view.room;
+    let output = area.show(ui, |ui| {
+        body(ui, trackers, &mut act);
+        ui.add_space(room);
+    });
+    hold_pressed_place(ui, &mut trackers.view, output);
     trackers.view.pressed = act;
+}
+
+/// A press that raises or ends a Due row changes the list's height above the trackers. In the
+/// passes after the press the view scrolls by as much, so the pressed action is where it was and
+/// a second press of a still pointer presses it again. It acts only while the content's height
+/// differs from the press's; the DM's own wheel or drag, or a view opened again, ends it. The
+/// room after the trackers is only what the scroll needs to hold it there.
+fn hold_pressed_place(
+    ui: &egui::Ui,
+    view: &mut ViewState,
+    output: egui::scroll_area::ScrollAreaOutput<()>,
+) {
+    let mut state = output.state;
+    let pass = ui.ctx().cumulative_pass_nr();
+    let content = output.content_size.y - view.room;
+    let scrolled = ui.input(|i| {
+        i.raw_scroll_delta != egui::Vec2::ZERO
+            || i.smooth_scroll_delta != egui::Vec2::ZERO
+            || i.pointer.is_decidedly_dragging()
+    });
+    view.keep
+        .take_if(|keep| scrolled || pass > keep.pass + KEEP_PASSES);
+    if let Some(keep) = view.keep.as_mut()
+        && (*keep.content.get_or_insert(content) - content).abs() > 0.5
+        && let Some(now) = keep.now.take()
+        && (now - keep.top).abs() > 0.5
+    {
+        let offset = (state.offset.y + now - keep.top).max(0.0);
+        let end = output.content_size.y - output.inner_rect.height();
+        view.room += (offset - end).max(0.0);
+        state.offset.y = offset;
+        state.store(ui.ctx(), output.id);
+        ui.ctx()
+            .request_discard("a press moved the Due list above it");
+        return;
+    }
+    view.room = (state.offset.y + output.inner_rect.height() - content).max(0.0);
 }
 
 fn apply(trackers: &mut Trackers, act: Act) {
@@ -397,12 +477,24 @@ pub(super) fn words_ending_with(
         .nth(before)
         .map_or(words.len(), |(at, _)| at);
     let (head, last) = words.split_at(split);
-    if !head.trim().is_empty() {
-        ui.add(egui::Label::new(Type::Body.rich(ui, head.trim_end())).wrap());
+    if head.trim().is_empty() {
+        ui.horizontal(|ui| {
+            ui.label(Type::Body.rich(ui, last.trim()));
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), add);
+        });
+        return;
     }
-    ui.horizontal(|ui| {
-        ui.label(Type::Body.rich(ui, last.trim()));
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), add);
+    // The last line keeps the words' pitch: it follows the line above with no gap, and its
+    // actions start at its top, so they reach below it and never over the words above.
+    ui.scope(|ui| {
+        ui.spacing_mut().item_spacing.y = 0.0;
+        ui.add(egui::Label::new(Type::Body.rich(ui, head.trim_end())).wrap());
+        ui.horizontal(|ui| {
+            ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
+                ui.label(Type::Body.rich(ui, last.trim()));
+            });
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), add);
+        });
     });
 }
 
@@ -415,27 +507,26 @@ fn right_line(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
     );
 }
 
-/// The row's last action: `Next` on a day mark's row of several days, else `Done`. Either
-/// applies the ticked changes and ends one notice: the oldest day of the row.
-fn finish_label(notice: &super::Notice) -> &'static str {
-    if notice.days.len() > 1 {
-        "Next"
-    } else {
-        "Done"
+/// The row's last action: `Done`, which applies the ticked changes and ends one notice. On a
+/// day mark's row of several days it names the day it ends, the oldest: `Done: Day 32`.
+fn finish_label(notice: &super::Notice) -> String {
+    match (&notice.id, notice.days.len()) {
+        (NoticeRef::Day { day, .. }, 2..) => format!("Done: Day {day}"),
+        _ => "Done".to_owned(),
     }
 }
 
-/// `Done` or `Next` and the row's menu, with the gap between them.
+/// `Done` and the row's menu, with the gap between them.
 fn finish_width(ui: &egui::Ui, notice: &super::Notice) -> f32 {
-    Action::quiet(finish_label(notice))
+    Action::quiet(&finish_label(notice))
         .density(Density::Read)
         .natural_width(ui)
         + ui.spacing().item_spacing.x
         + Density::Read.control()
 }
 
-/// The row's menu with `Dismiss` (and `Dismiss all` on a row of several days), then `Done` or
-/// `Next`, laid out from the right.
+/// The row's menu with `Dismiss` (and `Dismiss all` on a row of several days), then `Done`,
+/// laid out from the right.
 fn finish(
     ui: &mut egui::Ui,
     short: &str,
@@ -464,8 +555,8 @@ fn finish(
         }
     });
     let finish = finish_label(notice);
-    let name = format!("{finish}: {short}");
-    if Action::quiet(finish)
+    let name = format!("Done: {short}");
+    if Action::quiet(&finish)
         .density(Density::Read)
         .name(&name)
         .show(ui)
@@ -509,11 +600,14 @@ fn tracker_lines(
         ui.label(Type::Body.rich(ui, &def.name));
         design::L
     };
-    // Names and values stand in columns, so the values of one tracker read down a line.
+    // Names and values stand in columns, so the values of one tracker read down a line and its
+    // actions start at one edge. A long name is cut at a whole word, and its hover keeps it.
+    let name_limit = (ui.available_width() - indent) * NAME_SHARE;
     let name_width = instances
         .iter()
         .map(|i| measure(ui, i.unwrap_or(&def.name), font.clone()))
-        .fold(0.0, f32::max);
+        .fold(0.0, f32::max)
+        .min(name_limit);
     let value_width = instances
         .iter()
         .map(|i| measure(ui, &value_text(*i), Type::Numeral.font(ui)))
@@ -524,11 +618,7 @@ fn tracker_lines(
             ui.add_space(indent);
             let height = Density::Read.control();
             let name = instance.unwrap_or(&def.name);
-            ui.allocate_ui_with_layout(
-                egui::vec2(name_width, height),
-                egui::Layout::left_to_right(egui::Align::Center),
-                |ui| ui.label(Type::Body.rich(ui, name)),
-            );
+            name_cell(ui, view, name, egui::vec2(name_width, height));
             ui.add_space(design::S);
             let (rect, _) =
                 ui.allocate_exact_size(egui::vec2(value_width, height), egui::Sense::hover());
@@ -546,7 +636,11 @@ fn tracker_lines(
                     *k == place.0 && *i == place.1 && *l == quick.label
                 });
                 if here {
-                    amount_field(ui, view, &quick.label, act);
+                    // The field takes exactly its action's column, so nothing after it moves.
+                    let width = Action::secondary(&quick.label)
+                        .density(Density::Read)
+                        .natural_width(ui);
+                    amount_field(ui, view, &quick.label, width, act);
                     continue;
                 }
                 let response = Action::secondary(&quick.label)
@@ -556,7 +650,14 @@ fn tracker_lines(
                         None => quick.label.clone(),
                     })
                     .show(ui);
+                if let Some(keep) = view.keep.as_mut().filter(|keep| {
+                    (&keep.place.0, &keep.place.1, &keep.place.2)
+                        == (&place.0, &place.1, &quick.label)
+                }) {
+                    keep.now = Some(response.rect.top());
+                }
                 if response.clicked() {
+                    view.hold(ui, &place.0, &place.1, &quick.label, response.rect.top());
                     // Read on the click only: a dice amount is parsed to tell it from `ask`.
                     if quick.asks() {
                         view.asking = Some((
@@ -581,14 +682,62 @@ fn tracker_lines(
     ui.add_space(design::XS);
 }
 
+/// The most of a tracker's line that its name column takes, so the value and an action keep room.
+const NAME_SHARE: f32 = 0.4;
+
+/// A name in its column: exactly `size`, whatever the name's own width. A name wider than the
+/// column ends at a whole word with `…`, or is `…` alone when its first word does not fit; its
+/// hover says it whole. Only a name that does not fit is shortened, once for each width.
+fn name_cell(ui: &mut egui::Ui, view: &mut ViewState, name: &str, size: egui::Vec2) {
+    let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
+    let font = Type::Body.font(ui);
+    let shown = if design::number_width(ui, name, &font) <= size.x {
+        name
+    } else {
+        let key = (name.to_owned(), size.x.to_bits());
+        if !view.fitted.contains_key(&key) {
+            // A width that changes with the window makes new keys: keep the map small.
+            if view.fitted.len() >= 64 {
+                view.fitted.clear();
+            }
+            let mut words = design::words_that_fit(ui, name, &font, size.x);
+            if design::number_width(ui, &words, &font) > size.x {
+                words = "…".to_owned();
+            }
+            #[cfg(test)]
+            {
+                view.shortened += 1;
+            }
+            view.fitted.insert(key.clone(), words);
+        }
+        view.fitted[&key].as_str()
+    };
+    let mut cell = ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(rect)
+            .layout(egui::Layout::left_to_right(egui::Align::Center)),
+    );
+    let response = cell.add(egui::Label::new(Type::Body.rich(ui, shown)));
+    if shown != name {
+        response.on_hover_text(name);
+    }
+}
+
 /// `add: ask` puts a number field in the action's place. It holds focus until Enter or Escape.
-fn amount_field(ui: &mut egui::Ui, view: &mut ViewState, label: &str, act: &mut Option<Act>) {
+fn amount_field(
+    ui: &mut egui::Ui,
+    view: &mut ViewState,
+    label: &str,
+    width: f32,
+    act: &mut Option<Act>,
+) {
     let Some((key, instance, _, typed)) = view.asking.as_mut() else {
         return;
     };
-    let response = ui.add(
+    let response = ui.add_sized(
+        egui::vec2(width, Density::Read.control()),
         egui::TextEdit::singleline(typed)
-            .desired_width(design::XL * 3.0)
+            .min_size(egui::vec2(0.0, Density::Read.control()))
             .hint_text("Amount"),
     );
     design::named(ui, &response, label);
@@ -598,9 +747,12 @@ fn amount_field(ui: &mut egui::Ui, view: &mut ViewState, label: &str, act: &mut 
     if response.lost_focus() {
         let enter = ui.input(|i| i.key_pressed(egui::Key::Enter));
         if enter && let Ok(amount) = typed.trim().parse::<i64>() {
+            let (key, instance) = (key.clone(), instance.clone());
+            // Enter is the press: the action keeps its place as a click's does.
+            view.hold(ui, &key, &instance, label, response.rect.top());
             *act = Some(Act::Press {
-                key: key.clone(),
-                instance: instance.clone(),
+                key,
+                instance,
                 label: label.to_owned(),
                 asked: Some(amount),
             });
@@ -647,15 +799,15 @@ fn result_line(ui: &mut egui::Ui, trackers: &Trackers, act: &mut Option<Act>) {
         .icon(icons::UNDO)
         .density(Density::Read);
     let add = Action::quiet("Add to Timeline").density(Density::Read);
-    let gap = ui.spacing().item_spacing.x;
-    // `Undo` starts at the words; `Add to Timeline` ends the line, or has a line of its own.
+    // `Undo`'s words start at the message's words, its icon in the message's icon column;
+    // `Add to Timeline` ends the line, or has a line of its own that starts at the words.
     let one_line =
         inset + undo.natural_width(ui) + design::L + add.natural_width(ui) <= ui.available_width();
     let mut undo_clicked = false;
     let mut add_clicked = false;
     ui.horizontal(|ui| {
-        ui.add_space((inset - gap).max(0.0));
-        undo_clicked = undo.show(ui).clicked();
+        ui.add_space(inset);
+        undo_clicked = undo.line_start().show(ui).clicked();
         if one_line {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 add_clicked = add.show(ui).clicked();
@@ -664,9 +816,10 @@ fn result_line(ui: &mut egui::Ui, trackers: &Trackers, act: &mut Option<Act>) {
     });
     if !one_line {
         ui.horizontal(|ui| {
-            ui.add_space((inset - gap).max(0.0));
+            ui.add_space(inset);
             add_clicked = Action::quiet("Add to Timeline")
                 .density(Density::Read)
+                .line_start()
                 .show(ui)
                 .clicked();
         });
@@ -675,7 +828,8 @@ fn result_line(ui: &mut egui::Ui, trackers: &Trackers, act: &mut Option<Act>) {
         *act = Some(Act::Undo(entries.to_vec()));
     }
     if add_clicked {
-        *act = Some(Act::AddToTimeline(first.id.clone(), label.clone()));
+        let title = super::timeline_title(&trackers.rules, &trackers.ledger, entries);
+        *act = Some(Act::AddToTimeline(first.id.clone(), title));
     }
 }
 
@@ -686,4 +840,62 @@ pub(super) fn not_saved(error: &str) -> String {
         super::ledger::FILE,
         error.trim_end_matches('.')
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use egui_kittest::Harness;
+
+    /// X16: a name wider than its column ends at a whole word, or is `…` alone when its first
+    /// word does not fit; unchanged frames do not shorten it again.
+    #[test]
+    fn a_name_in_its_column_ends_at_a_whole_word_and_is_shortened_once() {
+        const NAMES: [&str; 3] = [
+            "Party",
+            "Ravenholm Ironside Wardens of the Gate",
+            "Supercalifragilisticexpialidocious Smith",
+        ];
+        let mut h = Harness::builder()
+            .with_size(egui::vec2(400.0, 200.0))
+            .build_ui_state(
+                |ui, view: &mut ViewState| {
+                    for name in NAMES {
+                        name_cell(ui, view, name, egui::vec2(110.0, 28.0));
+                    }
+                },
+                ViewState::default(),
+            );
+        crate::design::theme::install(&h.ctx);
+        h.run();
+        let shown = |view: &ViewState, name: &str| {
+            view.fitted
+                .iter()
+                .find(|((full, _), _)| full == name)
+                .map(|(_, shown)| shown.clone())
+        };
+        let view = h.state();
+        assert_eq!(
+            shown(view, NAMES[0]),
+            None,
+            "a name that fits is not shortened"
+        );
+        let words = shown(view, NAMES[1]).unwrap();
+        let kept = words.strip_suffix('…').unwrap();
+        assert!(
+            !kept.is_empty() && NAMES[1].starts_with(&format!("{kept} ")),
+            "{words}"
+        );
+        assert_eq!(shown(view, NAMES[2]).as_deref(), Some("…"));
+        let once = view.shortened;
+        assert_eq!(once, 2);
+        for _ in 0..3 {
+            h.step();
+        }
+        assert_eq!(
+            h.state().shortened,
+            once,
+            "unchanged frames shorten nothing"
+        );
+    }
 }

@@ -525,9 +525,9 @@ and the day: `notice: {mark: month_end, day: 32}`. Splat works the rows out agai
 definitions or the ledger change, never in each frame, and an act reads the Timeline again at the click: when the
 row's day is no longer due, it writes nothing and says so on the result line.
 
-Repeats of one mark are one row: "End of month ×3", with **Next** and **Dismiss all**. A done period stays done, and moving a
+Repeats of one mark are one row: "End of month ×3", with **Done: Day 32** (it ends the oldest day) and **Dismiss all**. A done period stays done, and moving a
 boundary does not reverse its income. An overdue item uses today's values, and an older period says so before it runs. An
-8-month voyage is one Travel event and 8 presses of **Next**. Do not schedule daily changes.
+8-month voyage is one Travel event and 8 presses of **Done**. Do not schedule daily changes.
 
 ## Interface
 
@@ -621,7 +621,7 @@ unplanned, so part 5 may come sooner than its number.
 4. **Event types.** *Not built, and deprioritized.* *Changes:* `timeline.rs`, `timeline/page.rs`, `processing.rs`. A test covers an unknown type's round trip.
 5. **NPCs and locations.** *Built.* *Changes:* `content/mod.rs` (`splat_world`), `presentation.rs`, `lookup.rs`, `encounter_run.rs`.
    *Done when:* a typed name becomes a participant in the fight, and the run stays on screen.
-6. **The clock and day marks.** *Built: the clock, and day marks in P11 of [The session cycle](session-cycle.md).* Year 1 begins. *Changes:* `trackers.rs` (the day count from `timeline::Book`, the day notices in the replay, `Next` and `Dismiss all`), the ledger module (a day notice's identity), the Trackers view; `timeline.rs` is unchanged.
+6. **The clock and day marks.** *Built: the clock, and day marks in P11 of [The session cycle](session-cycle.md).* Year 1 begins. *Changes:* `trackers.rs` (the day count from `timeline::Book`, the day notices in the replay, `Done: Day N` and `Dismiss all`), the ledger module (a day notice's identity), the Trackers view; `timeline.rs` is unchanged.
 
 ## Alternatives rejected
 
