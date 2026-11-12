@@ -240,17 +240,22 @@ pub fn run(d: &mut Driver<'_>) {
     look_up(d, "wolf");
     ready_rows_say_their_word(d, "T5.7-ready-lookup");
     // V7: beside Lookup at 960x640 Mill Road's word gives way on its row, and the row's hover
-    // keeps it.
-    let (gave_way, hover) = d.act_at_size(SMALL, |d| {
-        let gave_way = plan_summary_line(d, HIGH_SUMMARY).as_deref() == Some(HIGH_SUMMARY);
-        let hover = d.painted_tooltip_shows(HIGH_SUMMARY, &format!("{HIGH_SUMMARY} · High"));
-        (gave_way, hover)
+    // keeps it, with the whole detail. The row is found by the start of its detail, which
+    // stays painted also where the rest of the detail is cut.
+    const HIGH_START: &str = "5 party · 1 × Cinder Tyrant";
+    let (line, hover) = d.act_at_size(SMALL, |d| {
+        let line = plan_summary_line(d, HIGH_START);
+        let hover = d.painted_tooltip_shows(HIGH_START, &format!("{HIGH_SUMMARY} · High"));
+        (line, hover)
     });
+    let gave_way = line
+        .as_deref()
+        .is_some_and(|line| !line.contains(" · High"));
     d.observe(
         "V7-ready-hover",
         gave_way && hover,
         format!(
-            "Beside Lookup at 960x640 the word gives way {gave_way}, and the hover keeps it {hover}"
+            "Beside Lookup at 960x640 the word gives way {gave_way} (the line: {line:?}), and the hover keeps it {hover}"
         ),
     );
     d.state("ready-to-run-beside-lookup", Sizes::Small);
