@@ -4978,6 +4978,10 @@ mod allowed_classes {
                 "a: a Change of no width",
             ),
             (
+                with("Button: Change Status", "at 946.2 196 100x30"),
+                "a: a Change of another size",
+            ),
+            (
                 with("Button: Change Status", "at 2000 196 63.8x30"),
                 "a: a Change outside the window",
             ),
