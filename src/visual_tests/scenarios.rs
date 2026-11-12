@@ -14261,6 +14261,34 @@ pub mod encounter_groups {
             changed && !d.has("Unknown creature: not in this campaign’s packages."),
             "A changed group's missing member names no line; Discard gives back the saved form",
         );
+        // Review 2: a count edit lands after the comparison in its own frame. The input-free
+        // frames after it work the comparison out again (the line goes), putting the count back
+        // brings the line back, and unchanged frames still do no comparison.
+        const SHORT: &str = "Unknown creature: not in this campaign’s packages.";
+        let focused = d.tab_to("How many of Cinder Wolf");
+        // The open run takes the arrow keys, so the count is typed.
+        d.press_ctrl(Key::A);
+        d.type_text("2");
+        d.press(Key::Enter);
+        let edited = d.visible_text("Unsaved") && d.has(SHORT);
+        d.tab_to("How many of Cinder Wolf");
+        d.press_ctrl(Key::A);
+        d.type_text("1");
+        d.press(Key::Enter);
+        let restored = !d.has(SHORT) && !d.visible_text("Unsaved");
+        let idle = compare.steady(d, |d| {
+            d.settle();
+            d.at_size(SMALL, |_| ());
+            d.settle();
+            d.has("Replace Unknown creature")
+        });
+        d.observe(
+            "iter-26-B-FJ6-count",
+            focused && edited && restored && idle.is_ok(),
+            format!(
+                "Count field focused {focused}; after the edit the line went {edited}; restored {restored}; idle {idle:?}"
+            ),
+        );
     }
 }
 
@@ -14907,6 +14935,25 @@ pub mod encounter_owned_groups {
             d.expect("1. Wolf");
             order && kept
         });
+        // Review 2: Undo move gives back only who owns the group. Its members and the cleared
+        // member result stay as they are now.
+        let move_keeps_members = d.aside(|d| {
+            d.click("More actions for Wolf");
+            d.click("Remove");
+            d.click_first(&format!("More actions for {NEW_NAME}"));
+            d.click("Make available to any encounter");
+            d.expect("Undo move");
+            d.click("Undo remove member");
+            let cleared = !d.has("Undo remove member");
+            d.click("Undo move");
+            d.expect(&format!("Group name: {NEW_NAME}"));
+            cleared && d.has("1. Wolf") && !d.has("Undo remove member") && !d.has("Undo move")
+        });
+        d.observe(
+            "iter-26-B-undo-move-owner",
+            move_keeps_members && !d.visible_text("Unsaved"),
+            format!("Undo move keeps Wolf and the cleared member result: {move_keeps_members}"),
+        );
         d.observe(
             "iter-26-B-encounter-group-results",
             member_undo && member_then_group && group_then_member && !d.visible_text("Unsaved"),

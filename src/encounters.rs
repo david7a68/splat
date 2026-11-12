@@ -639,20 +639,22 @@ impl Draft {
         let Some((index, removed, delete, _)) = self.removed_group.take() else {
             return;
         };
-        if delete {
-            let path = removed.path().to_owned();
-            self.deleted_groups.retain(|group| group.path() != path);
+        let path = removed.path().to_owned();
+        if let Some(group) = self.groups.iter_mut().find(|group| group.path() == path) {
+            // A move changed only who owns the group: Undo gives that back, and the group
+            // keeps its members, edits and member results made since.
+            group.take_owner_from(&removed);
+            return;
         }
-        if let Some(group) = self
-            .groups
-            .iter_mut()
-            .find(|group| group.path() == removed.path())
-        {
-            *group = removed;
-        } else {
-            let at = index.min(self.groups.len());
-            self.groups.insert(at, removed);
-        }
+        // A deleted group comes back as it was deleted; a group whose file went comes back from
+        // the copy kept with its result.
+        let back = self
+            .deleted_groups
+            .iter()
+            .position(|group| delete && group.path() == path)
+            .map_or(removed, |at| self.deleted_groups.remove(at));
+        let at = index.min(self.groups.len());
+        self.groups.insert(at, back);
     }
     /// AB1: Save's reason while one of this encounter's changed groups has no members: Save
     /// checks every changed group, and refuses an empty one.

@@ -187,6 +187,10 @@ impl GroupDraft {
     pub(super) fn name(&self) -> String {
         self.name.clone()
     }
+    /// Give this group the owner `earlier` had, and change nothing else: Undo of a move.
+    pub(super) fn take_owner_from(&mut self, earlier: &GroupDraft) {
+        self.setup.encounter = earlier.setup.encounter.clone();
+    }
     /// No member that Save would write: Save refuses the group.
     pub(super) fn is_empty(&self) -> bool {
         self.setup.members.is_empty()
@@ -248,7 +252,8 @@ impl GroupDraft {
     /// The comparison runs only after a change (`members_saved`); each frame reaches it.
     fn members_are_saved(&mut self, ctx: &egui::Context) -> bool {
         let edited = super::edit_input(ctx);
-        if edited || std::mem::replace(&mut self.edited_last_frame, edited) {
+        let edited_before = std::mem::replace(&mut self.edited_last_frame, edited);
+        if edited || edited_before {
             self.members_saved = None;
         }
         #[cfg(test)]
@@ -456,6 +461,7 @@ impl GroupDraft {
         self.baseline.is_some()
     }
     pub(super) fn add_named(&mut self, id: Uuid, name: String) {
+        self.members_saved = None;
         self.setup.members.push(MemberDraft {
             extra: Mapping::new(),
             creature: EntryRef::id(id),
@@ -3165,6 +3171,54 @@ mod tests {
         }
         let mut body = super::super::body_above(ui, bottom);
         members(&mut body, &mut state.0, snapshot, &mut state.1);
+    }
+
+    /// iter-26-B, review 2: a control's change that lands after the comparison, in a frame with
+    /// editing input, is seen in the next frame even when that frame has no input; after it, an
+    /// unchanged frame compares nothing.
+    #[test]
+    fn members_are_saved_sees_a_change_that_lands_late_in_an_edited_frame() {
+        let ctx = egui::Context::default();
+        let mut draft = GroupDraft::new();
+        let member = MemberDraft {
+            creature: EntryRef::id(Uuid::new_v4()),
+            count: 1,
+            overrides: Mapping::new(),
+            extra: Mapping::new(),
+        };
+        draft.setup.members.push(member.clone());
+        draft.saved_setup.members.push(member);
+        let key = egui::RawInput {
+            events: vec![egui::Event::Key {
+                key: egui::Key::Num2,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: egui::Modifiers::NONE,
+            }],
+            ..Default::default()
+        };
+        let mut seen = Vec::new();
+        // The edited frame compares first; the count field then changes late in it.
+        let _ = ctx.run(key, |ctx| {
+            seen.push(draft.members_are_saved(ctx));
+            draft.setup.members[0].count = 2;
+        });
+        // The next frame has no input, and still compares again.
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            seen.push(draft.members_are_saved(ctx));
+        });
+        let before = member_comparisons();
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            seen.push(draft.members_are_saved(ctx));
+        });
+        let idle = member_comparisons();
+        assert_eq!(seen, [true, false, false], "the late change is seen");
+        assert_eq!(
+            (idle.0 - before.0, idle.1 - before.1),
+            (1, 0),
+            "an unchanged frame reaches the cache and compares nothing"
+        );
     }
 
     #[test]
