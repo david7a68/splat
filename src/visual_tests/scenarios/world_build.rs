@@ -714,10 +714,10 @@ pub fn broken(d: &mut Driver<'_>) {
     );
     reload(d);
     d.click("2 notes cannot be read");
-    let row = "Notes/Broken.md · Text format cannot be read";
+    let row = "Notes/Broken.md · Not a text file";
     d.observe(
         "iter-18-D-AD2-list-cause",
-        d.has(row) && d.has(&format!("{long_path} · Text format cannot be read")),
+        d.has(row) && d.has(&format!("{long_path} · Not a text file")),
         "Each unreadable row states the short cause, not the system's words",
     );
     // The click finds the row by its path, so a wrong cause fails only the check above.
@@ -890,11 +890,11 @@ pub fn broken(d: &mut Driver<'_>) {
         "A note row opens that note in the reader and ends the unreadable pane",
     );
     // The longest path wraps in the list at 960, whole, with its cause below it.
-    let long_row = format!("{long_path} · Text format cannot be read");
+    let long_row = format!("{long_path} · Not a text file");
     let whole = d.at_size(SMALL, |d| {
         d.place_of(&long_row).is_some_and(|row| {
             let painted = d.painted_in(row);
-            painted.contains("Harbour Council.md") && painted.contains("Text format cannot be read")
+            painted.contains("Harbour Council.md") && painted.contains("Not a text file")
         })
     });
     d.observe(
@@ -2749,7 +2749,44 @@ pub fn tables(d: &mut Driver<'_>) {
         d.has("Roll 1d6") && d.has("Close Lookup"),
         "In Lookup, the table's own button says Roll 1d6, as before",
     );
-    d.state("authored-table-in-lookup", Sizes::Default);
+    d.state_prepared("authored-table-in-lookup", Sizes::Default, |d| {
+        // Round 26 AE1: World and Lookup show the same table. Each reader has its own field id
+        // (egui paints no `Second use` id warning) and its own roll state: World's typed 4 does
+        // not show in Lookup. Lookup is the right pane, so its Roll button is the rightmost.
+        let rolls: Vec<_> = d
+            .nodes()
+            .into_iter()
+            .filter(|node| node.name == "Roll 1d6")
+            .map(|node| node.rect)
+            .collect();
+        let fields = d
+            .nodes()
+            .into_iter()
+            .filter(|node| node.name == "Typed roll for Valid")
+            .count();
+        let lookup = rolls
+            .iter()
+            .max_by(|a, b| a.left().total_cmp(&b.left()))
+            .map(|roll| {
+                egui::Rect::from_min_max(
+                    roll.left_top(),
+                    egui::pos2(roll.left() + 600.0, roll.bottom() + 3.0 * design::XL),
+                )
+            });
+        let everything = d.painted_in(egui::Rect::EVERYTHING);
+        d.observe(
+            "iter-26-L-AE1",
+            rolls.len() == 2
+                && fields == 2
+                && !everything.contains("Second use")
+                && !everything.contains("First use")
+                && lookup.is_some_and(|area| !d.painted_in(area).contains("Typed 4")),
+            format!(
+                "World and Lookup each show the table ({} Roll buttons, {fields} fields) with no widget id warning, and Lookup does not show World's typed roll",
+                rolls.len()
+            ),
+        );
+    });
 }
 
 pub fn generator(d: &mut Driver<'_>) {
@@ -4911,13 +4948,13 @@ pub fn package_about(d: &mut Driver<'_>) {
     d.open_combo_at(LIBRARY_PACKAGE_DROPDOWN);
     d.click(MODULE);
     d.click("About Ashen Marches");
-    d.wait_for_text("5 of 6 entries chosen");
+    d.wait_for_text("4 of 6 entries chosen · 1 still needed");
     d.observe(
         "W2 fixture",
-        d.visible_text("5 of 6 entries chosen")
+        d.visible_text("4 of 6 entries chosen · 1 still needed")
             && !d.visible_text("Engine support")
             && !d.visible_text("Library / Other entries"),
-        "Four selected entries and one required entry count as package use",
+        "Four chosen entries count as chosen; the one entry they need counts as still needed",
     );
     d.state("package-about", Sizes::All);
     let title_before = reader_title_tops(d, MODULE);
@@ -4952,7 +4989,7 @@ pub fn package_about(d: &mut Driver<'_>) {
         );
     });
     d.click("Undo package choice");
-    d.wait_for_text("5 of 6 entries chosen");
+    d.wait_for_text("4 of 6 entries chosen · 1 still needed");
     d.expect_same("Undo package choice restores the original package selection and About reader.");
     d.assert_state_matches("package-use-undone", "package-about");
     d.click(EDIT_MARKDOWN);
@@ -8010,7 +8047,7 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     d.type_into("Package folder", &copied.to_string_lossy());
     d.click("Add folder");
     d.expect("This folder is a copy of Ashen Marches.");
-    d.expect("Register it as a new package below.");
+    d.expect("This folder is a copy.");
     assert!(d.is_disabled("Add folder"));
     assert_eq!(d.app_mut().campaigns.modules().len(), 1);
     d.state("copied-package-names-duplicate-identity", Sizes::All);
@@ -9876,7 +9913,7 @@ fn file_fault_reader(d: &mut Driver<'_>, id: &str, headline: &str, path: &str, c
         if !clip.intersects(text.visual_bounding_rect()) {
             return;
         }
-        if job.text.contains("Text format cannot be read") {
+        if job.text.contains("Not a text file") {
             rows.push(painted_marks(job));
         }
         if job.text.contains(" need fixing") || job.text.contains(" needs fixing") {
@@ -9939,8 +9976,8 @@ fn file_fault_reader(d: &mut Driver<'_>, id: &str, headline: &str, path: &str, c
             "iter21-E-FD2-{}",
             if campaign { "campaign" } else { "package" }
         ),
-        d.visible_text("Text format cannot be read"),
-        "The Library row names the short cause, Text format cannot be read",
+        d.visible_text("Not a text file"),
+        "The Library row names the short cause, Not a text file",
     );
     d.observe(
         &format!("{id}-no-repair"),

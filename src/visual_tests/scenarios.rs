@@ -1460,7 +1460,26 @@ pub mod library_navigation {
             |d| d.place_of("Read").unwrap().left() < d.place_of("Back").unwrap().left(),
         );
         d.state("wiki-link-in-library", Sizes::All);
+        // Round 26 SF1, SB1: a list click records the trail as a link does. Link Ash Exposure →
+        // Ashfall, list click About Ashen Marches, Back → Ashfall, Back → Ash Exposure.
+        d.click("About Ashen Marches");
+        d.observe(
+            "iter-26-L-SB1-about",
+            !d.visible_text("Hot ash falls") && d.has("Back"),
+            "The About row opens the package's About page, with Back",
+        );
         d.click("Back");
+        d.observe(
+            "iter-26-L-SB1-list",
+            d.visible_text("Hot ash falls"),
+            "Back after a list click returns to the entry the click left",
+        );
+        d.click("Back");
+        d.observe(
+            "iter-26-L-SB1-link",
+            d.has("Read Captain Varra") && !d.visible_text("Hot ash falls"),
+            "The next Back returns to the entry the link left (Ash Exposure, with its Read Captain Varra link)",
+        );
         d.click("Read Captain Varra");
         d.wait_for_text("The last commander of the Emberfall watch.");
         d.state("reference-outside-package", Sizes::All);
@@ -8184,7 +8203,7 @@ pub mod library_scope {
 
     const BUILT_IN: &str = "Built-in · Read only";
     const CAMPAIGN_OWNER: &str = "Campaign · Editable";
-    const PACKAGE_OWNER: &str = "5 of 6 entries chosen";
+    const PACKAGE_OWNER: &str = "4 of 6 entries chosen · 1 still needed";
 
     /// The reader title's distance below the Read tab, at each captured size.
     fn title_offsets(d: &mut Driver<'_>, title: &str) -> Vec<Option<f32>> {

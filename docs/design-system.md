@@ -347,7 +347,7 @@ have Edit in Obsidian. The path shortens from the front only and keeps its file 
 second Read row. An unreadable entry keeps `Cannot be read` on its owner line, in place of `Chosen for this campaign`.
 A file that the system will not read at all (not UTF-8 text, or no permission) has no text to repair, in a package
 or a campaign. Library keeps why the read failed, from the error's kind, as World does. Its row's cause is short
-(`Text format cannot be read`). Its reader keeps the title and a file line with only `Show file`: no Edit in
+(`Not a text file`). Its reader keeps the title and a file line with only `Show file`: no Edit in
 Obsidian, because no editor can open the file either. Below the title, an error names the file (`Splat cannot read
 Notes/Broken.md as text.`), then the recovery in plain words, then quiet `Try again` at the message words.
 Technical details holds the system's words. Edit Markdown is blocked with its reason, and the reader offers no
@@ -949,7 +949,7 @@ longer be read, its error and the note's file line also offer no editor link unt
 names the file only as `this note`, because the title and file line name it (`Splat cannot read this note as text.`),
 then gives the recovery in plain words at the reader measure, with `Try again` and, `L` after it, `Cancel`, each with
 the secondary border, the first border at the message text. Technical details below holds the system's words. Its row's cause is short
-(`Text format cannot be read`). Try again reads the folder again: a fixed note opens in the reader, a note that is
+(`Not a text file`). Try again reads the folder again: a fixed note opens in the reader, a note that is
 still broken opens its repair, and a file moved or deleted outside Splat ends the pane. Splat never writes that file.
 Every other World message about a file that the system will not read or write, away from that file's pane, names the
 file and the recovery, never the system's words. A rolled table selects the matching row, marks it with dice and

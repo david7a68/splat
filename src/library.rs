@@ -764,6 +764,41 @@ enum Scope {
     Campaign,
 }
 
+/// The place of the open entry, for Back and Forward. A free function, so a list closure that
+/// holds the notes can record the place it leaves (round 26 SB1).
+fn place(
+    loaded: &Loaded,
+    selected: Option<usize>,
+    scope: Scope,
+    section: Section,
+    search: &str,
+) -> Option<Place> {
+    let current = loaded.notes.get(selected?)?;
+    Some(Place {
+        owner: current.owner.id(),
+        path: current.path.clone(),
+        scope,
+        section,
+        search: search.to_owned(),
+    })
+}
+
+/// A package's About line count, in Campaign's form: `All entries chosen`, `4 of 6 entries
+/// chosen`, `4 of 6 entries chosen · 1 still needed`, `No entries chosen · 3 still needed`.
+/// `chosen`
+/// counts only the DM's own choices; `still needed` counts the entries those choices need that
+/// the DM did not choose, and is left out when it is 0.
+fn chosen_count(chosen: usize, needed: usize, total: usize) -> String {
+    let needed_words = |needed: usize| format!("{needed} still needed");
+    match (chosen, needed) {
+        (c, 0) if c == total => "All entries chosen".into(),
+        (0, 0) => "No entries chosen".into(),
+        (0, n) => format!("No entries chosen · {}", needed_words(n)),
+        (c, 0) => format!("{c} of {total} entries chosen"),
+        (c, n) => format!("{c} of {total} entries chosen · {}", needed_words(n)),
+    }
+}
+
 /// How many entries leave Splat's lists when a package is unregistered. The manifest is not one.
 fn unregister_count(notes: &[Note], package: Uuid) -> usize {
     notes
@@ -939,6 +974,9 @@ pub(crate) struct Loaded {
     shared_paths: std::sync::OnceLock<std::collections::HashMap<String, Vec<String>>>,
     /// What the active campaign can use: its selections and what they require.
     uses: Option<std::collections::HashSet<Uuid>>,
+    /// The entries the DM chose for the active campaign, without the entries those choices
+    /// need. Counts that say `chosen` count only these (round 26 FC2, FD4).
+    chosen: Option<std::collections::HashSet<Uuid>>,
     subtitles: std::sync::OnceLock<Vec<String>>,
     counts: std::sync::OnceLock<Vec<(Section, usize)>>,
     duplicate_ids: std::sync::OnceLock<std::collections::HashSet<Uuid>>,
@@ -1418,6 +1456,15 @@ impl Loaded {
             .len()
     }
 
+    /// Whether the DM chose this entry for the active campaign, not only needed it. With no
+    /// campaign open, nothing is chosen.
+    fn chose(&self, note: &Note) -> bool {
+        self.chosen
+            .as_ref()
+            .zip(note.entry.as_ref())
+            .is_some_and(|(chosen, entry)| chosen.contains(&entry.id))
+    }
+
     fn in_scope(&self, note: &Note, scope: Scope) -> bool {
         if note.is_manifest() {
             return false;
@@ -1752,6 +1799,8 @@ mod draft_view {
 struct LetGo {
     note: Note,
     used: bool,
+    /// Whether the DM chose the entry itself, not only needed it.
+    chosen: bool,
     /// The campaign that was open when the entry was removed, once the page has seen it. Its
     /// `used` flag and the catalogue it goes back into belong to that campaign.
     campaign: Option<Option<Uuid>>,
@@ -2835,6 +2884,7 @@ pub(crate) fn load_all(modules: &[Module], campaign: Option<&Campaign>) -> Resul
         {
             Ok((document, catalogue)) => {
                 let closure = catalogue.closure(&document.selections, campaign.id);
+                all.chosen = Some(closure.direct.iter().copied().collect());
                 all.uses = Some(
                     closure
                         .direct
@@ -3485,12 +3535,19 @@ impl Library {
         let Some(change) = self.disk_change.take() else {
             return;
         };
-        // Whether this campaign uses the entry now, for Undo remove to give back.
+        // Whether this campaign uses the entry now, and whether the DM chose it, for Undo
+        // remove to give back.
         let used = self.loaded.as_ref().is_some_and(|loaded| {
             loaded
                 .notes
                 .get(index)
                 .is_some_and(|note| loaded.in_scope(note, Scope::Uses))
+        });
+        let chosen = self.loaded.as_ref().is_some_and(|loaded| {
+            loaded
+                .notes
+                .get(index)
+                .is_some_and(|note| loaded.chose(note))
         });
         let Some(note) = self.loaded.as_mut().and_then(|l| l.notes.get_mut(index)) else {
             return;
@@ -3542,6 +3599,7 @@ impl Library {
                         owner: note.owner.clone(),
                     },
                     used,
+                    chosen,
                     campaign: None,
                 });
                 self.draft = note.text.clone();
@@ -4375,6 +4433,16 @@ impl Library {
                             .clicked()
                         && !dirty
                     {
+                        // Round 26 SB1: a list click records the trail, as a link does.
+                        if self.selected != Some(index) {
+                            self.trail.leave(place(
+                                loaded,
+                                self.selected,
+                                self.scope,
+                                self.section,
+                                &self.search,
+                            ));
+                        }
                         self.selected = Some(index);
                         self.draft = note.text.clone();
                         self.section = Section::All;
@@ -4632,7 +4700,22 @@ impl Library {
                     && let Scope::Package(package) = scope
                     && let Some((index, note)) = loaded.notes.iter().enumerate().find(|(_, n)| n.owner.id() == Some(package) && n.is_manifest())
                     && about_row(ui, &note.about_label(loaded.has_problem(note)), about_open).clicked() && !dirty
-                { self.selected = Some(index); self.draft = note.text.clone(); self.section = Section::All; self.unreadable_kind = None; self.source = false; }
+                {
+                    if self.selected != Some(index) {
+                        self.trail.leave(place(
+                            loaded,
+                            self.selected,
+                            self.scope,
+                            self.section,
+                            &self.search,
+                        ));
+                    }
+                    self.selected = Some(index);
+                    self.draft = note.text.clone();
+                    self.section = Section::All;
+                    self.unreadable_kind = None;
+                    self.source = false;
+                }
                 if self.section == Section::Creatures || searching {
                     let notes = &loaded.notes;
                     let facets = loaded.facets();
@@ -4791,6 +4874,11 @@ impl Library {
             self.section = Section::All;
         }
         if let Some(i) = select {
+            // Round 26 SF1, SB1: a list click leaves the open entry as a link does, so Back
+            // returns to it and Forward ends.
+            if self.selected != Some(i) {
+                self.trail.leave(self.here());
+            }
             self.selected = Some(i);
             self.draft = self.loaded.as_ref().unwrap().notes[i].text.clone();
             self.error = None;
@@ -5230,7 +5318,7 @@ impl Library {
                     .or(self
                         .copied_package
                         .is_some()
-                        .then_some("Register it as a new package below."))
+                        .then_some("This folder is a copy."))
                     .or(self
                         .path
                         .trim()
@@ -5749,9 +5837,10 @@ impl Library {
                                 let l = self.loaded.as_mut().unwrap();
                                 if !self.new_not_used
                                     && used.is_ok()
-                                    && let Some(uses) = &mut l.uses
+                                    && let (Some(uses), Some(chosen)) = (&mut l.uses, &mut l.chosen)
                                 {
                                     uses.insert(entry.id);
+                                    chosen.insert(entry.id);
                                 }
                                 let created_path = path.clone();
                                 let created_owner = owner.id();
@@ -5804,14 +5893,13 @@ impl Library {
 
     /// The open entry, as Back or Forward returns to it.
     fn here(&self) -> Option<Place> {
-        let current = self.loaded.as_ref()?.notes.get(self.selected?)?;
-        Some(Place {
-            owner: current.owner.id(),
-            path: current.path.clone(),
-            scope: self.scope,
-            section: self.section,
-            search: self.search.clone(),
-        })
+        place(
+            self.loaded.as_ref()?,
+            self.selected,
+            self.scope,
+            self.section,
+            &self.search,
+        )
     }
 
     fn go(&mut self, step: Step) {
@@ -6122,13 +6210,20 @@ impl Library {
                 "Undo remove",
             )
             && let Some((_, _, draft)) = self.discarded.take()
-            && let Some(LetGo { note, used, .. }) = self.discarded_note.take()
+            && let Some(LetGo {
+                note, used, chosen, ..
+            }) = self.discarded_note.take()
             && let Some(loaded) = self.loaded.as_mut()
         {
             // The reload after Remove entry and lose draft left the entry out of what this campaign uses and
             // counted the entries that need it. Undo gives back both with the draft.
             if used && let (Some(uses), Some(entry)) = (loaded.uses.as_mut(), note.entry.as_ref()) {
                 uses.insert(entry.id);
+            }
+            if chosen
+                && let (Some(set), Some(entry)) = (loaded.chosen.as_mut(), note.entry.as_ref())
+            {
+                set.insert(entry.id);
             }
             self.selected = Some(loaded.notes.len());
             loaded.notes.push(note);
@@ -6262,6 +6357,7 @@ impl Library {
             .is_some_and(|change| change.fault.is_some());
         let about = note.entry.as_ref().is_some_and(|e| e.kind == "package");
         let mut use_every = None;
+        let mut every_chosen = false;
         let package_word = match &note.owner {
             Owner::Package(module) if stopped_reading => {
                 format!("{} · Cannot be read", module.name)
@@ -6281,15 +6377,15 @@ impl Library {
                             })
                     })
                     .collect();
-                let used = entries
+                // `chosen` counts only the DM's own choices, as Campaign's package row does;
+                // the entries those choices need are `still needed` (round 26 FC2, FD4).
+                let chosen = entries.iter().filter(|n| loaded.chose(n)).count();
+                let needed = entries
                     .iter()
-                    .filter(|n| loaded.in_scope(n, Scope::Uses))
+                    .filter(|n| !loaded.chose(n) && loaded.in_scope(n, Scope::Uses))
                     .count();
-                if used == entries.len() {
-                    "All entries chosen".into()
-                } else {
-                    format!("{used} of {} entries chosen", entries.len())
-                }
+                every_chosen = chosen == entries.len();
+                chosen_count(chosen, needed, entries.len())
             }
             Owner::Package(module)
                 if note.error.as_deref() == Some(crate::content_workspace::DELETED_MANIFEST) =>
@@ -6444,9 +6540,7 @@ impl Library {
         // path to a second row: the title keeps one place for chosen and not-chosen entries.
         let choose = match &note.owner {
             Owner::Package(_)
-                if about
-                    && campaigns.active_campaign().is_some()
-                    && package_word != "All entries chosen" =>
+                if about && campaigns.active_campaign().is_some() && !every_chosen =>
             {
                 Some("Choose every entry")
             }
@@ -11017,7 +11111,7 @@ mod tests {
             assert_eq!(fault.path, path, "SD1-fault-names-the-file");
             assert_eq!(
                 bad.error.as_deref(),
-                Some("Text format cannot be read"),
+                Some("Not a text file"),
                 "SD1-plain-cause: {path}"
             );
             assert!(bad.text.is_empty() && bad.entry.is_none());
@@ -11029,8 +11123,7 @@ mod tests {
                 .unwrap();
             // Round 24 AE1, FE2: the cause follows the error mark, as the reader marks it.
             assert!(
-                loaded.subtitles()[at]
-                    .starts_with(&format!("{} Text format cannot be read", icons::ERROR)),
+                loaded.subtitles()[at].starts_with(&format!("{} Not a text file", icons::ERROR)),
                 "iter21-E-FD2-row, iter-24-L-AE1: {path}: {}",
                 loaded.subtitles()[at]
             );
@@ -11063,7 +11156,7 @@ mod tests {
                 broken
                     .error
                     .as_deref()
-                    .is_some_and(|e| e != "Text format cannot be read")
+                    .is_some_and(|e| e != "Not a text file")
             );
         }
         for (owner, path) in [(module.id, "Wolf.md"), (campaign.id, "Notes/Rule.md")] {
