@@ -2512,12 +2512,19 @@ impl Lookup {
         let (reader, campaign) = (&mut self.reader, self.campaign.as_ref());
         // The reader's results and their Undo sit in Lookup's footer, pinned below the reader,
         // so a result never moves the kind line, `Add to fight` or the text (round 26 FJ3).
-        let lines = reader.footer_lines(current, &index, campaign, None);
+        let lines = world::with_lines(
+            reader.footer_lines(current, &index, campaign, None),
+            crate::trackers::history::footer_lines(trackers, current.entry.id),
+        );
         let (pressed, bottom) = world::draw_footer(ui, "lookup_footer", &lines);
-        if let Some(act) = pressed
-            && let Some(campaign) = campaign
-        {
-            nav = nav.take().or(reader.footer_act(act, current, campaign));
+        match pressed {
+            Some(world::FooterAct::Trackers) => trackers.undo_remove(),
+            Some(act) => {
+                if let Some(campaign) = campaign {
+                    nav = nav.take().or(reader.footer_act(act, current, campaign));
+                }
+            }
+            None => {}
         }
         egui::ScrollArea::vertical()
             .max_height((bottom - ui.cursor().top()).max(0.0))
@@ -2527,7 +2534,7 @@ impl Lookup {
                 // The results list above sets its own row spacing. The reader keeps the app's,
                 // so an entry reads the same whether a search or a link opened it.
                 ui.spacing_mut().item_spacing.y = ui.ctx().style().spacing.item_spacing.y;
-                let read = reader.read(ui, current, &index, campaign);
+                let read = reader.read_with(ui, current, &index, campaign, Some(trackers));
                 nav = nav.take().or(read);
             });
         if let Some(nav) = nav {

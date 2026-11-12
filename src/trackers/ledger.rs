@@ -149,6 +149,10 @@ pub enum Op {
     Append(Vec<Entry>),
     /// These entries, exactly as they were read, leave the list.
     Remove(Vec<Entry>),
+    /// Entries that a `Remove` took go back, each after the entry it followed then, as that
+    /// entry was read (`None`: at the top), so the acts made since keep their places. Its order
+    /// is the list's.
+    Restore(Vec<(Option<Entry>, Entry)>),
 }
 
 impl Ledger {
@@ -201,6 +205,39 @@ impl Ledger {
                             return Err("That entry changed on disk. Nothing was undone.".into());
                         }
                     }
+                }
+            }
+            Op::Restore(placed) => {
+                for (after, entry) in placed {
+                    match next.changes.iter().find(|old| old.id == entry.id) {
+                        // Back already: an earlier try put it there.
+                        Some(old) if old == entry => continue,
+                        Some(_) => {
+                            return Err("That entry changed on disk. Nothing was put back.".into());
+                        }
+                        None => {}
+                    }
+                    let at = match after {
+                        None => 0,
+                        Some(after) => {
+                            let at = next
+                                .changes
+                                .iter()
+                                .position(|old| old.id == after.id)
+                                .ok_or(
+                                    "The entry before it is no longer in Trackers.md. Nothing was put back.",
+                                )?;
+                            // The place is named by the whole entry before it, as it was read.
+                            if next.changes[at] != *after {
+                                return Err(
+                                    "The entry before it changed on disk. Nothing was put back."
+                                        .into(),
+                                );
+                            }
+                            at + 1
+                        }
+                    };
+                    next.changes.insert(at, entry.clone());
                 }
             }
         }
@@ -345,6 +382,27 @@ mod tests {
         let undone = once.apply(&Op::Remove(vec![entry.clone()])).unwrap();
         assert_eq!(undone, ledger);
         assert_eq!(undone.apply(&Op::Remove(vec![entry])).unwrap(), ledger);
+        // Remove's Undo puts entries back after the entry each followed, also after a newer
+        // act, and once only; it refuses when that entry or its own changed on disk.
+        let second = ledger.changes[1].clone();
+        let placed = vec![(Some(ledger.changes[0].clone()), second.clone())];
+        let removed = once.apply(&Op::Remove(vec![second.clone()])).unwrap();
+        let back = removed.apply(&Op::Restore(placed.clone())).unwrap();
+        assert_eq!(back, once);
+        assert_eq!(back.apply(&Op::Restore(placed.clone())).unwrap(), once);
+        let first = ledger.changes[0].clone();
+        let mut gone = removed.apply(&Op::Remove(vec![first])).unwrap();
+        assert!(gone.apply(&Op::Restore(placed.clone())).is_err());
+        gone = once.clone();
+        gone.changes[1].add = Some(9);
+        assert!(gone.apply(&Op::Restore(placed.clone())).is_err());
+        // The entry before it was edited on disk: the place it names is not the place read.
+        let mut moved = removed.clone();
+        moved.changes[0].add = Some(20);
+        assert_eq!(
+            moved.apply(&Op::Restore(placed)),
+            Err("The entry before it changed on disk. Nothing was put back.".into())
+        );
     }
 
     #[test]
