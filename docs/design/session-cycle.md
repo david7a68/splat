@@ -970,10 +970,13 @@ Seals
   left them out, because P6 changed the reader (`src/world.rs`) at the same time; they were built after P6 landed.
   The view keeps every problem at the end of its scroll area; the reader lists the note's own, also a value that
   an edit in Obsidian forced below its `min` (`Crowd Favor is -2, below its min of 0.`), which Splat never
-  changes. Under the note's text each tracker has a folded `<NAME> HISTORY N`, with its start value and its entries
-  in the ledger's order; a row with another stamp has `Remove` in its menu. The result, `Removed: <label>.` with
-  `Undo remove`, and why a Remove wrote nothing, are in the reader's footer, where the DM acted. The rows are
-  worked out when the ledger or a definition changes; a folded history does no work.
+  changes. Under the note's text in Lookup's reader each tracker and each day mark has a folded `<NAME> HISTORY
+  N`, a tracker's with its start value, and its entries in the ledger's order; a row with another stamp has
+  `Remove` in its menu. The result, `Removed: <label>.` with `Undo remove`, and why a Remove wrote nothing, are in
+  the reader's footer, where the DM acted, also when the note's file was moved at the click. The rows are worked
+  out when the ledger or a definition changes; a folded history does no work, and an open one draws only the
+  rows in view. `Undo remove` writes nothing when the entry before a removed one changed on disk. A row does not
+  name its session (a stated limit).
 - **In a fight** the DM marks the paper sheet. Ctrl+T still opens the view (three acts for each press), and
   the run offers nothing more. After the fight the DM enters the fight's marks; a mark that those raise
   shows then.

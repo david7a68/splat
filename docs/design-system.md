@@ -623,19 +623,22 @@ no note in play has, with its key, which are not counted, and a value below its 
 min of 0.`), which an edit in Obsidian can force and Splat never changes. With no house rule note in play the view says `No house rules are in play.` and `Turn one
 on in Campaign → Rules and runs.`; the rail then says nothing about trackers.
 
-**A tracker's history** is in the reader of its house rule note, after the note's text, while the note is in play
-(F4). First the note's own problems, as small error messages (a definition that cannot be used, a value below its
-`min`); then, for each tracker of the note, a collapsed section `<NAME> HISTORY N` (`section_with_id` with
-`group_heading_text`, N entries). Open, it shows `Start <value>` (or each name's start value) in `Small` muted, then
-one row for each entry in the ledger's order: its words (`Take seal: Keyring +1`, `Bell done.`, `Rival Track roll:
-Old Guard 4 · Takes a seal.`), the value it left as a right-aligned `Numeral` (`number`), and the row's menu
-(`row_menu`) with a quiet `Remove` only on an entry with another session's stamp; every row keeps the menu's place,
-so the values stand in one column. `Remove` takes the entry, the others of its press, and the entries of the notices
+**A tracker's history** is in the reader of its house rule note in Lookup (a house rule note is no World entry),
+after the note's text, while the note is in play (F4). First the note's own problems, as small error messages (a
+definition that cannot be used, a value below its `min`, a note in play whose file is gone or moved); then, for each
+tracker and each day mark of the note, a collapsed section `<NAME> HISTORY N` (`section_with_id` with
+`group_heading_text`, N entries). Open, a tracker's shows `Start <value>` (or each name's start value) in `Small`
+muted; then each section has one row for each entry in the ledger's order, one control high: its words (`Take
+seal: Keyring +1`, `Bell done.`, `End of month, Day 32 done.`), cut with `…` when they do not fit and whole on hover,
+the value it left as a right-aligned `Numeral` (`number`), and the row's menu (`row_menu`) with a quiet `Remove`
+only on an entry with another session's stamp; every row keeps the menu's place, so the values stand in one column.
+Only the rows inside the reader's clip are laid out and drawn. `Remove` takes the entry, the others of its press, and the entries of the notices
 it raised, and the reader's footer says `Removed: <label>.` (with `With it: …` for what went with it) and offers
 `Undo remove`, one step, as the Timeline's removal; it shows only while the note is in play. A refusal (the entry
 changed or is gone on disk, or a notice depends on it) and a failed save are the footer's reason line. When `Trackers.md` cannot be read the
 reader names it and shows no history and no value; when `Campaign.md` or a note in play cannot be read it says
-so. A note not in play, and a campaign with none, show nothing here. The rows are worked out when the ledger or a
+so. A note in play whose file is gone or moved keeps its problem and a click's refusal in its reader. A note not in
+play, and a campaign with none, show nothing here. The rows are worked out when the ledger or a
 definition changes, and a collapsed section draws nothing.
 
 A copy starts with the original name selected. Destination and dependency preview update with its fields. Copy
