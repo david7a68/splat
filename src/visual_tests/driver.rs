@@ -2661,6 +2661,13 @@ impl<'a> Driver<'a> {
             state,
             &window,
         ));
+        self.outcome.violations.extend(ergonomics::wide_help(
+            &self.harness.ctx,
+            &self.harness.output().shapes,
+            self.scenario,
+            state,
+            &window,
+        ));
         self.outcome.violations.extend(ergonomics::cut_text(
             &self.harness.output().shapes,
             &horizontal_regions,
