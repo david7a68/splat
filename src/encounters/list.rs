@@ -814,8 +814,7 @@ pub(super) fn history_list(
                         if history_summary(ui, read.summary, blocked.filter(|_| !here), not_last) {
                             *action = Some(ListAction::ContinueFight(run.path.clone()));
                         }
-                        // The row's own gap above it is the clean edge: the line above ends
-                        // there, so none of its letters show cut at the list's top.
+                        // The top of the row's own gap above it: the line above ends there.
                         opened_top = Some(top - ui.spacing().item_spacing.y);
                     }
                 }

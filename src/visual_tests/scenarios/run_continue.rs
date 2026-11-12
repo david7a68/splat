@@ -176,10 +176,9 @@ fn history_edges(d: &mut Driver<'_>) {
             let (mut cut, mut above_log) = (Vec::new(), f32::MIN);
             d.each_painted_text(|text, clip| {
                 let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
-                let ink = text.visual_bounding_rect();
                 if (clip.top() - list.top()).abs() < 0.5
-                    && ink.top() < list.top() - 0.5
-                    && ink.bottom() > list.top() + 0.5
+                    && rect.top() < list.top() - 0.5
+                    && rect.bottom() > list.top() + 0.5
                 {
                     cut.push(text.galley.job.text.clone());
                 }

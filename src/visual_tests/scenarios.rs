@@ -15974,6 +15974,10 @@ pub mod encounter_history {
             "Reading History changes no story and leaves the live-run slot free",
         );
         d.state("ended-run-open", Sizes::All);
+        // The opened run stays at the list's top; the DM scrolls up to In progress.
+        if let Some(at) = d.place_of("Read-only") {
+            d.scroll_up_at(at.center(), 10);
+        }
         resume_run(d, RUN);
         let live = d
             .app_mut()

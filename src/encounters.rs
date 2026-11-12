@@ -3030,7 +3030,7 @@ impl Encounters {
     /// list follows the row. `list.inner` is the row's clean top edge on screen.
     fn keep_history_run(
         &mut self,
-        ctx: &egui::Context,
+        ui: &egui::Ui,
         list: &egui::scroll_area::ScrollAreaOutput<Option<f32>>,
     ) {
         let offset = list.state.offset.y;
@@ -3045,12 +3045,15 @@ impl Encounters {
         let Some(top) = list.inner.filter(|_| follow) else {
             return;
         };
-        let want = (top - list.inner_rect.top() + offset).clamp(0.0, most);
+        // The list paints `clip_rect_margin` above its top; the row's gap starts there, so no
+        // letter of the line above shows cut (X37).
+        let margin = ui.visuals().clip_rect_margin;
+        let want = (top + margin - list.inner_rect.top() + offset).clamp(0.0, most);
         if (want - offset).abs() > 0.5 {
             let mut state = list.state;
             state.offset.y = want;
-            state.store(ctx, list.id);
-            ctx.request_repaint();
+            state.store(ui.ctx(), list.id);
+            ui.ctx().request_repaint();
         }
         self.history_kept = Some(want);
     }
@@ -4784,7 +4787,7 @@ impl Encounters {
                     &mut action,
                 )
             });
-        self.keep_history_run(ui.ctx(), &list);
+        self.keep_history_run(ui, &list);
         let Some(action) = action else {
             return;
         };

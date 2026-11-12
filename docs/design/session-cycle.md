@@ -534,7 +534,7 @@ Case A, the plan at 330 px
 |---|---|
 | The XP, every level and the budget table are known | The words above |
 | A creature has no XP and no CR; a level is not known; there are no sheets; the rules have no table; there is no creature against the party | Nothing. The line is as today |
-| A creature's XP or a character's level is not known, and the party and the table are known (by the lead's ruling after app round 1, W1-D2) | The summary is as today. The opened row's line says why, in `muted`: `Read encounter · XP not known: Nameless Thing`, or `Level not known: <name>`; with more names, the first and `and 2 more`. The names are in `Scale::weigh`'s typed answer (`Difficulty::missing`) |
+| A creature's XP or a character's level is not known, and the party and the table are known (by the lead's ruling after app round 1, W1-D2) | The summary is as today. The opened row's line says why, in `muted`: `Read encounter · XP not known: Nameless Thing`, or `Level not known: <name>`; with more names, the first and `and 2 more`. The names are in `Scale::weigh`'s typed answer (`Difficulty::missing`). The encounter editor, where the DM can repair the cause, says it too (by the lead's ruling after app round 2, X2): `ROSTER 6 · XP not known: Nameless Thing`, and in the tab row below 760 px where the word would be. Without room the names shorten from their end and go only when no letter fits |
 | Run open | The open fight's plan row shows its status link, not a word. Arrivals shows the live word |
 
 **What the file stores.** Nothing. **Undo.** None is needed. **Keyboard.** Nothing takes focus.
