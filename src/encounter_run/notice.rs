@@ -752,6 +752,17 @@ mod tests {
             reminder.right() < before.left(),
             "{reminder:?} clear of {before:?}"
         );
+        // Narrower, the whole words would need Undo's room: they are the count, and Undo and
+        // its target keep their place.
+        let narrow = header(begun(), 360.0);
+        let before_narrow = undo(&narrow).expect("Undo with its target");
+        let mut tight = begun();
+        tight.state.participants[0].conditions =
+            vec![Condition::read("Wis save DC 15 (Hold Person) on its turn")];
+        let harness = header(tight, 360.0);
+        assert!(!painted(&harness, "Wis save DC 15 (Hold Person)"));
+        assert!(painted(&harness, "1"), "the count");
+        assert_eq!(undo(&harness), Some(before_narrow));
         three.state.participants[0].conditions = vec![
             Condition::read("Wis save DC 15 (Hold Person) on its turn"),
             Condition::read("Wis save DC 15 (Hold Person) ends 10 rounds"),
