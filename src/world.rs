@@ -1885,6 +1885,9 @@ pub struct Reader {
     showing: Option<Uuid>,
     status: String,
     status_editing: bool,
+    /// `Change` on Status was pressed: the field takes the keyboard, its words selected, once
+    /// the frame of the press is over.
+    status_select: bool,
     status_drafts: HashMap<Uuid, String>,
     /// Edit forms by entry. A form with changes stays while the DM reads other entries.
     edits: HashMap<Uuid, edit::EditDraft>,
@@ -2314,6 +2317,7 @@ impl Reader {
                 .remove(&item.entry.id)
                 .unwrap_or_else(|| status(&item.entry).to_owned());
             self.status_editing = self.status != status(&item.entry);
+            self.status_select = false;
             // Only a form with changes is worth keeping. It opens again where it was left.
             self.edits.retain(|_, draft| draft.dirty());
             self.other_type.clear();
@@ -3117,6 +3121,10 @@ impl Reader {
         campaign: &Campaign,
         editing: bool,
     ) -> Option<Go> {
+        // With no field open, no scope: an empty one still takes an item gap.
+        if !self.log_fields.contains_key(&(campaign.id, item.entry.id)) {
+            return None;
+        }
         design::reader::measure(ui, |ui| self.log_field_in(ui, item, campaign, editing))
     }
 
@@ -3128,9 +3136,6 @@ impl Reader {
         editing: bool,
     ) -> Option<Go> {
         let key = (campaign.id, item.entry.id);
-        if !self.log_fields.contains_key(&key) {
-            return None;
-        }
         if editing || self.edited_elsewhere.contains(&item.entry.id) {
             design::message(ui, Tone::Info, "Save or discard your edit first.");
             return None;
@@ -4186,7 +4191,6 @@ impl Reader {
         // Status and its Change show in both readers, World's and Lookup's: one act, one write
         // and one Undo wherever the DM reads the entry.
         let value_width = self.relationship_value_width(ui, item, index);
-        let mut opened = false;
         if !self.status_editing
             && (!status(&item.entry).trim().is_empty() || status_unread(&item.entry))
         {
@@ -4212,15 +4216,17 @@ impl Reader {
             );
             if changed {
                 self.status_editing = true;
-                opened = true;
+                self.status_select = true;
             }
         }
         if self.status_editing {
             let response = design::text_field(ui, "Status", &mut self.status, None, None);
             // Change puts the keyboard in the field with its words selected, so the DM types
-            // the new value at once.
-            if opened {
+            // the new value at once. A pass that still holds Change's click takes the keyboard
+            // from a field that was not clicked, so the request waits for a pass with no click.
+            if self.status_select {
                 design::focus_and_select(ui, response.id, &self.status);
+                self.status_select = ui.input(|input| input.pointer.any_click());
             }
             // While the field has the keyboard, Escape is the field's, not Lookup's.
             if response.has_focus() || response.lost_focus() {

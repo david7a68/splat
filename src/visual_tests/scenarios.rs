@@ -10563,7 +10563,10 @@ pub mod world {
         d.click(&format!("New NPC “{NPC}”"));
         d.settle();
         d.expect("Add to fight");
-        d.expect("NPC · alive · Campaign");
+        // Lookup shows a campaign NPC's status in its Status row, with Change, so the kind line
+        // names it once, as World's does.
+        d.expect("NPC · Campaign");
+        d.expect("Change Status");
         d.state("world-new-npc", Sizes::Default);
         d.click("Add to fight");
         d.type_into("Stat block", "Guard");
