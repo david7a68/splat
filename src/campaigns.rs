@@ -1315,9 +1315,15 @@ impl Campaigns {
                     // moves nothing; quiet Cancel starts that line when there is something to
                     // cancel.
                     ui.horizontal(|ui| {
-                        ui.set_min_height(Type::Small.line());
+                        // As tall as Cancel, so Cancel coming moves nothing.
+                        ui.set_min_height(Density::Read.control());
                         if !missing || self.remote.is_some() {
-                            if Action::quiet("Cancel").line_start().show(ui).clicked() {
+                            if Action::quiet("Cancel")
+                                .density(Density::Read)
+                                .line_start()
+                                .show(ui)
+                                .clicked()
+                            {
                                 self.clear_form();
                             }
                             ui.add_space(design::L - ui.spacing().item_spacing.x);

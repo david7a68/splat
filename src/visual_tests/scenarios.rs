@@ -290,20 +290,27 @@ fn creation_row(
     field: &str,
     action: &str,
     reason: &str,
-) -> Option<(egui::Rect, egui::Rect, egui::Rect)> {
+) -> Result<(egui::Rect, egui::Rect, egui::Rect), String> {
     let field = d
         .nodes()
         .into_iter()
-        .find(|node| node.name == field && node.role == egui::accesskit::Role::TextInput)?
+        .find(|node| node.name == field && node.role == egui::accesskit::Role::TextInput)
+        .ok_or(format!("no text field {field:?}"))?
         .rect;
-    let action = d.place_of(action)?;
-    let reason = d.painted_rect_in(reason, egui::Rect::EVERYTHING)?;
-    ((action.center().y - field.center().y).abs() <= 1.0
+    let action = d.place_of(action).ok_or(format!("no {action:?}"))?;
+    let reason = d
+        .painted_rect_in(reason, egui::Rect::EVERYTHING)
+        .ok_or(format!("no reason {reason:?}"))?;
+    if (action.center().y - field.center().y).abs() <= 1.0
         && action.left() > field.right()
         && reason.left() >= field.left() - 1.0
         && reason.right() <= action.left()
-        && reason.top() >= field.bottom() - 0.5)
-        .then_some((field, action, reason))
+        && reason.top() >= field.bottom() - 0.5
+    {
+        Ok((field, action, reason))
+    } else {
+        Err(format!("field {field:?}, action {action:?}, reason {reason:?}"))
+    }
 }
 
 /// Round 26: the pane footer whose words hold `words`: the smallest named group that holds them.
@@ -1366,7 +1373,7 @@ pub mod library_author {
             });
             d.observe(
                 "iter-26-C-FB6-library",
-                rows.iter().all(Option::is_some),
+                rows.iter().all(Result::is_ok),
                 format!("At {size:?}, Add folder and Create package on their field's line, reasons below: {rows:?}"),
             );
         }
@@ -1400,7 +1407,7 @@ pub mod library_author {
             });
             d.observe(
                 "iter-26-C-FB6-entry",
-                row.is_some(),
+                row.is_ok(),
                 format!("At {size:?}, Create entry on the Folder field's line, its reason below: {row:?}"),
             );
         }
@@ -2980,6 +2987,10 @@ pub mod campaign_content {
         const UNDO_A: &str = "Undo discard of Broken.md";
         const UNDO_B: &str = "Undo discard of Cracked.md";
         const UNDO_P: &str = "Undo discard of Campaign packages";
+        // At 1920, so the package rows are in view above the footer: at 960 the driver's click
+        // on a row under the footer would reach the footer's Undo instead.
+        let base = d.window_size();
+        d.set_base(LARGE);
         let a_draft = draft(d, A_PATH);
         let before = b_top(d);
         d.click_below(A_MESSAGE, "Discard");
@@ -3047,6 +3058,11 @@ pub mod campaign_content {
             live_before && ended,
             format!("Three Undos before the round trip {live_before}; all ended after it {ended}"),
         );
+        // The steps after these start, as before, with a live package-selection discard.
+        d.click_starting(MODULE_ROW);
+        d.click(&format!("Use {UNSELECTED_ENTRY}"));
+        d.click_below(SAVE_SELECTIONS, DISCARD_SELECTION);
+        d.set_base(base);
         let _ = std::fs::remove_file(d.root.join(SECOND));
         d.click(RELOAD);
         d.settle();
@@ -4651,10 +4667,12 @@ pub mod settings {
             d.wait_for_text("Campaign name");
             assert_eq!(d.field_text("Campaign name").as_deref(), Some("Salt Road"));
             for _ in 0..4 {
-                if d.nodes()
-                    .iter()
-                    .any(|node| node.name == "Add campaign" && node.fully_in_view())
-                {
+                let nodes = d.nodes();
+                if ["Add campaign", "Cancel"].iter().all(|name| {
+                    nodes
+                        .iter()
+                        .any(|node| node.name == *name && node.fully_in_view())
+                }) {
                     break;
                 }
                 let folder = d.row_of("Folder");

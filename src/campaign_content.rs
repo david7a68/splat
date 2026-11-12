@@ -1020,7 +1020,16 @@ impl CampaignContent {
                         .package_warnings(ui, campaigns, active, warnings.unavailable);
                 });
             }
-            footer.show(ui)
+            // The footer is drawn on a layer above the page. The package columns inside the
+            // page are egui panels, whose widgets are hit-tested by the panel's own clip, so the
+            // entry list's drag area reaches under the footer and would take presses meant for
+            // the footer's first row (review round 26, two discards).
+            let layer = egui::LayerId::new(
+                egui::Order::Middle,
+                egui::Id::new(("campaign_page_footer_layer", active.id)),
+            );
+            ui.scope_builder(egui::UiBuilder::new().layer_id(layer), |ui| footer.show(ui))
+                .inner
         };
         let this = me.into_inner();
         this.press_result(press.take());

@@ -5292,6 +5292,8 @@ impl Library {
                 // Round 26 FB6: Add folder follows the field on its line; the reason is below.
                 let add = ui
                     .horizontal(|ui| {
+                    // As tall as the buttons, so the field and its actions share one centre.
+                    ui.set_min_height(Density::Scan.control());
                     design::text_input(
                         ui,
                         "Package folder",
@@ -5514,10 +5516,12 @@ impl Library {
                     // The reason sits on its own line below, kept when empty; quiet Clear starts
                     // it when there is something to clear.
                     ui.horizontal(|ui| {
-                        ui.set_min_height(Type::Small.line());
+                        // As tall as Clear, so Clear coming moves nothing.
+                        ui.set_min_height(Density::Read.control());
                         if (!self.name.is_empty() || self.package_folder_changed)
                             && Action::quiet("Clear")
                                 .name("Clear the new package fields")
+                                .density(Density::Read)
                                 .line_start()
                                 .show(ui)
                                 .clicked()
@@ -5804,8 +5808,13 @@ impl Library {
                     });
                 });
                 ui.horizontal(|ui| {
-                    ui.set_min_height(Type::Small.line());
-                    if Action::quiet("Cancel").line_start().show(ui).clicked() {
+                    ui.set_min_height(Density::Read.control());
+                    if Action::quiet("Cancel")
+                        .density(Density::Read)
+                        .line_start()
+                        .show(ui)
+                        .clicked()
+                    {
                         self.new_form = false;
                     }
                     ui.add_space(design::L - ui.spacing().item_spacing.x);
