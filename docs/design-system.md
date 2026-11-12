@@ -2006,8 +2006,11 @@ A Travel event's checks are lines of the event: `- Checks table: road` (no key w
 them keeps each as one string. A check's identity is its offset in hours, never a day's name. A fight begun from a
 plan line with that mark carries `journey=<event> at=<hours>` in its `%% splat … %%` line: it follows the
 journey, and the clock starts it at the check while the journey still covers it (W5-D1). Its planned row ends
-its second line with `· Day 2 of <journey>`; the journey's name goes, then the day, so the row keeps its lines. A removed event takes the
-blank line before it, so a removal gives back the file as it was.
+its second line with `· Day 2 of <journey>`; the journey's name goes, then the day, so the row keeps its lines. The mark is one whole
+comment; the words before and after it are the line's own. The clock places the fight while it is a fight and its
+journey covers the check (`checks::covers`), and the clock after the journey is the later of the journey's end and
+each such fight's end. A road fight's removal takes the line break its insertion wrote, so its Undo gives back the
+file to the byte; every other removal is as before.
 
 Version 2 stores event lists and day IDs in comments below headings. Every write renumbers days to the
 displayed clock. File items use Fight and Major event; accept Encounter and Event in any case, with or without

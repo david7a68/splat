@@ -1534,15 +1534,22 @@ first.` So a wrong `Roll for encounters` can go at any time.
 - **A result that links an encounter or a group offers `Plan “<name>”`** for each, at most three. One click
   writes the link under `## Plan for tonight` as the first line still to come. So the fight is the next plan
   row and has the primary `Start fight`. The line ends with a mark that no reader shows, the journey and the check as read
-  (`<!-- splat:check journey=t-5c1d2e3f4a at=24 sum=1a2b3c4d -->`: the event, the offset, and a short sum of the
-  words), and the row's second line says the day the fight is played on, `… · Day 2 of Road to the ford`; as the
+  (`<!-- splat:check journey=t-5c1d2e3f4a at=24 sum=1a2b3c4d5e6f7a8b -->`: the event, the offset, and 64 bits of
+  the words' SHA-256). The mark is one whole comment and nothing else: every reader and writer of the line
+  keeps the words before and after it byte for byte, and half a comment is no mark. And the row's second line says the day the fight is played on, `… · Day 2 of Road to the ford`; as the
   rating word does, the journey's name goes, then the day, so the row keeps its lines. **When that fight
   begins, its event goes in the journey at that check** (by the lead's ruling after app round 2, W5-D1): it
   follows the journey in the list, the clock starts it at the check (`Day 4, 08:00`), and the journey keeps its
-  length and its checks. Its run's `Undo: begin combat` takes the event out, so the file is as it was. When the
-  journey or the check changed or went since (rolled again, cleared, edited in Obsidian, a shorter journey, a
-  journey of another session), the fight goes after the session's last event as any fight does, and the run's
-  notice line says `Its travel check changed, so this fight follows the last event.` A fight planned any other
+  length and its checks. Its run's `Undo: begin combat` takes the event out, so the file is as it was, also
+  after a restart. `Begin combat` decides from the note and `Timeline.md` as they are on disk at that moment
+  and from the Timeline as Splat holds it, saves the fight at once, and checks again after that save's merge.
+  When the journey or the check changed or went (rolled again, cleared, edited in Obsidian, a shorter
+  journey), the fight goes after the session's last event as any fight does, and the run's notice line says
+  `Its travel check changed, so this fight follows the last event.`; for a line carried over or copied to
+  another session's note, `Its journey is in an earlier session, so this fight follows the last event.`; when
+  a file cannot be read, `Splat cannot read its travel check now, so this fight follows the last event.` One
+  rule (`checks::covers`) says whether a journey covers a check, for the block, for Begin and for the clock: a
+  journey made zero long covers none. A fight planned any other
   way has no mark and is as before. Then the line says `In the plan`, while the plan has a row still to
   come for that
   link: Splat reads this by the plan's own rule, which takes one played event for each link
@@ -1566,7 +1573,9 @@ first.` So a wrong `Roll for encounters` can go at any time.
 journey`. `Clear`. `Plan “Wolf Pack”`. `In the plan`. `Outside this journey now`. Results: `Encounter checks
 added to this journey.` `Undo checks`; `2 travel checks rolled.` `Undo roll`; `Check cleared.` `Undo clear`;
 `“Wolf Pack” is in tonight’s plan.` `Undo plan line`. The planned row: `· Day 2 of Road to the ford`. The run's notice
-when the check changed: `Its travel check changed, so this fight follows the last event.`
+when the check changed: `Its travel check changed, so this fight follows the last event.`; carried over: `Its
+journey is in an earlier session, so this fight follows the last event.`; a file not read: `Splat cannot read its
+travel check now, so this fight follows the last event.`
 
 | State | What shows |
 |---|---|
@@ -1592,8 +1601,12 @@ An older Splat keeps lines that it does not know and writes them back (`:413-423
 
 - **A fight played at a check** keeps the journey and the offset on its own line, never a day: `%% splat
   session=… journey=t-5c1d2e3f4a at=24 %%`. The clock reads its start from the journey's start and the
-  offset, while the journey is before it in the list and still covers that offset; else it follows the event
-  before it.
+  offset, while it is a fight, the journey is before it in the list and still covers that offset; any other
+  kind, or a fight its journey no longer covers, follows the event before it. The clock after the journey is the
+  later of the journey's end and each such fight's end, so a long fight carries the day on. The fight came in
+  after the journey's last line as a line break and its own lines; its removal takes that line break too, so its
+  Undo gives back the file to the byte with or without blank lines between events. Every other removal is as
+  before.
 - **What Splat reads back:** the table's key; from each check line, the offset in its label, the number
   before `·` and the words after it. It writes each value in quotes, so that an older Splat, which keeps a
   line that it does not know as a YAML value (`src/timeline/formats.rs:86-89`), keeps it as one string, also
