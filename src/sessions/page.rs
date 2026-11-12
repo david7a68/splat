@@ -594,8 +594,10 @@ fn prose(section: &str) -> Option<String> {
 
 /// What the Last time line reads of the last session: the prose under its `What happened`,
 /// then its processed recap, the one source that carry-over reads too. When neither holds
-/// words, the note's first written line, so the line still shows last week's words. That line
-/// is never the template's title and date, the recap of the session before it, or its plan.
+/// words, the note's first written line, so the line still shows last week's words: also a
+/// line before any section. `body` comes without the note's own title and date
+/// (`without_own_heading`); the line is never a heading, the recap of the session before, or
+/// the plan.
 fn recap_preview(body: &str, processed: impl FnOnce() -> Option<String>) -> Option<String> {
     if let Some(words) = section_text(body, "What happened").and_then(|words| prose(&words)) {
         return Some(words);
@@ -613,7 +615,7 @@ fn recap_preview(body: &str, processed: impl FnOnce() -> Option<String>) -> Opti
             !line.starts_with('#')
                 && heading
                     .as_deref()
-                    .is_some_and(|name| name != "Recap of last time" && name != "Plan for tonight")
+                    .is_none_or(|name| name != "Recap of last time" && name != "Plan for tonight")
         })
         .find_map(|line| {
             let line = super::task_parts(line.trim()).map_or(line, |(_, words)| words);
@@ -3982,28 +3984,19 @@ impl Sessions {
         if self.draft.is_none() {
             return;
         }
-        let body = self.note_body();
         let index = reader_index(ui);
         let model = self.plan_model(index.as_deref(), plan);
-        let (body, embeds) = self.mark_embeds(&body, index.as_deref(), book);
-        let compact = compact_plan_for_reading(
-            &body,
-            plan.fights,
-            plan.groups,
-            &model.scene_lines(),
-            beside,
-        );
-        let summary = (!beside && *compact != *body)
-            .then(|| section_text(&compact, "Plan for tonight"))
-            .flatten();
-        let text = words_to_read(&compact, book);
+        let Some(prepared) = self.prepared_read(index.as_deref(), &model, plan, beside, book)
+        else {
+            return;
+        };
         egui::ScrollArea::vertical()
             .id_salt(("session_reader", self.selected))
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 ui.scope(|ui| {
                     ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
-                    if !has_written_text(&compact) {
+                    if !prepared.written {
                         ui.horizontal(|ui| {
                             ui.label(
                                 Type::Small
@@ -4015,14 +4008,12 @@ impl Sessions {
                                 self.focus_notes = true;
                             }
                         });
-                    } else if let Some(summary) = &summary
-                        && let Some((before, after)) = text.split_once(summary)
-                    {
-                        self.show_reader_with_embeds(ui, before, &embeds);
-                        ui.label(Type::Small.rich(ui, summary).color(colors().muted));
-                        self.show_reader_with_embeds(ui, after, &embeds);
                     } else {
-                        self.show_reader_with_embeds(ui, &text, &embeds);
+                        self.show_prepared(ui, &prepared, false);
+                        if let Some(summary) = &prepared.summary {
+                            ui.label(Type::Small.rich(ui, summary).color(colors().muted));
+                            self.show_prepared(ui, &prepared, true);
+                        }
                     }
                     self.world_changes(ui);
                 });
@@ -4270,12 +4261,13 @@ impl Sessions {
                     _ => label,
                 };
                 let source = self.carry_source(note, plan, book);
-                let what_happened = recap_preview(body, || match &source {
-                    Some(Ok(source)) if source.id == note.id => {
-                        source.processed().map(str::to_owned)
-                    }
-                    _ => carry::processed_recap(self.folder.as_deref()?, note.id),
-                });
+                let what_happened =
+                    recap_preview(&without_own_heading(body, note), || match &source {
+                        Some(Ok(source)) if source.id == note.id => {
+                            source.processed().map(str::to_owned)
+                        }
+                        _ => carry::processed_recap(self.folder.as_deref()?, note.id),
+                    });
                 LastTime {
                     id: note.id,
                     label,
@@ -7377,11 +7369,29 @@ mod tests {
         let template = "# Session 1: The Road\n\n2026-01-01, Emberfall\n\n## Recap of last time\n\nWe won.\n\n\
                         ## Plan for tonight\n\n- [ ] Meet [[Hobb]]\n\n## What happened\n\n## Open threads\n\n\
                         - [ ] The miller Hobb told the party about the toll.\n";
+        // The Last time line reads the note without its own title and date, as Read does.
+        let note = Note {
+            id: uuid::Uuid::nil(),
+            number: 1,
+            title: "The Road".into(),
+            date: "2026-01-01".into(),
+            path: PathBuf::from("Session 1.md"),
+            also: Vec::new(),
+        };
+        let preview = |text: &str| recap_preview(&without_own_heading(text, &note), none);
         assert_eq!(
-            recap_preview(template, none).as_deref(),
+            preview(template).as_deref(),
             Some("The miller Hobb told the party about the toll.")
         );
         assert_eq!(recap_preview(recap_only, none), None);
+        // Words before any section are written words too (review of PR 277, finding 4).
+        assert_eq!(
+            preview(
+                "# Session 1: The Road\n\n2026-01-01, Marches\n\nWe found the missing ferry.\n"
+            )
+            .as_deref(),
+            Some("We found the missing ferry.")
+        );
     }
 
     #[test]

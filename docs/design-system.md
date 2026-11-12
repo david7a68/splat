@@ -1537,10 +1537,12 @@ with empty boxes and the open threads, each below what its heading holds and nev
 what it added, with `Undo carry over`, which puts back the exact text and properties. The result belongs to
 its session: another session or page leaves it, and any other change of the note's text ends it. A refusal
 shows there in a warning. Read draws an embed of a session note's heading as that heading's words under a
-`Type::Small` muted `From` and a small link to the session; the embed that Carry over wrote follows its session
-by `carried_from` after a rename outside Obsidian, with a quiet `Update the link` and `Undo link`; a note or
-heading that is gone is a warning `small_message`, `The recap’s source is gone: <note> › <heading>.`, and the
-line stays in the note. An older session warns once and links the session being played, which the list marks
+`Type::Small` muted `From` and a small link to the session. Its target is resolved as every campaign link is
+(`ContentIndex::resolve_link`), with its folder when it has one: a target that two notes share stays a link,
+and so does an embed inside a callout or a list item. A target that names nothing, also after a rename outside
+Obsidian, is a warning `small_message`, `The recap’s source is gone: <target> › <heading>.`, and the line
+stays in the note; Splat never rewrites an embed, and the DM links again by hand. Read's words are prepared
+when the note's words, the content, the plan or the folder change, not on a quiet frame. An older session warns once and links the session being played, which the list marks
 Playing. The action says Return to the session being played. When the two session numbers match, the warning
 names both note files. Reading old notes changes neither the destination for new events nor runs: use the newest session
 unless the DM chooses another, and name that destination on Timeline before adding.

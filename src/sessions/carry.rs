@@ -472,62 +472,44 @@ pub(super) fn carry(text: &str, source: &Source) -> Option<(String, Offer)> {
 enum Outcome {
     /// What the act did, and its Undo, while the note's text is what the act left.
     Done {
-        place: Place,
         words: String,
-        /// `Undo carry over` or `Undo link`.
-        action: &'static str,
         undo: NoteUndo,
         /// The draft's revision when the Undo was last checked.
         seen: u64,
     },
     /// Why the act wrote nothing, until the note's text changes.
-    Refused {
-        place: Place,
-        words: String,
-        seen: u64,
-    },
+    Refused { words: String, seen: u64 },
 }
 
-impl Outcome {
-    fn place(&self) -> Place {
-        match self {
-            Self::Done { place, .. } | Self::Refused { place, .. } => *place,
-        }
-    }
-}
-
-/// Where the DM acted, so the result shows there.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Place {
-    /// `Carry over`, on the Last time line.
-    Line,
-    /// `Update the link`, in Read, under the embed.
-    Embed,
-}
-
-/// The results of carry-over acts, by the session note each act changed, and the embeds of
-/// session notes in the open note, as Read draws them.
+/// The results of carry-over acts, by the session note each act changed; Read's prepared words
+/// of the open note; and whether the selected session is prepared, as last worked out.
 #[derive(Default)]
 pub(super) struct Carries {
     results: BTreeMap<Uuid, Outcome>,
-    /// The embeds, for the draft's revision and the content they were read from. A folder
-    /// scan reads them again, as the notes they show can change.
-    embeds: Option<Embeds>,
+    /// Read's words, for what they were made from. A folder scan prepares them again, as the
+    /// notes that embeds show can change.
+    read: Option<(ReadKey, Arc<Prepared>)>,
+    /// How often a frame asked for Read's words, and how often they were made.
+    #[cfg(test)]
+    pub(super) read_counts: crate::test_support::Counts,
+    /// `preparing`'s answer, for the session, the current session, the open run's and the live
+    /// recording's sessions, and the number of the Timeline's events it was worked out for.
+    preparing: Option<(PreparingKey, bool)>,
 }
 
-/// The embeds of the open note, and Read's words with each embed line marked, with the
-/// draft's revision and the content's generation they were read for.
-type Embeds = ((u64, Option<u64>), Arc<Vec<EmbedLine>>, Option<Arc<str>>);
+type PreparingKey = (Uuid, Option<Uuid>, Option<Uuid>, Option<Uuid>, usize);
 
 impl Carries {
-    /// The folder was scanned: an embed's note can have changed or gone.
+    /// The folder was scanned: an embed's note can have changed or gone, and an event can have
+    /// moved to another session.
     pub(super) fn scanned(&mut self) {
-        self.embeds = None;
+        self.read = None;
+        self.preparing = None;
     }
 
     /// The note moved to a new file, and its Undo follows it.
     pub(super) fn moved(&mut self, from: &Path, to: &Path) {
-        self.embeds = None;
+        self.read = None;
         for outcome in self.results.values_mut() {
             if let Outcome::Done { undo, .. } = outcome {
                 undo.moved(from, to);
@@ -566,17 +548,27 @@ impl Carries {
 impl Sessions {
     /// Whether this session is being prepared: it is the session that new events go to, and it
     /// has no event, no run and no live recording. Carry-over is a prep act.
-    fn preparing(&self, session: Uuid, book: &Book) -> bool {
-        Some(session) == self.current()
-            && self
-                .open_run
-                .as_ref()
-                .is_none_or(|(_, run)| *run != session)
-            && self
-                .live
-                .as_ref()
-                .is_none_or(|live| live.session != session)
-            && !book.events.iter().any(|event| event.is_in(Some(session)))
+    /// The events are looked through only when their number changes, at a folder scan, or when
+    /// another of these inputs changes; not on a quiet frame.
+    fn preparing(&mut self, session: Uuid, book: &Book) -> bool {
+        let key = (
+            session,
+            self.current(),
+            self.open_run.as_ref().map(|(_, run)| *run),
+            self.live.as_ref().map(|live| live.session),
+            book.events.len(),
+        );
+        if let Some((seen, answer)) = self.carries.preparing
+            && seen == key
+        {
+            return answer;
+        }
+        let answer = key.1 == Some(session)
+            && key.2 != Some(session)
+            && key.3 != Some(session)
+            && !book.events.iter().any(|event| event.is_in(Some(session)));
+        self.carries.preparing = Some((key, answer));
+        answer
     }
 
     /// The session `Carry over` reads: the one this note carried from, once it did, or else
@@ -640,7 +632,9 @@ impl Sessions {
         } else {
             None
         };
+        // The result and its Undo are this note's: they show also when the last session is gone.
         let Some((_, Some(last))) = &self.last_time else {
+            self.carry_result(ui, session);
             return;
         };
         let full = format!(
@@ -715,7 +709,7 @@ impl Sessions {
         if carry {
             self.carry_over(session, id, plan, book);
         }
-        self.carry_result(ui, session, Place::Line);
+        self.carry_result(ui, session);
     }
 
     /// The act. It reads the last session again at the click, and writes nothing when what the
@@ -739,7 +733,6 @@ impl Sessions {
                 self.carries.results.insert(
                     session,
                     Outcome::Refused {
-                        place: Place::Line,
                         words: words.clone(),
                         seen,
                     },
@@ -753,14 +746,9 @@ impl Sessions {
                     now.name
                 );
                 self.last_time = None;
-                self.carries.results.insert(
-                    session,
-                    Outcome::Refused {
-                        place: Place::Line,
-                        words,
-                        seen,
-                    },
-                );
+                self.carries
+                    .results
+                    .insert(session, Outcome::Refused { words, seen });
                 return;
             }
             (None, _) => return,
@@ -777,14 +765,11 @@ impl Sessions {
         let seen = draft.revision();
         let outcome = match result {
             Ok(undo) | Err(ActFault::NotSaved(_, undo)) => Outcome::Done {
-                place: Place::Line,
                 words: offer.map(|offer| offer.result(&source)).unwrap_or_default(),
-                action: "Undo carry over",
                 undo,
                 seen,
             },
             Err(fault) => Outcome::Refused {
-                place: Place::Line,
                 words: fault.words().to_owned(),
                 seen,
             },
@@ -794,29 +779,19 @@ impl Sessions {
 
     /// The result of this session's act, where the DM acted: its words and its Undo, or why it
     /// wrote nothing. A save that failed says so, and the Undo still works.
-    fn carry_result(&mut self, ui: &mut egui::Ui, session: Uuid, place: Place) {
-        let undo = match self
-            .carries
-            .results
-            .get(&session)
-            .filter(|outcome| outcome.place() == place)
-        {
+    fn carry_result(&mut self, ui: &mut egui::Ui, session: Uuid) {
+        let undo = match self.carries.results.get(&session) {
             Some(Outcome::Refused { words, .. }) => {
                 design::message(ui, Tone::Warning, words);
                 false
             }
-            Some(Outcome::Done {
-                words,
-                action,
-                undo,
-                ..
-            }) => {
+            Some(Outcome::Done { words, undo, .. }) => {
                 let (tone, words) = if undo.written() {
                     (Tone::Success, words.as_str())
                 } else {
                     (Tone::Warning, crate::sessions::NOT_SAVED)
                 };
-                design::undo_message(ui, tone, words, action)
+                design::undo_message(ui, tone, words, "Undo carry over")
             }
             None => false,
         };
@@ -833,7 +808,6 @@ impl Sessions {
             self.carries.results.insert(
                 session,
                 Outcome::Refused {
-                    place,
                     words: fault.words().to_owned(),
                     seen,
                 },
@@ -848,135 +822,180 @@ const EMBED_MARK: char = '\u{E000}';
 /// One line of the open note that is an embed of a session note's heading, as Read draws it.
 #[derive(Clone, Debug)]
 pub(super) struct EmbedLine {
-    /// The line as the note holds it, and its number in the note's words.
+    /// The line as the note holds it.
     line: String,
-    at: usize,
     shown: Shown,
 }
 
 #[derive(Clone, Debug)]
 enum Shown {
-    /// The heading's words, under `From <session>`, which links that session. `update` is the
-    /// line with the note's new name, for the embed that Carry over wrote when its note was
-    /// renamed outside Obsidian.
+    /// The heading's words, ready to read, under `From <session>`, which links that session.
     Words {
         from: Uuid,
         label: String,
         words: String,
-        update: Option<String>,
     },
     /// The note or its heading is gone. The line stays in the note.
     Gone(String),
 }
 
-/// The note's name and heading of a line that is only an embed of a note's heading.
+/// The target (a note's name or path) and the heading of a line that is only an embed of a
+/// note's heading. An embed inside a callout or a list item is not such a line.
 fn embed_target(line: &str) -> Option<(&str, &str)> {
     let inner = line.trim().strip_prefix("![[")?.strip_suffix("]]")?;
     let inner = inner.split('|').next()?;
     let (name, heading) = inner.split_once('#')?;
-    let name = name.rsplit('/').next()?.trim();
-    let name = name.strip_suffix(".md").unwrap_or(name);
-    let heading = heading.trim();
+    let (name, heading) = (name.trim(), heading.trim());
     (!name.is_empty() && !heading.is_empty() && !heading.starts_with('^'))
         .then_some((name, heading))
 }
 
+/// One part of Read's words: Markdown, or the embed with this place in the list.
+#[derive(Debug)]
+enum Chunk {
+    Words(String),
+    Embed(usize),
+}
+
+/// Read's words of the open note, prepared when the note's words, the content, the plan or the
+/// folder change, never on a quiet frame.
+#[derive(Debug)]
+pub(super) struct Prepared {
+    /// The note has written words; otherwise Read says `Nothing written yet.`
+    pub(super) written: bool,
+    /// The plan's count line, in the tab layout, between the two parts.
+    pub(super) summary: Option<String>,
+    before: Vec<Chunk>,
+    after: Vec<Chunk>,
+    embeds: Vec<EmbedLine>,
+}
+
+/// What a prepared Read was made from: the draft's revision, the content's generation, the
+/// plan model it used, and whether the plan stands beside the note.
+pub(super) type ReadKey = (u64, Option<u64>, usize, bool);
+
+/// The parts of `text`, split at its marked embed lines.
+fn chunks(text: &str) -> Vec<Chunk> {
+    let mut out = Vec::new();
+    let mut part = String::new();
+    for line in text.split_inclusive('\n') {
+        match line
+            .trim_end()
+            .strip_prefix(EMBED_MARK)
+            .and_then(|rest| rest.strip_suffix(EMBED_MARK))
+            .and_then(|at| at.parse::<usize>().ok())
+        {
+            Some(at) => {
+                if !part.trim().is_empty() {
+                    out.push(Chunk::Words(std::mem::take(&mut part)));
+                }
+                part.clear();
+                out.push(Chunk::Embed(at));
+            }
+            None => part.push_str(line),
+        }
+    }
+    if !part.trim().is_empty() {
+        out.push(Chunk::Words(part));
+    }
+    out
+}
+
 impl Sessions {
-    /// The open note's embeds of session notes' headings, read when its words or the content
-    /// change and at each folder scan, never on a quiet frame. An embed of another note that
-    /// the content holds stays a link.
+    /// The open note's embeds of session notes' headings. Each target is resolved as every
+    /// link of the campaign is (`ContentIndex::resolve_link`): a session note shows its
+    /// heading's words; a target that names nothing says its source is gone; any other
+    /// target, an ambiguous one, and every embed while there is no index stay links.
     fn embeds(
-        &mut self,
+        &self,
+        body: &str,
         index: Option<&crate::lookup::ContentIndex>,
         book: &Book,
-    ) -> Arc<Vec<EmbedLine>> {
+    ) -> Vec<EmbedLine> {
+        let Some(index) = index else {
+            return Vec::new();
+        };
+        let mut embeds = Vec::new();
+        for line in body.lines() {
+            let Some((name, heading)) = embed_target(line) else {
+                continue;
+            };
+            if embeds
+                .iter()
+                .any(|embed: &EmbedLine| embed.line == line.trim_end())
+            {
+                continue;
+            }
+            let gone = || Shown::Gone(format!("The recap’s source is gone: {name} › {heading}."));
+            let shown = match index.resolve_link(name, None) {
+                crate::world::Go::Missing(_) => gone(),
+                crate::world::Go::Item(at, _) => {
+                    let item = &index.items[at];
+                    if item.note_role() != Some(crate::world::Role::Session) {
+                        continue;
+                    }
+                    let Some(note) = self
+                        .notes
+                        .iter()
+                        .find(|note| note.path.ends_with(&item.entry.path))
+                    else {
+                        continue;
+                    };
+                    fs::read_to_string(&note.path)
+                        .ok()
+                        .and_then(|text| section_text(body_of(&text), heading))
+                        .map_or_else(gone, |words| Shown::Words {
+                            from: note.id,
+                            label: note.label(),
+                            words: super::words_to_read(&words, book),
+                        })
+                }
+                _ => continue,
+            };
+            embeds.push(EmbedLine {
+                line: line.trim_end().to_owned(),
+                shown,
+            });
+        }
+        embeds
+    }
+
+    /// Read's words of the open note, from the cache while nothing they are made from changed.
+    pub(super) fn prepared_read(
+        &mut self,
+        index: Option<&crate::lookup::ContentIndex>,
+        model: &Arc<super::plan::PlanModel>,
+        plan: &Plan<'_>,
+        beside: bool,
+        book: &Book,
+    ) -> Option<Arc<Prepared>> {
         let Some(draft) = &self.draft else {
-            return Arc::default();
+            self.carries.read = None;
+            return None;
         };
         let key = (
             draft.revision(),
             index.map(crate::lookup::ContentIndex::generation),
+            Arc::as_ptr(model) as usize,
+            beside,
         );
-        if let Some((seen, embeds, _)) = &self.carries.embeds
+        #[cfg(test)]
+        {
+            self.carries.read_counts.reached += 1;
+        }
+        if let Some((seen, prepared)) = &self.carries.read
             && *seen == key
         {
-            return Arc::clone(embeds);
+            return Some(Arc::clone(prepared));
         }
-        // The embed that Carry over wrote is the recap section's one line, while the note says
-        // it carried the recap. Any other embed is the DM's, and is never repaired.
-        let carried = carried(&draft.text());
-        let carried = carried
-            .carried_parts
-            .contains(&Part::Recap)
-            .then_some(carried.carried_from)
-            .flatten()
-            .filter(|_| section_lines(&draft.body, RECAP).count() == 1);
-        let mut embeds = Vec::new();
-        let mut section = "";
-        for (at, line) in draft.body.lines().enumerate() {
-            if let Some(heading) = line.strip_prefix("## ") {
-                section = heading.trim();
-                continue;
-            }
-            let Some((name, heading)) = embed_target(line) else {
-                continue;
-            };
-            let named = self
-                .notes
-                .iter()
-                .find(|note| note.link().eq_ignore_ascii_case(name));
-            // The embed that Carry over wrote finds its session by `carried_from`.
-            let renamed = || {
-                carried
-                    .filter(|_| section == RECAP && heading == WHAT_HAPPENED)
-                    .and_then(|id| self.notes.iter().find(|note| note.id == id))
-            };
-            let gone = || Shown::Gone(format!("The recap’s source is gone: {name} › {heading}."));
-            let shown = match named.map(|note| (note, None)).or_else(|| {
-                renamed().map(|note| (note, Some(format!("![[{}#{heading}]]", note.link()))))
-            }) {
-                Some((note, update)) => fs::read_to_string(&note.path)
-                    .ok()
-                    .and_then(|text| section_text(body_of(&text), heading))
-                    .map_or_else(gone, |words| Shown::Words {
-                        from: note.id,
-                        label: note.label(),
-                        words: super::words_to_read(&words, book),
-                        update,
-                    }),
-                None if index.is_some_and(|index| {
-                    matches!(index.resolve_link(name, None), crate::world::Go::Missing(_))
-                }) =>
-                {
-                    gone()
-                }
-                None => continue,
-            };
-            embeds.push(EmbedLine {
-                line: line.trim_end().to_owned(),
-                at,
-                shown,
-            });
+        #[cfg(test)]
+        {
+            self.carries.read_counts.work += 1;
         }
-        let embeds = Arc::new(embeds);
-        self.carries.embeds = Some((key, Arc::clone(&embeds), None));
-        embeds
-    }
-
-    /// Read's words with each embed line marked, so that Read draws it by its target.
-    /// The marked words are made once for each read of the embeds, never on a quiet frame.
-    pub(super) fn mark_embeds(
-        &mut self,
-        body: &str,
-        index: Option<&crate::lookup::ContentIndex>,
-        book: &Book,
-    ) -> (Arc<str>, Arc<Vec<EmbedLine>>) {
-        let embeds = self.embeds(index, book);
-        if let Some((_, _, Some(marked))) = &self.carries.embeds {
-            return (Arc::clone(marked), embeds);
-        }
-        let marked: Arc<str> = if embeds.is_empty() {
-            body.into()
+        let body = self.note_body();
+        let embeds = self.embeds(&body, index, book);
+        let marked = if embeds.is_empty() {
+            body
         } else {
             body.split_inclusive('\n')
                 .map(|line| {
@@ -988,117 +1007,68 @@ impl Sessions {
                         None => line.to_owned(),
                     }
                 })
-                .collect::<String>()
-                .into()
+                .collect()
         };
-        if let Some((_, _, cached)) = &mut self.carries.embeds {
-            *cached = Some(Arc::clone(&marked));
-        }
-        (marked, embeds)
+        let compact = super::compact_plan_for_reading(
+            &marked,
+            plan.fights,
+            plan.groups,
+            &model.scene_lines(),
+            beside,
+        );
+        let summary = (!beside && compact != marked)
+            .then(|| section_text(&compact, "Plan for tonight"))
+            .flatten();
+        let text = super::words_to_read(&compact, book);
+        let (before, after, summary) = match summary
+            .as_ref()
+            .and_then(|summary| text.split_once(summary.as_str()))
+        {
+            Some((before, after)) => (chunks(before), chunks(after), summary),
+            None => (chunks(&text), Vec::new(), None),
+        };
+        let prepared = Arc::new(Prepared {
+            written: super::has_written_text(&compact),
+            summary,
+            before,
+            after,
+            embeds,
+        });
+        self.carries.read = Some((key, Arc::clone(&prepared)));
+        Some(prepared)
     }
 
-    /// Read's Markdown, with each marked embed drawn as its heading's words under a muted line
-    /// that links its session, or as the words that say its source is gone.
-    pub(super) fn show_reader_with_embeds(
-        &mut self,
-        ui: &mut egui::Ui,
-        text: &str,
-        embeds: &[EmbedLine],
-    ) {
-        // No embed: no line to look for, so the words are not copied on each frame.
-        if embeds.is_empty() {
-            if !text.trim().is_empty() {
-                crate::markdown_view::show_reader(ui, text);
-            }
-            return;
-        }
-        let mut part = String::new();
+    /// One part of the prepared Read: its Markdown, and each embed as its heading's words under
+    /// a muted line that links its session, or as the words that say its source is gone.
+    pub(super) fn show_prepared(&mut self, ui: &mut egui::Ui, prepared: &Prepared, after: bool) {
         let mut open = None;
-        let mut update = None;
-        for line in text.split_inclusive('\n') {
-            let Some(embed) = line
-                .trim_end()
-                .strip_prefix(EMBED_MARK)
-                .and_then(|rest| rest.strip_suffix(EMBED_MARK))
-                .and_then(|at| at.parse::<usize>().ok())
-                .and_then(|at| embeds.get(at))
-            else {
-                part.push_str(line);
-                continue;
-            };
-            if !part.trim().is_empty() {
-                crate::markdown_view::show_reader(ui, &part);
+        for chunk in if after {
+            &prepared.after
+        } else {
+            &prepared.before
+        } {
+            match chunk {
+                Chunk::Words(words) => crate::markdown_view::show_reader(ui, words),
+                Chunk::Embed(at) => match prepared.embeds.get(*at).map(|embed| &embed.shown) {
+                    Some(Shown::Words { from, label, words }) => {
+                        ui.horizontal(|ui| {
+                            ui.label(Type::Small.rich(ui, "From").color(colors().muted));
+                            if design::small_link(ui, label).clicked() {
+                                open = Some(*from);
+                            }
+                        });
+                        crate::markdown_view::show_reader(ui, words);
+                    }
+                    Some(Shown::Gone(words)) => {
+                        design::small_message(ui, Tone::Warning, words);
+                    }
+                    None => {}
+                },
             }
-            part.clear();
-            match &embed.shown {
-                Shown::Words {
-                    from,
-                    label,
-                    words,
-                    update: new,
-                } => {
-                    ui.horizontal(|ui| {
-                        ui.label(Type::Small.rich(ui, "From").color(colors().muted));
-                        if design::small_link(ui, label).clicked() {
-                            open = Some(*from);
-                        }
-                        if let Some(new) = new
-                            && Action::quiet("Update the link")
-                                .in_line()
-                                .show(ui)
-                                .clicked()
-                        {
-                            update = Some((embed.at, embed.line.clone(), new.clone()));
-                        }
-                    });
-                    crate::markdown_view::show_reader(ui, words);
-                }
-                Shown::Gone(words) => {
-                    design::small_message(ui, Tone::Warning, words);
-                }
-            }
-            if let Some(session) = self.selected {
-                self.carry_result(ui, session, Place::Embed);
-            }
-        }
-        if !part.trim().is_empty() {
-            crate::markdown_view::show_reader(ui, &part);
         }
         if let Some(session) = open {
             self.select(Some(session));
-        } else if let Some((at, line, new)) = update {
-            self.update_link(at, &line, &new);
         }
-    }
-
-    /// `Update the link`: the embed line that Carry over wrote names the note's new name. One
-    /// save of this note, through the note's one act path.
-    fn update_link(&mut self, at: usize, line: &str, new: &str) {
-        let (Some(session), Some(draft)) = (self.selected, self.draft.as_mut()) else {
-            return;
-        };
-        let result = draft.apply(session, crate::sessions::Apply::Now, |text| {
-            crate::sessions::change_line(text, at, line, Some(new))
-        });
-        let seen = draft.revision();
-        let outcome = match result {
-            Ok(undo) | Err(ActFault::NotSaved(_, undo)) => Outcome::Done {
-                place: Place::Embed,
-                words: format!(
-                    "The link now names {}.",
-                    embed_target(new).map_or(new, |(name, _)| name)
-                ),
-                action: "Undo link",
-                undo,
-                seen,
-            },
-            Err(fault) => Outcome::Refused {
-                place: Place::Embed,
-                words: fault.words().to_owned(),
-                seen,
-            },
-        };
-        self.carries.results.insert(session, outcome);
     }
 }
 
@@ -1474,6 +1444,21 @@ mod tests {
         harness.run_steps(2);
         harness.state_mut().0.select(Some(tonight.id));
         harness.run_steps(2);
+        // The last session's note goes, and the campaign is read again: the result and its Undo
+        // are this note's, and they stay (review of PR 277, finding 3).
+        let last_text = fs::read_to_string(&last.path).unwrap();
+        fs::remove_file(&last.path).unwrap();
+        let rescan = |harness: &mut egui_kittest::Harness<'_, (Sessions, Book)>| {
+            let page = &mut harness.state_mut().0;
+            page.notes = list_notes(dir.path());
+            page.last_time = None;
+            page.carries.scanned();
+            harness.run_steps(2);
+        };
+        rescan(&mut harness);
+        assert!(harness.query_by_label("Undo carry over").is_some());
+        fs::write(&last.path, &last_text).unwrap();
+        rescan(&mut harness);
         harness.get_by_label("Undo carry over").click();
         harness.run_steps(2);
         assert_eq!(read(), outside);
@@ -1564,34 +1549,86 @@ mod tests {
         assert_eq!(read(), written);
     }
 
-    /// Row 18: Read draws an embed of a session note's heading by its target. The embed that
-    /// Carry over wrote follows its session by `carried_from` after a rename outside Obsidian,
-    /// and `Update the link` writes the new name, with `Undo link`. A source that is gone says so.
+    /// Row 18: Read draws an embed of a session note's heading by its target, resolved as every
+    /// campaign link is, never by a part of its name. A source that is gone says so, and no
+    /// embed is ever rewritten: the DM's own kept recap neither. Read's words are prepared when
+    /// what they are made from changes, not on a quiet frame.
     #[test]
     fn read_draws_a_session_embed_by_its_target() {
-        let dir = tempfile::tempdir().unwrap();
-        let last = note(dir.path(), 1, "The Road", LAST);
-        let tonight = note(dir.path(), 2, "The Crossing", TONIGHT);
+        use egui_kittest::kittest::Queryable;
+        let root = tempfile::tempdir().unwrap();
+        let campaign = crate::persistence::Campaign {
+            id: Uuid::new_v4(),
+            name: "Sample".into(),
+            path: root.path().into(),
+            dndbeyond_campaign_id: None,
+            dndbeyond_campaign_name: None,
+        };
+        let dir = root.path().join(crate::sessions::DEFAULT_FOLDER);
+        fs::create_dir_all(&dir).unwrap();
+        let last = note(&dir, 1, "The Road", LAST);
+        // Two notes with one file name in two folders (review of PR 277, finding 2).
+        let first = note(
+            &dir,
+            5,
+            "First",
+            "## What happened\n\nThe correct first session.\n",
+        );
+        let second = note(
+            &dir,
+            6,
+            "Second",
+            "## What happened\n\nThe WRONG second session.\n",
+        );
+        for (note, folder) in [(&first, "Archive"), (&second, "Recent")] {
+            fs::create_dir_all(dir.join(folder)).unwrap();
+            fs::rename(&note.path, dir.join(folder).join("Same.md")).unwrap();
+        }
+        // The DM's own embed is the recap (finding 1), and the notes below embed by target.
+        let own = TONIGHT.replace(
+            "## Recap of last time\n\n",
+            "## Recap of last time\n\n![[My missing session#What happened]]\n\n",
+        );
+        let tonight = note(
+            &dir,
+            2,
+            "The Crossing",
+            &format!(
+                "{own}## Notes\n\n![[{}#What happened]]\n\n![[Sessions/Archive/Same#What happened]]\n\n\
+                 ![[Archive/Same#What happened]]\n\n![[Same#What happened]]\n\n{}",
+                last.link(),
+                "Some written words.\n".repeat(200)
+            ),
+        );
         let mut draft = Draft::open(&tonight.path).unwrap();
         with_plan(&[], |plan| {
-            let source = Source::read(&last, dir.path(), plan, &Book::default()).unwrap();
+            let source = Source::read(&last, &dir, plan, &Book::default()).unwrap();
+            let (_, offer) = carry(&draft.text(), &source).unwrap();
+            assert_eq!(offer.recap, Recap::Kept);
             draft
                 .apply_with_properties(tonight.id, |text| carry(text, &source).map(|(t, _)| t))
                 .unwrap();
         });
-        let mut page = Sessions {
+        let carried = fs::read_to_string(&tonight.path).unwrap();
+        let page = Sessions {
             selected: Some(tonight.id),
-            notes: list_notes(dir.path()),
-            folder: Some(dir.path().to_owned()),
+            notes: list_notes(&dir),
+            folder: Some(dir.clone()),
             draft: Some(Draft::open(&tonight.path).unwrap()),
             reading_note: true,
             ..Sessions::default()
         };
-        page.last_time = Some((tonight.id, None));
+        let load = || Arc::new(crate::lookup::ContentIndex::load(&[], Some(&campaign)).unwrap());
+        let index = std::rc::Rc::new(std::cell::RefCell::new(load()));
+        let shared = std::rc::Rc::clone(&index);
         let mut harness = egui_kittest::Harness::builder()
-            .with_size(egui::vec2(800.0, 600.0))
+            .with_size(egui::vec2(800.0, 4000.0))
             .build_state(
-                |ctx, (page, book): &mut (Sessions, Book)| {
+                move |ctx, (page, book): &mut (Sessions, Book)| {
+                    let index = Arc::clone(&shared.borrow());
+                    ctx.data_mut(|data| {
+                        data.insert_temp(egui::Id::new("reader_link_index"), index);
+                    });
                     with_plan(&[], |plan| {
                         egui::CentralPanel::default()
                             .show(ctx, |ui| page.read_tab(ui, book, plan, true));
@@ -1601,93 +1638,56 @@ mod tests {
             );
         design::theme::install(&harness.ctx);
         harness.run_steps(2);
-        assert!(harness.query_by_label("From").is_some());
+        let has = |harness: &egui_kittest::Harness<'_, (Sessions, Book)>, words: &str| {
+            harness.query_by_label_contains(words).is_some()
+        };
         assert!(harness.query_by_label("Session 1: The Road").is_some());
-        assert!(
-            harness
-                .query_by_label_contains("Wolves at the ford.")
-                .is_some()
-        );
-        assert!(harness.query_by_label_contains("What happened").is_none());
+        assert!(has(&harness, "Wolves at the ford."));
+        // A target with its folder shows that note; a part of a path names nothing and says so;
+        // a name that two notes share stays a link. Never the other session's words.
+        assert!(has(&harness, "The correct first session."));
+        assert!(!has(&harness, "The WRONG second session."));
+        assert!(has(
+            &harness,
+            "The recap’s source is gone: Archive/Same › What happened."
+        ));
+        // The DM's kept recap names nothing: Read says so, and nothing offers to rewrite it.
+        assert!(has(
+            &harness,
+            "The recap’s source is gone: My missing session › What happened."
+        ));
         assert!(harness.query_by_label("Update the link").is_none());
 
-        // Renamed outside Obsidian: the text still shows, and the line can name the new file.
-        let renamed = dir.path().join("Session 1 - The Old Road.md");
-        fs::rename(&last.path, &renamed).unwrap();
+        // Quiet frames prepare nothing (finding 5).
+        let work = crate::test_support::CachedWork::start(
+            "Read's prepared words",
+            &mut harness,
+            |harness: &mut egui_kittest::Harness<'_, (Sessions, Book)>| {
+                harness.state().0.carries.read_counts
+            },
+        );
+        work.steady(&mut harness, |harness| {
+            harness.run_steps(3);
+            has(harness, "Wolves at the ford.")
+        })
+        .expect("read-steady");
+
+        // The last note is renamed outside Obsidian: its embed now names nothing, and says so.
+        fs::rename(&last.path, dir.join("Session 1 - The Old Road.md")).unwrap();
+        *index.borrow_mut() = load();
         let page = &mut harness.state_mut().0;
-        page.notes = list_notes(dir.path());
+        page.notes = list_notes(&dir);
         page.carries.scanned();
         harness.run_steps(2);
-        assert!(
-            harness
-                .query_by_label_contains("Wolves at the ford.")
-                .is_some()
-        );
-        let before = fs::read_to_string(&tonight.path).unwrap();
-        harness.get_by_label("Update the link").click();
-        harness.run_steps(2);
-        let updated = fs::read_to_string(&tonight.path).unwrap();
-        assert_eq!(
-            updated,
-            before.replace(
-                &format!("![[{}#What happened]]", last.link()),
-                "![[Session 1 - The Old Road#What happened]]"
+        assert!(!has(&harness, "Wolves at the ford."));
+        assert!(has(
+            &harness,
+            &format!(
+                "The recap’s source is gone: {} › What happened.",
+                last.link()
             )
-        );
-        assert!(
-            harness
-                .query_by_label("The link now names Session 1 - The Old Road.")
-                .is_some()
-        );
-        harness.get_by_label("Undo link").click();
-        harness.run_steps(2);
-        assert_eq!(fs::read_to_string(&tonight.path).unwrap(), before);
-
-        // The note's heading is gone: the line stays in the note, and Read says so.
-        fs::write(
-            &renamed,
-            fs::read_to_string(&renamed)
-                .unwrap()
-                .replace("## What happened", "## Later"),
-        )
-        .unwrap();
-        harness.state_mut().0.carries.scanned();
-        harness.run_steps(2);
-        assert!(
-            harness
-                .query_by_label_contains(&format!(
-                    "The recap’s source is gone: {} › What happened.",
-                    last.link()
-                ))
-                .is_some()
-        );
-        assert_eq!(fs::read_to_string(&tonight.path).unwrap(), before);
-
-        // The DM adds an embed of their own under the recap. Neither line is then Carry over's
-        // alone, so no embed is repaired by `carried_from`: the renamed one says it is gone.
-        fs::write(
-            &renamed,
-            fs::read_to_string(&renamed)
-                .unwrap()
-                .replace("## Later", "## What happened"),
-        )
-        .unwrap();
-        let own = before.replace(
-            "#What happened]]\n",
-            "#What happened]]\n![[Session 9 Gone#What happened]]\n",
-        );
-        fs::write(&tonight.path, &own).unwrap();
-        let page = &mut harness.state_mut().0;
-        page.draft.as_mut().unwrap().follow_disk();
-        page.carries.scanned();
-        harness.run_steps(2);
-        assert!(harness.query_by_label("Update the link").is_none());
-        assert!(
-            harness
-                .query_by_label_contains("Wolves at the ford.")
-                .is_none()
-        );
-        assert_eq!(fs::read_to_string(&tonight.path).unwrap(), own);
+        ));
+        assert_eq!(fs::read_to_string(&tonight.path).unwrap(), carried);
     }
 
     fn harness_for(

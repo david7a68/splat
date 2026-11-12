@@ -1816,6 +1816,9 @@ mod allowed_classes {
         const HOVER: &str = "Last time: Session 7: The Road to Emberfall — ";
         /// The Last time line's top, with Lookup closed and open (the reference).
         const LINE_TOPS: [f32; 2] = [140.0, 174.0];
+        /// The widest word and its ellipsis that a cut at `Small` drops (the reference's cuts
+        /// differ by at most 8 px).
+        const CUT_WORD: f32 = 40.0;
 
         fn bare(name: &str) -> &str {
             name.strip_prefix("Label: ")
@@ -1887,7 +1890,20 @@ mod allowed_classes {
                 .iter()
                 .filter(|row| here(&row.difference, partner, other))
                 .count();
-            mine == theirs && mine > 0
+            // These screens show no `Carry over`, so a cut new form has today's room: it may be
+            // narrower than the old form only by the word and the ellipsis that the cut drops.
+            let widths = |change: &str, words: &str| {
+                rows.iter()
+                    .map(|row| &row.difference)
+                    .filter(|o| here(o, change, words))
+                    .filter_map(|o| Some((o.name.ends_with('…'), rect(&o.detail)?[2])))
+                    .collect::<Vec<_>>()
+            };
+            let old = widths("gone", RECAP);
+            let in_room = widths("new", WHAT_HAPPENED)
+                .iter()
+                .all(|(cut, new)| !cut || old.iter().all(|(_, old)| old - new <= CUT_WORD));
+            mine == theirs && mine > 0 && in_room
         }
 
         /// An act's parts are only the preview: its new words in this record (`+`), and its old
@@ -2548,6 +2564,18 @@ mod allowed_classes {
             (
                 vec![row16(&old), row16(&old), row16(&new)],
                 "two old forms for one",
+            ),
+            // The review of PR 277: a cut far past what the room needs.
+            (
+                vec![
+                    row16(&old),
+                    row16(&Difference {
+                        name: "— W…".into(),
+                        detail: "at 647.3 144 25x16".into(),
+                        ..new.clone()
+                    }),
+                ],
+                "a preview cut to one word with room to spare",
             ),
         ] {
             assert!(
