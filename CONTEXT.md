@@ -230,7 +230,8 @@ A world entry with a date, counted back from Day 1 of the campaign clock. Its ty
 _Avoid_: Timeline event, which is a thing that happened in play.
 
 **Log**:
-The last heading of a world entry, with one line for each thing that play changed.
+The last heading of a world entry, with one line for each thing that play changed. The DM can also add a line in
+their own words, with `Add to Log`.
 _Avoid_: Ledger, which is the history of trackers.
 
 **Open question**:
@@ -302,6 +303,11 @@ _Avoid_: Treasure.
 A task line of a session's plan that is not a fight or a group, with a done mark: a talk, a person to meet, a
 place, a secret to reveal.
 _Avoid_: Plan item, task, to-do.
+
+**Carry-over**:
+The act that adds the last session's recap link, plan lines that were not played and open threads to a
+session's note. The note's `carried_from` and `carried_parts` say what it carried. It carries no HP: carried
+state stays inside one session.
 
 **Carried state**:
 Each player's HP and temporary HP from the last fight of the session being played, which the next run starts

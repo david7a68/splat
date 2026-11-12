@@ -4,7 +4,12 @@ use eframe::egui::{self, Ui, vec2};
 
 /// Prose in a side panel is one step smaller than prose at full width.
 pub fn prose_type(ui: &Ui) -> Type {
-    if ui.available_width() < READER_MEASURE - 60.0 {
+    prose_type_at(ui.available_width())
+}
+
+/// The Reader's prose type in a column this wide.
+pub fn prose_type_at(width: f32) -> Type {
+    if width < READER_MEASURE - 60.0 {
         Type::ProseCompact
     } else {
         Type::Prose

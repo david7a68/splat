@@ -236,11 +236,16 @@ reason after Unsaved and Discard in the save row. While Save is blocked, Discard
 says `Discard to switch campaign.`; while Save is open it says `Save or discard to switch campaign.` Reserve its height so the first edit moves no content. Run
 settings keep their full save actions on a second line at the right edge, so neither action is cut short.
 
+A quiet action that ends a line of text, such as the Last time line's `Carry over`, uses `in_line`: it is
+24 px high (`XL`), as a link is, so the line keeps the height it has without the action.
+
 A quiet action at the start of a line uses `line_start`: its words start at the text edge of the line above,
 and its padding hangs `S` into the gutter. Outside a message, such an action has no icon (Lookup's `Show N results`, `New NPC “<name>”`, `New location “<name>”`, `Generate NPC`
 and `Copy the marker`), so its whole target clears every splitter without a wider gutter. Inside a message
 (`undo_message`, `message_with_actions` and other message choices), an action with an icon that starts a line
-hangs its icon into the message's own icon column, so its words start at the message's words. A
+hangs its icon into the message's own icon column, so its words start at the message's words. An Undo on its
+own line below its message keeps its target inside the message's column: it never starts left of the
+message's bar, so in Lookup, whose reader starts at its scroll area's edge, no part of it is cut. A
 choice without an icon on its own line below a result message (`message_choice_row`: `Use the copy in
 encounters` below a package's registration message, and `Build an encounter` below a copied campaign's) has
 the secondary border, as the same choice beside a plain result has. It sits below the result and its Undo,
@@ -937,12 +942,30 @@ tone (`In` `⚠ Watch House · Not found`).
 A campaign world entry has a quiet Edit action, with a pencil icon and the word Edit, on its title line in Lookup and World. Its icon sits one `L` after the measured title at every title width, so a kind line wider than a short title does not push it away; a title with art keeps Edit after the art. With no run open, a creature's or an NPC's reader (a campaign
 entry, or a package creature, whose header has no Edit) has a quiet `Start fight` with the run icon after Edit,
 `XS` apart (after the measured title, one `L` on, when there is no Edit), named `Start a fight with <name>` and
-blocked as the encounter editor's `Start fight` is. `Add to Log` will come first, next to Edit. It takes only the
-room after the title on the title's line: the title keeps its width and the row gains no line and no menu, so
-when the room does not hold the word, `Start fight` does not show. Beside a portrait there is no such room. It
+blocked as the encounter editor's `Start fight` is. A campaign world entry also has a quiet `Add to Log`
+(`icons::ADD`) `XS` after `Start fight`, or after Edit when there is no `Start fight`, so `Start fight` keeps
+its place whether or not the DM ever adds to a Log. They take only the room after the
+title on the title's line: the title keeps its width and the row gains no line and no menu. The header shows
+the first of these that fits: both words; `Start fight` and `Add to Log` as its icon (`icon_button`, its name
+on hover); `Start fight` alone; the icon alone; neither. `Start fight` is never an icon, so when the room does
+not hold its word it does not show. Beside a portrait there is no such room. `Start fight`
 saves `Fight with <name>` with the party and the creature and starts its run; an encounter of that name (or of
 that name with a number) that was never run and holds the same roster starts instead. An NPC with no stat block
-opens the run's made-up form in Arrivals, with the name filled in and the keyboard in HP. Edit replaces the rows and
+opens the run's made-up form in Arrivals, with the name filled in and the keyboard in HP. `Add to Log` opens one
+`add_field` under the kind line, named `Log line for <name>`, with the placeholder `What happened?` and the
+keyboard in it; the line's stamp (`Session 12, Day 3:`, the stamp of a Change at that moment, or the day alone
+when no session is being played) stands before it in `Type::Small` `muted`, on the field's line while the field
+keeps 224 px, else above it. Enter adds one line at the end of the entry's `## Log` (Splat makes the heading
+when the note has none) and closes the field; Escape clears and closes it. Its result, `Added to <name>’s Log.`
+with `Undo Log line`, sits in the pane's message footer, as every World and Lookup result does; Undo removes
+that line only while the file holds what the act wrote, and ends when the entry's text changes or the reader
+shows another entry. A failed read or write is the error of the last action, also in the footer: it names the
+file, and the field keeps its words. The typed words belong to the campaign and the entry, not the session:
+the stamp is the session being played at Enter. They wait while the reader shows another entry and across a
+campaign change, and the campaign switch's guard and the close warning count them. When the entry is gone
+(deleted, or another note took its ID), its draft waits for nothing, and the pane's footer says once:
+`“<name>” was deleted. The Log line was not added: “<words>”`. While the entry's edit form is open the field waits
+under `Save or discard your edit first.` A package's entry has no `Add to Log`. Edit replaces the rows and
 the text with one form. Read and Edit show Stat block, In, Part of, then Status, so a value keeps its place when the DM
 presses Edit; conflict lines after Overwrite use the same order. Text follows in the reader's prose type,
 without the title line. The Text field ends at the same `FORM_WIDTH` edge as Status. One frame holds
@@ -1627,8 +1650,29 @@ Read view keeps only its inline Write link; hide tab-row Write until the note ha
 centres on the title action row. A saved note is the calm, usual state: `✓ Notes saved` is muted
 (`document.clean`) on the session page and in the Notes panel, also just after a write. Last time is one line linking the previous session and recap, with full recap
 on hover. When another note shares that session's title, the link adds its file name
-(`Session 1: The Bridge (Session 1 - The Bridge.md)`), as the list's second line does. Without recap, use prose under What happened and omit link-only lines; without either, show the
-session link alone. An older session warns once and links the session being played, which the list marks
+(`Session 1: The Bridge (Session 1 - The Bridge.md)`), as the list's second line does. The preview is the
+prose under the last note's What happened, omitting link-only lines; then its newest processed recording's
+Recap, the one source that carry-over reads too; then the note's first written line outside its title, date,
+`Recap of last time` and `Plan for tonight`; with none of these, show the session link alone. While the
+session is the current one and has no event, no run and no live recording, and the last session holds a part
+to carry, a quiet `Carry over` (`Action::in_line`, 24 px, so the line keeps its height) ends the line, `L` after
+the preview, with what it adds on hover. The preview gives it room first, to nothing, then the link's words
+shorten; nothing wraps. The preview stops at `READER_MEASURE`, as muted help does. A last note that cannot be read blocks it: `Splat cannot read Session 1’s note.` It
+adds, through `Draft::apply_with_properties` and in one save, the recap as one embed line
+`![[<note>#What happened]]` (or the processed recap under `> This draft was written automatically. Check it
+against your memory.`, which the embed replaces once What happened has prose), the plan lines still to come
+with empty boxes and the open threads, each below what its heading holds and never twice, and the properties
+`carried_from` and `carried_parts`. The result is an `undo_message` in the Session page's message footer (as
+every result of that page, so the Last time line, the tabs and the plan never move), success tone, naming only
+what it added, with `Undo carry over`, which puts back the exact text and properties. The result belongs to
+the new note by its ID: another session or page leaves it, it shows also when the last session can no longer be
+found, and any other change of the note's text ends it. A refusal shows in the same footer, in a warning. Read draws an embed of a session note's heading as that heading's words under a
+`Type::Small` muted `From` and a small link to the session. Its target is resolved as every campaign link is
+(`ContentIndex::resolve_link`), with its folder when it has one: a target that two notes share stays a link,
+and so does an embed inside a callout or a list item. A target that names nothing, also after a rename outside
+Obsidian, is a warning `small_message`, `The recap’s source is gone: <target> › <heading>.`, and the line
+stays in the note; Splat never rewrites an embed, and the DM links again by hand. Read's words are prepared
+when the note's words, the content, the plan or the folder change, not on a quiet frame. An older session warns once and links the session being played, which the list marks
 Playing. The action says Return to the session being played. When the two session numbers match, the warning
 names both note files. Reading old notes changes neither the destination for new events nor runs: use the newest session
 unless the DM chooses another, and name that destination on Timeline before adding.
@@ -1762,7 +1806,12 @@ plain list line gets no row. A scene's row starts with the theme's checkbox, 24 
 its accessible name is `Open: <words>` or `Done: <words>`, and a click or Space ticks it, one character of the
 note. Its words are the Reader's inline text, and a link opens its entry in Lookup; a done scene's words are
 `muted`. When the words link exactly one World entry, the second line gives its kind, status and place
-(`NPC · alive · Ashfall Keep`) in `Type::Small` `muted`. The action place stays empty. The menu holds Remove
+(`NPC · alive · Ashfall Keep`) in `Type::Small` `muted`. The action place is empty until the scene is done; then,
+when its words link exactly one World entry of the campaign, it holds a quiet `Add to Log` left of the menu
+(accessible name `Add to Log: <words>`) while the words keep their lines beside it; else `Add to Log` is the
+last line of the scene's menu, so the row keeps its words and its height. It opens Lookup on that entry with
+the Log field open, filled with the scene's words outside its link and selected, so typing replaces them and
+Enter keeps them; a field that already holds typed words keeps them. The menu holds Remove
 from tonight, with `Removed “<words>” from tonight.` and Undo remove in the scene's place, and for a scene that
 links exactly one NPC or creature, while no run is open, `Start fight` (accessible name `Start a fight with
 <name>`), blocked as the editor's is. A done scene does not count in Tonight. Read leaves scenes out as it
