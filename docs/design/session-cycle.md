@@ -87,7 +87,8 @@ Timeline` (F4).
 - **The reader's header** is one row: the title, and for an entry of the campaign `Edit`, one `L` after the
   measured title (`src/world.rs:1733-1768`). It has no menu. Lookup and the World page draw this one reader
   (`src/lookup.rs:2195-2203`); the Library page has its own header and does not change. `Start fight` (F3)
-  and `Add to Log` (F6) follow `Edit`, as quiet actions, 4 px apart; `Add to Log` is next to `Edit`. The title
+  and `Add to Log` (F6) follow `Edit`, as quiet actions, 4 px apart; `Start fight` is next to `Edit`, so it
+  stays where it is for a DM who never adds to a Log, and `Add to Log` follows it (review of P6). The title
   keeps the width that it has
   today, and the row gains no line and no menu. The header shows the first of these that fits:
   1. `Start fight` and `Add to Log`, each with its word;
@@ -123,6 +124,12 @@ the World page at 960x640 it shows beside `Captain Varra Black`. A portrait sits
 cell, with `Edit` after it, so beside a portrait no room is spare and `Start fight` does not show. A creature
 with its type's art (the plain campaign's creatures, `Cinder Wolf`) therefore has no `Start fight` in any reader;
 its routes are a scene row's menu and the encounter editor.
+
+**Measured in P6** (`log-from-play`, `session-plan-scenes`, `npc-in-lookup` and the plain evening): `Add to Log`
+is 103.5 px wide with its word and 28 as its icon. In Lookup at case B a 13-letter title (`Warden Ostrel`) shows
+`Start fight` and the icon, as the table says; `Captain Varra Black` shows `Start fight` alone, and at case D
+neither. Beside a 10-letter title (`Rook Ambry`) at case D, `Start fight` shows alone. On the World page at 960x640
+and 1200x800, `Captain Varra Black` shows both words.
 
 **The routes that stay** when the header does not show an action. `Start fight` is a line of the menu of a
 scene row that links that NPC or creature: 2, at any width, on the Session page (F3). For any other NPC or
@@ -382,6 +389,9 @@ today and its fit rule. No row adds a line, changes a row's height or takes widt
 | 5 | A row marked `Conc` that takes damage | The row's second line ends with `Conc save DC 10` until the next step (F2) | `view.rs:6476-6486` | Only when the line keeps its lines and folds nothing that shows today. Else in the hover and accessible name only |
 | 6 | Run dock, line two | A quiet `Effect`, left of **Conditions** (F2) | `dock.rs:80-172` | F2: the word, then the icon, then not shown, before the name loses a word or its size |
 | 7 | The Add strip's **More** menu | Its last line is `Scene` (F3) | `src/design/components.rs:2339`; `src/timeline/page.rs:89` | A menu line. The strip's visible actions are as today |
+| 8 | A campaign World entry's reader | `Add to Log` after `Edit`, and after `Start fight` where it shows (F6) | The header: `src/world.rs:1733-1768` | Section 1.2: its word, then its icon, then not shown |
+| 9 | A campaign creature's or NPC's reader, with no run open | A quiet `Start fight` after `Edit` (F3) | The same header | Section 1.2: with its word, or not shown |
+| 10 | An ended fight's plan row | `Add rewards` (F7) | The action band: `plan.rs:692-694`; the opened row's links: `:1313-1321` | On the row only when the title keeps its lines beside the action's own width. Else the last link of the opened row, after `Timeline`. A fight whose reference an old note already has as a list line says `In notes` |
 | 8 | A campaign World entry's reader | `Add to Log` after `Edit` (F6) | The header: `src/world.rs:1733-1768` | Section 1.2: its word, then its icon, then not shown |
 | 9 | A campaign creature's or NPC's reader, with no run open | A quiet `Start fight` after `Add to Log` (F3) | The same header | Section 1.2: with its word, or not shown |
 | 10 | An ended fight's plan row | `Add rewards` (F7) | The action band: `plan.rs:692-694`; the opened row's links: `:1313-1321` | On the row only when the title keeps its width and its line breaks beside the action's own width. Else the last link of the opened row, after `Timeline`, while that line has room. Else the last line of the row's menu (measured in P7: the links with `Add rewards` take about 326 px, and the plan at 330 px gives them 296). A fight whose reference an old note already has as a list item says `In notes`, also in the menu |
@@ -749,7 +759,9 @@ Add  ⚔ Fight  ⚇ Group  ⌂ Long rest  ⋯⌄    │
 - **The second line** shows only when the words link exactly one World entry: its kind, status and place
   (`NPC · alive · Ashfall Keep`).
 - **The action place** is empty until the scene is done. Then, when the words link exactly one World entry, it
-  holds the quiet `Add to Log` of F6.
+  holds the quiet `Add to Log` of F6, by the fit rule: while the words keep their rows beside it. Else
+  `Add to Log` is the last line of the scene's menu (built in P6: a done scene with long words, and the plain
+  campaign's `Meet [[Hobb the Miller]] at the mill` at 960x640, keep their rows).
 - **The menu** holds `Remove from tonight`, with `Undo remove` under the row, as for a fight. A scene that
   links exactly one NPC or creature also has `Start fight` there while no run is open (section 1.2): 2.
 

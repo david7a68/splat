@@ -1807,6 +1807,22 @@ mod allowed_classes {
             name: "P3 t: an act's words of these classes",
             fits: |d, _| scenes::act_words(d),
         },
+        // P6, F6. Row 8: `Add to Log` next to Edit, with the reader's `Start fight` after it.
+        Class {
+            row: 8,
+            name: "P6 a: the reader's new Add to Log, its word or its icon",
+            fits: log::add_to_log,
+        },
+        Class {
+            row: 8,
+            name: "P6 b: the Add icon, matched by its order",
+            fits: log::icon_by_order,
+        },
+        Class {
+            row: 8,
+            name: "P6 d: an act shows or hides Add to Log",
+            fits: |d, _| log::act_words(d),
+        },
         // P8, F5.
         Class {
             row: 16,
@@ -1861,6 +1877,103 @@ mod allowed_classes {
             fits: |d, _| rewards::act_words(d),
         },
     ];
+
+    /// P6's classes. Each proves itself from the geometry of its view: Add to Log is new only in a
+    /// reader, after what the header shows today; a glyph matched by its order pairs with a new
+    /// glyph at its old place. Nothing of today goes, moves, is cut, or narrows: `Start fight`
+    /// stays next to Edit.
+    mod log {
+        use super::super::{AllowedRow, Difference};
+        use super::{rect_of, rects};
+
+        const ADD: &str = "\u{e3d4}";
+        const BUTTON: &str = "Button: Add to Log";
+
+        fn reader(d: &Difference) -> bool {
+            d.screen.starts_with("world-reader") || d.screen.starts_with("lookup-reader ")
+        }
+
+        fn same_view(o: &Difference, d: &Difference) -> bool {
+            (&o.screen, &o.view) == (&d.screen, &d.view)
+        }
+
+        fn inside(r: [f32; 4], outer: [f32; 4]) -> bool {
+            outer[0] <= r[0]
+                && r[0] + r[2] <= outer[0] + outer[2] + 0.05
+                && outer[1] <= r[1]
+                && r[1] + r[3] <= outer[1] + outer[3] + 0.05
+        }
+
+        /// The new Add to Log targets of `d`'s view.
+        fn buttons<'a>(
+            d: &'a Difference,
+            rows: &'a [AllowedRow],
+        ) -> impl Iterator<Item = [f32; 4]> + 'a {
+            rows.iter()
+                .map(|row| &row.difference)
+                .filter(move |o| {
+                    same_view(o, d) && o.what == "control" && o.change == "new" && o.name == BUTTON
+                })
+                .filter_map(|o| rect_of(&o.detail, "at "))
+        }
+
+        pub(super) fn add_to_log(d: &Difference, rows: &[AllowedRow]) -> bool {
+            if !reader(d) || d.change != "new" {
+                return false;
+            }
+            let Some(at) = rect_of(&d.detail, "at ") else {
+                return false;
+            };
+            match (d.what.as_str(), d.name.as_str()) {
+                // Its word, or its icon alone: the height of a reader's header action.
+                ("control", BUTTON) => (at[3] - 28.0).abs() < 0.05,
+                ("text", "Add to Log" | ADD) => {
+                    buttons(d, rows).any(|button| inside(at, button))
+                        || (d.name == ADD && moved_away_from(d, at, rows))
+                }
+                _ => false,
+            }
+        }
+
+        /// A glyph of today matched by its order to the new icon left a new glyph at its old
+        /// place: that is the glyph of today, which did not move.
+        fn moved_away_from(d: &Difference, at: [f32; 4], rows: &[AllowedRow]) -> bool {
+            rows.iter().map(|row| &row.difference).any(|o| {
+                same_view(o, d)
+                    && o.what == "text"
+                    && o.change == "moved"
+                    && o.name == ADD
+                    && rects(&o.detail).is_some_and(|(was, now)| {
+                        was == at && buttons(d, rows).any(|button| inside(now, button))
+                    })
+            })
+        }
+
+        pub(super) fn icon_by_order(d: &Difference, rows: &[AllowedRow]) -> bool {
+            reader(d)
+                && d.what == "text"
+                && d.change == "moved"
+                && d.name == ADD
+                && rects(&d.detail).is_some_and(|(was, now)| {
+                    buttons(d, rows).any(|button| inside(now, button))
+                        && rows.iter().map(|row| &row.difference).any(|o| {
+                            same_view(o, d)
+                                && o.what == "text"
+                                && o.change == "new"
+                                && o.name == ADD
+                                && rect_of(&o.detail, "at ") == Some(was)
+                        })
+                })
+        }
+
+        pub(super) fn act_words(d: &Difference) -> bool {
+            d.what == "act"
+                && d.change == "changed"
+                && d.detail
+                    .split(" | ")
+                    .all(|part| ["appeared + Add to Log", "went + Add to Log"].contains(&part))
+        }
+    }
 
     /// P8's classes. Row 16: the Last time preview's words go from the last note's recap to its
     /// `What happened`, at the same place and height, each old form with its own new form. Row
@@ -3423,6 +3536,70 @@ mod allowed_classes {
                     row.difference
                 );
             }
+        }
+        // P6's classes refuse the reader's Start fight gone, moved sideways (as Add to Log next
+        // to Edit would move it), moved down or narrowed; Add to Log outside a reader; an
+        // existing glyph moved elsewhere; and an act that hides Start fight.
+        let start = Difference {
+            screen: "world-reader".into(),
+            view: "1200x800 Lookup closed".into(),
+            what: "control".into(),
+            change: "moved".into(),
+            name: "Button: Start a fight with Captain Varra Black".into(),
+            detail: "726.6 67 100x28 -> 834.1 67 100x28".into(),
+        };
+        let p6_faults = [
+            Difference {
+                change: "gone".into(),
+                detail: "was 726.6 67 100x28".into(),
+                ..start.clone()
+            },
+            Difference {
+                detail: "726.6 67 100x28 -> 840.1 67 100x28".into(),
+                ..start.clone()
+            },
+            Difference {
+                detail: "726.6 67 100x28 -> 834.1 95 100x28".into(),
+                ..start.clone()
+            },
+            Difference {
+                change: "resized".into(),
+                detail: "726.6 67 100x28 -> 834.1 67 90x28".into(),
+                ..start.clone()
+            },
+            Difference {
+                screen: "session-tonight".into(),
+                change: "new".into(),
+                name: "Button: Add to Log".into(),
+                detail: "at 726.6 67 103.5x28".into(),
+                ..start.clone()
+            },
+            Difference {
+                what: "text".into(),
+                name: "\u{e3d4}".into(),
+                detail: "643.9 50 14x18 -> 700.0 50 14x18".into(),
+                ..start.clone()
+            },
+            Difference {
+                screen: "act 103".into(),
+                view: String::new(),
+                what: "act".into(),
+                change: "changed".into(),
+                name: "open Captain Varra Black".into(),
+                detail: "appeared + Add to Log | went + Start fight".into(),
+            },
+        ];
+        for fault in p6_faults {
+            let row = AllowedRow {
+                row: 8,
+                why: String::new(),
+                difference: fault,
+            };
+            assert!(
+                class_of(&row, &allowed.rows).is_none(),
+                "a class allows {}",
+                row.difference
+            );
         }
     }
 }

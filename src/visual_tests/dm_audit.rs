@@ -772,7 +772,68 @@ fn after_the_session(a: &mut Audit<'_, '_>) {
             .find(|node| node.name.contains("Kestrel Dunmoor ·"))
             .map_or_else(String::new, |node| node.name.clone())
     ));
+
+    // F6 of the session-cycle design: what an NPC said goes in the NPC's own Log, from the
+    // scene that the DM marked done. Counted from the plan, as the design counts it.
+    a.setup("the plan holds a done scene with Hobb the Miller, in view", |d| {
+        let campaign = d.app_mut().campaigns.active_campaign().expect("a campaign");
+        let npc = campaign.path.join(HOBB_PATH);
+        fs::create_dir_all(npc.parent().expect("a folder")).expect("make the NPC folder");
+        fs::write(
+            &npc,
+            format!(
+                "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: world\nsplat_name: {HOBB}\nsplat_world: {{type: npc, status: alive}}\n---\n\n# {HOBB}\n\nKeeps the mill at the ford.\n",
+                splat::character::stable_id(HOBB_PATH)
+            ),
+        )
+        .expect("write the NPC");
+        d.app_mut().lookup.refresh();
+        d.settle();
+        d.click(NAV_SESSIONS);
+        let body = d.editor_text().expect("tonight's note");
+        d.replace_editor_text(&body.replacen(
+            "## Plan for tonight\n",
+            &format!("## Plan for tonight\n\n- [x] [[{HOBB}]]\n"),
+            1,
+        ));
+        d.press_ctrl(Key::S);
+        show_plan(d);
+        // By now the plan holds an opened fight with its rewards, so its rows pass the pane and
+        // the scenes fold to `N scenes` (F3). The DM opens them with that link.
+        let fold = d
+            .nodes()
+            .into_iter()
+            .find(|node| {
+                node.name.split_once(' ').is_some_and(|(n, word)| {
+                    n.parse::<usize>().is_ok() && ["scene", "scenes"].contains(&word)
+                })
+            })
+            .map(|node| node.name);
+        if let Some(fold) = fold {
+            d.click(&fold);
+        }
+        d.expect(&format!("Done: {HOBB}"));
+    });
+    a.task("Put what an NPC said in the NPC's own note");
+    a.click(Panel, &format!("Add to Log: {HOBB}"));
+    a.act(Do, "type the line", |d| {
+        d.type_text("Named the informer at the ford.")
+    });
+    a.act(Do, "add it", |d| d.press(Key::Enter));
+    a.act(Panel, "close Lookup", |d| d.press(Key::Escape));
+    a.fact(format!(
+        "the NPC's note holds the line: {}",
+        a.d.app()
+            .campaigns
+            .active_campaign()
+            .and_then(|campaign| fs::read_to_string(campaign.path.join(HOBB_PATH)).ok())
+            .is_some_and(|text| text.contains(": Named the informer at the ford.\n"))
+    ));
 }
+
+/// The World NPC of F6's task, whom a done scene links.
+const HOBB: &str = "Hobb the Miller";
+const HOBB_PATH: &str = "NPCs/Hobb the Miller.md";
 
 /// Each counted task's cost, in the order played. Set-up rows count for nothing.
 fn counts(record: &Record) -> Vec<TaskCount> {
