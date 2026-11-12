@@ -1528,7 +1528,7 @@ Recap, the one source that carry-over reads too; then the note's first written l
 session is the current one and has no event, no run and no live recording, and the last session holds a part
 to carry, a quiet `Carry over` (`Action::in_line`, 24 px, so the line keeps its height) ends the line, `L` after
 the preview, with what it adds on hover. The preview gives it room first, to nothing, then the link's words
-shorten; nothing wraps. A last note that cannot be read blocks it: `Splat cannot read Session 1’s note.` It
+shorten; nothing wraps. The preview stops at `READER_MEASURE`, as muted help does. A last note that cannot be read blocks it: `Splat cannot read Session 1’s note.` It
 adds, through `Draft::apply_with_properties` and in one save, the recap as one embed line
 `![[<note>#What happened]]` (or the processed recap under `> This draft was written automatically. Check it
 against your memory.`, which the embed replaces once What happened has prose), the plan lines still to come

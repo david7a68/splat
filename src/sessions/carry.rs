@@ -692,7 +692,8 @@ impl Sessions {
                     format!("— {preview}")
                 },
                 &Type::Small.font(ui),
-                ui.available_width() - carry_room,
+                // Muted words keep the reader's measure, as help does.
+                (ui.available_width() - carry_room).min(design::READER_MEASURE),
             );
             if !words.is_empty() || action.is_none() {
                 ui.label(Type::Small.rich(ui, words).color(colors().muted))
