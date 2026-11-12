@@ -12780,6 +12780,8 @@ pub mod session_recording {
                     && node.rect.is_positive()
                     && target.rect.y_range().contains(node.rect.center().y)
                     && pane.intersects(node.rect.x_range())
+                    // A footer's own words and actions are not the pane's row.
+                    && !bands.iter().any(|band| band.contains_rect(node.rect))
             })
             .collect();
         let clear = |node: &Found| {
