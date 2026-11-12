@@ -1829,10 +1829,7 @@ pub const REWARDS_HEADING: &str = "## Loot and rewards";
 
 /// The Timeline ID that a list line starts with: `- [[Timeline#^t-…|Name]]`.
 fn listed_reference(line: &str) -> Option<&str> {
-    let rest = line.trim_start();
-    let rest = ["- ", "* ", "+ "]
-        .iter()
-        .find_map(|mark| rest.strip_prefix(mark))?;
+    let rest = after_list_mark(line.trim_start())?;
     let rest = rest.trim_start().strip_prefix("[[Timeline#^")?;
     let end = rest.find(['|', ']'])?;
     Some(rest[..end].trim())
@@ -1845,6 +1842,22 @@ pub fn listed_references(text: &str) -> std::collections::BTreeSet<String> {
         .filter_map(listed_reference)
         .map(str::to_owned)
         .collect()
+}
+
+/// The words after a list line's mark (`- `, `* ` or `+ `), for words that start with it.
+fn after_list_mark(words: &str) -> Option<&str> {
+    ["- ", "* ", "+ "]
+        .iter()
+        .find_map(|mark| words.strip_prefix(mark))
+}
+
+/// Each line of `text` with its line end, and the byte where it starts.
+fn lines_at(text: &str) -> impl Iterator<Item = (usize, &str)> {
+    text.split_inclusive('\n').scan(0, |at, line| {
+        let start = *at;
+        *at += line.len();
+        Some((start, line))
+    })
 }
 
 /// One rewards block as the note holds it: the line that starts with a fight's reference, and
@@ -1861,14 +1874,7 @@ struct Block<'a> {
 /// line that starts with another event's reference is not a block.
 fn blocks<'a>(text: &'a str, fight: &dyn Fn(&str) -> bool) -> Vec<Block<'a>> {
     let indent = |line: &str| line.len() - line.trim_start().len();
-    let lines: Vec<(usize, &str)> = text
-        .split_inclusive('\n')
-        .scan(0, |at, line| {
-            let start = *at;
-            *at += line.len();
-            Some((start, line))
-        })
-        .collect();
+    let lines: Vec<(usize, &str)> = lines_at(text).collect();
     let mut out = Vec::new();
     for (at, (start, line)) in lines.iter().enumerate() {
         let Some(id) = listed_reference(line).filter(|id| fight(id)) else {
@@ -1882,10 +1888,7 @@ fn blocks<'a>(text: &'a str, fight: &dyn Fn(&str) -> bool) -> Vec<Block<'a>> {
             }
             end = child_start + child.len();
             let words = child.trim();
-            let words = ["- ", "* ", "+ "]
-                .iter()
-                .find_map(|mark| words.strip_prefix(mark))
-                .unwrap_or(words);
+            let words = after_list_mark(words).unwrap_or(words);
             if xp.is_none() && (words == "XP" || words.starts_with("XP ")) {
                 xp = Some(words);
             }
@@ -1974,14 +1977,8 @@ pub struct Rewarded {
 /// Put a block for the fight `id` at the end of `## Loot and rewards`, after its last line,
 /// or add that heading at the end of the note. `block` is whole lines, each ending in `\n`.
 pub fn add_rewards(text: &str, id: &str, block: &str) -> (String, Rewarded, usize) {
-    let mut starts = text
-        .split_inclusive('\n')
-        .scan(0, |at, line| {
-            let start = *at;
-            *at += line.len();
-            Some((start, line))
-        })
-        .skip_while(|(_, line)| !line.trim().eq_ignore_ascii_case(REWARDS_HEADING));
+    let mut starts =
+        lines_at(text).skip_while(|(_, line)| !line.trim().eq_ignore_ascii_case(REWARDS_HEADING));
     let (at, lead) = match starts.next() {
         Some((heading, line)) => {
             // The section ends at the next heading of its level or higher.

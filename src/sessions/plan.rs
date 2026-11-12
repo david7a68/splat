@@ -1211,6 +1211,30 @@ impl Rewards {
     }
 }
 
+/// A fight's rewards block: its reference, then under it the XP line, when it has one, and
+/// each loot line.
+fn rewards_block(reference: &str, xp: Option<&str>, loot: &[String]) -> String {
+    let mut block = format!("- {reference}\n");
+    for line in xp.into_iter().chain(loot.iter().map(String::as_str)) {
+        block.push_str(&format!("  - {line}\n"));
+    }
+    block
+}
+
+/// The words of an `Add rewards` result for its XP choice, from the newest block before it.
+fn rewards_choice(with_xp: Option<bool>, xp_line: &str) -> String {
+    match with_xp {
+        Some(true) => format!(
+            "XP {}, as in your last rewards.",
+            crate::encounter_run::grouped_number(
+                crate::sessions::first_number(xp_line).unwrap_or(0)
+            )
+        ),
+        Some(false) => "No XP, as in your last rewards.".to_owned(),
+        None => "XP added. Delete that line to leave XP out from now on.".to_owned(),
+    }
+}
+
 /// The Timeline IDs of the fights that were played: a reference to another event is not a
 /// rewards block.
 fn played_fights(book: &Book) -> std::collections::BTreeSet<String> {
@@ -1285,13 +1309,8 @@ impl Sessions {
                         std::iter::once(Some(text)).chain(earlier.iter().map(Option::as_deref));
                     let with_xp =
                         crate::sessions::rewards_with_xp(notes, &|id| fights.contains(id));
-                    let mut block = format!("- {reference}\n");
-                    if with_xp != Some(false) {
-                        block.push_str(&format!("  - {xp}\n"));
-                    }
-                    for line in &found.loot {
-                        block.push_str(&format!("  - {line}\n"));
-                    }
+                    let xp_shown = (with_xp != Some(false)).then_some(xp.as_str());
+                    let block = rewards_block(&reference, xp_shown, &found.loot);
                     let (after, written, at) = crate::sessions::add_rewards(text, &event, &block);
                     // The note beside the plan shows the block's last line.
                     let shown = after[..at + block.len() - 1].chars().count();
@@ -1301,26 +1320,15 @@ impl Sessions {
                 if let (Ok(_) | Err(ActFault::NotSaved(..)), Some((written, with_xp, shown))) =
                     (&result, made)
                 {
-                    let choice = match with_xp {
-                        Some(true) => format!(
-                            "XP {}, as in your last rewards.",
-                            crate::encounter_run::grouped_number(
-                                crate::sessions::first_number(&xp).unwrap_or(0)
-                            )
-                        ),
-                        Some(false) => "No XP, as in your last rewards.".to_owned(),
-                        None => {
-                            "XP added. Delete that line to leave XP out from now on.".to_owned()
-                        }
-                    };
+                    let has_xp = with_xp != Some(false);
                     rewards.done.insert(
                         (note, event.clone()),
                         RewardsDone {
                             written,
-                            choice,
-                            with_xp: with_xp != Some(false),
+                            choice: rewards_choice(with_xp, &xp),
+                            with_xp: has_xp,
                             not_rolled: found.not_rolled,
-                            unknown: unknown * u64::from(with_xp != Some(false)),
+                            unknown: unknown * u64::from(has_xp),
                         },
                     );
                     self.caret_to_show = Some(shown);

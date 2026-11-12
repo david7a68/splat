@@ -87,9 +87,16 @@ pub(super) fn describe(rolls: &[LootRoll]) -> String {
 /// `3`, `3 and 4`, `3, 4 and 1`.
 fn values(found: &[Found]) -> String {
     let words: Vec<String> = found.iter().map(|f| f.value.to_string()).collect();
+    and_list(&words)
+}
+
+/// `a`, `a and b`, `a, b and c`.
+fn and_list<S: std::borrow::Borrow<str>>(words: &[S]) -> String {
     match words.split_last() {
-        Some((last, rest)) if !rest.is_empty() => format!("{} and {last}", rest.join(", ")),
-        _ => words.join(""),
+        Some((last, rest)) if !rest.is_empty() => {
+            format!("{} and {}", rest.join(", "), last.borrow())
+        }
+        _ => words.concat(),
     }
 }
 
@@ -260,11 +267,10 @@ impl Rewards {
                 .filter(|(_, xp)| xp.is_none())
                 .map(|(name, _)| name.as_str())
                 .collect();
-            let names = match names.split_last() {
-                Some((last, rest)) if !rest.is_empty() => format!("{} and {last}", rest.join(", ")),
-                _ => names.concat(),
-            };
-            line.push_str(&format!(". XP not known for {names}: enter an award here."));
+            line.push_str(&format!(
+                ". XP not known for {}: enter an award here.",
+                and_list(&names)
+            ));
             return (line, downed.unknown);
         }
         if self.characters > 0 && downed.xp > 0 {
