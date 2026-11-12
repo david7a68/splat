@@ -104,6 +104,23 @@ fn block_faults(d: &Driver<'_>, result: Option<&str>, next: &str) -> Vec<String>
     faults
 }
 
+/// The tops of the open Travel row's parts below its checks, from its label `Encounter checks`:
+/// Title, Notes and the row's `Timeline` link.
+fn below_checks(d: &Driver<'_>) -> Vec<Option<f32>> {
+    let nodes = d.nodes();
+    let top =
+        |found: Option<&crate::visual_tests::driver::Found>| found.map(|node| node.rect.top());
+    let label = top(nodes.iter().find(|node| node.name == "Encounter checks"));
+    let named = |name: &str| top(nodes.iter().find(|node| node.name == name));
+    let link = top(nodes
+        .iter()
+        .find(|node| node.name == "Timeline" && node.is_link()));
+    [named("Title"), named("Notes on this event"), link]
+        .into_iter()
+        .map(|at| Some(at? - label?))
+        .collect()
+}
+
 /// From the bottom of the table menu's line to the top of a control under it.
 fn below_menu(d: &Driver<'_>, name: &str) -> Option<f32> {
     Some(d.place_of(name)?.top() - d.place_of("On the road")?.bottom())
@@ -241,12 +258,24 @@ pub fn run(d: &mut Driver<'_>) {
     );
     d.click("Close Lookup");
     // Act A: plan the fight. It is the next row, with Start fight.
+    let below = below_checks(d);
+    let offer = d.place_of(PLAN_AMBUSH);
     d.begin_task();
     d.click(PLAN_AMBUSH);
     d.expect("“Bridge Ambush” is in tonight’s plan.");
     d.goal_within("T11.10", "plan a result as a fight", 1);
+    // The message and its Undo take the offer's line, so nothing below the checks moves.
+    let undo = d.place_of("Undo plan line");
+    let after = below_checks(d);
+    d.observe(
+        "T11.10",
+        below.iter().all(Option::is_some)
+            && after == below
+            && matches!((offer, undo), (Some(offer), Some(undo)) if offer.y_range().contains(undo.center().y)),
+        format!("The plan line's message is on the check's line ({offer:?}, {undo:?}), and moves nothing ({below:?}, {after:?})"),
+    );
     let parts = [
-        d.has_containing("In the plan"),
+        d.has_containing("in tonight’s plan"),
         !d.has(PLAN_AMBUSH),
         // The fixture's Bridge Ambush has a paused run, so its row resumes it.
         d.has("Start fight: Bridge Ambush") || d.has("Resume: Bridge Ambush"),
@@ -284,6 +313,20 @@ pub fn run(d: &mut Driver<'_>) {
         "T11.9",
         checks(d).len() == 2,
         "Undo clear puts the result back",
+    );
+    // An edit of the note ends the plan line's Undo: `In the plan` takes the message's line.
+    d.click(PLAN_AMBUSH);
+    let below = below_checks(d);
+    write_note(d);
+    d.type_into_editor("\nThe road is quiet.\n");
+    d.settle();
+    let after = below_checks(d);
+    d.observe(
+        "T11.10",
+        d.has_containing("In the plan") && !d.has("Undo plan line") && after == below,
+        format!(
+            "After a note edit, In the plan stands in the message's place ({below:?}, {after:?})"
+        ),
     );
     // A shorter journey deletes no result.
     d.replace_text_in("How long", "1 day");

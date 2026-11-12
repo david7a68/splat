@@ -855,12 +855,12 @@ impl TimelinePage {
         notes: &mut crate::sessions::page::Sessions,
     ) {
         let c = colors();
-        checks::settle_length(book, self.selected.as_deref());
-        let Some(id) = self
+        let index = self
             .selected
-            .clone()
-            .filter(|id| book.events.iter().any(|event| event.id == *id))
-        else {
+            .as_ref()
+            .and_then(|id| book.events.iter().position(|event| event.id == *id));
+        checks::settle_length(book, index);
+        let Some(index) = index else {
             ui.label(Type::Heading.rich(ui, "An event").color(c.text));
             ui.add(
                 egui::Label::new(
@@ -875,12 +875,8 @@ impl TimelinePage {
             );
             return;
         };
+        let id = book.events[index].id.clone();
         let days = day_numbers(&book.events);
-        let index = book
-            .events
-            .iter()
-            .position(|event| event.id == id)
-            .expect("the selected event");
         let link = reference(&book.events[index], days[index]);
         let unsaved = book.event_unsaved(&id);
         let blocked = book
@@ -1163,6 +1159,7 @@ impl TimelinePage {
                     length: &length,
                     tables,
                     planned: &|_| None,
+                    plan_line: None,
                 };
                 checks_act = checks::header(ui, &view, &mut self.checks).or(checks_act.take());
                 // The act's result keeps its line under the table, so it moves no field.

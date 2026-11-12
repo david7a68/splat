@@ -27,7 +27,29 @@ pub enum Act {
     /// `Clear` on a result: its label and its words.
     Clear(String, String),
     /// `Plan “<name>”` on a result that links an encounter or a group.
-    Plan(String),
+    Plan(Planned),
+    /// `Undo plan line` on the line of the check that the plan line came from.
+    UndoPlan,
+}
+
+/// What `Plan “<name>”` acted on: the name, and the check the DM clicked it on, by its label
+/// and words as read.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Planned {
+    pub name: String,
+    pub check: (String, String),
+}
+
+impl Planned {
+    /// The plan line's message.
+    pub fn words(&self) -> String {
+        format!("“{}” is in tonight’s plan.", self.name)
+    }
+
+    /// Whether this is the check the DM clicked.
+    pub fn on(&self, check: &Check) -> bool {
+        self.check.0 == check.label && self.check.1 == check.words
+    }
 }
 
 /// Whether this journey shows its checks: the DM chose `Roll for encounters` on it.
@@ -238,7 +260,7 @@ pub fn apply(
             event.checks.remove(at);
             Some(("Check cleared.".to_owned(), "Undo clear"))
         }
-        Act::Plan(_) => return Ok(None),
+        Act::Plan(_) | Act::UndoPlan => return Ok(None),
     };
     let after = event.clone();
     if after == before {
@@ -266,6 +288,8 @@ pub struct View<'a> {
     /// For a name that a result links: nothing when it is not an encounter or a group, else
     /// whether the plan has a row still to come for it.
     pub planned: &'a dyn Fn(&str) -> Option<bool>,
+    /// The plan line whose message and Undo show on its check's line, in place of its offer.
+    pub plan_line: Option<&'a Planned>,
 }
 
 /// What the DM typed in one block: a roll for each line, and the last line's fault.
@@ -479,7 +503,7 @@ pub fn lines(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<Ac
             );
             match check {
                 Some(check) => {
-                    if let Some(found) = result(ui, label, check, view.planned) {
+                    if let Some(found) = result(ui, label, check, view) {
                         act = Some(found);
                     }
                 }
@@ -580,12 +604,8 @@ pub fn lines(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<Ac
 
 /// A result: its number and words, `Clear` at the line's end, and an offer for each encounter
 /// or group that it links.
-fn result(
-    ui: &mut egui::Ui,
-    label: &str,
-    check: &Check,
-    planned: &dyn Fn(&str) -> Option<bool>,
-) -> Option<Act> {
+fn result(ui: &mut egui::Ui, label: &str, check: &Check, view: &View<'_>) -> Option<Act> {
+    let planned = view.planned;
     let c = colors();
     let mut act = None;
     let clear_name = format!("Clear the check for {label}");
@@ -609,23 +629,41 @@ fn result(
             );
             let mut names = crate::sessions::linked_names(&check.words);
             names.retain(|name| planned(name).is_some());
+            // Each name keeps one line of one height: its offer, then the plan line's message
+            // and Undo, then `In the plan`. So nothing moves when the message comes or goes.
             for name in names.into_iter().take(MOST_OFFERS) {
-                if planned(&name) == Some(true) {
-                    design::status(
-                        ui,
-                        Status {
-                            icon: icons::OK,
-                            word: "In the plan",
-                            color: c.document.saved,
-                        },
-                    );
+                let line = view
+                    .plan_line
+                    .filter(|line| line.name == name && line.on(check));
+                if let Some(line) = line {
+                    let words = line.words();
+                    if design::undo_line(ui, Tone::Success, Some((&words, "Undo plan line"))) {
+                        act = Some(Act::UndoPlan);
+                    }
+                } else if planned(&name) == Some(true) {
+                    let size = egui::vec2(ui.available_width(), Density::Read.control());
+                    let left = egui::Layout::left_to_right(egui::Align::Center);
+                    ui.allocate_ui_with_layout(size, left, |ui| {
+                        ui.set_min_size(size);
+                        design::status(
+                            ui,
+                            Status {
+                                icon: icons::OK,
+                                word: "In the plan",
+                                color: c.document.saved,
+                            },
+                        );
+                    });
                 } else if Action::quiet(&format!("Plan “{name}”"))
                     .line_start()
                     .density(Density::Read)
                     .show(ui)
                     .clicked()
                 {
-                    act = Some(Act::Plan(name));
+                    act = Some(Act::Plan(Planned {
+                        name,
+                        check: (check.label.clone(), check.words.clone()),
+                    }));
                 }
             }
         },
@@ -722,23 +760,22 @@ pub fn length_input(
 }
 
 /// A length typed for a journey whose held field is no longer in view: its event takes it, as
-/// the field would have when it lost focus. `open` is the event whose form is in view; a page
-/// that goes out of view settles with none. Only a journey that shows its checks holds a typed
-/// length, so a draft for an event without them settles too.
-pub fn settle_length(book: &mut Book, open: Option<&str>) {
-    let held = |id: &str| {
-        Some(id) == open
-            && book
-                .events
-                .iter()
-                .any(|event| event.id == id && shown(event))
-    };
+/// the field would have when it lost focus. `open` is the place in the list of the event whose
+/// form is in view, as the page resolved it; a page that goes out of view settles with none.
+/// Only a journey that shows its checks holds a typed length, so a draft for an event without
+/// them settles too. A frame that keeps the draft reads that one event, never the list.
+pub fn settle_length(book: &mut Book, open: Option<usize>) {
+    let held = open
+        .and_then(|at| book.events.get(at))
+        .filter(|event| shown(event))
+        .map(|event| event.id.as_str());
     let Some(id) = book
         .length
         .0
         .as_ref()
-        .map(|(id, _, _)| id.clone())
-        .filter(|id| !held(id))
+        .map(|(id, _, _)| id.as_str())
+        .filter(|id| Some(*id) != held)
+        .map(str::to_owned)
     else {
         return;
     };
@@ -852,10 +889,10 @@ mod tests {
         let typed = LengthDraft(Some((id.clone(), "4 days".into(), "2 days".into())));
         book.events[0].checks_table = Some("road".into());
         book.length = typed.clone();
-        settle_length(&mut book, Some(&id));
+        settle_length(&mut book, Some(0));
         assert_eq!(book.length, typed);
         book.events[0].checks_table = None;
-        settle_length(&mut book, Some(&id));
+        settle_length(&mut book, Some(0));
         assert_eq!(book.length, LengthDraft::default());
         assert_eq!(book.events[0].duration, "4 days");
     }
@@ -878,6 +915,7 @@ mod tests {
                         length: "",
                         tables: &tables,
                         planned: &|_| None,
+                        plan_line: None,
                     };
                     header(ui, &view, &mut State::default());
                 });
