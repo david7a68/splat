@@ -67,19 +67,20 @@ fn chosen<'a>(event: &Event, tables: &'a [Table]) -> Option<&'a Table> {
     tables.iter().find(|table| table.key == key)
 }
 
-/// The length in minutes, when the clock can read it and it is more than nothing.
+/// The length in minutes, when the clock can read it. Zero is a length.
 fn minutes(length: &str) -> Option<u64> {
-    read_duration(length.trim()).filter(|minutes| *minutes > 0)
+    read_duration(length.trim())
 }
 
 /// Whether a check at this offset is one of the journey's: a whole interval from the start,
 /// and before the end.
 fn fits(at: u64, every: u64, length: Option<u64>) -> bool {
-    at.is_multiple_of(every) && (at == 0 || length.is_some_and(|minutes| at * HOUR < minutes))
+    at.is_multiple_of(every) && length.map_or(at == 0, |minutes| at * HOUR < minutes)
 }
 
 /// The offsets of a journey's checks, in hours: one at each whole interval from the start, and
-/// none at the end. An empty length, or one the clock cannot read, has one. Too many is a count.
+/// none at the end, so a length of zero has none. An empty length, or one the clock cannot read,
+/// has one. Too many is a count.
 pub fn offsets(length: &str, every: u64) -> Result<Vec<u64>, usize> {
     let Some(minutes) = minutes(length) else {
         return Ok(vec![0]);
@@ -129,6 +130,37 @@ impl Done {
             book.touch();
             book.save();
         }
+    }
+}
+
+/// The last result of each journey's act on one page, with its Undo, kept by the event's ID. Each
+/// lasts while its event is as the act left it; the page drops them all when the DM leaves it.
+#[derive(Default)]
+pub struct Results(BTreeMap<String, Done>);
+
+impl Results {
+    pub fn keep(&mut self, done: Done) {
+        self.0.insert(done.id.clone(), done);
+    }
+
+    /// Drop each result whose event changed since its act.
+    pub fn follow(&mut self, book: &Book) {
+        self.0.retain(|_, done| done.live(book));
+    }
+
+    pub fn get(&self, id: &str) -> Option<&Done> {
+        self.0.get(id)
+    }
+
+    /// Undo this journey's last act.
+    pub fn undo(&mut self, id: &str, book: &mut Book) {
+        if let Some(done) = self.0.remove(id) {
+            done.undo(book);
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.0.clear();
     }
 }
 
@@ -340,7 +372,7 @@ pub fn header(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<A
 /// The span of the journey on the clock, for the line under **How long**.
 pub fn span(start: Option<u64>, length: &str) -> Option<String> {
     let start = start?;
-    let end = start + minutes(length)?;
+    let end = start + minutes(length).filter(|minutes| *minutes > 0)?;
     Some(format!("{} to {}", clock_words(start), clock_words(end)))
 }
 
@@ -676,8 +708,10 @@ pub fn length_input(
 }
 
 /// A length typed for a journey whose field is no longer in view: its event takes it, as the
-/// field would have when it lost focus.
-pub fn settle_length(book: &mut Book, draft: &mut LengthDraft, shown: Option<&str>) {
+/// field would have when it lost focus. `shown` is the journey whose field is in view; a page
+/// that goes out of view settles with none.
+pub fn settle_length(book: &mut Book, shown: Option<&str>) {
+    let draft = &mut book.length;
     let Some(id) = draft
         .0
         .as_ref()
@@ -687,9 +721,9 @@ pub fn settle_length(book: &mut Book, draft: &mut LengthDraft, shown: Option<&st
         return;
     };
     let taken = match book.events.iter_mut().find(|event| event.id == id) {
-        Some(event) => draft.take(event),
+        Some(event) => book.length.take(event),
         None => {
-            draft.0 = None;
+            book.length.0 = None;
             Taken::Nothing
         }
     };
@@ -754,9 +788,12 @@ mod tests {
         assert_eq!(offsets("2 days", 24), Ok(vec![0, 24]));
         assert_eq!(offsets("2 days", 8), Ok(vec![0, 8, 16, 24, 32, 40]));
         assert_eq!(offsets("36 hours", 24), Ok(vec![0, 24]));
-        for length in ["", "a while", "0 days"] {
+        for length in ["", "a while"] {
             assert_eq!(offsets(length, 24), Ok(vec![0]), "{length}");
         }
+        // Shorter than one interval: the check at its start. Zero: none, as none is at the end.
+        assert_eq!(offsets("1 hour", 24), Ok(vec![0]));
+        assert_eq!(offsets("0 days", 24), Ok(vec![]));
         assert_eq!(offsets("10 days", 1), Err(240));
         assert_eq!(name(Some(2 * DAY + 8 * HOUR), 24, &Per::Day), "Day 4");
         assert_eq!(
@@ -777,15 +814,16 @@ mod tests {
         book.open(Some(dir.path()));
         let id = book.add(Kind::Travel, None);
         book.save();
-        let mut draft = LengthDraft(Some((id.clone(), "2 days".into(), String::new())));
+        let draft = LengthDraft(Some((id.clone(), "2 days".into(), String::new())));
         // Typed against the length the event had: an edit.
         let taken = draft.clone().take(&mut book.events[0].clone());
+        book.length = draft;
         assert_eq!(taken, Taken::Length);
         // The file gave the event a length meanwhile: the typed one does not overwrite it
         // silently, and saving waits for the DM's choice.
         book.events[0].duration = "3 days".into();
-        settle_length(&mut book, &mut draft, None);
-        assert_eq!(draft, LengthDraft::default());
+        settle_length(&mut book, None);
+        assert_eq!(book.length, LengthDraft::default());
         assert!(book.conflict && book.events[0].duration == "2 days");
     }
 

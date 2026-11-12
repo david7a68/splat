@@ -702,6 +702,9 @@ pub struct Book {
     rest_undo: Option<(Event, Event)>,
     /// Each session's note name, for links in the file's body.
     pub session_links: BTreeMap<Uuid, String>,
+    /// The length being typed in a journey's **How long**, on whichever page. One owner, so a
+    /// draft on one page never outlives a newer length typed on the other.
+    pub length: checks::LengthDraft,
     /// Goes up at each edit, read and write, so a reader can keep what it worked out from the
     /// events until they can have changed.
     changes: u64,

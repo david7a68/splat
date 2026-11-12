@@ -87,12 +87,10 @@ pub struct TimelinePage {
     pub open_place: Option<Uuid>,
     /// The campaign's marked tables, for a journey's encounter checks.
     pub tables: Option<std::sync::Arc<crate::loot_editor::Sources>>,
-    /// **How long** while it has focus: the event and the words typed.
-    length: checks::LengthDraft,
     focus_length: bool,
-    /// What the DM typed in a journey's checks, and the last act's result with its Undo.
+    /// What the DM typed in a journey's checks, and each journey's last result with its Undo.
     checks: checks::State,
-    checks_done: Option<checks::Done>,
+    checks_done: checks::Results,
 }
 
 /// One button for each of these kinds of event. Returns the new event's ID.
@@ -484,8 +482,8 @@ impl TimelinePage {
 
     pub fn reopen(&mut self) {
         self.reset_detail = true;
-        // A journey's result and its Undo end when the DM leaves the page.
-        self.checks_done = None;
+        // The journeys' results and their Undo end when the DM leaves the page.
+        self.checks_done.clear();
     }
 
     fn row(
@@ -842,7 +840,7 @@ impl TimelinePage {
         notes: &mut crate::sessions::page::Sessions,
     ) {
         let c = colors();
-        checks::settle_length(book, &mut self.length, self.selected.as_deref());
+        checks::settle_length(book, self.selected.as_deref());
         let Some(id) = self
             .selected
             .clone()
@@ -887,13 +885,7 @@ impl TimelinePage {
         let mut checks_act = None;
         let mut undo_checks = false;
         let mut length_taken = checks::Taken::Nothing;
-        if self
-            .checks_done
-            .as_ref()
-            .is_some_and(|done| !done.live(book))
-        {
-            self.checks_done = None;
-        }
+        self.checks_done.follow(book);
         let labels: Vec<String> = book
             .events
             .iter()
@@ -1105,7 +1097,7 @@ impl TimelinePage {
                         };
                         let focus = std::mem::take(&mut self.focus_length);
                         let (words, taken) =
-                            checks::length_input(ui, &mut self.length, event, hint, focus);
+                            checks::length_input(ui, &mut book.length, event, hint, focus);
                         length = words;
                         length_taken = taken;
                     },
@@ -1146,7 +1138,7 @@ impl TimelinePage {
                 };
                 checks_act = checks::header(ui, &view, &mut self.checks).or(checks_act.take());
                 checks_act = checks::lines(ui, &view, &mut self.checks).or(checks_act.take());
-                if let Some(done) = self.checks_done.as_ref().filter(|done| done.id == id) {
+                if let Some(done) = self.checks_done.get(&id) {
                     ui.add_space(design::S);
                     undo_checks |= design::undo_message(ui, Tone::Success, &done.words, done.undo);
                 }
@@ -1292,13 +1284,13 @@ impl TimelinePage {
                 self.focus_length = book.events[index].duration.trim().is_empty();
             }
             match checks::apply(book, &id, &act, tables) {
-                Ok(Some(done)) => self.checks_done = Some(done),
+                Ok(Some(done)) => self.checks_done.keep(done),
                 Ok(None) => {}
                 Err(error) => self.checks.failed(&act, error),
             }
         }
-        if undo_checks && let Some(done) = self.checks_done.take() {
-            done.undo(book);
+        if undo_checks {
+            self.checks_done.undo(&id, book);
         }
         if let Some(action) = ruling {
             action.apply(book, &id);
