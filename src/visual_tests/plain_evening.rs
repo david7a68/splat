@@ -1927,7 +1927,7 @@ mod allowed_classes {
         },
         Class {
             row: 25,
-            name: "R3b c: an item of the header's line left of Next turn, right by its narrowing",
+            name: "R3b c: an item of the header's line up to Next turn's edge, right by its narrowing",
             fits: run_header::shifted,
         },
         Class {
@@ -2029,7 +2029,8 @@ mod allowed_classes {
             view_narrowing(d, rows).is_some_and(|(_, next)| key_in(d, next))
         }
 
-        /// An item of the header's line, left of Next turn, moved right by its narrowing.
+        /// An item of the header's line, up to Next turn's right edge (its icon and words, and
+        /// `Add to fight` left of it), moved right by its narrowing.
         pub(super) fn shifted(d: &Difference, rows: &[AllowedRow]) -> bool {
             let (Some((b, a)), Some((dx, next))) = (before_after(d), view_narrowing(d, rows))
             else {
@@ -2042,7 +2043,7 @@ mod allowed_classes {
                 && b[1] == a[1]
                 && (b[2], b[3]) == (a[2], a[3])
                 && ((a[0] - b[0]) - dx).abs() <= 0.5
-                && b[0] < next[0]
+                && b[0] + b[2] <= next[0] + next[2]
         }
 
         /// The turn's heading, wider to the right on its line.

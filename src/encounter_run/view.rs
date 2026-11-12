@@ -4636,7 +4636,10 @@ impl Run {
                             if self.history.is_empty() {
                                 self.empty_undo(ui)
                             } else {
-                                self.undo_action(&label)
+                                // The one rule of Undo labels, as in the live and ended header.
+                                let room = ui.available_width();
+                                let words = self.undo_words_in(ui, &label, room, Density::Read);
+                                self.undo_action(&words)
                                     .name(&label)
                                     .hint(&label)
                                     .show(ui)
@@ -5770,7 +5773,7 @@ impl Run {
             return;
         }
         let full = self.undo_label();
-        let words = self.ended_undo_words(ui, &full, room);
+        let words = self.undo_words_in(ui, &full, room, Density::Glance);
         if self
             .undo_action(&words)
             .density(Density::Glance)
@@ -5784,15 +5787,12 @@ impl Run {
         }
     }
 
-    /// Undo's words as the ended header's line has `room` for them: whole when they fit, else
-    /// the first form of the one rule (`undo_forms`) that fits, and `Undo` alone last.
-    fn ended_undo_words(&self, ui: &egui::Ui, full: &str, room: f32) -> String {
-        let fits = |words: &str| {
-            self.undo_action(words)
-                .density(Density::Glance)
-                .natural_width(ui)
-                <= room + 0.5
-        };
+    /// Undo's words as a header's line has `room` for them, in the ended and the setup view:
+    /// whole when they fit, else the first form of the one rule (`undo_forms`) that fits, and
+    /// `Undo` alone last.
+    fn undo_words_in(&self, ui: &egui::Ui, full: &str, room: f32, density: Density) -> String {
+        let fits =
+            |words: &str| self.undo_action(words).density(density).natural_width(ui) <= room + 0.5;
         if fits(full) {
             return full.to_owned();
         }
@@ -8538,6 +8538,41 @@ mod tests {
             2,
             "Undo's hover holds its whole words"
         );
+        // The setup view's Undo has the same rule: a long name shortens by whole words, never
+        // inside a word, and the whole step is its accessible name.
+        let mut setup = super::super::tests::run();
+        let name = "Oren Thistlewick, Keeper of the Southern Road";
+        setup.state.participants[0].name = name.into();
+        setup.history.push(setup.state.clone());
+        setup.history_labels.push(format!("initiative for {name}"));
+        setup.history_from_sheet.push(false);
+        let full = format!("Undo: initiative for {name}");
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(454.0, 640.0))
+            .build(move |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    setup.setup_view(ui);
+                });
+            });
+        crate::design::theme::install(&harness.ctx);
+        harness.run_steps(4);
+        let painted: Vec<_> = harness
+            .output()
+            .shapes
+            .iter()
+            .filter_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.job.text.starts_with("Undo") => {
+                    Some((text.galley.job.text.clone(), text.galley.elided))
+                }
+                _ => None,
+            })
+            .collect();
+        assert!(
+            matches!(&painted[..], [(words, false)]
+                if words.starts_with("Undo: initiative for Oren") && keeps_names(words)),
+            "the setup Undo is one form of the rule: {painted:?}"
+        );
+        assert!(harness.query_by_label(&full).is_some(), "{full}");
     }
 
     #[test]
