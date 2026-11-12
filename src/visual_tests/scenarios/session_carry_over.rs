@@ -99,7 +99,8 @@ pub fn run(d: &mut Driver<'_>) {
     // with no carry-over property, while the line offers Carry over.
     d.observe(
         "T18.4",
-        !before.contains("carried_") && before.contains("## Recap of last time\n\n## Plan for tonight"),
+        !before.contains("carried_")
+            && before.contains("## Recap of last time\n\n## Plan for tonight"),
         format!("The new session's note is the template until the DM acts: {before:?}"),
     );
     d.begin_task();
