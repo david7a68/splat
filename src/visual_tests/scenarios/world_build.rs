@@ -473,13 +473,13 @@ pub fn broken(d: &mut Driver<'_>) {
     d.expect("Note repaired.");
     // FD1: an edit-form save result takes the same place on the same note. It replaces
     // `Note repaired.`, the older result.
-    let pane = reader_pane(d);
-    let repaired_at = d.painted_rect_in("Note repaired.", pane);
+    // Round 26 FG1: the value rows keep their place from `Note repaired.` to `Changes saved.`
+    // and its Undo; both results sit in the footer.
+    let rows = tops_at_sizes(d, "Change Stat block");
     d.click("Edit Repaired watchkeeper");
     d.type_into("Status", "on watch");
     d.click("Save changes");
     d.wait_for_text("Changes saved.");
-    let saved_at = d.painted_rect_in("Changes saved.", pane);
     // FD5 (round 20): a finished change has the success tone, as `Note repaired.` has.
     let (below, detail) = result_below_file_line(
         d,
@@ -487,18 +487,12 @@ pub fn broken(d: &mut Driver<'_>) {
         "Notes/Broken.md",
         design::colors().result.success,
     );
-    // An Undo message centres its words on its Undo target's line, so its words start that
-    // much below the top of the place.
-    let centred = (design::Density::Read.control() - design::Type::Body.line()) / 2.0;
     d.observe(
         "iter-17-D-FD1-same-place",
-        below
-            && !d.visible_text("Note repaired.")
-            && repaired_at.zip(saved_at).is_some_and(|(repaired, saved)| {
-                (repaired.top() - (saved.top() - centred)).abs() <= 0.5
-            }),
-        format!("`Note repaired.` at {repaired_at:?}, `Changes saved.` at {saved_at:?}; {detail}"),
+        below && !d.visible_text("Note repaired."),
+        format!("`Changes saved.` replaces `Note repaired.`; {detail}"),
     );
+    body_kept(d, "iter-26-D-FG1", "Change Stat block", &rows, Some("Undo changes"));
     d.state("repaired-note-saved", Sizes::Default);
     d.click("Undo changes");
     d.observe(
@@ -1189,6 +1183,7 @@ pub fn broken(d: &mut Driver<'_>) {
     entry(d, "NPCs/Lamp.md", "Lamp Warden", "npc", "");
     reload(d);
     d.click_containing("Lamp Warden · ");
+    let lamp_original = fs::read_to_string(&lamp).unwrap();
     d.click("Rename the note to Lamp");
     d.wait_for_text("Undo name change");
     let lamp_renamed = fs::read_to_string(&lamp).unwrap();
@@ -1196,6 +1191,40 @@ pub fn broken(d: &mut Driver<'_>) {
         lamp_renamed.contains("splat_name: Lamp\n"),
         "B changed state"
     );
+    // Round 26 contract (revision 18): a newer result on the same note joins the older one in
+    // the footer, newest Undo first in the footer's order. The older Undo refuses while the file
+    // holds the newer write: the bytes stay and the refusal is a reason; then each Undo, newest
+    // first, takes its own write back.
+    d.click("Change Stat block");
+    d.type_text("Guard");
+    d.click("Guard");
+    d.wait_for_text("Stat block set to Guard.");
+    let lamp_both = fs::read_to_string(&lamp).unwrap();
+    let listed = d.in_view("Undo name change") && d.in_view("Undo stat block change");
+    d.click("Undo name change");
+    d.settle();
+    let refused = fs::read_to_string(&lamp).unwrap() == lamp_both
+        && d.in_view("Undo stat block change")
+        && d.in_view("Undo name change");
+    d.click("Undo stat block change");
+    d.settle();
+    let stat_back = fs::read_to_string(&lamp).unwrap() == lamp_renamed;
+    d.click("Undo name change");
+    d.settle();
+    d.observe(
+        "iter-26-D-two-results",
+        listed
+            && lamp_both.contains("Guard")
+            && refused
+            && stat_back
+            && fs::read_to_string(&lamp).unwrap() == lamp_original
+            && !d.has("Undo name change")
+            && !d.has_containing("changed on disk"),
+        format!("Both listed {listed}; older refused {refused}; newer undone {stat_back}"),
+    );
+    d.click("Rename the note to Lamp");
+    d.wait_for_text("Undo name change");
+    assert_eq!(fs::read_to_string(&lamp).unwrap(), lamp_renamed, "B changed state again");
     d.click_containing("Repaired watchkeeper · ");
     d.click("Undo file rename");
     d.settle();
@@ -2130,6 +2159,8 @@ pub fn places(d: &mut Driver<'_>) {
     );
     d.state("npc-place", Sizes::All);
     let original = fs::read(root(d).join("NPCs/Rook Ambry.md")).unwrap();
+    // Round 26 SH1: the In row below the Stat block row keeps its place while the result shows.
+    let rows = tops_at_sizes(d, "Change In");
     let before = d.interaction_count();
     d.click("Change Stat block");
     d.type_text("Guard");
@@ -2144,9 +2175,11 @@ pub fn places(d: &mut Driver<'_>) {
             .unwrap()
             .contains("splat_stat_block:")
     );
+    body_kept(d, "iter-26-D-SH1", "Change In", &rows, Some("Undo stat block change"));
     d.expect_same("Adding the stat block keeps the note's content and offers Undo.");
     d.state("npc-stat-block-changed", Sizes::All);
     d.click("Undo stat block change");
+    body_kept(d, "iter-26-D-SH1-undo", "Change In", &rows, None);
     d.observe(
         "W3",
         fs::read(root(d).join("NPCs/Rook Ambry.md")).unwrap() == original,
@@ -2857,6 +2890,10 @@ pub fn generator(d: &mut Driver<'_>) {
         !d.has("Save NPC"),
         "The World page has no generated NPC before Lookup rolls one",
     );
+    // Round 26 FF1: with no note open, the discard result and its Undo sit in the pane's
+    // footer, as below a note, not under the empty state's advice.
+    let empty = tops_at_sizes(d, "No note open");
+    body_kept(d, "iter-26-D-FF1", "No note open", &empty, Some("Undo discard"));
     look_up(d, "Tally");
     d.click("Clear");
     d.click("Generate NPC");
@@ -3534,6 +3571,46 @@ fn result_below_file_line(
     )
 }
 
+/// Round 26 footer: `anchor`'s top at 960, 1200 and 1920.
+fn tops_at_sizes(d: &mut Driver<'_>, anchor: &str) -> [Option<f32>; 3] {
+    [SMALL, DEFAULT, LARGE]
+        .map(|size| d.at_size(size, |d| d.place_of(anchor).map(|rect| rect.top())))
+}
+
+/// Round 26 footer: a pane's results, reasons and Undo sit in its footer, so `anchor` (what the
+/// DM works on) keeps the top it had in `before` at 960, 1200 and 1920. When `result` is given,
+/// it is in view at each size in the footer: below `anchor`, in the pane's lower part.
+fn body_kept(
+    d: &mut Driver<'_>,
+    id: &str,
+    anchor: &str,
+    before: &[Option<f32>; 3],
+    result: Option<&str>,
+) {
+    let now = tops_at_sizes(d, anchor);
+    let kept = before.iter().zip(&now).all(|pair| match pair {
+        (Some(before), Some(now)) => (before - now).abs() <= 0.5,
+        _ => false,
+    });
+    let mut placed = Vec::new();
+    if let Some(result) = result {
+        for size in [SMALL, DEFAULT, LARGE] {
+            placed.push(d.at_size(size, |d| {
+                let found = d.place_of(result).filter(|_| d.in_view(result));
+                let below = found.zip(d.place_of(anchor)).is_some_and(|(found, anchor)| {
+                    found.top() >= anchor.bottom() && found.top() >= size.1 / 2.0
+                });
+                (size, found, below)
+            }));
+        }
+    }
+    d.observe(
+        id,
+        kept && placed.iter().all(|(_, _, below)| *below),
+        format!("{anchor} keeps its top {before:?} → {now:?}; {result:?} in the footer: {placed:?}"),
+    );
+}
+
 /// FD5 (round 20): a finished change is a success. Its words have the success tone's bar, and
 /// no info bar.
 pub(super) fn finished_change_tone(d: &Driver<'_>, words: &str) -> (bool, String) {
@@ -3915,6 +3992,9 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
         );
     }
     d.expect("Edit Rook Ambry");
+    // Round 26 FJ3: `Add to fight` keeps its place in Lookup while the save result shows and
+    // after it goes; the result sits in Lookup's footer.
+    let add = tops_at_sizes(d, "Add to fight");
     d.click("Edit Rook Ambry");
     d.wait_for_text("Save changes");
     d.click("Change In");
@@ -4027,10 +4107,12 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
             && !d.has("Change In"),
         "After Save, Lookup reads the NPC again with the new place and text",
     );
+    body_kept(d, "iter-26-D-FJ3", "Add to fight", &add, Some("Undo changes"));
     d.state("npc-edit-saved-in-lookup", Sizes::All);
     d.click("Undo changes");
     d.wait_for_text("Watch House");
     assert_eq!(fs::read_to_string(&path).unwrap(), before);
+    body_kept(d, "iter-26-D-FJ3-undo", "Add to fight", &add, None);
 
     // FT2, the other half: Bless has no value block. Its prose sets the gap that Watch House
     // must match.
@@ -9342,7 +9424,8 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
             !d.has("Save changes")
         },
     );
-    // FD1: the edit-form save result is a page result, below the file line and above the rows.
+    // Round 26 FE2 (replaces round 17 FD1's place above the rows): the edit-form save result
+    // is in the pane's footer, below the value rows, with the success tone.
     for size in [SMALL, DEFAULT, LARGE] {
         let (placed, detail) = d.at_size(size, |d| {
             d.expect("Change Status");
@@ -9359,18 +9442,21 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
                 below
                     && message
                         .zip(row)
-                        .is_some_and(|(message, row)| message.bottom() <= row.top()),
-                format!("{detail}; first row at {row:?}"),
+                        .is_some_and(|(message, row)| message.top() >= row.bottom()),
+                format!("{detail}; status row at {row:?}"),
             )
         });
         d.observe(
-            "iter-17-D-FD1",
+            "iter-26-D-FE2-footer",
             placed,
-            format!("At {size:?}, `Changes saved.` sits above the value rows: {detail}"),
+            format!("At {size:?}, `Changes saved.` sits in the footer below the rows: {detail}"),
         );
     }
+    let rows = tops_at_sizes(d, "Change Status");
     d.state("overwrite-keeps-unread-disk-groups", Sizes::All);
     d.click("Undo changes");
+    // The rows keep their place when the result goes with its Undo.
+    body_kept(d, "iter-26-D-FE2", "Change Status", &rows, None);
     assert_eq!(fs::read(&path).unwrap(), unread.as_bytes());
     reload(d);
     d.click("Edit Safe Rook");

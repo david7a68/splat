@@ -3287,6 +3287,7 @@ impl Reader {
             FooterAct::FileRename => match self.file_undo.as_ref()?.undo(campaign) {
                 Ok(()) => {
                     self.file_undo = None;
+                    self.error = None;
                     Some(Go::Reload(item.entry.id))
                 }
                 Err(error) => {
@@ -3297,6 +3298,7 @@ impl Reader {
             FooterAct::Name => match self.name_undo.as_ref()?.undo(campaign) {
                 Ok(()) => {
                     self.name_undo = None;
+                    self.error = None;
                     Some(Go::Reload(item.entry.id))
                 }
                 Err(error) => {
@@ -3310,6 +3312,7 @@ impl Reader {
                     Ok(()) => {
                         let id = note_id(&undo.path);
                         self.identity_undo = None;
+                        self.error = None;
                         Some(Go::Reload(id))
                     }
                     Err(error) => {
@@ -3334,6 +3337,8 @@ impl Reader {
         match self.undo.as_ref()?.undo(campaign) {
             Ok(_) => {
                 self.undo = None;
+                // A finished Undo ends the reason an earlier action left.
+                self.error = None;
                 Some(Go::Reload(id))
             }
             Err(error) => {
