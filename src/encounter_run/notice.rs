@@ -1,7 +1,7 @@
 //! The run's header. Its second line is the notice line: the notice, the Undo label beside it,
 //! and the rule for what shortens first.
 use super::{
-    Command, NOBODY_PRESENT, Panel, Run, SHEET_SOURCE,
+    Command, NOBODY_PRESENT, Panel, Phase, Run, SHEET_SOURCE,
     view::{
         DOCK_ALL_WORDS_FROM, dock_name, header_height, keeps_names, log_link, undo_compact,
         undo_words,
@@ -28,6 +28,26 @@ impl SyncAlert {
 }
 
 impl Run {
+    /// The current turn's reminders, from the effects with a time: all of them whole, their
+    /// count, and the whole words for the hover and the accessible name.
+    pub(super) fn turn_reminders(&self) -> Option<(String, String, String)> {
+        if self.state.phase != Phase::Running {
+            return None;
+        }
+        let p = self.state.participants.get(self.current()?)?;
+        let reminders: Vec<String> = p
+            .conditions
+            .iter()
+            .filter_map(super::Condition::reminder)
+            .collect();
+        if reminders.is_empty() {
+            return None;
+        }
+        let whole = reminders.join(" · ");
+        let full = format!("Reminders for {}: {whole}", p.name);
+        Some((whole, reminders.len().to_string(), full))
+    }
+
     /// The round and the turn are the strongest things on the page, above any row, and
     /// they grow with the rows. Next up is the only name that may be off the roster's view.
     pub(super) fn live_header(&mut self, ui: &mut egui::Ui, scale: RunScale) -> bool {
@@ -277,7 +297,7 @@ impl Run {
                 sheet_notice_in_header = sheet.is_some();
                 let notice_width = (notice_width + if sheet.is_some() { sheet_width } else { 0.0 })
                     .min((ui.available_width() - minimum - design::L).max(0.0));
-                let slot = ui.available_width() - notice_width - design::L;
+                let mut slot = ui.available_width() - notice_width - design::L;
                 let mut keyless = false;
                 let shown = if party_sync_off
                     && self.recording_notice.is_some()
@@ -324,6 +344,46 @@ impl Run {
                     }
                     shown
                 };
+                // Part 3, the current turn's reminders, takes only the room that the notice,
+                // the sheet summary and today's Undo label leave. `Next:` gives way to it.
+                let next_shown = sync_alert.is_none()
+                    && self.recording_notice.is_none()
+                    && !nobody_present
+                    && strip.next.is_some();
+                let undo_width = if self.history.is_empty() {
+                    self.undo_action("Undo").natural_width(ui)
+                        + design::S
+                        + design::number_width(ui, self.empty_undo_words(), &font)
+                } else {
+                    let action = self.undo_action(&shown);
+                    let action = if keyless { action.key("") } else { action };
+                    action.natural_width(ui)
+                };
+                let next_width = if next_shown {
+                    design::number_width(ui, &notice, &font) + design::S
+                } else {
+                    0.0
+                };
+                let reminder = self
+                    .turn_reminders()
+                    .and_then(|(whole, count, full)| {
+                        let room = slot - undo_width - design::L + next_width;
+                        [whole, count]
+                            .into_iter()
+                            .map(|words| {
+                                let width = design::number_width(
+                                    ui,
+                                    &format!("{} {words}", icons::PIN),
+                                    &font,
+                                ) + design::XS;
+                                (words, width)
+                            })
+                            .find(|(_, width)| *width <= room)
+                            .map(|(words, width)| (words, width, full))
+                    });
+                if let Some((_, width, _)) = &reminder {
+                    slot -= width + design::L - next_width;
+                }
                 ui.allocate_ui_with_layout(
                     vec2(slot, Density::Read.control()),
                     Layout::right_to_left(Align::Center),
@@ -378,10 +438,26 @@ impl Run {
                         };
                         let full = &alert.text;
                         let link_width = design::number_width(ui, link, &font) + design::S;
+                        // A conflict's name wider than the line beside the bare Undo shortens
+                        // as the dock's name does; the icon, `Conflict` and `Review` stay.
+                        let short = match &strip.conflict {
+                            Some(name)
+                                if design::number_width(ui, &alert.short, &font)
+                                    + link_width
+                                    + design::XS
+                                    > ui.available_width() =>
+                            {
+                                let prefix = format!("{} Conflict: ", icons::WARN);
+                                let room = ui.available_width()
+                                    - link_width
+                                    - design::XS
+                                    - design::number_width(ui, &prefix, &font);
+                                format!("{prefix}{}", dock_name(ui, name, &font, room))
+                            }
+                            _ => alert.short.clone(),
+                        };
                         let fits_link = !link.is_empty()
-                            && design::number_width(ui, &alert.short, &font)
-                                + link_width
-                                + design::XS
+                            && design::number_width(ui, &short, &font) + link_width + design::XS
                                 <= ui.available_width();
                         let text_width = ui.available_width()
                             - if sheet.is_some() { sheet_width } else { 0.0 }
@@ -391,7 +467,7 @@ impl Run {
                                 0.0
                             };
                         let full_fits = design::number_width(ui, full, &font) <= text_width;
-                        let words = if full_fits { full } else { &alert.short };
+                        let words = if full_fits { full } else { &short };
                         ui.allocate_ui_with_layout(
                             vec2(text_width, Density::Read.control()),
                             Layout::left_to_right(Align::Center),
@@ -441,8 +517,10 @@ impl Run {
                                 .map_or(String::new(), |next| format!("Next: {next}"))
                         };
                         // Undo is shortened first. Then the next name goes whole, because
-                        // the roster marks NEXT on its row.
-                        let shown = if nobody_present {
+                        // the roster marks NEXT on its row. It gives way to the reminders.
+                        let shown = if reminder.is_some() && !nobody_present {
+                            String::new()
+                        } else if nobody_present {
                             design::words_that_fit(ui, &text, &font, ui.available_width())
                         } else if design::number_width(ui, &text, &font) <= ui.available_width() {
                             text
@@ -487,6 +565,20 @@ impl Run {
                             self.notice = None;
                             self.notice_summary = None;
                         }
+                    }
+                    if let Some((words, _, full)) = &reminder {
+                        if sheet.is_some() || !next_shown {
+                            ui.add_space(design::S);
+                        }
+                        let response = ui
+                            .horizontal(|ui| {
+                                ui.spacing_mut().item_spacing.x = design::XS;
+                                ui.label(Type::Small.rich(ui, icons::PIN).color(c.result.info));
+                                ui.label(Type::Small.rich(ui, words.as_str()).color(c.text));
+                            })
+                            .response;
+                        design::named(ui, &response, full);
+                        response.on_hover_text(full);
                     }
                 });
             },

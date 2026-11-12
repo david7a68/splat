@@ -10,6 +10,14 @@ use super::{
 use crate::design::{self, Action, Density, Type, colors, icons};
 use eframe::egui::{self, Align, Key, Layout, vec2};
 
+/// How `Effect` fits beside the selected name.
+#[derive(Clone, Copy, PartialEq)]
+enum EffectFit {
+    Word,
+    Icon,
+    None,
+}
+
 /// A roll's result has its place before there is one, so that nothing moves when it comes.
 const DICE_RESULT_WIDTH: f32 = 32.0;
 
@@ -22,6 +30,8 @@ impl Run {
         let mut command = None;
         let mut open_conditions = false;
         let mut open_side = false;
+        let mut open_effect = false;
+        let mut in_dock = false;
         let frame = egui::Frame::new()
             .fill(c.selected)
             .inner_margin(egui::Margin::symmetric(design::S as i8, design::XS as i8));
@@ -75,7 +85,13 @@ impl Run {
                     });
                 });
                 if !self.also.is_empty() {
+                    self.effect_in_dock = false;
                     self.target_words(ui);
+                    return;
+                }
+                // Line two becomes one field while the DM adds an effect to this row.
+                if self.effect_open.as_ref() == Some(&self.state.participants[index].key) {
+                    command = self.effect_line(ui, index);
                     return;
                 }
                 let p = &self.state.participants[index];
@@ -103,6 +119,15 @@ impl Run {
                         .natural_width(ui)
                     + gap;
                 let height = Density::Read.control();
+                let effect_key = if self.lookup_open || self.notes_open {
+                    ""
+                } else {
+                    "E"
+                };
+                let running = self.state.phase == super::Phase::Running;
+                let effect_word = Self::effect_action(effect_key).natural_width(ui) + gap;
+                let effect_icon = Density::Read.control() + gap;
+                let mut effect = EffectFit::None;
                 // Left to right: the name, then exactly `L`, then its controls. The controls'
                 // width only limits how long a name may be.
                 ui.horizontal(|ui| {
@@ -112,12 +137,40 @@ impl Run {
                             .on_hover_text(line);
                     }
                     let room = ui.available_width() - controls - design::L;
+                    // `Effect` shows with its word while the name keeps its size and its
+                    // words; with its icon while the name keeps both beside the icon; and
+                    // not at all otherwise.
+                    let keeps = |room: f32| {
+                        dock_name_shown(ui, &p.name, room) == (Type::Heading, p.name.clone())
+                    };
+                    if running && keeps(room - effect_word) {
+                        effect = EffectFit::Word;
+                    } else if running && keeps(room - effect_icon) {
+                        effect = EffectFit::Icon;
+                    }
+                    let room = room
+                        - match effect {
+                            EffectFit::Word => effect_word,
+                            EffectFit::Icon => effect_icon,
+                            EffectFit::None => 0.0,
+                        };
                     let (role, shown) = dock_name_shown(ui, &p.name, room);
                     let response = ui
                         .label(role.rich(ui, shown).color(c.text))
                         .on_hover_text(&p.name);
                     design::named(ui, &response, &format!("Selected: {}", p.name));
                     ui.add_space(design::L - gap);
+                    let pressed = match effect {
+                        EffectFit::Word => Self::effect_action(effect_key).show(ui).clicked(),
+                        EffectFit::Icon => {
+                            design::icon_button(ui, icons::PIN, "Effect: words for this row")
+                                .clicked()
+                        }
+                        EffectFit::None => false,
+                    };
+                    if pressed {
+                        open_effect = true;
+                    }
                     if Action::quiet("Conditions")
                         .density(Density::Read)
                         .name("Conditions for this participant")
@@ -164,10 +217,15 @@ impl Run {
                         command = Some(Command::Presence(index, !p.present));
                     }
                 });
+                in_dock = effect != EffectFit::None;
             });
         });
+        self.effect_in_dock = in_dock;
         if open_conditions {
             self.open_conditions_tab();
+        }
+        if open_effect {
+            self.open_effect_field();
         }
         if open_side {
             self.close_lookup = true;
@@ -184,6 +242,59 @@ impl Run {
                 self.follow_with_keyboard();
             }
         }
+    }
+
+    /// The quiet `Effect` of the dock's second line, with its key while the key works.
+    fn effect_action(key: &str) -> Action<'_> {
+        Action::quiet("Effect")
+            .icon(icons::PIN)
+            .density(Density::Read)
+            .name("Effect: words for this row")
+            .hint("Pin words to this row, such as Bless 10 rounds")
+            .key(key)
+    }
+
+    /// The dock's second line as one field, for the row it opened for. Enter adds the words
+    /// and Escape clears them; either closes the field and puts focus in `Amount`. Any other
+    /// way out, such as `Next turn`, closes it, and its words wait for that row.
+    fn effect_line(&mut self, ui: &mut egui::Ui, index: usize) -> Option<Command> {
+        let p = &self.state.participants[index];
+        let (key, hint) = (
+            p.key.clone(),
+            format!("Effect on {}, such as Bless 10 rounds", p.name),
+        );
+        let field = self.effect_fields.entry(key.clone()).or_default();
+        let result = ui
+            .horizontal(|ui| {
+                ui.set_min_height(Density::Read.control());
+                design::add_field(
+                    ui,
+                    field,
+                    "Effect",
+                    &hint,
+                    0.0,
+                    |_| None::<()>,
+                    |_| Vec::new(),
+                )
+            })
+            .inner;
+        let escape = ui.input(|i| i.key_pressed(Key::Escape));
+        let words = field.words.trim().to_owned();
+        let mut command = None;
+        if result.enter || (escape && result.field.lost_focus()) {
+            if result.enter && !words.is_empty() {
+                command = Some(Command::Condition(index, words));
+            }
+            field.clear();
+            self.effect_open = None;
+            self.focus_amount = true;
+        } else if result.field.lost_focus() {
+            self.effect_open = None;
+        }
+        if self.effect_open.is_none() {
+            self.effect_fields.retain(|_, field| !field.words.is_empty());
+        }
+        command
     }
 
     /// In place of the one row's actions: how many take this amount, and how to give half. The

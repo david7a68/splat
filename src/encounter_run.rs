@@ -772,6 +772,15 @@ pub(crate) struct Run {
     closing: bool,
     ending: bool,
     focus_amount: bool,
+    /// The row whose effect the dock's field is open for, by key.
+    effect_open: Option<String>,
+    /// Words typed in the dock's effect field, by the key of the row they are for. They wait
+    /// for that row when the field closes without Enter.
+    effect_fields: BTreeMap<String, crate::design::AddField>,
+    /// The dock had room for `Effect` beside the selected name, so `E` opens its field.
+    effect_in_dock: bool,
+    /// The Conditions tab's `Other effect…` field takes focus on its next frame.
+    focus_other_effect: bool,
     roster_height: f32,
     sync_to_restore: Vec<String>,
     /// Sync starts by itself for each linked player, and again after a connection comes back.
@@ -1230,6 +1239,10 @@ impl Run {
             closing: false,
             ending: false,
             focus_amount: false,
+            effect_open: None,
+            effect_fields: BTreeMap::new(),
+            effect_in_dock: false,
+            focus_other_effect: false,
             roster_height: 0.0,
             sync_to_restore: Vec::new(),
             keep_party_synced: false,
@@ -4318,6 +4331,10 @@ impl Run {
             closing: false,
             ending: false,
             focus_amount: true,
+            effect_open: None,
+            effect_fields: BTreeMap::new(),
+            effect_in_dock: false,
+            focus_other_effect: false,
             roster_height: 0.0,
             sync_to_restore: Vec::new(),
             keep_party_synced: saved.keep_party_synced,

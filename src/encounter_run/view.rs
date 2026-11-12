@@ -91,9 +91,17 @@ fn other_effect_add() -> Action<'static> {
 }
 
 /// The field that adds an other effect, and its Add. True when the DM adds the typed words.
-pub(crate) fn other_effect_field(ui: &mut egui::Ui, text: &mut String, width: f32) -> bool {
+pub(crate) fn other_effect_field(
+    ui: &mut egui::Ui,
+    text: &mut String,
+    width: f32,
+    focus: bool,
+) -> bool {
     ui.horizontal(|ui| {
         let response = design::text_input(ui, "Other effect", text, "Other effect…", width);
+        if focus {
+            response.request_focus();
+        }
         let enter = response.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
         (other_effect_add()
             .blocked_if(text.trim().is_empty(), "Type an effect first.")
@@ -609,6 +617,9 @@ impl Run {
         // Next turn puts the focus in Amount, and the DM may still be typing a search.
         let letters = !self.lookup_open;
         let plain = Modifiers::NONE;
+        let effect = letters
+            && !(ui.input(|i| i.modifiers.shift || i.modifiers.alt))
+            && ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::E));
         let (next, undo, up, down, focus, enter, heal, conditions, typed) = ui.input_mut(|i| {
             let typed: String = if focused.is_none() {
                 i.events
@@ -674,6 +685,9 @@ impl Run {
         }
         if conditions {
             self.open_conditions_tab();
+        }
+        if effect {
+            self.open_effect_field();
         }
         // Ctrl+1 to Ctrl+9 arm the panel's actions, as a game's action bar does.
         const NUMBERS: [Key; 9] = [
@@ -1184,6 +1198,24 @@ impl Run {
 
     /// Every row's layout at this width. Rows with only a name can give up height when
     /// the list would otherwise scroll, so a wrapped condition costs no other row its view.
+    /// A row marked Conc that the newest step damaged: the DC of its save, 10 or half the
+    /// damage if that is more, and at most 30. It is read from the newest Undo step, so it
+    /// lasts until the next step and the run file gains no field. Splat does not roll it.
+    pub(super) fn conc_save_dc(&self, index: usize) -> Option<u32> {
+        let p = self.state.participants.get(index)?;
+        let before = self.history.last()?.participants.get(index)?;
+        let damage_step = self
+            .history_labels
+            .last()
+            .is_some_and(|label| label.contains(" damage"));
+        if !p.concentration || !damage_step || self.history_from_sheet.last() == Some(&true) {
+            return None;
+        }
+        let total = |p: &Participant| p.hp.unwrap_or(0).saturating_add(p.temporary_hp);
+        let damage = total(before).saturating_sub(total(p));
+        (damage > 0 && before.key == p.key).then(|| (damage / 2).clamp(10, 30) as u32)
+    }
+
     fn roster_layouts(
         &self,
         ui: &egui::Ui,
@@ -1200,7 +1232,8 @@ impl Run {
             .iter()
             .map(|&index| {
                 let p = &self.state.participants[index];
-                RowLayout::new(ui, width, p, self.row_sync_word(index), scale, fit, longest)
+                let row = (self.row_sync_word(index), self.conc_save_dc(index));
+                RowLayout::fitted(ui, width, p, row, scale, fit, longest)
                     .with_art(self.row_art(ui.ctx(), p))
                     .with_badge(ui, self.row_badge(index).as_deref())
             })
@@ -1283,6 +1316,7 @@ impl Run {
         let mut row_choice = None;
         let mut rule = None;
         let mut toggle_half = None;
+        let mut effect_act = None;
         // A changed window size must not leave the selected row out of view. The bar of
         // actions that Lookup shows above the dock is not a new size.
         let window_room = room + self.strip_height();
@@ -1324,6 +1358,10 @@ impl Run {
                     let badge = self.row_badge(index);
                     let turn = TurnMark::of(index, current, next_up);
                     let mut name = row_name(p, turn, sync);
+                    let conc_dc = self.conc_save_dc(index).map(|dc| format!("Conc save DC {dc}"));
+                    if let Some(dc) = &conc_dc {
+                        name.push_str(&format!(", {dc}"));
+                    }
                     if let Some((ability, total)) = &save {
                         name.push_str(&format!(", {ability} save {total}"));
                     }
@@ -1401,10 +1439,23 @@ impl Run {
                     });
                     let (response, rect) = response.inner;
                     // A name cut to `…` is whole in hover, as it is in the row's name.
-                    let response = if layout.name_cut {
-                        response.on_hover_text(format!("{}\n{}", p.name, p.side))
+                    // The whole words of the effects, and the save's DC, are in the hover.
+                    let effects: Vec<String> = p
+                        .conditions
+                        .iter()
+                        .filter(|c| c.is_effect())
+                        .map(super::Condition::words)
+                        .chain(conc_dc)
+                        .collect();
+                    let side = if effects.is_empty() {
+                        p.side.clone()
                     } else {
-                        response.on_hover_text(&p.side)
+                        format!("{}\n{}", p.side, effects.join(" · "))
+                    };
+                    let response = if layout.name_cut {
+                        response.on_hover_text(format!("{}\n{side}", p.name))
+                    } else {
+                        response.on_hover_text(side)
                     };
                     ui.set_clip_rect(original_clip);
                     spans.push((rect.top() - origin, rect.bottom() - origin, index));
@@ -1548,6 +1599,19 @@ impl Run {
                         rule = Some(position);
                         clicked = Some((index, false));
                     }
+                    // An ended run shows its effects as words: nothing counts, and a click
+                    // does nothing.
+                    if self.state.phase == Phase::Running
+                        && let Some((act, _)) = effect_links(ui, rect, p, layout, scale)
+                    {
+                        clicked = Some((index, false));
+                        effect_act = Some(match act {
+                            EffectAct::Open => None,
+                            EffectAct::Remove(at) => Some(Command::RemoveCondition(index, at)),
+                            EffectAct::Spend(at) => Some(Command::Spend(index, at)),
+                            EffectAct::Recharge(at) => Some(Command::Recharge(index, at)),
+                        });
+                    }
                     // More than a fill says a row is one of several targets, and the mark
                     // says whether it took half for a save.
                     if selected && !self.also.is_empty() {
@@ -1649,6 +1713,11 @@ impl Run {
         if let Some((index, choice)) = row_choice {
             self.row_choice(index, choice);
         }
+        match effect_act {
+            Some(Some(command)) => self.run_command(command),
+            Some(None) => self.open_conditions_tab(),
+            None => {}
+        }
         if rule == Some(usize::MAX) || rule == Some(usize::MAX - 2) {
             self.panel = Panel::Conditions;
         } else if rule == Some(usize::MAX - 1) {
@@ -1748,6 +1817,22 @@ impl Run {
     pub(super) fn open_conditions_tab(&mut self) {
         self.panel = Panel::Conditions;
         self.close_lookup = true;
+    }
+
+    /// `E`: the dock's effect field for the selected row; when `Effect` has no room there, or
+    /// several rows are selected, the Conditions tab with focus in its `Other effect…` field.
+    pub(super) fn open_effect_field(&mut self) {
+        if self.state.phase != Phase::Running {
+            return;
+        }
+        if self.effect_in_dock && self.also.is_empty() {
+            let key = self.state.participants[self.selected].key.clone();
+            self.effect_fields.entry(key.clone()).or_default().focus = true;
+            self.effect_open = Some(key);
+        } else {
+            self.open_conditions_tab();
+            self.focus_other_effect = true;
+        }
     }
 
     /// What was typed in this field beside Notes, when it cannot be a number.
@@ -1873,7 +1958,8 @@ impl Run {
                 ) {
                     command = Some(Command::RemoveCondition(index, custom[at].0));
                 }
-                if other_effect_field(ui, &mut self.condition, width) {
+                let focus = std::mem::take(&mut self.focus_other_effect);
+                if other_effect_field(ui, &mut self.condition, width, focus) {
                     // Typed as a level, it is still the one Exhaustion a creature has.
                     let typed = self.condition.trim();
                     command = Some(match exhausted.filter(|_| typed.starts_with("Exhaustion")) {
@@ -6266,6 +6352,15 @@ impl RowLayout {
             self.badge_below = badge_words(ui, badge, &font, beside).is_none()
                 || (whole > beside && whole <= below);
         }
+        // Roll words that the effects would push to a line of their own: the row has no room
+        // for its effects while they show.
+        if let Some(base) = self.without_effects.take() {
+            let base = base.with_badge(ui, badge);
+            if base.badge_below != self.badge_below {
+                return base;
+            }
+            self.without_effects = Some(Box::new(base));
+        }
         self
     }
 
@@ -6284,6 +6379,9 @@ impl RowLayout {
     }
 
     fn with_art(mut self, art: Option<PathBuf>) -> Self {
+        if let Some(base) = self.without_effects.take() {
+            self.without_effects = Some(Box::new(base.with_art(art.clone())));
+        }
         self.art = art;
         self
     }
@@ -7011,6 +7109,102 @@ fn condition_links(
         }
     }
     opened
+}
+
+/// Each target of a row's effects: a count, words shown on each turn, or the count of the
+/// rest. Each is its own target, at least `XL` wide, so the name beside it keeps its act.
+/// Returns the act the DM asked for, and the effect's place.
+fn effect_links(
+    ui: &mut egui::Ui,
+    rect: Rect,
+    p: &Participant,
+    layout: &RowLayout,
+    scale: RunScale,
+) -> Option<(EffectAct, usize)> {
+    let galley = layout.second_line.as_ref()?;
+    let origin = pos2(
+        rect.left() + layout.second_left,
+        layout.second_y(scale, rect),
+    );
+    let mut asked = None;
+    for (act, at, span) in &layout.effect_spans {
+        let condition = p.conditions.get(*at);
+        let words = condition.map_or_else(
+            || {
+                p.conditions
+                    .iter()
+                    .filter(|c| c.is_effect())
+                    .map(super::Condition::words)
+                    .collect::<Vec<_>>()
+                    .join(" · ")
+            },
+            super::Condition::words,
+        );
+        let effect = condition.map_or("", super::Condition::name);
+        let name = match (act, condition.and_then(super::Condition::time)) {
+            (EffectAct::Remove(_), _) => format!("Remove {effect}"),
+            (EffectAct::Spend(_), Some(Time::Uses { left: 0, .. })) => {
+                format!("Give back every use of {effect} of {}", p.name)
+            }
+            (EffectAct::Spend(_), _) => format!("Spend one use of {effect} of {}", p.name),
+            (EffectAct::Recharge(_), Some(Time::Recharge { spent: false, .. })) => {
+                format!("Mark {effect} spent")
+            }
+            (EffectAct::Recharge(_), Some(Time::Recharge { recharge, .. })) => {
+                let range = if recharge[0] == recharge[1] {
+                    recharge[0].to_string()
+                } else {
+                    format!("{}–{}", recharge[0], recharge[1])
+                };
+                format!("Roll 1d6. {range} makes it ready")
+            }
+            _ => format!("{words}. Remove it in Conditions"),
+        };
+        let start = galley.pos_from_cursor(egui::text::CCursor::new(span.start));
+        let end = galley.pos_from_cursor(egui::text::CCursor::new(span.end));
+        if start.top() != end.top() {
+            continue;
+        }
+        let word = Rect::from_min_max(start.min, pos2(end.left(), start.bottom()))
+            .translate(origin.to_vec2());
+        let bottom = (word.center().y + design::XL / 2.0).min(rect.bottom());
+        let width = word.width().max(design::XL);
+        let left = (word.center().x - width / 2.0)
+            .max(rect.left())
+            .min(rect.right() - width);
+        let target =
+            Rect::from_min_max(pos2(left, bottom - design::XL), pos2(left + width, bottom));
+        let response = ui
+            .interact(
+                target,
+                ui.id().with(("effect", &p.key, *at, span.start)),
+                egui::Sense::click(),
+            )
+            .on_hover_text(&name)
+            .on_hover_cursor(egui::CursorIcon::PointingHand);
+        response.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::WidgetType::Link, ui.is_enabled(), &name)
+        });
+        ui.painter().hline(
+            word.x_range(),
+            word.bottom(),
+            Stroke::new(
+                1.0,
+                if response.hovered() {
+                    colors().focus
+                } else {
+                    colors().participant.condition.gamma_multiply(0.5)
+                },
+            ),
+        );
+        if response.has_focus() {
+            design::focus_ring(ui, target);
+        }
+        if response.clicked() {
+            asked = Some((*act, *at));
+        }
+    }
+    asked
 }
 
 /// Where a row's roll words go: their left edge, their top below the second line's top, and

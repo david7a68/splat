@@ -1905,7 +1905,7 @@ fn conditions_row(ui: &mut egui::Ui, conditions: &mut Vec<String>) {
     let mut text = ui
         .data(|data| data.get_temp::<String>(id))
         .unwrap_or_default();
-    if crate::encounter_run::view::other_effect_field(ui, &mut text, width) {
+    if crate::encounter_run::view::other_effect_field(ui, &mut text, width, false) {
         if !conditions.iter().any(|c| same_condition(c, text.trim())) {
             conditions.push(text.trim().to_owned());
         }
