@@ -2212,6 +2212,19 @@ pub fn places(d: &mut Driver<'_>) {
         fs::read(root(d).join("NPCs/Rook Ambry.md")).unwrap() == original,
         "Undo restores the previous content byte for byte",
     );
+    // Round 26 FH2: the rows above keep their place while the cleared place's result shows in
+    // the footer. The cleared In row goes with its value, so the prose moves up by exactly one
+    // row pitch, and the result adds nothing to that.
+    let prose_at = |d: &mut Driver<'_>| {
+        [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                d.painted_rect_in("A note for tonight.", egui::Rect::EVERYTHING)
+                    .map(|words| words.top())
+            })
+        })
+    };
+    let rows = tops_at_sizes(d, "Change Stat block");
+    let prose = prose_at(d);
     d.click("Change In");
     action_at_text_edge(
         d,
@@ -2246,6 +2259,18 @@ pub fn places(d: &mut Driver<'_>) {
         undo.zip(row)
             .is_some_and(|(undo, row)| undo.top() >= row.bottom()),
         format!("Undo place change at {undo:?}, below the last row at {row:?}"),
+    );
+    body_kept(d, "iter-26-D-FH2", "Change Stat block", &rows, Some("Undo place change"));
+    let cleared = prose_at(d);
+    d.observe(
+        "iter-26-D-FH2-prose",
+        prose.iter().zip(&cleared).all(|pair| match pair {
+            (Some(before), Some(after)) => {
+                (before - design::Density::Scan.row() - after).abs() <= 0.5
+            }
+            _ => false,
+        }),
+        format!("The prose moves up one row pitch with the In row: {prose:?} → {cleared:?}"),
     );
     d.state("cleared-place-keeps-undo", Sizes::All);
     d.click("Undo place change");
