@@ -100,8 +100,8 @@ const ADD_COMMAND: &str = "devenv shell -- audit-freeze add";
 const SCENARIO: &str = "plain-evening";
 const WIDE: (f32, f32) = (1200.0, 800.0);
 const NARROW: (f32, f32) = (960.0, 640.0);
-/// Section 2.5 numbers its rows 1 to 22.
-const CONTRACT_ROWS: std::ops::RangeInclusive<u32> = 1..=27;
+/// Section 2.5 numbers its rows; R3e's are 35 to 37, and the rows between come with other pull requests.
+const CONTRACT_ROWS: std::ops::RangeInclusive<u32> = 1..=37;
 /// What the test folder becomes in a run's `splat_run_source_path`.
 const WORLD: &str = "<world>";
 const SAME: &str = "the same as at the start";
@@ -1914,53 +1914,53 @@ mod allowed_classes {
             name: "P4 c: an act shows or hides only `Effect`'s words",
             fits: |d, _| effect::act_words(d),
         },
-        // R3e, rows 25 to 27 (by the lead's ruling after app round 2).
+        // R3e, rows 35 to 37 (by the lead's ruling after app round 2).
         Class {
-            row: 25,
+            row: 35,
             name: "R3e a: the opened played row's new `Where`, its label over its field",
             fits: r3e::where_field,
         },
         Class {
-            row: 25,
+            row: 35,
             name: "R3e b: an unchanged item below `Where`, straight down by the block's one amount",
             fits: r3e::below_where,
         },
         Class {
-            row: 25,
+            row: 35,
             name: "R3e c: `Whole run`, `Timeline` and their `·` left to one `S` gap each",
             fits: r3e::link_gaps,
         },
         Class {
-            row: 25,
+            row: 35,
             name: "R3e d: an act shows or hides only `Where`",
             fits: |d, _| r3e::act_words(d, "Where"),
         },
         Class {
-            row: 26,
+            row: 36,
             name: "R3e e: a one-line scene's words straight down to a fight title's line",
             fits: r3e::scene_line,
         },
         Class {
-            row: 26,
+            row: 36,
             name: "R3e f: a done scene's `Add to Log` on its row without its icon",
             fits: r3e::log_without_icon,
         },
         Class {
-            row: 27,
+            row: 37,
             name: "R3e g: `Edit encounter`, the planned fight's menu's new last line",
             fits: |d, rows| r3e::edit_line(d, rows),
         },
         Class {
-            row: 27,
+            row: 37,
             name: "R3e h: an act shows or hides only `Edit encounter`",
             fits: |d, _| r3e::act_words(d, "Edit encounter"),
         },
     ];
 
-    /// R3e's classes, by the lead's ruling after app round 2. Row 25: an opened played fight's
-    /// row has `Where` (W2-D3) under links with one `S` gap each (X48). Row 26: a one-line
+    /// R3e's classes, by the lead's ruling after app round 2. Row 35: an opened played fight's
+    /// row has `Where` (W2-D3) under links with one `S` gap each (X48). Row 36: a one-line
     /// scene's words sit on a fight title's line (X12) and a done scene's `Add to Log` on its
-    /// row has no icon (X29). Row 27: a planned fight's menu ends with `Edit encounter` (W1-D1).
+    /// row has no icon (X29). Row 37: a planned fight's menu ends with `Edit encounter` (W1-D1).
     /// None lets an item of today go, be cut, narrow (but the one icon that X29 takes away),
     /// move sideways (but the links that X48 brings together) or move by another amount.
     mod r3e {
@@ -2085,7 +2085,7 @@ mod allowed_classes {
         }
 
         /// An item that lay at or below where `Where` now starts, straight down by the view's
-        /// one amount; a scene's words by that amount and `PAD` (row 26's line).
+        /// one amount; a scene's words by that amount and `PAD` (row 36's line).
         pub(super) fn below_where(d: &Difference, rows: &[AllowedRow]) -> bool {
             let (Some((label, _)), Some((by, old)), Some(amount)) =
                 (block(d, rows), down(d), amount(d, rows))
@@ -4378,18 +4378,18 @@ mod allowed_classes {
         let row = |row: u32, what: &str, change: &str, name: &str, detail: &str| {
             at(row, PLAYED, what, change, name, detail)
         };
-        let label = row(25, "control", "new", "Label: Where", "at 394 453 34.6x16");
+        let label = row(35, "control", "new", "Label: Where", "at 394 453 34.6x16");
         let field = row(
-            25,
+            35,
             "control",
             "new",
             "TextInput: Where",
             "at 394 473 296x28.2",
         );
-        let words = row(25, "text", "new", "Where", "at 394 453 34.6x16");
+        let words = row(35, "text", "new", "Where", "at 394 453 34.6x16");
         let menu = |detail: &str| {
             row(
-                25,
+                35,
                 "control",
                 "moved",
                 "Button: More actions for Ask about the toll",
@@ -4406,7 +4406,7 @@ mod allowed_classes {
                 detail,
             )
         };
-        let link = |name: &str, detail: &str| row(25, "control", "moved", name, detail);
+        let link = |name: &str, detail: &str| row(35, "control", "moved", name, detail);
         let links = [
             link("Label: ·", "431.4 422 3.9x16 -> 423.4 422 3.9x16"),
             link("Link: Whole run", "451.3 418 63.9x24 -> 435.3 418 63.9x24"),
@@ -4418,26 +4418,26 @@ mod allowed_classes {
             field.clone(),
             words,
             below.clone(),
-            scene(25, "394 529 109.8x24 -> 394 598.1 109.8x24"),
+            scene(35, "394 529 109.8x24 -> 394 598.1 109.8x24"),
         ];
         good.extend(links.iter().cloned());
-        // Row 26 in a view with no `Where`, and row 27.
+        // Row 36 in a view with no `Where`, and row 37.
         let tonight = |row: u32, what: &str, change: &str, name: &str, detail: &str| {
             at(row, "session-tonight", what, change, name, detail)
         };
         let log = |detail: &str| {
             tonight(
-                26,
+                36,
                 "control",
                 "resized",
                 "Button: Add to Log: Meet Hobb the Miller at the mill",
                 detail,
             )
         };
-        let icon = tonight(26, "text", "gone", "\u{e3d4}", "was 746.5 368 14x18");
+        let icon = tonight(36, "text", "gone", "\u{e3d4}", "was 746.5 368 14x18");
         good.extend([
             tonight(
-                26,
+                36,
                 "control",
                 "moved",
                 "Label: Read Emberfall Rumours",
@@ -4448,7 +4448,7 @@ mod allowed_classes {
         ]);
         let edit = |screen: &str, detail: &str| {
             at(
-                27,
+                37,
                 screen,
                 "control",
                 "new",
@@ -4472,8 +4472,8 @@ mod allowed_classes {
                 detail: detail.into(),
             },
         };
-        good.push(act(25, "appeared + Where"));
-        good.push(act(27, "went + Edit encounter"));
+        good.push(act(35, "appeared + Where"));
+        good.push(act(37, "went + Edit encounter"));
         assert!(
             classes(&good).iter().all(Option::is_some),
             "R3e's own differences fit: {:?}",
@@ -4498,7 +4498,7 @@ mod allowed_classes {
                 without(
                     "TextInput: Where",
                     row(
-                        25,
+                        35,
                         "control",
                         "new",
                         "TextInput: Where",
@@ -4511,7 +4511,7 @@ mod allowed_classes {
                 without(
                     "TextInput: Where",
                     row(
-                        25,
+                        35,
                         "control",
                         "new",
                         "TextInput: Where",
@@ -4536,14 +4536,14 @@ mod allowed_classes {
                     .cloned()
                     .chain([
                         menu("662 529 28x28 -> 662 579 28x28"),
-                        scene(25, "394 529 109.8x24 -> 394 581.9 109.8x24"),
+                        scene(35, "394 529 109.8x24 -> 394 581.9 109.8x24"),
                     ])
                     .collect(),
                 "every item below by one wrong amount",
             ),
             (
                 with(row(
-                    25,
+                    35,
                     "control",
                     "moved",
                     "Link: Notes",
@@ -4553,7 +4553,7 @@ mod allowed_classes {
             ),
             (
                 with(row(
-                    25,
+                    35,
                     "control",
                     "moved",
                     "Link: Log",
@@ -4563,7 +4563,7 @@ mod allowed_classes {
             ),
             (
                 with(row(
-                    25,
+                    35,
                     "control",
                     "gone",
                     "Button: More actions for Meet Hobb the Miller at the mill",
@@ -4587,7 +4587,7 @@ mod allowed_classes {
             ),
             (
                 with(tonight(
-                    26,
+                    36,
                     "control",
                     "moved",
                     "Label: Talk to Hobb the Miller about the ropes",
@@ -4597,7 +4597,7 @@ mod allowed_classes {
             ),
             (
                 with(tonight(
-                    26,
+                    36,
                     "control",
                     "moved",
                     "Button: Start fight: Shrine of Cinders",
@@ -4635,7 +4635,7 @@ mod allowed_classes {
                 "an Edit encounter below 24 px",
             ),
             (
-                vec![act(25, "appeared + Where | went + Start fight")],
+                vec![act(35, "appeared + Where | went + Start fight")],
                 "an act that also hides another control",
             ),
         ] {
