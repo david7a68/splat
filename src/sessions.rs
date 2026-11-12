@@ -1718,12 +1718,12 @@ impl Draft {
         // Only an act that changed the properties puts them back.
         let properties = (prefix != self.prefix).then(|| {
             let before = std::mem::replace(&mut self.prefix, prefix);
-            (before, self.prefix.clone())
+            Box::new((before, self.prefix.clone()))
         });
         self.body.clone_from(&after);
         self.edited();
         let mut undo = NoteUndo {
-            path: self.path.clone(),
+            path: self.path.as_path().into(),
             note,
             before,
             after,
@@ -1798,13 +1798,14 @@ impl ActFault {
 #[derive(Clone, Debug, PartialEq)]
 pub struct NoteUndo {
     /// The note's file. It follows a move of that note, never a copy.
-    path: PathBuf,
+    path: Box<Path>,
     /// The session the act was for.
     note: Uuid,
     before: String,
     after: String,
-    /// The properties before and after the act, when the act changed them.
-    properties: Option<(String, String)>,
+    /// The properties before and after the act, when the act changed them. Boxed, as most
+    /// acts change only words.
+    properties: Option<Box<(String, String)>>,
     /// Whether the act's save wrote the fragment. One that waits in the draft is taken back
     /// from the draft alone.
     written: bool,
@@ -1830,18 +1831,18 @@ impl NoteUndo {
     fn left_properties(&self, prefix: &str) -> bool {
         self.properties
             .as_ref()
-            .is_none_or(|(_, after)| after == prefix)
+            .is_none_or(|properties| properties.1 == prefix)
     }
 
     /// Whether the draft is the note that the act changed: its file and its ID.
     fn owns(&self, draft: &Draft) -> bool {
-        draft.path == self.path && draft.note_id() == Some(self.note)
+        *draft.path == *self.path && draft.note_id() == Some(self.note)
     }
 
     /// The folder scan followed this note, the one note with its ID, to a new file.
     pub fn moved(&mut self, from: &Path, to: &Path) {
-        if self.path == from {
-            to.clone_into(&mut self.path);
+        if *self.path == *from {
+            self.path = to.into();
         }
     }
 
@@ -1862,14 +1863,15 @@ impl NoteUndo {
         }
         let back = |prefix: &str, words: &str| {
             (words == self.after && self.left_properties(prefix)).then(|| {
-                let prefix = self.properties.as_ref().map_or(prefix, |(before, _)| before);
+                let prefix = self
+                    .properties
+                    .as_ref()
+                    .map_or(prefix, |properties| &properties.0);
                 (prefix.to_owned(), self.before.clone())
             })
         };
         if self.written {
-            return draft
-                .apply_parts(self.note, Apply::Now, back)
-                .map(drop);
+            return draft.apply_parts(self.note, Apply::Now, back).map(drop);
         }
         let (prefix, before) = back(&draft.prefix, &draft.body).ok_or(ActFault::LineChanged)?;
         draft.prefix = prefix;

@@ -7358,8 +7358,14 @@ mod tests {
     fn recap_uses_prose_and_skips_link_only_lines() {
         let body = "## Recap of last time\n\n## What happened\n\n- [[Timeline#^t-rest|Long rest]]\n\nWe reached the mill.\n";
         let none = || None;
-        assert_eq!(recap_preview(body, none).as_deref(), Some("We reached the mill."));
-        assert_eq!(recap_preview("## What happened\n- [[Bridge]]\n", none), None);
+        assert_eq!(
+            recap_preview(body, none).as_deref(),
+            Some("We reached the mill.")
+        );
+        assert_eq!(
+            recap_preview("## What happened\n- [[Bridge]]\n", none),
+            None
+        );
         // Row 16: `What happened` first, as carry-over reads it, then the processed recap.
         let both = "## Recap of last time\nWe won.\n\n## What happened\nWe ran.";
         assert_eq!(recap_preview(both, none).as_deref(), Some("We ran."));
