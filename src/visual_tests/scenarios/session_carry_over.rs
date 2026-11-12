@@ -93,12 +93,20 @@ pub fn run(d: &mut Driver<'_>) {
     // with both properties in the same save.
     let tonight = note_path(d, TONIGHT);
     let before = fs::read_to_string(&tonight).unwrap();
+    let last = note_path(d, LAST);
+    let last_before = fs::read_to_string(&last).unwrap();
+    // T18.4: a note the DM did not act on does not change. The new note is the template,
+    // with no carry-over property, while the line offers Carry over.
+    d.observe(
+        "T18.4",
+        !before.contains("carried_") && before.contains("## Recap of last time\n\n## Plan for tonight"),
+        format!("The new session's note is the template until the DM acts: {before:?}"),
+    );
     d.begin_task();
     d.click(CARRY);
     d.expect(RESULT);
     d.audit_goal_within("T18.3", "carry over what the last session left", 1);
     let carried = fs::read_to_string(&tonight).unwrap();
-    let last = note_path(d, LAST);
     let link = last.file_stem().unwrap().to_string_lossy().into_owned();
     d.observe(
         "T18.3-file",
@@ -139,6 +147,12 @@ pub fn run(d: &mut Driver<'_>) {
     d.click(&format!("Open: {SCENE}"));
     d.expect(&format!("Done: {SCENE}"));
     let ticked = fs::read_to_string(&last).unwrap();
+    // T18.4: carry-over never wrote the last session's note; only the DM's tick did.
+    d.observe(
+        "T18.4-last",
+        ticked == last_before.replace(&format!("- [ ] {SCENE}"), &format!("- [x] {SCENE}")),
+        "The last session's note changed only by the DM's own tick",
+    );
     d.click_starting(&format!("Session 2: {TONIGHT}"));
     d.expect(UNDO);
     d.click(UNDO);
