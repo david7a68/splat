@@ -2147,6 +2147,11 @@ impl<'a> Driver<'a> {
     }
 
     /// Return to the start of a reader after editing its source.
+    /// Scroll down by `points`, as a touchpad does, in place of a whole wheel notch.
+    pub fn scroll_points_at(&mut self, pos: egui::Pos2, points: f32) {
+        self.scroll_by(pos, 1, egui::vec2(0.0, -points));
+    }
+
     pub fn scroll_up_at(&mut self, pos: egui::Pos2, notches: u32) {
         self.scroll_by(pos, notches, egui::vec2(0.0, 100.0));
     }
@@ -2359,6 +2364,14 @@ impl<'a> Driver<'a> {
     pub fn at_size<T>(&mut self, size: (f32, f32), look: impl FnOnce(&Self) -> T) -> T {
         self.resize(size, 1.0);
         let result = look(self);
+        self.resize(self.base, 1.0);
+        result
+    }
+
+    /// `at_size` for a step that acts (keys, wheel), then back to the base size.
+    pub fn act_at_size<T>(&mut self, size: (f32, f32), act: impl FnOnce(&mut Self) -> T) -> T {
+        self.resize(size, 1.0);
+        let result = act(self);
         self.resize(self.base, 1.0);
         result
     }
@@ -2864,6 +2877,24 @@ impl<'a> Driver<'a> {
             passed,
             detail,
         );
+    }
+
+    /// The widget id that has keyboard focus, if any.
+    pub fn focus_id(&self) -> Option<egui::Id> {
+        self.harness.ctx.memory(|memory| memory.focused())
+    }
+
+    /// Give keyboard focus back to exactly this widget id, or to none, with no click.
+    pub fn restore_focus(&mut self, id: Option<egui::Id>) {
+        self.harness.ctx.memory_mut(|memory| match id {
+            Some(id) => memory.request_focus(id),
+            None => {
+                if let Some(id) = memory.focused() {
+                    memory.surrender_focus(id);
+                }
+            }
+        });
+        self.settle();
     }
 
     fn clear_focus(&mut self) {

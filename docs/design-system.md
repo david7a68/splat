@@ -292,9 +292,9 @@ Overwrite keeps.
 
 `Discard` takes one press, with no dialog. Show it only for a dirty draft, apart from Save. Keep `Draft
 discarded` and `Undo discard` until the next edit. A later disk change also clears Undo discard. Library shows the
-same Undo message in its reserved reason slot, aligned with the editor's left edge. The slot has a fixed
-height of two text lines (see Files and recovery), so neither the reason nor the message moves the editor. A repair draft keeps its parse error
-above the slot, and the slot below the error holds the discard result the same way. Keeping a draft in the close dialog restores
+same Undo message in its one message space below the save row, aligned with the editor's left edge. The space has a
+fixed height of two text lines (see Files and recovery), so no reason, result or Undo moves the editor. A repair
+draft's parse error takes the same space. Keeping a draft in the close dialog restores
 its editor focus and cursor.
 
 A changed file stops saving. World uses `disk_conflict_choices` with the noun `note`: “This note changed on disk. Your draft is safe until you choose.” Library uses `entry` in the same choices. Encounters says the same sentence with `encounter`, `group` or `creature` (`This encounter changed on disk. Your draft is safe until you choose.`), and never names the file. When the file is gone, its red choice is `Remove encounter and lose draft` (`group`, `creature`), and the result says `<name> removed. Its draft was discarded.` with `Undo remove`, which gives the draft back. Show secondary `Overwrite with my draft` first, then
@@ -330,21 +330,21 @@ above it. World uses this, so a typed note with no set values starts its prose w
 Lookup has no file line: there an empty value block draws nothing, and the prose keeps the reader's gap below
 the kind line, as a spell's does, and so does a plain note's prose. Lookup's reader keeps the app's row spacing whether a search or a link
 opened the entry. Library draws no value block. `design::reader` holds the typographic parts. Library shows quiet Back whenever it has reading
-history. Its toolbar stays on one line: Read and Edit Markdown at the left, then visible copy and creation
-actions, then Back. Drop Back's key hint first; fold Copy and Make NPC note into quiet More when needed, with
+history. Its toolbar stays on one line: Read and Edit Markdown at the left, then visible copy, creation and
+campaign-choice actions (`Choose for this campaign`, `Choose every entry`), then Back. Drop Back's key hint first; fold Copy, Make NPC note and the campaign choice into quiet More when needed, with
 Back before More. Every toolbar action, Make NPC note and the actions in More included, is a Read control
 (28 px), so the toolbar row has one height and a campaign creature's title sits where a campaign spell's does. Lookup keeps its Back hint; its Back is a Read control (28 px), as its title line's icon buttons are, so the title line has one height with or without Back and the search field below never moves. Both use Alt+Left, and Alt+Right for Forward, which has no button. Lookup takes the key when focus is there. Beside the Library, the mouse's Back and Forward buttons act on the side under the pointer.
 
 Library omits `Library / <kind>` above the title. Its kind line does not repeat the package name: where two
 packages share a name, it adds only the folder that tells them apart (`Creature · CR 1 · ashen-marches/`). Owner status
-and `Use in this campaign` stay on the wrapping file line in Read and Edit Markdown, so Back does not move the
+stays on the wrapping file line in Read and Edit Markdown, so Back does not move the
 title. The file line is one Read row (28 px) for every owner: built-in, campaign and package About. Its status, path,
 links and quiet actions centre in that row, so the title stays at one height when the DM goes from one owner to
 another. When the line is too narrow and the path goes to a second row, that row is also one Read row. During a
 draft, Back opens the earlier entry in Lookup. Show file is on that line; vault entries also
 have Edit in Obsidian. The path shortens from the front only and keeps its file name whole
 (`…/Cinder Wolf copy.md`): when that does not fit beside the owner words and their action, the path takes its
-second Read row. An unreadable entry keeps `Cannot be read` on its owner line, in place of `Used here`.
+second Read row. An unreadable entry keeps `Cannot be read` on its owner line, in place of `Chosen for this campaign`.
 A file that the system will not read at all (not UTF-8 text, or no permission) has no text to repair, in a package
 or a campaign. Library keeps why the read failed, from the error's kind, as World does. Its row's cause is short
 (`Text format cannot be read`). Its reader keeps the title and a file line with only `Show file`: no Edit in
@@ -427,8 +427,8 @@ saving throw leaves an empty cell. Bad cells warn with their file line; valid va
 and run panel. Rejected vitals keep their original text and warning in the vitals area. Unknown rows remain
 readable. Stat warnings name the field, bad value, line and repair. List rows and the file warning count
 include flagged stat cells. The editor warns when prose AC or HP disagrees with the table, in the DM's words
-(`Hit Points line says 24, but the stat block says 22. The fight uses the stat block.`), and offers `Use
-<value>` with Undo.
+(`Hit Points line says 24; stat block says 22. The fight uses 22.`), and offers `Use <value>` with Undo. In Edit
+Markdown's two-line message space a warning that wraps scrolls there, with its action.
 
 Spells and items show facts once, with no empty rows or machine lines. Spells use Casting Time,
 Range, Components, Duration in book order; Concentration and Ritual appear in those values only when true.
@@ -461,7 +461,8 @@ words, or search Everything.`), and quiet `Search Everything` starts the next li
 the words and filters. In Everything the sentence ends at `Try fewer words.` with no action. At narrow widths, scope and category share an equal-width line directly above search. The package's About row follows search as the first list row.
 Hide All entries without a search. Empty categories and their headings stay hidden. Fixed scope names
 wrap; package names can shorten with full hover text and accessible names. The About row stays one line, with
-or without its mark: the package name shortens by whole words, so a fault moves no row below it. Both the scope menu and
+or without its mark, so a fault moves no row below it. When the marked name does not fit after `About`, the row drops
+`About` first (`⚠ Ashen Marches`); only a name that still does not fit shortens by whole words. Both the scope menu and
 selected button say `Campaign entries`. An open package About row uses selected fill with no selected
 category; choosing a category restores it. About is followed by the manifest name. A manifest is never
 counted or listed as an entry, even when unreadable. Keep its warning on About and in the file issue
@@ -476,7 +477,11 @@ Plain prose with no front matter and no `splat_` lines stays a README, even in `
 write if both names hold notes. Never replace a README. Empty files, front matter and malformed
 Splat fields stay in repair. Manifest repair selects the package scope and its warning About row.
 Draw the manifest error with `message_with_action`, then its muted `Small` consequence at the same
-text edge below the action. The consequence wraps at the pane's notice measure, not at the action's width. Show used and total entries and `Use every entry` with Undo. Its result
+text edge below the action. The consequence wraps at the pane's notice measure, not at the action's width. In Edit
+Markdown the error is in the message space below the save row, and the bordered action and its consequence follow
+directly below that space, at the message text edge: they depend on the saved file only, so they stay while the DM
+edits. Show the chosen and total entries (`5 of 6 entries chosen`, `All entries chosen`) and `Choose every entry`
+with Undo. Its result
 and Undo sit in the reader's results place, after the title, like manifest-write results (see Files and recovery). Omit the entry breadcrumb and Engine support. Empty package counts have no separator.
 
 Nonzero file status links sit in the page header before Packages and New entry. The validation count says how
@@ -493,7 +498,11 @@ from the reader keep the path. An entry row marks every fault the header counts 
 fault: the icon in the fault's tone, then a short cause in the row's muted words. A file that cannot be read is an
 error (the error icon in the error colour, then its cause or `Line 4`); every other fault is a warning (the warning
 icon in the warning colour: `Same entry in two files`, `First heading differs`, `1 broken link`, `Needs fixing` for
-any other). When each counted problem of a file is a link to a missing entry, the row says `⚠ 2 broken links` only. About and
+any other). Each known repair cause is named: a duplicate whose first heading also differs says `⚠ Same entry in two
+files · First heading differs`. Where two packages share a name, the folder that tells them apart comes last, as on the
+reader's kind line (`Creature · CR 1 · Ashen Marches · ashen-marches/`); when the line does not fit, the words before
+the folder shorten, never the folder. In Edit Markdown, each broken link the row counts has its own warning with its
+line (`Line 17: this link names no entry.`); the link Campaign sent the DM to fix keeps its longer words. When each counted problem of a file is a link to a missing entry, the row says `⚠ 2 broken links` only. About and
 Lookup rows draw their marks in the same tones. Opening one from a roster selects its
 kind under Cannot be read and opens repair. Repair errors use file line numbers. Edit Markdown opens with
 the caret on the line to fix and scrolls that line into view. A repair draft's error and its save-row state
@@ -511,9 +520,11 @@ deleted manifest, a file that is not text) stays until the file changes. Repair 
 messages also update after encounter or group edits.
 Other readable files stay available.
 
-A deleted draft shows YOUR DRAFT, `Save my draft again` and red `Let it go`, with Undo let go. Its file line keeps
+A deleted draft says `This entry’s file was deleted on disk. Your draft is safe until you choose.` and shows YOUR
+DRAFT, `Save my draft again` and red `Remove entry and lose draft`. Its result says what was lost: `Ash Exposure
+removed. Its draft was discarded. Ember Cultist now needs a missing entry.`, with `Undo remove`. Its file line keeps
 the path and offers `Show folder` for the nearest folder still there: no link offers the missing file, and no
-Edit in Obsidian. Let it go names entries that need the deleted note. Undo let go gives back the draft, the
+Edit in Obsidian. The message names entries that need the deleted note. Undo remove gives back the draft, the
 entry's campaign use and the header count as one step. A moved draft shows the new path and old folder; moved-from text ends the
 file line. Its warning says `This entry moved on disk. Your draft is safe until you choose.`, and its two buttons
 name the choices. File actions use the new path. Offer `Save my draft to its new path`; saving checks the disk ID to
@@ -522,9 +533,11 @@ prevent a second file after a move.
 Source mode has one frame at the remaining pane height. All four edges stay visible; only text scrolls. Read
 mode keeps its outer body scroll. Form headings use text colour and an `L` gap; labels stay muted. New entries
 start in their kind folder, use `FORM_WIDTH`, show the destination path and reveal the selected row after
-reload. New entry, Create package and Copy to a package default Use in this campaign to on. Help states which
-selection will be saved. Package entries show their package and Used here or Not used here; Use in this
-campaign saves the missing choice. Empty campaign entries offer one New entry action and link to Can use with
+reload. New entry, Create package and Copy to a package default Choose for this campaign to on. Help states which
+selection will be saved. One word names the campaign's choice everywhere: package entries show their package and
+`Chosen for this campaign` or `Not chosen` (`Chosen` alone when a narrow reader cannot fit the rest); `Choose for this
+campaign` saves the missing choice. It is a toolbar action (folded into More with Copy to… when the toolbar is
+narrow), so it never sends the file line's path to a second row and the title keeps one place. Empty campaign entries offer one New entry action and link to Can use with
 `entry you can use`.
 
 Missing dependencies lead with the owner and retained member name: `Lost Patrol needs Scout, which was
@@ -566,8 +579,9 @@ first H1 only when it matches the source name.
 
 A copy preview explains dependencies: “Also copies <entry>, because <source> links to it.” For several copies,
 say “because a copied entry links to it.” Copy both copies a campaign dependency with its entry and reconnects
-references. The warning action copies and reconnects one dependency; Undo restores the reference and removes
-the unchanged copy. Keep room for Copy both and Cancel, with no outer scroll handle below them.
+references. The warning action (`Copy Captain Varra to Ashen Marches`) copies and reconnects one entry; its result
+names both in the button's words (`Captain Varra copied to Ashen Marches and linked.`), and `Undo copy` restores the
+reference and removes the unchanged copy. Keep room for Copy both and Cancel, with no outer scroll handle below them.
 
 ## Files and recovery
 
@@ -602,12 +616,16 @@ the same place. Every Library result takes it too: package use, a manifest write
 separate entry.`, a folder's separate entries, a discarded draft, the offer to change links after a rename and its
 result, and a copied package's registration with `Use the copy in encounters`. One result place per reader: in Read
 they sit after the title's kind line, so the columns, the tabs, the file line and the title never move. Edit
-Markdown keeps one space of fixed height below the save row: a result part, then the reason slot directly above the
-editor, each two text lines high whatever it holds. Longer words wrap and scroll inside their part, beside a lane
-kept for its scroll bar, so no text is cut. Each part is one focusable group named with its whole message: Tab
-reaches it, a screen reader reads all of it, and while it has focus the up and down arrows scroll it by a line and
-Page Up and Page Down by the part; the wheel scrolls it too. The result part holds the guidance first when Save's reason or the
-discard result holds the slot. So no result, reason, Discard or Undo discard moves the editor. With no entry
+Markdown keeps one message space below the save row, directly above the editor, two text lines high whatever it
+holds. Longer words wrap and scroll inside it, beside a lane kept for its scroll bar, so no text is cut. It is one
+focusable group named with its whole message: Tab reaches it, a screen reader reads all of it, and while it has focus
+the up and down arrows scroll it by a line and Page Up and Page Down by the space; the wheel scrolls it too. Its order:
+a result that carries a live Undo comes first (Discard's, the heading and stat fixes', a write's), because a broken
+file's reason never clears after Discard or Reload; then Save's reason (a repair draft's parse error, a refusal before
+the write, the disk's failure); then the link Campaign sent the DM to fix. With no reason, the warnings follow (each
+broken link, the first heading, a stat line) and results with no Undo. A reason hides those; they come back when it
+clears, while their owner lives. With none of these, the space says why other actions wait for the draft. So no
+result, reason, warning, Discard or Undo moves the editor. With no entry
 open, they sit above the empty reader, and above a form that takes the reader's place. The link offer after a
 rename and its result belong to the renamed entry: they show only in its reader, stay hidden while another entry is
 open, and end on its next link update or saved edit (a saved edit ends the earlier offer whatever it offers), on
@@ -694,9 +712,9 @@ chosen`). Its use checkbox starts
 off when the original is used. Keep the warning above the `Register a copy` Label title and fields.
 The named Register action is primary when the name is ready and no run is open, as `Create package` is.
 Quiet Cancel follows it after an `L` gap. It closes the form without writing
-and keeps the name and use choice for reopening. When use is off, help says the campaign keeps the
-original and the copy is registered but not used. When on, it says every entry is used, including future
-entries. `Use the copy in encounters` keeps roster names, counts and changes, with one Undo. After registration,
+and keeps the name and the campaign choice for reopening. When the choice is off, help says the campaign keeps
+the original and the copy is registered but not chosen. When on, it says every entry is used, including future
+entries. Help under a field or section is `design::help`: `Small` muted words at `READER_MEASURE`. `Use the copy in encounters` keeps roster names, counts and changes, with one Undo. After registration,
 quiet `Undo package registration` sits on the message line, as every Undo after a message does, and bordered
 `Use the copy in encounters`, without an icon, sits on the next line: its border starts at the message words. The choice names what it changes, in its result's words: its result `Encounters now use the
 copy.` keeps `Undo source change` on its
@@ -707,7 +725,8 @@ longer on this computer`. Count affected campaign entries when references are kn
 campaign and Find the folder… beside the message. Only Technical details shows IDs. Removing an unavailable
 package has Undo and keeps links to affected encounters; the message's icon centres on its first line, whose
 words are those links. Unregister keeps the last folder in Settings. Library
-offers Undo unregister; Campaign offers Register it again.
+offers Undo unregister in its success result, which sits in the reader's result place (above the form that takes the
+reader's place), so the scope, the search and the list never move; Campaign offers Register it again.
 
 Missing-package recovery searches beside known package folders. A unique match gets bordered secondary Use
 this folder before Find the folder…; every action on the message, Remove from this campaign too, is bordered
