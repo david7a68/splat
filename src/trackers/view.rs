@@ -45,7 +45,7 @@ impl Trackers {
 }
 
 /// The empty state, the file that cannot be read, or the trackers with the result line.
-pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers) {
+pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, from_top: bool) {
     if !trackers.in_play() {
         ui.add_space(design::S);
         for words in [
@@ -72,10 +72,14 @@ pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers) {
                 result_line(ui, trackers, &mut act);
             });
     }
-    egui::ScrollArea::vertical()
+    // What is due is in view when the view opens.
+    let mut area = egui::ScrollArea::vertical()
         .id_salt("trackers_view")
-        .auto_shrink([false, false])
-        .show(ui, |ui| body(ui, trackers, &mut act));
+        .auto_shrink([false, false]);
+    if from_top {
+        area = area.vertical_scroll_offset(0.0);
+    }
+    area.show(ui, |ui| body(ui, trackers, &mut act));
     if let Some(act) = act {
         apply(trackers, act);
     }
@@ -219,7 +223,20 @@ fn notice_row(
         Some(name) => format!("{name}: {}", mark.say),
         None => mark.say.clone(),
     };
-    ui.add(egui::Label::new(Type::Body.rich(ui, &words)).wrap());
+    let short = short_name(
+        rules,
+        &notice.tracker,
+        notice.instance.as_deref(),
+        notice.id.at,
+    );
+    let ends_words = mark.tables.is_empty() && mark.changes.is_empty();
+    if ends_words {
+        words_ending_with(ui, &words, finish_width(ui), |ui| {
+            finish(ui, &short, blocked, notice, mark, view, act)
+        });
+    } else {
+        ui.add(egui::Label::new(Type::Body.rich(ui, &words)).wrap());
+    }
     if !mark.tables.is_empty() {
         ui.horizontal_wrapped(|ui| {
             for table in &mark.tables {
@@ -236,22 +253,32 @@ fn notice_row(
                 {
                     *act = Some(Act::Roll(notice.id.clone(), key.to_owned()));
                 }
+                if each_rolled && blocked.is_none() {
+                    design::blocked_reason(ui, Some("Each name has its roll."));
+                }
             }
         });
-        for roll in &notice.rolls {
-            let name = roll
-                .name
-                .as_deref()
-                .unwrap_or_else(|| rules.table_name(&roll.table));
-            ui.horizontal(|ui| {
-                ui.add_space(design::L);
-                ui.add(
-                    egui::Label::new(
-                        Type::Body.rich(ui, format!("{name}: {} · {}", roll.value, roll.row)),
-                    )
-                    .wrap(),
-                );
-            });
+        // The results are listed under the buttons, one line each, as one block of words.
+        if !notice.rolls.is_empty() {
+            let lines: Vec<String> = notice
+                .rolls
+                .iter()
+                .map(|roll| {
+                    let name = roll
+                        .name
+                        .as_deref()
+                        .unwrap_or_else(|| rules.table_name(&roll.table));
+                    format!("{name}: {} · {}", roll.value, roll.row)
+                })
+                .collect();
+            egui::Frame::NONE
+                .inner_margin(egui::Margin {
+                    left: design::L as i8,
+                    ..egui::Margin::ZERO
+                })
+                .show(ui, |ui| {
+                    ui.add(egui::Label::new(Type::Body.rich(ui, lines.join("\n"))).wrap());
+                });
         }
     }
     for (at, change) in mark.changes.iter().enumerate() {
@@ -273,44 +300,112 @@ fn notice_row(
             }
         }
     }
-    let short = short_name(
-        rules,
-        &notice.tracker,
-        notice.instance.as_deref(),
-        notice.id.at,
-    );
     let _ = ledger;
-    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-        design::row_menu(ui, &short, |ui| {
-            if Action::quiet("Dismiss")
-                .density(Density::Read)
-                .blocked(blocked)
-                .show(ui)
-                .clicked()
-            {
-                *act = Some(Act::Dismiss(notice.id.clone()));
-                ui.close();
-            }
+    if !ends_words {
+        right_line(ui, |ui| {
+            finish(ui, &short, blocked, notice, mark, view, act)
         });
-        if Action::quiet("Done")
-            .density(Density::Read)
-            .name(&format!("Done: {short}"))
-            .blocked(blocked)
-            .show(ui)
-            .clicked()
-        {
-            let ticked = (0..mark.changes.len())
-                .map(|at| !view.unticked.contains(&(notice.id.clone(), at)))
-                .collect();
-            *act = Some(Act::Done(notice.id.clone(), ticked));
-        }
-    });
+    }
     if let Some((Place::Notice(id), why)) = reason
         && *id == notice.id
     {
         design::small_message(ui, Tone::Warning, why);
     }
     ui.add_space(design::XS);
+}
+
+/// The words, with `add` at the right end of their last line when it fits there, and else on
+/// a line of its own at the right. The last line is its own label, so nothing overlaps words.
+fn words_ending_with(
+    ui: &mut egui::Ui,
+    words: &str,
+    trailing: f32,
+    add: impl FnOnce(&mut egui::Ui),
+) {
+    let width = ui.available_width();
+    let galley = ui
+        .painter()
+        .layout(words.to_owned(), Type::Body.font(ui), colors().text, width);
+    let gap = ui.spacing().item_spacing.x;
+    let fits = galley
+        .rows
+        .last()
+        .is_some_and(|row| width - row.rect().width() >= trailing + gap);
+    if !fits {
+        ui.add(egui::Label::new(Type::Body.rich(ui, words)).wrap());
+        right_line(ui, add);
+        return;
+    }
+    let before: usize = galley.rows[..galley.rows.len() - 1]
+        .iter()
+        .map(|row| row.char_count_including_newline())
+        .sum();
+    let split = words
+        .char_indices()
+        .nth(before)
+        .map_or(words.len(), |(at, _)| at);
+    let (head, last) = words.split_at(split);
+    if !head.trim().is_empty() {
+        ui.add(egui::Label::new(Type::Body.rich(ui, head.trim_end())).wrap());
+    }
+    ui.horizontal(|ui| {
+        ui.label(Type::Body.rich(ui, last.trim()));
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), add);
+    });
+}
+
+/// A line of one control's height, laid out from its right end.
+fn right_line(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
+    ui.allocate_ui_with_layout(
+        egui::vec2(ui.available_width(), Density::Read.control()),
+        egui::Layout::right_to_left(egui::Align::Center),
+        add,
+    );
+}
+
+/// `Done` and the row's menu, with the gap between them.
+fn finish_width(ui: &egui::Ui) -> f32 {
+    Action::quiet("Done")
+        .density(Density::Read)
+        .natural_width(ui)
+        + ui.spacing().item_spacing.x
+        + Density::Read.control()
+}
+
+/// The row's menu with `Dismiss`, then `Done`, laid out from the right.
+fn finish(
+    ui: &mut egui::Ui,
+    short: &str,
+    blocked: Option<&str>,
+    notice: &super::Notice,
+    mark: &super::Mark,
+    view: &ViewState,
+    act: &mut Option<Act>,
+) {
+    design::row_menu(ui, short, |ui| {
+        if Action::quiet("Dismiss")
+            .density(Density::Read)
+            .blocked(blocked)
+            .show(ui)
+            .clicked()
+        {
+            *act = Some(Act::Dismiss(notice.id.clone()));
+            ui.close();
+        }
+    });
+    let name = format!("Done: {short}");
+    if Action::quiet("Done")
+        .density(Density::Read)
+        .name(&name)
+        .blocked(blocked)
+        .show(ui)
+        .clicked()
+    {
+        let ticked = (0..mark.changes.len())
+            .map(|at| !view.unticked.contains(&(notice.id.clone(), at)))
+            .collect();
+        *act = Some(Act::Done(notice.id.clone(), ticked));
+    }
 }
 
 /// A tracker's lines: one line, or a heading and one line for each instance.
@@ -495,21 +590,41 @@ fn result_line(ui: &mut egui::Ui, trackers: &Trackers, act: &mut Option<Act>) {
         return;
     }
     let words = result_words(&trackers.rules, &trackers.ledger, &trackers.state, &entries);
-    design::message_with_actions(ui, Tone::Success, &words, |ui| {
-        if Action::quiet(&format!("Undo: {label}"))
-            .icon(icons::UNDO)
-            .density(Density::Read)
-            .show(ui)
-            .clicked()
-        {
-            *act = Some(Act::Undo(entries.clone()));
-        }
-        if Action::quiet("Add to Timeline")
-            .density(Density::Read)
-            .show(ui)
-            .clicked()
-        {
-            *act = Some(Act::AddToTimeline(first.id.clone(), label.clone()));
+    let message = design::message(ui, Tone::Success, &words);
+    let inset = message.rect.left() - ui.cursor().left();
+    let undo_label = format!("Undo: {label}");
+    let undo = Action::quiet(&undo_label)
+        .icon(icons::UNDO)
+        .density(Density::Read);
+    let add = Action::quiet("Add to Timeline").density(Density::Read);
+    let gap = ui.spacing().item_spacing.x;
+    // `Undo` starts at the words; `Add to Timeline` ends the line, or has a line of its own.
+    let one_line =
+        inset + undo.natural_width(ui) + design::L + add.natural_width(ui) <= ui.available_width();
+    let mut undo_clicked = false;
+    let mut add_clicked = false;
+    ui.horizontal(|ui| {
+        ui.add_space((inset - gap).max(0.0));
+        undo_clicked = undo.show(ui).clicked();
+        if one_line {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                add_clicked = add.show(ui).clicked();
+            });
         }
     });
+    if !one_line {
+        ui.horizontal(|ui| {
+            ui.add_space((inset - gap).max(0.0));
+            add_clicked = Action::quiet("Add to Timeline")
+                .density(Density::Read)
+                .show(ui)
+                .clicked();
+        });
+    }
+    if undo_clicked {
+        *act = Some(Act::Undo(entries.clone()));
+    }
+    if add_clicked {
+        *act = Some(Act::AddToTimeline(first.id.clone(), label.clone()));
+    }
 }

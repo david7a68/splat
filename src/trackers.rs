@@ -1190,8 +1190,7 @@ mod tests {
     use crate::{content_workspace::CampaignDocument, encounter_settings::Options};
     use std::fs;
 
-    const EXAMPLE: &str =
-        include_str!("../docs/design/world-examples/heralds-tournament.md");
+    const EXAMPLE: &str = include_str!("../docs/design/world-examples/heralds-tournament.md");
 
     fn table(heading: &str, key: &str, dice: &str, rows: &[(&str, &str)]) -> String {
         let mut text = format!(
@@ -1230,13 +1229,20 @@ mod tests {
         let id = Uuid::new_v4();
         let note = EXAMPLE[start..end].replace("<a new UUID>", &id.to_string());
         fs::write(dir.path().join("Tournament.md"), note).unwrap();
-        let wander = [("1-7", "Nothing comes."), ("8", "Two Sand Wraiths at the next door.")];
+        let wander = [
+            ("1-7", "Nothing comes."),
+            ("8", "Two Sand Wraiths at the next door."),
+        ];
         let tables = [
             table(
                 "Rival Track",
                 "rival_track",
                 "1d6",
-                &[("1", "Loses its way."), ("2–5", "Moves on."), ("6", "Takes a seal.")],
+                &[
+                    ("1", "Loses its way."),
+                    ("2–5", "Moves on."),
+                    ("6", "Takes a seal."),
+                ],
             ),
             table("Wandering, 0:00 to 0:39", "wander_early", "1d8", &wander),
             table("Wandering, 0:40 to 1:19", "wander_middle", "1d8", &wander),
@@ -1290,12 +1296,22 @@ mod tests {
         let keys: Vec<_> = rules.trackers.iter().map(|t| t.key.as_str()).collect();
         assert_eq!(
             keys,
-            ["race_clock", "favor", "souls", "seals", "members", "activation"]
+            [
+                "race_clock",
+                "favor",
+                "souls",
+                "seals",
+                "members",
+                "activation"
+            ]
         );
         for tracker in &rules.trackers {
             assert!(tracker.def.is_ok(), "{}: {:?}", tracker.key, tracker.def);
         }
-        assert!(!rules.def("activation").unwrap().pin, "activation is not pinned");
+        assert!(
+            !rules.def("activation").unwrap().pin,
+            "activation is not pinned"
+        );
         // The note is a valid entry: no warning in the Library or the Campaign's review.
         let note = race
             .index
@@ -1335,7 +1351,10 @@ mod tests {
         t.roll_notice(&bell, "rival_track");
         assert_eq!(
             t.reason,
-            Some((Place::Notice(bell.clone()), "Each name has its roll.".into()))
+            Some((
+                Place::Notice(bell.clone()),
+                "Each name has its roll.".into()
+            ))
         );
         assert_eq!(file(&race), before, "a refused act writes nothing");
         // A table with no names rolls as often as it is pressed.
@@ -1388,7 +1407,11 @@ mod tests {
         t.press("seals", Some("Old Guard"), "Lose seal", None);
         assert_eq!(value(&race, "seals", Some("Old Guard")), 0);
         let t = &mut race.trackers;
-        assert_eq!(t.due(), 1, "a mark does not fire, or unfire, when a value falls");
+        assert_eq!(
+            t.due(),
+            1,
+            "a mark does not fire, or unfire, when a value falls"
+        );
 
         // One press that changes two trackers is two entries with one `use`; Undo takes both.
         t.press("race_clock", None, "Collect soul", None);
@@ -1498,7 +1521,11 @@ mod tests {
 
         // A restart: the values, the result line and its Undo come from the file.
         let mut again = Trackers::default();
-        again.poll(Some(race.index.clone()), Some(&race.campaign), Some(TONIGHT));
+        again.poll(
+            Some(race.index.clone()),
+            Some(&race.campaign),
+            Some(TONIGHT),
+        );
         assert_eq!(again.state.value(&again.rules, "favor", None), 2);
         assert_eq!(newest_label(&again), "Crowd loves it");
         let newest = again.newest().to_vec();

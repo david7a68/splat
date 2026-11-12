@@ -1552,6 +1552,8 @@ pub struct Lookup {
     trackers_shown: bool,
     /// Ctrl+T opened the panel, so Ctrl+T closes it again.
     trackers_closes: bool,
+    /// Trackers just came into view: it shows from its top, where the Due rows are.
+    trackers_from_top: bool,
 }
 
 /// Include registered packages even when there is no active campaign.
@@ -1738,6 +1740,7 @@ impl Lookup {
             self.open = true;
             self.written_stale = true;
             self.trackers_shown = true;
+            self.trackers_from_top = true;
         }
     }
 
@@ -2073,7 +2076,7 @@ impl Lookup {
         }
         if self.trackers_shown {
             design::rule(ui);
-            crate::trackers::view::show(ui, trackers);
+            crate::trackers::view::show(ui, trackers, std::mem::take(&mut self.trackers_from_top));
             return;
         }
         let Some(index) = self.index.clone() else {

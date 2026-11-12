@@ -21,6 +21,7 @@ pub mod markdown_links;
 pub mod run_continue;
 pub mod session_plan_scenes;
 pub mod stat_formats;
+pub mod trackers;
 pub mod travel_checks;
 pub mod world_build;
 
@@ -4726,6 +4727,37 @@ pub mod run_lookup {
                 && d.row_node(PARTICIPANT)
                     .is_some_and(|row| row.fully_in_view())
         });
+        // T19.1, T19.3: in a fight, Ctrl+T shows Trackers in Lookup, and Ctrl+T again shows the
+        // spell. A campaign with no house rule note in play has the empty view and nothing in
+        // the rail; the run's keys stay off beside it, and Next turn stays.
+        d.aside(|d| {
+            let rail = d.rail_words();
+            d.press_ctrl(Key::T);
+            d.expect("No house rules are in play.");
+            d.observe(
+                "T19.1",
+                d.has(SEARCH_LOOKUP) && !d.in_view(SPELL) && d.in_view(NEXT_TURN),
+                "Ctrl+T shows Trackers in Lookup beside the run, and Next turn stays in view",
+            );
+            d.state("trackers-beside-run", Sizes::Small);
+            let turn = current_participant(d);
+            d.harness_focus_nothing();
+            d.press(Key::N);
+            d.observe(
+                "T19.3",
+                current_participant(d) == turn
+                    && d.has("No house rules are in play.")
+                    && d.rail_words() == rail
+                    && !d.has_containing("due. Open Trackers"),
+                "Beside Trackers the run's letter keys are off, and the rail shows no tracker part",
+            );
+            d.press_ctrl(Key::T);
+            d.observe(
+                "T19.1",
+                d.in_view(SPELL) && !d.has_containing("No house rules are in play."),
+                "Ctrl+T again shows the spell that Lookup held",
+            );
+        });
         // SI1: at 960 the strip's hidden action is in a menu, by name and number, and the mouse
         // arms it while Lookup stays open.
         const HIDDEN_ACTION: &str = "Cinder Dart +3";
@@ -6240,6 +6272,34 @@ pub mod nav_state {
         d.expect_same("Encounters keeps its open editor on return.");
         d.assert_state_matches("encounters-returned", "encounters-set-up");
         d.goal("return to every page");
+        // T19.1: Trackers is a view of Lookup. With Lookup closed, Ctrl+T opens it on Trackers;
+        // Ctrl+K closes it and opens it again on what it showed last, Trackers; Ctrl+T then
+        // shows what Lookup showed before, and Lookup stays open. The page keeps its state.
+        d.aside(|d| {
+            d.press_ctrl(Key::T);
+            let opened = d.has(SEARCH_LOOKUP) && d.has("No house rules are in play.");
+            d.press_ctrl(Key::K);
+            let closed = !d.has(SEARCH_LOOKUP);
+            d.press_ctrl(Key::K);
+            let reopened = d.has("No house rules are in play.");
+            d.press_ctrl(Key::T);
+            let back = d.has(SEARCH_LOOKUP)
+                && !d.has("No house rules are in play.")
+                && d.has_containing("Search built-in rules");
+            d.press_ctrl(Key::K);
+            d.observe(
+                "T19.1",
+                opened
+                    && closed
+                    && reopened
+                    && back
+                    && !d.has(SEARCH_LOOKUP)
+                    && d.in_view_containing(ROSTER_TEXT),
+                format!(
+                    "Ctrl+T opens Trackers {opened}, Ctrl+K closes {closed} and reopens on Trackers {reopened}, Ctrl+T goes back {back}; Encounters keeps its editor"
+                ),
+            );
+        });
         d.observe(
             "G2",
             library && campaign && party && encounters,
