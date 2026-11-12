@@ -2495,6 +2495,7 @@ impl Lookup {
             let _ = self.reader.choices(ui, &index).map(|nav| self.follow(nav));
         }
         let Some(current) = self.current.and_then(|c| index.items.get(c)) else {
+            self.gone_log_footer(ui);
             if query.is_empty() {
                 ui.add_space(design::S);
                 // Help keeps the reader measure, as every help line does (round 26 AB2).
@@ -2532,6 +2533,20 @@ impl Lookup {
             });
         if let Some(nav) = nav {
             self.follow(nav);
+        }
+    }
+
+    /// With no entry on show, the words of a Log line whose entry is gone still sit in
+    /// Lookup's footer, with `Copy text`, until the DM copies or dismisses them.
+    fn gone_log_footer(&mut self, ui: &mut egui::Ui) {
+        let lines = self.reader.gone_log_notices();
+        if lines.is_empty() {
+            return;
+        }
+        if let (Some(world::FooterAct::GoneLog(key)), _) =
+            world::draw_footer(ui, "lookup_footer", &lines)
+        {
+            self.reader.end_gone_log(key);
         }
     }
 

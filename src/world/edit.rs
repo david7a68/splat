@@ -561,6 +561,59 @@ fn index_campaign(index: &ContentIndex) -> Uuid {
         .map_or(Uuid::nil(), |campaign| campaign.id)
 }
 
+/// The choices of a message about words that have no place now: quiet `Copy text` with its
+/// icon, then, an `L` gap after it, `let_go` with the secondary border, which lets the words go.
+/// A lost draft and a gone entry's Log line both use it. Returns whether each was pressed.
+pub(super) fn copy_or_let_go(
+    ui: &mut egui::Ui,
+    copy_name: &str,
+    let_go: &str,
+    let_go_name: &str,
+) -> (bool, bool) {
+    ui.horizontal_wrapped(|ui| {
+        let copy = Action::quiet("Copy text")
+            .icon(design::icons::COPY)
+            .density(Density::Read)
+            .name(copy_name);
+        let copied = super::starts_line(ui, copy, true).show(ui);
+        // The second choice lets the DM's words go, so an `L` gap keeps it apart. The gap
+        // starts at Copy text's target, which `line_start` draws `S` left of its place in the row.
+        ui.add_space((copied.rect.right() + design::L - ui.cursor().left()).max(0.0));
+        // A message action without an icon has the secondary border.
+        let let_go = Action::secondary(let_go)
+            .density(Density::Read)
+            .name(let_go_name)
+            .show(ui)
+            .clicked();
+        (copied.clicked(), let_go)
+    })
+    .inner
+}
+
+impl super::GoneLog {
+    /// The notice with its choices. `Copy text` puts the typed words on the clipboard; either
+    /// choice ends the notice.
+    pub(super) fn draw(
+        &self,
+        ui: &mut egui::Ui,
+        words: &str,
+        tone: Tone,
+    ) -> Option<super::FooterAct> {
+        let (copied, dismissed) = design::message_with_actions(ui, tone, words, |ui| {
+            copy_or_let_go(
+                ui,
+                &format!("Copy the Log line for {}", self.name),
+                "Dismiss",
+                &format!("Dismiss the Log line for {}", self.name),
+            )
+        });
+        if copied {
+            ui.ctx().copy_text(self.words.clone());
+        }
+        (copied || dismissed).then_some(super::FooterAct::GoneLog(self.key))
+    }
+}
+
 impl Reader {
     /// Open the form for the entry on show.
     pub(super) fn begin_edit(&mut self, campaign: &Campaign, item: &Item) {
@@ -608,19 +661,23 @@ impl Reader {
         self.picker.is_some() || self.form_focused
     }
 
-    /// A new reader that keeps only this one's typed Log lines.
+    /// A new reader that keeps only this one's typed Log lines, and the words of those whose
+    /// entry is gone.
     pub(crate) fn keep_log_lines(mut old: Self) -> Self {
         Self {
             log_fields: std::mem::take(&mut old.log_fields),
+            gone_log_lines: std::mem::take(&mut old.gone_log_lines),
             ..Self::default()
         }
     }
 
-    /// Start again with nothing on show. Unsaved changes stay: edit forms, and Log lines.
+    /// Start again with nothing on show. Unsaved changes stay: edit forms, Log lines, and the
+    /// words of Log lines whose entry is gone.
     pub fn clear(&mut self) {
         *self = Self {
             edits: std::mem::take(&mut self.edits),
             log_fields: std::mem::take(&mut self.log_fields),
+            gone_log_lines: std::mem::take(&mut self.gone_log_lines),
             ..Self::default()
         };
     }
@@ -635,7 +692,8 @@ impl Reader {
 
     /// Drop the Log fields of this index's campaign whose entry is gone (deleted, or another
     /// note took its ID), so no guard waits on words that no field can show. Typed words are
-    /// not lost without a word: the pane's footer says once what they were.
+    /// not lost without a word: the pane's footer says them, with `Copy text`, until the DM
+    /// copies or dismisses them.
     pub fn forget_gone_log_lines(&mut self, index: &ContentIndex) {
         if self.log_fields.is_empty() {
             return;
@@ -651,33 +709,39 @@ impl Reader {
             if let Some(open) = self.log_fields.remove(&key)
                 && !open.field.words.trim().is_empty()
             {
-                self.gone_log_lines.push((
-                    format!(
-                        "\u{201c}{}\u{201d} was deleted. The Log line was not added: \u{201c}{}\u{201d}",
-                        open.name,
-                        open.field.words.trim()
-                    ),
-                    false,
-                ));
+                // The entry's newest words replace its older notice: one notice for each entry.
+                self.gone_log_lines.retain(|gone| gone.key != key);
+                self.gone_log_lines.push(super::GoneLog {
+                    key,
+                    name: open.name,
+                    words: open.field.words.trim().to_owned(),
+                });
             }
         }
     }
 
-    /// The words of Log lines whose entry is gone, as footer notices. Each shows until the
-    /// reader shows another entry after it was shown.
-    pub(crate) fn gone_log_notices(&mut self) -> Vec<super::FooterLine> {
+    /// The words of Log lines whose entry is gone, as footer notices. Each shows, whatever the
+    /// reader shows, until the DM copies or dismisses it (`FooterAct::GoneLog`).
+    pub(crate) fn gone_log_notices(&self) -> Vec<super::FooterLine> {
         self.gone_log_lines
-            .iter_mut()
-            .map(|(words, shown)| {
-                *shown = true;
+            .iter()
+            .map(|gone| {
                 super::FooterLine::new(
                     super::FooterRank::Notice,
                     Tone::Warning,
-                    words,
-                    super::FooterKind::Plain,
+                    &format!(
+                        "\u{201c}{}\u{201d} was deleted. The Log line was not added: \u{201c}{}\u{201d}",
+                        gone.name, gone.words
+                    ),
+                    super::FooterKind::GoneLog(gone.clone()),
                 )
             })
             .collect()
+    }
+
+    /// The DM copied or dismissed the words of this gone entry's Log line.
+    pub(crate) fn end_gone_log(&mut self, key: super::LogKey) {
+        self.gone_log_lines.retain(|gone| gone.key != key);
     }
 
     /// Put the entries whose edit form is open in this reader in `out`, with no new
@@ -723,35 +787,19 @@ impl Reader {
                         "The note for your unsaved changes to {name} is gone. It was deleted, or another note took its place."
                     ),
                     |ui| {
-                        ui.horizontal_wrapped(|ui| {
-                            let copy_name = format!("Copy the text of {name}");
-                            let copy = Action::quiet("Copy text")
-                                .icon(design::icons::COPY)
-                                .density(Density::Read)
-                                .name(&copy_name);
-                            let copied = super::starts_line(ui, copy, true).show(ui);
-                            if copied.clicked()
-                                && let Some(draft) = self.edits.get(&id)
-                            {
-                                ui.ctx().copy_text(draft.now.text.clone());
-                            }
-                            let discard_name = format!("Discard the draft of {name}");
-                            // Discard draft lets the DM's words go, so an `L` gap keeps it apart.
-                            // The gap starts at Copy text's target, which `line_start` draws `S`
-                            // left of its place in the row.
-                            ui.add_space((copied.rect.right() + design::L - ui.cursor().left()).max(0.0));
-                            // A message action without an icon has the secondary border.
-                            if Action::secondary("Discard draft")
-                                .density(Density::Read)
-                                .name(&discard_name)
-                                .show(ui)
-                                .clicked()
-                                && let Some(draft) = self.edits.remove(&id)
-                            {
-                                self.discarded = Some((id, draft));
-                                self.stamp(super::FooterAct::Discarded);
-                            }
-                        });
+                        let (copied, discard) = copy_or_let_go(
+                            ui,
+                            &format!("Copy the text of {name}"),
+                            "Discard draft",
+                            &format!("Discard the draft of {name}"),
+                        );
+                        if copied && let Some(draft) = self.edits.get(&id) {
+                            ui.ctx().copy_text(draft.now.text.clone());
+                        }
+                        if discard && let Some(draft) = self.edits.remove(&id) {
+                            self.discarded = Some((id, draft));
+                            self.stamp(super::FooterAct::Discarded);
+                        }
                     },
                 );
             });

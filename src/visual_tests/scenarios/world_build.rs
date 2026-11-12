@@ -2061,6 +2061,19 @@ pub fn facts(d: &mut Driver<'_>) {
         d.focused_name().as_deref() == Some("Log line for Zarel") && d.visible_text("Session 1:"),
         "Add to Log opens the Log field with the keyboard in it, after the line's stamp",
     );
+    // X31 of app round 2: the stamp and the field end at the reader's measure, as its rules do.
+    for size in [DEFAULT, LARGE] {
+        let (stamp, field) = d.at_size(size, |d| {
+            (d.place_of("Session 1:"), d.place_of("Log line for Zarel"))
+        });
+        d.observe(
+            "T18.2",
+            stamp.zip(field).is_some_and(|(stamp, field)| {
+                field.right() - stamp.left() <= design::READER_MEASURE + 0.5
+            }),
+            format!("At {size:?} the stamp {stamp:?} and the field {field:?} end at the measure"),
+        );
+    }
     d.state("log-field-open", Sizes::All);
     d.type_text("Gave the gate key to Iselle.");
     d.press(Key::Enter);
@@ -2191,6 +2204,48 @@ pub fn facts(d: &mut Driver<'_>) {
         format!("The question {question:?} is Body above its note {source:?}: {sizes:?}"),
     );
     d.state("open-questions", Sizes::All);
+    // X45 of app round 2: a question is ticked where the DM reads it. Its box writes `[x]` to
+    // that line of its note at once, with `Undo tick` in the pane's footer.
+    let horn = root(d).join("Lore/Horn Rings.md");
+    let open = fs::read_to_string(&horn).unwrap();
+    let question = "Open: Can a horn ring be sold?";
+    d.click(question);
+    d.expect("Undo tick");
+    d.observe(
+        "T15.5",
+        fs::read_to_string(&horn).unwrap()
+            == open.replacen(
+                "- [ ] Can a horn ring be sold?",
+                "- [x] Can a horn ring be sold?",
+                1,
+            )
+            && !d.has(question)
+            && d.visible_text("“Can a horn ring be sold?” ticked in Horn Rings."),
+        "The box ticks that line of its note, and the question leaves the list",
+    );
+    d.state("question-ticked", Sizes::Default);
+    d.click("Undo tick");
+    d.observe(
+        "T15.5",
+        fs::read_to_string(&horn).unwrap() == open && d.has(question) && !d.has("Undo tick"),
+        "Undo tick opens that box again",
+    );
+    // The line changed on disk since it was read: the tick writes nothing and says so.
+    let changed = open.replace(
+        "Can a horn ring be sold?",
+        "Can a horn ring be sold or lent?",
+    );
+    fs::write(&horn, &changed).unwrap();
+    d.click(question);
+    d.observe(
+        "T15.5",
+        fs::read_to_string(&horn).unwrap() == changed
+            && d.visible_text("This question changed in Horn Rings. Nothing was written.")
+            && !d.has("Undo tick"),
+        "A question whose line changed on disk is not ticked, and the footer says why",
+    );
+    fs::write(&horn, &open).unwrap();
+    reload(d);
     d.click("Can a horn ring be sold?");
     d.observe(
         "T15.5",
@@ -4203,12 +4258,21 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
             d.expect("Edit Rook Ambry");
             let rect = d.place_of("Edit Rook Ambry").unwrap();
             let words = d.painted_in(rect);
-            words.contains("Edit") && words.contains(design::icons::EDIT)
+            // X32 of app round 2: `Add to Log` has its own glyph, a list with a plus, in its
+            // word form and its icon form, not the bare `+` of `Add to fight`.
+            let log = d.place_of("Add to Log").map(|rect| d.painted_in(rect));
+            words.contains("Edit")
+                && words.contains(design::icons::EDIT)
+                && log.is_some_and(|log| {
+                    log.contains(design::icons::ADD_TO_LOG) && !log.contains(design::icons::ADD)
+                })
         });
         d.observe(
             "iter-6-D-FD7",
             named,
-            format!("Lookup's Edit action has its pencil and word at {size:?}"),
+            format!(
+                "Lookup's Edit action has its pencil and word, and Add to Log its own glyph, at {size:?}"
+            ),
         );
     }
     d.expect("Edit Rook Ambry");

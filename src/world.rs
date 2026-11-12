@@ -1940,8 +1940,8 @@ pub struct Reader {
     /// Each open `Add to Log` field, by its entry and the session it was opened in. Its words
     /// wait while the reader shows another entry; a restart loses them, as every held form.
     log_fields: HashMap<LogKey, LogField>,
-    /// The words of Log lines whose entry is gone, for the footer, and whether they were shown.
-    gone_log_lines: Vec<(String, bool)>,
+    /// The Log lines whose entry is gone, for the footer, until the DM copies or dismisses each.
+    gone_log_lines: Vec<GoneLog>,
     /// The entries whose edit form is open in the other reader (Lookup's, or the World
     /// page's). Their Log field waits too, so Splat never makes its own disk conflict.
     pub edited_elsewhere: Vec<Uuid>,
@@ -1979,7 +1979,16 @@ impl PageResult {
 /// in another campaign has the same entry ID, so the campaign is part of the key, and the words
 /// never reach another campaign's note. The session is not: the stamp is the session being
 /// played at Enter, so a renamed, closed or changed session cannot hide typed words.
-type LogKey = (Uuid, Uuid);
+pub(crate) type LogKey = (Uuid, Uuid);
+
+/// The typed words of a Log line whose entry is gone: the footer says them, with `Copy text`,
+/// until the DM copies or dismisses them.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct GoneLog {
+    key: LogKey,
+    name: String,
+    words: String,
+}
 
 /// One open `Add to Log` field: its words, and whether its next draw selects them.
 #[derive(Default)]
@@ -1992,7 +2001,6 @@ struct LogField {
 }
 
 /// The least room that `Add to Log`'s field keeps for a sentence when its stamp shares its line.
-/// It also keeps the words it holds whole, with the field's margins.
 const LOG_FIELD_BESIDE: f32 = design::XXL * 7.0;
 
 /// How `Add to Log` shows in a reader's header.
@@ -2070,6 +2078,10 @@ pub(crate) enum FooterAct {
     Discarded,
     /// The page result's Undo: the page owns it.
     Page,
+    /// The DM copied or dismissed the words of a Log line whose entry is gone.
+    GoneLog(LogKey),
+    /// `Undo tick` of an open question, by its note and its line: the World page's.
+    Untick(Uuid, usize),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -2088,6 +2100,8 @@ pub(crate) enum FooterKind {
     Error {
         editor: Option<std::path::PathBuf>,
     },
+    /// A Log line whose entry is gone, with `Copy text` and `Dismiss`.
+    GoneLog(GoneLog),
 }
 
 /// One World or Lookup message for its pane's footer (round 26): a result, reason or notice
@@ -2143,6 +2157,7 @@ impl FooterLine {
             FooterKind::Discarded { name, act } => {
                 design::draft_discarded(ui, name).then_some(*act)
             }
+            FooterKind::GoneLog(gone) => gone.draw(ui, &self.words, self.tone),
             FooterKind::Error { editor } => {
                 ui.horizontal_wrapped(|ui| {
                     design::message(ui, self.tone, &self.words);
@@ -2301,7 +2316,6 @@ impl Reader {
             self.status_editing = self.status != status(&item.entry);
             // Only a form with changes is worth keeping. It opens again where it was left.
             self.edits.retain(|_, draft| draft.dirty());
-            self.gone_log_lines.retain(|(_, shown)| !shown);
             self.other_type.clear();
             self.adding = None;
             self.picker = None;
@@ -2456,8 +2470,9 @@ impl Reader {
             // design): `Start fight` next to Edit, where it is for a DM who never adds to a Log,
             // then `Add to Log`, which gives way first: to its icon, then away. `Start fight`
             // keeps its word, or does not show.
+            // Its own glyph, a list with a plus, so it is not a bare `+` above `Add to fight`.
             let log_action = Action::quiet("Add to Log")
-                .icon(design::icons::ADD)
+                .icon(design::icons::ADD_TO_LOG)
                 .density(Density::Read);
             let start_name = start
                 .as_ref()
@@ -2498,7 +2513,7 @@ impl Reader {
                     in_rect(ui, at(width), |ui| log_action.show(ui).clicked())
                 }
                 Some(LogAction::Icon) => in_rect(ui, at(Density::Read.control()), |ui| {
-                    design::icon_button(ui, design::icons::ADD, "Add to Log").clicked()
+                    design::icon_button(ui, design::icons::ADD_TO_LOG, "Add to Log").clicked()
                 }),
                 None => false,
             };
@@ -3089,9 +3104,20 @@ impl Reader {
     }
 
     /// `Add to Log`'s field under the header, while it is open for this entry in this session:
-    /// the line's stamp in muted words, then the field. Enter adds the line and closes the
-    /// field; Escape clears and closes it. An open edit form blocks it.
+    /// the line's stamp in muted words, then the field, both ending at the reader's measure.
+    /// Enter adds the line and closes the field; Escape clears and closes it. An open edit form
+    /// blocks it.
     fn log_field(
+        &mut self,
+        ui: &mut egui::Ui,
+        item: &Item,
+        campaign: &Campaign,
+        editing: bool,
+    ) -> Option<Go> {
+        design::reader::measure(ui, |ui| self.log_field_in(ui, item, campaign, editing))
+    }
+
+    fn log_field_in(
         &mut self,
         ui: &mut egui::Ui,
         item: &Item,
@@ -3134,20 +3160,11 @@ impl Reader {
                     .size()
                     .x;
                 let words = Type::Small.rich(ui, stamp).color(colors().muted);
-                // The stamp shares the field's line while the field keeps room for a sentence.
-                // One layout for both, so the field keeps its ID, and the keyboard, when the
-                // window changes size.
+                // The stamp shares the field's line while the field keeps room for a sentence,
+                // whatever words it holds. One layout for both, so the field keeps its ID, and
+                // the keyboard, when the window changes size.
                 let room = ui.available_width() - width - design::S;
-                let typed = ui
-                    .painter()
-                    .layout_no_wrap(
-                        field.words.clone(),
-                        egui::TextStyle::Body.resolve(ui.style()),
-                        colors().text,
-                    )
-                    .size()
-                    .x;
-                let beside = room >= LOG_FIELD_BESIDE.max(typed + 3.0 * design::S);
+                let beside = room >= LOG_FIELD_BESIDE;
                 ui.horizontal_wrapped(|ui| {
                     ui.label(words);
                     if !beside {
@@ -3816,6 +3833,12 @@ impl Reader {
             }
             // The page takes its own result's Undo.
             FooterAct::Page => None,
+            FooterAct::GoneLog(key) => {
+                self.end_gone_log(key);
+                None
+            }
+            // The World page takes a tick's Undo.
+            FooterAct::Untick(..) => None,
         };
         go.and_then(|go| self.settle(go))
     }
@@ -4157,63 +4180,74 @@ impl Reader {
         {
             return Some(go);
         }
-        if !self.compact {
-            let value_width = self.relationship_value_width(ui, item, index);
-            if !self.status_editing
-                && (!status(&item.entry).trim().is_empty() || status_unread(&item.entry))
-            {
-                let value = status(&item.entry);
-                let unread = status_unread(&item.entry);
-                let changed = Self::relationship_row(
-                    ui,
-                    "Status",
-                    value_width,
-                    |ui| {
-                        // Round 26 FE5: a set value is in `Body` in the text colour, as a set
-                        // link is; only `not read` and `not set` stay `Small`.
-                        let (words, role, color) = if unread {
-                            ("not read", Type::Small, colors().result.warning)
-                        } else if value.is_empty() {
-                            ("not set", Type::Small, colors().muted)
-                        } else {
-                            (value, Type::Body, colors().text)
-                        };
-                        ui.label(role.rich(ui, words).color(color));
-                    },
-                    None,
-                );
-                if changed {
-                    self.status_editing = true;
-                }
+        // Status and its Change show in both readers, World's and Lookup's: one act, one write
+        // and one Undo wherever the DM reads the entry.
+        let value_width = self.relationship_value_width(ui, item, index);
+        let mut opened = false;
+        if !self.status_editing
+            && (!status(&item.entry).trim().is_empty() || status_unread(&item.entry))
+        {
+            let value = status(&item.entry);
+            let unread = status_unread(&item.entry);
+            let changed = Self::relationship_row(
+                ui,
+                "Status",
+                value_width,
+                |ui| {
+                    // Round 26 FE5: a set value is in `Body` in the text colour, as a set
+                    // link is; only `not read` and `not set` stay `Small`.
+                    let (words, role, color) = if unread {
+                        ("not read", Type::Small, colors().result.warning)
+                    } else if value.is_empty() {
+                        ("not set", Type::Small, colors().muted)
+                    } else {
+                        (value, Type::Body, colors().text)
+                    };
+                    ui.label(role.rich(ui, words).color(color));
+                },
+                None,
+            );
+            if changed {
+                self.status_editing = true;
+                opened = true;
             }
-            if self.status_editing {
-                let response = design::text_field(ui, "Status", &mut self.status, None, None);
-                let wanted = self.status.trim().to_owned();
-                if wanted != status(&item.entry) {
-                    let mut save = response.has_focus()
-                        && ui.input(|input| input.key_pressed(egui::Key::Enter));
-                    ui.horizontal(|ui| {
-                        design::status(
-                            ui,
-                            design::Status {
-                                icon: design::icons::DRAFT,
-                                word: "Unsaved",
-                                color: colors().document.unsaved,
-                            },
-                        );
-                        save |= Action::secondary("Save status")
-                            .density(Density::Read)
-                            .show(ui)
-                            .clicked();
-                    });
-                    if save {
-                        let result = self.change(campaign, item, index, "status", wanted.into());
-                        if result.is_some() {
-                            self.status_editing = false;
-                            self.status_drafts.remove(&item.entry.id);
-                        }
-                        return result;
+        }
+        if self.status_editing {
+            let response = design::text_field(ui, "Status", &mut self.status, None, None);
+            // Change puts the keyboard in the field with its words selected, so the DM types
+            // the new value at once.
+            if opened {
+                design::focus_and_select(ui, response.id, &self.status);
+            }
+            // While the field has the keyboard, Escape is the field's, not Lookup's.
+            if response.has_focus() || response.lost_focus() {
+                self.form_focused = true;
+            }
+            let wanted = self.status.trim().to_owned();
+            if wanted != status(&item.entry) {
+                let mut save =
+                    response.has_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter));
+                ui.horizontal(|ui| {
+                    design::status(
+                        ui,
+                        design::Status {
+                            icon: design::icons::DRAFT,
+                            word: "Unsaved",
+                            color: colors().document.unsaved,
+                        },
+                    );
+                    save |= Action::secondary("Save status")
+                        .density(Density::Read)
+                        .show(ui)
+                        .clicked();
+                });
+                if save {
+                    let result = self.change(campaign, item, index, "status", wanted.into());
+                    if result.is_some() {
+                        self.status_editing = false;
+                        self.status_drafts.remove(&item.entry.id);
                     }
+                    return result;
                 }
             }
         }
@@ -5697,7 +5731,7 @@ mod tests {
         );
 
         // An entry that is gone: its draft waits for no guard, and the pane's footer says the
-        // words once, so nothing is lost without a word.
+        // words, so nothing is lost without a word.
         fs::remove_file(&path).unwrap();
         let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
         assert!(index.position(hob).is_none());
@@ -5716,6 +5750,20 @@ mod tests {
             ),
             "{notices:?}"
         );
+        // X28 of app round 2: the notice stays until the DM copies or dismisses it. Lookup's
+        // Clear, and another entry shown after it, keep it; its choice ends it.
+        lookup.clear();
+        let notices = |lookup: &mut Reader| {
+            lookup
+                .footer_lines(item, &index, Some(&campaign), None)
+                .iter()
+                .filter(|line| matches!(line.kind, FooterKind::GoneLog(_)))
+                .count()
+        };
+        assert_eq!(notices(&mut lookup), 1);
+        assert_eq!(notices(&mut lookup), 1);
+        lookup.footer_act(FooterAct::GoneLog(key), item, &campaign);
+        assert_eq!(notices(&mut lookup), 0);
     }
 
     #[test]
