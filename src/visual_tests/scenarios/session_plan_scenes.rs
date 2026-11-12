@@ -244,7 +244,9 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     let body = d.editor_text().expect("a new session has a note");
     d.replace_editor_text(&body.replace(
         "## Plan for tonight\n",
-        &format!("## Plan for tonight\n\n- [x] [[{VARRA_BLACK}]]: {WORDS}\n- [ ] [[{VARRA_BLACK}]]\n"),
+        &format!(
+            "## Plan for tonight\n\n- [x] [[{VARRA_BLACK}]]: {WORDS}\n- [ ] [[{VARRA_BLACK}]]\n"
+        ),
     ));
     d.press_ctrl(Key::S);
     show_plan(d);
@@ -253,7 +255,10 @@ pub fn log_from_play(d: &mut Driver<'_>) {
         .app()
         .sessions
         .selected_path()
-        .and_then(|path| path.file_stem().map(|stem| stem.to_string_lossy().into_owned()))
+        .and_then(|path| {
+            path.file_stem()
+                .map(|stem| stem.to_string_lossy().into_owned())
+        })
         .expect("a session is open");
     let stamp = match crate::timeline::day_now(&d.app().timeline.events) {
         Some(day) => format!("{session}, Day {day}"),
@@ -276,7 +281,12 @@ pub fn log_from_play(d: &mut Driver<'_>) {
         });
         d.observe(
             "T18.2",
-            shown && d.nodes().iter().filter(|node| node.name.starts_with("Add to Log: ")).count() == 1,
+            shown
+                && d.nodes()
+                    .iter()
+                    .filter(|node| node.name.starts_with("Add to Log: "))
+                    .count()
+                    == 1,
             format!("At {size:?}, only the done scene has Add to Log, left of its menu: {detail}"),
         );
     }
@@ -306,7 +316,11 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     d.press(Key::Enter);
     d.expect(&added);
     d.click("Close Lookup");
-    d.audit_goal_within("T18.2", "put what an NPC said in her own note, from a done scene", 4);
+    d.audit_goal_within(
+        "T18.2",
+        "put what an NPC said in her own note, from a done scene",
+        4,
+    );
     let logged = fs::read_to_string(&path).unwrap();
     let expected = format!(
         "{before}\n## Log\n\n- {}: {TYPED}\n",
@@ -335,7 +349,8 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     for size in [SMALL, DEFAULT, LARGE] {
         let (fits, detail) = d.at_size(size, |d| {
             let (log, start, order) = reader_header(d, VARRA_BLACK);
-            let icon = log.is_some_and(|log| log.width() <= crate::design::Density::Read.control() + 0.5);
+            let icon =
+                log.is_some_and(|log| log.width() <= crate::design::Density::Read.control() + 0.5);
             (
                 order && (log.is_none() || icon || start.is_some()),
                 format!("Add to Log {log:?}, Start fight {start:?}"),
@@ -364,7 +379,8 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     d.expect(&field);
     d.observe(
         "T18.2",
-        d.field_text(&field).as_deref() == Some(WORDS) && fs::read_to_string(&path).unwrap() == before,
+        d.field_text(&field).as_deref() == Some(WORDS)
+            && fs::read_to_string(&path).unwrap() == before,
         "After Discard the field opens with the scene's words, and the note is as before",
     );
     // Escape clears and closes the field, and writes nothing.

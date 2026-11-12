@@ -673,7 +673,9 @@ fn after_the_session(a: &mut Audit<'_, '_>) {
     });
     a.task("Put what an NPC said in the NPC's own note");
     a.click(Panel, &format!("Add to Log: {HOBB}: {HOBB_WORDS}"));
-    a.act(Do, "type the line", |d| d.type_text("Named the informer at the ford."));
+    a.act(Do, "type the line", |d| {
+        d.type_text("Named the informer at the ford.")
+    });
     a.act(Do, "add it", |d| d.press(Key::Enter));
     a.act(Panel, "close Lookup", |d| d.press(Key::Escape));
     a.fact(format!(

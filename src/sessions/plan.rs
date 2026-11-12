@@ -825,8 +825,8 @@ fn scene_row(
             .density(Density::Read)
             .name(&log_name)
     };
-    let action_width = Density::Read.control()
-        + log.map_or(0.0, |_| log_action().natural_width(ui) + design::S);
+    let action_width =
+        Density::Read.control() + log.map_or(0.0, |_| log_action().natural_width(ui) + design::S);
     let widths = [width - action_width - design::S, action_width];
     let mut tick = false;
     let mut remove = false;

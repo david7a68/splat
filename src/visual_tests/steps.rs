@@ -257,5 +257,9 @@ pub fn reader_header(
     let follows = |rect: Option<eframe::egui::Rect>, after: eframe::egui::Rect| {
         rect.is_none_or(|rect| (rect.left() - after.right() - crate::design::XS).abs() <= 0.5)
     };
-    (log, start, follows(log, edit) && follows(start, log.unwrap_or(edit)))
+    (
+        log,
+        start,
+        follows(log, edit) && follows(start, log.unwrap_or(edit)),
+    )
 }

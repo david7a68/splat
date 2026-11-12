@@ -1972,7 +1972,11 @@ enum LogAction {
 /// with only `Add to Log` shows its word, then its icon, then nothing. `Start fight` is never an
 /// icon. Each action after the first has `XS` before it. Returns how `Add to Log` shows and
 /// `Start fight`'s width when it shows.
-fn header_actions(room: f32, log: Option<f32>, start: Option<f32>) -> (Option<LogAction>, Option<f32>) {
+fn header_actions(
+    room: f32,
+    log: Option<f32>,
+    start: Option<f32>,
+) -> (Option<LogAction>, Option<f32>) {
     let icon = Density::Read.control();
     let fits = |widths: &[f32]| {
         widths.iter().sum::<f32>() + design::XS * widths.len().saturating_sub(1) as f32 <= room
@@ -2029,7 +2033,10 @@ impl Reader {
     /// Open `Add to Log` for this entry, as a done scene's `Add to Log` does. The field starts
     /// with `words`, selected, unless the DM already typed words there.
     pub fn open_log(&mut self, id: Uuid, words: &str) {
-        let field = self.log_fields.entry((id, self.played.clone())).or_default();
+        let field = self
+            .log_fields
+            .entry((id, self.played.clone()))
+            .or_default();
         field.focus = true;
         if field.words.trim().is_empty() {
             words.clone_into(&mut field.words);
@@ -5231,7 +5238,11 @@ mod tests {
         let before_log = fs::read_to_string(&path).unwrap();
         let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
         let item = &index.items[index.position(hob).unwrap()];
-        assert!(reader.add_log_line(&campaign, item, "Gave the gate key to Iselle.").is_some());
+        assert!(
+            reader
+                .add_log_line(&campaign, item, "Gave the gate key to Iselle.")
+                .is_some()
+        );
         let logged = fs::read_to_string(&path).unwrap();
         assert_eq!(
             logged,
@@ -5317,13 +5328,20 @@ mod tests {
         // goes after it, in the entry's new Log heading.
         let edited = format!("{}Seen at the ford.\n", fs::read_to_string(&path).unwrap());
         fs::write(&path, &edited).unwrap();
-        assert!(lookup.add_log_line(&campaign, item, "Told who burned the ropes.").is_some());
+        assert!(
+            lookup
+                .add_log_line(&campaign, item, "Told who burned the ropes.")
+                .is_some()
+        );
         let a = fs::read_to_string(&path).unwrap();
         assert_eq!(
             a,
             format!("{edited}\n## Log\n\n- [[Session 1]]: Told who burned the ropes.\n")
         );
-        assert!(!lookup.log_fields.contains_key(&key), "Enter closes the field");
+        assert!(
+            !lookup.log_fields.contains_key(&key),
+            "Enter closes the field"
+        );
 
         // Act A in Lookup, an unrelated act B in the World page's reader, then Undo of A: A's
         // line goes, B's stays.
@@ -5332,7 +5350,9 @@ mod tests {
         let other = &index.items[index.position(oren).unwrap()];
         let oren_path = dir.path().join("NPCs/Oren.md");
         let oren_before = fs::read_to_string(&oren_path).unwrap();
-        world.add_log_line(&campaign, other, "Paid the toll.").unwrap();
+        world
+            .add_log_line(&campaign, other, "Paid the toll.")
+            .unwrap();
         let oren_after = fs::read_to_string(&oren_path).unwrap();
         assert_ne!(oren_before, oren_after);
         assert!(lookup.undo_change(&campaign, hob).is_some());
@@ -5349,7 +5369,12 @@ mod tests {
         let failed = lookup.add_log_line(&campaign, item, "Kept.");
         fs::set_permissions(&folder, fs::Permissions::from_mode(0o755)).unwrap();
         assert!(failed.is_none());
-        assert!(lookup.error.as_deref().is_some_and(|error| error.contains("NPCs/Hob.md")));
+        assert!(
+            lookup
+                .error
+                .as_deref()
+                .is_some_and(|error| error.contains("NPCs/Hob.md"))
+        );
         assert_eq!(fs::read_to_string(&path).unwrap(), edited);
         assert_eq!(lookup.log_fields[&key].words, "Kept.");
 
@@ -5357,11 +5382,21 @@ mod tests {
         // act names the file and writes nothing.
         fs::write(&path, [0xff, 0xfe, b'\n']).unwrap();
         assert!(lookup.add_log_line(&campaign, item, "Kept.").is_none());
-        assert!(lookup.error.as_deref().is_some_and(|error| error.contains("NPCs/Hob.md")));
+        assert!(
+            lookup
+                .error
+                .as_deref()
+                .is_some_and(|error| error.contains("NPCs/Hob.md"))
+        );
         assert_eq!(fs::read(&path).unwrap(), [0xff, 0xfe, b'\n']);
         fs::remove_file(&path).unwrap();
         assert!(lookup.add_log_line(&campaign, item, "Kept.").is_none());
-        assert!(lookup.error.as_deref().is_some_and(|error| error.contains("NPCs/Hob.md")));
+        assert!(
+            lookup
+                .error
+                .as_deref()
+                .is_some_and(|error| error.contains("NPCs/Hob.md"))
+        );
         assert!(!path.exists());
         assert_eq!(lookup.log_fields[&key].words, "Kept.");
 
@@ -5377,7 +5412,11 @@ mod tests {
         let cases = [
             (both, Some(LogAction::Word(log)), Some(start)),
             (both - 1.0, Some(LogAction::Icon), Some(start)),
-            (icon + design::XS + start, Some(LogAction::Icon), Some(start)),
+            (
+                icon + design::XS + start,
+                Some(LogAction::Icon),
+                Some(start),
+            ),
             (icon + design::XS + start - 1.0, None, Some(start)),
             (start, None, Some(start)),
             (start - 1.0, Some(LogAction::Icon), None),
@@ -5393,10 +5432,19 @@ mod tests {
         }
         // An entry with only `Add to Log`: its word, then its icon, then nothing. One with only
         // `Start fight`: its word, or nothing.
-        assert_eq!(header_actions(log, Some(log), None), (Some(LogAction::Word(log)), None));
-        assert_eq!(header_actions(log - 1.0, Some(log), None), (Some(LogAction::Icon), None));
+        assert_eq!(
+            header_actions(log, Some(log), None),
+            (Some(LogAction::Word(log)), None)
+        );
+        assert_eq!(
+            header_actions(log - 1.0, Some(log), None),
+            (Some(LogAction::Icon), None)
+        );
         assert_eq!(header_actions(icon - 1.0, Some(log), None), (None, None));
-        assert_eq!(header_actions(start, None, Some(start)), (None, Some(start)));
+        assert_eq!(
+            header_actions(start, None, Some(start)),
+            (None, Some(start))
+        );
         assert_eq!(header_actions(start - 1.0, None, Some(start)), (None, None));
     }
 
