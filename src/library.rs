@@ -6435,7 +6435,6 @@ impl Library {
                 .and_then(|_| presentation::class_level(parsed.as_ref().ok()?)),
         );
         let dirty = self.draft != note.text;
-        if dirty {}
         let editable = note.owner.editable();
         // A file the system will not read has no text to edit: the reader names its fault.
         let fault = note.fault.clone();
