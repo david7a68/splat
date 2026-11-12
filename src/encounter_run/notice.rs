@@ -2,7 +2,7 @@
 //! and the rule for what shortens first.
 use super::{
     Command, NOBODY_PRESENT, Panel, Phase, Run, SHEET_SOURCE,
-    view::{DOCK_ALL_WORDS_FROM, dock_name, header_height, log_link, undo_forms, undo_words},
+    view::{DOCK_ALL_WORDS_FROM, dock_name, header_height, log_link, undo_forms},
 };
 use crate::design::{self, Action, Density, RunScale, Status, Tone, Type, colors, icons};
 use eframe::egui::{self, Align, Layout, vec2};
@@ -247,27 +247,19 @@ impl Run {
                 };
                 let action_font = Type::Strong.font(ui);
                 let from_sheet = self.undo_from_sheet();
-                let fitted = undo_words(
-                    ui,
-                    &undo_label,
-                    from_sheet,
-                    &self.state.participants,
-                    &action_font,
-                    f32::INFINITY,
-                );
+                // The forms of the one rule, once a frame, from the step's own target.
+                let target = self.undo_target();
+                let forms = undo_forms(&undo_label, target, from_sheet, &self.state.participants);
+                let fitted = forms.target.first().unwrap_or(&undo_label).clone();
+                // The reserve: the target cut to `5 × L`, at its own place in the words.
                 let mut minimum = fitted.clone();
-                if let Some(target) = self
-                    .state
-                    .participants
-                    .iter()
-                    .filter(|p| minimum.contains(&p.name))
-                    .max_by_key(|p| p.name.len())
-                {
-                    minimum = minimum.replacen(
-                        &target.name,
-                        &dock_name(ui, &target.name, &action_font, design::L * 5.0),
-                        1,
-                    );
+                if let Some(name) = target {
+                    let short = dock_name(ui, name, &action_font, design::L * 5.0);
+                    if let Some(before) = minimum.strip_suffix(name) {
+                        minimum = format!("{before}{short}");
+                    } else if let Some(after) = minimum.strip_prefix(&format!("Undo: {name}")) {
+                        minimum = format!("Undo: {short}{after}");
+                    }
                 }
                 // The shortest target Undo keeps: a sheet's step also gives up its source.
                 let shortest = minimum
@@ -336,7 +328,6 @@ impl Run {
                     // The key letter goes before the target does; the Keys list still has U.
                     // No target fits: the step's words without it, `Undo: 8 damage × 3`,
                     // before `Undo` alone. Hover keeps the whole step.
-                    let forms = undo_forms(&undo_label, from_sheet, &self.state.participants);
                     let strong = Type::Strong.font(ui);
                     let width_of = |words: &str, drop_key: bool| {
                         let action = self.undo_action(words);

@@ -1370,8 +1370,9 @@ number; `participants` and the half count go),
 is never cut to only `…` and its copy number; retain copy numbers, action words, amounts and condition
 directions. The target shortens by whole words and keeps the part that tells two rows apart: its copy number or
 letter (`Cinder… 2`), else its last word; a short form that another row's name also gives is not used. When no
-such form fits, the target goes. One function makes every Undo label of the run, in the live and the ended header
-(`undo_forms`). Hover and accessibility keep the full action. Empty history says Nothing to undo, to the left of
+such form fits, the target goes. One function makes every Undo label of the run, in the live, ended and setup
+header (`undo_forms`), from the step's parts: the step keeps the words that name its row (or loot table) as it made
+them, so the target is never searched for in the label's words. Hover and accessibility keep the full action. Empty history says Nothing to undo, to the left of
 blocked Undo on setup and live screens. A run file from before Undo steps were saved says Nothing to undo since
 reopening, and a file whose steps could not be read says so. A narrow slot uses
 Nothing to undo with full hover and accessible text. Sheet updates name whose sheet changed; only sheet reads
@@ -1633,13 +1634,15 @@ An ended view has one control that takes the ending away. While the ending is th
 `Undo: end encounter`, and no other control shows. Otherwise it is secondary `Continue fight` with the run icon,
 `S` left of primary Close run: the two ways out of an ended fight, with the one that changes nothing last. Undo stays
 at the roster's right edge. The title, the outcome and the save word keep their words. Beside Continue fight or the
-sentence that stands in its place, Undo keeps its target (`Undo: roll loot`). The header's form depends on the width
-only, never on Undo's target or on whether Continue fight shows yet: when the title's line cannot hold Close run,
-Continue fight (or the sentence in its place) and `Undo: end encounter`, as beside Lookup at 960x640 or at 1200x800,
-Close run stays on that line and Undo and Continue fight take a line of their own below it, at the right edge, from
-the start of the ended view. So a loot roll moves nothing under the pointer, and the lone Undo names its target there
-too (`Undo: end encounter`). A target too long for its room shortens by the rule of the run's Undo labels (`Undo: 2
-loot rolls`), with the full action in hover and its accessible name. A closed, ended run read in History has the same
+sentence that stands in its place, Undo keeps its target (`Undo: roll loot`). The header's form and height depend on
+the width only: never on Undo's target, the loot, the reason or whether Continue fight shows yet. Undo keeps one room,
+`14 × L` (at least `Undo: end encounter`), and Continue fight one room, the widest of the control and every reason
+sentence. When the title's line cannot hold Close run (or Close after sync), those two rooms and the widest save
+word, as beside Lookup at 960x640 or at 1200x800, Close run stays on that line and Undo and Continue fight take a
+line of their own below it, at the right edge, from the start of the ended view; that line is as tall as the tallest
+reason at its room, so no reason is cut. So a loot roll moves nothing under the pointer, and the lone Undo names its
+target there too (`Undo: end encounter`). A target too long for Undo's room shortens by the rule of the run's Undo
+labels (`Undo: 2 loot rolls`), with the full action in hover and its accessible name. A closed, ended run read in History has the same
 secondary `Continue fight` on its own line under Read-only, blocked with `Close the open run first.` while another
 run is open. Continue fight is offered only for the fight that was played last (`README.md`, Running an encounter
 as DM). For any other ended fight the control is absent, and one muted `Small` sentence stands in its place and says

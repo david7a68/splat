@@ -39,8 +39,9 @@ const SLOT: usize = 2 * (std::mem::size_of::<serde_yaml_ng::Value>() + 16);
 /// The most a step's text can grow when it is decoded: a few bytes of text name one slot.
 const DECODED: usize = 64;
 
-/// The state before each step, oldest first, with each step's name and whether a sheet made it.
-pub(super) type History = (Vec<State>, Vec<String>, Vec<bool>);
+/// The state before each step, oldest first, with each step's name, whether a sheet made it,
+/// and the words in its name that name what it acted on.
+pub(super) type History = (Vec<State>, Vec<String>, Vec<bool>, Vec<Option<String>>);
 
 /// The file's form. It is written from steps that are already text, and read as the newest
 /// steps, still as text.
@@ -55,6 +56,10 @@ struct Step {
     label: String,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     from_sheet: bool,
+    /// The words of `label` that name what the step acted on. A file from before has none,
+    /// and its Undo then shortens only as a label with no target.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    target: Option<String>,
     /// How many rows the state has.
     count: usize,
     /// The rows that differ from the same rows after the step, by place.
@@ -195,7 +200,12 @@ impl Lines {
 }
 
 impl Step {
-    fn of(before: &State, after: &State, label: &str, from_sheet: bool) -> Self {
+    fn of(
+        before: &State,
+        after: &State,
+        (label, target): (&str, Option<&String>),
+        from_sheet: bool,
+    ) -> Self {
         // Every field is named, so that a new field of a state is a decision here. The two
         // left out are never saved: the run file does not keep them for its own state either.
         let State {
@@ -229,6 +239,7 @@ impl Step {
         Self {
             label: label.to_owned(),
             from_sheet,
+            target: target.cloned(),
             count: participants.len(),
             rows,
             log: Lines::of(log, &after.log),
@@ -337,6 +348,7 @@ pub(super) fn save(
     history: &[State],
     labels: &[String],
     from_sheet: &[bool],
+    targets: &[Option<String>],
     now: &State,
 ) -> Result<Box<RawValue>, String> {
     let mut steps = Vec::new();
@@ -344,7 +356,8 @@ pub(super) fn save(
     // The newest step is the one the DM needs first, so the budget is spent from that end.
     for at in (0..history.len()).rev() {
         let after = history.get(at + 1).unwrap_or(now);
-        let step = Step::of(&history[at], after, &labels[at], from_sheet[at]);
+        let target = targets.get(at).and_then(Option::as_ref);
+        let step = Step::of(&history[at], after, (&labels[at], target), from_sheet[at]);
         let step = serde_json::value::to_raw_value(&step).map_err(|e| e.to_string())?;
         bytes += step.get().len();
         if bytes > SAVED_BYTES {
@@ -400,7 +413,7 @@ pub(super) fn read(saved: &RawValue, now: &State) -> Option<History> {
     if saved.version != VERSION {
         return None;
     }
-    let mut history = (Vec::new(), Vec::new(), Vec::new());
+    let mut history = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
     let mut memory: usize = 0;
     let mut weights: Vec<usize> = now
         .participants
@@ -422,12 +435,14 @@ pub(super) fn read(saved: &RawValue, now: &State) -> Option<History> {
         }
         history.1.push(std::mem::take(&mut step.label));
         history.2.push(step.from_sheet);
+        history.3.push(step.target.take());
         let state = step.before(after)?;
         history.0.push(state);
         weights = rows;
     }
     history.0.reverse();
     history.1.reverse();
+    history.3.reverse();
     history.2.reverse();
     Some(history)
 }

@@ -765,6 +765,10 @@ pub(crate) struct Run {
     /// Beside each label: true when a sheet made the step, not the DM. Only such a step may
     /// give up its source when Undo is tight.
     history_from_sheet: Vec<bool>,
+    /// Beside each label: the words in it that name what the step acted on, the row's name or
+    /// a loot table, as `describe` made them. Undo shortens them from these parts, and never
+    /// reads them back out of the label (a row named `2` is not the `2` of `DC 12`).
+    history_targets: Vec<Option<String>>,
     /// How many of the oldest steps came from the run file. Undo of an ending among them makes
     /// the fight live again by `continue_blocked`, as Continue fight does. Never saved.
     saved_steps: usize,
@@ -989,6 +993,16 @@ const CONTINUE_NEEDS_TIMELINE: &str =
 /// the Timeline's next change works the rule out again.
 const CONTINUE_DISK_CHANGED: &str =
     "Timeline.md changed on disk. Settle that on the Timeline page first.";
+/// Every sentence that can stand where Continue fight would be, so the ended header keeps room
+/// for the widest and the tallest of them (X38).
+const CONTINUE_REASONS: [&str; 6] = [
+    CONTINUE_LATER,
+    CONTINUE_NO_EVENT,
+    CONTINUE_LATER_GONE,
+    CONTINUE_NO_EVENT_GONE,
+    CONTINUE_NEEDS_TIMELINE,
+    CONTINUE_DISK_CHANGED,
+];
 
 /// Each unread roster row's slot key, the key its participant has, with the row's line. The key
 /// is the row's own (`slot=` in its note) or its file line's, as `list_formats` gives a slot.
@@ -1059,6 +1073,8 @@ pub enum Unend {
 /// The outcome of an ending whose outcome field was left empty.
 const NO_OUTCOME: &str = "Undecided";
 /// The Undo step an ending makes. While it is the newest step, Undo is how the fight goes on.
+/// An Undo step's label, and the words in it that name what it acted on (`describe_named`).
+type Named = (String, Option<String>);
 const END_STEP: &str = "end encounter";
 /// The Undo step that takes an ending away.
 const CONTINUE_STEP: &str = "continue fight";
@@ -1277,6 +1293,7 @@ impl Run {
             history: Vec::new(),
             history_labels: Vec::new(),
             history_from_sheet: Vec::new(),
+            history_targets: Vec::new(),
             saved_steps: 0,
             selected: 0,
             also: BTreeSet::new(),
@@ -1457,20 +1474,23 @@ impl Run {
     }
     /// Keep one more Undo step: the state before it, its name, and whether a sheet made it.
     /// Every step enters here, so the stack never holds more than the limit: the oldest goes.
-    fn keep_step(&mut self, before: State, label: String, from_sheet: bool) {
+    fn keep_step(&mut self, before: State, (label, target): Named, from_sheet: bool) {
         let extra = (self.history.len() + 1).saturating_sub(undo::LIMIT);
         self.saved_steps = self.saved_steps.saturating_sub(extra);
         self.history.drain(..extra);
         self.history_labels.drain(..extra);
         self.history_from_sheet.drain(..extra);
+        self.history_targets
+            .drain(..extra.min(self.history_targets.len()));
         self.history.push(before);
         self.history_labels.push(label);
         self.history_from_sheet.push(from_sheet);
+        self.history_targets.push(target);
         self.revision += 1;
     }
     /// Keep a step that the DM took, which counts as play.
-    fn keep_own_step(&mut self, before: State, label: String, from_sheet: bool) {
-        self.keep_step(before, label, from_sheet);
+    fn keep_own_step(&mut self, before: State, named: Named, from_sheet: bool) {
+        self.keep_step(before, named, from_sheet);
         self.dm_steps += 1;
     }
     /// The newest Undo step's name, if there is one.
@@ -1524,6 +1544,9 @@ impl Run {
         self.state.log.insert(start, SAVED_HP_USED.into());
         if let Some(label) = self.history_labels.last_mut() {
             *label = SAVED_HP_STEP.into();
+        }
+        if let Some(target) = self.history_targets.last_mut() {
+            *target = None;
         }
         let len = self.history.len();
         if let Some(carried) = &mut self.carried {
@@ -2142,7 +2165,7 @@ impl Run {
         if initiative_edit.is_some() && initiative_edit == self.last_initiative {
             self.undo();
         }
-        let undo_label = self.describe(&command);
+        let (undo_label, target) = self.describe_named(&command);
         // A save's damage names each target's own result once it is applied.
         let roll_results = self.save_results(&command);
         let damage: BTreeMap<usize, i64> = rolling::damage_shares(&command).into_iter().collect();
@@ -2407,13 +2430,17 @@ impl Run {
         next.roll_results.extend(roll_results);
         next.damage = damage;
         next.cast = None;
-        next.last_change = Some(Self::change_with_result(&next, &undo_label));
+        next.last_change = Some(Self::change_with_result(
+            &next,
+            &undo_label,
+            target.as_deref(),
+        ));
         self.notice = None;
         // The step keeps the save as it stood, and the save is finished: its tile disarms.
         let finished = cast.is_some();
         self.state.cast = cast;
         let before = std::mem::replace(&mut self.state, next);
-        self.keep_own_step(before, undo_label, false);
+        self.keep_own_step(before, (undo_label, target), false);
         if finished {
             self.end_cast();
         }
@@ -2707,6 +2734,8 @@ impl Run {
             self.dm_steps += 1;
             self.history_labels.pop();
             self.history_from_sheet.pop();
+            self.history_targets
+                .truncate(self.history_labels.len().min(self.history_targets.len()));
             // What D&D Beyond last confirmed is a fact, not a step that can be taken back.
             let confirmed: Vec<_> = self
                 .state
@@ -2775,14 +2804,27 @@ impl Run {
             .filter(|mode| *mode != Grouping::Explicit || has_group)
             .collect()
     }
-    /// The words a named Undo uses for this command.
-    fn describe(&self, command: &Command) -> String {
-        let name = |index: &usize| {
-            self.state
+    /// The words a named Undo uses for this command, and the words in them that name what it
+    /// acted on: the row that `name` gave at the label's start or end, or the one loot table.
+    fn describe_named(&self, command: &Command) -> Named {
+        let named = std::cell::RefCell::new(None);
+        let label = self.describe_with(command, &|index| {
+            let name = self
+                .state
                 .participants
                 .get(*index)
-                .map_or("a participant", |p| p.name.as_str())
-        };
+                .map_or("a participant", |p| p.name.as_str());
+            *named.borrow_mut() = Some(name.to_owned());
+            name
+        });
+        let target = match command {
+            Command::Loot(rolls) if rolls.len() == 1 => Some(rolls[0].roll.key.clone()),
+            _ => named.into_inner(),
+        }
+        .filter(|name| label.ends_with(name.as_str()) || label.starts_with(name.as_str()));
+        (label, target)
+    }
+    fn describe_with<'a>(&'a self, command: &Command, name: &dyn Fn(&usize) -> &'a str) -> String {
         let condition = |index: &usize, at: &usize| {
             self.state
                 .participants
@@ -2957,6 +2999,11 @@ impl Run {
     /// True when a sheet made the newest Undo step.
     fn undo_from_sheet(&self) -> bool {
         self.history_from_sheet.last().copied().unwrap_or(false)
+    }
+    /// The words of the newest step's label that name what it acted on (`describe_named`).
+    fn undo_target(&self) -> Option<&str> {
+        let at = self.history_labels.len().checked_sub(1)?;
+        self.history_targets.get(at)?.as_deref()
     }
     fn undo_label(&self) -> String {
         self.history_labels
@@ -3631,6 +3678,7 @@ impl Run {
         let mut kept = Vec::new();
         let mut labels = Vec::new();
         let mut from_sheet = Vec::new();
+        let mut targets = Vec::new();
         let mut dropped = Vec::new();
         // A multi-target step is atomic. If it also touched another participant, its
         // older steps cannot safely cross this boundary either. Say which steps were lost.
@@ -3685,10 +3733,12 @@ impl Run {
             kept.push(previous);
             labels.push(self.history_labels[at].clone());
             from_sheet.push(self.history_from_sheet[at]);
+            targets.push(self.history_targets.get(at).cloned().flatten());
         }
         self.history = kept;
         self.history_labels = labels;
         self.history_from_sheet = from_sheet;
+        self.history_targets = targets;
         self.saved_steps = saved;
         self.removed_steps = dropped.len();
         if !dropped.is_empty() {
@@ -3721,8 +3771,17 @@ impl Run {
                     crate::design::count(choices.len(), "character", "characters")
                 )
             };
-            self.state.last_change = Some(Self::change_with_result(&self.state, &label));
-            self.keep_own_step(previous, label, true);
+            // One character's step names that row; a count of characters names none.
+            let target = match choices {
+                [index] => Some(self.state.participants[*index].name.clone()),
+                _ => None,
+            };
+            self.state.last_change = Some(Self::change_with_result(
+                &self.state,
+                &label,
+                target.as_deref(),
+            ));
+            self.keep_own_step(previous, (label, target), true);
         }
     }
 
@@ -4193,6 +4252,7 @@ impl Run {
                 &self.history,
                 &self.history_labels,
                 &self.history_from_sheet,
+                &self.history_targets,
                 &self.state,
             )?),
         };
@@ -4347,7 +4407,12 @@ impl Run {
         let (mut run, saved_undo) = Self::load(path, campaign)?;
         match saved_undo.map(|saved| undo::read(&saved, &run.state)) {
             Some(Some(steps)) => {
-                (run.history, run.history_labels, run.history_from_sheet) = steps;
+                (
+                    run.history,
+                    run.history_labels,
+                    run.history_from_sheet,
+                    run.history_targets,
+                ) = steps;
                 run.saved_steps = run.history.len();
             }
             None => run.no_saved_undo = Some(UNDO_NOT_KEPT),
@@ -4430,6 +4495,7 @@ impl Run {
             history: Vec::new(),
             history_labels: Vec::new(),
             history_from_sheet: Vec::new(),
+            history_targets: Vec::new(),
             saved_steps: 0,
             also: BTreeSet::new(),
             halved: BTreeSet::new(),
@@ -4635,11 +4701,10 @@ impl Run {
         let saved_at = crate::hermetic::file_time(&path);
         Some(self.info(path, saved_at, false))
     }
-    fn change_with_result(state: &State, label: &str) -> String {
-        state
-            .participants
-            .iter()
-            .find(|p| label.ends_with(&format!("damage to {}", p.name)))
+    fn change_with_result(state: &State, label: &str, target: Option<&str>) -> String {
+        target
+            .filter(|name| label.ends_with(&format!("damage to {name}")))
+            .and_then(|name| state.participants.iter().find(|p| p.name == name))
             .and_then(|p| p.hp)
             .map_or_else(|| label.to_owned(), |hp| format!("{label} ({hp} HP left)"))
     }
@@ -4992,6 +5057,7 @@ impl Run {
         self.history.clear();
         self.history_labels.clear();
         self.history_from_sheet.clear();
+        self.history_targets.clear();
         self.reopened = false;
         self.no_saved_undo = None;
         self.undo_stopped = false;
@@ -5157,13 +5223,18 @@ impl Run {
             .ok_or("Participant is missing.")?;
         p.conditions.push(Condition::Label(words.to_owned()));
         let undo_label = format!("{words} on {}", p.name);
+        let target = Some(p.name.clone());
         let line = format!("{}: Condition added: {words}.", p.name);
         next.log.push(line);
         next.cast = None;
-        next.last_change = Some(Self::change_with_result(&next, &undo_label));
+        next.last_change = Some(Self::change_with_result(
+            &next,
+            &undo_label,
+            target.as_deref(),
+        ));
         self.notice = None;
         let before = std::mem::replace(&mut self.state, next);
-        self.keep_own_step(before, undo_label, false);
+        self.keep_own_step(before, (undo_label, target), false);
         self.notice_summary = None;
         self.last_initiative = None;
         self.dirty = true;
@@ -5466,6 +5537,8 @@ mod tests {
         assert!(!run.history.is_empty(), "the run has steps to compare");
         assert_eq!(reopened.history_labels, run.history_labels);
         assert_eq!(reopened.history_from_sheet, run.history_from_sheet);
+        // Each step's target, which its Undo shortens from (review round 1 of PR 286).
+        assert_eq!(reopened.history_targets, run.history_targets);
         assert_eq!(reopened.history.len(), run.history.len());
         for (at, (kept, read)) in run.history.iter().zip(&reopened.history).enumerate() {
             assert_eq!(
@@ -8038,7 +8111,7 @@ mod tests {
                 "exhaustion {old} → {new} on {}",
                 run.state.participants[0].name
             );
-            assert_eq!(run.describe(&command), expected);
+            assert_eq!(run.describe_named(&command).0, expected);
             run.apply(command).unwrap();
             run.undo();
             assert_eq!(
@@ -8368,7 +8441,11 @@ mod tests {
         let mut run = run();
         begin(&mut run);
         run.apply(Command::Damage(0, 3)).unwrap();
-        let expected = Run::change_with_result(&run.state, run.history_labels.last().unwrap());
+        let expected = Run::change_with_result(
+            &run.state,
+            run.history_labels.last().unwrap(),
+            run.undo_target(),
+        );
         let campaign = stored(&mut run, dir.path());
         let reopened = close_and_reopen(&mut run, campaign);
         assert_same_undo(&run, &reopened);

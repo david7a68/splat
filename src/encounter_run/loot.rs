@@ -94,13 +94,6 @@ fn step_words(times: u32, key: Option<&str>) -> String {
     }
 }
 
-/// A loot step's words and its table, from `describe`'s words: `2 loot rolls` and `gems`, so
-/// an Undo too narrow for the table keeps the act (`Undo: 2 loot rolls`).
-pub(super) fn describe_parts(action: &str) -> Option<(&str, &str)> {
-    let (words, table) = action.split_once(" on ")?;
-    (words == "loot roll" || words.ends_with(" loot rolls")).then_some((words, table))
-}
-
 /// `3`, `3 and 4`, `3, 4 and 1`.
 fn values(found: &[Found]) -> String {
     let words: Vec<String> = found.iter().map(|f| f.value.to_string()).collect();
@@ -313,27 +306,6 @@ impl Run {
     /// Everyone with loot: the encounter first, then participants in turn order.
     pub(super) fn holders(&self) -> Vec<Holder> {
         holders(&self.name, self.prep().0, &self.state)
-    }
-
-    /// X38: every Undo step's words that this ended fight's loot can make: one for each roll
-    /// line, and one for rolling them all. Read from the loot as the encounter has it, rolled
-    /// or not, so they stay the same while the DM rolls.
-    pub(super) fn loot_step_words(&self) -> Vec<String> {
-        let rolls: Vec<(u32, String)> = self
-            .holders()
-            .into_iter()
-            .flat_map(|holder| holder.lines)
-            .filter_map(|line| match Loot::parse(&line) {
-                Loot::Roll { times, key } => Some((times, key)),
-                Loot::Text(_) => None,
-            })
-            .collect();
-        let all = (rolls.len() > 1).then(|| step_words(rolls.iter().map(|r| r.0).sum(), None));
-        rolls
-            .iter()
-            .map(|(times, key)| step_words(*times, Some(key)))
-            .chain(all)
-            .collect()
     }
 
     /// The roll lines of these holders with no result yet, as `(holder, line)`.
