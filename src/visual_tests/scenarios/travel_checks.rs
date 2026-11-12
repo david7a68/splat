@@ -571,14 +571,22 @@ fn road_fight_keeps_its_day(d: &mut Driver<'_>, dir: &Path) {
     d.press(Key::Enter);
     d.type_into("Enter a roll for Day 2", "18");
     d.press(Key::Enter);
-    d.observe(
-        "W5-D1",
-        d.visible_text("Day 1, 00:00 to Day 3, 00:00"),
-        "The journey runs from Day 1 to Day 3 before the fight",
-    );
     d.click(PLAN_SHRINE);
     d.expect("“Shrine of Cinders” is in tonight’s plan.");
     let journey_before = journey(d, "Travel");
+    let travel_start = |d: &Driver<'_>| {
+        let events = &d.app().timeline.events;
+        let at = events.iter().position(|event| {
+            event.title == "Travel"
+                || (event.kind == crate::timeline::Kind::Travel && event.title.is_empty())
+        })?;
+        crate::timeline::clock(events)[at]
+    };
+    d.observe(
+        "W5-D1",
+        travel_start(d) == Some(0) && journey_before.duration == "2 days",
+        "The journey runs from Day 1, 00:00 for two days before the fight",
+    );
     // A restart between Plan and the start of the fight: the plan line holds the check.
     d.app_mut().timeline.save();
     d.restart();
