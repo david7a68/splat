@@ -485,7 +485,7 @@ directly below that space, at the message text edge: they depend on the saved fi
 edits. Show the chosen and total entries (`4 of 6 entries chosen · 1 still needed`, `All entries chosen`) and `Choose every entry`. `chosen` counts only the DM's own choices, as Campaign's package row does; `still needed` counts the entries
 those choices need that the DM did not choose, and is left out when it is 0
 with Undo. Its result
-and Undo sit in the reader's results place, after the title, like manifest-write results (see Files and recovery). Omit the entry breadcrumb and Engine support. Empty package counts have no separator.
+and Undo sit in the pane's message footer, like manifest-write results (see Files and recovery). Omit the entry breadcrumb and Engine support. Empty package counts have no separator.
 
 Nonzero file status links sit in the page header before Packages and New entry. The validation count says how
 many files need fixing: a validation message, a broken link, a duplicate identity or more than one count a file
@@ -612,22 +612,22 @@ entries` and `Undo separate entries`, with one guarded Undo for the batch. In Li
 or folder choice states which file or folder an encounter will keep or use, in `Small` muted text an
 `XS` gap below its own action. Library, World and Lookup draw the choices and these lines through
 `message_with_actions`, so they start at the message text edge, not at the warning bar. The Library reader
-draws the warning and its choices after the title, inside its scroll area, so they scroll with the entry;
-Edit Markdown keeps them above the editor. A file's warnings share this one place: the first-heading
-warning and its `Use <name>` action come directly above the duplicate warning, so no warning moves the
-title. Its result, `The first heading now says <name>.` with `Undo heading change` on the message line, takes
-the same place. Every Library result takes it too: package use, a manifest write, `<file> is now a
-separate entry.`, a folder's separate entries, a discarded draft, the offer to change links after a rename and its
-result, and a copied package's registration with `Use the copy in encounters`. One result place per reader: in Read
-they sit after the title's kind line, so the columns, the tabs, the file line and the title never move. Edit
-Markdown keeps its messages in the pane's message footer (`Footer`), pinned below the editor; the editor starts
-directly below the save row. Its order: a result that carries a live Undo comes first (Discard's, the heading and stat
+draws the warning and its choices in the pane's message footer (`Footer`), pinned below the body in Read and below
+the editor in Edit Markdown, so Save keeps one place and nothing moves the body or the editor. A file's warnings share
+this one place: the first-heading warning and its `Use <name>` action come directly above the duplicate warning. Its
+result, `The first heading now says <name>.` with `Undo heading change` on the message line, takes the same place.
+Every Library result takes it too: package use, a manifest write, `<file> is now a separate entry.`, a folder's
+separate entries, a discarded draft, the offer to change links after a rename and its result, a copied package's
+registration with `Use the copy in encounters`, a package entry's `<name> is in this campaign only.` with its copy
+action and result, and the page's `Error:`. One message place per reader, in Read and in Edit Markdown: the columns,
+the tabs, the file line, the title and the body never move. The editor starts directly below the save row. Its order: a result that carries a live Undo comes first (Discard's, the heading and stat
 fixes', a write's), because a broken file's reason never clears after Discard or Reload; then Save's reason (a repair
 draft's parse error with a broken manifest's recovery, a refusal before the write, the disk's failure); then the
 notices: results with no Undo, the link Campaign sent the DM to fix, each broken link, the first heading, a stat line.
 With none of these, the footer says why other actions wait for the draft. So no result, reason, warning, Discard or
 Undo moves the editor's top. With no entry
-open, they sit above the empty reader, and above a form that takes the reader's place. The link offer after a
+open, they sit in the footer below the empty reader, with Remove's `Undo remove`, and below a form that takes the
+reader's place. A file that changed on disk keeps its messages above the comparison, which owns the pane. The link offer after a
 rename and its result belong to the renamed entry: they show only in its reader, stay hidden while another entry is
 open, and end on its next link update or saved edit (a saved edit ends the earlier offer whatever it offers), on
 Undo, or when a file the update wrote changes on disk. An offer is checked again on every load and before its write:
@@ -635,7 +635,8 @@ its entry still has the new name, and neither name names another entry, or it go
 the write, Splat reads the entry's own file from disk; if it no longer has the new name, the update writes nothing
 and says `No links were changed. This entry changed on disk since it was renamed. Reload from disk, then rename it
 again.` Each linking file must still hold what was read, or nothing is written.
-Undo restores only the files that update wrote, so another entry's link update stays.
+Undo restores only the files that update wrote, so another entry's link update stays. After Undo the links say the
+old name again, so the offer comes back in the result's place; pressing it again is a new update with its own Undo.
 An `L` gap separates choices. Name the folder when filenames match. Making an entry separate also sets
 its name and matching first heading to its file stem. Other actions name encounters whose source will
 change; results explaining which entry an encounter will use are Small muted text below the action.
@@ -726,7 +727,7 @@ longer on this computer`. Count affected campaign entries when references are kn
 campaign and Find the folder… beside the message. Only Technical details shows IDs. Removing an unavailable
 package has Undo and keeps links to affected encounters; the message's icon centres on its first line, whose
 words are those links. Unregister keeps the last folder in Settings. Library
-offers Undo unregister in its success result, which sits in the reader's result place (above the form that takes the
+offers Undo unregister in its success result, which sits in the pane's message footer (below the form that takes the
 reader's place), so the scope, the search and the list never move; Campaign offers Register it again.
 
 Missing-package recovery searches beside known package folders. A unique match gets bordered secondary Use
