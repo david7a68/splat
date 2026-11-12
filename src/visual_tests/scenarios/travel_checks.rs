@@ -274,6 +274,7 @@ pub fn run(d: &mut Driver<'_>) {
             && matches!((offer, undo), (Some(offer), Some(undo)) if offer.y_range().contains(undo.center().y)),
         format!("The plan line's message is on the check's line ({offer:?}, {undo:?}), and moves nothing ({below:?}, {after:?})"),
     );
+    d.state("travel-checks-planned", Sizes::Small);
     let parts = [
         d.has_containing("in tonight’s plan"),
         !d.has(PLAN_AMBUSH),
