@@ -553,38 +553,6 @@ pub(super) fn in_progress_list(
     ui.add_space(design::L);
 }
 
-impl Encounters {
-    /// `Remove…` on a Ready to run row: its result, with the words and the pattern of a saved
-    /// group's removal.
-    pub(super) fn encounter_remove_undo(
-        &mut self,
-        ui: &mut egui::Ui,
-        active: &Campaign,
-        modules: &[Module],
-    ) {
-        let Some(removed) = &self.removed_encounter else {
-            return;
-        };
-        if design::undo_message(
-            ui,
-            Tone::Info,
-            &format!("Removed encounter {}.", removed.name),
-            "Undo remove encounter",
-        ) {
-            match removed.restore() {
-                Ok(()) => {
-                    self.removed_encounter = None;
-                    self.reload_snapshot(active, modules);
-                    self.saved = true;
-                }
-                Err(error) => {
-                    self.error = Some(format!("The encounter did not come back: {error}"));
-                }
-            }
-        }
-    }
-}
-
 /// Whether a run of this encounter is saved: unfinished, ended, or in a file that cannot be read
 /// but names it. Only an encounter with none can be removed.
 fn has_saved_run(page: &history::Arranged<'_>, row: &history::ReadyRow<'_>) -> bool {

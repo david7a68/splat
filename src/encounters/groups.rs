@@ -178,6 +178,52 @@ impl GroupDraft {
     pub(super) fn is_empty(&self) -> bool {
         self.setup.members.is_empty()
     }
+    /// The member result that shows now, with its Undo: the newest of a replacement, a removed
+    /// member and a removed unread row owns it. A replacement's ends when its member no longer
+    /// holds the chosen creature.
+    fn member_result(&mut self) -> Option<(String, &'static str)> {
+        if let Some(result) = &self.replaced {
+            if self
+                .setup
+                .members
+                .get(result.index)
+                .is_some_and(|member| member.creature == result.after)
+            {
+                return Some((result.words.clone(), "Undo replacement"));
+            }
+            self.replaced = None;
+        }
+        self.removed_member
+            .as_ref()
+            .map(|(_, _, name)| name)
+            .or(self.removed_unread.as_ref().map(|(_, _, name)| name))
+            .map(|name| (format!("Removed {name}."), "Undo remove member"))
+    }
+    /// Undo the member result that shows: the creature, the member or the unread row comes
+    /// back at its place, and other draft edits stay.
+    fn undo_member_result(&mut self) {
+        if let Some(result) = self.replaced.take() {
+            if let Some(member) = self.setup.members.get_mut(result.index) {
+                member.creature = result.before;
+            }
+        } else if let Some((index, member, _)) = self.removed_member.take() {
+            self.setup
+                .members
+                .insert(index.min(self.setup.members.len()), member);
+        } else if let Some((line, row, _)) = self.removed_unread.take() {
+            let at = self
+                .source
+                .split_inclusive('\n')
+                .take(line - 1)
+                .map(str::len)
+                .sum();
+            self.source.insert_str(at, &row);
+            if let Ok(entry) = Entry::parse(&self.path, &self.source) {
+                self.flags = entry.flags;
+            }
+            self.reread_lines();
+        }
+    }
     fn reread_lines(&mut self) {
         self.member_lines =
             splat::content::list_formats::group_member_lines(&self.source, &self.flags);
@@ -1022,31 +1068,6 @@ impl Encounters {
         }
         true
     }
-    pub(super) fn group_remove_undo(
-        &mut self,
-        ui: &mut egui::Ui,
-        active: &Campaign,
-        modules: &[Module],
-    ) {
-        let Some(removed) = &self.removed_saved_group else {
-            return;
-        };
-        if design::undo_message(
-            ui,
-            Tone::Success,
-            &format!("Removed group {}.", removed.name),
-            "Undo remove group",
-        ) {
-            match removed.restore() {
-                Ok(()) => {
-                    self.removed_saved_group = None;
-                    self.reload_snapshot(active, modules);
-                    self.saved = true;
-                }
-                Err(error) => self.error = Some(format!("The group did not come back: {error}")),
-            }
-        }
-    }
 }
 
 /// Which the search adds to: the roster, or one of this encounter's groups.
@@ -1226,37 +1247,6 @@ pub(super) fn of_encounter(
             groups[index].setup.encounter = None;
         }
         *removed_group = Some((index, gone, delete));
-    }
-    if let Some((_, removed, delete)) = removed_group.as_ref() {
-        // FF7: a group removed with its draft after its file was gone says what was lost.
-        let gone = removed.file_gone();
-        let words = if gone {
-            super::disk::removed_with_draft(&removed.name)
-        } else if *delete {
-            "Group deleted. Save deletes its file.".to_owned()
-        } else {
-            format!("{} moves to any encounter when you save.", removed.name)
-        };
-        let undo = if gone {
-            "Undo remove"
-        } else if *delete {
-            "Undo remove group"
-        } else {
-            "Undo move"
-        };
-        // FB7: nothing is on disk until Save, so each of these says so in the info tone, as a
-        // discarded draft does; success belongs to a change that is written.
-        if design::undo_message(ui, Tone::Info, &words, undo) {
-            let (index, removed, delete) = removed_group.take().expect("a removed group");
-            if delete {
-                deleted_groups.retain(|group| group.path != removed.path);
-            }
-            if let Some(group) = groups.iter_mut().find(|group| group.path == removed.path) {
-                *group = removed;
-            } else {
-                groups.insert(index.min(groups.len()), removed);
-            }
-        }
     }
     if Action::secondary("New group for this encounter")
         .icon(icons::ADD)
@@ -2185,13 +2175,15 @@ impl Encounters {
             ui.add_space((height + ui.spacing().item_spacing.y - used).max(0.0));
         }
         design::rule(ui);
+        // The file's warnings that no member row states; they go in the footer below.
         let unread =
             splat::content::list_formats::unread_group_members(&draft.source, &draft.flags);
-        for flag in &draft.flags {
-            if !unread.iter().any(|member| member.flag.line == flag.line) {
-                design::message(ui, Tone::Warning, &flag.message);
-            }
-        }
+        let file_warnings: Vec<String> = draft
+            .flags
+            .iter()
+            .filter(|flag| !unread.iter().any(|member| member.flag.line == flag.line))
+            .map(|flag| flag.message.clone())
+            .collect();
 
         if back {
             self.clear_notice();
@@ -2215,10 +2207,40 @@ impl Encounters {
         if save || save_key {
             self.save_group_draft(ui.ctx(), active, campaigns.modules());
         }
-        self.discard_undo(ui);
         self.refresh_validation_error(true, super::edit_input(ui.ctx()));
-        if let Some(e) = &self.error {
-            design::message(ui, Tone::Error, e);
+        // FI1's family: the editor's results with a live Undo (the discard, the newest member
+        // result), then Save's reason, then the file's warnings sit in one footer pinned below
+        // the members and the search, so none of them moves a member or a field.
+        let kinds = self.kept_results(false);
+        let pressed = std::cell::Cell::new(None);
+        let member_undo = std::cell::Cell::new(false);
+        let (pressed_ref, member_ref) = (&pressed, &member_undo);
+        let footer_id = self.group_draft.as_ref().map(|draft| draft.path.clone());
+        let mut footer =
+            design::Footer::new(("group_editor_footer", footer_id), ui.available_width());
+        self.kept_into_footer(&mut footer, &kinds, pressed_ref);
+        if let Some(draft) = self.group_draft.as_mut() {
+            member_result_into(draft, &mut footer, member_ref);
+        }
+        if let Some(e) = self.error.clone() {
+            footer.reason(e.clone(), move |ui| {
+                design::message(ui, Tone::Error, &e);
+            });
+        }
+        for warning in file_warnings {
+            footer.notice(warning.clone(), move |ui| {
+                design::message(ui, Tone::Warning, &warning);
+            });
+        }
+        footer.show(ui);
+        if let Some(kind) = pressed.get() {
+            self.undo_kept(kind, Some((active, campaigns.modules())));
+        }
+        if member_undo.get()
+            && let Some(draft) = self.group_draft.as_mut()
+        {
+            draft.undo_member_result();
+            self.expanded = None;
         }
         let Some(snapshot) = &self.snapshot else {
             design::spinner(ui);
@@ -2374,6 +2396,22 @@ fn name_width(column: f32) -> f32 {
 /// Where a group editor's members column ended in the last pass, for the name field above it.
 fn column_right_id(path: &str) -> egui::Id {
     egui::Id::new(("group_column_right", path))
+}
+
+/// The newest member result, with its Undo, in the editor's footer. A pressed Undo is recorded
+/// in `pressed` and applied with `undo_member_result` after the footer is drawn.
+fn member_result_into<'a>(
+    draft: &mut GroupDraft,
+    footer: &mut design::Footer<'a>,
+    pressed: &'a std::cell::Cell<bool>,
+) {
+    if let Some((words, undo)) = draft.member_result() {
+        footer.result(words.clone(), true, move |ui| {
+            if design::undo_message(ui, Tone::Success, &words, undo) {
+                pressed.set(true);
+            }
+        });
+    }
 }
 
 fn members_pane(
@@ -2753,54 +2791,6 @@ fn members(
             design::rule(ui);
         });
     }
-    // The replacement's result stays while its member still holds the chosen creature.
-    if let Some(result) = &draft.replaced
-        && draft
-            .setup
-            .members
-            .get(result.index)
-            .is_some_and(|member| member.creature == result.after)
-    {
-        if design::undo_message(ui, Tone::Success, &result.words, "Undo replacement")
-            && let Some(result) = draft.replaced.take()
-        {
-            draft.setup.members[result.index].creature = result.before;
-            *expanded = None;
-        }
-    } else {
-        draft.replaced = None;
-    }
-    if let Some((_, _, name)) = &draft.removed_member {
-        let words = format!("Removed {name}.");
-        if design::undo_message(ui, Tone::Success, &words, "Undo remove member")
-            && let Some((index, member, _)) = draft.removed_member.take()
-        {
-            draft
-                .setup
-                .members
-                .insert(index.min(draft.setup.members.len()), member);
-            *expanded = None;
-        }
-    }
-    let removed_unread_words = draft
-        .removed_unread
-        .as_ref()
-        .map(|(_, _, name)| format!("Removed {name}."));
-    if let Some(words) = removed_unread_words
-        && design::undo_message(ui, Tone::Success, &words, "Undo remove member")
-        && let Some((line, row, _)) = draft.removed_unread.take()
-    {
-        let at = draft
-            .source
-            .split_inclusive('\n')
-            .take(line - 1)
-            .map(str::len)
-            .sum();
-        draft.source.insert_str(at, &row);
-        if let Ok(entry) = Entry::parse(&draft.path, &draft.source) {
-            draft.flags = entry.flags;
-        }
-    }
     // An open form is keyed by place. Left open, it would now edit another member.
     if remove.or(raise).or(lower).is_some() {
         *expanded = None;
@@ -3100,6 +3090,23 @@ mod tests {
         id
     }
 
+    /// The members with the editor's footer, as the group editor draws them.
+    fn editor_members(
+        ui: &mut egui::Ui,
+        state: &mut (GroupDraft, Option<String>),
+        snapshot: &Snapshot,
+    ) {
+        let pressed = std::cell::Cell::new(false);
+        let mut footer = design::Footer::new("members_test_footer", ui.available_width());
+        member_result_into(&mut state.0, &mut footer, &pressed);
+        footer.show(ui);
+        if pressed.get() {
+            state.0.undo_member_result();
+            state.1 = None;
+        }
+        members(ui, &mut state.0, snapshot, &mut state.1);
+    }
+
     #[test]
     fn iter4_b_remove_member_undo_keeps_full_member_and_other_draft_edits() {
         use egui_kittest::kittest::Queryable;
@@ -3126,7 +3133,7 @@ mod tests {
             .build_state(
                 move |ctx, state: &mut (GroupDraft, Option<String>)| {
                     egui::CentralPanel::default()
-                        .show(ctx, |ui| members(ui, &mut state.0, &snapshot, &mut state.1));
+                        .show(ctx, |ui| editor_members(ui, state, &snapshot));
                 },
                 (draft, None),
             );
@@ -3164,7 +3171,7 @@ mod tests {
             .build_state(
                 move |ctx, state: &mut (GroupDraft, Option<String>)| {
                     egui::CentralPanel::default()
-                        .show(ctx, |ui| members(ui, &mut state.0, &snapshot, &mut state.1));
+                        .show(ctx, |ui| editor_members(ui, state, &snapshot));
                 },
                 (draft, None),
             );
