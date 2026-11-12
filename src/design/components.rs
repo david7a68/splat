@@ -539,6 +539,8 @@ pub struct Action<'a> {
     key: Option<&'a str>,
     plain: bool,
     line_start: bool,
+    /// The left edge of the message column that a `line_start` Undo stays in.
+    column: Option<f32>,
     min_width: Option<f32>,
 }
 
@@ -556,6 +558,7 @@ impl<'a> Action<'a> {
             key: None,
             plain: false,
             line_start: false,
+            column: None,
             min_width: None,
         }
     }
@@ -580,6 +583,14 @@ impl<'a> Action<'a> {
     /// reaches only `S` into the pane's gutter.
     pub fn line_start(mut self) -> Self {
         self.line_start = true;
+        self
+    }
+
+    /// `line_start` for an Undo on its own line under its message: its target stays in the
+    /// message's column, which starts at `left`.
+    fn line_start_in_column(mut self, left: f32) -> Self {
+        self.line_start = true;
+        self.column = Some(left);
         self
     }
 
@@ -724,11 +735,13 @@ impl<'a> Action<'a> {
                 .align_size_within_rect(size, allocated)
                 .translate(vec2(-padding, 0.0));
             let rect = rect.with_min_x(rect.min.x - icon_width);
-            // The hang never leaves the pane: where the text edge is a scroll area's own edge
-            // (Lookup's reader), the target ends there. A scroll area's clip reaches
-            // `clip_rect_margin` past its edge. The icon and the words keep their places.
-            let edge = ui.clip_rect().left() + ui.visuals().clip_rect_margin;
-            let target = rect.with_min_x(rect.min.x.max(edge));
+            // An Undo under its message keeps its target in the message's column, so it never
+            // hangs past a pane whose text edge is the message's (Lookup's reader). The icon
+            // and the words keep their places.
+            let target = match self.column {
+                Some(left) => rect.with_min_x(rect.min.x.max(left)),
+                None => rect,
+            };
             (rect, ui.interact(target, id, Sense::click()))
         } else {
             ui.allocate_exact_size(vec2(width, self.height), Sense::click())
@@ -2210,7 +2223,8 @@ fn undo_message_with_links_inside(
         clicked = notice(ui, tone, names, suffix);
         ui.horizontal(|ui| {
             ui.add_space((inset - gap).max(0.0));
-            pressed = button.line_start().show(ui).clicked();
+            let left = ui.max_rect().left();
+            pressed = button.line_start_in_column(left).show(ui).clicked();
         });
     } else {
         clicked = ui
@@ -2537,7 +2551,8 @@ fn undo_message_inside(
         message(ui, tone, text);
         ui.horizontal(|ui| {
             ui.add_space((inset - gap).max(0.0));
-            pressed = button.line_start().show(ui).clicked();
+            let left = ui.max_rect().left();
+            pressed = button.line_start_in_column(left).show(ui).clicked();
         });
     } else {
         ui.horizontal_top(|ui| {
