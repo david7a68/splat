@@ -388,6 +388,11 @@ const SCENARIOS: [(&str, Seed, Script); 86] = [
     ("plain-evening", Seed::Plain, plain_evening::run),
     ("run-continue", Seed::Loot, scenarios::run_continue::run),
     (
+        "encounter-difficulty",
+        Seed::Campaign,
+        scenarios::encounter_difficulty::run,
+    ),
+    (
         "session-plan-scenes",
         Seed::Campaign,
         scenarios::session_plan_scenes::run,

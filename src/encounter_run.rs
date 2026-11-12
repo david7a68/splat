@@ -674,6 +674,11 @@ struct State {
     #[serde(skip)]
     cast: Option<rolling::Cast>,
 }
+/// The state, groups and scale an answer in Arrivals was worked out from: the count of steps
+/// kept or taken back, and the two reads by their address.
+type ArrivalKey = (u64, usize, usize);
+/// What each group would make the fight, with the XP its members on the other side add.
+pub(crate) type ArrivalWords = BTreeMap<Uuid, (crate::difficulty::Rating, u64)>;
 /// Each carried player's place in the roster, and HP and temporary HP from their sheet.
 type SheetValues = Vec<(usize, Option<i64>, i64)>;
 /// HP that came from the last fight, not from the sheets.
@@ -746,6 +751,12 @@ pub(crate) struct Run {
     /// `Loot copied.`: the copy action, at the `revision` it was made. Undo and any new step
     /// (a roll among them) end it. Never saved.
     loot_copied: Option<u64>,
+    /// What each group in Arrivals would make the fight, with the XP its members on the other
+    /// side add, worked out for one `revision`, one read of the groups and one scale. Never saved.
+    arrival_words: Option<(ArrivalKey, ArrivalWords)>,
+    /// How often frames asked for the Arrivals words, and how often they were worked out.
+    #[cfg(test)]
+    pub(crate) arrival_counts: (usize, usize),
     /// Never saved.
     carried: Option<CarriedHp>,
     rest_order: u64,
@@ -855,6 +866,8 @@ pub(crate) struct Run {
     /// The campaign's encounter groups, as they read from disk, once they have been read. A
     /// run does not save these.
     pub groups: Option<Arc<Vec<Arc<RunGroup>>>>,
+    /// The campaign's XP budget table and party, once they have been read.
+    pub scale: Option<Arc<crate::difficulty::Scale>>,
     /// The campaign's creatures that can join a fight, once they have been read.
     pub creatures: Option<Arc<Vec<Arc<RunCreature>>>>,
     /// The names linked in tonight's plan. Those groups come first in the panel.
@@ -1219,6 +1232,9 @@ impl Run {
             dm_steps: 0,
             revision: 0,
             loot_copied: None,
+            arrival_words: None,
+            #[cfg(test)]
+            arrival_counts: (0, 0),
             carried: None,
             rest_order: 0,
             armed: None,
@@ -1288,6 +1304,7 @@ impl Run {
             focus_field: None,
             focus_first_missing: true,
             groups: None,
+            scale: None,
             creatures: None,
             planned: Vec::new(),
             ad_hoc: ad_hoc::AdHoc::default(),
@@ -4313,6 +4330,9 @@ impl Run {
             dm_steps: 0,
             revision: 0,
             loot_copied: None,
+            arrival_words: None,
+            #[cfg(test)]
+            arrival_counts: (0, 0),
             carried: None,
             rest_order: saved.rest_order,
             armed: None,
@@ -4381,6 +4401,7 @@ impl Run {
             focus_field: None,
             focus_first_missing: true,
             groups: None,
+            scale: None,
             creatures: None,
             planned: Vec::new(),
             ad_hoc: ad_hoc::AdHoc::default(),
@@ -10067,6 +10088,118 @@ mod tests {
                 (beast(), 2, Overrides::default()),
             ],
         )
+    }
+    /// F1 in Arrivals: what a group makes the fight. A member that joins on the party's side is an
+    /// ally and adds no XP, and a character's level is the saved sheet's now, not the copy the
+    /// run kept when it started.
+    #[test]
+    fn arrivals_weigh_each_member_on_its_side_against_the_saved_levels() {
+        let with = |field: &str, value: &str| {
+            let mut entry = creature();
+            entry.id = Uuid::new_v4();
+            entry
+                .fields
+                .insert(field.into(), serde_yaml_ng::from_str(value).unwrap());
+            entry
+        };
+        let (cr1, cr5) = (
+            with("splat_creature", "{type: humanoid, cr_text: '1'}"),
+            with("splat_creature", "{type: humanoid, cr_text: '5'}"),
+        );
+        // Five characters whose run copies say level 3; their saved sheets now say level 4.
+        let heroes: Vec<_> = (0..5)
+            .map(|_| with("splat_character", "{level: 3}"))
+            .collect();
+        let mut participants: Vec<_> = heroes
+            .iter()
+            .enumerate()
+            .map(|(i, hero)| {
+                Participant::new(
+                    format!("hero{i}"),
+                    "party".into(),
+                    hero.clone(),
+                    &Mapping::new(),
+                    true,
+                )
+                .unwrap()
+            })
+            .collect();
+        participants.extend((0..3).map(|i| {
+            Participant::new(
+                format!("foe{i}"),
+                "enemies".into(),
+                cr1.clone(),
+                &Mapping::new(),
+                true,
+            )
+            .unwrap()
+        }));
+        let mut run = Run::new("Ambush".into(), participants, String::new()).unwrap();
+        let ally = Overrides {
+            side: Some("party".into()),
+            ..Overrides::default()
+        };
+        let mut group = group_of(
+            "Mixed",
+            "enemies",
+            vec![
+                (cr1.clone(), 1, Overrides::default()),
+                (cr5.clone(), 1, ally),
+            ],
+        );
+        // The group's own total, as the loader sums it, holds both members.
+        Arc::get_mut(&mut group).unwrap().xp = 2000;
+        run.groups = Some(Arc::new(vec![group.clone()]));
+        run.scale = Some(Arc::new(crate::difficulty::Scale {
+            budgets: Some(crate::difficulty::builtin_budgets()),
+            party: heroes.iter().map(|hero| (hero.id, Some(4))).collect(),
+        }));
+        // 600 XP in the fight and 200 more: Low for five at level 4 (1,250). Counting the ally
+        // (1,800) would make it Above High; the run's level-3 copies would make it Moderate.
+        let (rating, adds) = run.arrival_words().unwrap()[&group.id].clone();
+        assert_eq!(
+            (rating.word, rating.xp, rating.budgets[0], adds),
+            (crate::difficulty::Word::Low, 800, 1250, 200)
+        );
+        // A step that marks a character or a creature absent changes the budgets and the XP.
+        let weigh = |run: &mut Run| {
+            run.revision += 1;
+            run.arrival_words().unwrap().get(&group.id).cloned()
+        };
+        run.state.participants[0].present = false;
+        let (rating, _) = weigh(&mut run).unwrap();
+        assert_eq!(
+            (rating.characters, rating.budgets, rating.xp),
+            (4, [1000, 1500, 2000], 800)
+        );
+        run.state.participants[5].present = false;
+        assert_eq!(weigh(&mut run).unwrap().0.xp, 600);
+        // Every character absent: the campaign's party does not stand in, so no word.
+        for p in &mut run.state.participants[..5] {
+            p.present = false;
+        }
+        assert_eq!(weigh(&mut run), None, "no character is present");
+        for p in &mut run.state.participants {
+            p.present = true;
+        }
+        assert!(weigh(&mut run).is_some());
+        // A saved sheet that is gone or cannot be read after the run started: the run's old
+        // copy never gives the level, so the word does not show.
+        let mut scale = (**run.scale.as_ref().unwrap()).clone();
+        scale.party.remove(&heroes[0].id);
+        run.scale = Some(Arc::new(scale.clone()));
+        assert_eq!(
+            weigh(&mut run),
+            None,
+            "a missing saved sheet hides the word"
+        );
+        scale.party.insert(heroes[0].id, None);
+        run.scale = Some(Arc::new(scale));
+        assert_eq!(
+            weigh(&mut run),
+            None,
+            "an unreadable saved sheet hides the word"
+        );
     }
     #[test]
     fn identical_rolls_once_for_a_mixed_group_with_the_first_members_bonus() {
