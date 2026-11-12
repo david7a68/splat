@@ -615,10 +615,11 @@ last name the button is off and says `Each name has its roll.` beside it. A trac
 in `Numeral` right-aligned in a column (`value / goal` with a goal), then its quick actions (`Action::secondary`,
 Read), which wrap below. A tracker with `per` has a line for each instance, under its name. The lines of one tracker
 stand in columns: the name column is as wide as its longest name, at most 40 % of the line, and a longer name ends
-at a whole word with `…` and is whole on hover; every value ends at one edge, and every first action starts at one
+at a whole word with `…` (or is `…` alone when its first word does not fit) and is whole on hover; every value ends at one edge, and every first action starts at one
 edge. A press that raises or ends a Due row scrolls the view by the row's height, so the pressed action stays under
-the pointer and a second press of a still pointer presses it again; the scroll area keeps blank room after the
-trackers only while that needs it. `add: ask` puts a
+the pointer and a second press of a still pointer presses it again. It acts only in the few frames after the
+press and only while the content's height changed; the DM's own wheel or drag, or the view opened again, ends it.
+The scroll area keeps blank room after the trackers only while that needs it. `add: ask` puts a
 number field in the action's place; it holds focus until Enter or Escape, and Escape there does not close Lookup.
 The result line keeps its place at the panel's bottom
 edge above a hairline: the last act of the session being played as a success message, then `Undo: <label>`
@@ -650,7 +651,7 @@ only on an entry with another session's stamp; every row keeps the menu's place,
 Only the rows inside the reader's clip are laid out and drawn. `Remove` takes the entry, the others of its press, and the entries of the notices
 it raised, and the reader's footer says `Removed: <label>.` (with `With it: …` for what went with it) and offers
 `Undo remove`, one step, as the Timeline's removal; it shows only while the note is in play. A refusal (the entry
-changed or is gone on disk, or a notice depends on it) and a failed save are the footer's reason line. When `Trackers.md` cannot be read the
+changed or is gone on disk, or a notice or a roll on a notice depends on it) and a failed save are the footer's reason line. When `Trackers.md` cannot be read the
 reader names it and shows no history and no value; when `Campaign.md` or a note in play cannot be read it says
 so. A note in play whose file is gone or moved keeps its problem and a click's refusal in its reader. A note not in
 play, and a campaign with none, show nothing here. The rows are worked out when the ledger or a

@@ -754,6 +754,9 @@ pub struct State {
     raised: HashMap<String, Vec<i64>>,
     /// The notices each change entry ended by taking the value back below their marks, by mark.
     lowered: HashMap<String, Vec<i64>>,
+    /// The entries about a notice at a value that is not open where they stand: they count for
+    /// nothing. A Remove or an Undo that would add one writes nothing.
+    stray: std::collections::HashSet<String>,
     /// How many entries name each tracker that no note in play has, in the file's order. They
     /// count for nothing, and the view names them.
     pub unknown: Vec<(String, usize)>,
@@ -819,6 +822,7 @@ pub fn replay(rules: &Rules, ledger: &Ledger, today: &Today) -> State {
         }
         if let Some(id) = &entry.notice {
             let Some(at) = state.due.iter().position(|notice| notice.id == *id) else {
+                state.stray.insert(entry.id.clone());
                 continue;
             };
             acted_on.insert(id.clone());
@@ -1796,15 +1800,21 @@ impl Trackers {
         });
     }
 
-    /// `Undo: <label>`: these entries, exactly as the line named them, leave the ledger.
+    /// `Undo: <label>`: these entries, exactly as the line named them, leave the ledger. When a
+    /// later entry about a notice would then count for nothing, it writes nothing and names it.
     pub fn undo(&mut self, expected: &[Entry]) {
         let session = self.played;
-        if let Err(Some(reason)) = self.commit(|_, ledger| {
+        let today = self.today.clone();
+        if let Err(Some(reason)) = self.commit(|rules, ledger| {
             let target = undo_target(ledger, session);
             if target != expected {
                 return Err("The ledger changed on disk. Nothing was undone.".into());
             }
-            Ok(Op::Remove(target))
+            let op = Op::Remove(target);
+            if let Some(name) = history::orphaned(rules, &today, ledger, &ledger.apply(&op)?) {
+                return Err(format!("{name} depends on this act. Nothing was undone."));
+            }
+            Ok(op)
         }) {
             self.reason = Some(reason);
         }
@@ -2700,6 +2710,83 @@ mod tests {
             "the Undo stays for when that roll is gone"
         );
         assert_eq!(file(&race), before);
+
+        // A roll on a notice must keep counting. Rooms of an older session: A to 20 raises the
+        // bell, B to 30, C back to 20, then a roll on A's bell. Without B, C would end the bell
+        // before the roll, so Remove of B writes nothing and names the roll; so does Undo of B
+        // when B is tonight's newest act.
+        let path = ledger::path(&race.campaign.path);
+        let older = Some(Uuid::from_u128(1));
+        let room = |id: &str, add: i64, session| Entry {
+            id: id.into(),
+            tracker: Some("race_clock".into()),
+            add: Some(add),
+            session,
+            ..Entry::default()
+        };
+        let roll = Entry {
+            id: "c-0000000d".into(),
+            notice: Some(NoticeRef::Value {
+                change: "c-0000000a".into(),
+                at: 20,
+            }),
+            roll: Some(Roll::Table(TableRoll {
+                table: "wander_early".into(),
+                name: None,
+                value: 3,
+                row: "Nothing comes.".into(),
+            })),
+            session: older,
+            ..Entry::default()
+        };
+        let write = |b_session| {
+            fs::remove_file(&path).ok();
+            ledger::commit(&path, |_| {
+                Ok(Op::Append(vec![
+                    room("c-0000000a", 20, older),
+                    room("c-0000000b", 10, b_session),
+                    room("c-0000000c", -10, older),
+                    roll.clone(),
+                ]))
+            })
+            .unwrap();
+            fs::read_to_string(&path).unwrap()
+        };
+        let before = write(older);
+        let t = &mut race.trackers;
+        t.read_disk();
+        assert_eq!(t.state.due.len(), 1, "the bell, with its roll");
+        let b = t.history["race_clock"]
+            .iter()
+            .find(|row| row.entry.id == "c-0000000b")
+            .unwrap()
+            .entry
+            .clone();
+        t.remove(note, &b);
+        assert_eq!(
+            t.history_reason,
+            Some((
+                note,
+                Unrecorded::Refused(
+                    "Wandering, 0:00 to 0:39 roll depends on this entry. Remove that first. Nothing was removed."
+                        .into()
+                )
+            ))
+        );
+        assert_eq!(fs::read_to_string(&path).unwrap(), before);
+        let before = write(Some(TONIGHT));
+        let t = &mut race.trackers;
+        t.read_disk();
+        let newest = t.newest().to_vec();
+        assert_eq!(newest.len(), 1, "B is tonight's newest act");
+        t.undo(&newest);
+        assert_eq!(
+            t.reason,
+            Some(Unrecorded::Refused(
+                "Wandering, 0:00 to 0:39 roll depends on this act. Nothing was undone.".into()
+            ))
+        );
+        assert_eq!(fs::read_to_string(&path).unwrap(), before);
 
         // A value that an edit in Obsidian forced below its `min` counts as written, and joins
         // the problems list of its note; Splat changes nothing.

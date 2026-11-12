@@ -22,6 +22,12 @@ pub(crate) struct ViewState {
     /// Blank room after the trackers, so the scroll can hold a pressed action in its place
     /// near the end of the view. It shrinks as the DM scrolls back up.
     room: f32,
+    /// A name wider than its column, as shortened for that width, so a frame with no change
+    /// does not shorten it again.
+    fitted: std::collections::HashMap<(String, u32), String>,
+    /// How many times a name was shortened.
+    #[cfg(test)]
+    shortened: usize,
 }
 
 /// How many passes after a press the view still holds the pressed action in place. The Due
@@ -29,12 +35,13 @@ pub(crate) struct ViewState {
 const KEEP_PASSES: u64 = 6;
 
 /// A pressed quick action: its line and label, its top on screen at the press, the pass of the
-/// press, and its top as drawn in the pass now.
+/// press, its top as drawn in the pass now, and the height of the view's content at the press.
 struct Keep {
     place: (String, Option<String>, String),
     top: f32,
     pass: u64,
     now: Option<f32>,
+    content: Option<f32>,
 }
 
 impl ViewState {
@@ -145,6 +152,7 @@ pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, from_top: bool) {
         .auto_shrink([false, false]);
     if from_top {
         area = area.vertical_scroll_offset(0.0);
+        trackers.view.keep = None;
     }
     let room = trackers.view.room;
     let output = area.show(ui, |ui| {
@@ -156,9 +164,10 @@ pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, from_top: bool) {
 }
 
 /// A press that raises or ends a Due row changes the list's height above the trackers. In the
-/// frame after the press the view scrolls by as much, so the pressed action is where it was and
-/// a second press of a still pointer presses it again. The room after the trackers is only what
-/// the scroll needs to hold it there.
+/// passes after the press the view scrolls by as much, so the pressed action is where it was and
+/// a second press of a still pointer presses it again. It acts only while the content's height
+/// differs from the press's; the DM's own wheel or drag, or a view opened again, ends it. The
+/// room after the trackers is only what the scroll needs to hold it there.
 fn hold_pressed_place(
     ui: &egui::Ui,
     view: &mut ViewState,
@@ -166,8 +175,16 @@ fn hold_pressed_place(
 ) {
     let mut state = output.state;
     let pass = ui.ctx().cumulative_pass_nr();
-    view.keep.take_if(|keep| pass > keep.pass + KEEP_PASSES);
-    if let Some(keep) = view.keep.as_mut().filter(|keep| keep.pass < pass)
+    let content = output.content_size.y - view.room;
+    let scrolled = ui.input(|i| {
+        i.raw_scroll_delta != egui::Vec2::ZERO
+            || i.smooth_scroll_delta != egui::Vec2::ZERO
+            || i.pointer.is_decidedly_dragging()
+    });
+    view.keep
+        .take_if(|keep| scrolled || pass > keep.pass + KEEP_PASSES);
+    if let Some(keep) = view.keep.as_mut()
+        && (*keep.content.get_or_insert(content) - content).abs() > 0.5
         && let Some(now) = keep.now.take()
         && (now - keep.top).abs() > 0.5
     {
@@ -180,7 +197,6 @@ fn hold_pressed_place(
             .request_discard("a press moved the Due list above it");
         return;
     }
-    let content = output.content_size.y - view.room;
     view.room = (state.offset.y + output.inner_rect.height() - content).max(0.0);
 }
 
@@ -591,7 +607,7 @@ fn tracker_lines(
             ui.add_space(indent);
             let height = Density::Read.control();
             let name = instance.unwrap_or(&def.name);
-            name_cell(ui, name, egui::vec2(name_width, height));
+            name_cell(ui, view, name, egui::vec2(name_width, height));
             ui.add_space(design::S);
             let (rect, _) =
                 ui.allocate_exact_size(egui::vec2(value_width, height), egui::Sense::hover());
@@ -631,6 +647,7 @@ fn tracker_lines(
                         top: response.rect.top(),
                         pass: ui.ctx().cumulative_pass_nr(),
                         now: None,
+                        content: None,
                     });
                     // Read on the click only: a dice amount is parsed to tell it from `ask`.
                     if quick.asks() {
@@ -660,17 +677,38 @@ fn tracker_lines(
 const NAME_SHARE: f32 = 0.4;
 
 /// A name in its column: exactly `size`, whatever the name's own width. A name wider than the
-/// column ends at a whole word with `…`, and its hover says it whole.
-fn name_cell(ui: &mut egui::Ui, name: &str, size: egui::Vec2) {
+/// column ends at a whole word with `…`, or is `…` alone when its first word does not fit; its
+/// hover says it whole. Only a name that does not fit is shortened, once for each width.
+fn name_cell(ui: &mut egui::Ui, view: &mut ViewState, name: &str, size: egui::Vec2) {
     let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
     let font = Type::Body.font(ui);
-    let shown = design::words_that_fit(ui, name, &font, size.x);
+    let shown = if design::number_width(ui, name, &font) <= size.x {
+        name
+    } else {
+        let key = (name.to_owned(), size.x.to_bits());
+        if !view.fitted.contains_key(&key) {
+            // A width that changes with the window makes new keys: keep the map small.
+            if view.fitted.len() >= 64 {
+                view.fitted.clear();
+            }
+            let mut words = design::words_that_fit(ui, name, &font, size.x);
+            if design::number_width(ui, &words, &font) > size.x {
+                words = "…".to_owned();
+            }
+            #[cfg(test)]
+            {
+                view.shortened += 1;
+            }
+            view.fitted.insert(key.clone(), words);
+        }
+        view.fitted[&key].as_str()
+    };
     let mut cell = ui.new_child(
         egui::UiBuilder::new()
             .max_rect(rect)
             .layout(egui::Layout::left_to_right(egui::Align::Center)),
     );
-    let response = cell.add(egui::Label::new(Type::Body.rich(ui, &shown)).truncate());
+    let response = cell.add(egui::Label::new(Type::Body.rich(ui, shown)));
     if shown != name {
         response.on_hover_text(name);
     }
@@ -783,4 +821,62 @@ pub(super) fn not_saved(error: &str) -> String {
         super::ledger::FILE,
         error.trim_end_matches('.')
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use egui_kittest::Harness;
+
+    /// X16: a name wider than its column ends at a whole word, or is `…` alone when its first
+    /// word does not fit; unchanged frames do not shorten it again.
+    #[test]
+    fn a_name_in_its_column_ends_at_a_whole_word_and_is_shortened_once() {
+        const NAMES: [&str; 3] = [
+            "Party",
+            "Ravenholm Ironside Wardens of the Gate",
+            "Supercalifragilisticexpialidocious Smith",
+        ];
+        let mut h = Harness::builder()
+            .with_size(egui::vec2(400.0, 200.0))
+            .build_ui_state(
+                |ui, view: &mut ViewState| {
+                    for name in NAMES {
+                        name_cell(ui, view, name, egui::vec2(110.0, 28.0));
+                    }
+                },
+                ViewState::default(),
+            );
+        crate::design::theme::install(&h.ctx);
+        h.run();
+        let shown = |view: &ViewState, name: &str| {
+            view.fitted
+                .iter()
+                .find(|((full, _), _)| full == name)
+                .map(|(_, shown)| shown.clone())
+        };
+        let view = h.state();
+        assert_eq!(
+            shown(view, NAMES[0]),
+            None,
+            "a name that fits is not shortened"
+        );
+        let words = shown(view, NAMES[1]).unwrap();
+        let kept = words.strip_suffix('…').unwrap();
+        assert!(
+            !kept.is_empty() && NAMES[1].starts_with(&format!("{kept} ")),
+            "{words}"
+        );
+        assert_eq!(shown(view, NAMES[2]).as_deref(), Some("…"));
+        let once = view.shortened;
+        assert_eq!(once, 2);
+        for _ in 0..3 {
+            h.step();
+        }
+        assert_eq!(
+            h.state().shortened,
+            once,
+            "unchanged frames shorten nothing"
+        );
+    }
 }
