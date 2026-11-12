@@ -7409,6 +7409,15 @@ pub mod column_resize {
         d.click(NAV_LOOKUP);
         d.settle();
         d.expect("Close Lookup");
+        // Round 26 AB2: the search help keeps the reader measure at every size.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let help = d.at_size(size, |d| d.place_of(crate::lookup::SEARCH_HELP));
+            d.observe(
+                "iter-26-D-AB2",
+                help.is_some_and(|help| help.width() <= crate::design::READER_MEASURE + 0.5),
+                format!("At {size:?}, Lookup's search help {help:?} keeps the reader measure"),
+            );
+        }
         d.state("lookup-beside-run-rail", Sizes::All);
         // Lookup gives the run room beside its natural-width rail.
         let lookup_edge = d.column_edge("lookup");
@@ -9580,10 +9589,9 @@ pub mod world {
             d.has_containing(NPC) && d.has(CLOSE_RUN),
             "A new NPC joins the fight, and the run stays on screen",
         );
-        d.expect("Stat block: not set → Guard.");
+        d.expect("Stat block set to Guard.");
         d.expect("Undo stat block change");
-        let (success, detail) =
-            world_build::finished_change_tone(d, "Stat block: not set → Guard.");
+        let (success, detail) = world_build::finished_change_tone(d, "Stat block set to Guard.");
         d.observe("iter-20-D-FD5-stat-block", success, detail);
         d.state("world-npc-in-run", Sizes::All);
         d.observe(

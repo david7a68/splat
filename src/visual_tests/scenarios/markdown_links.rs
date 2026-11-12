@@ -167,7 +167,7 @@ pub fn run(d: &mut Driver<'_>) {
 
     // SD1: two short links side by side never share a press target.
     d.click(NAV_WORLD);
-    d.click_containing("Problems · ");
+    d.click_containing("Things to check · ");
     let pair = |d: &Driver<'_>| {
         let nodes = d.nodes();
         let link = |name: &str| {
