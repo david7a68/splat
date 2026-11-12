@@ -519,6 +519,8 @@ struct SceneEntry {
     detail: Option<String>,
     /// The fight that its `Start fight` starts, for an NPC or a creature.
     start: Option<crate::world::StartFight>,
+    /// The entry's ID, when it is a campaign World entry whose Log takes a line (F6).
+    log: Option<Uuid>,
 }
 
 /// A World entry's kind, status and place, as a scene's second line and a suggestion say it.
@@ -582,7 +584,31 @@ fn scene_entry(index: &ContentIndex, words: &str) -> Option<SceneEntry> {
     Some(SceneEntry {
         detail: is_world(index, at).then(|| world_detail(index, at)),
         start: crate::world::start_fight(item, index),
+        log: crate::world::takes_log(item, index).then_some(item.entry.id),
     })
+}
+
+/// A scene's words that are outside its links, as `Add to Log` starts its field with them:
+/// `[[Captain Varra]]: the ropes` gives `the ropes`.
+fn words_outside_links(words: &str) -> String {
+    let mut out = String::new();
+    let mut rest = words;
+    while let Some(start) = rest.find("[[") {
+        out.push_str(&rest[..start]);
+        match rest[start..].find("]]") {
+            Some(end) => rest = &rest[start + end + 2..],
+            None => {
+                rest = &rest[start..];
+                break;
+            }
+        }
+    }
+    out.push_str(rest);
+    out.split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .trim_matches(|c: char| c.is_whitespace() || matches!(c, ':' | ';' | ',' | '-' | '–' | '—'))
+        .to_owned()
 }
 
 /// One line of the plan as the plan draws it.
@@ -769,6 +795,8 @@ enum SceneAct {
     UndoAdd,
     UndoRemove,
     StartFight(crate::world::StartFight),
+    /// A done scene's `Add to Log`: its entry, and the scene's words outside its link.
+    AddToLog(Uuid, String),
 }
 
 /// One scene: its box where a fight has its caret, its words as the Reader draws them, its
@@ -784,13 +812,26 @@ fn scene_row(
     let c = colors();
     let task = &scene.task;
     let plain = plain_links(&task.words);
-    let widths = [
-        width - Density::Read.control() - design::S,
-        Density::Read.control(),
-    ];
+    // A done scene that links one World entry offers its Log in the row's action place.
+    let log = scene
+        .entry
+        .as_ref()
+        .and_then(|entry| entry.log)
+        .filter(|_| task.done);
+    let log_name = format!("Add to the Log of {plain}");
+    let log_action = || {
+        Action::quiet("Add to Log")
+            .icon(icons::ADD)
+            .density(Density::Read)
+            .name(&log_name)
+    };
+    let action_width = Density::Read.control()
+        + log.map_or(0.0, |_| log_action().natural_width(ui) + design::S);
+    let widths = [width - action_width - design::S, action_width];
     let mut tick = false;
     let mut remove = false;
     let mut start = None;
+    let mut add_log = false;
     ui.push_id(("scene", task.at, &task.line), |ui| {
         plan_row_with(
             ui,
@@ -846,6 +887,9 @@ fn scene_row(
                         }
                     }
                 });
+                if log.is_some() {
+                    add_log = log_action().show(ui).clicked();
+                }
             },
         );
         plan_rule(ui);
@@ -856,6 +900,8 @@ fn scene_row(
         *act = Some(SceneAct::Remove(slot, task.clone()));
     } else if let Some(fight) = start {
         *act = Some(SceneAct::StartFight(fight));
+    } else if let Some(id) = log.filter(|_| add_log) {
+        *act = Some(SceneAct::AddToLog(id, words_outside_links(&task.words)));
     }
 }
 
@@ -1979,13 +2025,17 @@ impl Sessions {
             self.wants_start_fight = Some(fight);
             return;
         }
+        if let SceneAct::AddToLog(id, words) = act {
+            self.wants_log = Some((id, words));
+            return;
+        }
         let (Some(draft), Some(note)) = (&mut self.draft, session) else {
             return;
         };
         let scenes = &mut self.scenes;
         scenes.fault = None;
         let (result, place) = match act {
-            SceneAct::StartFight(_) => return,
+            SceneAct::StartFight(_) | SceneAct::AddToLog(..) => return,
             SceneAct::Add(words) => {
                 let result = draft.apply(note, Apply::Now, |text| Some(add_scene(text, &words)));
                 if let Ok(undo) | Err(ActFault::NotSaved(_, undo)) = &result {

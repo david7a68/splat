@@ -394,6 +394,8 @@ pub struct Sessions {
     pub wants_lookup: Option<String>,
     /// A scene's NPC or creature, by its ID, to start a fight that nobody planned with.
     pub wants_start_fight: Option<crate::world::StartFight>,
+    /// A done scene's entry, by its ID, to open in Lookup with its Log field and these words.
+    pub wants_log: Option<(Uuid, String)>,
     /// The `/` menu in the note, and what its command has open.
     slash: super::slash::Slash,
     /// A command wrote a file, so Lookup must read the campaign again.

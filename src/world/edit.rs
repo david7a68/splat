@@ -1080,7 +1080,7 @@ impl Reader {
             return None;
         }
         if save {
-            match draft.save(campaign, index, self.log_as.as_deref()) {
+            match draft.save(campaign, index, self.log_as().as_deref()) {
                 Ok(Saved::Written(change)) => {
                     self.picker = None;
                     self.form_focused = false;
@@ -1379,7 +1379,7 @@ mod tests {
 
     #[test]
     fn iter9_d_read_and_live_changes_keep_reported_unread_disk_bytes() {
-        for log_as in [None, Some("[[Session 1]]".to_owned())] {
+        for played in [None, Some("[[Session 1]]".to_owned())] {
             let (dir, campaign, _, id, file) = unread_group_note();
             // The picker opened on a readable file. The index is deliberately stale.
             let path = dir.path().join("NPCs/Rook.md");
@@ -1390,7 +1390,7 @@ mod tests {
             let stale = &index.items[index.position(id).unwrap()];
             fs::write(&path, &file).unwrap();
             let mut reader = Reader {
-                log_as,
+                played,
                 picker: Some(Picker {
                     key: "part_of",
                     ..Default::default()
