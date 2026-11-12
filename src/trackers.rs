@@ -89,6 +89,10 @@ pub struct Quick {
 pub struct Change {
     #[serde(default)]
     pub tracker: Option<String>,
+    /// The line of a tracker with `per` that the change is for. With none, the line the act
+    /// was made on. A day mark names it, because a day has no line of its own.
+    #[serde(default, rename = "for")]
+    pub instance: Option<String>,
     #[serde(default)]
     pub add: Option<Amount>,
     #[serde(default)]
@@ -176,6 +180,84 @@ impl MarkTable {
     }
 }
 
+/// A mark on the campaign's day count: at one day, or every so many days from a day. It raises
+/// a notice as a mark at a value does, and never acts.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct DayMark {
+    /// The row's name. With none, the first sentence of `say`.
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub at: Option<u64>,
+    #[serde(default)]
+    pub every: Option<u64>,
+    #[serde(default)]
+    pub from: Option<u64>,
+    pub say: String,
+    #[serde(default)]
+    pub tables: Vec<MarkTable>,
+    #[serde(default)]
+    pub changes: Vec<Change>,
+}
+
+impl DayMark {
+    /// The days it comes due on, up to `today`, oldest first. `at: 721` is the start of Day
+    /// 721. `every: 30, from: 2` is Day 32, Day 62 and so on; with no `from`, a schedule counts
+    /// from Day 1, the clock's first day.
+    pub fn days_until(&self, today: u64) -> Vec<u64> {
+        match (self.at, self.every) {
+            (Some(at), None) => (at <= today).then_some(at).into_iter().collect(),
+            (None, Some(every)) if every > 0 => {
+                let from = self.from.unwrap_or(1);
+                (1..)
+                    .map(|n: u64| from.saturating_add(n.saturating_mul(every)))
+                    .take_while(|day| *day <= today && *day < u64::MAX)
+                    .collect()
+            }
+            _ => Vec::new(),
+        }
+    }
+
+    /// The row's name for reading.
+    pub fn title(&self) -> &str {
+        self.name
+            .as_deref()
+            .unwrap_or_else(|| first_sentence(&self.say))
+    }
+
+    pub fn says(&self) -> Says<'_> {
+        Says {
+            say: &self.say,
+            tables: &self.tables,
+            changes: &self.changes,
+        }
+    }
+}
+
+/// What a notice says and offers: a mark at a value's, or a day mark's.
+#[derive(Clone, Copy)]
+pub struct Says<'a> {
+    pub say: &'a str,
+    pub tables: &'a [MarkTable],
+    pub changes: &'a [Change],
+}
+
+impl Mark {
+    pub fn says(&self) -> Says<'_> {
+        Says {
+            say: &self.say,
+            tables: &self.tables,
+            changes: &self.changes,
+        }
+    }
+}
+
+/// The first sentence of a notice's words: its short name.
+fn first_sentence(say: &str) -> &str {
+    say.split_once('.').map_or(say, |(first, _)| first).trim()
+}
+
 impl Definition {
     /// The value before any entry, for this instance.
     pub fn start(&self, instance: Option<&str>) -> i64 {
@@ -210,6 +292,13 @@ pub struct Tracker {
     pub def: Result<Definition, String>,
 }
 
+/// A day mark of a note in play, or why its definition cannot be used.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Dated {
+    pub key: String,
+    pub def: Result<DayMark, String>,
+}
+
 /// The house rule notes in play and what they define. Read again when the content changes.
 #[derive(Clone, Default)]
 pub struct Rules {
@@ -217,6 +306,8 @@ pub struct Rules {
     pub notes: Vec<String>,
     /// Every tracker of those notes, in the notes' order.
     pub trackers: Vec<Tracker>,
+    /// Every day mark of those notes, in the notes' order.
+    pub day_marks: Vec<Dated>,
     /// A note in play that cannot be used, with the reason.
     pub problems: Vec<String>,
     /// `Campaign.md` or a note in play that cannot be read, with the reason. It is no empty
@@ -236,11 +327,13 @@ impl Rules {
         (
             &self.notes,
             &self.trackers,
+            &self.day_marks,
             &self.problems,
             &self.unreadable,
         ) == (
             &other.notes,
             &other.trackers,
+            &other.day_marks,
             &other.problems,
             &other.unreadable,
         )
@@ -251,6 +344,31 @@ impl Rules {
             .iter()
             .find(|tracker| tracker.key == key)
             .and_then(|tracker| tracker.def.as_ref().ok())
+    }
+
+    pub fn day_mark(&self, key: &str) -> Option<&DayMark> {
+        self.day_marks
+            .iter()
+            .find(|mark| mark.key == key)
+            .and_then(|mark| mark.def.as_ref().ok())
+    }
+
+    /// A day mark's name for reading, or its key when the mark cannot be used.
+    pub fn day_title<'a>(&'a self, key: &'a str) -> &'a str {
+        self.day_mark(key).map_or(key, DayMark::title)
+    }
+
+    /// A member that cannot be used, with its key and why.
+    pub fn member_problems(&self) -> impl Iterator<Item = String> + '_ {
+        let trackers = self
+            .trackers
+            .iter()
+            .filter_map(|t| t.def.as_ref().err().map(|e| format!("{}: {e}", t.key)));
+        let days = self
+            .day_marks
+            .iter()
+            .filter_map(|m| m.def.as_ref().err().map(|e| format!("{}: {e}", m.key)));
+        trackers.chain(days)
     }
 
     /// A table's name for reading: its heading, never its key.
@@ -379,43 +497,141 @@ fn read_rules(tables: Arc<Sources>, notes: Vec<Result<splat::content::Entry, Str
             continue;
         }
         rules.notes.push(entry.name.clone());
-        let members = entry
-            .fields
-            .get("splat_members")
-            .and_then(|members| members.get("trackers"))
-            .and_then(Value::as_mapping);
-        for (key, value) in members.into_iter().flatten() {
-            let Some(key) = key.as_str() else { continue };
-            owners
-                .entry(key.to_owned())
-                .or_default()
-                .push(entry.name.clone());
+        let members = |part: &str| {
+            entry
+                .fields
+                .get("splat_members")
+                .and_then(|members| members.get(part))
+                .and_then(Value::as_mapping)
+                .into_iter()
+                .flatten()
+                .filter_map(|(key, value)| Some((key.as_str()?.to_owned(), value.clone())))
+        };
+        for (key, _) in members("trackers").chain(members("day_marks")) {
+            owners.entry(key).or_default().push(entry.name.clone());
+        }
+        for (key, value) in members("trackers") {
             rules.trackers.push(Tracker {
-                key: key.to_owned(),
-                def: serde_yaml_ng::from_value::<Definition>(value.clone())
+                key,
+                def: serde_yaml_ng::from_value::<Definition>(value)
                     .map_err(|error| error.to_string()),
             });
         }
+        for (key, value) in members("day_marks") {
+            rules.day_marks.push(Dated {
+                key,
+                def: serde_yaml_ng::from_value::<DayMark>(value).map_err(|error| error.to_string()),
+            });
+        }
     }
+    // A key names one member across the notes in play: a tracker or a day mark.
+    let shared = |key: &str| {
+        owners.get(key).filter(|o| o.len() > 1).map(|notes| {
+            format!(
+                "The key {key} is in {}. A key names one tracker or day mark.",
+                notes.join(" and ")
+            )
+        })
+    };
     let checked: Vec<_> = rules
         .trackers
         .iter()
-        .map(|tracker| match &tracker.def {
-            Err(error) => Err(error.clone()),
-            Ok(def) => match owners.get(&tracker.key).filter(|o| o.len() > 1) {
-                Some(notes) => Err(format!(
-                    "The key {} is in {}. A key names one tracker.",
-                    tracker.key,
-                    notes.join(" and ")
-                )),
-                None => check(def, &rules).map(|()| def.clone()),
+        .map(
+            |tracker| match (&tracker.def, shared(&tracker.key).as_ref()) {
+                (Err(error), _) | (Ok(_), Some(error)) => Err(error.clone()),
+                (Ok(def), None) => check(def, &rules).map(|()| def.clone()),
             },
+        )
+        .collect();
+    let dated: Vec<_> = rules
+        .day_marks
+        .iter()
+        .map(|mark| match (&mark.def, shared(&mark.key).as_ref()) {
+            (Err(error), _) | (Ok(_), Some(error)) => Err(error.clone()),
+            (Ok(def), None) => check_day_mark(def, &rules).map(|()| def.clone()),
         })
         .collect();
     for (tracker, def) in rules.trackers.iter_mut().zip(checked) {
         tracker.def = def;
     }
+    for (mark, def) in rules.day_marks.iter_mut().zip(dated) {
+        mark.def = def;
+    }
     rules
+}
+
+/// A table key resolves to a marked table of the campaign.
+fn check_table(rules: &Rules, key: &str) -> Result<(), String> {
+    match &rules.tables {
+        Some(tables) => tables.problem(key).map_or(Ok(()), Err),
+        None => Err(format!("No roll table has the key “{key}”.")),
+    }
+}
+
+/// A change names a tracker in play and a line that tracker has, and one amount. `own` is the
+/// tracker the change belongs to; a day mark has none, so its changes name their tracker.
+fn check_change(
+    rules: &Rules,
+    own: Option<&Definition>,
+    change: &Change,
+    alone: bool,
+) -> Result<(), String> {
+    let (key, target) = match &change.tracker {
+        Some(key) => {
+            let Some(target) = rules.trackers.iter().find(|t| t.key == *key) else {
+                return Err(format!("No tracker in play has the key “{key}”."));
+            };
+            (key.as_str(), target.def.as_ref().ok())
+        }
+        None => (
+            "This tracker",
+            Some(own.ok_or("A day mark’s change names its tracker.")?),
+        ),
+    };
+    if let Some(target) = target {
+        match (&change.instance, target.per.is_empty()) {
+            (Some(_), true) => {
+                return Err(format!(
+                    "{key} has no per, so a change to it names no line."
+                ));
+            }
+            (Some(word), false) if !target.per.contains(word) => {
+                return Err(format!("{key} has no line for {word}."));
+            }
+            (None, false) if change.tracker.is_some() => {
+                let lines = own.map_or(&[][..], |own| own.per.as_slice());
+                if lines.is_empty() {
+                    return Err(format!("{key} has per, so a change to it needs a name."));
+                }
+                if let Some(word) = lines.iter().find(|word| !target.per.contains(word)) {
+                    return Err(format!("{key} has no line for {word}."));
+                }
+            }
+            _ => {}
+        }
+    }
+    match (&change.add, change.set) {
+        (Some(add), None) => match add.read()? {
+            Add::Ask { .. } if !alone => Err("ask works only in an action of one change.".into()),
+            _ => Ok(()),
+        },
+        (None, Some(_)) => Ok(()),
+        _ => Err("A change has add or set.".into()),
+    }
+}
+
+/// A notice's tables and proposed changes resolve, and no proposed change asks.
+fn check_says(rules: &Rules, own: Option<&Definition>, says: Says<'_>) -> Result<(), String> {
+    for t in says.tables {
+        check_table(rules, t.key())?;
+    }
+    for c in says.changes {
+        check_change(rules, own, c, false)?;
+        if matches!(c.add.as_ref().map(Amount::read), Some(Ok(Add::Ask { .. }))) {
+            return Err("A mark’s change cannot ask.".into());
+        }
+    }
+    Ok(())
 }
 
 /// Every word of a definition resolves: trackers, tables, instances and amounts.
@@ -425,44 +641,14 @@ fn check(def: &Definition, rules: &Rules) -> Result<(), String> {
     {
         return Err(format!("start names “{word}”, which is not in per."));
     }
-    let known = |key: &str| rules.trackers.iter().find(|t| t.key == key);
-    let table = |key: &str| match &rules.tables {
-        Some(tables) => tables.problem(key).map_or(Ok(()), Err),
-        None => Err(format!("No roll table has the key “{key}”.")),
-    };
-    let change = |change: &Change, alone: bool| -> Result<(), String> {
-        if let Some(key) = &change.tracker {
-            let Some(target) = known(key) else {
-                return Err(format!("No tracker in play has the key “{key}”."));
-            };
-            if let Ok(target) = &target.def
-                && !target.per.is_empty()
-            {
-                if def.per.is_empty() {
-                    return Err(format!("{key} has per, so a change to it needs a name."));
-                }
-                if let Some(word) = def.per.iter().find(|word| !target.per.contains(word)) {
-                    return Err(format!("{key} has no line for {word}."));
-                }
-            }
-        }
-        match (&change.add, change.set) {
-            (Some(add), None) => match add.read()? {
-                Add::Ask { .. } if !alone => {
-                    Err("ask works only in an action of one change.".into())
-                }
-                _ => Ok(()),
-            },
-            (None, Some(_)) => Ok(()),
-            _ => Err("A change has add or set.".into()),
-        }
-    };
     for quick in &def.quick {
         let one = Change {
             tracker: None,
+            instance: None,
             add: quick.add.clone(),
             set: quick.set,
         };
+        let change = |c: &Change, alone| check_change(rules, Some(def), c, alone);
         match (
             quick.changes.is_empty(),
             one.add.is_some() || one.set.is_some(),
@@ -476,40 +662,85 @@ fn check(def: &Definition, rules: &Rules) -> Result<(), String> {
         }
         .map_err(|error| format!("{}: {error}", quick.label))?;
         if let Some(key) = &quick.table {
-            table(key).map_err(|error| format!("{}: {error}", quick.label))?;
+            check_table(rules, key).map_err(|error| format!("{}: {error}", quick.label))?;
         }
     }
     for mark in &def.marks {
-        for t in &mark.tables {
-            table(t.key())?;
-        }
-        for c in &mark.changes {
-            change(c, false)?;
-            if matches!(c.add.as_ref().map(Amount::read), Some(Ok(Add::Ask { .. }))) {
-                return Err("A mark’s change cannot ask.".into());
-            }
-        }
+        check_says(rules, Some(def), mark.says())?;
     }
     Ok(())
+}
+
+/// A day mark has `at` or `every`, a day of 1 or more, `from` only with `every`, and words that
+/// resolve.
+fn check_day_mark(mark: &DayMark, rules: &Rules) -> Result<(), String> {
+    match (mark.at, mark.every, mark.from) {
+        (Some(0), None, _) | (None, Some(0), _) => {
+            return Err("A day mark’s day is 1 or more.".into());
+        }
+        (Some(_), None, Some(_)) => return Err("from works only with every.".into()),
+        (Some(_), None, _) | (None, Some(_), _) => {}
+        _ => return Err("A day mark has at or every.".into()),
+    }
+    check_says(rules, None, mark.says())
 }
 
 // ---------------------------------------------------------------------------------------------
 // The replay: values and notices are worked out from the entries, never stored.
 
+/// The campaign's day count, as the Timeline holds it now: its one owner is `timeline::Book`.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Today {
+    /// The day the story is on; 0 before the first `Day`.
+    Day(u64),
+    /// `Timeline.md` cannot be read, with the Timeline's words. The day marks freeze: no day
+    /// notice is raised or cleared, and no act on one is recorded.
+    NotRead(String),
+}
+
+impl Default for Today {
+    fn default() -> Self {
+        Self::Day(0)
+    }
+}
+
+/// The one answer to "what is the day count now, or why is it not known": the view, the rail's
+/// count and every act read it. Not known while `Timeline.md` cannot be read, while it changed
+/// or cannot be read under an edit that waits to be saved, and while that waits for the DM's
+/// choice; then no day notice shows, and the Timeline keeps the draft.
+fn today(book: &crate::timeline::Book) -> Today {
+    let why = book
+        .unreadable
+        .clone()
+        .or_else(|| book.moved_under_edit.clone())
+        .or_else(|| {
+            book.conflict
+                .then(|| crate::timeline::CHANGED_UNDER_DRAFT.to_owned())
+        });
+    match why {
+        Some(why) => Today::NotRead(why),
+        None => Today::Day(crate::timeline::day_now(&book.events).unwrap_or(0)),
+    }
+}
+
 /// An open notice, with its rolls so far.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Notice {
     pub id: NoticeRef,
-    pub tracker: String,
+    /// The member that raised it: the tracker whose change crossed a mark, or the day mark.
+    pub key: String,
     pub instance: Option<String>,
     pub rolls: Vec<TableRoll>,
+    /// A day mark's open days, oldest first: one row for them all, which acts on the first.
+    /// Empty for a mark at a value.
+    pub days: Vec<u64>,
 }
 
 /// What the ledger says now, for the definitions in play.
 #[derive(Clone, Debug, Default)]
 pub struct State {
     values: HashMap<(String, Option<String>), i64>,
-    /// The open notices, oldest first.
+    /// The open notices, oldest first: the day marks' rows, then the marks at a value.
     pub due: Vec<Notice>,
     /// The value of each change entry right after it.
     after: HashMap<String, i64>,
@@ -518,6 +749,8 @@ pub struct State {
     /// How many entries name each tracker that no note in play has, in the file's order. They
     /// count for nothing, and the view names them.
     pub unknown: Vec<(String, usize)>,
+    /// Why the day count is not known while day marks are in play. Then no day notice shows.
+    pub clock_not_read: Option<String>,
 }
 
 impl State {
@@ -532,13 +765,36 @@ impl State {
     pub fn notice(&self, id: &NoticeRef) -> Option<&Notice> {
         self.due.iter().find(|notice| notice.id == *id)
     }
+
+    fn count_unknown(&mut self, key: &str) {
+        match self.unknown.iter_mut().find(|(known, _)| known == key) {
+            Some((_, count)) => *count += 1,
+            None => self.unknown.push((key.to_owned(), 1)),
+        }
+    }
 }
 
 /// The value is a plain sum: `start`, then every change in ledger order. A row for a tracker
-/// that is not in play is kept in the file and counts for nothing here.
-pub fn replay(rules: &Rules, ledger: &Ledger) -> State {
+/// that is not in play is kept in the file and counts for nothing here. A day mark's notices
+/// are its days up to `today` that no entry ends; raising one writes nothing.
+pub fn replay(rules: &Rules, ledger: &Ledger, today: &Today) -> State {
     let mut state = State::default();
+    // The entries about day notices: which days ended, and the rolls on each.
+    let mut ended = std::collections::HashSet::new();
+    let mut day_rolls: HashMap<NoticeRef, Vec<TableRoll>> = HashMap::new();
     for entry in &ledger.changes {
+        if let Some(id @ NoticeRef::Day { mark, .. }) = &entry.notice {
+            if rules.day_mark(mark).is_none() {
+                if !rules.day_marks.iter().any(|m| m.key == *mark) {
+                    state.count_unknown(mark);
+                }
+            } else if entry.done || entry.dismissed {
+                ended.insert(id.clone());
+            } else if let Some(Roll::Table(roll)) = &entry.roll {
+                day_rolls.entry(id.clone()).or_default().push(roll.clone());
+            }
+            continue;
+        }
         if let Some(id) = &entry.notice {
             let Some(at) = state.due.iter().position(|notice| notice.id == *id) else {
                 continue;
@@ -553,10 +809,7 @@ pub fn replay(rules: &Rules, ledger: &Ledger) -> State {
         let Some(key) = &entry.tracker else { continue };
         let Some(def) = rules.def(key) else {
             if !rules.trackers.iter().any(|tracker| tracker.key == *key) {
-                match state.unknown.iter_mut().find(|(known, _)| known == key) {
-                    Some((_, count)) => *count += 1,
-                    None => state.unknown.push((key.clone(), 1)),
-                }
+                state.count_unknown(key);
             }
             continue;
         };
@@ -576,13 +829,14 @@ pub fn replay(rules: &Rules, ledger: &Ledger) -> State {
         for mark in &def.marks {
             if before < mark.at && mark.at <= after {
                 state.due.push(Notice {
-                    id: NoticeRef {
+                    id: NoticeRef::Value {
                         change: entry.id.clone(),
                         at: mark.at,
                     },
-                    tracker: key.clone(),
+                    key: key.clone(),
                     instance: entry.instance.clone(),
                     rolls: Vec::new(),
+                    days: Vec::new(),
                 });
                 state
                     .raised
@@ -592,28 +846,74 @@ pub fn replay(rules: &Rules, ledger: &Ledger) -> State {
             }
         }
     }
+    let marks = rules
+        .day_marks
+        .iter()
+        .filter_map(|m| m.def.as_ref().ok().map(|def| (m.key.as_str(), def)));
+    let today = match today {
+        Today::Day(day) => *day,
+        Today::NotRead(why) => {
+            if marks.clone().next().is_some() {
+                state.clock_not_read = Some(why.clone());
+            }
+            return state;
+        }
+    };
+    let mut dated: Vec<Notice> = marks
+        .filter_map(|(key, def)| {
+            let id = |day| NoticeRef::Day {
+                mark: key.to_owned(),
+                day,
+            };
+            let days: Vec<u64> = def
+                .days_until(today)
+                .into_iter()
+                .filter(|day| !ended.contains(&id(*day)))
+                .collect();
+            let first = id(*days.first()?);
+            Some(Notice {
+                rolls: day_rolls.remove(&first).unwrap_or_default(),
+                id: first,
+                key: key.to_owned(),
+                instance: None,
+                days,
+            })
+        })
+        .collect();
+    // Oldest first; marks due on one day keep their notes' order.
+    dated.sort_by_key(|notice| notice.days[0]);
+    dated.append(&mut state.due);
+    state.due = dated;
     state
 }
 
-/// The notice the DM clicked, as the file on disk holds it now: the same change and mark, for
-/// the same tracker and name. An outside edit that moved it writes nothing.
+/// The notice the DM clicked, as the files on disk hold it now: the same change and mark, for
+/// the same tracker and name, or the same day of the same day mark. An outside edit that moved
+/// it, or a day count that went back, writes nothing.
 fn open_as_drawn<'a>(state: &'a State, drawn: &Notice) -> Result<&'a Notice, String> {
+    if let (NoticeRef::Day { .. }, Some(why)) = (&drawn.id, &state.clock_not_read) {
+        return Err(format!("{why} Nothing was recorded."));
+    }
     let open = state
         .notice(&drawn.id)
         .ok_or("That notice is no longer due. Nothing was recorded.")?;
-    if open.tracker != drawn.tracker || open.instance != drawn.instance {
+    if open.key != drawn.key || open.instance != drawn.instance {
         return Err("That notice changed on disk. Nothing was recorded.".into());
     }
     Ok(open)
 }
 
-/// The mark that a notice is for.
-pub fn mark_of<'a>(rules: &'a Rules, notice: &Notice) -> Option<&'a Mark> {
-    rules
-        .def(&notice.tracker)?
-        .marks
-        .iter()
-        .find(|mark| mark.at == notice.id.at)
+/// What a notice says and offers: its mark's, or its day mark's.
+pub fn mark_of<'a>(rules: &'a Rules, notice: &Notice) -> Option<Says<'a>> {
+    match &notice.id {
+        NoticeRef::Value { at, .. } => rules
+            .def(&notice.key)?
+            .marks
+            .iter()
+            .find(|mark| mark.at == *at)
+            .map(Mark::says),
+        NoticeRef::Day { mark, .. } => rules.day_mark(mark).map(DayMark::says),
+    }
 }
 
 /// A notice's short name: the first sentence of its words, and the name it is for.
@@ -622,10 +922,27 @@ pub fn short_name(rules: &Rules, tracker: &str, instance: Option<&str>, at: i64)
         .def(tracker)
         .and_then(|def| def.marks.iter().find(|mark| mark.at == at))
         .map_or("Notice", |mark| mark.say.as_str());
-    let first = say.split_once('.').map_or(say, |(first, _)| first).trim();
+    let first = first_sentence(say);
     match instance {
         Some(name) => format!("{first} for {name}"),
         None => first.to_owned(),
+    }
+}
+
+/// A day notice's short name: the mark's name and the day it is for.
+fn day_name(rules: &Rules, mark: &str, day: u64) -> String {
+    format!("{}, Day {day}", rules.day_title(mark))
+}
+
+impl Notice {
+    /// Its short name, as the row's actions and the result line say it.
+    pub fn name(&self, rules: &Rules) -> String {
+        match &self.id {
+            NoticeRef::Value { at, .. } => {
+                short_name(rules, &self.key, self.instance.as_deref(), *at)
+            }
+            NoticeRef::Day { mark, day } => day_name(rules, mark, *day),
+        }
     }
 }
 
@@ -663,7 +980,8 @@ pub fn undo_target(ledger: &Ledger, session: Option<Uuid>) -> Vec<Entry> {
                 entry
                     .notice
                     .as_ref()
-                    .is_some_and(|notice| out.iter().any(|kept| kept.id == notice.change))
+                    .and_then(NoticeRef::change)
+                    .is_some_and(|change| out.iter().any(|kept| kept.id == change))
                     || out.iter().any(|kept| entry.same_press(kept))
             })
             .collect();
@@ -676,19 +994,23 @@ pub fn undo_target(ledger: &Ledger, session: Option<Uuid>) -> Vec<Entry> {
     out.into_iter().cloned().collect()
 }
 
-/// The tracker and instance of the change that raised a notice.
-fn notice_place(ledger: &Ledger, notice: &NoticeRef) -> (String, Option<String>) {
-    ledger
-        .changes
-        .iter()
-        .find(|entry| entry.id == notice.change)
-        .map(|entry| {
-            (
-                entry.tracker.clone().unwrap_or_default(),
-                entry.instance.clone(),
+/// A notice's short name, from the ledger and the definitions alone: a day notice's mark and
+/// day, or the first sentence of a mark's words with the line of the change that raised it.
+fn notice_name(rules: &Rules, ledger: &Ledger, notice: &NoticeRef) -> String {
+    match notice {
+        NoticeRef::Value { change, at } => {
+            let raised = ledger.changes.iter().find(|entry| entry.id == *change);
+            short_name(
+                rules,
+                raised
+                    .and_then(|e| e.tracker.as_deref())
+                    .unwrap_or_default(),
+                raised.and_then(|e| e.instance.as_deref()),
+                *at,
             )
-        })
-        .unwrap_or_default()
+        }
+        NoticeRef::Day { mark, day } => day_name(rules, mark, *day),
+    }
 }
 
 /// The entry that names an act: the end of a notice, else a tracker change, else a roll. An
@@ -707,8 +1029,12 @@ pub fn label(rules: &Rules, ledger: &Ledger, entries: &[Entry]) -> String {
         return String::new();
     };
     if let Some(notice) = &entry.notice {
-        let (tracker, instance) = notice_place(ledger, notice);
-        let short = short_name(rules, &tracker, instance.as_deref(), notice.at);
+        // `Dismiss all` ends a day mark's open days in one press: it names the mark and the count.
+        let ends = entries.iter().filter(|e| e.dismissed).count();
+        if let (NoticeRef::Day { mark, .. }, true) = (notice, ends > 1) {
+            return format!("{} ×{ends} dismissed", rules.day_title(mark));
+        }
+        let short = notice_name(rules, ledger, notice);
         return if entry.done {
             format!("{short} done")
         } else if entry.dismissed {
@@ -944,6 +1270,7 @@ fn press_op(
     let changes = if quick.changes.is_empty() {
         vec![Change {
             tracker: None,
+            instance: None,
             add: quick.add.clone(),
             set: quick.set,
         }]
@@ -954,7 +1281,9 @@ fn press_op(
     let mut entries = Vec::new();
     for change in &changes {
         let target = change.tracker.as_deref().unwrap_or(key);
-        let mut entry = change_entry(rules, state, &mut values, target, instance, change, asked)?;
+        // A change that names its line with `for:` goes there, else to the line pressed.
+        let line = change.instance.as_deref().or(instance);
+        let mut entry = change_entry(rules, state, &mut values, target, line, change, asked)?;
         entry.why = Some(label.to_owned());
         entries.push(entry);
     }
@@ -1014,6 +1343,10 @@ pub struct Trackers {
     pub played: Option<Uuid>,
     /// `Add to Timeline` for this entry, with this label: the shell has the Timeline.
     pub wants_timeline: Option<(String, String)>,
+    /// The campaign's day count, as the Timeline held it when its count of changes was
+    /// `clock_seen`. The shell reads it again at each act, so an act uses the day at the click.
+    today: Today,
+    clock_seen: Option<(u64, bool, Option<String>)>,
     /// `Undo add` of this event.
     pub wants_undo_add: Option<String>,
     pub(crate) view: view::ViewState,
@@ -1028,6 +1361,7 @@ impl Trackers {
         index: Option<Arc<ContentIndex>>,
         campaign: Option<&Campaign>,
         played: Option<Uuid>,
+        timeline: &crate::timeline::Book,
     ) {
         if self.played != played {
             self.played = played;
@@ -1042,6 +1376,7 @@ impl Trackers {
             };
         }
         let Some(campaign) = campaign else { return };
+        self.follow_clock(timeline);
         if let Some(index) = index
             && !self
                 .index
@@ -1068,6 +1403,25 @@ impl Trackers {
             .is_some_and(|added| added.at.elapsed() >= UNDO_ADD_FOR)
         {
             self.added = None;
+        }
+    }
+
+    /// Follow the campaign's day count. The Timeline's count of changes says when it can have
+    /// moved, so the day is worked out again only then, never in each frame.
+    pub fn follow_clock(&mut self, timeline: &crate::timeline::Book) {
+        let seen = (
+            timeline.changes(),
+            timeline.conflict,
+            timeline.moved_under_edit.clone(),
+        );
+        if self.clock_seen.as_ref() == Some(&seen) {
+            return;
+        }
+        self.clock_seen = Some(seen);
+        let today = today(timeline);
+        if today != self.today {
+            self.today = today;
+            self.settle();
         }
     }
 
@@ -1128,7 +1482,7 @@ impl Trackers {
 
     /// Work the values, the notices and the newest act out of the ledger again.
     fn settle(&mut self) {
-        self.state = replay(&self.rules, &self.ledger);
+        self.state = replay(&self.rules, &self.ledger, &self.today);
         self.settle_result();
     }
 
@@ -1145,7 +1499,8 @@ impl Trackers {
 
     /// An act built from the values and notices of the file on disk.
     fn act(&mut self, build: impl FnOnce(&Rules, &State) -> Result<Op, String>) {
-        self.commit(|rules, ledger| build(rules, &replay(rules, ledger)));
+        let today = self.today.clone();
+        self.commit(|rules, ledger| build(rules, &replay(rules, ledger, &today)));
     }
 
     /// The definitions in play as the files hold them now.
@@ -1272,15 +1627,12 @@ impl Trackers {
                 return Err("That mark changed in its note. Nothing was recorded.".into());
             }
             // The label of the notice's end, as `label` names it.
-            let why = format!(
-                "{} done",
-                short_name(rules, &open.tracker, open.instance.as_deref(), notice.at)
-            );
+            let why = format!("{} done", open.name(rules));
             let mut values = HashMap::new();
             let mut entries = Vec::new();
             for (change, _) in mark.changes.iter().zip(ticked).filter(|(_, on)| **on) {
-                let target = change.tracker.as_deref().unwrap_or(&open.tracker);
-                let instance = open.instance.as_deref();
+                let target = change.tracker.as_deref().unwrap_or(&open.key);
+                let instance = change.instance.as_deref().or(open.instance.as_deref());
                 let mut entry =
                     change_entry(rules, state, &mut values, target, instance, change, None)?;
                 entry.why = Some(why.clone());
@@ -1309,6 +1661,30 @@ impl Trackers {
                 }],
                 session,
             ))
+        });
+    }
+
+    /// `Dismiss all` on a day mark's row: each of its open days ends, as one act, and nothing is
+    /// applied. The days must be the ones the row showed.
+    pub fn dismiss_all(&mut self, drawn: &Notice) {
+        let session = self.played;
+        self.act(|_, state| {
+            let open = open_as_drawn(state, drawn)?;
+            let NoticeRef::Day { mark, .. } = &open.id else {
+                return Err("Only a day mark’s row has Dismiss all.".into());
+            };
+            if open.days != drawn.days {
+                return Err("The day count changed. Nothing was recorded.".into());
+            }
+            let ends = open.days.iter().map(|day| Entry {
+                notice: Some(NoticeRef::Day {
+                    mark: mark.clone(),
+                    day: *day,
+                }),
+                dismissed: true,
+                ..Entry::default()
+            });
+            Ok(stamp(ends.collect(), session))
         });
     }
 
@@ -1351,6 +1727,8 @@ mod tests {
         campaign: Campaign,
         trackers: Trackers,
         index: Arc<ContentIndex>,
+        /// The campaign's Timeline: the day count's one owner.
+        timeline: crate::timeline::Book,
     }
 
     const TONIGHT: Uuid = Uuid::from_u128(0x0070_eca3_6331_c46c_b5a6_32a6_e352_65da);
@@ -1408,13 +1786,21 @@ mod tests {
             vec![id]
         );
         let index = Arc::new(ContentIndex::load(&[], Some(&campaign)).unwrap());
+        let mut timeline = crate::timeline::Book::default();
+        timeline.open(Some(dir.path()));
         let mut trackers = Trackers::default();
-        trackers.poll(Some(index.clone()), Some(&campaign), Some(TONIGHT));
+        trackers.poll(
+            Some(index.clone()),
+            Some(&campaign),
+            Some(TONIGHT),
+            &timeline,
+        );
         Race {
             _dir: dir,
             campaign,
             trackers,
             index,
+            timeline,
         }
     }
 
@@ -1637,6 +2023,311 @@ mod tests {
         assert_eq!(file(&race), before);
     }
 
+    /// Two day marks for the Tournament: the month's end every 30 days from Day 2, as the design
+    /// counts it, and the wagon on one day, with a change for one line of a tracker with `per`.
+    /// The wagon comes second in the note and first in the Due list: oldest day first.
+    const DAY_MARKS: &str = "> day_marks:\n>   month_end:\n>     name: End of month\n>     every: 30\n>     from: 2\n>     say: Move the rival powers.\n>     changes:\n>     - {tracker: favor, add: 1}\n>   wagon:\n>     name: Supply wagon\n>     at: 3\n>     say: The supply wagon arrives. The party takes a seal.\n>     changes:\n>     - {tracker: seals, for: Party, add: 1}\n";
+
+    fn with_day_marks(race: &mut Race) {
+        let note = race.campaign.path.join("Tournament.md");
+        let text = fs::read_to_string(&note).unwrap();
+        let marked = text.replacen("> trackers:\n", &format!("{DAY_MARKS}> trackers:\n"), 1);
+        assert_ne!(marked, text);
+        fs::write(&note, marked).unwrap();
+        race.index = Arc::new(ContentIndex::load(&[], Some(&race.campaign)).unwrap());
+        let index = Some(race.index.clone());
+        race.trackers
+            .poll(index, Some(&race.campaign), Some(TONIGHT), &race.timeline);
+    }
+
+    /// An event on the Timeline, saved, and the day count followed as the shell does.
+    fn add_event(race: &mut Race, kind: crate::timeline::Kind, length: &str) -> String {
+        let id = race.timeline.add(kind, Some(TONIGHT));
+        race.timeline.event_mut(&id).unwrap().duration = length.into();
+        race.timeline.touch();
+        race.timeline.save();
+        race.trackers.follow_clock(&race.timeline);
+        id
+    }
+
+    fn day(mark: &str, day: u64) -> NoticeRef {
+        NoticeRef::Day {
+            mark: mark.into(),
+            day,
+        }
+    }
+
+    #[test]
+    fn day_marks_follow_the_campaigns_day_count() {
+        use crate::timeline::{Book, Kind};
+        use std::os::unix::fs::PermissionsExt;
+        let mut race = race();
+        // With no day mark in play, a Timeline that cannot be read says nothing here.
+        let plain = replay(
+            &race.trackers.rules,
+            &race.trackers.ledger,
+            &Today::NotRead("Timeline.md could not be read.".into()),
+        );
+        assert_eq!(plain.clock_not_read, None);
+        with_day_marks(&mut race);
+        let marks = &race.trackers.rules.day_marks;
+        assert_eq!(marks.len(), 2);
+        assert!(marks.iter().all(|mark| mark.def.is_ok()), "{marks:?}");
+        // Before the first Day the clock has not started: nothing is due.
+        assert_eq!(race.trackers.due(), 0);
+        add_event(&mut race, Kind::Day, "");
+        add_event(&mut race, Kind::Travel, "2 days");
+        let t = &race.trackers;
+        assert_eq!((t.due(), &t.state.due[0].id), (1, &day("wagon", 3)));
+        assert_eq!(
+            file(&race),
+            "",
+            "a day notice is worked out, and raising it writes nothing"
+        );
+
+        // Several days in one step: 60 days of travel pass Day 32 and Day 62. One row, oldest
+        // first, acts on its first day.
+        let travel = add_event(&mut race, Kind::Travel, "60 days");
+        let t = &race.trackers;
+        let month = t.state.due[1].clone();
+        assert_eq!(
+            (t.due(), &month.id, month.days.as_slice()),
+            (2, &day("month_end", 32), &[32, 62][..])
+        );
+        // Done on the wagon applies its change to the line it names; that raises Party's seal.
+        let wagon = t.state.due[0].clone();
+        race.trackers.done(&wagon, &[true]);
+        assert_eq!(value(&race, "seals", Some("Party")), 1);
+        let t = &race.trackers;
+        assert_eq!(newest_label(t), "Supply wagon, Day 3 done");
+        // Next ends the oldest day only, with today's values.
+        race.trackers.done(&month, &[true]);
+        let t = &race.trackers;
+        assert_eq!(t.reason, None);
+        assert_eq!(newest_label(t), "End of month, Day 32 done");
+        assert_eq!(value(&race, "favor", None), 1);
+        let rows: Vec<_> = t.state.due.iter().map(|n| n.id.clone()).collect();
+        assert_eq!(rows[0], day("month_end", 62), "{rows:?}");
+
+        // The clock goes back by the Timeline's Undo: a day no longer reached goes away, and a
+        // Done stays in the ledger. Forward again, a done day stays done.
+        race.timeline.undo_add(&travel);
+        race.timeline.save();
+        race.trackers.follow_clock(&race.timeline);
+        let t = &race.trackers;
+        assert!(
+            t.state
+                .due
+                .iter()
+                .all(|n| matches!(n.id, NoticeRef::Value { .. }))
+        );
+        assert!(file(&race).contains("day: 32"));
+        add_event(&mut race, Kind::Travel, "90 days");
+        add_event(&mut race, Kind::Travel, "1 day");
+        let month = race.trackers.state.due[0].clone();
+        assert_eq!(month.days, [62, 92]);
+
+        // Dismiss all of a row drawn before the clock moved on writes nothing.
+        let before = file(&race);
+        add_event(&mut race, Kind::Travel, "30 days");
+        race.trackers.dismiss_all(&month);
+        assert_eq!(
+            race.trackers.reason,
+            Some(Unrecorded::Refused(
+                "The day count changed. Nothing was recorded.".into()
+            ))
+        );
+        assert_eq!(file(&race), before);
+        // Dismiss all ends each open day as one act; one Undo takes them back.
+        let month = race.trackers.state.due[0].clone();
+        assert_eq!(month.days, [62, 92, 122]);
+        race.trackers.dismiss_all(&month);
+        let t = &race.trackers;
+        assert_eq!(newest_label(t), "End of month ×3 dismissed");
+        assert!(t.state.due.iter().all(|n| n.key != "month_end"));
+        let dismissed = t.newest().to_vec();
+        assert_eq!(dismissed.len(), 3);
+        // A, then an unrelated B with another stamp, then Undo of A: B stays.
+        race.trackers.played = Some(Uuid::from_u128(2));
+        race.trackers.press("race_clock", None, "Enter room", None);
+        race.trackers.played = Some(TONIGHT);
+        race.trackers.settle();
+        race.trackers.undo(&dismissed);
+        let t = &race.trackers;
+        assert_eq!(t.state.due[0].days, [62, 92, 122]);
+        assert_eq!(value(&race, "race_clock", None), 10, "B’s change stays");
+
+        // An edit in Obsidian a moment before ends Day 62: the click on the row drawn before
+        // writes nothing and says so, and the row draws from the file.
+        let month = race.trackers.state.due[0].clone();
+        let path = ledger::path(&race.campaign.path);
+        let outside = format!(
+            "{}- id: c-0b51de62\n  notice:\n    mark: month_end\n    day: 62\n  done: true\n- id: c-01dca1e5\n  notice: {{mark: old_calendar, day: 5}}\n  dismissed: true\n---\n",
+            file(&race).trim_end().trim_end_matches("---")
+        );
+        fs::write(&path, &outside).unwrap();
+        race.trackers.done(&month, &[true]);
+        assert_eq!(
+            race.trackers.reason,
+            Some(Unrecorded::Refused(
+                "That notice is no longer due. Nothing was recorded.".into()
+            ))
+        );
+        assert_eq!(file(&race), outside);
+        assert_eq!(race.trackers.state.due[0].days, [92, 122]);
+        // An entry for a day mark that no note in play has is kept and named, as a tracker's.
+        assert_eq!(race.trackers.state.unknown, [("old_calendar".into(), 1)]);
+
+        // A failed save records nothing and keeps nothing.
+        let month = race.trackers.state.due[0].clone();
+        let mut mode = fs::metadata(&race.campaign.path).unwrap().permissions();
+        mode.set_mode(0o555);
+        fs::set_permissions(&race.campaign.path, mode.clone()).unwrap();
+        race.trackers.done(&month, &[true]);
+        mode.set_mode(0o755);
+        fs::set_permissions(&race.campaign.path, mode).unwrap();
+        assert!(matches!(
+            race.trackers.reason,
+            Some(Unrecorded::NotSaved(_))
+        ));
+        assert_eq!(file(&race), outside);
+        assert_eq!(race.trackers.state.due[0].days, [92, 122]);
+
+        // A Timeline that cannot be read: no day notice shows, never an old one, the Due list
+        // says why, and an act on a day row writes nothing. A notice at a value still shows.
+        let timeline = race.campaign.path.join(crate::timeline::FILE);
+        let readable = fs::read(&timeline).unwrap();
+        fs::set_permissions(&timeline, fs::Permissions::from_mode(0o000)).unwrap();
+        race.timeline.reload();
+        race.trackers.follow_clock(&race.timeline);
+        let t = &race.trackers;
+        let why = t.state.clock_not_read.clone().unwrap_or_default();
+        assert!(why.starts_with("Timeline.md could not be read."), "{why}");
+        assert_eq!(t.due(), 1, "Party's First seal");
+        race.trackers.dismiss(&month);
+        assert_eq!(
+            race.trackers.reason,
+            Some(Unrecorded::Refused(format!("{why} Nothing was recorded.")))
+        );
+        assert_eq!(file(&race), outside);
+        fs::set_permissions(&timeline, fs::Permissions::from_mode(0o644)).unwrap();
+
+        // A day passes while Splat is closed: another program adds 30 days to the Timeline.
+        // After a restart the row and the last act's Undo come from the files.
+        let mut other = Book::default();
+        other.open(Some(&race.campaign.path));
+        let id = other.add(Kind::Travel, None);
+        other.event_mut(&id).unwrap().duration = "30 days".into();
+        other.touch();
+        other.save();
+        assert_ne!(fs::read(&timeline).unwrap(), readable);
+        let mut book = Book::default();
+        book.open(Some(&race.campaign.path));
+        let mut again = Trackers::default();
+        again.poll(
+            Some(race.index.clone()),
+            Some(&race.campaign),
+            Some(TONIGHT),
+            &book,
+        );
+        assert_eq!(again.state.due[0].days, [92, 122, 152]);
+        assert_eq!(newest_label(&again), "End of month, Day 32 done");
+
+        // The act reads the day at the click. Obsidian takes the Timeline back to Day 3 while
+        // the shell's Timeline still holds Day 153; the press in the view writes nothing.
+        let mut app = crate::Splat {
+            trackers: again,
+            ..Default::default()
+        };
+        app.timeline.open(Some(&race.campaign.path));
+        app.trackers.follow_clock(&app.timeline);
+        let month = app.trackers.state.due[0].clone();
+        assert_eq!(month.days, [92, 122, 152]);
+        // Next pressed in the view ends the oldest day, and the row moves on to the next.
+        app.trackers.press_done_in_view(&month, vec![true]);
+        app.apply_tracker_act();
+        assert_eq!(app.trackers.reason, None);
+        assert_eq!(app.trackers.state.due[0].days, [122, 152]);
+        let month = app.trackers.state.due[0].clone();
+        let before = file(&race);
+        // A Timeline edit waits for its pause, and under it the file changes on disk, or
+        // cannot be read: the day count is not known. One answer serves the act and the view:
+        // the click records nothing, no day row shows, the Due list says why, and the draft is
+        // kept. When the file reads as it was, the rows come back.
+        let saved = fs::read(&timeline).unwrap();
+        let edited = app.timeline.events[0].id.clone();
+        app.timeline.event_mut(&edited).unwrap().title = "Dawn".into();
+        app.timeline.touch();
+        let mut outside = String::from_utf8(saved.clone()).unwrap();
+        outside.push_str("\nWritten in Obsidian.\n");
+        let day_rows = |t: &Trackers| {
+            t.state
+                .due
+                .iter()
+                .filter(|n| matches!(n.id, NoticeRef::Day { .. }))
+                .count()
+        };
+        let value_rows = app.trackers.due() - day_rows(&app.trackers);
+        for (text, mode, why) in [
+            (
+                outside.as_bytes(),
+                0o644,
+                crate::timeline::CHANGED_UNDER_DRAFT,
+            ),
+            (&saved[..], 0o000, "Timeline.md could not be read."),
+        ] {
+            fs::write(&timeline, text).unwrap();
+            fs::set_permissions(&timeline, fs::Permissions::from_mode(mode)).unwrap();
+            app.trackers.press_done_in_view(&month, vec![true]);
+            app.apply_tracker_act();
+            fs::set_permissions(&timeline, fs::Permissions::from_mode(0o644)).unwrap();
+            let t = &app.trackers;
+            let shown = t.state.clock_not_read.clone().unwrap_or_default();
+            assert!(shown.starts_with(why), "{shown}");
+            assert_eq!(
+                t.reason,
+                Some(Unrecorded::Refused(format!(
+                    "{shown} Nothing was recorded."
+                )))
+            );
+            assert_eq!((day_rows(t), t.due()), (0, value_rows), "{why}");
+            assert_eq!(file(&race), before);
+            assert!(app.timeline.unsaved() && app.timeline.events[0].title == "Dawn");
+            // The file reads as it was: the rows come back, with the draft still waiting.
+            fs::write(&timeline, &saved).unwrap();
+            app.timeline.read_if_changed();
+            app.trackers.follow_clock(&app.timeline);
+            let t = &app.trackers;
+            assert_eq!(t.state.clock_not_read, None);
+            assert_eq!(t.state.due[0].days, [122, 152]);
+        }
+        app.timeline.save();
+        app.timeline.read_if_changed();
+        let mut back = Book::default();
+        back.open(Some(&race.campaign.path));
+        let ids: Vec<String> = back
+            .events
+            .iter()
+            .filter(|event| event.kind == Kind::Travel)
+            .skip(1)
+            .map(|event| event.id.clone())
+            .collect();
+        for id in &ids {
+            back.remove(id);
+        }
+        back.save();
+        app.trackers.press_done_in_view(&month, vec![true]);
+        app.apply_tracker_act();
+        assert_eq!(
+            app.trackers.reason,
+            Some(Unrecorded::Refused(
+                "That notice is no longer due. Nothing was recorded.".into()
+            ))
+        );
+        assert_eq!(file(&race), before);
+        assert!(app.trackers.state.due.iter().all(|n| n.key != "month_end"));
+    }
+
     #[test]
     fn a_linked_change_names_a_line_its_tracker_has() {
         let def = |yaml: &str| serde_yaml_ng::from_str::<Definition>(yaml).unwrap();
@@ -1646,7 +2337,7 @@ mod tests {
                 Tracker {
                     key: "teams".into(),
                     def: Ok(def(
-                        "name: Teams\nper: [Party]\nquick:\n- label: Score\n  changes: [{tracker: rivals, add: 1}]",
+                        "name: Teams\nper: [Party]\nquick:\n- label: Score\n  changes: [{tracker: rivals, add: 1}]\n- label: Score for Old Guard\n  changes: [{tracker: rivals, for: Old Guard, add: 1}]",
                     )),
                 },
                 Tracker {
@@ -1664,11 +2355,62 @@ mod tests {
             check(teams, &rules),
             Err("Score: rivals has no line for Party.".into())
         );
-        let state = replay(&rules, &Ledger::default());
+        let state = replay(&rules, &Ledger::default(), &Today::default());
         assert_eq!(
             press_op(&rules, &state, "teams", Some("Party"), "Score", None, None),
             Err("Rivals has no line for Party. Nothing was recorded.".into())
         );
+        // A change that names its line with `for:` goes there, from whichever line is pressed.
+        let pressed = "Score for Old Guard";
+        let Ok(Op::Append(entries)) =
+            press_op(&rules, &state, "teams", Some("Party"), pressed, None, None)
+        else {
+            panic!("the press records");
+        };
+        assert_eq!(entries[0].instance.as_deref(), Some("Old Guard"));
+        // A day mark has no line of its own, so its change names its tracker, and `for:` names
+        // a line that tracker has.
+        let day_mark = |yaml: &str| {
+            let mark = serde_yaml_ng::from_str::<DayMark>(yaml).unwrap();
+            check_day_mark(&mark, &rules)
+        };
+        assert_eq!(
+            day_mark(
+                "{every: 7, say: Rest., changes: [{tracker: rivals, for: Old Guard, add: 1}]}"
+            ),
+            Ok(())
+        );
+        for (yaml, why) in [
+            (
+                "{at: 3, every: 7, say: Rest.}",
+                "A day mark has at or every.",
+            ),
+            ("{say: Rest.}", "A day mark has at or every."),
+            (
+                "{at: 3, from: 2, say: Rest.}",
+                "from works only with every.",
+            ),
+            ("{every: 0, say: Rest.}", "A day mark’s day is 1 or more."),
+            (
+                "{at: 3, say: Rest., changes: [{add: 1}]}",
+                "A day mark’s change names its tracker.",
+            ),
+            (
+                "{at: 3, say: Rest., changes: [{tracker: rivals, add: 1}]}",
+                "rivals has per, so a change to it needs a name.",
+            ),
+            (
+                "{at: 3, say: Rest., changes: [{tracker: rivals, for: Party, add: 1}]}",
+                "rivals has no line for Party.",
+            ),
+        ] {
+            assert_eq!(day_mark(yaml), Err(why.into()), "{yaml}");
+        }
+        // `every: 30, from: 2` is Day 32, Day 62; with no `from` a schedule counts from Day 1.
+        let month = serde_yaml_ng::from_str::<DayMark>("{every: 30, from: 2, say: x}").unwrap();
+        assert_eq!(month.days_until(91), [32, 62]);
+        let plain = serde_yaml_ng::from_str::<DayMark>("{every: 30, say: x}").unwrap();
+        assert_eq!(plain.days_until(31), [31]);
     }
 
     #[test]
@@ -1770,7 +2512,12 @@ mod tests {
         fs::write(&note, with_ask).unwrap();
         let index = Arc::new(ContentIndex::load(&[], Some(&race.campaign)).unwrap());
         let t = &mut race.trackers;
-        t.poll(Some(index), Some(&race.campaign), Some(TONIGHT));
+        t.poll(
+            Some(index),
+            Some(&race.campaign),
+            Some(TONIGHT),
+            &race.timeline,
+        );
         t.press("favor", None, "Bet", Some(3));
         assert!(matches!(t.reason, Some(Unrecorded::NotSaved(_))));
         assert_eq!(t.view.typed(), Some("3"));
@@ -1829,6 +2576,7 @@ mod tests {
             Some(race.index.clone()),
             Some(&race.campaign),
             Some(TONIGHT),
+            &race.timeline,
         );
         assert_eq!(again.state.value(&again.rules, "favor", None), 2);
         assert_eq!(newest_label(&again), "Crowd loves it");
@@ -1908,7 +2656,7 @@ mod tests {
         fs::write(ledger::path(&race.campaign.path), "not a ledger").unwrap();
         let index = Arc::new(ContentIndex::load(&[], Some(&race.campaign)).unwrap());
         let mut trackers = Trackers::default();
-        trackers.poll(Some(index), Some(&race.campaign), None);
+        trackers.poll(Some(index), Some(&race.campaign), None, &race.timeline);
         assert!(!trackers.in_play());
         assert_eq!(trackers.due(), 0);
         assert!(trackers.unreadable.is_none(), "the ledger is not read");

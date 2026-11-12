@@ -157,6 +157,13 @@
     },
     {
       "phase": "during",
+      "task": "A wolf frightens Oren for 10 rounds: give the condition its count",
+      "transitions": 0,
+      "interactions": 4,
+      "path": "Run"
+    },
+    {
+      "phase": "during",
       "task": "Iselle starts concentrating: mark it",
       "transitions": 0,
       "interactions": 2,
@@ -271,7 +278,7 @@
       "phase": "during",
       "task": "A fight that nobody planned, with a Bandit from the book, then talk",
       "transitions": 2,
-      "interactions": 5,
+      "interactions": 6,
       "path": "Session > Run > Session"
     },
     {
@@ -343,6 +350,13 @@
       "transitions": 0,
       "interactions": 4,
       "path": "Session"
+    },
+    {
+      "phase": "after",
+      "task": "A new day starts: take the supply wagon's torches",
+      "transitions": 1,
+      "interactions": 5,
+      "path": "Session > Timeline"
     }
   ]
 }

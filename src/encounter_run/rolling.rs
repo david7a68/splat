@@ -198,7 +198,7 @@ fn mode_words(mode: Mode) -> Option<&'static str> {
 }
 
 /// The damage `command` gives each row: one amount, or each target's own.
-fn damage_shares(command: &Command) -> Vec<(usize, i64)> {
+pub(super) fn damage_shares(command: &Command) -> Vec<(usize, i64)> {
     match command {
         Command::Damage(row, amount) => vec![(*row, *amount)],
         Command::Several(commands) => commands.iter().flat_map(damage_shares).collect(),

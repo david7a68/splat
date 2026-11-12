@@ -655,6 +655,15 @@ rolls (with `for:`, one roll for each name), its proposed changes ticked, and **
 changes, or **Dismiss** in its menu. While a notice is due, the rail says `Due N` on every page. Splat counts and
 shows; it never applies a rule by itself.
 
+A **day mark** (`day_marks` in the same block) raises a notice on the campaign's day count, which the Timeline
+works out: `at: 721` at the start of Day 721, or `every: 30, from: 2` on Day 32, Day 62 and so on (with no `from`,
+the count starts on Day 1). Its proposed changes name their tracker, and `for:` names the line of a tracker with
+`per`. Raising a day notice writes nothing. Days of one mark that are due together, after a long journey or while
+Splat was closed, are one row (`End of month ×3`) with **Next**, which ends the oldest day, and **Dismiss all** in
+its menu. When the clock goes back, for example by the Timeline's Undo, a day no longer reached leaves the Due
+list; a day already done stays done. While `Timeline.md` cannot be read, or it changed under a Timeline edit that is
+not saved yet, no day notice shows, the Due list says so, and no act on one is recorded; your edit is kept.
+
 Every act is one entry in `Trackers.md` in the campaign's root folder, written at once. The result line names the
 last act of the session being played, with **Undo: <label>**, which steps back newest first, also after a
 restart, and **Add to Timeline**, which makes a Major event with the act's label. A wrong press seen late is
@@ -958,6 +967,16 @@ phases, and completion conditions. The dice field beside the amount accepts expr
 such as `2d6 + 3`, and shows the total beside it. The roll also goes in the log. It is not an Undo
 step, so **Undo** after a roll takes back the change before it, and the roll stays in the log.
 
+**Effect** (`E`) in the dock pins words to the selected row, such as `Bless 10 rounds`; the Conditions tab's
+**Other effect…** field reads them the same way. A time at the end counts: `10 rounds` or `1 minute` goes down
+by one when that participant's turn ends, and says `last round`, then `time is up`; `on its turn` repeats on
+each of its turns. On that participant's turn the run header repeats these reminders where it has room. `3
+uses` is spent from the row, and `recharge 5–6` is marked spent and rolled from the row. An official condition
+with a time keeps one entry with its count, and a sheet that removes it removes both. Splat removes nothing by
+itself, and each act is one named Undo step. Words with no time, and the words of an encounter or a run saved
+before effects, stay as words. After damage to a row marked **Conc**, the row shows its save DC until the next
+step.
+
 | Key | Command |
 |---|---|
 | `N` | Next turn |
@@ -968,6 +987,7 @@ step, so **Undo** after a roll takes back the change before it, and the roll sta
 | `Escape` | Select the current turn again |
 | `A` | Focus the amount |
 | `C` | Conditions |
+| `E` | Effect: words for the selected row |
 | `Ctrl+K` | Open or close Lookup. `Escape` also closes it |
 | `Ctrl+T` | Show Trackers in Lookup, and go back. The run's letter keys stay off beside it |
 
@@ -1157,7 +1177,9 @@ The visual suite includes `npc-in-lookup`, `package-rename` and `package-about`.
 close and a restart, Continue fight and the sentence that stands in its place for a fight that was not played last,
 and unread Undo steps, each with Lookup closed and open. `encounter-difficulty` covers the difficulty word on
 the Ready to run rows, in the editor, on the plan's rows and their opened line, with Lookup closed and open, and
-the encounters whose XP or party is not known, whose opened line says whose XP is not known. `share-to-package` checks the new references after **Copy both**, and Library navigation checks the dependency copy action and its Undo.
+the encounters whose XP or party is not known, whose opened line says whose XP is not known. `run-effects` covers
+effects and turn reminders: the dock's **Effect**, a count through a turn and a restart, the row's targets, and Lookup
+open. `share-to-package` checks the new references after **Copy both**, and Library navigation checks the dependency copy action and its Undo.
 
 On window focus, Splat checks campaign notes and every registered package for disk changes. Library, Lookup and encounter search reload changed content. A changed draft opens the disk comparison. A package's About page counts its chosen entries and offers **Choose every entry** with Undo. Removing an unavailable package also offers Undo and keeps links to the encounters that need its creatures.
 

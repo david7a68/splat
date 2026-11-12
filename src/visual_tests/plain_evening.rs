@@ -1897,7 +1897,76 @@ mod allowed_classes {
             name: "R1a d: the section caret before `N scenes`",
             fits: scene_rows::caret,
         },
+        // P4, F2: row 6. The dock's `Effect` is new, in the room after Absent; nothing of
+        // today's dock moves, so no class here allows a move.
+        Class {
+            row: 6,
+            name: "P4 a: the dock's new `Effect`",
+            fits: |d, _| effect::control(d),
+        },
+        Class {
+            row: 6,
+            name: "P4 b: `Effect`'s own words, inside it",
+            fits: effect::words,
+        },
+        Class {
+            row: 6,
+            name: "P4 c: an act shows or hides only `Effect`'s words",
+            fits: |d, _| effect::act_words(d),
+        },
     ];
+
+    /// P4's classes: the dock's `Effect`, its icon, word and key letter, and acts that show or
+    /// hide only those. Each is new; none lets an item of today go, move, narrow or be cut.
+    mod effect {
+        use super::super::{AllowedRow, Difference};
+        use super::rect_of;
+
+        const NAME: &str = "Button: Effect: words for this row";
+        const WORDS: [&str; 3] = ["\u{e3e2}", "Effect", "E"];
+
+        fn run_view(d: &Difference) -> bool {
+            d.screen.starts_with("run-")
+        }
+
+        pub(super) fn control(d: &Difference) -> bool {
+            run_view(d) && d.what == "control" && d.change == "new" && d.name == NAME
+        }
+
+        /// A word of `Effect` that lies inside a new `Effect` of the same view.
+        pub(super) fn words(d: &Difference, rows: &[AllowedRow]) -> bool {
+            let Some(at) = rect_of(&d.detail, "at ") else {
+                return false;
+            };
+            run_view(d)
+                && d.what == "text"
+                && d.change == "new"
+                && WORDS.contains(&d.name.as_str())
+                && rows.iter().any(|row| {
+                    let o = &row.difference;
+                    control(o)
+                        && (&o.screen, &o.view) == (&d.screen, &d.view)
+                        && rect_of(&o.detail, "at ").is_some_and(|button| {
+                            at[0] >= button[0]
+                                && at[1] >= button[1]
+                                && at[0] + at[2] <= button[0] + button[2]
+                                && at[1] + at[3] <= button[1] + button[3]
+                        })
+                })
+        }
+
+        /// Every part of the act is a word of `Effect` that this evening shows or hides.
+        pub(super) fn act_words(d: &Difference) -> bool {
+            d.what == "act"
+                && d.change == "changed"
+                && d.detail.split(" | ").all(|part| {
+                    ["appeared + ", "went + "]
+                        .iter()
+                        .find_map(|prefix| part.strip_prefix(prefix))
+                        .is_some_and(|word| WORDS.contains(&word))
+                })
+        }
+    }
 
     /// P6's classes. Each proves itself from the geometry of its view: Add to Log is new only in a
     /// reader, after what the header shows today; a glyph matched by its order pairs with a new
@@ -2236,10 +2305,6 @@ mod allowed_classes {
         /// Where the bands of a History view start in its frozen view, for items of `d`'s
         /// kind: the middle of the Read-only line, and the top of `FINAL STATE`.
         fn marks(d: &Difference) -> Option<(f32, f32)> {
-            #[cfg(test)]
-            if let Some(marks) = MARKS.get() {
-                return Some(marks);
-            }
             let view = reference()
                 .views
                 .iter()
@@ -2252,13 +2317,6 @@ mod allowed_classes {
             let find = |end: &str| items.iter().find(|item| item.0.ends_with(end));
             let line = find("Read-only").map(|item| item.1[1] + item.1[3] / 2.0)?;
             Some((line, find("FINAL STATE")?.1[1]))
-        }
-
-        #[cfg(test)]
-        thread_local! {
-            /// The marks of the reference that the checks below were written against (frozen at
-            /// 3dee0a40). A later reference holds R1c's scroll itself, so its marks differ.
-            static MARKS: std::cell::Cell<Option<(f32, f32)>> = const { std::cell::Cell::new(None) };
         }
 
         /// An item's band, by where it was: 0 the list above the Read-only line, 1 that line,
@@ -2462,12 +2520,16 @@ mod allowed_classes {
                 })
         }
 
-        /// The frozen plain reference, read once.
+        /// The views of the plain reference that these classes were written against, read
+        /// once. A later freeze writes a new `reference.json`, in which History already scrolls;
+        /// these classes measure the views of the freeze before pull request 275
+        /// (`history_r1c.json`, frozen at 0855cf95), as their rows did.
         fn reference() -> &'static super::super::Reference {
             static REFERENCE: std::sync::OnceLock<super::super::Reference> =
                 std::sync::OnceLock::new();
-            REFERENCE
-                .get_or_init(|| super::super::read(&super::super::folder().join("reference.json")))
+            REFERENCE.get_or_init(|| {
+                super::super::read(&super::super::folder().join("history_r1c.json"))
+            })
         }
 
         /// An act around History whose every changed word is a text that scrolled out of or
@@ -2495,9 +2557,6 @@ mod allowed_classes {
         /// The faults R1c's classes refuse, beside one scroll of the opened run's row.
         #[test]
         fn the_r1c_classes_refuse_a_loss_a_sideways_move_a_narrowing_and_other_words() {
-            // `run-ended: played last` at 960x640 in that reference: the Read-only line's
-            // middle, and the top of `FINAL STATE`.
-            MARKS.set(Some((498.0, 551.0)));
             let row =
                 |screen: &str, what: &str, change: &str, name: &str, detail: &str| AllowedRow {
                     row: 22,
@@ -4248,6 +4307,50 @@ mod allowed_classes {
         for fault in rewards_faults {
             let row = AllowedRow {
                 row: 10,
+                why: String::new(),
+                difference: fault,
+            };
+            assert!(
+                class_of(&row, &allowed.rows).is_none(),
+                "a class allows {}",
+                row.difference
+            );
+        }
+        // P4's classes refuse a dock control of today that moved or went, Effect's words
+        // outside Effect, and an act that shows or hides another word.
+        let effect = |change: &str, what: &str, name: &str, detail: &str| Difference {
+            screen: "run-conditions".into(),
+            view: "1200x800 Lookup closed".into(),
+            what: what.into(),
+            change: change.into(),
+            name: name.into(),
+            detail: detail.into(),
+        };
+        for fault in [
+            effect(
+                "moved",
+                "control",
+                "Button: Absent",
+                "618.8 725 80.9x28 -> 650.8 725 80.9x28",
+            ),
+            effect(
+                "gone",
+                "control",
+                "Button: Conditions for this participant",
+                "was 1 2 3x4",
+            ),
+            effect("new", "text", "Effect", "at 10 730 37.1x18"),
+            effect("new", "text", "Conc", "at 574.1 730 37.1x18"),
+            effect(
+                "changed",
+                "act",
+                "select Brannoch",
+                "appeared + E | went - Conditions",
+            ),
+            effect("changed", "act", "select Brannoch", "appeared - Effect"),
+        ] {
+            let row = AllowedRow {
+                row: 6,
                 why: String::new(),
                 difference: fault,
             };

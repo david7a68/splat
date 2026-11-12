@@ -10,6 +10,14 @@ use super::{
 use crate::design::{self, Action, Density, Type, colors, icons};
 use eframe::egui::{self, Align, Key, Layout, vec2};
 
+/// How `Effect` fits beside the selected name.
+#[derive(Clone, Copy, PartialEq)]
+enum EffectFit {
+    Word,
+    Icon,
+    None,
+}
+
 /// A roll's result has its place before there is one, so that nothing moves when it comes.
 const DICE_RESULT_WIDTH: f32 = 32.0;
 
@@ -22,6 +30,8 @@ impl Run {
         let mut command = None;
         let mut open_conditions = false;
         let mut open_side = false;
+        let mut open_effect = false;
+        let mut in_dock = false;
         let frame = egui::Frame::new()
             .fill(c.selected)
             .inner_margin(egui::Margin::symmetric(design::S as i8, design::XS as i8));
@@ -78,6 +88,16 @@ impl Run {
                     self.target_words(ui);
                     return;
                 }
+                // Line two becomes one field while the DM adds an effect to this row. The
+                // field belongs to that row: another selection closes it, and its words wait.
+                let key = &self.state.participants[index].key;
+                if self.effect_open.as_ref().is_some_and(|open| open != key) {
+                    self.effect_open = None;
+                }
+                if self.effect_open.is_some() {
+                    command = self.effect_line(ui, index);
+                    return;
+                }
                 let widest = self.widest_name(ui);
                 let p = &self.state.participants[index];
                 let death_saves = self.hide_panel && p.hp == Some(0);
@@ -104,6 +124,15 @@ impl Run {
                         .natural_width(ui)
                     + gap;
                 let height = Density::Read.control();
+                let effect_key = if self.lookup_open || self.notes_open {
+                    ""
+                } else {
+                    "E"
+                };
+                let running = self.state.phase == super::Phase::Running;
+                let effect_word = Self::effect_action(effect_key).natural_width(ui);
+                let effect_icon = Density::Read.control();
+                let mut effect = EffectFit::None;
                 // SL1: in a narrow dock the dice total has a reserved place at the line's end,
                 // under the dice and Roll, so it never joins the selected name.
                 let result_slot = if narrow {
@@ -125,6 +154,8 @@ impl Run {
                     let room = ui.available_width() - controls - design::L - result_slot;
                     let slot = widest.min(12.0 * design::L).min(room).max(0.0);
                     let (role, shown) = dock_name_shown(ui, &p.name, slot);
+                    // A name that lost a word or its size has no room to give.
+                    let whole = role == Type::Heading && shown == p.name;
                     ui.allocate_ui_with_layout(
                         vec2(slot, height),
                         Layout::left_to_right(Align::Center),
@@ -182,25 +213,52 @@ impl Run {
                     {
                         command = Some(Command::Presence(index, !p.present));
                     }
+                    // `Effect` takes only the room that is spare after Absent, `L` after it and
+                    // short of the dice total's place, so no control of the line moves and the
+                    // name keeps all its room: with its word, else with its icon, else not at all.
+                    let spare = ui.available_width() - design::L + gap - result_slot;
+                    if running && whole && spare >= effect_word {
+                        effect = EffectFit::Word;
+                    } else if running && whole && spare >= effect_icon {
+                        effect = EffectFit::Icon;
+                    }
+                    if effect != EffectFit::None {
+                        ui.add_space(design::L - gap);
+                    }
+                    open_effect = match effect {
+                        EffectFit::Word => Self::effect_action(effect_key).show(ui).clicked(),
+                        EffectFit::Icon => {
+                            design::icon_button(ui, icons::PIN, "Effect: words for this row")
+                                .clicked()
+                        }
+                        EffectFit::None => false,
+                    };
                     if narrow {
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            if let Some((total, line)) = self.dock_roll() {
-                                let response = ui
-                                    .label(
-                                        Type::Strong
-                                            .rich(ui, format!("{} {total}", icons::DICE))
-                                            .color(c.text),
-                                    )
-                                    .on_hover_text(&line);
-                                design::named(ui, &response, &format!("Rolled {total}"));
-                            }
+                            ui.allocate_ui_with_layout(
+                                vec2(result_slot - gap, height),
+                                Layout::right_to_left(Align::Center),
+                                |ui| {
+                                    ui.set_width(result_slot - gap);
+                                    self.dock_result(
+                                        ui,
+                                        Type::Strong,
+                                        &[&format!("{} ", icons::DICE)],
+                                    );
+                                },
+                            );
                         });
                     }
                 });
+                in_dock = effect != EffectFit::None;
             });
         });
+        self.effect_in_dock = in_dock;
         if open_conditions {
             self.open_conditions_tab();
+        }
+        if open_effect {
+            self.open_effect_field();
         }
         if open_side {
             self.close_lookup = true;
@@ -210,13 +268,75 @@ impl Run {
                 command,
                 Command::Damage(..) | Command::Heal(..) | Command::TempHp(..) | Command::Several(_)
             );
+            let added = matches!(command, Command::Condition(..));
             self.run_command(command);
+            // Added words leave the participant's draft; words the run refused stay.
+            if added && self.error.is_none() {
+                let key = &self.state.participants[index].key;
+                self.effect_fields.remove(key);
+            }
             if applied {
                 self.amount.clear();
                 self.clear_targets();
                 self.follow_with_keyboard();
             }
         }
+    }
+
+    /// The quiet `Effect` of the dock's second line, with its key while the key works.
+    fn effect_action(key: &str) -> Action<'_> {
+        Action::quiet("Effect")
+            .icon(icons::PIN)
+            .density(Density::Read)
+            .name("Effect: words for this row")
+            .hint("Pin words to this row, such as Bless 10 rounds")
+            .key(key)
+    }
+
+    /// The dock's second line as one field, for the row it opened for. Enter adds the words
+    /// and Escape clears them; either closes the field and puts focus in `Amount`. Any other
+    /// way out, such as `Next turn`, closes it, and its words wait for that row.
+    fn effect_line(&mut self, ui: &mut egui::Ui, index: usize) -> Option<Command> {
+        let p = &self.state.participants[index];
+        let (key, hint) = (
+            p.key.clone(),
+            format!("Effect on {}, such as Bless 10 rounds", p.name),
+        );
+        let field = self.effect_fields.entry(key.clone()).or_default();
+        let result = ui
+            .horizontal(|ui| {
+                ui.set_min_height(Density::Read.control());
+                design::add_field(
+                    ui,
+                    field,
+                    "Effect",
+                    &hint,
+                    0.0,
+                    |_| None::<()>,
+                    |_| Vec::new(),
+                )
+            })
+            .inner;
+        let escape = ui.input(|i| i.key_pressed(Key::Escape));
+        let words = field.words.trim().to_owned();
+        let mut command = None;
+        if result.enter || (escape && result.field.lost_focus()) {
+            // Enter's words leave the draft once the run takes them (`dock`); Escape clears.
+            if result.enter && !words.is_empty() {
+                command = Some(Command::Condition(index, words));
+            } else {
+                field.clear();
+            }
+            self.effect_open = None;
+            self.focus_amount = true;
+        } else if result.field.lost_focus() {
+            self.effect_open = None;
+        }
+        if self.effect_open.is_none() {
+            self.effect_fields
+                .retain(|_, field| !field.words.is_empty());
+        }
+        command
     }
 
     /// In place of the one row's actions: how to give half. The choice is on each row, so that
@@ -242,14 +362,8 @@ impl Run {
                 Layout::left_to_right(Align::Center),
                 |ui| {
                     ui.set_width(DICE_RESULT_WIDTH);
-                    if let Some((total, line)) = self.dock_roll() {
-                        ui.label(
-                            Type::Heading
-                                .rich(ui, format!("= {total}"))
-                                .color(colors().text),
-                        )
-                        .on_hover_text(line);
-                    }
+                    // `= 88` fits, and `888` keeps its digits by giving up `=`.
+                    self.dock_result(ui, Type::Heading, &["= ", ""]);
                 },
             );
         }
@@ -275,7 +389,6 @@ impl Run {
             match self.roll_dice(&expression) {
                 Err(error) => self.error = Some(error),
                 Ok(()) => {
-                    self.condition.clear();
                     self.note.clear();
                 }
             }
@@ -283,7 +396,6 @@ impl Run {
         }
     }
 
-    /// The dice field's last roll, beside it.
     /// The widest roster name in the dock's `Heading` (FK1). Measured again only after a step
     /// or an Undo (`revision`, which a rename is), a roster of another size, or another type
     /// size; an unchanged frame reads the kept width.
@@ -312,9 +424,34 @@ impl Run {
         width
     }
 
+    /// The dice field's last roll: its total and its Log line.
     fn dock_roll(&self) -> Option<(i64, String)> {
         let rolled = self.dock_roll.as_ref()?;
         Some((rolled.total, rolled.line()))
+    }
+
+    /// The last roll in the slot that `ui` is: the total after the first of `prefixes` that
+    /// fits, else after the last one and ending in `…`. It never leaves the slot. Hover keeps
+    /// the roll's whole line, and the accessible name its total.
+    fn dock_result(&self, ui: &mut egui::Ui, role: Type, prefixes: &[&str]) {
+        let Some((total, line)) = self.dock_roll() else {
+            return;
+        };
+        let font = role.font(ui);
+        let room = ui.available_width();
+        let shown = prefixes
+            .iter()
+            .map(|prefix| format!("{prefix}{total}"))
+            .find(|form| design::number_width(ui, form, &font) <= room)
+            .unwrap_or_else(|| format!("{}{total}", prefixes[prefixes.len() - 1]));
+        let response = ui
+            .add(
+                egui::Label::new(role.rich(ui, shown).color(colors().text))
+                    .truncate()
+                    .show_tooltip_when_elided(false),
+            )
+            .on_hover_text(line);
+        design::named(ui, &response, &format!("Rolled {total}"));
     }
 
     /// Beside Notes, a letter in Amount means the DM went on writing. It and the digits
@@ -356,4 +493,293 @@ pub(super) fn target_hint() -> String {
         "Press a target’s {} to give it half, rounded down.",
         icons::OK
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use egui_kittest::kittest::Queryable;
+    use std::{cell::RefCell, collections::BTreeSet, rc::Rc};
+
+    fn dock(name: &str, width: f32) -> (Rc<RefCell<Run>>, egui_kittest::Harness<'static>) {
+        let mut run = super::super::tests::run();
+        for (index, total) in [20, 15, 10].into_iter().enumerate() {
+            run.apply(Command::Initiative(index, Some(total))).unwrap();
+        }
+        run.apply(Command::Begin).unwrap();
+        run.state.participants[0].name = name.into();
+        let run = Rc::new(RefCell::new(run));
+        let shown = run.clone();
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(vec2(width, 200.0))
+            .build(move |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| shown.borrow_mut().dock(ui));
+            });
+        design::theme::install(&harness.ctx);
+        // The name slot's width is kept from the first frame, which had no theme fonts yet.
+        run.borrow_mut().widest_name = None;
+        harness.run_steps(2);
+        (run, harness)
+    }
+
+    /// The painted name, and its size.
+    fn name_shown(harness: &egui_kittest::Harness<'_>, name: &str) -> Option<(String, f32)> {
+        let first = name.split_whitespace().next().unwrap();
+        harness
+            .output()
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.text().starts_with(first) => Some((
+                    text.galley.text().to_owned(),
+                    text.galley.job.sections[0].format.font_id.size,
+                )),
+                _ => None,
+            })
+    }
+
+    /// The places of the name and of every control of the dock.
+    fn dock_places(harness: &egui_kittest::Harness<'_>, name: &str) -> Vec<Option<egui::Rect>> {
+        let first = name.split_whitespace().next().unwrap();
+        let painted = harness
+            .output()
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.text().starts_with(first) => {
+                    Some(text.visual_bounding_rect())
+                }
+                _ => None,
+            });
+        [
+            "Amount",
+            "Conditions for this participant",
+            "Concentrating",
+            "Absent",
+            "Effect: words for this row",
+            "Dice",
+            "Roll dice",
+        ]
+        .into_iter()
+        .map(|label| harness.query_by_label(label).map(|node| node.rect()))
+        .chain([painted])
+        .collect()
+    }
+
+    /// V32: the dice total has one slot that belongs to the dice: after Roll at the block's
+    /// edge, or in a narrow dock at the end of the name's line under Roll, never before the
+    /// name. Up to three digits show whole; a longer total ends in `…` inside the slot.
+    fn assert_result_in_its_slot(harness: &egui_kittest::Harness<'_>, total: i64, width: u32) {
+        let name = format!("Rolled {total}");
+        // The accessible name, which kittest's `label` does not read on a `Label`.
+        let rolled = harness
+            .get(
+                egui_kittest::kittest::By::new()
+                    .include_labels()
+                    .predicate(move |node| node.label().as_deref() == Some(name.as_str())),
+            )
+            .rect();
+        let roll = harness.get_by_label("Roll dice").rect();
+        let slot = if rolled.top() < roll.bottom() {
+            egui::Rect::from_x_y_ranges(
+                roll.right()..=roll.right() + design::XS + DICE_RESULT_WIDTH,
+                roll.y_range(),
+            )
+        } else {
+            let last = ["Absent", "Effect: words for this row"]
+                .into_iter()
+                .filter_map(|label| harness.query_by_label(label))
+                .map(|node| node.rect().right())
+                .fold(0.0, f32::max);
+            egui::Rect::from_x_y_ranges(last..=roll.right(), roll.bottom()..=f32::INFINITY)
+        };
+        assert!(
+            slot.expand(0.5).contains_rect(rolled),
+            "{width} {total}: {rolled:?} in {slot:?}"
+        );
+        // The galley keeps the whole text; `elided` says it ends in `…`.
+        let (shown, elided) = harness
+            .output()
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Text(text)
+                    if rolled.contains(text.visual_bounding_rect().center()) =>
+                {
+                    Some((text.galley.text().to_owned(), text.galley.elided))
+                }
+                _ => None,
+            })
+            .unwrap_or_default();
+        let whole = total.abs().to_string().len() <= 3;
+        assert!(
+            shown.ends_with(&total.to_string()) && elided != whole,
+            "{width} {total} shows {shown:?}, elided {elided}"
+        );
+    }
+
+    /// F2: `Effect` takes only the room after Absent: with its word, else its icon, else not
+    /// at all. The name and today's controls keep their places at every width. V32: they also
+    /// keep them when a dice total comes, changes or goes, and the total keeps to its slot.
+    #[test]
+    fn effect_gives_up_its_place_before_the_name_loses_a_word_or_its_size() {
+        // A name that the dock's name slot (at most `12 × L`, from main) shows whole.
+        let name = "Oren Thistlewick";
+        let (_, wide) = dock(name, 900.0);
+        let (_, size) = name_shown(&wide, name).unwrap();
+        let mut forms = BTreeSet::new();
+        for width in (360..=1200).step_by(8) {
+            let (run, harness) = dock(name, width as f32);
+            let effect = harness.query_by_label("Effect: words for this row");
+            let word = harness.output().shapes.iter().any(|shape| {
+                matches!(&shape.shape, egui::Shape::Text(text) if text.galley.text() == "Effect")
+            });
+            let form = match (effect.is_some(), word) {
+                (true, true) => "word",
+                (true, false) => "icon",
+                (false, _) => "none",
+            };
+            forms.insert(form);
+            assert_eq!(run.borrow().effect_in_dock, effect.is_some(), "{width}");
+            if effect.is_some() {
+                assert_eq!(
+                    name_shown(&harness, name),
+                    Some((name.to_owned(), size)),
+                    "{width} {form}: the name keeps its size and its words"
+                );
+            }
+            let before = dock_places(&harness, name);
+            assert!(
+                before.iter().filter(|place| place.is_none()).count() <= 1,
+                "{width} {before:?}"
+            );
+            let mut harness = harness;
+            for expression in ["1d1+3", "1d1+99", "1d1-100", "1d1+123455"] {
+                run.borrow_mut().roll_dice(expression).unwrap();
+                harness.run_steps(2);
+                assert_eq!(dock_places(&harness, name), before, "{width} {expression}");
+                // From the narrowest dock the app shows: 960x640 beside Lookup, a 426 px block.
+                if width >= 458 {
+                    let total = run.borrow().dock_roll.as_ref().unwrap().total;
+                    assert_result_in_its_slot(&harness, total, width);
+                }
+            }
+            run.borrow_mut().dock_roll = None;
+            harness.run_steps(2);
+            assert_eq!(
+                dock_places(&harness, name),
+                before,
+                "{width}: the total goes"
+            );
+            // Conditions, Conc and Absent stay where they are without Effect: in Setup.
+            let absent = harness.get_by_label("Absent").rect();
+            let (setup, harness) = dock(name, width as f32);
+            setup.borrow_mut().state.phase = crate::encounter_run::Phase::Setup;
+            let mut harness = harness;
+            harness.run_steps(2);
+            assert!(
+                harness
+                    .query_by_label("Effect: words for this row")
+                    .is_none()
+            );
+            assert_eq!(
+                harness.get_by_label("Absent").rect(),
+                absent,
+                "{width} {form}"
+            );
+        }
+        assert_eq!(
+            forms,
+            BTreeSet::from(["icon", "none", "word"]),
+            "each form at some width"
+        );
+    }
+
+    /// F2: the dock's field adds one effect to the row it opened for. Enter adds and puts
+    /// focus in Amount; Escape clears; another selection closes it, and its words wait.
+    #[test]
+    fn the_effect_field_belongs_to_its_row() {
+        let (run, mut harness) = dock("Guard", 900.0);
+        let field = "Effect";
+        harness.get_by_label("Effect: words for this row").click();
+        harness.run_steps(3);
+        harness.get_by_label(field).type_text("Bless 10 rounds");
+        harness.run_steps(1);
+        harness.key_press(egui::Key::Enter);
+        harness.run_steps(2);
+        {
+            let run = run.borrow();
+            assert!(
+                run.state.participants[0]
+                    .conditions
+                    .iter()
+                    .any(|c| c == "Bless 10")
+            );
+            assert_eq!(run.undo_label(), "Undo: effect Bless on Guard");
+            assert!(run.effect_open.is_none() && run.effect_fields.is_empty());
+        }
+        assert!(harness.query_by_label(field).is_none(), "the field closed");
+        assert!(
+            harness.get_by_label("Amount").is_focused(),
+            "Enter puts focus in Amount"
+        );
+        // Escape clears the words and adds nothing.
+        harness.get_by_label("Effect: words for this row").click();
+        harness.run_steps(3);
+        harness.get_by_label(field).type_text("Haste");
+        harness.run_steps(1);
+        harness.key_press(egui::Key::Escape);
+        harness.run_steps(2);
+        assert!(run.borrow().effect_fields.is_empty());
+        assert_eq!(run.borrow().state.participants[0].conditions.len(), 2);
+        assert!(
+            harness.get_by_label("Amount").is_focused(),
+            "Escape puts focus in Amount"
+        );
+        // Next turn moves the selection: the field closes, and its words wait for its row.
+        harness.get_by_label("Effect: words for this row").click();
+        harness.run_steps(3);
+        harness.get_by_label(field).type_text("Haste");
+        harness.run_steps(1);
+        run.borrow_mut().run_command(Command::Next);
+        harness.run_steps(2);
+        assert!(harness.query_by_label(field).is_none());
+        let key = run.borrow().state.participants[0].key.clone();
+        assert_eq!(run.borrow().effect_fields[&key].words, "Haste");
+        run.borrow_mut().select(0);
+        harness.run_steps(2);
+        harness.get_by_label("Effect: words for this row").click();
+        harness.run_steps(3);
+        assert_eq!(
+            harness.get_by_label(field).value().as_deref(),
+            Some("Haste")
+        );
+        // One draft, the participant's: where Effect has no room, `E` opens the Conditions
+        // tab's field on the same words, and Next turn or another selection keeps them for
+        // that participant (review of PR 276, round 1).
+        harness.key_press(egui::Key::Escape);
+        harness.run_steps(2);
+        harness.get_by_label("Effect: words for this row").click();
+        harness.run_steps(3);
+        harness.get_by_label(field).type_text("Haste");
+        harness.run_steps(1);
+        run.borrow_mut().run_command(Command::Next);
+        harness.run_steps(2);
+        let draft = |run: &Run| run.effect_fields.get(&key).map(|field| field.words.clone());
+        for _ in 0..2 {
+            run.borrow_mut().select(0);
+            run.borrow_mut().effect_in_dock = false;
+            run.borrow_mut().open_effect_field();
+            assert_eq!(draft(&run.borrow()).as_deref(), Some("Haste"));
+            run.borrow_mut().run_command(Command::Next);
+            run.borrow_mut().select(1);
+        }
+        // A draft whose participant left the run goes with it.
+        run.borrow_mut()
+            .effect_fields
+            .insert("gone".into(), crate::design::AddField::default());
+        run.borrow_mut().forget_removed_participants();
+        assert!(!run.borrow().effect_fields.contains_key("gone"));
+        assert!(run.borrow().effect_fields.contains_key(&key));
+    }
 }

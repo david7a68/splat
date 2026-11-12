@@ -20,6 +20,7 @@ pub mod integrity;
 pub mod list_formats;
 pub mod markdown_links;
 pub mod run_continue;
+pub mod run_effects;
 pub mod session_carry_over;
 pub mod session_plan_scenes;
 pub mod stat_formats;
@@ -4320,6 +4321,26 @@ pub mod encounter_run {
 
         d.click_row(TARGET);
         d.state("participant-selected", Sizes::Default);
+        // T20.1: the dock's Effect shows its key while the key works, as each dock key does;
+        // beside Lookup the letters are text, and the key is not shown.
+        let effect_key = |d: &Driver<'_>| {
+            d.place_of("Effect: words for this row")
+                .map(|effect| d.painted_in(effect).replace('\u{a0}', " "))
+        };
+        let (closed, open) = d.aside(|d| {
+            let closed = d.at_size(DEFAULT, effect_key);
+            look_up(d, KEYBOARD_LOOKUP);
+            let open = d.at_size(DEFAULT, effect_key);
+            d.press_ctrl(Key::K);
+            d.click_row(TARGET);
+            (closed, open)
+        });
+        d.observe(
+            "T20.1",
+            closed.as_deref() == Some(&format!("{} Effect E", crate::design::icons::PIN)[..])
+                && open.as_deref() == Some(&format!("{} Effect", crate::design::icons::PIN)[..]),
+            format!("Effect with Lookup closed: {closed:?}; open: {open:?}"),
+        );
         d.type_text(DAMAGE);
         d.press(Key::Enter);
         d.observe(
@@ -5493,6 +5514,31 @@ pub mod run_lookup {
             d.has_containing(SECOND_RESULT),
             "At 960x640 the best match opens with the other results visible",
         );
+        // V32 beside Lookup: the dice total comes, then changes to three digits, in its own
+        // slot; no control of the dock moves, and Lookup keeps the spell.
+        let sizes = [SMALL, DEFAULT, LARGE];
+        let before = sizes.map(|size| d.at_size(size, super::session_plan::dock_places));
+        for (expression, total) in [("1d1+3", 4), ("100d1", 100)] {
+            d.type_into("Dice", expression);
+            d.press(Key::Enter);
+            for (size, before) in sizes.into_iter().zip(&before) {
+                let (after, slot, lookup) = d.at_size(size, |d| {
+                    (
+                        super::session_plan::dock_places(d),
+                        super::session_plan::dice_total_in_its_slot(d, total),
+                        d.in_view(SPELL),
+                    )
+                });
+                d.observe(
+                    "r2a-V32-lookup",
+                    after == *before && after[0].is_some() && slot.is_ok() && lookup,
+                    format!(
+                        "At {size:?} after {expression}: dock {before:?} then {after:?}; \
+                         total {slot:?}; Lookup keeps the spell: {lookup}"
+                    ),
+                );
+            }
+        }
         let builtin_found = d.in_view(SPELL);
         d.observe_both("T2.1", "Roster and Next turn stay visible", |d| {
             d.in_view(NEXT_TURN)
@@ -5830,6 +5876,26 @@ pub mod run_long_names {
         d.click_row(LONG_NAME);
         d.state("long-name", Sizes::All);
         check_columns_stay(d, "Selected");
+        // T20.1: beside the longest name the dock has no Effect, and the name keeps its size
+        // and its words as before; E adds the effect through the Conditions tab's field in 4.
+        d.observe(
+            "T20.1",
+            !d.has("Effect: words for this row"),
+            "Effect gives up its place beside the longest name at 960x640",
+        );
+        d.begin_task();
+        d.click_row(LONG_NAME);
+        d.press(Key::E);
+        d.type_text("Bless 10 rounds");
+        d.press(Key::Enter);
+        d.goal_within("T20.1", "pin an effect beside the longest name", 4);
+        d.observe(
+            "T20.1",
+            d.nodes()
+                .iter()
+                .any(|node| node.name.starts_with(LONG_NAME) && node.name.contains("Bless 10")),
+            "The Conditions tab's field read the time",
+        );
         let row = d.row_words(LONG_NAME);
         d.observe(
             "Long names",
@@ -6981,6 +7047,69 @@ pub mod run_sync_conflict {
             "The Log keeps the full sheet change",
         );
         d.click(STOP_SYNC);
+        // T20.4, case D: a conflict on a 16-letter name, and three reminders on the current
+        // turn that start with the same words. The conflict comes first and stays whole or
+        // shortens as the dock's name does; Review and Undo stay; the reminders give way.
+        let current = current_participant(d).expect("a turn");
+        d.click_row(&current);
+        for words in [
+            "Wis save DC 15 (Hold Person) on its turn",
+            "Wis save DC 15 (Hold Person) ends 10 rounds",
+            "Wis save DC 15 (Hold Monster) on its turn",
+        ] {
+            d.press(Key::E);
+            d.type_text(words);
+            d.press(Key::Enter);
+        }
+        let rows_before = roster_places(d);
+        d.app_mut()
+            .encounters
+            .simulate_sync_conflict("Oren Thistlewick");
+        d.settle();
+        look_up(d, "hold person");
+        let undo = d.name_starting("Undo");
+        let line = |d: &Driver<'_>| {
+            let conflict = d.place_of("Conflict: Oren Thistlewick").or_else(|| {
+                d.nodes()
+                    .into_iter()
+                    .find(|node| node.name.starts_with("Sync conflict: Oren"))
+                    .map(|node| node.shown)
+            });
+            let review = d.place_of("Review");
+            let undo = d.place_of(&undo);
+            let reminders = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name.starts_with(&format!("Reminders for {current}")))
+                .map(|node| node.shown);
+            (conflict, review, undo, reminders)
+        };
+        for size in [SMALL, DEFAULT] {
+            let (conflict, review, undo, reminders) = d.at_size(size, line);
+            // The reminders, when they show at all, are in the room between Review and Undo.
+            let clear = conflict
+                .zip(review)
+                .zip(undo)
+                .is_some_and(|((conflict, review), undo)| {
+                    conflict.right() <= review.left() + 1.0
+                        && review.right() < undo.left()
+                        && reminders.is_none_or(|place| {
+                            place.left() > review.right() && place.right() < undo.left()
+                        })
+                });
+            d.observe(
+                "T20.4",
+                clear,
+                format!("{size:?}: conflict {conflict:?}, Review {review:?}, Undo {undo:?}, reminders {reminders:?}"),
+            );
+        }
+        d.state("conflict-and-reminders-beside-lookup", Sizes::Default);
+        d.press_ctrl(Key::K);
+        d.observe(
+            "T20.4",
+            roster_places(d) == rows_before,
+            "Reminders and a conflict move no row",
+        );
         d.begin_task();
         d.unreached(
             "wrong campaign, a duplicate character, and a live read after a reconnect (a simulated read goes through the real comparison)",
@@ -18994,6 +19123,49 @@ pub mod session_plan {
         ("Sable Harrowgate", "13"),
     ];
 
+    /// The dock's selected name, then its controls by name.
+    const DOCK_CONTROLS: [&str; 7] = [
+        "Amount",
+        "Conditions for this participant",
+        "Concentrating",
+        "Absent",
+        "Effect: words for this row",
+        "Dice",
+        "Roll dice",
+    ];
+
+    pub(super) fn dock_places(d: &Driver<'_>) -> Vec<Option<egui::Rect>> {
+        let name = d
+            .nodes()
+            .into_iter()
+            .find(|node| node.name.starts_with("Selected: "));
+        std::iter::once(name.map(|node| node.rect))
+            .chain(DOCK_CONTROLS.map(|name| d.place_of(name)))
+            .collect()
+    }
+
+    /// V32: the dice total keeps to its own slot: after Roll on the dice's line, or under Roll
+    /// at the end of the name's line, after the last control, never before the name. A total
+    /// of up to three digits shows whole.
+    pub(super) fn dice_total_in_its_slot(d: &Driver<'_>, total: i64) -> Result<(), String> {
+        let rolled = d.place_of(&format!("Rolled {total}")).ok_or("no total")?;
+        let roll = d.place_of("Roll dice").ok_or("no Roll")?;
+        let placed = if rolled.top() < roll.bottom() {
+            rolled.left() >= roll.right() && rolled.right() <= roll.right() + 4.0 + 32.5
+        } else {
+            let last = ["Absent", "Effect: words for this row"]
+                .into_iter()
+                .filter_map(|name| d.place_of(name))
+                .map(|place| place.right())
+                .fold(0.0, f32::max);
+            rolled.left() >= last && rolled.right() <= roll.right() + 0.5
+        };
+        let painted = d.painted_in(rolled);
+        (placed && painted.ends_with(&total.to_string()))
+            .then_some(())
+            .ok_or(format!("{rolled:?} paints {painted:?}; Roll {roll:?}"))
+    }
+
     fn roll_and_begin(d: &mut Driver<'_>) {
         d.click("Roll NPC initiative");
         for (name, total) in PLAYERS {
@@ -19320,10 +19492,21 @@ pub mod session_plan {
 
         // T12.4: dice beside the amount, with the stat block still open.
         d.click_row("Ember Cultist");
+        let sizes = [SMALL, DEFAULT, LARGE];
+        let before = sizes.map(|size| d.at_size(size, dock_places));
         d.begin_task();
         d.type_into("Dice", "1d1+3");
         d.press(Key::Enter);
         let cost = d.goal("roll dice beside the stat block");
+        // V32: the total has its own slot, and no control of the dock moves when it comes.
+        for (size, before) in sizes.into_iter().zip(before) {
+            let (after, slot) = d.at_size(size, |d| (dock_places(d), dice_total_in_its_slot(d, 4)));
+            d.observe(
+                "r2a-V32",
+                after == before && after[0].is_some() && slot.is_ok(),
+                format!("At {size:?}: dock {before:?} then {after:?}; total {slot:?}"),
+            );
+        }
         // iter-26-R SL1: the selected name keeps the dock's left edge at every size, and the
         // total never starts the name's line: at 960 it has its own place at the line's end.
         for size in [SMALL, DEFAULT, LARGE] {
@@ -21521,7 +21704,9 @@ pub mod run_rolls {
         let finished = |d: &Driver<'_>| {
             let rows_show_ac = [ATTACKER, TARGET].map(|row| {
                 d.row_node(row).is_some_and(|node| {
-                    !node.name.contains(" save ")
+                    // A save's result where AC is, such as `DEX save 14`. A Conc row that took
+                    // the damage names its own save's DC (F2, row 5), which is not that.
+                    !node.name.replace("Conc save DC", "").contains(" save ")
                         && d.painted_word_rect("AC", node.shown).is_some()
                         && d.painted_word_rect("DEX", node.shown).is_none()
                 })

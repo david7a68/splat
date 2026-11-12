@@ -184,6 +184,12 @@ run's header; `notice.rs:232-246`). Part 3 is measured after them:
 2. Else it is its count.
 3. Else it does not show. The current row has the reminders.
 
+**Measured in P4.** Beside a state notice, `Undo` keeps a target only while its names stay whole, so a long
+step shows the bare `Undo` and leaves room: at case D, with `⚠ Sync conflict: Oren Thistlewick  Review` and
+three reminders, the count `⚑ 3` shows between `Review` and `Undo` (`run-sync-conflict`). With the panel at
+960x640 and `Sync off for the party`, part 3 has no room, and the row has the reminders. The tests of F2 are
+T20.1 to T20.6 in `docs/ux-intent.md`, because F8 has T17.
+
 So no feature makes `Undo` shorter, and no state notice loses a word. One repair comes from rule K: when a
 conflict's name is wider than the line beside the bare `Undo`, the name shortens as the dock's name does
 (`dock_name`, `src/encounter_run/view.rs:5791`); the icon, `Conflict` and `Review` stay (section 2.5, row 20).
@@ -391,7 +397,7 @@ today and its fit rule. No row adds a line, changes a row's height or takes widt
 | 3 | The encounter editor | `· XP 550 of 2,500 · Low` (F1) at the end of the `Roster` heading, or of the tab row below 760 px | `src/encounters.rs:4381`; `:3932-3955` | One line. The numbers go first, then the word |
 | 4 | Arrivals | A group's XP is followed by `→ Moderate` (F1) | `src/encounter_run/view.rs:3468-3520` | Only where the totals and the status words are in the heading today (`:3479-3492`) and stay there |
 | 5 | A row marked `Conc` that takes damage | The row's second line ends with `Conc save DC 10` until the next step (F2) | `view.rs:6476-6486` | Only when the line keeps its lines and folds nothing that shows today. Else in the hover and accessible name only |
-| 6 | Run dock, line two | A quiet `Effect`, left of **Conditions** (F2) | `dock.rs:80-172` | F2: the word, then the icon, then not shown, before the name loses a word or its size |
+| 6 | Run dock, line two | A quiet `Effect`, `L` after **Absent** (F2). P4 measured that the line is laid out from the left, so a control left of **Conditions** moved **Conditions**, **Conc** and **Absent** in every view; the spare room is after **Absent** | `dock.rs:80-172` | F2: the word, then the icon, then not shown, before the name loses a word or its size |
 | 7 | The Add strip's **More** menu | Its last line is `Scene` (F3) | `src/design/components.rs:2339`; `src/timeline/page.rs:89` | A menu line. The strip's visible actions are as today |
 | 8 | A campaign World entry's reader | `Add to Log` after `Edit`, and after `Start fight` where it shows (F6) | The header: `src/world.rs:1733-1768` | Section 1.2: its word, then its icon, then not shown |
 | 9 | A campaign creature's or NPC's reader, with no run open | A quiet `Start fight` after `Edit` (F3) | The same header | Section 1.2: with its word, or not shown |
@@ -566,9 +572,10 @@ the DM gave the effect a time: a count of rounds, or `on its turn`.** Words with
 
 - **The Conditions tab** has the field today (`Other effect…`, `src/encounter_run/view.rs:2421-2445`). It
   stays, with its label and its place. It now reads a time when the DM types one.
-- **The dock** gets the quick way, `Effect` (key `E`): a quiet action on the dock's second line, left of
-  **Conditions**. That line is laid out from the right (Absent, Conc, Conditions), and the name takes the rest
-  (`dock.rs:80-172`). **The fit rule for `Effect`, stated once:** it shows with its word while the selected
+- **The dock** gets the quick way, `Effect` (key `E`): a quiet action on the dock's second line, `L` after
+  **Absent**. That line is laid out from the left (the name, `L`, Conditions, Conc, Absent), so the spare room
+  is after Absent, and there `Effect` moves no control (measured in P4; an earlier draft put it left of
+  Conditions, which moved the three controls after it). **The fit rule for `Effect`, stated once:** it shows with its word while the selected
   name keeps its size and its words; with its icon only while the name keeps both beside the icon; and not at
   all otherwise. `Death saves` and a roll's total, which that line holds at times (`dock.rs:109-143`), keep
   their places first. With several rows selected, the line is one sentence today (`target_words`, `dock.rs:197-213`) and has no
@@ -587,7 +594,7 @@ Round 3   Oren Thistlewick’s turn                    [+ Add to fight]  [> Next
  TURN  Frightened 9 · ⚑ +1
 …
 [Amount] [Damage  Enter]  Heal  🛡 Temp HP                      [1d20] [Roll]
-Oren Thistlewick                  ⚑ Effect E   Conditions C   ✧ Conc   Absent
+Oren Thistlewick   Conditions C   ✧ Conc   Absent   ⚑ Effect E
 ```
 
 **The dock while the DM adds an effect.** Line one does not change. Line two becomes one field.
@@ -605,7 +612,7 @@ wireframe of section 1.4. The dock:
 ```text
 Dagger +6   Fire Bolt +7                       ← the tile line of today
 [Amount] [Damage] Heal 🛡Temp HP        [1d20] [Roll]
-Cinder Wolf 2             ⚑  Conditions  ✧ Conc  Absent
+Cinder Wolf 2   Conditions  ✧ Conc  Absent  ⚑
 ```
 
 With Lookup or Notes open, `E` is text, as every letter is, and `Effect` takes a click. Case B is case D with
@@ -891,8 +898,9 @@ the improvised encounter by `Close run` (cut: after a restart nothing remembers 
 
 **The slice.** This design builds trackers for use **between fights**: the ledger, the Trackers view of
 Lookup, the Due list and the rail's `Due N` (P9). In a fight the DM uses Trackers through Ctrl+T, and the owner
-accepted this cost (section 7), so the run has no part of F4. Marks that a round raises are dropped, and day
-marks come in P11.
+accepted this cost (section 7), so the run has no part of F4. Marks that a round raises are dropped. Day
+marks are built in P11: the Timeline's day count raises a Due row, with the same words, rolls, proposed changes,
+`Done`, `Dismiss`, ledger entries and Undo as a mark at a value.
 
 The data model of [World and house rules](world-and-house-rules.md) stands, and this pull request changes
 that document in place: Trackers is a view of Lookup, the ledger is the Undo, a mark's table can name what
@@ -1012,8 +1020,24 @@ action. Escape closes Lookup.
 **What stays with the DM.** Awarding Favor, moving a rival, what a bell does on the map, and every rule that a
 tracker's number stands for. A proposed change applies only when the DM presses `Done`.
 
-**Not built, and why.** Any tracker part in a run (the owner accepted this cost; section 7), and day marks
-(P11). The parts in
+**Day marks (P11).** A day mark (`at`, or `every` with `from`, in days) is open while the day count of the
+Timeline has reached its day and no ledger entry ends it; raising it writes nothing. Its row starts with its day:
+`Day 32: Move the rival powers.` Days of one mark that are due together are one row, as
+[World and house rules](world-and-house-rules.md) says: `End of month ×3. Next: Day 32. …`, with `Next` in the place
+of `Done` (it ends the oldest day) and `Dismiss all` in the row's menu. Day rows come first, oldest day first, then
+the notices of marks at a value. The Due count counts rows, so a row of three days is `Due 1`. The result line says
+`End of month, Day 32 done.` and `Undo: End of month, Day 32 done`, or `Undo: End of month ×3 dismissed`. The day
+count has one answer, which the view, the rail's count and every act read (`trackers::today`). It is not known while
+`Timeline.md` cannot be read, while a Timeline edit waits to be saved and the file changed, or cannot be read, under
+it, and while the Timeline waits for the DM's choice. Then no day row shows, the top of the scroll area says the
+Timeline's words (`Timeline.md changed on disk. Your draft is safe until you choose.`, or why it cannot be read)
+and `No day mark shows until the Timeline is read.`, no act on a day row records, and the draft is kept. When the
+file reads again or the choice is made, the rows come back. An act on a day row reads the Timeline again at the
+click; when the row's day is no longer due, or the days of `Dismiss all` changed, it writes nothing and says so on
+the result line. The rail's
+`Due N` counts day rows too; the run shows nothing more.
+
+**Not built, and why.** Any tracker part in a run (the owner accepted this cost; section 7). The parts in
 [World and rules: later](world-and-rules-later.md). An action on a notice for a group (**Add to fight** is the
 route, as today). A `Make house rule note` action (no band holds it today; the DM sets the note's properties).
 
@@ -1733,7 +1757,7 @@ the rule in this document is the text.
 - **W16, new, Close the evening and open the next:** "Rewards, what changed in the world, the recap and the
   open threads are where the next step needs them, with nothing typed twice." (T18.1 to T18.4)
 - **W17, new, Run a house rule's numbers:** "Between fights, one press records a change, a due notice stays
-  in view, and the history is a file." (T19.1 to T19.4)
+  in view, and the history is a file." (T19.1 to T19.5)
 
 **New rows for section 8.**
 
@@ -1759,6 +1783,7 @@ the rule in this document is the text.
 | T19.2 | A quick action takes 1, also on an instance's line. `Undo` steps back through the acts of the session being played, also after a restart. The opposite action corrects a value in 1 |
 | T19.3 | A value that passes a mark raises a Due row above the trackers and the rail's count, on every page. The Run page shows no tracker part except the rail's count |
 | T19.4 | Case D, beside the Session page: three notices with four rolls and the result line are in view with no scroll |
+| T19.5 | The Timeline's day count raises a day mark's Due row and the rail's count, and raising it writes nothing. Days that pass in one step are one row with `Next`. A clock that goes back takes the row away and keeps what was done (P11) |
 | G6 | The unchanged evening of the audit gives the counts it gave before |
 | G7 | The plain campaign differs from its reference only by rows of section 2.5 |
 
@@ -1832,7 +1857,7 @@ the reference of G7.
 | **P8** | F5, with rows 11, 16 and 18 of section 2.5. The draft's provenance, and the exact inverse of `Undo carry over` | `src/sessions.rs`, `src/sessions/page.rs` (`last_time_block`, `recap_preview`), `src/markdown_view.rs` | P3 | New `session-carry-over`. Extend `session-plan` |
 | **P9** | F4, the slice between fights: house rule notes, in play, the ledger with its save and its Undo, quick actions, instances, marks at a value with `for:`, the Due rows, the rail's count, `Add to Timeline`, the Trackers view and Ctrl+T. In the Tournament example: `for:` on the bells, `activation` not pinned (P10, which needed it, is dropped), and no line about **Make house rule note** | New `src/trackers.rs`, `src/trackers/ledger.rs`, `src/trackers/view.rs`. `src/lookup.rs`, `src/lib.rs`, `src/campaign_content.rs`, `crates/core`, the example note | P1a, P1c | New `trackers`, with the Session page's plan tab and `Start fight` beside the view. Extend `run-lookup`, `nav-state` |
 | **P10** | Dropped (section 7): marks that a fight raises | – | – | – |
-| **P11** | Day marks | – | P9 | – |
+| **P11** | Day marks. Built: `at` and `every` with `from`, in days, on the Timeline's day count, `Next` and `Dismiss all` | `src/trackers.rs`, `src/trackers/ledger.rs`, `src/trackers/view.rs`, `src/lib.rs` (the act reads the day count at the click) | P9 | Extend `trackers` (T19.5) |
 | **P12** | The audit, again. Extend the evening to use every feature, measure it, and add the scripts for J2, J3, J4 and J6. Run G6 and G7 on the whole | `src/visual_tests/dm_audit.rs`, `artifacts/dm-audit/` | All that are built | The audit's captures, and `plain-evening` |
 
 **What can be built at the same time.**

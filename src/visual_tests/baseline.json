@@ -47,6 +47,7 @@
       "run-add-creature": 8,
       "run-continue": 27,
       "run-edge-states": 5,
+      "run-effects": 2,
       "run-large-roster": 2,
       "run-long-names": 9,
       "run-lookup": 3,
@@ -67,7 +68,7 @@
       "share-to-package": 3,
       "signed-in": 17,
       "stat-formats": 3,
-      "trackers": 3,
+      "trackers": 5,
       "travel-checks": 8,
       "world": 1,
       "world-edit-round-trip": 1,
@@ -149,6 +150,7 @@
       "run-add-creature": 42,
       "run-continue": 120,
       "run-edge-states": 44,
+      "run-effects": 14,
       "run-folder-defect": 3,
       "run-large-roster": 16,
       "run-long-names": 37,
@@ -160,7 +162,7 @@
       "run-resume": 7,
       "run-rolls": 61,
       "run-roster-conflict": 24,
-      "run-sync-conflict": 41,
+      "run-sync-conflict": 43,
       "run-sync-states": 32,
       "session-carry-over": 28,
       "session-notes": 213,
@@ -172,7 +174,7 @@
       "share-to-package": 35,
       "signed-in": 66,
       "stat-formats": 42,
-      "trackers": 33,
+      "trackers": 39,
       "travel-checks": 26,
       "world": 60,
       "world-broken-note": 76,
@@ -309,6 +311,12 @@
       "see everyone absent": 16,
       "see the run changed on disk": 19
     },
+    "run-effects": {
+      "T20.1: pin an effect by the pointer beside Lookup": 5,
+      "T20.1: pin an effect with a count to the selected row": 3,
+      "T20.5: roll a spent recharge on the row": 1,
+      "T20.5: spend a use on the row": 1
+    },
     "run-folder-defect": {
       "edit the run folder with no draft": 5
     },
@@ -317,6 +325,9 @@
       "advance through a full round of 20": 20,
       "open a run with 12 participants": 1,
       "open a run with 20 participants": 1
+    },
+    "run-long-names": {
+      "T20.1: pin an effect beside the longest name": 4
     },
     "run-lookup": {
       "T2.1: read a spell from a run": 2,

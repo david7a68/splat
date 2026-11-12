@@ -964,7 +964,11 @@ fn history_summary(
                         let rest: Vec<String> = (!row.present)
                             .then(|| "Absent".to_owned())
                             .into_iter()
-                            .chain((!row.conditions.is_empty()).then(|| row.conditions.join(", ")))
+                            .chain((!row.conditions.is_empty()).then(|| {
+                                let words: Vec<_> =
+                                    row.conditions.iter().map(|c| c.words()).collect();
+                                words.join(", ")
+                            }))
                             .collect();
                         if !rest.is_empty() {
                             let width = ui.available_width();
