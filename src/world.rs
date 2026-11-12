@@ -1918,10 +1918,10 @@ pub struct Reader {
     pub day: Option<u64>,
     /// Each open `Add to Log` field, by its entry and the session it was opened in. Its words
     /// wait while the reader shows another entry; a restart loses them, as every held form.
-    log_fields: HashMap<(Uuid, Option<String>), design::AddField>,
-    /// The next draw selects the field's words: they came from a done scene, so typing
-    /// replaces them and Enter keeps them.
-    log_select: bool,
+    log_fields: HashMap<(Uuid, Option<String>), LogField>,
+    /// The entries whose edit form is open in the other reader (Lookup's, or the World
+    /// page's). Their Log field waits too, so Splat never makes its own disk conflict.
+    pub edited_elsewhere: Vec<Uuid>,
     /// The World page's result for this draw. It sits where every World result sits: below the
     /// file line, so the title never moves.
     pub page_result: Option<PageResult>,
@@ -1951,6 +1951,14 @@ pub(crate) fn page_result(ui: &mut egui::Ui, result: &PageResult) -> bool {
         }
         PageResult::Discarded(name) => design::draft_discarded(ui, name),
     }
+}
+
+/// One open `Add to Log` field: its words, and whether its next draw selects them.
+#[derive(Default)]
+struct LogField {
+    field: design::AddField,
+    /// The words came from a done scene, so typing replaces them and Enter keeps them.
+    select: bool,
 }
 
 /// The least room that `Add to Log`'s field keeps for a sentence when its stamp shares its line.
@@ -2033,14 +2041,14 @@ impl Reader {
     /// Open `Add to Log` for this entry, as a done scene's `Add to Log` does. The field starts
     /// with `words`, selected, unless the DM already typed words there.
     pub fn open_log(&mut self, id: Uuid, words: &str) {
-        let field = self
+        let open = self
             .log_fields
             .entry((id, self.played.clone()))
             .or_default();
-        field.focus = true;
-        if field.words.trim().is_empty() {
-            words.clone_into(&mut field.words);
-            self.log_select = !words.is_empty();
+        open.field.focus = true;
+        if open.field.words.trim().is_empty() {
+            words.clone_into(&mut open.field.words);
+            open.select = !words.is_empty();
         }
     }
 
@@ -2330,6 +2338,7 @@ impl Reader {
                 self.log_fields
                     .entry((id, self.played.clone()))
                     .or_default()
+                    .field
                     .focus = true;
             }
         });
@@ -3006,15 +3015,16 @@ impl Reader {
         if !self.log_fields.contains_key(&key) {
             return None;
         }
-        if editing {
+        if editing || self.edited_elsewhere.contains(&item.entry.id) {
             design::message(ui, Tone::Info, "Save or discard your edit first.");
             return None;
         }
         let stamp = self
             .line_stamp()
             .map(|stamp| format!("{}:", sessions::plain_links(&stamp)));
-        let select = std::mem::take(&mut self.log_select);
-        let field = self.log_fields.get_mut(&key)?;
+        let open = self.log_fields.get_mut(&key)?;
+        let select = std::mem::take(&mut open.select);
+        let field = &mut open.field;
         let name = format!("Log line for {}", item.entry.name);
         let draw = |ui: &mut egui::Ui, field: &mut design::AddField| {
             design::add_field(
@@ -5326,7 +5336,7 @@ mod tests {
         let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
         let item = &index.items[index.position(hob).unwrap()];
         lookup.open_log(hob, "the ropes");
-        lookup.log_fields.get_mut(&key).unwrap().words = "Told who burned the ropes.".into();
+        lookup.log_fields.get_mut(&key).unwrap().field.words = "Told who burned the ropes.".into();
 
         // An edit in Obsidian a moment before, while the field holds typed words: the line
         // goes after it, in the entry's new Log heading.
@@ -5367,7 +5377,7 @@ mod tests {
         let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
         let item = &index.items[index.position(hob).unwrap()];
         lookup.open_log(hob, "");
-        lookup.log_fields.get_mut(&key).unwrap().words = "Kept.".into();
+        lookup.log_fields.get_mut(&key).unwrap().field.words = "Kept.".into();
         let folder = dir.path().join("NPCs");
         fs::set_permissions(&folder, fs::Permissions::from_mode(0o555)).unwrap();
         let failed = lookup.add_log_line(&campaign, item, "Kept.");
@@ -5380,7 +5390,7 @@ mod tests {
                 .is_some_and(|error| error.contains("NPCs/Hob.md"))
         );
         assert_eq!(fs::read_to_string(&path).unwrap(), edited);
-        assert_eq!(lookup.log_fields[&key].words, "Kept.");
+        assert_eq!(lookup.log_fields[&key].field.words, "Kept.");
 
         // A note that cannot be read, and a note renamed or deleted under the open field: the
         // act names the file and writes nothing.
@@ -5402,11 +5412,18 @@ mod tests {
                 .is_some_and(|error| error.contains("NPCs/Hob.md"))
         );
         assert!(!path.exists());
-        assert_eq!(lookup.log_fields[&key].words, "Kept.");
+        assert_eq!(lookup.log_fields[&key].field.words, "Kept.");
 
-        // A done scene's words fill only an empty field: words the DM typed stay.
+        // A done scene's words fill only an empty field: words the DM typed stay, and nothing
+        // selects them. Clearing Lookup's search keeps them too.
         lookup.open_log(hob, "the ropes");
-        assert_eq!(lookup.log_fields[&key].words, "Kept.");
+        assert_eq!(lookup.log_fields[&key].field.words, "Kept.");
+        lookup.clear();
+        assert_eq!(lookup.log_fields[&key].field.words, "Kept.");
+        // Each field keeps its own request to select its words.
+        lookup.open_log(oren, "paid the toll");
+        assert!(!lookup.log_fields[&key].select);
+        assert!(lookup.log_fields[&(oren, lookup.played.clone())].select);
     }
 
     #[test]

@@ -606,12 +606,18 @@ impl Reader {
         self.picker.is_some() || self.form_focused
     }
 
-    /// Start again with nothing on show. Unsaved changes stay.
+    /// Start again with nothing on show. Unsaved changes stay: edit forms, and Log lines.
     pub fn clear(&mut self) {
         *self = Self {
             edits: std::mem::take(&mut self.edits),
+            log_fields: std::mem::take(&mut self.log_fields),
             ..Self::default()
         };
+    }
+
+    /// The entries whose edit form is open in this reader.
+    pub fn edit_forms(&self) -> Vec<Uuid> {
+        self.edits.keys().copied().collect()
     }
 
     /// A draft whose note is gone, or the Undo for one, is on show.

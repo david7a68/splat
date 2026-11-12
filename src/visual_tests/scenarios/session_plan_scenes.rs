@@ -388,14 +388,23 @@ pub fn log_from_play(d: &mut Driver<'_>) {
 
     // The reader's header, with a 19-letter title: `Add to Log` next to Edit gives way first, to
     // its icon, then away; `Start fight` keeps its word or does not show; the title keeps its
-    // width.
-    for size in [SMALL, DEFAULT, LARGE] {
+    // width. Beside Lookup at 960 neither fits, at 1200 `Start fight` alone, and wider both
+    // words (section 1.2, measured).
+    for (size, log_shown, start_shown) in [
+        (SMALL, false, false),
+        (DEFAULT, false, true),
+        (LARGE, true, true),
+    ] {
         let (fits, detail) = d.at_size(size, |d| {
             let (log, start, order) = reader_header(d, VARRA_BLACK);
-            let icon =
-                log.is_some_and(|log| log.width() <= crate::design::Density::Read.control() + 0.5);
+            let word =
+                log.is_some_and(|log| log.width() > crate::design::Density::Read.control() + 0.5);
             (
-                order && (log.is_none() || icon || start.is_some()),
+                order
+                    && d.has(&format!("Edit {VARRA_BLACK}"))
+                    && log.is_some() == log_shown
+                    && (!log_shown || word)
+                    && start.is_some() == start_shown,
                 format!("Add to Log {log:?}, Start fight {start:?}"),
             )
         });
@@ -427,4 +436,26 @@ pub fn log_from_play(d: &mut Driver<'_>) {
             && fs::read_to_string(&path).unwrap() == before,
         "After Discard the field opens with the scene's words, and the note is as before",
     );
+    d.press(Key::Escape);
+
+    // An edit form for her on the World page holds back the Log field in Lookup too.
+    d.click("Close Lookup");
+    d.click(NAV_WORLD);
+    d.click_starting(&format!("{VARRA_BLACK} · "));
+    d.click(&format!("Edit {VARRA_BLACK}"));
+    d.type_into_editor(" Draft.");
+    d.click(NAV_SESSIONS);
+    show_plan(d);
+    d.click(&long_menu);
+    d.click(&long);
+    d.observe(
+        "T18.2",
+        d.visible_text("Save or discard your edit first.")
+            && !d.has(&field)
+            && fs::read_to_string(&path).unwrap() == before,
+        "An edit form on the World page holds back the Log field in Lookup",
+    );
+    d.click("Close Lookup");
+    d.click(NAV_WORLD);
+    d.click("Discard");
 }

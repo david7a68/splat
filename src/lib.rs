@@ -1191,6 +1191,9 @@ impl Splat {
         let played = self.sessions.current_link();
         let day = timeline::day_now(&self.timeline.events);
         let start_blocked = self.encounters.plan_blocked();
+        // An edit form in one reader holds back the other's Log field for that entry.
+        self.world_page.reader.edited_elsewhere = self.lookup.reader.edit_forms();
+        self.lookup.reader.edited_elsewhere = self.world_page.reader.edit_forms();
         let mut start_fight = None;
         for reader in [&mut self.world_page.reader, &mut self.lookup.reader] {
             reader.start_blocked = start_blocked;

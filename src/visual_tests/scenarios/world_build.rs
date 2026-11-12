@@ -4166,7 +4166,7 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
         let (placed, detail) = d.at_size(size, |d| {
             let (log, start, order) = reader_header(d, "Rook Ambry");
             (
-                (size == SMALL || start.is_some()) && order,
+                (size == SMALL || (start.is_some() && log.is_some())) && order,
                 format!("Add to Log {log:?}, Start fight {start:?}"),
             )
         });
