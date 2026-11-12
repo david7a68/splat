@@ -9509,7 +9509,7 @@ mod tests {
                     "party".into(),
                     hero.clone(),
                     &Mapping::new(),
-                    false,
+                    true,
                 )
                 .unwrap()
             })
@@ -9529,7 +9529,7 @@ mod tests {
             side: Some("party".into()),
             ..Overrides::default()
         };
-        let group = group_of(
+        let mut group = group_of(
             "Mixed",
             "enemies",
             vec![
@@ -9537,6 +9537,8 @@ mod tests {
                 (cr5.clone(), 1, ally),
             ],
         );
+        // The group's own total, as the loader sums it, holds both members.
+        Arc::get_mut(&mut group).unwrap().xp = 2000;
         run.groups = Some(Arc::new(vec![group.clone()]));
         run.scale = Some(Arc::new(crate::difficulty::Scale {
             budgets: Some(crate::difficulty::builtin_budgets()),
