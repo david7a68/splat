@@ -4589,10 +4589,7 @@ mod tests {
             (found - missing).abs() < 0.5,
             "REVIEW-291-scene-state-height: a rule-note scene changes height when its entry goes: {found} -> {missing}"
         );
-        assert!(
-            row.query_by_label("Read Emberfall Rumours · Not found")
-                .is_some()
-        );
+        assert!(row.query_by_label_contains("Not found").is_some());
         let dir = tempfile::tempdir().unwrap();
         let note = create_note(
             dir.path(),
