@@ -2850,15 +2850,12 @@ struct NextAction {
     owed: f32,
     /// Where the pointer rested when the room was lost.
     pointer: Option<egui::Pos2>,
-    /// A footer took room while it was whole, and no scroll of the DM's came since.
+    /// A footer took room while it was whole, and no reveal or scroll of the DM's came since.
     promised: bool,
     /// The last reveal stopped at the room lost, short of what the row needed.
     capped: bool,
     /// For checks: the room lost, what the row needed and the scroll, at the last reveal.
     last: (f32, f32, f32),
-    /// The row's top before the last reveal: a row still there in the next pass did not move,
-    /// so the scroll did not take.
-    from: Option<f32>,
 }
 
 /// A next action as the reveal saw it in the last finished pass, for checks.
@@ -2867,7 +2864,7 @@ struct NextAction {
 pub(crate) struct NextSeen {
     pub rect: Rect,
     pub whole: bool,
-    /// A footer took room while it was whole, and no scroll of the DM's came since.
+    /// A footer took room while it was whole, and no reveal or scroll of the DM's came since.
     pub promised: bool,
     /// The last reveal stopped at the room lost: the row needed more (it moved, as when a
     /// narrower window puts it in one column).
@@ -2900,6 +2897,10 @@ pub(crate) fn next_actions(ctx: &egui::Context) -> Vec<NextSeen> {
 /// Every primary `Action` does this by itself. Call it for an action the DM needs next that is
 /// not drawn as the primary (a retry while another form owns the accent fill).
 pub fn keep_above_footer(ui: &Ui, response: &Response) {
+    // A pass that only measures, or a part that is not shown, owes nothing.
+    if ui.is_sizing_pass() || !ui.is_visible() {
+        return;
+    }
     let (ctx, rect, clip) = (ui.ctx(), response.rect, ui.clip_rect());
     let room = FooterRooms::this_pass(ctx).into_iter().find(|room| {
         !room.footer.contains_rect(clip) && room.band.x_range().intersects(rect.x_range())
@@ -2929,13 +2930,6 @@ pub fn keep_above_footer(ui: &Ui, response: &Response) {
             input.pointer.any_down() || input.pointer.any_pressed() || input.pointer.any_released();
         (pointer, over && acts, pressing)
     });
-    // A reveal ends its promise in the next pass, unless the row did not move at all (the scroll
-    // did not take); a later move of the layout is not the reveal's.
-    if let Some(from) = next.from.take()
-        && (rect.top() - from).abs() >= 0.5
-    {
-        next.promised = false;
-    }
     // The DM's own scroll or press in the pane ends what a footer owed the row.
     if scrolled {
         next.promised = false;
@@ -2985,7 +2979,7 @@ pub fn keep_above_footer(ui: &Ui, response: &Response) {
         top -= by;
         next.capped = by < need;
         next.last = (next.owed, need, by);
-        next.from = Some(rect.top());
+        next.promised = false;
         next.owed = 0.0;
         None
     };

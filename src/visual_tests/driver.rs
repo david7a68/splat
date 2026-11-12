@@ -2760,9 +2760,9 @@ impl<'a> Driver<'a> {
             &window,
         ));
         // R3f: a pane's content ends above its message footer. Each next action the reveal saw
-        // (every primary, and each action marked with `keep_above_footer`) that a footer took
-        // room from while it was whole is whole now, unless a guard holds the reveal back or the
-        // row needed more than the room lost (the reveal stops there).
+        // (every primary, and each action marked with `keep_above_footer`), also one wholly
+        // hidden, that a footer took room from while it was whole has had its reveal: none is
+        // still cut with its reveal owed and no guard holding it back.
         // Each state with a footer names its words.
         let bands = self.footer_bands();
         if !bands.is_empty() {

@@ -11693,6 +11693,7 @@ pub mod session_notes {
                 .map(|node| node.rect.top())?;
             Some((row, field))
         };
+        save_row_whole(d);
         let row_clean = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, save_row));
         // The height of the room the footer takes (the footer and `S` above it).
         let footer_room = |d: &Driver<'_>| {
