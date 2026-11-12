@@ -724,9 +724,11 @@ impl<'a> Action<'a> {
                 .align_size_within_rect(size, allocated)
                 .translate(vec2(-padding, 0.0));
             let rect = rect.with_min_x(rect.min.x - icon_width);
-            // The hang never leaves the pane: where the text edge is the clip's own (Lookup's
-            // reader), the target ends at the clip. The icon and the words keep their places.
-            let target = rect.with_min_x(rect.min.x.max(ui.clip_rect().left()));
+            // The hang never leaves the pane: where the text edge is a scroll area's own edge
+            // (Lookup's reader), the target ends there. A scroll area's clip reaches
+            // `clip_rect_margin` past its edge. The icon and the words keep their places.
+            let edge = ui.clip_rect().left() + ui.visuals().clip_rect_margin;
+            let target = rect.with_min_x(rect.min.x.max(edge));
             (rect, ui.interact(target, id, Sense::click()))
         } else {
             ui.allocate_exact_size(vec2(width, self.height), Sense::click())
