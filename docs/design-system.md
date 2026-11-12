@@ -206,7 +206,9 @@ state. An on toggle uses `selected`, its word and an icon or check, without acce
 action that loses something. Keep Delete and Remove in row menus.
 
 A save row keeps its state and quiet `Discard` at the left and `Save` at the right. A draft that Save's own check
-refuses says `Invalid`, changed or not: validity comes before whether the text changed. Other clean rows say `No
+refuses says `Invalid`, changed or not: validity comes before whether the text changed. An encounter draft is
+the exception: it says `Invalid` only while it has changes, because a clean one has nothing for Save to refuse, and
+its rows' warnings name the faults. Other clean rows say `No
 changes`, unless Save is enabled to repair something the file holds: then the state names the write with the warning
 icon (`Save replaces the unread choice on line 23 with these settings`), and `Ctrl+S` saves exactly when the button
 can. `No changes to save.` belongs only to blocked Save's hover text and accessible description. A save row
@@ -792,10 +794,11 @@ the width; a longer date wraps in it, with its first line on the name's line. A 
 column empty. A row in Here, Members or History is one paragraph: the name's link, then what the note is, wrapping at
 the name's edge with one `Small` line pitch; the link keeps its 24 px target on the first line, with that room above and
 below the paragraph. Lookup's `Use your own names` never replaces an unsaved NPC on the World page. World opens on its own card,
-which says `Lookup keeps <Lookup’s NPC>. Save or discard <this card’s NPC> to move <Lookup’s NPC> here.` while Lookup
-holds that NPC, so each of the two NPCs has its name.
+which says `<Lookup’s NPC> is not saved. It is in Lookup. Save or discard <this card’s NPC> to show <Lookup’s NPC> here.`
+while Lookup holds that NPC, so each of the two NPCs has its name. It is a state, so it is an info `small_message` with
+its icon and bar.
 An unsaved generated NPC on the World page is a held draft. Only Save NPC and Discard end it. Every other path keeps
-it: Problems, Open questions, another note, a repair, New, a reveal from another page and Lookup's link. While another
+it: Things to check, Open questions, another note, a repair, New, a reveal from another page and Lookup's link. While another
 view is open, one row above that view says `Unsaved NPC: <name> · Show`, so the view stays usable. Show, Generate NPC
 and Lookup's link open its card again; Reroll on the card replaces it. Discard says `<name> draft discarded.` with
 `Undo discard`, which brings back the same NPC until another view opens. Closing the app or changing the campaign
@@ -804,15 +807,18 @@ it is a link that opens the NPC's card on World from any page.
 
 Every World result with an Undo (a value, name, edit, identity or file change, and a discarded edit draft) and every
 edit form with its `Undo reload` belong to the campaign that made them: Lookup keeps its reader across a campaign change, and the result shows, and its Undo acts,
-only in that campaign. A World result is one message form in one place: `message` (or the shared Undo message) below the file line, where
-`<file> is now a separate note.` sits, so the title never moves. `Note repaired.` is a success message there, and
-`<name> draft discarded.` sits there below the open note's file line. The edit form's save result (`Changes saved.`
-with `Undo changes`, or `Your changes are already in the note.`) sits there too, and a later result on the same note
-replaces `Note repaired.`. An Undo message centres its words on its Undo target's line, so its words start 4 px lower
-than a message without an action. In an edit form, which has no file line, a result
-sits below the title. With no note open, it sits below the empty state's words.
-A finished change has the success tone, as Library's results have: `Changes saved.`, a value change beside its row
-(`In: … → …`, `Stat block: … → …`, Status, Part of), `Name changed to <name>.`, `Note repaired.` and
+only in that campaign. Every World and Lookup result, and the error of the last action, sits in one place: the pane's message footer (Widgets,
+Message footer), pinned below the reader, so the title, the file line, the value rows, `Add to fight` and the prose
+never move when a result comes or goes (round 26). That holds for `<file> is now a separate note.`, `Note repaired.`,
+`<name> draft discarded.`, the edit form's save result (`Changes saved.` with `Undo changes`, or `Your changes are
+already in the note.`), a name or file rename, and every value change. In the edit form and with no note open, the
+result is in the same footer. A later result on the same note replaces `Note repaired.`. Results with a live Undo come
+first, then the error. An older Undo whose file a newer result wrote refuses and leaves the bytes; the newer Undo goes
+first. The note's own faults (unread values, a place loop, a duplicate's repair, a lost draft) are the note's state, not
+results: they stay below the file line.
+A finished change has the success tone, as Library's results have: `Changes saved.`, a value change
+(`Stat block set to Guard.`, `In set to North Gate. It was Watch House.`, `In cleared. It was Ashfall Keep.`; Status and
+Part of alike), `Name changed to <name>.`, `Note repaired.` and
 `<file> is now a separate note.` (`world::CHANGED`). Encounters' finished changes have it too: a replacement
 (`Replaced Unknown creature with Ember Cultist.`, `2 Cinder Wolf rows replaced with Guard.`), a removed member or
 group, a group moved or deleted on save, and a deleted run. A result that wrote nothing keeps the info tone:
@@ -823,7 +829,7 @@ reader with no file line.
 Set values show labelled rows: Stat block, In, Part of and Status. An NPC also shows its empty Stat block row. A full NPC reader's kind line shows NPC and its owner; Status stays in its own row. A compact reader keeps status on the kind line because it has no Status row. A compact reader has no file line either: while a duplicate-note repair message shows, its kind line drops the fault and names the open file instead (`NPC · Campaign · NPCs/Rook Ambry copy.md`). The result rows keep the fault. Use a fixed label column, aligned
 values and a 32 px pitch. Change uses one column at the widest visible value in the block plus an `L`
 gap, capped at the value measure. Values wrap within their column, with Change level with the value's first line (a missing link's name line, not
-`Not found` below it). Read mode hides empty relationship and status values. An NPC keeps its empty Stat block row and Change action, so assigning its first stat block still takes three interactions from the reader. This row says `not set`. Edit on the title line opens all fields, including empty ones. A typed page with no set values shows its prose directly, except for this NPC Stat block row: with no row, the value block adds no gap, so the prose starts as far below the file line as a plain note's does. Missing links retain names and keep `Not found` on one line beside a label column. A missing link's icon and name
+`Not found` below it). Read mode hides empty relationship and status values. An NPC keeps its empty Stat block row and Change action, so assigning its first stat block still takes three interactions from the reader. This row says `not set`. A set value is `Body` in the text colour, as a set link is, so a value and its absence differ at a glance; only `not set` and `not read` stay muted `Small`. Edit on the title line opens all fields, including empty ones. A typed page with no set values shows its prose directly, except for this NPC Stat block row: with no row, the value block adds no gap, so the prose starts as far below the file line as a plain note's does. Missing links retain names and keep `Not found` on one line beside a label column. A missing link's icon and name
 are in `Body` in the warning tone, as large as a set link; only ` · Not found` is `Small`. In a narrow pane (Lookup beside World), each label stands
 above its value with an `S` gap above the label. The value then keeps the label column's room, and only Change and its
 `L` gap come off its width; there a missing link's name keeps its line, wrapping by whole words only when it must, and
@@ -855,12 +861,11 @@ type groups. The empty Status field in Edit shows the faint placeholder `A short
 Change pickers focus search. Place choices start at the value column beside In, with one file link and a
 bordered `Always use this one` action on each row; the link centres on the action's line. Change and the choice actions share one column: the
 widest value or file link in the block plus an `L` gap. A saved choice changes only its key and has Undo,
-which checks the file before writing. Always use this one saves a path with Undo. Change messages name
-both values as the rows show them: the name of the note a link opens, else the words in the file
-(`In: Ashfall Keep → not set.`, not the alias written in the file). When another World note has the same name, a
-result and a picker name the folder too (`In: Watch House → Watch House (Locations).`), so the DM can tell which file
-the change chose. They follow Change when they fit, otherwise sit below the whole row block. Only a Change message that
-names a row value sits there; every other World result sits below the file line. A place that matches more than one
+which checks the file before writing. Always use this one saves a path with Undo. Change messages are
+sentences that name both values as the rows show them: the name of the note a link opens, else the words in the file
+(`In cleared. It was Ashfall Keep.`, not the alias written in the file). Only the note's Log lines keep the arrow form
+(`In Ashfall Keep → not set.`). When another World note has the same name, a result and a picker name the folder too
+(`In set to Watch House (Locations). It was Watch House.`), so the DM can tell which file the change chose. They sit in the pane's footer, as every World result does. A cleared value's row goes with the value. A place that matches more than one
 note is the link `⚠ <name> · N matches`: the warning icon is its own glyph in the warning colour before the link
 words, so the underline covers only the words, as in `status_link`. Its accessible name keeps the icon. Different file and
 stored names offer two safe choices below the warning's words, `L` apart: `Rename the note to <file name>`, with a
@@ -922,7 +927,7 @@ Splat stays. Groups compare by target, not spelling: a link Obsidian respelled (
 path) is the same group, and a group both sides have keeps the note's spelling on one line. A link to no
 single note compares by its link target; plain text compares as written.
 Edit shows `not set` for null, empty and whitespace-only optional links. Saving other fields keeps their
-source text. World calls each file a note in related-note headings, Problems and conflict messages.
+source text. World calls each file a note in related-note headings, Things to check and conflict messages.
 `Also linked from` and the page links under `From other notes` name a copy of the note, or another note with the same
 name, by its path (`NPCs/Rook Ambry copy.md`), as search rows do.
 A duplicate note's values read as every reader's rows do: a muted label, then the value as a link that opens it. Only
@@ -931,8 +936,11 @@ link target. An `L` gap separates the choices, and an `M` gap follows the last c
 
 Task marks at the start of a list item show an empty box for `[ ]` and a checked box for `[x]`, with the accessible names `Open` and `Done`. Stored Markdown stays unchanged. Other brackets stay as text.
 
-A note row has selected fill only while its reader is open. Open questions, Problems, creation and repair
-keep the remembered note without selected fill.
+A note row has selected fill only while its reader is open. Open questions, Things to check, creation and repair
+keep the remembered note without selected fill. Open questions answers "which questions are open?": each question is
+`Body` first and opens its note at its heading; `In <note>` follows in `Small`. Dates outside events use the same form.
+`Things to check` lists advice (no summary, nothing points here, pages to write), not faults: its row counts
+suggestions (`3 suggestions`), and `needs fixing` stays for faults only.
 
 Broken notes stay under Cannot be read. A note that cannot be read is an error in its row, the header count (and
 Lookup's) and its pane: each row's second line is the error icon in the error colour, then the cause in muted words; a
@@ -957,7 +965,7 @@ permission) cannot open in the source editor. Its pane keeps the title and a fil
 editor link, because no editor can open the file either. When a change such as Part of finds an open note that can no
 longer be read, its error and the note's file line also offer no editor link until the file reads again. Its pane leads with an error that
 names the file only as `this note`, because the title and file line name it (`Splat cannot read this note as text.`),
-then gives the recovery in plain words at the reader measure, with `Try again` and, `L` after it, `Cancel`, each with
+then gives the recovery in plain words at the reader measure, with `Try again` and, `L` after it, `Close note` (which closes the pane; nothing is in progress), each with
 the secondary border, the first border at the message text. Technical details below holds the system's words. Its row's cause is short
 (`Not a text file`). Try again reads the folder again: a fixed note opens in the reader, a note that is
 still broken opens its repair, and a file moved or deleted outside Splat ends the pane. Splat never writes that file.
@@ -981,6 +989,15 @@ want; hover keeps the marker key.
 
 ## The encounter ledger and editor
 
+The Encounters page, the encounter editor, the group editor, the creature pane and Rules and runs each have one message
+footer (`Footer`). The page's footer holds its kept results with their Undo (a discarded draft, a deleted run, a removed
+group or encounter), newest first, then its errors, then the run folder's warning. The editor's footer holds the
+discard's result, a group taken from the encounter, the roster replacement's result, then Save's reason (the last
+refusal, an empty group, the unread rows' warning). The group editor's footer holds the discard's result and the
+newest member result, then Save's reason, then the file's warnings. Rules and runs draws its footer below the form, at
+the tab's bottom: the discard's result, the reasons (an error, the unread choice's warning with its file line), then
+the folder move's warning. Faults that belong to one row, member or field stay there.
+
 Encounters uses one column, at most `LIST_MEASURE` (880 px), with IN PROGRESS, READY TO RUN, GROUPS and
 HISTORY in that order. Groups and History start closed when they have rows. The list keeps the scroll bar's lane
 whether or not the bar shows, so opening Groups moves no row action; the creature results and the encounter
@@ -1001,7 +1018,10 @@ run icon, also when its first part is a warning (`▷ ⚠ Changed on disk · …
 2, with only saved time on line two. One paused run uses Paused run in the rail, then the fitted encounter
 name; full hover and accessible text includes name and state. It resumes in one click. With several, Paused
 runs and `2 fights` open Encounters. An open run keeps Run and its round or Setup. Rail details never end on a
-separator; a short rail shows Ended or Paused with full state on hover.
+separator; a short rail shows Ended or Paused with full state on hover. Every unsaved-draft status in the rail
+(`Encounter draft`, `Group draft`, `Creature draft`, `Run settings draft`, `Library draft`, `World draft`, `World repair
+draft`, `Campaign draft`) is a `status_link`, as `Unsaved NPC` is: it opens the page, and the Campaign tab, that holds the
+draft.
 
 **Encounter difficulty** (F1) is passive words at the end of a line that exists: `Low`, `Moderate`, `High` or
 `Above High`, from `difficulty::Scale::weigh`, the one computation. It compares the XP of every creature against
@@ -1023,7 +1043,9 @@ back only where no file has its path. A plan line that linked it gets no row, an
 hover `Not found in this campaign`.
 
 History opens read-only final state and log in place, outside the live-run slot. Final state has one name column, as
-wide as the longest name up to half the room, so every HP starts at one x. Rows put outcome before ended
+wide as the longest name up to half the room, so every HP starts at one x. HP and temporary HP follow in columns of
+their own, each as wide as its widest value, kept where a row has none; Absent and the conditions start after them and
+wrap inside the last column. Each row's values sit on its name's baseline. Rows put outcome before ended
 state and retain outcome and round. The detail header shows only Read-only and end reason. History rows keep
 Open or Close and their menu; Start and Edit stay in that menu.
 
@@ -1050,7 +1072,7 @@ check that finds the fault records its kind, and the message takes its tone from
 words. A roster fault names the row as the DM sees it, `Row 2 (Cinder Wolf): …`, never its stored key or a
 stored field name. Replace… uses the shared creature row with CR, HP, AC and Use. Replace all matching rows defaults to
 on and retains names and starting values, with one Undo. In a group's editor, Use says `Replaced Unknown creature
-with Ember Cultist.` with `Undo replacement` on the member result line that Remove uses; the newest member result owns
+with Ember Cultist.` with `Undo replacement` in the editor's footer, where Remove's result goes; the newest member result owns
 that line. Undo puts back only the creature, so later edits stay; a move or a removal ends it.
 
 Roster rows have name and detail, quiet Edit and a row menu. Sides sit on the second line and change in Edit.
@@ -1066,7 +1088,7 @@ the full change link, removing source before base creature. Remove a source whol
 hover keeps the full detail. The ` · ` before the link has the same blank on each side as the separators between
 the stats: no item spacing is added around it.
 
-An unread roster row stays visible by participant name and line, with its file line (path, Edit in Obsidian and Show file). The roster also shows that row in its place among the rows that read: its name with no number (the run will not add it) and `⚠ Line 20 not read` in the warning tone, so two rows of one name stay apart. The warning sits below the editor header and its save row, so a fault does not move the name field, Save encounter or Start fight. The last warning ends with what to do, and its file line starts at its words. Start fight is blocked until the DM repairs or explicitly removes that row. Plan starts use the same check. A resumed setup keeps the warning and blocks Begin combat while its source has unread rows. Saved run participants stay intact.
+An unread roster row stays visible by participant name and line, with its file line (path, Edit in Obsidian and Show file). The roster also shows that row in its place among the rows that read: its name with no number (the run will not add it) and `⚠ Line 20 not read` in the warning tone, so two rows of one name stay apart. The warning is a reason in the editor's footer, so a fault that comes or goes moves no roster row, field, Save encounter or Start fight. The last warning ends with what to do, and its file line starts at its words. Start fight is blocked until the DM repairs or explicitly removes that row. Plan starts use the same check. A resumed setup keeps the warning and blocks Begin combat while its source has unread rows. Saved run participants stay intact.
 
 The encounter editor keeps roster rows, loot and notes within `LIST_MEASURE`, including the scroll content
 and row actions. Add participants sits directly beside that column; extra space stays at the far right.
@@ -1078,7 +1100,9 @@ the start of one row with `Save run settings` at its end; without room, the stat
 
 The editor header keeps Save and Start on line one; the name field gives up width. While Save would refuse a
 changed draft (a roster row with no creature, or the refusal of the last Save while it still holds), the save row
-says `Invalid` and Save and Ctrl+S are blocked with the cause; otherwise a changed draft says `Unsaved`. Save encounter
+says `Invalid` and Save and Ctrl+S are blocked with the cause; otherwise a changed draft says `Unsaved`. A draft whose
+rows match the file again, as after `Undo replacement`, says `No changes`. A Save, also the one a start makes, ends the
+replacement's result and its Undo. Save encounter
 also gives the open fight from that encounter its new read-aloud text and notes for Prep; its roster and combat
 state stay, and other changes wait for the next fight. An unfinished encounter
 offers Resume, moves Start another fight into its menu and keeps run state in the save row. Blocked Start
@@ -1100,7 +1124,7 @@ edge: the name on line one, then the save row with the state and Discard at its 
 column's edge. A reason without room on the save row takes its own line below it. The group name field and Belongs to end at one edge: the column's edge, or
 `FORM_WIDTH` when that comes first by at least `XL`. So the edges are the same or clearly apart. In an
 encounter's group frame, the name starts at the frame's left edge and ends at `FORM_WIDTH` or before its
-actions. Removing any member shows `Removed <name>.` and `Undo remove member` on a result line. Undo restores the full member at its place and keeps other draft edits.
+actions. Removing any member shows `Removed <name>.` and `Undo remove member` in the editor's footer. Undo restores the full member at its place and keeps other draft edits.
 
 A plan group editor stays beside the note when `LIST_MEASURE`, an `L` gap and `READER_MEASURE` fit.
 Bound the editor at `LIST_MEASURE`, anchored left. Below that width, the note stays behind its tab. Plan summaries start directly
@@ -1121,7 +1145,7 @@ Add, and the Loot field end at one x. `Roll on a table` follows the Loot field.
 Groups has one level of headings: For any encounter, each encounter, then Encounter deleted. Rows keep Edit
 and a Remove menu action with Undo. Planned groups use Remove from tonight and Undo remove. Remove isolated
 plan links; retain words inside sentences. Moving an encounter group to any encounter says `<name> moves to
-any encounter when you save.`, with Undo move until save. Move to… lists named encounters only. Make available
+any encounter when you save.`, with Undo move until save, in the info tone in the editor's footer: nothing is written until Save. Move to… lists named encounters only. Make available
 to any encounter is the direct way to remove ownership; keep it distinct from Delete group, with Undo before
 saving.
 
