@@ -31,6 +31,8 @@ const REPLACE_DELETED_ENTRY: &str = "Choose a replacement in the roster.";
 const PARTY_SOURCE: &str = "Party members come from the sheets Splat saved last.";
 /// Where an encounter that this editor cannot change is repaired.
 const REPAIR_IN_ENTRIES: &str = "Repair this encounter in Campaign → Campaign entries.";
+/// Under `House rules in play`: where the trackers of a note in play are.
+const HOUSE_RULES_HELP: &str = "Trackers (Ctrl+T) shows the trackers of each note in play.";
 /// An encounter whose party rows the campaign fills, which this editor and the run cannot change.
 const PARTY_FROM_CAMPAIGN: &str = "This encounter fills some rows from the campaign’s party. Edit those rows in Campaign → Campaign entries. This editor adds party members from the sheets Splat saved last.";
 
@@ -6441,7 +6443,7 @@ impl Encounters {
             // with none shows nothing new.
             if !snapshot.options.house_rules.is_empty() {
                 let notes = snapshot.options.house_rules.clone();
-                design::small_field(ui, "House rules in play", None, None, |ui| {
+                design::small_field(ui, "House rules in play", Some(HOUSE_RULES_HELP), None, |ui| {
                     ui.vertical(|ui| {
                         for (id, name) in &notes {
                             let mut on = snapshot.options.in_play.contains(id);

@@ -553,4 +553,169 @@ pub fn run(d: &mut Driver<'_>) {
             && timeline_file(&dir).contains("Duration: 3 days"),
         "The newer length is the one after a restart",
     );
+    road_fight_keeps_its_day(d, &dir);
+}
+
+/// W5-D1: a fight planned from the day-two check of a two-day journey is played on Day 2. A
+/// fresh run begun from its plan row enters the Timeline at Day 2, 00:00, inside the journey,
+/// and the journey keeps its days; `Undo: begin combat` gives the file back as it was, also
+/// after a restart. When the check changed on disk before the fight began, the fight follows
+/// the last event and the run says so.
+fn road_fight_keeps_its_day(d: &mut Driver<'_>, dir: &Path) {
+    const PLAN_SHRINE: &str = "Plan “Shrine of Cinders”";
+    d.click(NAV_SESSIONS);
+    show_plan(d);
+    if !d.has("How long") {
+        d.click("Travel");
+    }
+    d.replace_text_in("How long", "2 days");
+    d.press(Key::Enter);
+    d.type_into("Enter a roll for Day 2", "18");
+    d.press(Key::Enter);
+    d.click(PLAN_SHRINE);
+    d.expect("“Shrine of Cinders” is in tonight’s plan.");
+    let journey_before = journey(d, "Travel");
+    let travel_start = |d: &Driver<'_>| {
+        let events = &d.app().timeline.events;
+        let at = events
+            .iter()
+            .position(|event| event.id == journey_before.id)?;
+        crate::timeline::clock(events)[at]
+    };
+    d.observe(
+        "W5-D1",
+        travel_start(d) == Some(0) && journey_before.duration == "2 days",
+        "The journey runs from Day 1, 00:00 for two days before the fight",
+    );
+    // A restart between Plan and the start of the fight: the plan line holds the check.
+    d.app_mut().timeline.save();
+    d.restart();
+    d.click(NAV_SESSIONS);
+    show_plan(d);
+    d.observe(
+        "W5-D1",
+        d.has_containing("Day 2 of Travel")
+            && note_file(dir).contains("- [[Shrine of Cinders]] <!-- splat:check journey="),
+        "The planned fight's row says the day it is played on, also after a restart",
+    );
+    d.state("travel-checks-road-day", Sizes::All);
+    d.state_prepared("travel-checks-road-day-lookup", Sizes::Standard, |d| {
+        if !d.has("Close Lookup") {
+            d.click(NAV_LOOKUP);
+        }
+        assert!(d.has_containing("Day 2"), "the day beside Lookup");
+    });
+    if d.has("Close Lookup") {
+        d.click("Close Lookup");
+    }
+    // A fresh run, begun from the plan row.
+    let before = timeline_file(dir);
+    d.click("Start fight: Shrine of Cinders");
+    begin_shrine(d);
+    d.app_mut().timeline.save();
+    let road_fight = |d: &Driver<'_>| {
+        let events = &d.app().timeline.events;
+        let at = events
+            .iter()
+            .position(|event| event.title == "Shrine of Cinders" && event.run.is_some())?;
+        Some((at, crate::timeline::clock(events)[at]))
+    };
+    let travel_at = |d: &Driver<'_>| {
+        d.app()
+            .timeline
+            .events
+            .iter()
+            .position(|event| event.id == journey_before.id)
+    };
+    let placed = road_fight(d);
+    d.observe(
+        "W5-D1",
+        placed.is_some_and(|(at, start)| {
+            start == Some(24 * 60) && travel_at(d).is_some_and(|travel| at == travel + 1)
+        }) && journey(d, "Travel") == journey_before
+            && timeline_file(dir).contains(&format!("journey={} at=24", journey_before.id)),
+        format!("The road fight starts at Day 2, 00:00, inside the journey, which keeps its days: {placed:?}"),
+    );
+    d.click(NAV_TIMELINE);
+    d.click_starting("Shrine of Cinders ·");
+    d.observe(
+        "W5-D1",
+        d.visible_text("Starts: Day 2, 00:00"),
+        "Timeline shows the road fight on Day 2",
+    );
+    d.state("travel-checks-road-fight", Sizes::Default);
+    d.click_starting("Travel ·");
+    d.observe(
+        "W5-D1",
+        d.visible_text("Starts: Day 1, 00:00") && d.visible_text("Ends: Day 3, 00:00"),
+        "The journey still runs from Day 1 to Day 3",
+    );
+    // Review of PR 284: a restart between the fight's begin and its Undo.
+    d.click(BACK_TO_RUN);
+    d.restart();
+    d.expect("Undo: begin combat");
+    d.click("Undo: begin combat");
+    d.app_mut().timeline.save();
+    d.observe(
+        "W5-D1",
+        road_fight(d).is_none() && timeline_file(dir) == before,
+        "Undo: begin combat gives Timeline.md back as it was",
+    );
+    // Review finding 2: the check changes on disk a moment before Begin, while the DM's own
+    // edit of that journey waits for its pause, so Splat has not read the file and its save
+    // cannot merge. Begin reads the file: an ordinary fight, and the run says why.
+    fs::write(
+        dir.join("Timeline.md"),
+        timeline_file(dir).replace("\"18 · A toll gang", "\"19 · A toll gang"),
+    )
+    .unwrap();
+    let notes = &mut d
+        .app_mut()
+        .timeline
+        .event_mut(&journey_before.id)
+        .unwrap()
+        .notes;
+    *notes = "Fog on the second day.".into();
+    d.app_mut().timeline.touch();
+    d.click("Begin combat");
+    let events = d.app().timeline.events.clone();
+    let last = events
+        .iter()
+        .rposition(|event| event.title != "Shrine of Cinders");
+    let placed = road_fight(d);
+    d.observe(
+        "W5-D1",
+        d.has_containing("Its travel check changed, so this fight follows the last event.")
+            && placed.is_some_and(|(at, _)| Some(at) > last)
+            && events.iter().all(|event| event.within.is_none())
+            && timeline_file(dir).contains("\"19 · A toll gang"),
+        format!("A check changed on disk gives an ordinary fight, and the run says so: {placed:?}"),
+    );
+    d.click("Undo: begin combat");
+    // The DM chooses the file over the waiting edit.
+    d.app_mut().timeline.reload();
+    d.click(NAV_SESSIONS);
+    show_plan(d);
+    d.observe(
+        "W5-D1",
+        !d.has_containing("Day 2 of Travel"),
+        "With its check changed, the planned row names no day",
+    );
+}
+
+/// Shrine of Cinders' setup, as the DM plays it: the NPCs' rolls, the players' numbers, and
+/// Begin combat.
+fn begin_shrine(d: &mut Driver<'_>) {
+    d.click("Roll NPC initiative");
+    for (name, total) in [
+        ("Brannoch Vale", "18"),
+        ("Iselle Marrowind", "15"),
+        ("Kestrel Dunmoor", "12"),
+        ("Oren Thistlewick", "9"),
+        ("Sable Harrowgate", "6"),
+    ] {
+        d.type_into(&format!("Initiative for {name}"), total);
+    }
+    d.click("Begin combat");
+    d.expect(NEXT_TURN);
 }

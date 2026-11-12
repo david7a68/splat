@@ -251,8 +251,19 @@ pub struct Event {
     /// The journey's rolled encounter checks, in the file's order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub checks: Vec<Check>,
+    /// A fight begun from a journey's check is played inside that journey, at that check.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub within: Option<Within>,
     #[serde(flatten)]
     pub extra: serde_yaml_ng::Mapping,
+}
+
+/// Where a fight inside a journey is played: the journey's event and the check's offset from
+/// its start, in hours. The clock puts the fight there; the journey keeps its length.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Within {
+    pub journey: String,
+    pub at: u64,
 }
 
 /// One rolled encounter check of a journey: `- Check at 24h: "16 · [[Wolf Pack]] pick up the
@@ -485,29 +496,50 @@ pub fn read_duration(text: &str) -> Option<u64> {
 /// The campaign's one clock: the minute each event starts, in list order. It is computed and
 /// never stored, so moving or removing an event corrects it. `None` means before the first day.
 pub fn clock(events: &[Event]) -> Vec<Option<u64>> {
+    walk(events).0
+}
+
+/// Each event's start, and the clock after them all.
+fn walk(events: &[Event]) -> (Vec<Option<u64>>, Option<u64>) {
     let mut now = None;
-    events
+    let mut starts: Vec<Option<u64>> = Vec::with_capacity(events.len());
+    for event in events {
+        if let Some(start) = inside_journey(&events[..starts.len()], &starts, event) {
+            starts.push(start);
+            // The clock after a journey with fights in it is the later of the journey's end
+            // and each fight's end, so a long fight never ends after `Now`.
+            now = now.max(start.map(|start| start.saturating_add(event.minutes())));
+            continue;
+        }
+        if event.kind == Kind::Day {
+            // Always the next boundary, so forgotten durations cannot make the count drift.
+            now = Some(now.map_or(0, |minute: u64| (minute / DAY + 1) * DAY));
+        }
+        starts.push(now);
+        now = now.map(|minute| minute.saturating_add(event.minutes()));
+    }
+    (starts, now)
+}
+
+/// A fight inside a journey starts at its check: while it is a fight that names a journey
+/// before it in the list, and that journey still covers the check. Any other event, or a fight
+/// whose journey no longer holds it, is an ordinary event in the sequence.
+fn inside_journey(before: &[Event], starts: &[Option<u64>], event: &Event) -> Option<Option<u64>> {
+    let within = event
+        .within
+        .as_ref()
+        .filter(|_| event.kind == Kind::Encounter)?;
+    let at = before
         .iter()
-        .map(|event| {
-            if event.kind == Kind::Day {
-                // Always the next boundary, so forgotten durations cannot make the count drift.
-                now = Some(now.map_or(0, |minute: u64| (minute / DAY + 1) * DAY));
-            }
-            let start = now;
-            now = now.map(|minute| minute.saturating_add(event.minutes()));
-            start
-        })
-        .collect()
+        .position(|journey| journey.id == within.journey && journey.kind == Kind::Travel)?;
+    let offset = within.at.checked_mul(HOUR)?;
+    checks::covers(&before[at], within.at)
+        .then(|| starts[at].map(|start| start.saturating_add(offset)))
 }
 
 /// The clock after every event, for the page to say where the story is now.
 pub fn clock_now(events: &[Event]) -> Option<u64> {
-    clock(events)
-        .last()
-        .copied()
-        .flatten()
-        .zip(events.last())
-        .map(|(start, event)| start.saturating_add(event.minutes()))
+    walk(events).1
 }
 
 /// The day the story is on now. Nothing, before the first day.
@@ -724,7 +756,7 @@ pub struct Book {
     pub run_open: bool,
     baseline: Option<Vec<u8>>,
     /// The generated body last written, even while frontmatter is edited elsewhere.
-    pending_run: Option<(RunFact, Option<Uuid>, bool)>,
+    pending_run: Option<(RunFact, Option<Uuid>, bool, Option<Within>)>,
     pub duplicate: Option<String>,
     saved_events: Vec<Event>,
     pub renamed_links: BTreeMap<String, Vec<String>>,
@@ -1130,8 +1162,8 @@ impl Book {
         self.unreadable = None;
         self.baseline = None;
         // Before the file is written, so that it holds what the open run said meanwhile.
-        if let Some((fact, session, played)) = self.pending_run.take() {
-            self.apply_run(&fact, session, played);
+        if let Some((fact, session, played, road)) = self.pending_run.take() {
+            self.apply_run(&fact, session, played, road.as_ref());
         }
         if let Err(error) = self.write() {
             self.error = Some(format!("The timeline was not saved. {error}"));
@@ -1257,9 +1289,9 @@ impl Book {
         if current != self.baseline || self.gone {
             self.reload();
             if self.unreadable.is_none()
-                && let Some((fact, session, played)) = self.pending_run.take()
+                && let Some((fact, session, played, road)) = self.pending_run.take()
             {
-                self.apply_run_keeping_removal(&fact, session, played);
+                self.apply_run_keeping_removal(&fact, session, played, road.as_ref());
             }
         }
         true
@@ -1282,15 +1314,41 @@ impl Book {
 
     /// Add after the session's last event, or at the end. A rest found in an old recording
     /// belongs with its session, not after what happened since.
-    pub fn add(&mut self, kind: Kind, session: Option<Uuid>) -> String {
-        let id = new_id();
-        let at = session
+    /// Where a new event of this session goes: after the session's last event.
+    fn session_end(&self, session: Option<Uuid>) -> usize {
+        session
             .and_then(|session| {
                 self.events
                     .iter()
                     .rposition(|event| event.session == Some(session))
             })
-            .map_or(self.events.len(), |index| index + 1);
+            .map_or(self.events.len(), |index| index + 1)
+    }
+
+    /// The events as `Timeline.md` holds them on disk now, when it can be read.
+    pub fn on_disk(&self) -> Option<Vec<Event>> {
+        let text = fs::read_to_string(self.path.as_ref()?).ok()?;
+        parse(&text).ok()?;
+        Some(formats::parse_with_sessions(&text, &self.session_links).0)
+    }
+
+    /// A run's fight that was placed in a journey goes after its session's last event, as any
+    /// fight does, and is saved: its check changed in the merge of the save that placed it.
+    pub fn leave_journey(&mut self, run: Uuid) {
+        let Some(from) = self.events.iter().position(|event| event.run == Some(run)) else {
+            return;
+        };
+        let mut event = self.events.remove(from);
+        event.within = None;
+        let at = self.session_end(event.session);
+        self.events.insert(at, event);
+        self.touch();
+        self.save();
+    }
+
+    pub fn add(&mut self, kind: Kind, session: Option<Uuid>) -> String {
+        let id = new_id();
+        let at = self.session_end(session);
         self.events.insert(
             at,
             Event {
@@ -1309,6 +1367,7 @@ impl Book {
                 played_order: 0,
                 checks_table: None,
                 checks: Vec::new(),
+                within: None,
                 extra: Default::default(),
             },
         );
@@ -1448,9 +1507,21 @@ impl Book {
     /// Every run sits on the timeline without a step from the DM. The DM's words stay, and
     /// so does the DM's undo, because a new round is not an edit.
     /// What a run says now. `played` means it changed while open, and it was not only opened.
+    #[cfg(test)]
     pub fn record_run(&mut self, fact: &RunFact, session: Option<Uuid>, played: bool) {
+        self.record_run_at(fact, session, played, None);
+    }
+
+    /// `road`: the journey and check that a fight entering now is played at.
+    fn record_run_at(
+        &mut self,
+        fact: &RunFact,
+        session: Option<Uuid>,
+        played: bool,
+        road: Option<&Within>,
+    ) {
         let dm_edit = self.dirty && !self.run_write;
-        self.apply_run_keeping_removal(fact, session, played);
+        self.apply_run_keeping_removal(fact, session, played, road);
         self.run_write = !dm_edit;
     }
 
@@ -1458,7 +1529,13 @@ impl Book {
     /// follow its order. When combat begins, the run's event enters the timeline; in the
     /// removal's own session that begins the next part of its story, so the result and Undo
     /// end there. A Setup adds no event and ends nothing.
-    fn apply_run_keeping_removal(&mut self, fact: &RunFact, session: Option<Uuid>, played: bool) {
+    fn apply_run_keeping_removal(
+        &mut self,
+        fact: &RunFact,
+        session: Option<Uuid>,
+        played: bool,
+        road: Option<&Within>,
+    ) {
         let on_timeline = |events: &[Event]| {
             events.iter().any(|event| {
                 event.run == Some(fact.id)
@@ -1468,12 +1545,12 @@ impl Book {
         // A run that waits for an unreadable file changes nothing yet, and the cleared events
         // are not the session's state.
         if self.unreadable.is_some() {
-            self.apply_run(fact, session, played);
+            self.apply_run(fact, session, played, road);
             return;
         }
         let before = on_timeline(&self.events);
         let removed = self.removed.clone();
-        self.apply_run(fact, session, played);
+        self.apply_run(fact, session, played, road);
         let entered = (!before)
             .then(|| self.events.iter().find(|event| event.run == Some(fact.id)))
             .flatten()
@@ -1511,12 +1588,14 @@ impl Book {
     }
 
     /// The open run's facts changed, from `before`. A run that was already over when it opened
-    /// is being read. It adds nothing to the story, whichever session is now current.
+    /// is being read. It adds nothing to the story, whichever session is now current. `road`:
+    /// the journey and the check where a fight that enters now is played.
     pub fn record_change(
         &mut self,
         before: Option<&RunFact>,
         fact: &RunFact,
         session: Option<Uuid>,
+        road: Option<&Within>,
     ) {
         // A new ID with a run already open is that run's copy, which keeps its place in the story.
         let known = self.events.iter().any(|event| {
@@ -1527,12 +1606,18 @@ impl Book {
             return;
         }
         let played = before.is_some_and(|old| fact.played_since(old));
-        self.record_run(fact, session, played);
+        self.record_run_at(fact, session, played, road);
     }
 
-    fn apply_run(&mut self, fact: &RunFact, session: Option<Uuid>, played: bool) {
+    fn apply_run(
+        &mut self,
+        fact: &RunFact,
+        session: Option<Uuid>,
+        played: bool,
+        road: Option<&Within>,
+    ) {
         if self.unreadable.is_some() {
-            self.pending_run = Some((fact.clone(), session, played));
+            self.pending_run = Some((fact.clone(), session, played, road.cloned()));
             return;
         }
         if !self.events.iter().any(|event| event.run == Some(fact.id))
@@ -1610,8 +1695,41 @@ impl Book {
                 event.run = Some(fact.id);
                 event.result = result;
                 event.played_order = order;
+                if let Some(within) = road {
+                    self.place_in_journey(&id, within);
+                }
             }
         }
+    }
+
+    /// A fight begun from a journey's check goes after that journey and the fights in it at
+    /// the same or an earlier check, and is played at its check. With the journey gone, it
+    /// stays where it is.
+    fn place_in_journey(&mut self, id: &str, within: &Within) {
+        let Some(from) = self.events.iter().position(|event| event.id == id) else {
+            return;
+        };
+        let mut event = self.events.remove(from);
+        let at = self
+            .events
+            .iter()
+            .position(|journey| journey.id == within.journey)
+            .map(|journey| {
+                journey
+                    + 1
+                    + self.events[journey + 1..]
+                        .iter()
+                        .take_while(|other| {
+                            other.within.as_ref().is_some_and(|other| {
+                                other.journey == within.journey && other.at <= within.at
+                            })
+                        })
+                        .count()
+            });
+        if at.is_some() {
+            event.within = Some(within.clone());
+        }
+        self.events.insert(at.unwrap_or(from), event);
     }
 
     /// The event added from this marker, however it was renamed since.
@@ -1890,7 +2008,7 @@ mod tests {
         fs::write(&path, "broken").unwrap();
         let mut book = book(dir.path());
         assert!(book.unreadable.is_some());
-        book.record_change(None, &fact(RunState::Running), None);
+        book.record_change(None, &fact(RunState::Running), None, None);
         let mut repaired = event(Kind::Travel, "1 hour");
         repaired.id = "t-repaired".into();
         fs::write(&path, render(&[repaired], &BTreeMap::new()).unwrap()).unwrap();
@@ -1913,7 +2031,7 @@ mod tests {
             round: 5,
             ..fact(RunState::Running)
         };
-        book.record_change(Some(&fact(RunState::Running)), &later, None);
+        book.record_change(Some(&fact(RunState::Running)), &later, None, None);
         fs::write(&path, &saved).unwrap();
         book.last_check = None;
         book.poll(&eframe::egui::Context::default());
@@ -1956,7 +2074,7 @@ mod tests {
     fn integrity_d22_a_recovery_copy_keeps_one_event_and_its_notes() {
         let mut book = Book::default();
         let original = fact(RunState::Running);
-        book.record_change(None, &original, None);
+        book.record_change(None, &original, None, None);
         let event = book.events[0].id.clone();
         book.events[0].notes = "DM's account".into();
         let copy = RunFact {
@@ -1964,7 +2082,7 @@ mod tests {
             copied_from: Some(original.id),
             ..original.clone()
         };
-        book.record_change(Some(&original), &copy, None);
+        book.record_change(Some(&original), &copy, None, None);
         assert_eq!(book.events.len(), 1);
         assert_eq!(book.events[0].id, event);
         assert_eq!(book.events[0].notes, "DM's account");
@@ -2007,7 +2125,7 @@ mod tests {
         let event = timeline.add(Kind::Event, None);
         timeline.save();
         assert!(!timeline.event_unsaved(&rest));
-        timeline.record_change(None, &fact(RunState::Running), None);
+        timeline.record_change(None, &fact(RunState::Running), None, None);
         assert!(timeline.unsaved());
         assert!(!timeline.event_unsaved(&rest));
         timeline.event_mut(&event).unwrap().notes = "Changed here".into();
@@ -2040,14 +2158,14 @@ mod tests {
     fn reading_an_ended_run_adds_nothing_to_the_story() {
         let mut book = Book::default();
         let ended = fact(RunState::Ended("Party won".into()));
-        book.record_change(None, &ended, Some(Uuid::new_v4()));
+        book.record_change(None, &ended, Some(Uuid::new_v4()), None);
         assert!(book.events.is_empty(), "it was over when it opened");
 
         // A run that ends while open is the story.
         let running = fact(RunState::Running);
-        book.record_change(None, &running, None);
+        book.record_change(None, &running, None, None);
         assert_eq!(book.events.len(), 1);
-        book.record_change(Some(&running), &ended, None);
+        book.record_change(Some(&running), &ended, None, None);
         assert!(book.events[0].result.starts_with("Party won"));
 
         // Keep both, on a run that ended: the copy has a new ID, and it is the story too.
@@ -2055,11 +2173,11 @@ mod tests {
             id: Uuid::new_v4(),
             ..ended.clone()
         };
-        book.record_change(Some(&ended), &copy, None);
+        book.record_change(Some(&ended), &copy, None, None);
         assert_eq!(book.events.len(), 2);
 
         // Opened again, it keeps its event up to date.
-        book.record_change(None, &ended, None);
+        book.record_change(None, &ended, None, None);
         assert_eq!(book.events.len(), 2);
     }
 
@@ -2104,6 +2222,7 @@ mod tests {
             played_order: 0,
             checks_table: None,
             checks: Vec::new(),
+            within: None,
             extra: Default::default(),
         }
     }
@@ -2417,6 +2536,320 @@ mod tests {
         book.record_run(&fact(RunState::Setup), Some(session), true);
         assert_eq!(book.events.len(), 1);
         assert_eq!(book.events[0].result, "");
+    }
+
+    /// F9, W5-D1: a fight begun from a journey's day-two check is played at that check, inside
+    /// the journey, and the journey keeps its length and checks. Its one write is the fight's
+    /// event in `Timeline.md`; the run's `Undo: begin combat` takes it back to the byte.
+    #[test]
+    fn w5_d1_a_fight_from_a_check_is_played_at_it_and_undo_restores_the_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(FILE);
+        let session = Some(Uuid::from_u128(1));
+        let mut book = book(dir.path());
+        book.add(Kind::Day, session);
+        let journey = book.add(Kind::Travel, session);
+        let rest = book.add(Kind::ShortRest, session);
+        {
+            let travel = book.event_mut(&journey).unwrap();
+            travel.duration = "2 days".into();
+            travel.checks_table = Some("road".into());
+            travel.checks = vec![
+                Check::new(0, "3 · Nothing stirs.".into()),
+                Check::new(24, "16 · [[Bridge Ambush]] waits.".into()),
+            ];
+        }
+        book.save();
+        let journey_before = book.event_mut(&journey).unwrap().clone();
+        // An edit on disk a moment before: the rest gets a place in Obsidian.
+        let mut outside = parse(&fs::read_to_string(&path).unwrap()).unwrap();
+        outside.iter_mut().find(|e| e.id == rest).unwrap().place = "The ford".into();
+        let text = formats::patch(
+            &fs::read_to_string(&path).unwrap(),
+            &outside,
+            &book.session_links,
+            false,
+        )
+        .unwrap();
+        fs::write(&path, &text).unwrap();
+        book.read_if_changed();
+        let before = fs::read_to_string(&path).unwrap();
+
+        // Act A: combat begins, from the check at 24 hours.
+        let road = Within {
+            journey: journey.clone(),
+            at: 24,
+        };
+        let running = fact(RunState::Running);
+        book.record_change(Some(&fact(RunState::Setup)), &running, session, Some(&road));
+        let kinds: Vec<_> = book.events.iter().map(|e| e.kind).collect();
+        assert_eq!(
+            kinds,
+            [Kind::Day, Kind::Travel, Kind::Encounter, Kind::ShortRest],
+            "the fight is in the journey, before what follows it"
+        );
+        let starts = clock(&book.events);
+        assert_eq!(starts[2], Some(DAY), "the fight starts at Day 2, 00:00");
+        assert_eq!(
+            starts[3],
+            Some(2 * DAY),
+            "the journey still ends at Day 3, 00:00"
+        );
+        assert_eq!(clock_now(&book.events), Some(2 * DAY + HOUR));
+        assert_eq!(day_numbers(&book.events)[2], 2);
+        assert_eq!(book.events[1], journey_before, "the journey is as it was");
+
+        // A failed save keeps the fight in memory and says so; the next save writes it.
+        use std::os::unix::fs::PermissionsExt;
+        let open = fs::metadata(dir.path()).unwrap().permissions();
+        fs::set_permissions(dir.path(), fs::Permissions::from_mode(0o555)).unwrap();
+        book.save();
+        fs::set_permissions(dir.path(), open).unwrap();
+        assert!(book.error.is_some(), "the save failed and says so");
+        assert_eq!(fs::read_to_string(&path).unwrap(), before);
+        book.save();
+        let written = fs::read_to_string(&path).unwrap();
+        assert!(
+            written.contains(&format!("journey={journey} at=24")),
+            "{written}"
+        );
+        assert!(
+            written.contains("- Place: The ford"),
+            "the outside edit stays"
+        );
+        // After a restart the file gives the same day.
+        let again = self::book(dir.path());
+        assert_eq!(again.events, book.events);
+        assert_eq!(clock(&again.events)[2], Some(DAY));
+
+        // Act B, unrelated: the DM names the rest. Then Undo of A takes only A's event.
+        book.event_mut(&rest).unwrap().title = "Breather".into();
+        book.touch();
+        book.save();
+        book.record_change(Some(&running), &fact(RunState::Setup), session, None);
+        book.save();
+        let undone = fs::read_to_string(&path).unwrap();
+        assert_eq!(
+            undone,
+            before.replace("- Short rest ^", "- Short rest: **Breather** ^")
+        );
+        assert_eq!(book.events[1], journey_before);
+    }
+
+    /// Review round 2, finding 5: the road fight's Undo gives back the file to the byte, with LF
+    /// or CRLF and with or without a final line break, after a restart, an act B and an outside
+    /// edit.
+    #[test]
+    fn pr284_r2_undo_matrix() {
+        let mut failures = Vec::new();
+        for crlf in [false, true] {
+            for final_lf in [false, true] {
+                let dir = tempfile::tempdir().unwrap();
+                let mut b = book(dir.path());
+                let session = Some(Uuid::from_u128(1));
+                b.add(Kind::Day, session);
+                let road = b.add(Kind::Travel, session);
+                b.event_mut(&road).unwrap().duration = "2 days".into();
+                b.save();
+                let path = dir.path().join(FILE);
+                let mut before = fs::read_to_string(&path).unwrap();
+                if !final_lf {
+                    before = before.trim_end_matches('\n').to_owned();
+                }
+                if crlf {
+                    before = before.replace('\n', "\r\n");
+                }
+                fs::write(&path, &before).unwrap();
+                b = book(dir.path());
+                let run = fact(RunState::Running);
+                let within = Within {
+                    journey: road.clone(),
+                    at: 24,
+                };
+                b.record_change(Some(&fact(RunState::Setup)), &run, session, Some(&within));
+                b.save();
+                assert!(b.error.is_none() && b.events.iter().any(|e| e.run == Some(run.id)));
+                // Restart; act B names the journey; an outside edit gives it a place.
+                b = book(dir.path());
+                b.event_mut(&road).unwrap().title = "Northern road".into();
+                b.touch();
+                b.save();
+                let disk = fs::read_to_string(&path).unwrap();
+                let mut outside = parse(&disk).unwrap();
+                outside.iter_mut().find(|e| e.id == road).unwrap().place = "The ford".into();
+                let text = formats::patch(&disk, &outside, &b.session_links, false).unwrap();
+                fs::write(&path, text).unwrap();
+                b.record_change(Some(&run), &fact(RunState::Setup), session, None);
+                b.save();
+                assert!(b.error.is_none(), "{:?}", b.error);
+                let mut expected = parse(&before).unwrap();
+                let journey = expected.iter_mut().find(|e| e.id == road).unwrap();
+                journey.title = "Northern road".into();
+                journey.place = "The ford".into();
+                let expected = formats::patch(&before, &expected, &b.session_links, false).unwrap();
+                let actual = fs::read_to_string(&path).unwrap();
+                if actual != expected {
+                    failures.push(format!(
+                        "crlf={crlf}, final_lf={final_lf}: expected {expected:?}, got {actual:?}"
+                    ));
+                }
+            }
+        }
+        assert!(failures.is_empty(), "{}", failures.join("\n"));
+    }
+
+    /// Review of PR 284, finding 2: Begin decides from the file on disk, and a change that lands
+    /// after that read meets the check again after the save's merge. Either way the fight is an
+    /// ordinary one, never at the old day.
+    #[test]
+    fn pr284_review_stale_check_at_begin() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut b = book(dir.path());
+        let session = Some(Uuid::from_u128(1));
+        b.add(Kind::Day, session);
+        let road = b.add(Kind::Travel, session);
+        let e = b.event_mut(&road).unwrap();
+        e.duration = "2 days".into();
+        e.checks = vec![Check::new(24, "16 · [[Bridge Ambush]] waits.".into())];
+        let mark = checks::RoadMark::new(&road, &e.checks[0]).unwrap();
+        b.save();
+        let path = dir.path().join(FILE);
+        let disk = fs::read_to_string(&path).unwrap();
+        fs::write(
+            &path,
+            disk.replace("16 · [[Bridge Ambush]] waits.", "17 · Nothing happens."),
+        )
+        .unwrap();
+        assert_eq!(
+            mark.place(&b.on_disk().unwrap(), session),
+            Err(checks::OffRoad::Changed),
+            "the file on disk has another check"
+        );
+        // The change lands after Begin read the file: the save merges it, and the check after
+        // the merge sends the fight after the session's last event.
+        let within = mark.place(&b.events, session).unwrap();
+        let running = fact(RunState::Running);
+        b.record_change(
+            Some(&fact(RunState::Setup)),
+            &running,
+            session,
+            Some(&within),
+        );
+        b.save();
+        assert!(b.error.is_none(), "the outside edit merged");
+        assert_eq!(
+            mark.place(&b.events, session),
+            Err(checks::OffRoad::Changed)
+        );
+        b.leave_journey(running.id);
+        let fight = b.events.iter().position(|e| e.run.is_some()).unwrap();
+        assert_eq!(
+            clock(&b.events)[fight],
+            Some(2 * DAY),
+            "Day 3, not the old Day 2"
+        );
+        let text = fs::read_to_string(path).unwrap();
+        assert!(text.contains("17 · Nothing happens.") && !text.contains("journey="));
+    }
+
+    /// Review finding 3: the place inside a journey holds only for a fight; an event whose kind
+    /// changed is an ordinary event in the sequence.
+    #[test]
+    fn pr284_review_changed_kind_uses_ordinary_clock() {
+        let mut road = event(Kind::Travel, "2 days");
+        road.id = "t-road".into();
+        let mut changed = event(Kind::Day, "");
+        changed.within = Some(Within {
+            journey: road.id.clone(),
+            at: 24,
+        });
+        let events = [event(Kind::Day, ""), road, changed];
+        assert_eq!(clock(&events)[2], Some(3 * DAY));
+    }
+
+    /// Review finding 3: the clock after a journey is the later of its end and each fight's
+    /// end inside it, so a fight never ends after `Now`.
+    #[test]
+    fn pr284_review_duration_beyond_journey() {
+        let mut road = event(Kind::Travel, "2 days");
+        road.id = "t-road".into();
+        let mut fight = event(Kind::Encounter, "2 days");
+        fight.within = Some(Within {
+            journey: road.id.clone(),
+            at: 24,
+        });
+        let mut events = vec![event(Kind::Day, ""), road, fight];
+        assert_eq!(clock(&events)[2], Some(DAY));
+        assert_eq!(
+            clock_now(&events),
+            Some(3 * DAY),
+            "the fight ends Day 4, 00:00"
+        );
+        events[2].duration = "1 hour".into();
+        assert_eq!(clock_now(&events), Some(2 * DAY), "the journey ends later");
+    }
+
+    /// Review finding 5: the road fight's Undo gives back a valid file with no blank line
+    /// between events to the byte, as it does a file with blank lines (the test above).
+    #[test]
+    fn pr284_review_compact_file_exact_undo() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut b = book(dir.path());
+        let session = Some(Uuid::from_u128(1));
+        b.add(Kind::Day, session);
+        let road = b.add(Kind::Travel, session);
+        b.event_mut(&road).unwrap().duration = "2 days".into();
+        b.add(Kind::ShortRest, session);
+        b.save();
+        let path = dir.path().join(FILE);
+        let before = fs::read_to_string(&path).unwrap().replace("\n\n- ", "\n- ");
+        fs::write(&path, &before).unwrap();
+        b = book(dir.path());
+        let run = fact(RunState::Running);
+        let road = Within {
+            journey: road,
+            at: 24,
+        };
+        b.record_change(Some(&fact(RunState::Setup)), &run, session, Some(&road));
+        b.save();
+        assert!(b.events.iter().any(|e| e.run == Some(run.id)));
+        b.record_change(Some(&run), &fact(RunState::Setup), session, None);
+        b.save();
+        assert_eq!(fs::read_to_string(path).unwrap(), before);
+    }
+
+    /// Review finding 5: an ordinary add and its Undo write the bytes that `main` writes. The
+    /// removal leaves the line break that the add brought; only a road fight takes its own.
+    #[test]
+    fn pr284_review_plain_add_undo_bytes() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut b = book(dir.path());
+        b.add(Kind::Day, None);
+        b.save();
+        let path = dir.path().join(FILE);
+        let before = fs::read_to_string(&path).unwrap();
+        let id = b.add(Kind::ShortRest, None);
+        b.save();
+        b.undo_add(&id);
+        b.save();
+        assert_eq!(fs::read_to_string(&path).unwrap(), format!("{before}\n"));
+    }
+
+    /// A fight inside a journey that the DM later shortened, or moved before it, follows the
+    /// event before it, as any fight does: never a day the journey no longer covers.
+    #[test]
+    fn w5_d1_a_fight_outside_its_journey_now_follows_the_event_before_it() {
+        let mut travel = event(Kind::Travel, "1 day");
+        travel.id = "t-road".into();
+        let mut fight = event(Kind::Encounter, "");
+        fight.within = Some(Within {
+            journey: "t-road".into(),
+            at: 24,
+        });
+        let events = [event(Kind::Day, ""), travel.clone(), fight.clone()];
+        assert_eq!(clock(&events)[2], Some(DAY));
+        let events = [event(Kind::Day, ""), fight, travel];
+        assert_eq!(clock(&events)[1], Some(0));
     }
 
     #[test]
@@ -2819,6 +3252,7 @@ mod tests {
             played_order: 0,
             checks_table: None,
             checks: Vec::new(),
+            within: None,
             extra: Default::default(),
         };
         let first = Uuid::new_v4();

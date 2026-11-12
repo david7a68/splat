@@ -267,6 +267,10 @@ The open notices: what a mark raised and the DM has not yet finished with `Done`
 `Trackers.md` in the campaign's root: one ordered list of tracker acts. It is the trackers' history and their
 Undo, also after a restart.
 
+**Tracker history**:
+One tracker's entries of the ledger, with its start value, in its house rule note's reader. **Remove** there takes
+an entry of another session out of the ledger, with one Undo.
+
 **Trackers**:
 The view of the Lookup panel that holds the trackers and the Due list. Ctrl+T shows it and goes back.
 _Avoid_: Tracker panel, which would be a third panel beside Lookup and Notes.
