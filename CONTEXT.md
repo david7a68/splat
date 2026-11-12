@@ -299,6 +299,11 @@ A task line of a session's plan that is not a fight or a group, with a done mark
 place, a secret to reveal.
 _Avoid_: Plan item, task, to-do.
 
+**Carry-over**:
+The act that adds the last session's recap link, plan lines that were not played and open threads to a
+session's note. The note's `carried_from` and `carried_parts` say what it carried. It carries no HP: carried
+state stays inside one session.
+
 **Carried state**:
 Each player's HP and temporary HP from the last fight of the session being played, which the next run starts
 from. A long rest the DM marks starts everyone at full instead.

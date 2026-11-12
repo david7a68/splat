@@ -401,6 +401,11 @@ const SCENARIOS: [(&str, Seed, Script); 88] = [
         Seed::Campaign,
         scenarios::session_plan_scenes::log_from_play,
     ),
+    (
+        "session-carry-over",
+        Seed::Campaign,
+        scenarios::session_carry_over::run,
+    ),
     ("trackers", Seed::Campaign, scenarios::trackers::run),
 ];
 
