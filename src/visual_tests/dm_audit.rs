@@ -686,8 +686,12 @@ fn during_the_session(a: &mut Audit<'_, '_>) {
     // F3 of the session-cycle design: the same fight from the book's Bandit in Lookup.
     a.task("A fight that nobody planned, with a Bandit from the book, then talk");
     a.act(Panel, "open Lookup", |d| d.press_ctrl(Key::K));
+    // Fresh words open the first result in the reader, and the Bandit ranks first: no click.
     a.act(Find, "search: bandit", |d| d.type_text("bandit"));
-    a.act(Find, "open the Bandit", |d| d.click_starting("Bandit · "));
+    a.fact(format!(
+        "the first result opened by itself: {}",
+        a.d.has("Start a fight with Bandit")
+    ));
     a.click(Nav, "Start a fight with Bandit");
     a.fact(format!(
         "the run of Fight with Bandit is open: {}",
@@ -816,20 +820,8 @@ fn after_the_session(a: &mut Audit<'_, '_>) {
         ));
         d.press_ctrl(Key::S);
         show_plan(d);
-        // By now the plan holds an opened fight with its rewards, so its rows pass the pane and
-        // the scenes fold to `N scenes` (F3). The DM opens them with that link.
-        let fold = d
-            .nodes()
-            .into_iter()
-            .find(|node| {
-                node.name.split_once(' ').is_some_and(|(n, word)| {
-                    n.parse::<usize>().is_ok() && ["scene", "scenes"].contains(&word)
-                })
-            })
-            .map(|node| node.name);
-        if let Some(fold) = fold {
-            d.click(&fold);
-        }
+        // The opened fight with its rewards does not fold this scene: an opened row folds the
+        // scenes only when it pushes the next fight out of view with scenes above it (F3).
         d.expect(&format!("Done: {HOBB}"));
     });
     a.task("Put what an NPC said in the NPC's own note");

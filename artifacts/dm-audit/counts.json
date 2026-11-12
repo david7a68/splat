@@ -278,7 +278,7 @@
       "phase": "during",
       "task": "A fight that nobody planned, with a Bandit from the book, then talk",
       "transitions": 2,
-      "interactions": 6,
+      "interactions": 5,
       "path": "Session > Run > Session"
     },
     {
