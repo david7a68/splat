@@ -2688,6 +2688,75 @@ impl Run {
         }
     }
 
+    /// What each group would make the fight when it joins, for the groups whose XP is known. The
+    /// party is the characters who are present; the fight is every present creature against them.
+    /// Worked out again only after a step, a new read of the groups or of the scale.
+    pub(super) fn arrival_words(&mut self) -> Option<&super::ArrivalWords> {
+        let (groups, scale) = (self.groups.as_ref()?, self.scale.as_ref()?);
+        let key = (
+            self.revision,
+            Arc::as_ptr(groups) as usize,
+            Arc::as_ptr(scale) as usize,
+        );
+        #[cfg(test)]
+        {
+            self.arrival_counts.0 += 1;
+        }
+        if self.arrival_words.as_ref().map(|(at, _)| *at) != Some(key) {
+            #[cfg(test)]
+            {
+                self.arrival_counts.1 += 1;
+            }
+            let (mut party, mut foes) = (Vec::new(), Vec::new());
+            let mut characters = false;
+            for p in &self.state.participants {
+                if p.side.trim() == "party" {
+                    let level = scale.level(&p.definition);
+                    characters |= level.is_some();
+                    if p.present {
+                        party.extend(level);
+                    }
+                } else if p.present {
+                    foes.push(crate::difficulty::creature_xp(&p.definition));
+                }
+            }
+            // The campaign's party stands in only for a fight with no character at all. When
+            // every character is absent, there is no party to weigh against.
+            let nobody = characters && party.is_empty();
+            let words = groups
+                .iter()
+                .filter_map(|group| {
+                    // Each member joins on its own side; one on the party's side is an ally.
+                    let added: Vec<_> = group
+                        .members
+                        .iter()
+                        .filter(|member| {
+                            member
+                                .overrides
+                                .side
+                                .as_deref()
+                                .unwrap_or(&group.side)
+                                .trim()
+                                != "party"
+                        })
+                        .flat_map(|member| {
+                            let xp = crate::difficulty::creature_xp(&member.entry);
+                            std::iter::repeat_n(xp, member.count as usize)
+                        })
+                        .collect();
+                    if added.is_empty() || nobody {
+                        return None;
+                    }
+                    let adds = added.iter().map(|xp| xp.unwrap_or(0)).sum();
+                    let fight = scale.weigh(&party, foes.iter().copied().chain(added));
+                    Some((group.id, (fight.rating?, adds)))
+                })
+                .collect();
+            self.arrival_words = Some((key, words));
+        }
+        self.arrival_words.as_ref().map(|(_, words)| words)
+    }
+
     /// Whether `arrival_result` has a result to show: the newest step added an arrival while
     /// no search words are typed, or it settled a tie.
     fn arrival_result_shown(&self) -> bool {
@@ -3058,21 +3127,15 @@ impl Run {
         let change_hint = if changed { " Changed." } else { "" };
         let joined_round = self.group_joined(group);
         let status = self.group_status(group, joined_round);
+        let rating = self
+            .arrival_words()
+            .and_then(|words| words.get(&group.id))
+            .cloned();
+        let (rating, adds) = rating.map_or((None, 0), |(rating, adds)| (Some(rating), adds));
         let grip = ui.allocate_response(
             vec2(block.min(ui.available_width()), Density::Read.control()),
             egui::Sense::DRAG,
         );
-        // A pointer's way to do what the Add button does, so the keyboard does not stop here.
-        grip.widget_info(|| {
-            egui::WidgetInfo::labeled(
-                egui::WidgetType::Other,
-                true,
-                format!(
-                    "Drag {name} to the initiative list{}",
-                    if changed { ". Changed." } else { "" }
-                ),
-            )
-        });
         let totals_text = Self::group_totals_text(group);
         let heading_width = design::number_width(
             ui,
@@ -3093,8 +3156,54 @@ impl Run {
                     &Type::Small.font(ui),
                 )
                 <= grip.rect.width();
-        let totals = ui.painter().text(
+        // F1: what the fight becomes, after the XP. Only where the totals and the status words
+        // are in the heading and stay there with it.
+        let word = rating
+            .as_ref()
+            .map(|rating| format!(" → {}", rating.word.text()));
+        let word = word.filter(|word| {
+            let line = if status.is_empty() {
+                format!("{totals_text}{word}")
+            } else {
+                format!("{status} · {totals_text}{word}")
+            };
+            totals_in_heading
+                && (status.is_empty() || status_in_heading)
+                && heading_width
+                    + design::L
+                    + design::number_width(ui, &line, &Type::Small.font(ui))
+                    <= grip.rect.width()
+        });
+        let shown = rating.as_ref().filter(|_| word.is_some());
+        // A pointer's way to do what the Add button does, so the keyboard does not stop here.
+        grip.widget_info(|| {
+            egui::WidgetInfo::labeled(
+                egui::WidgetType::Other,
+                true,
+                format!(
+                    "Drag {name} to the initiative list{}",
+                    if changed { ". Changed." } else { "" }
+                ),
+            )
+        });
+        if let Some(rating) = shown {
+            let words = format!(
+                "Adds {} XP; the fight becomes {}",
+                crate::encounter_run::grouped_number(adds),
+                rating.word.text()
+            );
+            ui.ctx()
+                .accesskit_node_builder(grip.id, |node| node.set_description(words));
+        }
+        let word_rect = ui.painter().text(
             grip.rect.right_center(),
+            Align2::RIGHT_CENTER,
+            word.clone().unwrap_or_default(),
+            Type::Small.font(ui),
+            c.text,
+        );
+        let totals = ui.painter().text(
+            pos2(word_rect.left(), grip.rect.center().y),
             Align2::RIGHT_CENTER,
             if totals_in_heading {
                 totals_text.clone()
@@ -3143,9 +3252,10 @@ impl Run {
             .filter(|_| group.encounter != self.source)
             .map_or_else(String::new, |name| format!("For {name}. "));
         let grip = grip.on_hover_text(format!(
-            "{name}.{change_hint} {context}{} {}",
+            "{name}.{change_hint} {context}{} {}{}",
             group.notes.trim(),
-            self.initiative.grouping.arrival_rule()
+            self.initiative.grouping.arrival_rule(),
+            shown.map_or_else(String::new, |rating| format!("\n{}", rating.budget_line()))
         ));
         if group.problem.is_none()
             && arrival_total(self.group_totals.get(&group.id).map_or("", String::as_str)).is_ok()

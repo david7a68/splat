@@ -1140,7 +1140,9 @@ Library shows **Back** with **Alt+Left** whenever an earlier entry is available.
 
 The visual suite includes `npc-in-lookup`, `package-rename` and `package-about`. `run-continue` covers Undo after a
 close and a restart, Continue fight and the sentence that stands in its place for a fight that was not played last,
-and unread Undo steps, each with Lookup closed and open. `share-to-package` checks the new references after **Copy both**, and Library navigation checks the dependency copy action and its Undo.
+and unread Undo steps, each with Lookup closed and open. `encounter-difficulty` covers the difficulty word on
+the Ready to run rows, in the editor, on the plan's rows and their opened line, with Lookup closed and open, and
+the encounters whose XP or party is not known. `share-to-package` checks the new references after **Copy both**, and Library navigation checks the dependency copy action and its Undo.
 
 On window focus, Splat checks campaign notes and every registered package for disk changes. Library, Lookup and encounter search reload changed content. A changed draft opens the disk comparison. A package's About page counts its chosen entries and offers **Choose every entry** with Undo. Removing an unavailable package also offers Undo and keeps links to the encounters that need its creatures.
 
