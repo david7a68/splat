@@ -3140,7 +3140,13 @@ mod tests {
                     ..Default::default()
                 },
                 |ctx| {
-                    egui::CentralPanel::default().show(ctx, |ui| sync.show(ui));
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        // Round 26: the result sits in the sheet's footer.
+                        let mut footer = crate::design::Footer::new("sync_test_footer", 600.0);
+                        sync.footer_messages(&mut footer);
+                        footer.show(ui);
+                        sync.show(ui);
+                    });
                 },
             );
             assert!(!out.shapes.is_empty());

@@ -2860,6 +2860,9 @@ mod tests {
                     },
                     |ctx| {
                         egui::CentralPanel::default().show(ctx, |ui| {
+                            // Round 26 FD1: the page's footer draws the warnings.
+                            let unavailable = content.package_warnings_of(&campaigns).unavailable;
+                            content.package_warnings(ui, &campaigns, &active, unavailable);
                             content.packages_content(ui, &campaigns, &active);
                         });
                     },
