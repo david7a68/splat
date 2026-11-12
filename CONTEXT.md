@@ -153,6 +153,11 @@ including participants that enter during a later phase.
 A group of participants assigned to the same side of an encounter, independently
 of their creature type or membership in a campaign's party.
 
+**Encounter difficulty**:
+The word that compares an encounter's XP with the party's XP budget from the campaign's
+rules: Low, Moderate, High or Above High. Splat shows it and blocks nothing.
+_Avoid_: Rating, challenge.
+
 **Encounter group**:
 A reusable, named list of creatures with counts, a default side, and notes, owned by
 a campaign. It is for any encounter, or it belongs to one encounter, and then only runs
@@ -232,7 +237,12 @@ _Avoid_: Ledger, which is the proposed history of trackers.
 An unticked task line in a world note: a fact the DM has not decided.
 
 **Roll table**:
-An existing Markdown table that a marker makes rollable.
+An existing Markdown table that a marker makes rollable. The marker can say how often a journey rolls it (`per`).
+
+**Travel check**:
+One roll on a marked table for one day or watch of a Travel event, kept with that event by its offset from the
+journey's start.
+_Avoid_: Random encounter roll, which names no journey.
 
 **Campaign clock**:
 The one count of standard hours, computed from the timeline, whatever world the party is on.
@@ -245,8 +255,13 @@ The current session, while a fight is open, a recording is live, or its note is 
 bar and a World entry's Log line follow it.
 
 **Session plan**:
-The encounters a session's note links to under its plan, with what has happened so far. The note holds the
-plan, so that Obsidian sees it too.
+The fights, groups and scenes a session's note lists under its plan, with what has happened so far. The note
+holds the plan, so that Obsidian sees it too.
+
+**Scene**:
+A task line of a session's plan that is not a fight or a group, with a done mark: a talk, a person to meet, a
+place, a secret to reveal.
+_Avoid_: Plan item, task, to-do.
 
 **Carried state**:
 Each player's HP and temporary HP from the last fight of the session being played, which the next run starts

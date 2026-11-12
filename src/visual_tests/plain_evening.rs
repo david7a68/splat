@@ -56,6 +56,37 @@ use std::{
     time::SystemTime,
 };
 
+/// F3 of the session-cycle design: tonight's next fight and its `Start fight` stay whole and in
+/// view at 960x640, with Lookup closed and open, whatever scenes the note's plan holds; an
+/// opened fight's `Read encounter` too. Scenes fold first.
+fn next_fight_in_view(d: &mut Driver<'_>, screen: &str, lookup: bool) {
+    if !screen.starts_with("session-tonight") {
+        return;
+    }
+    let (whole, detail) = d.at_size(NARROW, |d| {
+        let nodes = d.nodes();
+        let start = nodes
+            .iter()
+            .find(|node| node.name == "Start fight: Shrine of Cinders");
+        let read = nodes.iter().find(|node| node.name == "Read encounter");
+        let opened = screen.ends_with("planned fight open");
+        (
+            start.is_some_and(|node| node.fully_in_view())
+                && (!opened || read.is_some_and(|node| node.fully_in_view())),
+            format!(
+                "Start fight {:?}, Read encounter {:?}",
+                start.map(|node| (node.rect, node.shown)),
+                read.map(|node| (node.rect, node.shown))
+            ),
+        )
+    });
+    assert!(
+        whole,
+        "G7, F3: at 960x640 with Lookup {}, {screen}: the next fight's action is not whole and in view. {detail}",
+        if lookup { "open" } else { "closed" }
+    );
+}
+
 /// `all` writes the reference from this run; `add` adds new views and acts only.
 const WRITE: &str = "SPLAT_PLAIN_EVENING_WRITE";
 /// G7 compares with the reference only when this is `1`.
@@ -707,8 +738,10 @@ impl Evening {
         self.lookup(d, false);
         d.state(screen, Sizes::Standard);
         self.both_sizes(d, screen, Some(false));
+        next_fight_in_view(d, screen, false);
         self.lookup(d, true);
         self.both_sizes(d, screen, Some(true));
+        next_fight_in_view(d, screen, true);
         self.lookup(d, was_open);
     }
 
@@ -1643,4 +1676,732 @@ pub fn run(d: &mut Driver<'_>) {
             allowed.rows.len()
         ),
     );
+}
+
+/// Each row of `allowed.json` is in a named class of its row of section 2.5. A class lets a new
+/// thing appear and an old one move, never go, be cut or get narrower. A row that fits no
+/// class fails, so the list cannot allow a fault by copying the failures. Each pull request of
+/// the build plan keeps its own classes here: P5 the Travel menu (row 12), P2 the difficulty
+/// word (rows 1 to 3).
+#[cfg(test)]
+mod allowed_classes {
+    use super::*;
+
+    /// A class of one pull request's rows. `fits` reads the difference, and may read the other
+    /// rows: a move proves itself against the other moves of its view.
+    struct Class {
+        row: u32,
+        name: &'static str,
+        fits: fn(&Difference, &[AllowedRow]) -> bool,
+    }
+
+    const TRAVEL_MENU: &str = "session-tonight: Travel row menu";
+    /// One line of a row's menu, as the reference measures it.
+    const MENU_LINE: f32 = 36.0;
+
+    const CLASSES: &[Class] = &[
+        // P5, F9. Its reference at 993aa81f holds this line, so no row of it is left; the
+        // classes and their checks below stay for the next reference that does not.
+        Class {
+            row: 12,
+            name: "P5: the new line in a Travel row's open menu",
+            fits: |d, _| new_travel_menu_line(d),
+        },
+        Class {
+            row: 12,
+            name: "P5: `Remove` one line lower in that menu",
+            fits: |d, _| remove_one_line_lower(d),
+        },
+        // P3, F3 (the review of PR 261 named the first five).
+        Class {
+            row: 14,
+            name: "P3 a: an unchanged item down by the scenes' height",
+            fits: scenes::moved_down,
+        },
+        Class {
+            row: 14,
+            name: "P3 b: new scene content on the Session page",
+            fits: scenes::scene_content,
+        },
+        Class {
+            row: 7,
+            name: "P3 c: `Scene` in the More menu",
+            fits: |d, _| scenes::scene_line(d),
+        },
+        Class {
+            row: 9,
+            name: "P3 d: the reader's `Start fight`",
+            fits: |d, _| scenes::reader_start(d),
+        },
+        Class {
+            row: 21,
+            name: "P3 d: the reader's `Start fight`",
+            fits: |d, _| scenes::reader_start(d),
+        },
+        Class {
+            row: 13,
+            name: "P3 e: `Remove…` in a Ready row's menu",
+            fits: |d, _| scenes::remove_encounter(d),
+        },
+        Class {
+            row: 14,
+            name: "P3 f: the fold, `N scenes` on the Tonight line",
+            fits: |d, _| scenes::fold(d),
+        },
+        Class {
+            row: 14,
+            name: "P3 n: the Tonight count, with its pair",
+            fits: scenes::count,
+        },
+        Class {
+            row: 14,
+            name: "P3 r: Read leaves out the plan section",
+            fits: |d, _| scenes::read_leaves_out(d),
+        },
+        Class {
+            row: 14,
+            name: "P3 t: an act's words of these classes",
+            fits: |d, _| scenes::act_words(d),
+        },
+        Class {
+            row: 7,
+            name: "P3 t: an act's words of these classes",
+            fits: |d, _| scenes::act_words(d),
+        },
+        Class {
+            row: 9,
+            name: "P3 t: an act's words of these classes",
+            fits: |d, _| scenes::act_words(d),
+        },
+        Class {
+            row: 13,
+            name: "P3 t: an act's words of these classes",
+            fits: |d, _| scenes::act_words(d),
+        },
+    ];
+
+    /// P3's classes. Each proves itself from the difference's geometry and words: no class lets
+    /// an item of today go, be cut, be resized or narrow, apart from the count (n) and Read's
+    /// plan section (r), which row 14 rules.
+    mod scenes {
+        use super::super::{AllowedRow, Difference};
+
+        /// The plain campaign's task lines, as its notes hold them.
+        const SCENES: [&str; 4] = [
+            "Read Emberfall Rumours",
+            "Talk to Hobb the Miller about the ropes",
+            "Ask about the toll",
+            "Meet Hobb the Miller at the mill",
+        ];
+        const PARTS: [&str; 3] = ["Talk to Hobb the Miller about the ", "ropes", "NPC · alive"];
+        const LINKS: [&str; 2] = [
+            "Hobb the Miller (opens Hobb the Miller)",
+            "Emberfall Rumours (opens Emberfall Rumours)",
+        ];
+        const MENU: &str = "\u{e1fe}";
+        /// The task boxes that Read draws, and the More menu's `Scene` icon.
+        const GLYPHS: [&str; 2] = ["\u{e186}", "\u{e45e}"];
+        /// Where the Session page's Read pane starts at 1200x800.
+        const READ_X: f32 = 700.0;
+
+        fn bare(name: &str) -> &str {
+            ["Button: ", "CheckBox: ", "Label: ", "TextRun: ", "Link: "]
+                .iter()
+                .find_map(|prefix| name.strip_prefix(prefix))
+                .unwrap_or(name)
+        }
+
+        /// The numbers of a rectangle `x y wxh`, before any `, seen`.
+        fn rect(text: &str) -> Vec<f32> {
+            text.split(", seen")
+                .next()
+                .unwrap_or_default()
+                .split(|c: char| !(c.is_ascii_digit() || c == '.' || c == '-'))
+                .filter_map(|part| part.parse().ok())
+                .collect()
+        }
+
+        fn moved(d: &Difference) -> Option<(Vec<f32>, Vec<f32>)> {
+            let (before, after) = d.detail.split_once(" -> ")?;
+            let (before, after) = (rect(before), rect(after));
+            (before.len() == 4 && after.len() == 4).then_some((before, after))
+        }
+
+        fn plan_view(d: &Difference) -> bool {
+            d.screen.starts_with("session-") || d.screen.starts_with("lookup-reader ")
+        }
+
+        fn shown(d: &Difference) -> bool {
+            ["control", "text"].contains(&d.what.as_str()) && !d.detail.contains("seen")
+        }
+
+        fn is_count(name: &str) -> bool {
+            ["TONIGHT ", "THIS SESSION "].iter().any(|word| {
+                name.strip_prefix(word)
+                    .is_some_and(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()))
+            })
+        }
+
+        fn is_fold(name: &str) -> bool {
+            name.split_once(' ').is_some_and(|(n, word)| {
+                !n.is_empty()
+                    && n.chars().all(|c| c.is_ascii_digit())
+                    && ["scene", "scenes"].contains(&word)
+            })
+        }
+
+        fn scene_words(name: &str) -> bool {
+            SCENES.contains(&name)
+                || PARTS.contains(&name)
+                || LINKS.contains(&name)
+                || SCENES.iter().any(|words| {
+                    ["More actions for ", "Done: ", "Open: "]
+                        .iter()
+                        .any(|prefix| name.strip_prefix(prefix) == Some(words))
+                })
+        }
+
+        /// Every unchanged item that moves down in a view moves by the one same distance.
+        fn one_distance(d: &Difference, rows: &[AllowedRow]) -> Option<f32> {
+            let mut distances = rows.iter().filter_map(|row| {
+                let o = &row.difference;
+                let (before, after) = moved(o).filter(|_| {
+                    (&o.screen, &o.view, o.change.as_str()) == (&d.screen, &d.view, "moved")
+                        && shown(o)
+                })?;
+                let same = before[0] == after[0] && before[2..] == after[2..];
+                (same && after[1] > before[1]).then(|| ((after[1] - before[1]) * 10.0).round())
+            });
+            let first = distances.next()?;
+            distances.all(|other| other == first).then_some(first)
+        }
+
+        fn inside(at: &[f32], r: &[f32]) -> bool {
+            at.len() >= 2
+                && r.len() == 4
+                && r[0] <= at[0]
+                && at[0] <= r[0] + r[2]
+                && r[1] <= at[1]
+                && at[1] <= r[1] + r[3]
+        }
+
+        pub(super) fn moved_down(d: &Difference, rows: &[AllowedRow]) -> bool {
+            if !plan_view(d) || !shown(d) {
+                return false;
+            }
+            if d.change == "moved" {
+                return moved(d).is_some_and(|(before, after)| {
+                    before[0] == after[0]
+                        && before[2..] == after[2..]
+                        && after[1] > before[1]
+                        && one_distance(d, rows).is_some()
+                });
+            }
+            // A painted glyph is matched by its order: a fight's menu glyph that moved down
+            // with its row shows as new, inside a menu button that moved by that distance.
+            if d.change == "new" && bare(&d.name) == MENU {
+                let at = rect(&d.detail);
+                return rows.iter().any(|row| {
+                    let o = &row.difference;
+                    (&o.screen, &o.view, o.change.as_str()) == (&d.screen, &d.view, "moved")
+                        && bare(&o.name).starts_with("More actions for ")
+                        && moved(o).is_some_and(|(_, r)| inside(&at, &r))
+                        && moved_down(o, rows)
+                });
+            }
+            false
+        }
+
+        pub(super) fn scene_content(d: &Difference, rows: &[AllowedRow]) -> bool {
+            if !plan_view(d) || !shown(d) || d.change != "new" {
+                return false;
+            }
+            let name = bare(&d.name);
+            if scene_words(name) {
+                return true;
+            }
+            // A scene menu's glyph lies inside that new menu's button.
+            name == MENU && {
+                let at = rect(&d.detail);
+                rows.iter().any(|row| {
+                    let o = &row.difference;
+                    (&o.screen, &o.view, o.change.as_str()) == (&d.screen, &d.view, "new")
+                        && SCENES.iter().any(|words| {
+                            bare(&o.name).strip_prefix("More actions for ") == Some(words)
+                        })
+                        && inside(&at, &rect(&o.detail))
+                })
+            }
+        }
+
+        pub(super) fn scene_line(d: &Difference) -> bool {
+            shown(d)
+                && d.change == "new"
+                && d.screen == "session-tonight: More open"
+                && ["Add Scene", "Scene", GLYPHS[0]].contains(&bare(&d.name))
+        }
+
+        pub(super) fn reader_start(d: &Difference) -> bool {
+            let name = bare(&d.name);
+            let reader =
+                d.screen.starts_with("lookup-reader ") || d.screen.starts_with("world-reader");
+            shown(d)
+                && d.change == "new"
+                && (name.starts_with("Start a fight with ")
+                    || (reader && ["Start fight", "\u{e3d0}"].contains(&name)))
+        }
+
+        pub(super) fn remove_encounter(d: &Difference) -> bool {
+            shown(d)
+                && d.change == "new"
+                && d.screen == "encounters: row menu"
+                && bare(&d.name) == "Remove…"
+        }
+
+        pub(super) fn fold(d: &Difference) -> bool {
+            plan_view(d) && shown(d) && d.change == "new" && is_fold(bare(&d.name))
+        }
+
+        /// The count goes from 2 to 3: each gone count has a new count in its view.
+        pub(super) fn count(d: &Difference, rows: &[AllowedRow]) -> bool {
+            if !plan_view(d)
+                || !shown(d)
+                || !["new", "gone"].contains(&d.change.as_str())
+                || !is_count(bare(&d.name))
+            {
+                return false;
+            }
+            let of = |change: &str| {
+                rows.iter()
+                    .filter(|row| {
+                        let o = &row.difference;
+                        (&o.screen, &o.view, &o.what) == (&d.screen, &d.view, &d.what)
+                            && o.change == change
+                            && is_count(bare(&o.name))
+                    })
+                    .count()
+            };
+            of("new") == of("gone")
+        }
+
+        /// A task line as Read draws it: its words, after a space or after its box.
+        fn read_task(name: &str) -> bool {
+            SCENES.iter().any(|words| {
+                name.strip_prefix(' ') == Some(words)
+                    || GLYPHS.iter().any(|glyph| {
+                        name.strip_prefix(glyph)
+                            .and_then(|rest| rest.strip_prefix(' '))
+                            == Some(words)
+                    })
+            })
+        }
+
+        pub(super) fn read_leaves_out(d: &Difference) -> bool {
+            if !d.screen.starts_with("session-last") || !shown(d) {
+                return false;
+            }
+            let name = bare(&d.name);
+            match d.change.as_str() {
+                // The plan section in Read: its heading and its task lines, with their box.
+                "gone" => {
+                    let line = ["Plan for tonight", "Done", "Open"].contains(&name)
+                        || GLYPHS.contains(&name)
+                        || read_task(name);
+                    line && rect(&d.detail).first().is_some_and(|x| *x >= READ_X)
+                }
+                // The words below it in Read move up, unchanged.
+                "moved" => moved(d).is_some_and(|(before, after)| {
+                    before[0] >= READ_X
+                        && before[0] == after[0]
+                        && before[2..] == after[2..]
+                        && after[1] < before[1]
+                }),
+                // The link that Read showed in a task line is now on the scene's row.
+                "resized" => {
+                    LINKS.contains(&name)
+                        && moved(d)
+                            .is_some_and(|(before, after)| before[0] >= READ_X && after[0] < READ_X)
+                }
+                _ => false,
+            }
+        }
+
+        /// An act now shows or hides only words of the classes above.
+        pub(super) fn act_words(d: &Difference) -> bool {
+            if d.what != "act" || d.change != "changed" {
+                return false;
+            }
+            let word = |word: &str| {
+                SCENES.contains(&word)
+                    || PARTS.contains(&word)
+                    || GLYPHS.contains(&word)
+                    || ["Scene", "", "Start fight", "Remove…", "Plan for tonight"].contains(&word)
+                    || is_count(word)
+                    || is_fold(word)
+                    || read_task(word)
+            };
+            d.detail.split(" | ").all(|part| {
+                ["appeared + ", "appeared - ", "went + ", "went - "]
+                    .iter()
+                    .find_map(|prefix| part.strip_prefix(prefix))
+                    .is_some_and(word)
+            })
+        }
+    }
+
+    fn new_travel_menu_line(d: &Difference) -> bool {
+        let line = ["Button: Roll for encounters", "Roll for encounters"];
+        let shown = d.screen == TRAVEL_MENU
+            && ["control", "text"].contains(&d.what.as_str())
+            && d.change == "new"
+            && line.contains(&d.name.as_str());
+        // Opening the menu shows the line, and closing it takes the same line away.
+        let act = d.what == "act"
+            && d.change == "changed"
+            && ((d.name.starts_with("open More actions for ")
+                && d.detail == "appeared + Roll for encounters")
+                || (d.name.starts_with("close More actions for ")
+                    && d.detail == "went + Roll for encounters"));
+        shown || act
+    }
+
+    /// `x y wxh -> x y wxh`.
+    fn rects(detail: &str) -> Option<([f32; 4], [f32; 4])> {
+        let read = |part: &str| -> Option<[f32; 4]> {
+            let mut words = part.split_whitespace();
+            let x = words.next()?.parse().ok()?;
+            let y = words.next()?.parse().ok()?;
+            let (w, h) = words.next()?.split_once('x')?;
+            Some([x, y, w.parse().ok()?, h.parse().ok()?])
+        };
+        let (old, new) = detail.split_once(" -> ")?;
+        Some((read(old)?, read(new)?))
+    }
+
+    fn remove_one_line_lower(d: &Difference) -> bool {
+        let remove = ["Button: Remove this event", "Remove"];
+        d.screen == TRAVEL_MENU
+            && ["control", "text"].contains(&d.what.as_str())
+            && ["moved", "resized"].contains(&d.change.as_str())
+            && remove.contains(&d.name.as_str())
+            && rects(&d.detail).is_some_and(|(old, new)| {
+                // One line lower, the same height, and never narrower: the menu took the
+                // width of its new line.
+                (new[1] - old[1] - MENU_LINE).abs() < 0.5
+                    && (new[3] - old[3]).abs() < 0.05
+                    && new[2] >= old[2]
+            })
+    }
+
+    fn class_of(row: &AllowedRow, rows: &[AllowedRow]) -> Option<&'static str> {
+        CLASSES
+            .iter()
+            .find(|class| class.row == row.row && (class.fits)(&row.difference, rows))
+            .map(|class| class.name)
+    }
+
+    // P2, F1: the difficulty word. A text that exists today may never be gone, cut, resized or
+    // moved. The one "gone" a class accepts is the old form of a text that the same view shows
+    // again, at the same place and height, with only passive words at its end; each old form
+    // pairs with its own new form, one to one, so two losses cannot share one replacement.
+
+    /// The difficulty word, and the XP before it in the editor and the opened row.
+    const WORDS: [&str; 4] = ["Above High", "Moderate", "High", "Low"];
+    const F1_NEW_TEXT: &str = "F1: a new text that ends a line: the word and the XP";
+    const F1_EXTENDED: &str =
+        "F1: the word added at the end of a text that exists, its start unchanged";
+    const F1_OLD_FORM: &str = "F1: the old form of that text, shown again with the word at its end";
+    const F1_ACT: &str = "F1: an act's words, with the word at the end of texts that exist";
+
+    /// `x y w h` from a difference's `at …` or `was …` detail.
+    fn rect_of(detail: &str, lead: &str) -> Option<[f32; 4]> {
+        let numbers: Vec<f32> = detail
+            .strip_prefix(lead)?
+            .replace('x', " ")
+            .split_whitespace()
+            .map(|n| n.parse().ok())
+            .collect::<Option<_>>()?;
+        <[f32; 4]>::try_from(numbers).ok()
+    }
+
+    /// `6,300 of 6,400` or `11,800`: XP, and the budget when there is one.
+    fn xp_numbers(numbers: &str) -> bool {
+        numbers
+            .split(" of ")
+            .all(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit() || c == ','))
+    }
+
+    /// The words F1 may put at the end of `old` to make `new`: ` · Low`, or in the editor's
+    /// heading ` · XP 400 of 2,800 · Low`. Plan summaries join with a no-break space.
+    fn f1_suffix(old: &str, new: &str) -> bool {
+        let (old, new) = (old.replace('\u{a0}', " "), new.replace('\u{a0}', " "));
+        let Some(rest) = new.strip_prefix(&old) else {
+            return false;
+        };
+        WORDS.iter().any(|word| {
+            rest == format!(" · {word}")
+                || rest
+                    .strip_prefix(" · XP ")
+                    .and_then(|rest| rest.strip_suffix(&format!(" · {word}")))
+                    .is_some_and(xp_numbers)
+        })
+    }
+
+    /// A new text on a line that exists: `Low · XP 400 of 2,800` at the right of the narrow
+    /// editor's tab row, or ` · Low · XP 400 of 2,800` after `Read encounter`.
+    fn f1_new_text(name: &str) -> bool {
+        let name = name
+            .trim_start_matches("Label: ")
+            .trim_start_matches("TextRun: ")
+            .replace('\u{a0}', " ");
+        let name = name.strip_prefix(" · ").unwrap_or(&name);
+        WORDS.iter().any(|word| {
+            name.strip_prefix(word)
+                .and_then(|rest| rest.strip_prefix(" · XP "))
+                .is_some_and(xp_numbers)
+        })
+    }
+
+    /// Each part of an act that changed: `appeared + …`, `went - …`. Every added text is an old
+    /// text of the same kind with F1's words at its end, or a new F1 text; every removed text is
+    /// paired, one to one, with its extended form added in the same kind.
+    fn f1_act(detail: &str) -> bool {
+        let parts: Vec<(&str, &str, &str)> = detail
+            .split(" | ")
+            .filter_map(|part| {
+                let (kind, rest) = part.split_once(' ')?;
+                let (sign, words) = rest.split_once(' ')?;
+                Some((kind, sign, words))
+            })
+            .collect();
+        if parts.len() != detail.split(" | ").count()
+            || parts.iter().any(|(_, sign, _)| !["+", "-"].contains(sign))
+        {
+            return false;
+        }
+        let mut used = vec![false; parts.len()];
+        for (i, (kind, sign, old)) in parts.iter().enumerate() {
+            if *sign != "-" {
+                continue;
+            }
+            let Some(j) = (0..parts.len()).find(|&j| {
+                let (k, s, new) = parts[j];
+                !used[j] && k == *kind && s == "+" && f1_suffix(old, new)
+            }) else {
+                return false;
+            };
+            used[i] = true;
+            used[j] = true;
+        }
+        parts
+            .iter()
+            .zip(&used)
+            .all(|((_, _, words), used)| *used || f1_new_text(words))
+    }
+
+    /// The extended form, at the same place and height, at least as wide, in the same view.
+    fn f1_pair(old: &AllowedRow, new: &AllowedRow) -> bool {
+        let (o, n) = (&old.difference, &new.difference);
+        let rects = rect_of(&o.detail, "was ").zip(rect_of(&n.detail, "at "));
+        o.screen == n.screen
+            && o.view == n.view
+            && o.what == n.what
+            && ["control", "text"].contains(&o.what.as_str())
+            && o.change == "gone"
+            && n.change == "new"
+            && f1_suffix(&o.name, &n.name)
+            && rects.is_some_and(|(was, at)| {
+                was[0] == at[0] && was[1] == at[1] && was[3] == at[3] && at[2] >= was[2]
+            })
+    }
+
+    /// Each row's class: P5's from `CLASSES`, F1's one-row classes, then F1's pairs, one to one.
+    fn classes(rows: &[AllowedRow]) -> Vec<Option<&'static str>> {
+        let f1 = |row: &AllowedRow| (1..=3).contains(&row.row);
+        let mut out: Vec<_> = rows
+            .iter()
+            .map(|row| {
+                let d = &row.difference;
+                class_of(row, rows).or_else(|| {
+                    if !f1(row) {
+                        None
+                    } else if ["control", "text"].contains(&d.what.as_str())
+                        && d.change == "new"
+                        && f1_new_text(&d.name)
+                    {
+                        Some(F1_NEW_TEXT)
+                    } else if d.what == "act" && d.change == "changed" && f1_act(&d.detail) {
+                        Some(F1_ACT)
+                    } else {
+                        None
+                    }
+                })
+            })
+            .collect();
+        for i in 0..rows.len() {
+            if out[i].is_some() || !f1(&rows[i]) {
+                continue;
+            }
+            if let Some(j) = (0..rows.len())
+                .find(|&j| out[j].is_none() && f1(&rows[j]) && f1_pair(&rows[i], &rows[j]))
+            {
+                out[i] = Some(F1_OLD_FORM);
+                out[j] = Some(F1_EXTENDED);
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn the_f1_classes_refuse_a_loss_a_cut_a_move_and_two_losses_for_one_text() {
+        let row = |change: &str, name: &str, detail: &str| AllowedRow {
+            row: 1,
+            why: String::new(),
+            difference: Difference {
+                screen: "s".into(),
+                view: "v".into(),
+                what: "text".into(),
+                change: change.into(),
+                name: name.into(),
+                detail: detail.into(),
+            },
+        };
+        let gone = || row("gone", "5 party · 2 × Ember Cultist", "was 10 20 140x16");
+        let new = |detail: &str| row("new", "5 party · 2 × Ember Cultist · Low", detail);
+        let pair = [gone(), new("at 10 20 172x16")];
+        assert!(classes(&pair).iter().all(Option::is_some));
+        for (rows, why) in [
+            (vec![gone()], "a text gone alone"),
+            (
+                vec![row("new", "5 party · 2 × Ember", "at 10 20 100x16")],
+                "a cut text",
+            ),
+            (
+                vec![row("moved", "Read encounter", "1 2 3x4 -> 1 3 3x4")],
+                "a moved control",
+            ),
+            (
+                vec![row("height", "5 party", "16 -> 32")],
+                "a row that grows",
+            ),
+            (
+                vec![gone(), new("at 10 21 172x16")],
+                "an extended text that moved",
+            ),
+            (
+                vec![gone(), new("at 10 20 140x32")],
+                "an extended text that wrapped",
+            ),
+            (
+                vec![gone(), gone(), new("at 10 20 172x16")],
+                "two losses for one new text",
+            ),
+        ] {
+            assert!(
+                classes(&rows).iter().any(Option::is_none),
+                "{why} was accepted"
+            );
+        }
+        // An act may only swap a text for its extended form, one to one.
+        assert!(f1_act("appeared + 5 party · Low | appeared - 5 party"));
+        assert!(!f1_act(
+            "appeared + 5 party · Low | appeared - 5 party | appeared - 5 party"
+        ));
+        assert!(!f1_act("went - 5 party"));
+    }
+
+    #[test]
+    fn every_allowed_row_is_in_a_class_of_its_row() {
+        let allowed: Allowed = read(&folder().join("allowed.json"));
+        let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
+        for (row, class) in allowed.rows.iter().zip(classes(&allowed.rows)) {
+            let class = class.unwrap_or_else(|| {
+                panic!(
+                    "allowed.json row {} fits no class of its row: {}",
+                    row.row, row.difference
+                )
+            });
+            *counts.entry(class).or_default() += 1;
+        }
+        println!("allowed.json classes: {counts:?}");
+        // The classes refuse what a fault looks like: a line gone, or `Remove` narrower.
+        let remove = Difference {
+            screen: TRAVEL_MENU.into(),
+            view: "1200x800".into(),
+            what: "control".into(),
+            change: "resized".into(),
+            name: "Button: Remove this event".into(),
+            detail: "681 299 67.8x30 -> 681 335 137.9x30".into(),
+        };
+        assert!(remove_one_line_lower(&remove));
+        let narrower = Difference {
+            detail: "681 299 67.8x30 -> 681 335 60.0x30".into(),
+            ..remove.clone()
+        };
+        let gone = Difference {
+            change: "gone".into(),
+            ..remove.clone()
+        };
+        let other = Difference {
+            name: "Button: Delete the saved run".into(),
+            ..remove
+        };
+        for fault in [narrower, gone, other] {
+            assert!(
+                CLASSES
+                    .iter()
+                    .all(|class| !(class.fits)(&fault, &allowed.rows)),
+                "a class allows {fault}"
+            );
+        }
+        // P3's classes refuse the faults of the review of PR 261: the next fight gone, cut,
+        // narrowed, or moved in another direction; and an item of today gone outside Read.
+        let fight = Difference {
+            screen: "session-tonight: planned fight open".into(),
+            view: "960x640 Lookup closed".into(),
+            what: "control".into(),
+            change: "gone".into(),
+            name: "Button: Start fight: Shrine of Cinders".into(),
+            detail: "was 733 618.6 109x28".into(),
+        };
+        let faults = [
+            fight.clone(),
+            Difference {
+                change: "moved".into(),
+                detail: "733 452 109x28 -> 733 618.6 109x28, seen 733 618.6 109x13.4".into(),
+                ..fight.clone()
+            },
+            Difference {
+                change: "width".into(),
+                name: "TextInput: Title".into(),
+                detail: "394 335 554x28.2 -> 394 335 542x28.2".into(),
+                ..fight.clone()
+            },
+            Difference {
+                change: "moved".into(),
+                detail: "733 452 109x28 -> 703 452 109x28".into(),
+                ..fight.clone()
+            },
+            Difference {
+                screen: "session-tonight".into(),
+                name: "Label: Road to the ford".into(),
+                detail: "was 394 266 101x24".into(),
+                ..fight
+            },
+        ];
+        for fault in faults {
+            for row in [14, 7, 9, 13, 21] {
+                let row = AllowedRow {
+                    row,
+                    why: String::new(),
+                    difference: fault.clone(),
+                };
+                assert!(
+                    class_of(&row, &allowed.rows).is_none(),
+                    "a class allows {}",
+                    row.difference
+                );
+            }
+        }
+    }
 }

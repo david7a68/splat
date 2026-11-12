@@ -14,12 +14,15 @@ use super::{
     steps::*,
 };
 use eframe::egui::{self, Key, Pos2, pos2};
+pub mod encounter_difficulty;
 pub mod file_formats;
 pub mod integrity;
 pub mod list_formats;
 pub mod markdown_links;
 pub mod run_continue;
+pub mod session_plan_scenes;
 pub mod stat_formats;
+pub mod travel_checks;
 pub mod world_build;
 
 /// The middle of the reading pane and of the entry list, at the minimum window.
@@ -3493,10 +3496,18 @@ pub mod encounter_build {
             format!("The saved roster has the 8 rows asked for: {SAVED_ROWS:?}"),
         );
 
-        d.unreached(
-            "encounter difficulty and summary",
-            "the saved roster, because the app has no difficulty or summary view",
-        );
+        // T5.7: the roster's line ends with its XP and difficulty: five characters at levels 5
+        // and 6 have Low 2,800, and the three creatures are worth 200 XP each. The heading in a
+        // wide editor, the tab row in a narrow one.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let words = d.at_size(size, |d| d.painted_in(eframe::egui::Rect::EVERYTHING));
+            d.observe(
+                "T5.7",
+                words.contains("ROSTER 8 · XP 125 of 2,800 · Low")
+                    || words.contains("Low · XP 125 of 2,800"),
+                format!("At {size:?} the saved roster says its XP and word: {words}"),
+            );
+        }
         // Read a full stat block in Lookup, with the editor still open.
         let before = d.interaction_count();
         d.click("Cultist");
@@ -3780,6 +3791,42 @@ pub mod encounter_build {
             "Resume from the editor opens the paused second round",
         );
         d.state("resumed-from-editor", Sizes::All);
+
+        // T12.12: Remove… on a Ready to run row, only for an encounter with no saved run, with
+        // the words and the Undo of a saved group's removal. An unrelated act between them
+        // stays.
+        go_encounters(d);
+        if d.has(BACK_TO_LIST) {
+            d.click(BACK_TO_LIST);
+        }
+        d.expect(READY_TO_RUN);
+        let file = d
+            .root
+            .join(format!("campaigns/emberfall/Encounters/{NEW_NAME}.md"));
+        let text = std::fs::read_to_string(&file).expect("the new encounter");
+        d.click_first(&format!("More actions for {NEW_NAME}"));
+        d.expect("Remove…");
+        d.state("encounter-menu-remove", Sizes::All);
+        d.click("Remove…");
+        d.expect(&format!("Removed encounter {NEW_NAME}."));
+        d.observe(
+            "T12.12",
+            !file.exists() && !d.has(&format!("More actions for {NEW_NAME}")),
+            "Remove… takes the encounter's file away, and its row goes",
+        );
+        d.state("encounter-removed", Sizes::All);
+        d.click(BACK_TO_RUN);
+        d.click(NEXT_TURN);
+        let turn = d.app_mut().encounters.run().unwrap().strip().current;
+        go_encounters(d);
+        d.click("Undo remove encounter");
+        d.expect(&format!("More actions for {NEW_NAME}"));
+        let same_turn = d.app_mut().encounters.run().unwrap().strip().current == turn;
+        d.observe(
+            "T12.12",
+            std::fs::read_to_string(&file).is_ok_and(|back| back == text) && same_turn,
+            "Undo remove encounter writes the same file back, and the turn taken between stays",
+        );
     }
 }
 
@@ -9986,6 +10033,15 @@ pub mod session_notes {
                 && !d.has("Where"),
             "An opened plan event has its kind as Title and keeps duration and place on Timeline",
         );
+        // F9 (section 2.5, row 12): a campaign with no marked table has no checks to offer, so
+        // the Travel row's menu is as before.
+        d.click("More actions for Travel");
+        d.observe(
+            "T11.10",
+            d.has("Remove this event") && !d.has("Roll for encounters"),
+            "With no marked table, a Travel row's menu has no Roll for encounters",
+        );
+        d.press(Key::Escape);
         d.observe(
             "S13",
             d.has("Travel"),
@@ -13985,6 +14041,42 @@ pub mod encounter_groups {
             d.has_containing("3\u{a0}×\u{a0}Goblin\u{a0}Warrior")
                 && d.visible_text("3 members · XP 150"),
             "The panel lists each group's members and total XP",
+        );
+        // T5.7 in Arrivals: after a group's XP, what the fight becomes when it joins. Bridge
+        // Ambush's three creatures and the goblins are far below the party's Low 2,800.
+        let joins = d.at_size(DEFAULT, |d| {
+            let mut words = Vec::new();
+            d.each_painted_text(|text, _| {
+                if text.galley.job.text.starts_with(" → ") {
+                    words.push(text.galley.job.text.clone());
+                }
+            });
+            words
+        });
+        d.observe(
+            "T5.7-arrivals",
+            !joins.is_empty() && joins.iter().all(|word| word == " → Low"),
+            format!("Each group heading with room says what the fight becomes: {joins:?}"),
+        );
+        // The words are worked out after a step, not on each frame of the panel.
+        let words = crate::test_support::CachedWork::start("Arrivals words", d, |d| {
+            let (reached, work) = d
+                .app_mut()
+                .encounters
+                .run()
+                .map_or((0, 0), |run| run.arrival_counts);
+            crate::test_support::Counts { reached, work }
+        });
+        let steady = words.steady(d, |d| {
+            d.settle();
+            d.at_size(LARGE, |_| ());
+            d.settle();
+            d.visible_text(" → Low")
+        });
+        d.observe(
+            "F1-arrivals-cache",
+            steady.is_ok(),
+            format!("Unchanged frames and a resize do not work the words out again: {steady:?}"),
         );
         d.observe(
             "T13.1",

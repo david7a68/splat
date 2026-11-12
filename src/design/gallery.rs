@@ -364,6 +364,11 @@ pub fn components(ui: &mut egui::Ui) {
         })
         .collect(),
         &[1],
+        vec![
+            Action::quiet("Scene")
+                .icon(icons::CHECK_SQUARE)
+                .density(Density::Read),
+        ],
     );
     // The submenu keeps inside the gallery's pane, as the encounter editor's does.
     let inside = ui.max_rect().intersect(ui.clip_rect());

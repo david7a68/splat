@@ -44,13 +44,9 @@ impl Sources {
         if let Some(problem) = self.problem(key) {
             return Err(problem);
         }
-        let table = self.table(key).ok_or("No roll table has this key.")?;
-        Ok(TableRoll {
-            key: table.key.clone(),
-            dice: table.dice.clone(),
-            typed: None,
-            rows: table.rows.clone(),
-        })
+        self.table(key)
+            .ok_or("No roll table has this key.")?
+            .roll(None)
     }
 
     pub fn table(&self, key: &str) -> Option<&Table> {
@@ -567,16 +563,20 @@ mod tests {
                     dice: "1d4".into(),
                     path: "Treasure.md".into(),
                     heading: None,
+                    per: Default::default(),
                     problem: None,
                     rows: Vec::new(),
+                    markup: Vec::new(),
                 },
                 Table {
                     key: "broken".into(),
                     dice: "1d6".into(),
                     path: "Treasure.md".into(),
                     heading: None,
+                    per: Default::default(),
                     problem: Some("1d6 needs a row for 3.".into()),
                     rows: Vec::new(),
+                    markup: Vec::new(),
                 },
             ],
             items: vec![Item {

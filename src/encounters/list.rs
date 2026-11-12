@@ -214,6 +214,7 @@ pub(super) fn list_row(
     name: &str,
     detail: &str,
     status: bool,
+    rating: Option<&crate::difficulty::Rating>,
     actions: impl FnOnce(&mut egui::Ui),
 ) {
     ui.push_id(id, |ui| {
@@ -236,19 +237,24 @@ pub(super) fn list_row(
                                 .truncate(),
                         )
                         .on_hover_text(name);
-                        let visible_detail = fit_detail(
-                            ui,
-                            detail,
-                            &Type::Small.font(ui),
-                            // The run icon, and a leading warning's icon after it.
-                            ui.available_width()
-                                - if status { design::L } else { 0.0 }
-                                - if status && detail.starts_with("Changed on disk") {
-                                    design::L
-                                } else {
-                                    0.0
-                                },
-                        );
+                        // The run icon, and a leading warning's icon after it.
+                        let room = ui.available_width()
+                            - if status { design::L } else { 0.0 }
+                            - if status && detail.starts_with("Changed on disk") {
+                                design::L
+                            } else {
+                                0.0
+                            };
+                        let visible_detail = fit_detail(ui, detail, &Type::Small.font(ui), room);
+                        // F1: the word ends the line only when the detail stays whole with it.
+                        let rating = rating.filter(|rating| {
+                            visible_detail == detail
+                                && design::number_width(
+                                    ui,
+                                    &format!("{detail} · {}", rating.word.text()),
+                                    &Type::Small.font(ui),
+                                ) <= room
+                        });
                         let warning = visible_detail.split(" · ").position(|part| {
                             matches!(part, "Changed on disk" | "Offered in no fight")
                         });
@@ -299,8 +305,18 @@ pub(super) fn list_row(
                                 },
                             );
                         }
-                        let response = ui.add(egui::Label::new(job).extend()).on_hover_text(detail);
-                        design::named(ui, &response, &format!("{name} · {detail}"));
+                        let Some(rating) = rating else {
+                            let response =
+                                ui.add(egui::Label::new(job).extend()).on_hover_text(detail);
+                            design::named(ui, &response, &format!("{name} · {detail}"));
+                            return;
+                        };
+                        let word = rating.word.text();
+                        crate::difficulty::append(&mut job, ui, Type::Small, " · ", colors().muted);
+                        crate::difficulty::append(&mut job, ui, Type::Small, word, colors().text);
+                        let response = ui.add(egui::Label::new(job).extend());
+                        design::named(ui, &response, &format!("{name} · {detail} · {word}"));
+                        crate::difficulty::describe(ui, response, rating);
                     },
                 );
             },
@@ -484,7 +500,7 @@ pub(super) fn in_progress_list(
         let open = live.is_some_and(|live| live.id == run.id);
         let template = history::template_of(run, templates);
         let detail = paused_run_detail(run, &page.in_progress, open, story);
-        list_row(ui, &run.path, &run.encounter, &detail, !open, |ui| {
+        list_row(ui, &run.path, &run.encounter, &detail, !open, None, |ui| {
             row_menu_for_run(ui, run, template, open, blocked, loading, action);
             let edit_width = design::number_width(ui, "Edit", &Type::Strong.font(ui)) + design::L;
             ui.allocate_ui_with_layout(
@@ -537,6 +553,56 @@ pub(super) fn in_progress_list(
     ui.add_space(design::L);
 }
 
+impl Encounters {
+    /// `Remove…` on a Ready to run row: its result, with the words and the pattern of a saved
+    /// group's removal.
+    pub(super) fn encounter_remove_undo(
+        &mut self,
+        ui: &mut egui::Ui,
+        active: &Campaign,
+        modules: &[Module],
+    ) {
+        let Some(removed) = &self.removed_encounter else {
+            return;
+        };
+        if design::undo_message(
+            ui,
+            Tone::Info,
+            &format!("Removed encounter {}.", removed.name),
+            "Undo remove encounter",
+        ) {
+            match removed.restore() {
+                Ok(()) => {
+                    self.removed_encounter = None;
+                    self.reload_snapshot(active, modules);
+                    self.saved = true;
+                }
+                Err(error) => {
+                    self.error = Some(format!("The encounter did not come back: {error}"));
+                }
+            }
+        }
+    }
+}
+
+/// Whether a run of this encounter is saved: unfinished, ended, or in a file that cannot be read
+/// but names it. Only an encounter with none can be removed.
+fn has_saved_run(page: &history::Arranged<'_>, row: &history::ReadyRow<'_>) -> bool {
+    let template = row.template;
+    row.unfinished_run
+        || page
+            .history
+            .iter()
+            .flat_map(|session| &session.runs)
+            .any(|past| {
+                past.template
+                    .is_some_and(|other| other.path == template.path)
+            })
+        || page.unreadable.iter().any(|run| {
+            run.source == Some(template.id) || run.encounter.eq_ignore_ascii_case(&template.name)
+        })
+}
+
 pub(super) fn ready_list(
     ui: &mut egui::Ui,
     page: &history::Arranged<'_>,
@@ -586,10 +652,19 @@ pub(super) fn ready_list(
                 .filter(|s| !s.is_empty())
                 .unwrap_or("No participants yet"),
             false,
+            // A fight with an unfinished run is not ready, so it has no word (F1).
+            template
+                .difficulty
+                .rating
+                .as_ref()
+                .filter(|_| !row.unfinished_run),
             |ui| {
                 row_menu(ui, &template.name, |ui| {
                     if menu_action(ui, "Edit encounter", None) {
                         *action = Some(ListAction::Edit(template.path.clone()));
+                    }
+                    if !has_saved_run(page, row) && menu_action(ui, "Remove…", None) {
+                        *action = Some(ListAction::RemoveEncounter(template.path.clone()));
                     }
                 });
                 if Action::quiet("Edit")
@@ -699,7 +774,7 @@ pub(super) fn history_list(
                             ""
                         }
                     );
-                    list_row(ui, &run.path, &run.encounter, &detail, false, |ui| {
+                    list_row(ui, &run.path, &run.encounter, &detail, false, None, |ui| {
                         row_menu(ui, &run.encounter, |ui| {
                             if menu_action(
                                 ui,
@@ -865,6 +940,51 @@ mod iter_2_c_tests {
     use super::*;
     use crate::timeline::{Book, Kind, page::SessionLink};
 
+    /// F1: a Ready row's word joins its detail only when the detail stays whole with it on its
+    /// one line; else the line is as it was.
+    #[test]
+    fn the_difficulty_word_never_costs_a_detail_word() {
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let rating = crate::difficulty::above_high();
+        let detail = "5 party · Cinder Tyrant · 2 × Ember Cultist";
+        let widths: Vec<f32> = (200..=520).step_by(4).map(|width| width as f32).collect();
+        let lines = |rating: Option<&crate::difficulty::Rating>| {
+            let mut lines = Vec::new();
+            for width in &widths {
+                let output = ctx.run(Default::default(), |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        ui.scope(|ui| {
+                            ui.set_max_width(*width);
+                            list_row(ui, "row", "Mill Road", detail, false, rating, |_| {});
+                        });
+                    });
+                });
+                let line = output.shapes.iter().find_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) if text.galley.job.text.starts_with("5 party") => {
+                        Some(text.galley.job.text.clone())
+                    }
+                    _ => None,
+                });
+                lines.push(line.unwrap());
+            }
+            lines
+        };
+        let (plain, rated) = (lines(None), lines(Some(&rating)));
+        let word = format!("{detail} · Above High");
+        for (plain, rated) in plain.iter().zip(&rated) {
+            assert!(
+                rated == plain || (plain == detail && *rated == word),
+                "{plain:?} → {rated:?}"
+            );
+        }
+        // The word shows where it fits, and gives way where it would cut the detail.
+        assert!(
+            rated.contains(&word) && rated.iter().any(|line| *line != word),
+            "{rated:?}"
+        );
+    }
+
     /// Astra review of PR 231: a row menu opens below or above its button, never beside it, and
     /// starts at the button's left edge only when ending at its right edge would cross the pane.
     #[test]
@@ -886,6 +1006,47 @@ mod iter_2_c_tests {
         // A pane too narrow for either: still end at the button, never beside it.
         let narrow = egui::Rect::from_min_max(pos2(150.0, 90.0), pos2(330.0, 632.0));
         assert_eq!(menu_aligns(near_left, menu, narrow), end);
+    }
+
+    /// T12.12: Remove… is offered only for an encounter with no saved run: none unfinished,
+    /// none ended, and no unreadable run that names it.
+    #[test]
+    fn remove_is_offered_only_for_an_encounter_with_no_saved_run() {
+        use crate::encounter_run::Standing;
+        let template = |name: &str| Template {
+            path: format!("Encounters/{name}.md"),
+            id: Uuid::new_v4(),
+            name: name.into(),
+            summary: Some("1 × Wolf".into()),
+            difficulty: Default::default(),
+            repeatable: true,
+        };
+        let templates = ["Fresh", "Paused", "Ended", "Unreadable"].map(template);
+        let run = |at: usize, standing| SavedRunInfo {
+            path: PathBuf::from(format!("run-{at}.json")),
+            id: Some(Uuid::new_v4()),
+            source: Some(templates[at].id),
+            encounter: templates[at].name.clone(),
+            label: String::new(),
+            standing,
+            saved_at: None,
+            unsent: vec![],
+        };
+        let mut unreadable = run(3, Standing::Unreadable);
+        unreadable.source = None;
+        let runs = [
+            run(1, Standing::Unfinished),
+            run(2, Standing::Ended),
+            unreadable,
+        ];
+        let page = history::arrange(&templates, &runs, None, &[], &[]);
+        let offered: Vec<_> = page
+            .ready
+            .iter()
+            .filter(|row| !has_saved_run(&page, row))
+            .map(|row| row.template.name.as_str())
+            .collect();
+        assert_eq!(offered, ["Fresh"]);
     }
 
     #[test]
