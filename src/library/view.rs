@@ -234,8 +234,14 @@ fn show_inner(
     if let Some(entry) = entry {
         ui.ctx()
             .data_mut(|data| data.insert_temp(egui::Id::new("reader_document"), entry.id));
-        for flag in &entry.flags {
-            design::message(ui, crate::design::Tone::Warning, &flag.message);
+        // Line warnings wrap at the reader measure, where the stat block and the prose end, as
+        // World's do (round 26 FG3).
+        if !entry.flags.is_empty() {
+            style::measure(ui, |ui| {
+                for flag in &entry.flags {
+                    design::message(ui, crate::design::Tone::Warning, &flag.message);
+                }
+            });
         }
     }
     let reading = entry.and_then(|entry| entry.reading().ok().flatten());
