@@ -4252,7 +4252,6 @@ impl Run {
                 &self.history,
                 &self.history_labels,
                 &self.history_from_sheet,
-                &self.history_targets,
                 &self.state,
             )?),
         };
@@ -5537,8 +5536,24 @@ mod tests {
         assert!(!run.history.is_empty(), "the run has steps to compare");
         assert_eq!(reopened.history_labels, run.history_labels);
         assert_eq!(reopened.history_from_sheet, run.history_from_sheet);
-        // Each step's target, which its Undo shortens from (review round 1 of PR 286).
-        assert_eq!(reopened.history_targets, run.history_targets);
+        // Each step's row, which its Undo shortens from (review round 1 of PR 286): the file
+        // gives it back from the one row the step changed.
+        let rows: Vec<&str> = run
+            .state
+            .participants
+            .iter()
+            .map(|p| p.name.as_str())
+            .collect();
+        for (at, (kept, read)) in run
+            .history_targets
+            .iter()
+            .zip(&reopened.history_targets)
+            .enumerate()
+        {
+            if kept.as_deref().is_some_and(|name| rows.contains(&name)) {
+                assert_eq!(read, kept, "the row of step {at}");
+            }
+        }
         assert_eq!(reopened.history.len(), run.history.len());
         for (at, (kept, read)) in run.history.iter().zip(&reopened.history).enumerate() {
             assert_eq!(

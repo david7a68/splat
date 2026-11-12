@@ -4908,6 +4908,22 @@ mod allowed_classes {
             rows.push(r3b(25, extra));
             rows
         };
+        // Next turn and `Add to fight` by one amount, but not the key letter's: 30 px.
+        let wide_next = view(
+            "control",
+            "resized",
+            "Button: Next turn",
+            "468.7 8 121.7x36 -> 498.7 8 91.7x36",
+        );
+        let wide_add = view(
+            "control",
+            "moved",
+            "Button: Add to fight",
+            "383.4 8 69.3x36 -> 413.4 8 69.3x36",
+        );
+        let mut wider = with(&wide_next);
+        wider.retain(|row| row.difference.name != wide_add.name);
+        wider.push(r3b(25, &wide_add));
         let at_1200: Vec<_> = header
             .iter()
             .map(|row| AllowedRow {
@@ -4920,6 +4936,8 @@ mod allowed_classes {
             .collect();
         for (fault, rows) in [
             (r3b(25, &narrow), with(&narrow)),
+            (r3b(25, &wide_next), wider.clone()),
+            (r3b(25, &wide_add), wider.clone()),
             (r3b(25, &key), vec![r3b(25, &next), r3b(25, &key)]),
             (r3b(25, &round_text), header.clone()),
             (r3b(25, &far), with(&far)),

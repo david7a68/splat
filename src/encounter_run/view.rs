@@ -5417,8 +5417,15 @@ impl Run {
         let one_line =
             title_width + self.ended_actions_width(ui, undo_room) <= ui.available_width();
         let first_line = design::L * 4.0;
-        let (reason_room, second_line) =
-            self.ended_second_line(ui, ui.available_width(), undo_room);
+        // Beside the log panel the second line is the roster's: Undo stays at its right edge.
+        let line_width = if self.hide_panel {
+            ui.available_width()
+        } else {
+            ui.available_width()
+                - design::side_panel_width(ui.ctx().content_rect().width())
+                - design::S
+        };
+        let (reason_room, second_line) = self.ended_second_line(ui, line_width, undo_room);
         let (header_rect, _) = ui.allocate_exact_size(
             vec2(
                 ui.available_width(),
@@ -5639,7 +5646,15 @@ impl Run {
             let mut second = ui.new_child(
                 egui::UiBuilder::new()
                     .id_salt("ended_header_actions")
-                    .max_rect(header_rect.with_min_y(header_rect.top() + first_line)),
+                    .max_rect(
+                        header_rect
+                            .with_min_y(header_rect.top() + first_line)
+                            .with_max_x(if self.hide_panel {
+                                header_rect.right()
+                            } else {
+                                roster_right
+                            }),
+                    ),
             );
             second.with_layout(Layout::right_to_left(Align::Min), |ui| {
                 self.ended_continue(ui, reason_room);
