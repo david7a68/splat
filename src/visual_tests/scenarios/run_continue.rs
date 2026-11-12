@@ -173,7 +173,7 @@ pub(crate) fn history_edges(d: &mut Driver<'_>) {
                 }
             });
             let (list, state) = (list?, state?);
-            let (mut cut, mut above_log) = (Vec::new(), f32::MIN);
+            let (mut cut, mut above_log) = (Vec::new(), (f32::MIN, String::new()));
             d.each_painted_text(|text, clip| {
                 let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
                 if (clip.top() - list.top()).abs() < 0.5
@@ -182,15 +182,18 @@ pub(crate) fn history_edges(d: &mut Driver<'_>) {
                 {
                     cut.push(text.galley.job.text.clone());
                 }
+                // The list's own texts in Final state's column, between its label and the log's.
                 if log.is_some_and(|log| {
-                    clip.intersects(rect)
+                    (clip.top() - list.top()).abs() < 0.5
+                        && rect.left() >= state.left() - 0.5
                         && rect.top() > state.bottom()
                         && rect.bottom() <= log.top() + 0.5
-                }) {
-                    above_log = above_log.max(rect.bottom());
+                }) && rect.bottom() > above_log.0
+                {
+                    above_log = (rect.bottom(), text.galley.job.text.clone());
                 }
             });
-            Some((cut, log.map(|log| log.top() - above_log)))
+            Some((cut, log.map(|log| (log.top() - above_log.0, above_log.1))))
         });
         d.observe(
             "X37-history-clean-edge",
@@ -200,7 +203,9 @@ pub(crate) fn history_edges(d: &mut Driver<'_>) {
         let gap = edges.and_then(|(_, gap)| gap);
         d.observe(
             "X66-combat-log-gap",
-            gap.map_or(size == SMALL, |gap| (gap - crate::design::M).abs() <= 0.5),
+            gap.as_ref().map_or(size == SMALL, |(gap, _)| {
+                (gap - crate::design::M).abs() <= 0.5
+            }),
             format!("At {size:?}, COMBAT LOG is M below the last Final state row: {gap:?}"),
         );
     }
