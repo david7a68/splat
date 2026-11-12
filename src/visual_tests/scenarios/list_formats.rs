@@ -250,9 +250,33 @@ pub fn run(d: &mut Driver<'_>) {
             format!("At {size:?}, the Rules and runs warning's file line: {placed:?}"),
         );
     }
+    // iter-26-B FC5: the warning sits in the tab's footer, so Roll NPC initiative and Save keep
+    // their y when Save clears it, at 960, 1200 and 1920.
+    let form_tops = |d: &mut Driver<'_>| {
+        [SMALL, DEFAULT, (1920.0, 1080.0)].map(|size| {
+            d.at_size(size, |d| {
+                ["Roll NPC initiative", "Save run settings"].map(|name| {
+                    d.nodes()
+                        .into_iter()
+                        .filter(|node| node.name.starts_with(name))
+                        .map(|node| node.rect.top().round())
+                        .reduce(f32::max)
+                })
+            })
+        })
+    };
+    let with_warning = form_tops(d);
     // The Ctrl+S that Save shows saves exactly when Save can.
     d.press_ctrl(Key::S);
     d.expect("No changes");
+    let repaired = form_tops(d);
+    d.observe(
+        "iter-26-B-FC5",
+        with_warning.iter().flatten().all(Option::is_some) && repaired == with_warning,
+        format!(
+            "Initiative and Save tops with the warning {with_warning:?} and after Save {repaired:?}"
+        ),
+    );
     d.observe(
         "iter-23-B-AA2",
         !d.has_containing("Imaginary initiative") && !d.visible_text(REPAIR_STATE),
@@ -397,8 +421,11 @@ pub fn run(d: &mut Driver<'_>) {
             "iter-22-C-AD3",
             !rows.is_empty()
                 && rows.iter().all(|row| !row.trim_end().ends_with('·'))
+                // iter-26-B FI7: no row starts with a loose `·` either; a line break stands for
+                // the separator it dropped, and the name keeps it.
+                && rows.iter().all(|row| !row.trim_start().starts_with('·'))
                 && !rows.concat().contains('…')
-                && name.as_deref() == Some(painted.as_str()),
+                && name.as_deref() == Some(painted.replace('\n', " · ").as_str()),
             format!("Flagged summary {name:?} paints rows {rows:?}"),
         );
         // FC6: `Will add:` stays on a line with its first member.
@@ -695,8 +722,9 @@ pub fn run(d: &mut Driver<'_>) {
                     .sections
                     .iter()
                     .filter(|section| {
-                        text.galley.job.text[section.byte_range.clone()].trim()
-                            == crate::design::icons::WARN
+                        !text.galley.job.text[section.byte_range.clone()]
+                            .trim()
+                            .is_empty()
                     })
                     .map(|section| section.format.color),
             );
@@ -712,11 +740,13 @@ pub fn run(d: &mut Driver<'_>) {
         "iter-25-B-FC3",
         marked.len() == 1
             && marked[0].0 == format!("{} Line 20 not read", crate::design::icons::WARN)
-            && tones == [crate::design::colors().result.warning]
+            // iter-26-B FA5, AA2: the icon and the words, every painted part of the mark.
+            && !tones.is_empty()
+            && tones.iter().all(|tone| *tone == crate::design::colors().result.warning)
             && mark
                 .zip(last_read)
                 .is_some_and(|(mark, row)| mark.top() > row.bottom()),
-        format!("Marked roster rows {marked:?}, icon colours {tones:?}, mark {mark:?} after row 6 {last_read:?}"),
+        format!("Marked roster rows {marked:?}, mark colours {tones:?}, mark {mark:?} after row 6 {last_read:?}"),
     );
     d.state("flagged-roster-at-start-fight", Sizes::All);
     assert_eq!(fs::read_to_string(&roster_path).unwrap(), flagged_roster);
