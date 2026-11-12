@@ -14,6 +14,7 @@ use super::{
     steps::*,
 };
 use eframe::egui::{self, Key, Pos2, pos2};
+pub mod encounter_difficulty;
 pub mod file_formats;
 pub mod integrity;
 pub mod list_formats;
@@ -3356,10 +3357,18 @@ pub mod encounter_build {
             format!("The saved roster has the 8 rows asked for: {SAVED_ROWS:?}"),
         );
 
-        d.unreached(
-            "encounter difficulty and summary",
-            "the saved roster, because the app has no difficulty or summary view",
-        );
+        // T5.7: the roster's line ends with its XP and difficulty: five characters at levels 5
+        // and 6 have Low 2,800, and the three creatures are worth 200 XP each. The heading in a
+        // wide editor, the tab row in a narrow one.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let words = d.at_size(size, |d| d.painted_in(eframe::egui::Rect::EVERYTHING));
+            d.observe(
+                "T5.7",
+                words.contains("ROSTER 8 · XP 125 of 2,800 · Low")
+                    || words.contains("Low · XP 125 of 2,800"),
+                format!("At {size:?} the saved roster says its XP and word: {words}"),
+            );
+        }
         // Read a full stat block in Lookup, with the editor still open.
         let before = d.interaction_count();
         d.click("Cultist");
@@ -13909,6 +13918,42 @@ pub mod encounter_groups {
             d.has_containing("3\u{a0}×\u{a0}Goblin\u{a0}Warrior")
                 && d.visible_text("3 members · XP 150"),
             "The panel lists each group's members and total XP",
+        );
+        // T5.7 in Arrivals: after a group's XP, what the fight becomes when it joins. Bridge
+        // Ambush's three creatures and the goblins are far below the party's Low 2,800.
+        let joins = d.at_size(DEFAULT, |d| {
+            let mut words = Vec::new();
+            d.each_painted_text(|text, _| {
+                if text.galley.job.text.starts_with(" → ") {
+                    words.push(text.galley.job.text.clone());
+                }
+            });
+            words
+        });
+        d.observe(
+            "T5.7-arrivals",
+            !joins.is_empty() && joins.iter().all(|word| word == " → Low"),
+            format!("Each group heading with room says what the fight becomes: {joins:?}"),
+        );
+        // The words are worked out after a step, not on each frame of the panel.
+        let words = crate::test_support::CachedWork::start("Arrivals words", d, |d| {
+            let (reached, work) = d
+                .app_mut()
+                .encounters
+                .run()
+                .map_or((0, 0), |run| run.arrival_counts);
+            crate::test_support::Counts { reached, work }
+        });
+        let steady = words.steady(d, |d| {
+            d.settle();
+            d.at_size(LARGE, |_| ());
+            d.settle();
+            d.visible_text(" → Low")
+        });
+        d.observe(
+            "F1-arrivals-cache",
+            steady.is_ok(),
+            format!("Unchanged frames and a resize do not work the words out again: {steady:?}"),
         );
         d.observe(
             "T13.1",

@@ -376,7 +376,7 @@ today and its fit rule. No row adds a line, changes a row's height or takes widt
 | # | Screen | What differs | Band today | Fit rule |
 |---|---|---|---|---|
 | 1 | A planned fight's row, on the plan and in **Ready to run** | The summary ends with one word, such as `· Low` (F1), when the XP, the levels and the budget table are known | The summary: `src/sessions/plan.rs:795`; `src/encounters/list.rs:553-558` | Only when the summary keeps its lines and words |
-| 2 | An opened planned fight | The line of `Read encounter` ends with `· Low · XP 550 of 750` (F1) | `plan.rs:832-835` | The line holds one link today. The numbers go first, then the word |
+| 2 | An opened planned fight | The line of `Read encounter` ends with `· Low · XP 550 of 750` (F1) | `plan.rs:832-835` | The line holds one link today. The word goes first, then the numbers, as F1's table says; the words show only when the whole fits on the line |
 | 3 | The encounter editor | `· XP 550 of 2,500 · Low` (F1) at the end of the `Roster` heading, or of the tab row below 760 px | `src/encounters.rs:4381`; `:3932-3955` | One line. The numbers go first, then the word |
 | 4 | Arrivals | A group's XP is followed by `→ Moderate` (F1) | `src/encounter_run/view.rs:3468-3520` | Only where the totals and the status words are in the heading today (`:3479-3492`) and stay there |
 | 5 | A row marked `Conc` that takes damage | The row's second line ends with `Conc save DC 10` until the next step (F2) | `view.rs:6476-6486` | Only when the line keeps its lines and folds nothing that shows today. Else in the hover and accessible name only |
@@ -449,17 +449,23 @@ The examples of F1 use one party: 5 characters at level 3. Their budgets are Low
 **Where the numbers come from.** The rule entry
 `dnd2024:rules/combat_encounters_step_2_determine_your_xp_budget` has a typed table at
 `splat_rule/parameters/per_character_xp`, with `level`, `low`, `moderate` and `high` for levels 1 to 20. Splat
-reads it from the rules that the campaign uses, as it reads the inspiration rule
-(`src/encounter_settings.rs:421`). No table is written in Rust.
+reads it from the rules that the campaign uses, as it reads the inspiration rule (`xp_budgets` and
+`rules_in_use` in `src/encounter_settings.rs`): the only table, or of several the only one in the campaign's own
+notes, so a house rule's copy takes the package's place. No table is written in Rust.
 
 **One computation** (new module `src/difficulty.rs`, one function, every screen calls it).
 
-- **The party:** the characters on the party's side in the roster; in a run, those who are not absent. A
-  roster with no character uses the campaign's party. A level comes from the saved sheet.
+- **The party:** the characters on the party's side in the roster; in a run, those who are not absent. Only a
+  roster with no character at all uses the campaign's party, which is every party copy of the campaign,
+  also one whose note cannot be read; a run whose characters are all absent has no party, and shows no word.
+  An ally on the party's side counts for neither side.
+- **A level:** only from the saved sheet now (`splat_character.level` in the party copy's note, by its ID). A
+  sheet that is gone, cannot be read or has no level is a level not known, and the word does not show. A
+  run's copy of a sheet from when it started says who is a character, never their level.
 - **The budget:** for each difficulty, the sum of the table's value for each character's level.
-- **The XP:** the sum for every creature that is not on the party's side, from the function that groups use
-  today (`creature_xp`, `src/encounters/groups.rs:535`, which P2 moves into the shared module). It can have
-  no answer for a creature.
+- **The XP:** the sum for every creature that is not on the party's side (in a run, every present one), from
+  the function that groups use (`creature_xp`, now in `src/difficulty.rs`). It can have no answer for a
+  creature.
 - **The word:** `Low`, `Moderate` or `High` when the XP is at most that budget, and `Above High` for more.
 - **When.** The answer is kept with the revisions it came from (the encounter note, the saved sheets, the rule
   entry) and is computed again when one of them changes, never each frame.
@@ -480,8 +486,9 @@ Rows 1 to 4 of section 2.5 name each band in the source and its fit rule.
 - **Hover** on the word, and its accessible description, give the rest: `Budget for 5 at level 3: Low 750 ·
   Moderate 1,125 · High 2,000`. For mixed levels: `for 5 at levels 3 to 4`. With no character in the roster:
   `for the party of 5 at level 3`.
-- In Arrivals the word is what the fight becomes when the group joins. Its accessible name says `adds 400 XP;
-  the fight becomes Moderate`.
+- In Arrivals the word is what the fight becomes when the group joins. The group's drag handle keeps its
+  accessible name, and its accessible description says `Adds 400 XP; the fight becomes Moderate`: the word is
+  painted text, and a scenario finds the handle by its name.
 - **A summary whose last line has no room** shows no word. The DM opens the row, by a click or Enter on its
   title, and the word ends the line of `Read encounter`. That is 1 `Find`, with the keyboard.
 - It does not show on a running or played fight's row, on Setup's roster, in History or on Timeline.
