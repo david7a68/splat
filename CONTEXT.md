@@ -225,7 +225,8 @@ A world entry with a date, counted back from Day 1 of the campaign clock. Its ty
 _Avoid_: Timeline event, which is a thing that happened in play.
 
 **Log**:
-The last heading of a world entry, with one line for each thing that play changed.
+The last heading of a world entry, with one line for each thing that play changed. The DM can also add a line in
+their own words, with `Add to Log`.
 _Avoid_: Ledger, which is the proposed history of trackers.
 
 **Open question**:

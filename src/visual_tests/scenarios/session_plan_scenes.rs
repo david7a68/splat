@@ -1,6 +1,7 @@
 //! Scenes in a session's plan (F3 of the session-cycle design): task lines as rows with a done
 //! box, `Scene` in the Add strip's More list, a scene's link, and `Start fight` for a fight that
-//! nobody planned, from a scene's menu and from a reader's header.
+//! nobody planned, from a scene's menu and from a reader's header. Then F6: `Add to Log` from a
+//! done scene and from a reader's header.
 use super::*;
 use std::fs;
 use uuid::Uuid;
@@ -106,20 +107,15 @@ pub fn run(d: &mut Driver<'_>) {
     d.click_starting(&format!("{VARRA} (opens"));
     d.wait_for_text("A note for tonight.");
     d.audit_goal_within("T12.11", "read the NPC that a scene links", 1);
-    // Section 1.2: the reader's header shows `Start fight` with its word where the room after
-    // the title holds it, and else does not show it. At 960 the room beside a 13-letter title
-    // is too small.
+    // Section 1.2: the reader's header shows `Add to Log` next to Edit and `Start fight` with
+    // its word after it, where the room after the title holds them. At 960 the room beside a
+    // 13-letter title holds `Add to Log` as its icon alone; at 1200, `Start fight` too.
     for (size, shown) in [(SMALL, false), (DEFAULT, true), (LARGE, true)] {
         let (fits, detail) = d.at_size(size, |d| {
-            let start = d.place_of(&format!("Start a fight with {VARRA}"));
-            let edit = d.place_of(&format!("Edit {VARRA}"));
+            let (log, start, order) = reader_header(d, VARRA);
             (
-                start.is_some() == shown
-                    && start.zip(edit).is_none_or(|(start, edit)| {
-                        (start.left() - edit.right() - crate::design::XS).abs() <= 0.5
-                            && (start.top() - edit.top()).abs() <= 0.5
-                    }),
-                format!("Start fight {start:?}, Edit {edit:?}"),
+                start.is_some() == shown && log.is_some() && order,
+                format!("Add to Log {log:?}, Start fight {start:?}"),
             )
         });
         d.observe(
@@ -220,5 +216,163 @@ pub fn run(d: &mut Driver<'_>) {
         "T12.10",
         note(d) == after,
         "Undo remove puts the scene's line back where it was",
+    );
+}
+
+/// F6 of the session-cycle design: a line in an entry's own Log, from a done scene that links it
+/// and from its reader's header, with the long name of the design's wireframes.
+pub fn log_from_play(d: &mut Driver<'_>) {
+    const VARRA_BLACK: &str = "Captain Varra Black";
+    const WORDS: &str = "told the party who burned the ropes at the ford";
+    const TYPED: &str = "Told the party who burned the ropes.";
+    let field = format!("Log line for {VARRA_BLACK}");
+    let added = format!("Added to {VARRA_BLACK}’s Log.");
+    let keep = entry(d, "Locations/Ashfall Keep.md", KEEP, "location", "");
+    entry(
+        d,
+        "NPCs/Captain Varra Black.md",
+        VARRA_BLACK,
+        "npc",
+        &format!("  status: alive\n  in: {{id: {keep}}}\n"),
+    );
+    let path = root(d).join("NPCs/Captain Varra Black.md");
+    let before = fs::read_to_string(&path).unwrap();
+    d.app_mut().lookup.refresh();
+    d.settle();
+    d.click(NAV_SESSIONS);
+    new_session(d, "The Crossing");
+    let body = d.editor_text().expect("a new session has a note");
+    d.replace_editor_text(&body.replace(
+        "## Plan for tonight\n",
+        &format!("## Plan for tonight\n\n- [x] [[{VARRA_BLACK}]]: {WORDS}\n- [ ] [[{VARRA_BLACK}]]\n"),
+    ));
+    d.press_ctrl(Key::S);
+    show_plan(d);
+    // The line's stamp: the session being played, and the day on the Timeline's clock.
+    let session = d
+        .app()
+        .sessions
+        .selected_path()
+        .and_then(|path| path.file_stem().map(|stem| stem.to_string_lossy().into_owned()))
+        .expect("a session is open");
+    let stamp = match crate::timeline::day_now(&d.app().timeline.events) {
+        Some(day) => format!("{session}, Day {day}"),
+        None => session.clone(),
+    };
+
+    // A done scene that links one World entry has `Add to Log` in its action place; a scene
+    // still to come has none.
+    let add = format!("Add to Log: {VARRA_BLACK}: {WORDS}");
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (shown, detail) = d.at_size(size, |d| {
+            let action = d.place_of(&add);
+            let menu = d.place_of(&format!("More actions for {VARRA_BLACK}: {WORDS}"));
+            (
+                action.zip(menu).is_some_and(|(action, menu)| {
+                    action.right() <= menu.left() && (action.top() - menu.top()).abs() <= 0.5
+                }),
+                format!("Add to Log {action:?}, menu {menu:?}"),
+            )
+        });
+        d.observe(
+            "T18.2",
+            shown && d.nodes().iter().filter(|node| node.name.starts_with("Add to Log: ")).count() == 1,
+            format!("At {size:?}, only the done scene has Add to Log, left of its menu: {detail}"),
+        );
+    }
+    d.state("done-scene-add-to-log", Sizes::All);
+
+    // From the done scene: Lookup opens on the entry with the field, its stamp, and the scene's
+    // words outside its link, selected, so typing replaces them. Panel 2, Do 2.
+    d.set_base(DEFAULT);
+    d.begin_task();
+    d.click(&add);
+    d.expect(&field);
+    d.observe(
+        "T18.2",
+        d.has("Close Lookup")
+            && d.focused_name().as_deref() == Some(field.as_str())
+            && d.field_text(&field).as_deref() == Some(WORDS)
+            && d.visible_text(&format!("{stamp}:")),
+        "A done scene's Add to Log opens Lookup on its entry with the Log field, the stamp and the scene's words",
+    );
+    d.state("log-field-from-scene", Sizes::All);
+    d.type_text(TYPED);
+    d.observe(
+        "T18.2",
+        d.field_text(&field).as_deref() == Some(TYPED),
+        "The scene's words were selected, so typing replaced them",
+    );
+    d.press(Key::Enter);
+    d.expect(&added);
+    d.click("Close Lookup");
+    d.audit_goal_within("T18.2", "put what an NPC said in her own note, from a done scene", 4);
+    let logged = fs::read_to_string(&path).unwrap();
+    let expected = format!(
+        "{before}\n## Log\n\n- {}: {TYPED}\n",
+        stamp.replacen(&session, &format!("[[{session}]]"), 1)
+    );
+    d.observe(
+        "T18.2",
+        logged == expected && !note(d).contains(TYPED),
+        format!("The entry's note gains one line under a new Log heading, and the session note none: {logged:?}"),
+    );
+
+    // The result and its Undo stay with the entry: Lookup shows them again.
+    d.click(NAV_LOOKUP);
+    d.expect(&added);
+    d.state("log-line-added-in-lookup", Sizes::All);
+    d.click("Undo Log line");
+    d.observe(
+        "T18.2",
+        fs::read_to_string(&path).unwrap() == before && !d.has("Undo Log line"),
+        "Undo Log line takes back that one line, and the note is as before",
+    );
+
+    // The reader's header, with a 19-letter title: `Add to Log` next to Edit gives way first, to
+    // its icon, then away; `Start fight` keeps its word or does not show; the title keeps its
+    // width.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (fits, detail) = d.at_size(size, |d| {
+            let (log, start, order) = reader_header(d, VARRA_BLACK);
+            let icon = log.is_some_and(|log| log.width() <= crate::design::Density::Read.control() + 0.5);
+            (
+                order && (log.is_none() || icon || start.is_some()),
+                format!("Add to Log {log:?}, Start fight {start:?}"),
+            )
+        });
+        d.observe(
+            "T18.2",
+            fits,
+            format!("At {size:?}, the header's actions follow section 1.2: {detail}"),
+        );
+    }
+    d.state("log-header-long-title", Sizes::All);
+
+    // An edit form blocks the field: Splat makes no "changed on disk" warning of its own.
+    d.click(&format!("Edit {VARRA_BLACK}"));
+    d.type_into_editor(" Draft.");
+    d.click("Close Lookup");
+    d.click(&add);
+    d.observe(
+        "T18.2",
+        d.visible_text("Save or discard your edit first.") && !d.has(&field),
+        "While the entry has an edit form, the Log field waits",
+    );
+    d.state("log-field-blocked-by-edit", Sizes::Default);
+    d.click("Discard");
+    d.expect(&field);
+    d.observe(
+        "T18.2",
+        d.field_text(&field).as_deref() == Some(WORDS) && fs::read_to_string(&path).unwrap() == before,
+        "After Discard the field opens with the scene's words, and the note is as before",
+    );
+    // Escape clears and closes the field, and writes nothing.
+    d.click(&field);
+    d.press(Key::Escape);
+    d.observe(
+        "T18.2",
+        !d.has(&field) && fs::read_to_string(&path).unwrap() == before,
+        "Escape closes the field and writes nothing",
     );
 }

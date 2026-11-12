@@ -224,3 +224,38 @@ pub fn open_arrivals(d: &mut Driver<'_>) {
     d.click("Add to fight");
     d.expect("This fight · Arrivals");
 }
+
+/// Section 1.2 of the session-cycle design: a reader's quiet header actions after `Edit <name>`,
+/// on Edit's line. `Add to Log` comes next to Edit and `Start fight` after it, each `XS` after the
+/// one before. Returns where each shows, and whether they keep that order and spacing.
+pub fn reader_header(
+    d: &Driver<'_>,
+    name: &str,
+) -> (Option<eframe::egui::Rect>, Option<eframe::egui::Rect>, bool) {
+    let nodes = d.nodes();
+    let edit_name = format!("Edit {name}");
+    let Some(edit) = nodes
+        .iter()
+        .find(|node| node.name == edit_name)
+        .map(|node| node.rect)
+    else {
+        return (None, None, false);
+    };
+    let after_edit = |wanted: &str| {
+        nodes
+            .iter()
+            .filter(|node| {
+                node.name == wanted
+                    && (node.rect.top() - edit.top()).abs() <= 0.5
+                    && node.rect.left() > edit.right()
+            })
+            .map(|node| node.rect)
+            .min_by(|a, b| a.left().total_cmp(&b.left()))
+    };
+    let log = after_edit("Add to Log");
+    let start = after_edit(&format!("Start a fight with {name}"));
+    let follows = |rect: Option<eframe::egui::Rect>, after: eframe::egui::Rect| {
+        rect.is_none_or(|rect| (rect.left() - after.right() - crate::design::XS).abs() <= 0.5)
+    };
+    (log, start, follows(log, edit) && follows(start, log.unwrap_or(edit)))
+}

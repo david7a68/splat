@@ -818,7 +818,7 @@ fn scene_row(
         .as_ref()
         .and_then(|entry| entry.log)
         .filter(|_| task.done);
-    let log_name = format!("Add to the Log of {plain}");
+    let log_name = format!("Add to Log: {plain}");
     let log_action = || {
         Action::quiet("Add to Log")
             .icon(icons::ADD)

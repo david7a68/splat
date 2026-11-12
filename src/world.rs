@@ -2028,6 +2028,7 @@ impl Reader {
     /// Open `Add to Log` for this entry, as a done scene's `Add to Log` does. The field starts
     /// with `words`, selected, unless the DM already typed words there.
     pub fn open_log(&mut self, id: Uuid, words: &str) {
+        eprintln!("P6TRACE open_log {words:?} {}", std::backtrace::Backtrace::force_capture());
         let field = self.log_fields.entry((id, self.played.clone())).or_default();
         field.focus = true;
         if field.words.trim().is_empty() {
@@ -2107,6 +2108,7 @@ impl Reader {
         campaign: Option<&Campaign>,
     ) -> Option<Nav> {
         if self.showing != Some(item.entry.id) {
+            eprintln!("P6TRACE showing changes {:?}", item.entry.name);
             self.undo = None;
             self.kept = None;
             if let Some(previous) = self.showing {
@@ -3066,6 +3068,7 @@ impl Reader {
     /// and writes only when the file still holds what it read. A failed write keeps the field
     /// and its words, and names the file.
     fn add_log_line(&mut self, campaign: &Campaign, item: &Item, words: &str) -> Option<Go> {
+        eprintln!("P6TRACE add_log_line {words:?}");
         let line = match self.line_stamp() {
             Some(stamp) => format!("{stamp}: {words}"),
             None => words.to_owned(),

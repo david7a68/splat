@@ -1944,6 +1944,33 @@ pub fn facts(d: &mut Driver<'_>) {
     d.click("The Arena");
     d.expect("Part of: Arena Guild → Arena Guild, The Arena.");
     assert_eq!(fs::read_to_string(&path).unwrap(), after);
+    // F6: `Add to Log` beside Edit opens a field with the line's stamp. Enter writes one line
+    // in the DM's words, stamped as the change above, and its Undo takes back that line alone.
+    reload(d);
+    d.click("Add to Log");
+    d.observe(
+        "T18.2",
+        d.focused_name().as_deref() == Some("Log line for Zarel") && d.visible_text("Session 1:"),
+        "Add to Log opens the Log field with the keyboard in it, after the line's stamp",
+    );
+    d.state("log-field-open", Sizes::All);
+    d.type_text("Gave the gate key to Iselle.");
+    d.press(Key::Enter);
+    d.expect("Added to Zarel’s Log.");
+    d.observe(
+        "T18.2",
+        fs::read_to_string(&path).unwrap()
+            == format!("{after}- [[Session 1]]: Gave the gate key to Iselle.\n")
+            && !d.has("Log line for Zarel"),
+        "Enter adds one line at the end of the Log, with the change's stamp, and closes the field",
+    );
+    d.state("log-line-added", Sizes::All);
+    d.click("Undo Log line");
+    d.observe(
+        "T18.2",
+        fs::read_to_string(&path).unwrap() == after && !d.has("Undo Log line"),
+        "Undo Log line takes back that one line",
+    );
     reload(d);
     d.click(NAV_SESSIONS);
     d.click_containing("Session 1 · ");
@@ -4137,21 +4164,18 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
     d.wait_for_text("Watch House");
     for size in [SMALL, DEFAULT, LARGE] {
         let (placed, detail) = d.at_size(size, |d| {
-            let start = d.place_of(start);
-            let edit = d.place_of("Edit Rook Ambry");
+            let (log, start, order) = reader_header(d, "Rook Ambry");
             (
-                (size == SMALL || start.is_some())
-                    && start.zip(edit).is_none_or(|(start, edit)| {
-                        (start.left() - edit.right() - design::XS).abs() <= 0.5
-                            && (start.top() - edit.top()).abs() <= 0.5
-                    }),
-                format!("Start fight {start:?}, Edit {edit:?}"),
+                (size == SMALL || start.is_some()) && order,
+                format!("Add to Log {log:?}, Start fight {start:?}"),
             )
         });
         d.observe(
             "T12.12",
             placed,
-            format!("At {size:?}, the NPC's Start fight follows Edit by XS: {detail}"),
+            format!(
+                "At {size:?}, the NPC's Start fight follows Edit, or Add to Log next to it, by XS: {detail}"
+            ),
         );
     }
     d.state("npc-start-fight-in-lookup", Sizes::All);

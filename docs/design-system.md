@@ -878,12 +878,25 @@ tone (`In` `⚠ Watch House · Not found`).
 A campaign world entry has a quiet Edit action, with a pencil icon and the word Edit, on its title line in Lookup and World. Its icon sits one `L` after the measured title at every title width, so a kind line wider than a short title does not push it away; a title with art keeps Edit after the art. With no run open, a creature's or an NPC's reader (a campaign
 entry, or a package creature, whose header has no Edit) has a quiet `Start fight` with the run icon after Edit,
 `XS` apart (after the measured title, one `L` on, when there is no Edit), named `Start a fight with <name>` and
-blocked as the encounter editor's `Start fight` is. `Add to Log` will come first, next to Edit. It takes only the
-room after the title on the title's line: the title keeps its width and the row gains no line and no menu, so
-when the room does not hold the word, `Start fight` does not show. Beside a portrait there is no such room. It
+blocked as the encounter editor's `Start fight` is. A campaign world entry also has a quiet `Add to Log`
+(`icons::ADD`) next to Edit, `XS` apart, with `Start fight` `XS` after it. They take only the room after the
+title on the title's line: the title keeps its width and the row gains no line and no menu. The header shows
+the first of these that fits: both words; `Start fight` and `Add to Log` as its icon (`icon_button`, its name
+on hover); `Start fight` alone; the icon alone; neither. `Start fight` is never an icon, so when the room does
+not hold its word it does not show. Beside a portrait there is no such room. `Start fight`
 saves `Fight with <name>` with the party and the creature and starts its run; an encounter of that name (or of
 that name with a number) that was never run and holds the same roster starts instead. An NPC with no stat block
-opens the run's made-up form in Arrivals, with the name filled in and the keyboard in HP. Edit replaces the rows and
+opens the run's made-up form in Arrivals, with the name filled in and the keyboard in HP. `Add to Log` opens one
+`add_field` under the kind line, named `Log line for <name>`, with the placeholder `What happened?` and the
+keyboard in it; the line's stamp (`Session 12, Day 3:`, the stamp of a Change at that moment, or the day alone
+when no session is being played) stands before it in `Type::Small` `muted`, on the field's line while the field
+keeps 224 px, else above it. Enter adds one line at the end of the entry's `## Log` (Splat makes the heading
+when the note has none) and closes the field; Escape clears and closes it. Its result, `Added to <name>’s Log.`
+with `Undo Log line`, sits where the edit form's result sits; Undo removes that line only while the file holds
+what the act wrote, and ends when the entry's text changes or the reader shows another entry. A failed read or
+write names the file in the reader's error place and keeps the field with its words. The typed words wait, by
+entry and session, while the reader shows another entry. While the entry's edit form is open the field waits
+under `Save or discard your edit first.` A package's entry has no `Add to Log`. Edit replaces the rows and
 the text with one form. Read and Edit show Stat block, In, Part of, then Status, so a value keeps its place when the DM
 presses Edit; conflict lines after Overwrite use the same order. Text follows in the reader's prose type,
 without the title line. The Text field ends at the same `FORM_WIDTH` edge as Status. One frame holds
@@ -1591,7 +1604,11 @@ plain list line gets no row. A scene's row starts with the theme's checkbox, 24 
 its accessible name is `Open: <words>` or `Done: <words>`, and a click or Space ticks it, one character of the
 note. Its words are the Reader's inline text, and a link opens its entry in Lookup; a done scene's words are
 `muted`. When the words link exactly one World entry, the second line gives its kind, status and place
-(`NPC · alive · Ashfall Keep`) in `Type::Small` `muted`. The action place stays empty. The menu holds Remove
+(`NPC · alive · Ashfall Keep`) in `Type::Small` `muted`. The action place is empty until the scene is done; then,
+when its words link exactly one World entry of the campaign, it holds a quiet `Add to Log` left of the menu
+(accessible name `Add to Log: <words>`), and the words wrap in the room left. It opens Lookup on that entry with
+the Log field open, filled with the scene's words outside its link and selected, so typing replaces them and
+Enter keeps them; a field that already holds typed words keeps them. The menu holds Remove
 from tonight, with `Removed “<words>” from tonight.` and Undo remove in the scene's place, and for a scene that
 links exactly one NPC or creature, while no run is open, `Start fight` (accessible name `Start a fight with
 <name>`), blocked as the editor's is. A done scene does not count in Tonight. Read leaves scenes out as it
