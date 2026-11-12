@@ -4231,8 +4231,9 @@ impl Reader {
             }
             let wanted = self.status.trim().to_owned();
             if wanted != status(&item.entry) {
-                let mut save =
-                    response.has_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter));
+                // A one-line field lets go of the keyboard on Enter, so Enter saves as it lets go.
+                let mut save = (response.has_focus() || response.lost_focus())
+                    && ui.input(|input| input.key_pressed(egui::Key::Enter));
                 ui.horizontal(|ui| {
                     design::status(
                         ui,

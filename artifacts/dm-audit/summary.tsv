@@ -2,8 +2,8 @@ Phase totals
 phase	tasks	transitions	interactions	nav	sub	panel	find	do
 before	9	5	35	5	0	1	7	22
 during	32	9	196	9	2	15	44	126
-after	10	6	31	6	4	4	1	16
-total	51	20	262	20	6	20	52	164
+after	11	7	34	7	5	4	1	17
+total	52	21	265	21	7	20	52	165
 
 Tasks
 phase	task	transitions	interactions	overhead	path
@@ -58,6 +58,7 @@ after	Put the fight's rewards in the note	0	1	0	Session
 after	Check the party's HP for next time	1	1	1	Session > Party
 after	Put what an NPC said in the NPC's own note	0	4	2	Session
 after	A new day starts: take the supply wagon's torches	1	5	3	Session > Timeline
+after	The table settles an open question: tick it	1	3	2	Timeline > World
 
 Set-up, not counted
 before	play last week's session, then quit and open the app
@@ -71,6 +72,7 @@ after	save, quit and open the app after the session
 after	the recording service has its keys
 after	the plan holds a done scene with Hobb the Miller, in view
 after	the torch rules have a supply wagon on the next day
+after	Hobb's note holds an open question
 
 Blocked
 
@@ -108,3 +110,4 @@ after / Check the party's HP for next time: Kestrel on Party after the evening: 
 after / Put what an NPC said in the NPC's own note: the NPC's note holds the line: true
 after / A new day starts: take the supply wagon's torches: the rail counts the day mark: true
 after / A new day starts: take the supply wagon's torches: the ledger holds the wagon's Done: true
+after / The table settles an open question: tick it: Hobb's note holds the tick: true
