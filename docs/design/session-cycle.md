@@ -967,9 +967,17 @@ Seals
   action corrects the value in one press, as an erasure does on paper; the history keeps both.
 - **The result line** names the last act and has `Undo` and `Add to Timeline`. After `Add to Timeline` it says
   `Added to the Timeline.` with `Undo add`.
-- **A tracker's history,** with **Remove**, and the list of problems show in the house rule note's reader. Not built in
-  P9: the reader is `src/world.rs`, which P6 changes at the same time. P9 shows each problem in the view, at the end
-  of its scroll area, and an entry with another stamp stays until it is edited out in Obsidian.
+- **A tracker's history,** with **Remove**, and the list of problems show in the house rule note's reader. P9
+  left them out, because P6 changed the reader (`src/world.rs`) at the same time; they were built after P6 landed.
+  The view keeps every problem at the end of its scroll area; the reader lists the note's own, also a value that
+  an edit in Obsidian forced below its `min` (`Crowd Favor is -2, below its min of 0.`), which Splat never
+  changes. Under the note's text in Lookup's reader each tracker and each day mark has a folded `<NAME> HISTORY
+  N`, a tracker's with its start value, and its entries in the ledger's order; a row with another stamp has
+  `Remove` in its menu. The result, `Removed: <label>.` with `Undo remove`, and why a Remove wrote nothing, are in
+  the reader's footer, where the DM acted, also when the note's file was moved at the click. The rows are worked
+  out when the ledger or a definition changes; a folded history does no work, and an open one draws only the
+  rows in view. `Undo remove` writes nothing when the entry before a removed one changed on disk. A row does not
+  name its session (a stated limit).
 - **In a fight** the DM marks the paper sheet. Ctrl+T still opens the view (three acts for each press), and
   the run offers nothing more. After the fight the DM enters the fight's marks; a mark that those raise
   shows then.
@@ -987,7 +995,7 @@ in Campaign → Rules and runs.`
 |---|---|
 | No house rule note in play; or in play with nothing due | Nothing in the rail |
 | A notice is due | Rail: bell and `Due 1`, in the text colour |
-| `Trackers.md` cannot be read | Rail: error icon and `Trackers not read`. The view names the file, says the history is safe, and offers `Try again` and `Show file`. Quick actions are blocked with that reason |
+| `Trackers.md` cannot be read | Rail: error icon and `Trackers not read`. The view names the file, says the history is safe, and offers `Try again` and `Show file`. Quick actions are blocked with that reason. The house rule note's reader names the file and shows no history and no value |
 | A save of `Trackers.md` fails | Nothing is recorded and nothing waits (the lead's ruling after review round 2 of P9: a waiting act needed a snapshot of more and more state). The result line, at the view's bottom edge, says `Trackers.md was not saved: <reason>. Nothing was recorded.` as an error until the next act or until the ledger is read again. The DM presses the action again: one more act. A dice act rolls again; nothing was recorded, so no roll is lost from the record. A number typed for `add: ask` stays in its field |
 | `Campaign.md` or a house rule note in play cannot be read | No empty list: the view names the file, shows no value and no old one, and every act is refused with the same words. The rail says `Trackers not read`. A note that was moved or renamed outside Splat says that Splat reads the notes again when its window gets focus |
 | `Trackers.md` changed on disk | Splat reads it again within a second, and every act reads it at the press, so an edit in Obsidian counts at once and is never written over (as built in P9: no merge and no notice are needed). An Undo whose entries changed on disk writes nothing and says `The ledger changed on disk. Nothing was undone.` |
@@ -1641,7 +1649,8 @@ draws again from the file. It never looks for another line that reads the same (
   (`UNDO_ADD_FOR`, `src/sessions/plan.rs:22`, `src/timeline/page.rs:13`).
 - **`Undo remove encounter`:** as a saved group's `Undo remove group` today. It writes the file back only
   when no file has that path.
-- **A run step and a ledger entry** stay, also after a restart.
+- **A run step and a ledger entry** stay, also after a restart. `Undo remove` of a tracker's history is one step,
+  as the Timeline's removal: the next Remove replaces it, and a restart ends it.
 - **An Undo shows where the DM acted,** also when the act changed a file that is not in view.
 
 Each row is one new write, with the fragment as the file holds it. Longer fragments are in section 3.
@@ -1655,6 +1664,7 @@ Each row is one new write, with the fragment as the file holds it. Longer fragme
 | `Remove…` on an encounter (F3) | The encounter note | The file, removed | `Undo remove encounter` |
 | An effect: add, spend, give back, mark spent, recharge roll, remove (F2) | The run file | `{"name": "Frightened", "rounds": 10, "left": 9}` in the participant's `conditions` | The run's `Undo: <step>` |
 | A tracker press, roll, `Done`, `Dismiss` (F4) | `Trackers.md` | One entry at the end of `changes` (F4). A press that changes two trackers writes two entries that share a `use`, in one save | `Undo: <label>`, step by step |
+| `Remove` in a tracker's history (F4) | `Trackers.md` | The entry out of `changes`, with the others of its `use` and the entries of each notice it raised, in one save. It writes nothing when the entry changed on disk or a later notice depends on it | `Undo remove` in the reader's footer: each entry back after the one it followed; nothing when a notice raised since needs them out. One step, until the next Remove, as the Timeline's; not after a restart |
 | `Add to Timeline` after a tracker act (F4) | `Timeline.md` | `- Major event: **Throw a gift** ^t-7d2c9a41be`, with its `Session` line | Today's `Undo add`, on the Trackers result line |
 | `Carry over` (F5) | This session's note | The embed line or the copied recap, the copied lines, and `carried_from` with `carried_parts`, in one save (F5) | `Undo carry over`, which puts back what the act replaced |
 | `Add to Log` (F6) | The World entry's note | `- [[Session 12]], Day 3: Told the party who burned the ropes.` at the end of `## Log` | `Undo Log line` |

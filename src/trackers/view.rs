@@ -192,7 +192,11 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
         return;
     }
     let Trackers {
-        rules, state, view, ..
+        rules,
+        state,
+        view,
+        problems,
+        ..
     } = trackers;
     // A definition that cannot be read shows no value, never an old one.
     if let Some(error) = &rules.unreadable {
@@ -243,28 +247,10 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
             },
         );
     }
-    // A member that cannot be used is reported, and the others still work. So is a row of the
-    // ledger that counts for nothing.
-    let unknown = state.unknown.iter().map(|(key, count)| {
-        let (names, are) = if *count == 1 {
-            ("names", "It is")
-        } else {
-            ("name", "They are")
-        };
-        format!(
-            "{} in {} {names} {key}, which no house rule note in play has. {are} not counted.",
-            design::count(*count, "entry", "entries"),
-            super::ledger::FILE
-        )
-    });
-    for problem in rules
-        .problems
-        .iter()
-        .cloned()
-        .chain(rules.member_problems())
-        .chain(unknown)
-    {
-        design::small_message(ui, Tone::Error, &problem);
+    // A member that cannot be used is reported, and the others still work. So are a row of the
+    // ledger that counts for nothing and a value below its `min`.
+    for (_, problem) in problems.iter() {
+        design::small_message(ui, Tone::Error, problem);
     }
 }
 
@@ -382,7 +368,7 @@ fn notice_words(rules: &Rules, notice: &super::Notice, mark: Says<'_>) -> String
 
 /// The words, with `add` at the right end of their last line when it fits there, and else on
 /// a line of its own at the right. The last line is its own label, so nothing overlaps words.
-fn words_ending_with(
+pub(super) fn words_ending_with(
     ui: &mut egui::Ui,
     words: &str,
     trailing: f32,

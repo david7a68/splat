@@ -3,9 +3,10 @@
 Status: partly implemented. World notes, roll tables, NPCs and locations, and the clock are built. The trackers
 slice between fights is built ([The session cycle](session-cycle.md), P9): house rule notes, in play, trackers with
 instances, quick actions, marks at a value with `for:`, the Due list, the ledger and its Undo, and the Trackers view.
-Day marks, with `at` or `every` and `from`, are built too ([The session cycle](session-cycle.md), P11). A tracker's
-history with **Remove** and the problems list in the note's reader, `every` on a mark at a value, and a value's
-free-text line are not built yet; event types are still proposals. It uses the Heralds of the End notes
+Day marks, with `at` or `every` and `from`, are built too ([The session cycle](session-cycle.md), P11), and so are a
+tracker's history with **Remove** and the problems list in the note's reader (after P9, once the reader's change
+in P6 had landed). `every` on a mark at a value and a value's free-text line are not built yet; event types are
+still proposals. It uses the Heralds of the End notes
 (`40-59 Campaigns/42 Heralds of the End` in the vault) as its test case. Those notes are early, so
 this design takes their shape and not their numbers.
 
@@ -348,15 +349,26 @@ row shows no time.
   line then names the entry before it, so the DM steps back, newest first. The
   ledger is a file, so the steps are there after a restart. Undo of an entry that raised a notice removes the
   notice and its entries. A tracker's history shows in the house rule note's reader. There **Remove** works on any row with another stamp, with a
-  one-step undo as the Timeline has (`src/timeline.rs:654-658`). Changes that share a `use` go together.
-  Neither reverses later spending that relied on the old value.
+  one-step undo as the Timeline has (`Book::remove`, `src/timeline.rs`). Changes that share a `use` go together.
+  Neither reverses later spending that relied on the old value. As built: Remove takes the entry out of the file,
+  because the schema has no removal entry and removing an entry gives back what it replaced. It takes what Undo of
+  that entry would take: the others of its press, and the entries of each notice it raised, so no entry is left
+  naming a notice that is gone. When a later change crosses a mark only because of the entry's value, Remove
+  writes nothing and names that notice's entry, to remove first. It names the entry it was drawn from, its ID and
+  its content as read, and writes nothing when that entry changed or is gone on disk. Its Undo puts each entry back
+  after the entry it followed, so acts made since keep their places, and writes nothing when a notice raised
+  since then crosses its mark only while the entries are out; it is held in memory, as the Timeline's, and
+  does not outlive a restart. The rows are worked out when the ledger or a definition changes, and a folded
+  history does no work.
 - **The `U` key.** A tracker action is never a step of a run's Undo. An earlier version put a step on the run's
   stack, so that `U` took back the newest action of either kind. The run's steps are now saved in the run file
   ([The session cycle](session-cycle.md), F8), and a step there that changes `Trackers.md` could not be kept
   true after a restart. `U` is the run's Undo and never takes back a tracker change. Beside Trackers the run's
   keys are as beside any Lookup view: the letter keys are off.
 - **Repair.** A row for an unknown tracker or word stays in the file and shows in a problems list. The DM fixes
-  it with find and replace, because the keys are plain words.
+  it with find and replace, because the keys are plain words. The Trackers view lists every problem at the end of
+  its scroll area; a house rule note's reader lists its own: a definition that cannot be used, and a value below
+  its `min` with the tracker, the value and the `min`.
 - **Saving.** As built, an act reads `Trackers.md` as it is on disk at the press and writes with the shared atomic
   write and its outside-change check (`file_batch::apply`). There is no merge: an outside edit stays, and an Undo whose entries changed on disk writes nothing. A save that
   fails records nothing and keeps nothing: the result line says `Trackers.md was not saved: <reason>. Nothing was
