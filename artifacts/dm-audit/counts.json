@@ -227,6 +227,13 @@
     },
     {
       "phase": "during",
+      "task": "Mark a house rule's number between fights",
+      "transitions": 0,
+      "interactions": 3,
+      "path": "Session"
+    },
+    {
+      "phase": "during",
       "task": "Next fight: start it, with the party as it stands",
       "transitions": 1,
       "interactions": 1,
@@ -308,13 +315,6 @@
       "transitions": 2,
       "interactions": 6,
       "path": "Session > Timeline > Session"
-    },
-    {
-      "phase": "after",
-      "task": "Put the fight's rewards in the note",
-      "transitions": 0,
-      "interactions": 1,
-      "path": "Session"
     },
     {
       "phase": "after",
