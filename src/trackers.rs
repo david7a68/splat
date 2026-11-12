@@ -752,6 +752,8 @@ pub struct State {
     after: HashMap<String, i64>,
     /// The marks each change entry crossed.
     raised: HashMap<String, Vec<i64>>,
+    /// The notices each change entry ended by taking the value back below their marks, by mark.
+    lowered: HashMap<String, Vec<i64>>,
     /// How many entries name each tracker that no note in play has, in the file's order. They
     /// count for nothing, and the view names them.
     pub unknown: Vec<(String, usize)>,
@@ -800,6 +802,8 @@ pub fn replay(rules: &Rules, ledger: &Ledger, today: &Today) -> State {
     // The entries about day notices: which days ended, and the rolls on each.
     let mut ended = std::collections::HashSet::new();
     let mut day_rolls: HashMap<NoticeRef, Vec<TableRoll>> = HashMap::new();
+    // The notices at a value that an entry names: a roll on one, its Done or its Dismiss.
+    let mut acted_on = std::collections::HashSet::new();
     for entry in &ledger.changes {
         if let Some(id @ NoticeRef::Day { mark, .. }) = &entry.notice {
             if rules.day_mark(mark).is_none() {
@@ -817,6 +821,7 @@ pub fn replay(rules: &Rules, ledger: &Ledger, today: &Today) -> State {
             let Some(at) = state.due.iter().position(|notice| notice.id == *id) else {
                 continue;
             };
+            acted_on.insert(id.clone());
             if entry.done || entry.dismissed {
                 state.due.remove(at);
             } else if let Some(Roll::Table(roll)) = &entry.roll {
@@ -844,6 +849,7 @@ pub fn replay(rules: &Rules, ledger: &Ledger, today: &Today) -> State {
         let after = entry.set.unwrap_or(before + entry.add.unwrap_or(0));
         state.values.insert(place, after);
         state.after.insert(entry.id.clone(), after);
+        end_below_marks(&mut state, &acted_on, entry, after);
         for mark in &def.marks {
             if before < mark.at && mark.at <= after {
                 state.due.push(Notice {
@@ -903,6 +909,34 @@ pub fn replay(rules: &Rules, ledger: &Ledger, today: &Today) -> State {
     dated.append(&mut state.due);
     state.due = dated;
     state
+}
+
+/// A notice at a value is due because the value is at or past its mark. A change that takes the
+/// value back below the mark ends each such notice of its line that nothing was recorded on (no
+/// roll, `Done` or `Dismiss`): a wrong press and its opposite leave nothing due. A notice the
+/// DM acted on stays. Nothing is written; Undo of the change brings the notice back.
+fn end_below_marks(
+    state: &mut State,
+    acted_on: &std::collections::HashSet<NoticeRef>,
+    entry: &Entry,
+    after: i64,
+) {
+    let mut ended = Vec::new();
+    state.due.retain(|notice| match &notice.id {
+        NoticeRef::Value { at, .. }
+            if *at > after
+                && Some(&notice.key) == entry.tracker.as_ref()
+                && notice.instance == entry.instance
+                && !acted_on.contains(&notice.id) =>
+        {
+            ended.push(*at);
+            false
+        }
+        _ => true,
+    });
+    if !ended.is_empty() {
+        state.lowered.insert(entry.id.clone(), ended);
+    }
 }
 
 /// The notice the DM clicked, as the files on disk hold it now: the same change and mark, for
@@ -1078,6 +1112,19 @@ pub fn label(rules: &Rules, ledger: &Ledger, entries: &[Entry]) -> String {
     })
 }
 
+/// The title of the Major event that `Add to Timeline` makes: the act's label, with the line it
+/// changed, as the action's accessible name says it (`Take seal: Old Guard`).
+pub fn timeline_title(rules: &Rules, ledger: &Ledger, entries: &[Entry]) -> String {
+    let label = label(rules, ledger, entries);
+    match head(entries).filter(|entry| entry.notice.is_none()) {
+        Some(Entry {
+            instance: Some(line),
+            ..
+        }) => format!("{label}: {line}"),
+        _ => label,
+    }
+}
+
 /// `"1d6: [4]"` reads as `Rolled 4 on 1d6`.
 fn rolled(text: &str) -> String {
     match text.split_once(": [") {
@@ -1148,6 +1195,17 @@ pub fn result_words(rules: &Rules, ledger: &Ledger, state: &State, entries: &[En
         .collect();
     if !due.is_empty() {
         words.push_str(&format!(" Due: {}.", due.join(", ")));
+    }
+    for entry in entries {
+        for at in state.lowered.get(&entry.id).into_iter().flatten() {
+            let name = short_name(
+                rules,
+                entry.tracker.as_deref().unwrap_or_default(),
+                entry.instance.as_deref(),
+                *at,
+            );
+            words.push_str(&format!(" {name} is no longer due."));
+        }
     }
     words
 }
@@ -1362,7 +1420,7 @@ pub struct Trackers {
     pub added: Option<Added>,
     /// The session being played, for the stamp and for Undo.
     pub played: Option<Uuid>,
-    /// `Add to Timeline` for this entry, with this label: the shell has the Timeline.
+    /// `Add to Timeline` for this entry, with this title: the shell has the Timeline.
     pub wants_timeline: Option<(String, String)>,
     /// The campaign's day count, as the Timeline held it when its count of changes was
     /// `clock_seen`. The shell reads it again at each act, so an act uses the day at the click.
@@ -2010,14 +2068,26 @@ mod tests {
         t.read_disk();
         assert_eq!(t.state.due[0], drawn);
         // A wrong press seen late: the opposite action corrects the value, and the history
-        // keeps both presses.
+        // keeps both presses. The notice the wrong press raised had nothing on it, so the value
+        // back below its mark ends it; nothing is written for that.
         t.press("seals", Some("Old Guard"), "Lose seal", None);
         assert_eq!(value(&race, "seals", Some("Old Guard")), 0);
         let t = &mut race.trackers;
         assert_eq!(
             t.due(),
-            1,
-            "a mark does not fire, or unfire, when a value falls"
+            0,
+            "a notice with nothing on it ends when its value falls"
+        );
+        assert_eq!(
+            result_words(&t.rules, &t.ledger, &t.state, t.newest()),
+            "Lose seal: Seals (Old Guard) 0. First seal for Old Guard is no longer due."
+        );
+        let lowered = t.newest().to_vec();
+        t.undo(&lowered);
+        assert_eq!(
+            t.state.due,
+            [drawn],
+            "Undo of the fall brings the notice back"
         );
 
         // One press that changes two trackers is two entries with one `use`; Undo takes both.
@@ -2035,7 +2105,7 @@ mod tests {
         assert_eq!(value(&race, "souls", None), 0);
         assert_eq!(value(&race, "race_clock", None), 20);
         // The line then names the act before it: Undo steps back, newest first.
-        assert_eq!(newest_label(&race.trackers), "Lose seal");
+        assert_eq!(newest_label(&race.trackers), "Take seal");
         // A dice amount records its roll; `set` records what it replaced.
         let t = &mut race.trackers;
         t.press("activation", None, "Touch controls", None);
@@ -2525,6 +2595,29 @@ mod tests {
         t.roll_notice(&bell, "wander_early");
         t.played = Some(TONIGHT);
         t.settle();
+        // A notice with a roll on it stays when the value falls below its mark: the DM acted
+        // on it. Here an edit in Obsidian takes the clock back to 0, then away again.
+        let path = ledger::path(&race.campaign.path);
+        let back = Entry {
+            id: "c-0b5e1e01".into(),
+            tracker: Some("race_clock".into()),
+            add: Some(-20),
+            ..Entry::default()
+        };
+        ledger::commit(&path, |_| Ok(Op::Append(vec![back.clone()]))).unwrap();
+        let t = &mut race.trackers;
+        t.read_disk();
+        assert_eq!(
+            (
+                value(&race, "race_clock", None),
+                race.trackers.state.due.len()
+            ),
+            (0, 1),
+            "the rolled bell stays"
+        );
+        ledger::commit(&path, |_| Ok(Op::Remove(vec![back]))).unwrap();
+        let t = &mut race.trackers;
+        t.read_disk();
         let target = t.newest().to_vec();
         assert_eq!(target[0], raised[0]);
         assert_eq!(target.len(), 2, "the change and the roll on its notice");

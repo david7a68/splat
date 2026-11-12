@@ -1369,14 +1369,14 @@ impl Splat {
     }
 
     /// `Add to Timeline` after a tracker act: a second act, a Major event with the act's label
-    /// in the session being played, with the Timeline's own `Undo add`.
+    /// and its line in the session being played, with the Timeline's own `Undo add`.
     fn add_tracker_act_to_timeline(&mut self) {
-        if let Some((entry, label)) = self.trackers.wants_timeline.take() {
+        if let Some((entry, title)) = self.trackers.wants_timeline.take() {
             let event = self
                 .timeline
                 .add(timeline::Kind::Event, self.trackers.played);
             if let Some(added) = self.timeline.event_mut(&event) {
-                added.title = label;
+                added.title = title;
             }
             self.trackers.added = Some(trackers::Added {
                 entry,

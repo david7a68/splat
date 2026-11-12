@@ -592,27 +592,39 @@ card the view again. Lookup's place and its NPC are not kept across a restart.
 **Trackers** is a view of Lookup, never a third panel (F4). Ctrl+T shows it in the Lookup panel and Ctrl+T again
 shows what Lookup showed before: its entry, its found note or its results; when Ctrl+T opened Lookup, the second
 press closes it. Ctrl+K opens Lookup on what it showed last, also on Trackers. `Back` (and Alt+Left) returns to
-the entry that Lookup held; words typed in the search field leave Trackers for their results; an entry that opens
-from elsewhere takes the panel. The title line says `Trackers` in `Heading`, then the bell (`icons::BELL`) and
+the entry that Lookup held. While Trackers is the view, the search field is empty with its placeholder and no
+`Clear`, so it never reads as a filter of the trackers; Lookup keeps its words for its own view, and words typed in
+the field are a new search that leaves Trackers for its results. An entry that opens from elsewhere takes the panel. The title line says `Trackers` in `Heading`, then the bell (`icons::BELL`) and
 `Due N` while a notice is due, then `Back` when Lookup holds an entry, and the close icon. The view is one scroll
 area that opens at its top: the Due rows under `DUE N`, the pinned trackers under `PINNED` in the note's order,
 then a collapsed `MORE TRACKERS N` (`group_heading`). A Due row is its words, its `Roll <table’s heading>` buttons
 (`Action::secondary`, `icons::DICE`, Read) with their results listed under them in Body, a theme checkbox for each
 proposed change, ticked, and a quiet `Done` with the row's menu (`Dismiss`) at the right end of the words' last
-line when they fit there, else on a line of their own. A day mark's row starts with its day (`Day 32: …`); days of
-one mark that are due together are one row, `End of month ×3. Next: Day 32. …`, whose quiet `Next` takes the
-place of `Done` and ends the oldest day, and whose menu adds `Dismiss all`. Day rows come first, oldest day first,
+line when they fit there, else on a line of their own. That last line keeps the words' line pitch: it follows the
+line above with no gap, and its actions start at its top, so they reach below it and never over the words above. A
+day mark's row starts with its day (`Day 32: …`); days of one mark that are due together are one row, `End of month
+×3. Next: Day 32. …`, whose quiet `Done` names the day it ends, the oldest (`Done: Day 32`), and whose menu adds
+`Dismiss all`. A notice at a value is due because the value is at or past its mark: when a later change takes the
+value back below the mark and nothing is recorded on the notice (no roll, `Done` or `Dismiss`), the notice ends, and
+the result line adds `<name> is no longer due.` Nothing is written for that; Undo of the change brings the notice
+back. A notice with a roll on it stays. Day rows come first, oldest day first,
 then the notices of marks at a value. While day marks are in play and the day count is not known (`Timeline.md` cannot be read, or it changed under a
 Timeline edit that is not saved), the top of the scroll area says so as a small error in the Timeline's words, then
 `No day mark shows until the Timeline is read.`, and no day row shows. With `for:` each roll is for the next name; after the
 last name the button is off and says `Each name has its roll.` beside it. A tracker's line is its name, its value
 in `Numeral` right-aligned in a column (`value / goal` with a goal), then its quick actions (`Action::secondary`,
-Read), which wrap below. A tracker with `per` has a line for each instance, under its name. `add: ask` puts a
+Read), which wrap below. A tracker with `per` has a line for each instance, under its name. The lines of one tracker
+stand in columns: the name column is as wide as its longest name, at most 40 % of the line, and a longer name ends
+at a whole word with `…` and is whole on hover; every value ends at one edge, and every first action starts at one
+edge. A press that raises or ends a Due row scrolls the view by the row's height, so the pressed action stays under
+the pointer and a second press of a still pointer presses it again; the scroll area keeps blank room after the
+trackers only while that needs it. `add: ask` puts a
 number field in the action's place; it holds focus until Enter or Escape, and Escape there does not close Lookup.
 The result line keeps its place at the panel's bottom
-edge above a hairline: the last act of the session being played as a success message, then `Undo: <label>` at the
-words and `Add to Timeline` at the right end, or each on its own line when both do not fit. After `Add to
-Timeline` it says `Added to the Timeline.` with `Undo add` for 30 seconds; while the Timeline cannot save that event, it says the Timeline's own words as an error (`The timeline was not saved. <reason>`) with `Undo add`, and the event waits in the Timeline's draft. Why an act recorded nothing shows on
+edge above a hairline: the last act of the session being played as a success message, then `Undo: <label>`
+(`line_start`: its words at the message's words, its icon in the message's icon column) and `Add to Timeline` at
+the right end, or each on its own line, at the words, when both do not fit. `Add to Timeline` makes a Major event
+whose title is the act's label with the line it changed (`Take seal: Old Guard`). After `Add to Timeline` it says `Added to the Timeline.` with `Undo add` for 30 seconds; while the Timeline cannot save that event, it says the Timeline's own words as an error (`The timeline was not saved. <reason>`) with `Undo add`, and the event waits in the Timeline's draft. Why an act recorded nothing shows on
 the result line too, above the last act, until the next act or until the ledger is read again: a refusal as a
 warning, and a failed save as the error `Trackers.md was not saved: <reason>. Nothing was recorded.` The result line
 is drawn before anything else of the view, so these words stay in view when the row pressed went away. Nothing
@@ -620,8 +632,11 @@ waits after a failed save: the DM presses again, and a number typed for `add: as
 `Campaign.md` or a house rule note in play cannot be read, the view names the file and shows no tracker. At the end of the scroll area each problem is a small error message: a note in play that is missing
 or no house rule note, a definition that cannot be used, and the count of `Trackers.md` entries that name a tracker
 no note in play has, with its key, which are not counted, and a value below its `min` (`Crowd Favor is -2, below its
-min of 0.`), which an edit in Obsidian can force and Splat never changes. With no house rule note in play the view says `No house rules are in play.` and `Turn one
-on in Campaign → Rules and runs.`; the rail then says nothing about trackers.
+min of 0.`), which an edit in Obsidian can force and Splat never changes. With no house rule note in play the view is the empty state
+(`empty_state`, the bell): `No house rules in play` and `Turn one on in Campaign → Rules and runs.`; the rail then
+says nothing about trackers. In Campaign → Rules and runs, **House rules in play** has a switch for each house rule
+note, and its help line says `Trackers (Ctrl+T) shows the trackers of each note in play.` A campaign with no house
+rule note shows neither.
 
 **A tracker's history** is in the reader of its house rule note in Lookup (a house rule note is no World entry),
 after the note's text, while the note is in play (F4). First the note's own problems, as small error messages (a
