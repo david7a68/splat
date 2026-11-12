@@ -32,6 +32,8 @@ use std::{
 };
 use uuid::Uuid;
 
+#[path = "carry.rs"]
+mod carry;
 #[path = "plan.rs"]
 mod plan;
 
@@ -98,6 +100,11 @@ struct LastTime {
     id: Uuid,
     label: String,
     what_happened: Option<String>,
+    /// What the session that carry-over reads left, or why its note cannot be read. `None`
+    /// when this note carried from a session that is gone.
+    source: Option<Result<carry::Source, String>>,
+    /// What `Carry over` would add, for the draft's revision it was read from.
+    offer: Option<(u64, Option<carry::Offer>)>,
 }
 
 /// The new-session form, or the same fields for a session that exists.
@@ -287,6 +294,8 @@ pub struct Sessions {
     fight: Option<(Uuid, Result<FightSummary, String>)>,
     /// What the session before the selected one left, read once for each selection.
     last_time: Option<(Uuid, Option<LastTime>)>,
+    /// The results of carry-over acts, by the session each changed.
+    carries: carry::Carries,
     notes: Vec<Note>,
     unreadable: Vec<String>,
     mentions: BTreeMap<Uuid, Vec<String>>,
@@ -565,29 +574,51 @@ fn updated_event_links(body: &str, book: &Book) -> (String, usize) {
     (out, count)
 }
 
-/// A recap uses prose, never a line made only of links.
-fn recap_preview(body: &str) -> Option<String> {
-    for heading in ["Recap of last time", "What happened"] {
-        if let Some(section) = section_text(body, heading) {
-            let lines: Vec<_> = section
-                .lines()
-                .filter(|line| {
-                    let mut prose = line.trim().trim_start_matches(['-', '*', ' ']).to_owned();
-                    while let Some(start) = prose.find("[[") {
-                        let Some(end) = prose[start..].find("]]") else {
-                            break;
-                        };
-                        prose.replace_range(start..start + end + 2, "");
-                    }
-                    !prose.trim().is_empty()
-                })
-                .collect();
-            if !lines.is_empty() {
-                return Some(plain_links(&lines.join("\n")));
+/// The lines of a section that hold prose, never a line made only of links.
+fn prose(section: &str) -> Option<String> {
+    let lines: Vec<_> = section
+        .lines()
+        .filter(|line| {
+            let mut prose = line.trim().trim_start_matches(['-', '*', ' ']).to_owned();
+            while let Some(start) = prose.find("[[") {
+                let Some(end) = prose[start..].find("]]") else {
+                    break;
+                };
+                prose.replace_range(start..start + end + 2, "");
             }
-        }
+            !prose.trim().is_empty()
+        })
+        .collect();
+    (!lines.is_empty()).then(|| plain_links(&lines.join("\n")))
+}
+
+/// What the Last time line reads of the last session: the prose under its `What happened`,
+/// then its processed recap, the one source that carry-over reads too. When neither holds
+/// words, the note's first written line, so the line still shows last week's words. That line
+/// is never the template's title and date, the recap of the session before it, or its plan.
+fn recap_preview(body: &str, processed: impl FnOnce() -> Option<String>) -> Option<String> {
+    if let Some(words) = section_text(body, "What happened").and_then(|words| prose(&words)) {
+        return Some(words);
     }
-    None
+    if let Some(words) = processed() {
+        return Some(words);
+    }
+    let mut heading = None;
+    body.lines()
+        .filter(|line| {
+            if let Some(name) = line.strip_prefix("## ") {
+                heading = Some(name.trim().to_owned());
+                return false;
+            }
+            !line.starts_with('#')
+                && heading
+                    .as_deref()
+                    .is_some_and(|name| name != "Recap of last time" && name != "Plan for tonight")
+        })
+        .find_map(|line| {
+            let line = super::task_parts(line.trim()).map_or(line, |(_, words)| words);
+            prose(line.trim_start_matches(['-', '*', '+', ' ']))
+        })
 }
 
 /// The campaign's content index, as every reader of the page finds it.
@@ -1629,6 +1660,7 @@ impl Sessions {
                                 undo.moved(&from, &to);
                             }
                             self.scenes.moved(&from, &to);
+                            self.carries.moved(&from, &to);
                         }
                     }
                     None => {
@@ -4210,7 +4242,7 @@ impl Sessions {
     }
 
     /// What the session before this one left: where the DM picks up the thread.
-    fn last_time_block(&mut self, ui: &mut egui::Ui, _book: &Book) {
+    fn last_time_block(&mut self, ui: &mut egui::Ui, book: &Book, plan: &Plan<'_>) {
         let Some(selected) = self.selected else {
             return;
         };
@@ -4234,49 +4266,24 @@ impl Sessions {
                     Some(file) if shared => format!("{label} ({})", file.to_string_lossy()),
                     _ => label,
                 };
+                let source = self.carry_source(note, plan, book);
+                let what_happened = recap_preview(body, || match &source {
+                    Some(Ok(source)) if source.id == note.id => {
+                        source.processed().map(str::to_owned)
+                    }
+                    _ => carry::processed_recap(self.folder.as_deref()?, note.id),
+                });
                 LastTime {
                     id: note.id,
                     label,
-                    what_happened: recap_preview(body),
+                    what_happened,
+                    source,
+                    offer: None,
                 }
             });
             self.last_time = Some((selected, found));
         }
-        let Some((_, Some(last))) = &self.last_time else {
-            return;
-        };
-        let preview = last
-            .what_happened
-            .as_deref()
-            .and_then(|words| words.lines().find(|line| !line.trim().is_empty()))
-            .unwrap_or("");
-        let full = format!(
-            "Last time: {} — {}",
-            last.label,
-            last.what_happened
-                .as_deref()
-                .unwrap_or("Nothing written yet.")
-        );
-        let mut open = false;
-        ui.horizontal(|ui| {
-            ui.label(Type::Small.rich(ui, "Last time:").color(colors().muted));
-            open = design::link(ui, &last.label).on_hover_text(&full).clicked();
-            let words = design::words_that_fit(
-                ui,
-                &if preview.is_empty() {
-                    String::new()
-                } else {
-                    format!("— {preview}")
-                },
-                &Type::Small.font(ui),
-                ui.available_width(),
-            );
-            ui.label(Type::Small.rich(ui, words).color(colors().muted))
-                .on_hover_text(&full);
-        });
-        if open {
-            self.select(Some(last.id));
-        }
+        self.last_time_line(ui, selected, plan, book);
     }
 
     fn recording_row(
@@ -5577,7 +5584,7 @@ impl Sessions {
         }
         // A group being assembled needs the height, and last time can wait for it.
         if !(plan.group_open && self.group_session == self.selected) {
-            self.last_time_block(ui, book);
+            self.last_time_block(ui, book, plan);
         }
         if self
             .draft
@@ -7347,12 +7354,28 @@ mod tests {
     #[test]
     fn recap_uses_prose_and_skips_link_only_lines() {
         let body = "## Recap of last time\n\n## What happened\n\n- [[Timeline#^t-rest|Long rest]]\n\nWe reached the mill.\n";
-        assert_eq!(recap_preview(body).as_deref(), Some("We reached the mill."));
-        assert_eq!(recap_preview("## What happened\n- [[Bridge]]\n"), None);
+        let none = || None;
+        assert_eq!(recap_preview(body, none).as_deref(), Some("We reached the mill."));
+        assert_eq!(recap_preview("## What happened\n- [[Bridge]]\n", none), None);
+        // Row 16: `What happened` first, as carry-over reads it, then the processed recap.
+        let both = "## Recap of last time\nWe won.\n\n## What happened\nWe ran.";
+        assert_eq!(recap_preview(both, none).as_deref(), Some("We ran."));
+        let processed = || Some("The wolves came.".to_owned());
+        assert_eq!(recap_preview(both, processed).as_deref(), Some("We ran."));
+        let recap_only = "## Recap of last time\nWe won.\n\n## What happened\n";
         assert_eq!(
-            recap_preview("## Recap of last time\nWe won.\n\n## What happened\nWe ran.").as_deref(),
-            Some("We won.")
+            recap_preview(recap_only, processed).as_deref(),
+            Some("The wolves came.")
         );
+        // With neither, the note's first written line, never its title, date, older recap or plan.
+        let template = "# Session 1: The Road\n\n2026-01-01, Emberfall\n\n## Recap of last time\n\nWe won.\n\n\
+                        ## Plan for tonight\n\n- [ ] Meet [[Hobb]]\n\n## What happened\n\n## Open threads\n\n\
+                        - [ ] The miller Hobb told the party about the toll.\n";
+        assert_eq!(
+            recap_preview(template, none).as_deref(),
+            Some("The miller Hobb told the party about the toll.")
+        );
+        assert_eq!(recap_preview(recap_only, none), None);
     }
 
     #[test]

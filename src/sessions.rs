@@ -1406,6 +1406,11 @@ impl Draft {
         self.revision = next_revision();
     }
 
+    /// The note's whole text in this draft: its properties, then its words.
+    pub fn text(&self) -> String {
+        format!("{}{}", self.prefix, self.body)
+    }
+
     /// The text this draft was read from or last wrote.
     pub fn file_text(&self) -> Option<&str> {
         self.baseline.as_deref()
@@ -1663,6 +1668,33 @@ impl Draft {
         write: Apply,
         patch: impl FnOnce(&str) -> Option<String>,
     ) -> Result<NoteUndo, ActFault> {
+        self.apply_parts(note, write, |prefix, body| {
+            patch(body).map(|body| (prefix.to_owned(), body))
+        })
+    }
+
+    /// `apply` for an act that also changes the note's properties: `patch` gets the note's
+    /// whole text, properties first, and returns it whole. Its Undo puts both back.
+    pub fn apply_with_properties(
+        &mut self,
+        note: Uuid,
+        patch: impl FnOnce(&str) -> Option<String>,
+    ) -> Result<NoteUndo, ActFault> {
+        self.apply_parts(note, Apply::Now, |prefix, body| {
+            let text = patch(&format!("{prefix}{body}"))?;
+            let (prefix, body) = split_note(&text).unwrap_or(("", &text));
+            Some((prefix.to_owned(), body.to_owned()))
+        })
+    }
+
+    /// The one path of `apply` and `apply_with_properties`: `patch` gets the properties and the
+    /// words, and returns both.
+    fn apply_parts(
+        &mut self,
+        note: Uuid,
+        write: Apply,
+        patch: impl FnOnce(&str, &str) -> Option<(String, String)>,
+    ) -> Result<NoteUndo, ActFault> {
         if write == Apply::Now {
             // An edit made elsewhere a moment ago is in the words that the act changes.
             self.follow_disk();
@@ -1682,7 +1714,12 @@ impl Draft {
             }
         }
         let before = self.body.clone();
-        let after = patch(&before).ok_or(ActFault::LineChanged)?;
+        let (prefix, after) = patch(&self.prefix, &before).ok_or(ActFault::LineChanged)?;
+        // Only an act that changed the properties puts them back.
+        let properties = (prefix != self.prefix).then(|| {
+            let before = std::mem::replace(&mut self.prefix, prefix);
+            (before, self.prefix.clone())
+        });
         self.body.clone_from(&after);
         self.edited();
         let mut undo = NoteUndo {
@@ -1690,6 +1727,7 @@ impl Draft {
             note,
             before,
             after,
+            properties,
             written: false,
         };
         if write == Apply::WithTyping {
@@ -1743,7 +1781,7 @@ pub enum ActFault {
 
 impl ActFault {
     /// The words at the act's place.
-    pub fn words(&self) -> &str {
+    pub fn words(&self) -> &'static str {
         match self {
             Self::Changed => "The note changed on disk. Choose in the note first.",
             Self::Missing => "The note is gone from its folder.",
@@ -1765,6 +1803,8 @@ pub struct NoteUndo {
     note: Uuid,
     before: String,
     after: String,
+    /// The properties before and after the act, when the act changed them.
+    properties: Option<(String, String)>,
     /// Whether the act's save wrote the fragment. One that waits in the draft is taken back
     /// from the draft alone.
     written: bool,
@@ -1776,9 +1816,21 @@ impl NoteUndo {
         &self.after
     }
 
+    /// Whether the act's fragment is in the file. One whose save failed waits in the draft.
+    pub fn written(&self) -> bool {
+        self.written
+    }
+
     /// Whether this Undo still applies to the note in this draft.
     pub fn live(&self, draft: &Draft) -> bool {
-        self.owns(draft) && draft.body == self.after
+        self.owns(draft) && draft.body == self.after && self.left_properties(&draft.prefix)
+    }
+
+    /// The properties are the ones the act left, or the act did not change them.
+    fn left_properties(&self, prefix: &str) -> bool {
+        self.properties
+            .as_ref()
+            .is_none_or(|(_, after)| after == prefix)
     }
 
     /// Whether the draft is the note that the act changed: its file and its ID.
@@ -1808,17 +1860,20 @@ impl NoteUndo {
         if !self.owns(draft) {
             return Err(ActFault::OtherNote);
         }
+        let back = |prefix: &str, words: &str| {
+            (words == self.after && self.left_properties(prefix)).then(|| {
+                let prefix = self.properties.as_ref().map_or(prefix, |(before, _)| before);
+                (prefix.to_owned(), self.before.clone())
+            })
+        };
         if self.written {
             return draft
-                .apply(self.note, Apply::Now, |words| {
-                    (words == self.after).then(|| self.before.clone())
-                })
+                .apply_parts(self.note, Apply::Now, back)
                 .map(drop);
         }
-        if draft.body != self.after {
-            return Err(ActFault::LineChanged);
-        }
-        draft.body.clone_from(&self.before);
+        let (prefix, before) = back(&draft.prefix, &draft.body).ok_or(ActFault::LineChanged)?;
+        draft.prefix = prefix;
+        draft.body = before;
         draft.edited();
         Ok(())
     }
