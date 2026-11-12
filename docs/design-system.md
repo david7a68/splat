@@ -758,7 +758,9 @@ Its state says Not connected · showing the name saved on this computer.
 
 A session-folder change counts notes, events, templates and recordings left behind, and says what the safe
 choice costs: `If you save without moving, Splat no longer shows these files.` Offer Move files and save
-or Save without moving. Move files and save is primary when no other primary is in view; it is secondary while a
+or Save without moving. The session folder's warning, its save error and its move result sit in the Link and
+folder pane's message footer, so the first typed letter, a refusal or a move never moves the save row. Folder help
+uses `design::help`. Move files and save is primary when no other primary is in view; it is secondary while a
 run is open or the campaign details form is open. Refuse collisions and copy every owned file before changing the manifest. A run-folder
 change counts saved files left behind. Move runs and save is primary when no other primary is in view; it
 shows only while no run is open. It stages all files without replacement, saves
@@ -1622,13 +1624,13 @@ leaves out link-only plan lines, and its count line names them: `1 fight, 1 grou
 Scenes fold first: when the plan's rows, with the scenes, do not fit its pane, every scene folds, and the Tonight
 line says `N scenes`, a link with the expanded state, `L` after its count. It takes no line of its own, so no other row moves or narrows because scenes exist, and the next fight's
 `Start fight` stays whole and in view. `N scenes` opens them in place and closes them again; the choice holds
-for the session. A scene act's words show under its row, or under the Scene field, or below the Add strip when the
-scenes are folded.
+for the session. A scene act's words show under its row, or under the Scene field, or in the plan's message footer
+when the scenes are folded.
 `Scene` (`icons::CHECK_SQUARE`) is a line of the Add strip's More menu only: the fit of the strip is measured
 without it, so no visible action moves, and a strip with no More has no `Scene`. It opens one `add_field` at
 the end of the plan, `Plan a scene: words, a person or a place`, with at most four World entries as
 suggestions. Enter adds `- [ ] <words>` at the end of the plan (a note with no plan gets the heading at its
-end), keeps the field open, and shows `Scene added to tonight.` with Undo scene below the Add strip; Escape
+end), keeps the field open, and shows `Scene added to tonight.` with Undo scene in the plan's message footer; Escape
 clears and closes it. Every scene act goes through `Draft::apply` with `Apply::Now`, on the one line its row was drawn
 from (its place and its whole text): what it cannot do shows, in a warning, where the DM acted, until the note's
 words change or, for `Notes not saved`, until the note saves. An act whose save failed keeps its Undo.
@@ -1662,8 +1664,8 @@ Everyone at full or Not at full, with the ruling's icon and colour on the
 plan row, the Timeline row and the detail alike. Keep one Undo ruling until the next edit. Its message is a
 finished change, in the success tone, and says the
 ruling now in force: `Everyone starts the next fight at full.` or `The next fight starts from the HP the party
-has now.` On Timeline it sits in the list column with the other results, so the form does not move; in one
-column, it ends the form.
+has now.` On Timeline it sits in the list column's message footer with the other results, so neither the form
+nor a row moves; in one column, it ends the form.
 Resuming a saved Setup after a restoring rest starts party HP full, says `Party HP is full after the long
 rest.` and offers Use the saved HP. Splat made that fill, so it is no Undo step: the header keeps the step before it,
 or `Nothing to undo`, and Use the saved HP is the one way back. Every kept Undo state gets the same full HP, so Undo of
@@ -1723,8 +1725,9 @@ Field labels have `M` before them. Copy link uses a check and Copied for two sec
 quiet section; Place after is the only ordering control. Adds to shares the filter line. Context shows visible
 out of total while filtering; the filter says Major events.
 
-Added, removed and link-update notices stay in the list column, with the rest ruling's result and the file's
-flags, duplicate warning, reload result and save error, so a result never moves the Add strip or the open form.
+Added, removed and link-update notices sit in the list column's message footer (`design::Footer`), pinned below
+the rows, with the rest ruling's result and the file's flags, duplicate warning, reload result, save error and
+`Timeline.md also changed outside Splat.`, so a result never moves the Add strip, a row or the open form.
 With one column and an event open, they end the form. An unreadable file and a conflict stay above the Add strip:
 the DM must choose before anything else. Removing an event counts notes that still link
 to it and uses warning tone when any do. Each item's save state tracks its own edits: muted Saving… during
@@ -1733,13 +1736,13 @@ placeholder, with Starts and Ends beside duration help. The clock counts a numbe
 `half a day`); the help names these forms. A length it cannot count is a warning, not a muted fact: the row's
 detail and the plan row say `⚠ Not counted in the day’s time` in the warning colour, with how to write it on
 hover, and in the open form the same warning takes the place of Ends, so the fields below keep their place. Rename never changes notes automatically. The offer is the Library's, from one function:
-`Change links from “<old>” to “<new>”.` with `Update N links`, in the list column; it updates old-title aliases as one batch with Undo,
+`Change links from “<old>” to “<new>”.` with `Update N links`, in the list column's footer; it updates old-title aliases as one batch with Undo,
 and checks every note first: if one is changed on disk or needs a choice, no note is written. Each note is then
 saved on its own, after one more check of its file. If a save fails part way, nothing is rolled back: one result
 names every note already written and the error, and `Undo link update` puts back exactly those; the result stays
 until Undo or a new update. Undo writes only into the same file it wrote (same bytes, same session id), else it
 names the note and changes nothing; custom
-aliases remain. Undo stays only in the list column until a note/event edit or leaving Timeline, never in
+aliases remain. Undo stays only in the list column's footer until a note/event edit or leaving Timeline, never in
 conflict. Completed link updates use success.
 
 A Travel event's checks are lines of the event: `- Checks table: road` (no key while none is chosen) and
@@ -1771,9 +1774,18 @@ banner where the recording banners sit, never above the tabs or the note: proces
 processed. …`, with the close icon named `Dismiss`), a copy that claims the session, notes whose properties cannot
 be read, and a note or template draft whose file changed on disk, went, moved or could not be saved, with their
 choices. In the banner they follow the recording alerts, whose order and one primary stay as they are, and each
-wraps at `LIST_MEASURE`. The result of the DM's own action on the page keeps its place above the tabs: `Recording
-saved: …`, `Recording deleted.`, `Added to the notes.`, `<file> is now a separate session.`, where an open run
-stays or moved, `No entry is named …`, and `Draft discarded.` or `Reloaded from disk.` with their Undo. When the
+wraps at `LIST_MEASURE`. The result of the DM's own action on the page, and the notices about this page, sit in
+the session pane's message footer (`design::Footer`), pinned at the pane's bottom, so the title line, Last time,
+the tabs, the plan's rows and the recording row never move when one comes: `Recording saved: …`, `Recording
+deleted.`, `Added to the notes.`, `<file> is now a separate session.`, where an open run stays or moved, `No entry
+is named …`, `Draft discarded.` or `Reloaded from disk.` with their Undo, the warning that this is not the session
+being played or that its date has passed, the chosen input that is not connected, and another session's
+recording state (`⊘ Not saving audio 0:00 in Session 1: …`). The line below the title holds only this session's
+recording state, which keeps one height from Record to Stop, and the Record step. The plan has its own message
+footer below its rows for its Add, Remove, ruling and deleted-run results with their Undo, the file's notices, the
+group being assembled elsewhere and a rename problem; a result that belongs to one row stays under that row. The
+Notes panel beside a run and the Templates editor have one footer each for their draft's result, the panel's date
+warning and the template action's error. When the
 banner makes the note's view shorter and the view was at the note's end, it stays at the end, so the line being
 typed stays in view. The banner is at most a third of the window; longer content scrolls inside it, with the
 recording alerts at its top, and a choice that gains keyboard focus scrolls into view.

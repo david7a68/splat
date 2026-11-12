@@ -1883,8 +1883,17 @@ impl Splat {
                         // The same guard as Settings: a link or folder change would stop
                         // the run's sync, or hide an open draft.
                         let blocked = self.blocked_switch();
+                        // Round 26 FN2, FN5: the Session folder form's messages sit in this
+                        // pane's footer, below its scroll area.
+                        let mut footer = design::Footer::new(
+                            "campaign_link_footer",
+                            ui.available_width().min(design::FORM_WIDTH),
+                        );
+                        self.sessions.folder_messages(&mut footer, &self.timeline);
+                        let bottom = footer.show(ui);
                         egui::ScrollArea::vertical()
                             .id_salt("campaign_link")
+                            .max_height((bottom - ui.cursor().top()).max(0.0))
                             .auto_shrink([false, false])
                             .show(ui, |ui| {
                                 self.campaigns.show_active(

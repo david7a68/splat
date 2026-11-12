@@ -13,7 +13,8 @@ use crate::{
     timeline::{
         self, Book, Kind, checks,
         page::{
-            added_message, file_notices, long_rest_status, problems, quick_add_with, rest_ruling,
+            added_message, file_act, file_notices_in_footer, long_rest_status, problems,
+            quick_add_with, rest_ruling,
         },
         removed_event_words,
     },
@@ -28,6 +29,18 @@ use std::{
 use uuid::Uuid;
 
 const UNDO_ADD_FOR: Duration = Duration::from_secs(30);
+
+/// What the DM chose in the plan's message footer. It is done after the footer is drawn, so
+/// the footer's messages borrow nothing that the plan's rows change.
+#[derive(Clone, Debug, PartialEq)]
+enum FooterAct {
+    GoToGroup,
+    UndoGroupDiscard,
+    UndoDeletedRun,
+    UndoAdd(String),
+    UndoRemove,
+    Scene(SceneAct),
+}
 /// A list longer than this gets a search, and it scrolls instead of leaving the window.
 const FIGHT_SEARCH_FROM: usize = 8;
 const FIGHT_MENU_WIDTH: f32 = 240.0;
@@ -860,6 +873,7 @@ impl Scenes {
 }
 
 /// A scene act that the plan takes after it draws.
+#[derive(Clone, Debug, PartialEq)]
 enum SceneAct {
     Add(String),
     Tick(Slot, TaskLine),
@@ -1247,7 +1261,7 @@ impl Sessions {
         {
             self.removed_group = None;
         }
-        file_notices(ui, book);
+        // The comparison or the unread file takes the pane: the DM must choose first.
         if problems(ui, book) {
             return;
         }
@@ -1352,30 +1366,6 @@ impl Sessions {
             }
             None => None,
         };
-        if plan.group_open && self.not_being_played().is_none() {
-            let label = self
-                .notes
-                .iter()
-                .find(|note| Some(note.id) == self.group_session)
-                .map_or_else(
-                    || "another session".to_owned(),
-                    |note| format!("“{}”", note.label()),
-                );
-            if design::message_with_action(
-                ui,
-                Tone::Info,
-                &format!("A group is being assembled in the plan of {label}."),
-                "Go to it",
-            ) {
-                self.select(self.group_session);
-            }
-        }
-        if plan.group_discarded && here && design::draft_discarded(ui, &plan.group_discarded_name) {
-            self.wants_group_undo = true;
-        }
-        if let Some(problem) = &self.rename_problem {
-            design::message(ui, Tone::Warning, problem);
-        }
         // Planned fights not yet played, and whether each has an ended run: a removal notice
         // says when one with the same name stays.
         let planned_results: Vec<(String, bool)> = planned
@@ -1389,8 +1379,72 @@ impl Sessions {
                 )
             })
             .collect();
-        self.plan_messages(ui, book, session, plan, &planned_results);
-        self.scene_messages(ui, folded, &mut scene_act);
+        // Round 26 FL1: the plan's results, reasons and notices sit in its message footer, pinned
+        // below the rows, so a result never moves a row or the Add strip.
+        let footer_act = std::cell::Cell::new(None);
+        let mut footer =
+            design::Footer::new(("session_plan_footer", session), ui.available_width());
+        if plan.group_open && self.not_being_played().is_none() {
+            let label = self
+                .notes
+                .iter()
+                .find(|note| Some(note.id) == self.group_session)
+                .map_or_else(
+                    || "another session".to_owned(),
+                    |note| format!("“{}”", note.label()),
+                );
+            let words = format!("A group is being assembled in the plan of {label}.");
+            let act = &footer_act;
+            footer.notice(words.clone(), move |ui| {
+                if design::message_with_action(ui, Tone::Info, &words, "Go to it") {
+                    act.set(Some(FooterAct::GoToGroup));
+                }
+            });
+        }
+        if plan.group_discarded && here {
+            let name = plan.group_discarded_name.clone();
+            let act = &footer_act;
+            footer.result(format!("{name} draft discarded."), true, move |ui| {
+                if design::draft_discarded(ui, &name) {
+                    act.set(Some(FooterAct::UndoGroupDiscard));
+                }
+            });
+        }
+        if let Some(problem) = self.rename_problem.clone() {
+            footer.reason(problem.clone(), move |ui| {
+                design::message(ui, Tone::Warning, &problem);
+            });
+        }
+        let file = std::cell::Cell::new(None);
+        file_notices_in_footer(&mut footer, book, &file);
+        self.plan_messages(
+            ui,
+            &mut footer,
+            &footer_act,
+            book,
+            session,
+            plan,
+            &planned_results,
+        );
+        self.scene_messages(&mut footer, &footer_act, folded);
+        let body_bottom = footer.show(ui);
+        match footer_act.take() {
+            Some(FooterAct::GoToGroup) => {
+                self.select(self.group_session);
+            }
+            Some(FooterAct::UndoGroupDiscard) => self.wants_group_undo = true,
+            Some(FooterAct::UndoDeletedRun) => self.undo_deleted_run(),
+            Some(FooterAct::UndoAdd(id)) => {
+                book.undo_add(&id);
+                self.added = None;
+            }
+            Some(FooterAct::UndoRemove) => {
+                book.undo_remove();
+            }
+            Some(FooterAct::Scene(act)) => scene_act = Some(act),
+            None => {}
+        }
+        file_act(book, file.take());
         if let Some(id) = &added {
             if let Some(event) = book.events.iter_mut().find(|event| event.id == *id) {
                 event.title = event.kind.word().to_owned();
@@ -1466,7 +1520,10 @@ impl Sessions {
             // The rows leave the scroll bar's lane free whether or not the bar shows, so a row's
             // actions keep their x when the plan grows long enough to scroll.
             let lane_width = ui.available_width() - ui.spacing().scroll.allocated_width();
+            // The rows end above the message footer, whatever the panel's own bottom.
+            let rows_height = (body_bottom - ui.cursor().top()).max(0.0);
             let output = egui::ScrollArea::vertical().id_salt(("session_plan", session))
+                .max_height(rows_height)
                 .auto_shrink([false, false]).show(ui, |ui| {
                 ui.set_max_width(lane_width);
                 let width = lane_width.min(ui.available_width()) - design::M;
@@ -1584,7 +1641,7 @@ impl Sessions {
                         }
                         if self.row_notice == Some((session, at)) && self.deleted_run.is_some() {
                             ui.add_space(design::S);
-                            self.deleted_run_message(ui);
+                            self.deleted_run_in_row(ui);
                         }
                         plan_rule(ui);
                     });
@@ -1652,7 +1709,7 @@ impl Sessions {
                         });
                         if self.row_notice == Some((session, event_count + position)) && self.deleted_run.is_some() {
                             ui.add_space(design::S);
-                            self.deleted_run_message(ui);
+                            self.deleted_run_in_row(ui);
                         }
                         if self.open_planned.as_ref() == Some(&fight.path) {
                             plan_details(ui, |ui| {
@@ -1992,19 +2049,31 @@ impl Sessions {
         }
     }
 
-    /// The scenes' results in the plan's message place, below the Add strip.
-    fn scene_messages(&mut self, ui: &mut egui::Ui, folded: bool, act: &mut Option<SceneAct>) {
-        // A row's words show under the row; a folded row's show here.
+    /// The scenes' results in the plan's message footer. A row's words show under the row; a
+    /// folded row's, and the Add strip's, show in the footer.
+    fn scene_messages<'a>(
+        &self,
+        footer: &mut design::Footer<'a>,
+        act: &'a std::cell::Cell<Option<FooterAct>>,
+        folded: bool,
+    ) {
         if let Some(fault) = &self.scenes.fault
             && (fault.place == Place::Strip || folded && matches!(fault.place, Place::Row(_)))
         {
-            design::message(ui, Tone::Warning, &fault.words);
+            let words = fault.words.clone();
+            footer.reason(words.clone(), move |ui| {
+                design::message(ui, Tone::Warning, &words);
+            });
         }
         if let Some(undo) = &self.scenes.added
             && self.draft.as_ref().is_some_and(|draft| undo.live(draft))
-            && design::undo_message(ui, Tone::Success, "Scene added to tonight.", "Undo scene")
         {
-            *act = Some(SceneAct::UndoAdd);
+            const ADDED: &str = "Scene added to tonight.";
+            footer.result(ADDED, true, move |ui| {
+                if design::undo_message(ui, Tone::Success, ADDED, "Undo scene") {
+                    act.set(Some(FooterAct::Scene(SceneAct::UndoAdd)));
+                }
+            });
         }
     }
 
@@ -2212,35 +2281,67 @@ impl Sessions {
         }
     }
 
-    fn deleted_run_message(&mut self, ui: &mut egui::Ui) {
-        if let Some((deleted, _)) = &self.deleted_run {
-            let words = deleted.message();
-            if design::undo_message(
+    /// The deleted run's result at the row it was deleted from: the row owns it.
+    fn deleted_run_in_row(&mut self, ui: &mut egui::Ui) {
+        if let Some((tone, words)) = self.deleted_run_words()
+            && design::undo_message(
                 ui,
-                if deleted.unsent.is_empty() {
-                    Tone::Success
-                } else {
-                    Tone::Warning
-                },
+                tone,
                 &words,
                 crate::encounter_run::DeletedRun::UNDO_LABEL,
-            ) {
-                self.undo_deleted_run();
-            }
+            )
+        {
+            self.undo_deleted_run();
+        }
+    }
+
+    fn deleted_run_words(&self) -> Option<(Tone, String)> {
+        self.deleted_run.as_ref().map(|(deleted, _)| {
+            let tone = if deleted.unsent.is_empty() {
+                Tone::Success
+            } else {
+                Tone::Warning
+            };
+            (tone, deleted.message())
+        })
+    }
+
+    fn deleted_run_message<'a>(
+        &self,
+        footer: &mut design::Footer<'a>,
+        act: &'a std::cell::Cell<Option<FooterAct>>,
+    ) {
+        if let Some((tone, words)) = self.deleted_run_words() {
+            footer.result(words.clone(), true, move |ui| {
+                if design::undo_message(
+                    ui,
+                    tone,
+                    &words,
+                    crate::encounter_run::DeletedRun::UNDO_LABEL,
+                ) {
+                    act.set(Some(FooterAct::UndoDeletedRun));
+                }
+            });
         }
     }
 
     /// What can be undone in the plan: the event just added or just removed.
-    fn plan_messages(
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the plan's parts that its results name"
+    )]
+    fn plan_messages<'a>(
         &mut self,
-        ui: &mut egui::Ui,
-        book: &mut Book,
+        ui: &egui::Ui,
+        footer: &mut design::Footer<'a>,
+        act: &'a std::cell::Cell<Option<FooterAct>>,
+        book: &Book,
         session: Option<Uuid>,
         plan: &Plan<'_>,
         planned: &[(String, bool)],
     ) {
         if self.row_notice.is_none() {
-            self.deleted_run_message(ui);
+            self.deleted_run_message(footer, act);
         }
         let days = timeline::day_numbers(&book.events);
         // It goes at the DM's next edit, or soon, so that it cannot undo the wrong thing.
@@ -2270,18 +2371,21 @@ impl Sessions {
                 just.id.clone(),
                 added_message(&just.label, to.as_deref(), restores),
             );
-            if design::undo_message(ui, Tone::Success, &words, "Undo add") {
-                book.undo_add(&id);
-                self.added = None;
-            }
+            footer.result(words.clone(), true, move |ui| {
+                if design::undo_message(ui, Tone::Success, &words, "Undo add") {
+                    act.set(Some(FooterAct::UndoAdd(id)));
+                }
+            });
         } else if !self.removed_event_in_plan
             && !self.removal_superseded(book)
             && let Some(label) = book.removed().map(str::to_owned)
         {
             let words = removed_event_words(book, session, &days, &label, planned);
-            if design::undo_message(ui, Tone::Success, &words, "Undo remove") {
-                book.undo_remove();
-            }
+            footer.result(words.clone(), true, move |ui| {
+                if design::undo_message(ui, Tone::Success, &words, "Undo remove") {
+                    act.set(Some(FooterAct::UndoRemove));
+                }
+            });
         }
     }
 

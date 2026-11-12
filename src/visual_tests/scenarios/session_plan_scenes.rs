@@ -221,4 +221,34 @@ pub fn run(d: &mut Driver<'_>) {
         note(d) == after,
         "Undo remove puts the scene's line back where it was",
     );
+
+    // Round 26 FL1 contract: the plan's footer keeps every live Undo. A scene (A), then an
+    // unrelated Long rest (B), then Undo scene: A's line goes, B's event and its Undo stay.
+    d.click("More Add actions");
+    d.click("Add Scene");
+    d.type_text("ash");
+    d.click(&format!("{KEEP} · Location"));
+    d.expect("Scene added to tonight.");
+    d.press(Key::Escape);
+    let events = |d: &mut Driver<'_>| {
+        d.app_mut()
+            .timeline
+            .events
+            .iter()
+            .filter(|event| event.title == "Long rest")
+            .count()
+    };
+    let rests = events(d);
+    d.click("Add Long rest");
+    d.expect("Undo add");
+    let added = events(d) == rests + 1;
+    let both = d.in_view("Undo scene") && d.in_view("Undo add") && added;
+    d.click("Undo scene");
+    let kept = events(d) == rests + 1;
+    let undone = !note(d).contains(KEEP);
+    d.observe(
+        "iter-26-S-FL1-undo",
+        both && undone && kept && d.in_view("Undo add"),
+        "Both results stay listed; Undo scene takes A's line out, and B's event and Undo stay",
+    );
 }

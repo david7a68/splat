@@ -149,6 +149,31 @@ pub fn quick_add_with(
     })
 }
 
+/// A pane's body between the cursor and `bottom`, the top of its message footer: an editor or
+/// a list that fills its height stops above the footer.
+pub(crate) fn body_above<R>(
+    ui: &mut egui::Ui,
+    bottom: f32,
+    add: impl FnOnce(&mut egui::Ui) -> R,
+) -> R {
+    let body = egui::Rect::from_min_max(
+        ui.cursor().min,
+        egui::pos2(ui.max_rect().right(), bottom.max(ui.cursor().top())),
+    );
+    ui.scope_builder(egui::UiBuilder::new().max_rect(body), add)
+        .inner
+}
+
+/// What the DM chose in the Timeline list's message footer, done after the footer is drawn.
+#[derive(Clone, Debug, PartialEq)]
+enum ListAct {
+    UndoLinks,
+    UpdateLinks,
+    UndoRuling,
+    UndoRemove,
+    UndoAdd(String),
+}
+
 pub enum RestRulingAction {
     Set(bool),
     Undo,
@@ -317,6 +342,84 @@ pub fn file_notices(ui: &mut egui::Ui, book: &mut Book) {
             book.error = None;
             book.save();
         }
+    }
+}
+
+/// What the DM chose in a file notice in a pane's footer, done after the footer is drawn.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FileAct {
+    UndoReload,
+    SaveAgain,
+}
+
+/// Round 26 FL1: `file_notices` for a pane with a message footer. The same words and choices,
+/// in the footer's order: the reload result with its live Undo, then the failed save (a
+/// reason), then the flags and the duplicate (notices). The choice lands in `act`.
+pub fn file_notices_in_footer<'a>(
+    footer: &mut design::Footer<'a>,
+    book: &Book,
+    act: &'a std::cell::Cell<Option<FileAct>>,
+) {
+    if let Some(count) = book.dropped() {
+        let words = format!(
+            "Reloaded. Your version, with {}, is gone unless you undo.",
+            design::count(count, "event", "events")
+        );
+        footer.result(words.clone(), true, move |ui| {
+            if design::undo_message(ui, Tone::Info, &words, "Undo reload") {
+                act.set(Some(FileAct::UndoReload));
+            }
+        });
+    }
+    let folder = book
+        .path
+        .as_deref()
+        .and_then(std::path::Path::parent)
+        .map(std::path::Path::to_path_buf);
+    let last = book.flags.len();
+    for (at, flag) in book.flags.iter().enumerate() {
+        let text = flag_words(flag);
+        let folder = folder.clone().filter(|_| at + 1 == last);
+        footer.notice(text.clone(), move |ui| match folder {
+            Some(folder) => {
+                design::message_with_actions(ui, Tone::Warning, &text, |ui| {
+                    crate::encounters::file_line(ui, &folder, super::FILE);
+                });
+            }
+            None => {
+                design::message(ui, Tone::Warning, &text);
+            }
+        });
+    }
+    if let Some(warning) = book.duplicate.clone() {
+        footer.notice(warning.clone(), move |ui| {
+            design::message(ui, Tone::Warning, &warning);
+        });
+    }
+    if book.unreadable.is_none()
+        && !book.conflict
+        && let Some(error) = book.error.clone()
+    {
+        footer.reason(error.clone(), move |ui| {
+            let again = design::message_with_actions(ui, Tone::Error, &error, |ui| {
+                Action::secondary("Try to save again").show(ui).clicked()
+            });
+            if again {
+                act.set(Some(FileAct::SaveAgain));
+            }
+        });
+    }
+}
+
+/// Do what the DM chose in a footer's file notice.
+pub fn file_act(book: &mut Book, act: Option<FileAct>) {
+    match act {
+        Some(FileAct::UndoReload) => book.undo_reload(),
+        Some(FileAct::SaveAgain) => {
+            book.error = None;
+            book.save();
+        }
+        None => {}
     }
 }
 
@@ -674,7 +777,11 @@ impl TimelinePage {
             );
         }
         let response = if warning.is_some() {
-            response.on_hover_text(format!("{}. {}", super::TIME_NOT_COUNTED, super::TIME_REPAIR))
+            response.on_hover_text(format!(
+                "{}. {}",
+                super::TIME_NOT_COUNTED,
+                super::TIME_REPAIR
+            ))
         } else {
             response
         };
@@ -727,8 +834,65 @@ impl TimelinePage {
         changed
     }
 
-    fn list_messages(&mut self, ui: &mut egui::Ui, book: &mut Book) {
-        file_notices(ui, book);
+    /// Round 26: the list column's results, reasons and notices sit in its message footer,
+    /// pinned below the rows, so a result never moves a row: the link update after a rename and
+    /// its Undo, the open event's rest ruling, the file's notices, a removal and an add. Each
+    /// keeps its owner and end event; the footer only places them. Returns where the rows end.
+    fn list_footer(
+        &mut self,
+        ui: &mut egui::Ui,
+        book: &mut Book,
+        notes: &mut crate::sessions::page::Sessions,
+        open: Option<&str>,
+    ) -> f32 {
+        let act = std::cell::Cell::new(None);
+        let file = std::cell::Cell::new(None);
+        let mut footer = design::Footer::new("timeline_list_footer", ui.available_width());
+        if let Some(words) = notes.event_link_result() {
+            let act = &act;
+            footer.result(words.clone(), true, move |ui| {
+                if design::undo_message(ui, Tone::Success, &words, "Undo link update") {
+                    act.set(Some(ListAct::UndoLinks));
+                }
+            });
+        }
+        let offer = open
+            .filter(|id| book.events.iter().any(|event| event.id == *id))
+            .and_then(|id| notes.event_link_offer(book, id));
+        if let Some(offer) = &offer {
+            let (words, action) = (offer.words.clone(), offer.action.clone());
+            let act = &act;
+            footer.result(words.clone(), false, move |ui| {
+                if design::message_with_action(ui, Tone::Info, &words, &action) {
+                    act.set(Some(ListAct::UpdateLinks));
+                }
+            });
+        }
+        if let Some(problem) = notes.event_link_problem().map(str::to_owned) {
+            footer.reason(problem.clone(), move |ui| {
+                design::message(ui, Tone::Warning, &problem);
+            });
+        }
+        if let Some(id) = open
+            && let Some(event) = book
+                .events
+                .iter()
+                .find(|event| event.id == id && book.rest_undo_id() == Some(id))
+                .filter(|event| event.kind == Kind::LongRest)
+        {
+            let words = if event.restores {
+                REST_RESTORES_WORDS
+            } else {
+                "The next fight starts from the HP the party has now."
+            };
+            let act = &act;
+            footer.result(words, true, move |ui| {
+                if design::undo_message(ui, Tone::Success, words, "Undo ruling") {
+                    act.set(Some(ListAct::UndoRuling));
+                }
+            });
+        }
+        file_notices_in_footer(&mut footer, book, &file);
         if let Some(label) = book.removed().map(str::to_owned) {
             let mentions = self.removed_mentions;
             let words = timeline_removal_words(book, &label, mentions);
@@ -738,9 +902,12 @@ impl TimelinePage {
             } else {
                 Tone::Success
             };
-            if design::undo_message(ui, tone, &words, "Undo remove") {
-                book.undo_remove();
-            }
+            let act = &act;
+            footer.result(words.clone(), true, move |ui| {
+                if design::undo_message(ui, tone, &words, "Undo remove") {
+                    act.set(Some(ListAct::UndoRemove));
+                }
+            });
         }
         // It goes when the DM moves on, or soon, so that it cannot undo the wrong event.
         self.just_added = self
@@ -763,12 +930,46 @@ impl TimelinePage {
                 });
             // Timeline lists every session, so its result names only the event.
             let words = added_message(&label, None, restores);
-            if design::undo_message(ui, Tone::Success, &words, "Undo add") {
+            let act = &act;
+            footer.result(words.clone(), true, move |ui| {
+                if design::undo_message(ui, Tone::Success, &words, "Undo add") {
+                    act.set(Some(ListAct::UndoAdd(id)));
+                }
+            });
+        }
+        if book.merged_outside {
+            // A result like the others in this column: an icon and a bar, not help text.
+            const MERGED: &str = "Timeline.md also changed outside Splat. Both changes are kept.";
+            footer.notice(MERGED, |ui| {
+                design::message(ui, Tone::Info, MERGED);
+            });
+        }
+        let bottom = footer.show(ui);
+        file_act(book, file.take());
+        match act.take() {
+            Some(ListAct::UndoLinks) => notes.undo_event_link_update(),
+            Some(ListAct::UpdateLinks) => {
+                if let Some(offer) = offer {
+                    notes.accept_event_link_offer(offer, book);
+                }
+            }
+            Some(ListAct::UndoRuling) => {
+                if let Some(id) = open {
+                    RestRulingAction::Undo.apply(book, id);
+                    self.just_added = None;
+                }
+            }
+            Some(ListAct::UndoRemove) => {
+                book.undo_remove();
+            }
+            Some(ListAct::UndoAdd(id)) => {
                 book.undo_add(&id);
                 self.just_added = None;
                 self.selected = None;
             }
+            None => {}
         }
+        bottom
     }
 
     /// The open event's results stay in the list column with the other results, so they never
@@ -783,7 +984,14 @@ impl TimelinePage {
         if !book.events.iter().any(|event| event.id == id) {
             return;
         }
-        notes.event_link_offer(ui, book, id);
+        if let Some(offer) = notes.event_link_offer(book, id)
+            && design::message_with_action(ui, Tone::Info, &offer.words, &offer.action)
+        {
+            notes.accept_event_link_offer(offer, book);
+        }
+        if let Some(problem) = notes.event_link_problem() {
+            design::message(ui, Tone::Warning, problem);
+        }
         let ruling = book
             .events
             .iter()
@@ -796,15 +1004,6 @@ impl TimelinePage {
     }
 
     fn list(&mut self, ui: &mut egui::Ui, book: &mut Book, sessions: &[SessionLink]) {
-        self.list_messages(ui, book);
-        if book.merged_outside {
-            // A result like the others in this column: an icon and a bar, not help text.
-            design::message(
-                ui,
-                Tone::Info,
-                "Timeline.md also changed outside Splat. Both changes are kept.",
-            );
-        }
         let flagged: std::collections::HashMap<String, u32> = book
             .baseline
             .as_deref()
@@ -1118,7 +1317,9 @@ impl TimelinePage {
                 design::field(
                     ui,
                     "How long",
-                    Some("A number and a unit move the clock, such as 4 hours, 1 day or half a day."),
+                    Some(
+                        "A number and a unit move the clock, such as 4 hours, 1 day or half a day.",
+                    ),
                     None,
                     |ui| {
                         let hint = match event.kind {
@@ -1438,23 +1639,26 @@ impl TimelinePage {
         }
         ui.add_space(design::XS);
         if book.events.is_empty() && book.unreadable.is_none() {
-            self.list_messages(ui, book);
+            let bottom = self.list_footer(ui, book, notes, None);
             let mut first = false;
-            design::empty_state(
-                ui,
-                icons::TIMELINE,
-                "Nothing on the timeline yet",
-                "Add the first day above. Each encounter run appears here by itself, in the session it belongs to.",
-                |ui| {
-                    first = if self.open_run.is_some() {
-                        Action::secondary("Start with day 1")
-                    } else {
-                        Action::primary("Start with day 1")
-                    }
-                    .show(ui)
-                    .clicked();
-                },
-            );
+            let open_run = self.open_run.is_some();
+            body_above(ui, bottom, |ui| {
+                design::empty_state(
+                    ui,
+                    icons::TIMELINE,
+                    "Nothing on the timeline yet",
+                    "Add the first day above. Each encounter run appears here by itself, in the session it belongs to.",
+                    |ui| {
+                        first = if open_run {
+                            Action::secondary("Start with day 1")
+                        } else {
+                            Action::primary("Start with day 1")
+                        }
+                        .show(ui)
+                        .clicked();
+                    },
+                );
+            });
             if first {
                 let id = book.add(Kind::Day, current);
                 self.reveal(&id, book);
@@ -1491,14 +1695,14 @@ impl TimelinePage {
                 self.detail(ui, book, sessions, notes);
             } else {
                 notes.expire_event_link_undo(true, book);
-                notes.event_link_undo(ui);
-                self.list(ui, book, sessions);
+                let bottom = self.list_footer(ui, book, notes, None);
+                body_above(ui, bottom, |ui| self.list(ui, book, sessions));
             }
             return;
         }
         if !event_open {
-            notes.event_link_undo(ui);
-            self.list(ui, book, sessions);
+            let bottom = self.list_footer(ui, book, notes, None);
+            body_above(ui, bottom, |ui| self.list(ui, book, sessions));
             return;
         }
         let width = design::side_panel_width(ui.available_width());
@@ -1521,11 +1725,9 @@ impl TimelinePage {
                     }))
                     .show_inside(ui, |ui| {
                         notes.expire_event_link_undo(true, book);
-                        notes.event_link_undo(ui);
-                        if let Some(id) = self.selected.clone() {
-                            self.event_results(ui, book, notes, &id);
-                        }
-                        self.list(ui, book, sessions)
+                        let open = self.selected.clone();
+                        let bottom = self.list_footer(ui, book, notes, open.as_deref());
+                        body_above(ui, bottom, |ui| self.list(ui, book, sessions));
                     });
             },
         );
@@ -1579,7 +1781,10 @@ fn second_line(
         );
     };
     for (range, color) in spans {
-        let (start, end) = (range.start.max(at).min(detail.len()), range.end.min(detail.len()));
+        let (start, end) = (
+            range.start.max(at).min(detail.len()),
+            range.end.min(detail.len()),
+        );
         if start >= end {
             continue;
         }

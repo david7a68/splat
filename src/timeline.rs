@@ -444,8 +444,7 @@ const YEAR: u64 = 12 * MONTH;
 pub const TIME_NOT_COUNTED: &str = "Not counted in the day’s time";
 
 /// How to write a length the clock counts. The event form's help and the rows' hover say it.
-pub const TIME_REPAIR: &str =
-    "Write a number and a unit, such as 4 hours, 1 day or half a day.";
+pub const TIME_REPAIR: &str = "Write a number and a unit, such as 4 hours, 1 day or half a day.";
 
 /// A length in the closed form the clock can count, in minutes: `3 days`, `an hour`.
 pub fn read_duration(text: &str) -> Option<u64> {
