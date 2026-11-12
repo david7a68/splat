@@ -90,6 +90,9 @@ pub struct Difficulty {
     /// The word and the budgets. `None` when a creature's XP, a level or the table is not
     /// known, or when nothing stands against the party.
     pub rating: Option<Rating>,
+    /// How many foes have no XP that is known. Their XP is in no sum; the rewards' XP line
+    /// names them (F7).
+    pub unknown: u64,
     /// Which input takes the word away, when it is one that is not known: the creatures with
     /// no XP and no CR, or else the characters with no level. `None` when the word shows, or
     /// when nothing the DM could fill in would bring it (no party, no table, no creature).
@@ -189,6 +192,7 @@ impl Scale {
                 None => unknown.push(at),
             }
         }
+        let unknown_count = unknown.len() as u64;
         let campaign_party = party.is_empty();
         let saved: Vec<_>;
         let party = if campaign_party {
@@ -220,6 +224,7 @@ impl Scale {
         Difficulty {
             xp,
             rating,
+            unknown: unknown_count,
             missing,
         }
     }

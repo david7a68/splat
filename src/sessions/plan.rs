@@ -3603,11 +3603,13 @@ mod tests {
         let rated = Difficulty {
             xp: 6300,
             rating: Some(crate::difficulty::above_high()),
+            unknown: 0,
             missing: None,
         };
         let unknown = Difficulty {
             xp: 0,
             rating: None,
+            unknown: 2,
             missing: Some(Missing {
                 what: Unknown::Xp,
                 at: vec![0, 1],
