@@ -1752,6 +1752,9 @@ impl Draft {
     }
 }
 
+/// What a note act says when its save failed and the fragment waits in the draft.
+pub const NOT_SAVED: &str = "Notes not saved";
+
 /// How a note act meets the DM's typing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Apply {
@@ -1787,7 +1790,7 @@ impl ActFault {
             Self::Missing => "The note is gone from its folder.",
             Self::OtherNote => "The file now holds another note.",
             Self::LineChanged => "That line changed on disk.",
-            Self::NotSaved(..) => "Notes not saved",
+            Self::NotSaved(..) => NOT_SAVED,
         }
     }
 }

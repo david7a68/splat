@@ -598,8 +598,9 @@ impl Sessions {
         Some(Source::read(note, folder, plan, book))
     }
 
-    /// What `Carry over` would add now, read again only when the note's words change.
-    fn carry_offer(&mut self) -> Option<Result<Offer, String>> {
+    /// What `Carry over` would add now, as its hover says it, or why it is blocked. Read again
+    /// only when the note's words change.
+    fn carry_offer(&mut self) -> Option<Result<String, String>> {
         let revision = self.draft.as_ref().map(crate::sessions::Draft::revision)?;
         let (_, Some(last)) = self.last_time.as_mut()? else {
             return None;
@@ -617,7 +618,7 @@ impl Sessions {
         }
         match (source, last.offer.as_ref()) {
             (Err(words), _) => Some(Err(words.clone())),
-            (Ok(_), Some((_, Some(offer)))) => Some(Ok(offer.clone())),
+            (Ok(_), Some((_, Some(offer)))) => Some(Ok(offer.hover())),
             _ => None,
         }
     }
@@ -654,7 +655,7 @@ impl Sessions {
             .and_then(|words| words.lines().find(|line| !line.trim().is_empty()))
             .unwrap_or("");
         let (hover, blocked) = match &offer {
-            Some(Ok(offer)) => (Some(offer.hover()), None),
+            Some(Ok(hover)) => (Some(hover.as_str()), None),
             Some(Err(words)) => (None, Some(words.as_str())),
             None => (None, None),
         };
@@ -664,7 +665,7 @@ impl Sessions {
             ui.label(Type::Small.rich(ui, "Last time:").color(colors().muted));
             let action = offer.is_some().then(|| {
                 let mut action = Action::quiet("Carry over").in_line().blocked(blocked);
-                if let Some(hover) = &hover {
+                if let Some(hover) = hover {
                     action = action.hint(hover);
                 }
                 action
@@ -811,10 +812,7 @@ impl Sessions {
                 let (tone, words) = if undo.written() {
                     (Tone::Success, words.as_str())
                 } else {
-                    (
-                        Tone::Warning,
-                        ActFault::NotSaved(String::new(), undo.clone()).words(),
-                    )
+                    (Tone::Warning, crate::sessions::NOT_SAVED)
                 };
                 design::undo_message(ui, tone, words, action)
             }
