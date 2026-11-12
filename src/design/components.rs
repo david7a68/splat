@@ -2856,6 +2856,8 @@ struct NextAction {
     capped: bool,
     /// For checks: the room lost, what the row needed and the scroll, at the last reveal.
     last: (f32, f32, f32),
+    /// Where the row's top must be in the pass after a reveal; there, the promise is kept.
+    expect: Option<f32>,
 }
 
 /// A next action as the reveal saw it in the last finished pass, for checks.
@@ -2918,12 +2920,21 @@ pub fn keep_above_footer(ui: &Ui, response: &Response) {
             whole: whole_at(rect.top()),
             ..Default::default()
         });
-    let (pointer, scrolled) = ctx.input(|input| {
+    let (pointer, scrolled, pressing) = ctx.input(|input| {
         let pointer = input.pointer.latest_pos();
         let over = pointer.is_some_and(|at| view.contains(at));
         let acts = input.raw_scroll_delta != Vec2::ZERO || input.pointer.any_down();
-        (pointer, over && acts)
+        let pressing =
+            input.pointer.any_down() || input.pointer.any_pressed() || input.pointer.any_released();
+        (pointer, over && acts, pressing)
     });
+    // A reveal that put the row where it meant to keeps its promise; a row that did not move
+    // (another scroll area took the delta) stays promised, for the checks to see.
+    if let Some(expect) = next.expect.take()
+        && (rect.top() - expect).abs() < 0.5
+    {
+        next.promised = false;
+    }
     // The DM's own scroll or press in the pane ends what a footer owed the row.
     if scrolled {
         next.promised = false;
@@ -2946,11 +2957,16 @@ pub fn keep_above_footer(ui: &Ui, response: &Response) {
         next.promised = true;
     }
     let mut top = rect.top();
-    let field = ctx
-        .memory(|memory| memory.focused())
-        .and_then(|id| ctx.read_response(id))
-        .map(|field| field.rect)
-        .filter(|field| field.intersects(clip));
+    // The focused control's rect, read only when a reveal is owed and in a pass with no pointer
+    // press, hold or release: there egui's `read_response` drops the focus of a widget the press
+    // is not on (as in `scroll_part`).
+    let field = |by: f32| {
+        ctx.memory(|memory| memory.focused())
+            .and_then(|id| ctx.read_response(id))
+            .map(|field| field.rect)
+            .filter(|field| field.intersects(clip))
+            .is_some_and(|field| field.top() - by < view.top() - 0.5)
+    };
     // egui puts scrolled content on whole pixels, so the row needs the delta rounded up.
     let need = (rect.bottom() - view.bottom()).ceil();
     let by = need.min(next.owed.ceil());
@@ -2958,9 +2974,9 @@ pub fn keep_above_footer(ui: &Ui, response: &Response) {
     #[cfg_attr(not(test), allow(unused_variables))]
     let held = if next.owed <= 0.0 {
         None
-    } else if pointer.is_some_and(|at| view.contains(at)) && pointer == next.pointer {
+    } else if pressing || (pointer.is_some_and(|at| view.contains(at)) && pointer == next.pointer) {
         Some("pointer")
-    } else if field.is_some_and(|field| field.top() - by < view.top() - 0.5) {
+    } else if field(by) {
         Some("field")
     } else {
         ui.scroll_with_delta_animation(vec2(0.0, -by), egui::style::ScrollAnimation::none());
@@ -2968,6 +2984,7 @@ pub fn keep_above_footer(ui: &Ui, response: &Response) {
         top -= by;
         next.capped = by < need;
         next.last = (next.owed, need, by);
+        next.expect = Some(top);
         next.owed = 0.0;
         None
     };
