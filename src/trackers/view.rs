@@ -148,7 +148,6 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
     let Trackers {
         rules,
         state,
-        ledger,
         view,
         reason,
         pending,
@@ -160,7 +159,7 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
     if !state.due.is_empty() {
         design::group_heading(ui, "Due", state.due.len());
         for notice in &state.due {
-            notice_row(ui, rules, state, ledger, view, reason, blocked, notice, act);
+            notice_row(ui, rules, view, reason, blocked, notice, act);
         }
         ui.add_space(design::S);
     }
@@ -204,12 +203,9 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
 
 /// A Due row: its words, its rolls with their results, its proposed changes, and `Done` with
 /// the row's menu at the end.
-#[allow(clippy::too_many_arguments)]
 fn notice_row(
     ui: &mut egui::Ui,
     rules: &Rules,
-    _state: &State,
-    ledger: &super::ledger::Ledger,
     view: &mut ViewState,
     reason: &Option<(Place, String)>,
     blocked: Option<&str>,
@@ -300,7 +296,6 @@ fn notice_row(
             }
         }
     }
-    let _ = ledger;
     if !ends_words {
         right_line(ui, |ui| {
             finish(ui, &short, blocked, notice, mark, view, act)
@@ -475,10 +470,6 @@ fn tracker_lines(
             );
             ui.add_space(design::S);
             for quick in &def.quick {
-                let asks = matches!(
-                    quick.add.as_ref().map(super::Amount::read),
-                    Some(Ok(super::Add::Ask { .. }))
-                );
                 let here = view.asking.as_ref().is_some_and(|(k, i, l, _)| {
                     *k == place.0 && *i == place.1 && *l == quick.label
                 });
@@ -495,6 +486,11 @@ fn tracker_lines(
                     .blocked(blocked)
                     .show(ui);
                 if response.clicked() {
+                    // Read on the click only: a dice amount is parsed to tell it from `ask`.
+                    let asks = matches!(
+                        quick.add.as_ref().map(super::Amount::read),
+                        Some(Ok(super::Add::Ask { .. }))
+                    );
                     if asks {
                         view.asking = Some((
                             place.0.clone(),

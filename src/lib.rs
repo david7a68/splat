@@ -1060,6 +1060,7 @@ impl Splat {
             return;
         }
         let due = self.trackers.due();
+        let due_word = format!("Due {due}");
         let (state, hover) = if self.trackers.unreadable.is_some() {
             (
                 Status {
@@ -1085,7 +1086,7 @@ impl Splat {
             (
                 Status {
                     icon: icons::BELL,
-                    word: "",
+                    word: &due_word,
                     color: colors().text,
                 },
                 format!(
@@ -1095,15 +1096,6 @@ impl Splat {
             )
         } else {
             return;
-        };
-        let word = format!("Due {due}");
-        let state = Status {
-            word: if state.word.is_empty() {
-                &word
-            } else {
-                state.word
-            },
-            ..state
         };
         let response = design::status_link(ui, state);
         design::named(ui, &response, &hover);

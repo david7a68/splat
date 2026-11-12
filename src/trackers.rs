@@ -182,6 +182,14 @@ impl Definition {
             self.per.iter().map(|word| Some(word.as_str())).collect()
         }
     }
+
+    /// Does this tracker have a line for this instance? With `per`, a name of it; else none.
+    fn has_line(&self, instance: Option<&str>) -> bool {
+        match instance {
+            None => self.per.is_empty(),
+            Some(name) => self.per.iter().any(|word| word == name),
+        }
+    }
 }
 
 /// A tracker of a note in play, or why its definition cannot be used.
@@ -452,9 +460,7 @@ pub fn replay(rules: &Rules, ledger: &Ledger) -> State {
         let Some(key) = &entry.tracker else { continue };
         let Some(def) = rules.def(key) else { continue };
         let instance = entry.instance.as_deref();
-        if def.per.is_empty() != instance.is_none()
-            || instance.is_some_and(|i| !def.per.iter().any(|word| word == i))
-        {
+        if !def.has_line(instance) {
             continue;
         }
         let place = (key.clone(), entry.instance.clone());
@@ -736,38 +742,35 @@ fn roll_table(rules: &Rules, key: &str) -> Result<(String, i64, String), String>
 // Acts: each builds its entries from the ledger on disk at the click.
 
 /// One change's entry, with the value it leaves. A change that would pass `min` is refused.
-#[allow(clippy::too_many_arguments)]
+/// The line's name goes only to a tracker with `per`.
 fn change_entry(
     rules: &Rules,
     state: &State,
     values: &mut HashMap<(String, Option<String>), i64>,
     key: &str,
-    instance: Option<String>,
+    instance: Option<&str>,
     change: &Change,
     asked: Option<i64>,
 ) -> Result<Entry, String> {
     let target = rules
         .def(key)
         .ok_or_else(|| format!("No tracker in play has the key “{key}”."))?;
-    if target.per.is_empty() != instance.is_none()
-        || instance
-            .as_ref()
-            .is_some_and(|name| !target.per.contains(name))
-    {
+    let instance = instance.filter(|_| !target.per.is_empty());
+    if !target.has_line(instance) {
         return Err(format!(
             "{} has no line for {}. Nothing was recorded.",
             target.name,
-            instance.as_deref().unwrap_or("this action")
+            instance.unwrap_or("this action")
         ));
     }
-    let place = (key.to_owned(), instance.clone());
+    let place = (key.to_owned(), instance.map(str::to_owned));
     let before = values
         .get(&place)
         .copied()
-        .unwrap_or_else(|| state.value(rules, key, instance.as_deref()));
+        .unwrap_or_else(|| state.value(rules, key, instance));
     let mut entry = Entry {
         tracker: Some(key.to_owned()),
-        instance,
+        instance: place.1.clone(),
         ..Entry::default()
     };
     let after = match (
@@ -850,16 +853,7 @@ fn press_op(
     let mut entries = Vec::new();
     for change in &changes {
         let target = change.tracker.as_deref().unwrap_or(key);
-        let target_per = rules.def(target).is_some_and(|def| !def.per.is_empty());
-        let mut entry = change_entry(
-            rules,
-            state,
-            &mut values,
-            target,
-            instance.filter(|_| target_per).map(str::to_owned),
-            change,
-            asked,
-        )?;
+        let mut entry = change_entry(rules, state, &mut values, target, instance, change, asked)?;
         entry.why = Some(label.to_owned());
         entries.push(entry);
     }
@@ -1034,14 +1028,24 @@ impl Trackers {
         self.newest = undo_target(&self.ledger, self.played);
     }
 
+    /// An act built from the values and notices of the file on disk.
     fn act(&mut self, place: Place, build: impl FnOnce(&Rules, &State) -> Result<Op, String>) {
+        self.act_on_ledger(place, |rules, ledger| build(rules, &replay(rules, ledger)));
+    }
+
+    /// An act built from the file on disk. While a failed save waits, no other act is made.
+    fn act_on_ledger(
+        &mut self,
+        place: Place,
+        build: impl FnOnce(&Rules, &Ledger) -> Result<Op, String>,
+    ) {
         if self.pending.is_some() {
             self.reason = Some((place, "Trackers not saved. Try again first.".into()));
             return;
         }
         let Some(path) = self.path() else { return };
         let rules = &self.rules;
-        let result = ledger::commit(&path, |ledger| build(rules, &replay(rules, ledger)));
+        let result = ledger::commit(&path, |ledger| build(rules, ledger));
         self.finish(place, result);
     }
 
@@ -1122,36 +1126,24 @@ impl Trackers {
     pub fn done(&mut self, drawn: &Notice, ticked: &[bool]) {
         let notice = &drawn.id;
         let session = self.played;
-        let ledger = self.ledger.clone();
         self.act(Place::Notice(notice.clone()), |rules, state| {
             let open = open_as_drawn(state, drawn)?;
             let mark = mark_of(rules, open).ok_or("That mark changed in its note.")?;
             if mark.changes.len() != ticked.len() {
                 return Err("That mark changed in its note. Nothing was recorded.".into());
             }
-            let why = label(
-                rules,
-                &ledger,
-                &[Entry {
-                    notice: Some(notice.clone()),
-                    done: true,
-                    ..Entry::default()
-                }],
+            // The label of the notice's end, as `label` names it.
+            let why = format!(
+                "{} done",
+                short_name(rules, &open.tracker, open.instance.as_deref(), notice.at)
             );
             let mut values = HashMap::new();
             let mut entries = Vec::new();
             for (change, _) in mark.changes.iter().zip(ticked).filter(|(_, on)| **on) {
                 let target = change.tracker.as_deref().unwrap_or(&open.tracker);
-                let target_per = rules.def(target).is_some_and(|def| !def.per.is_empty());
-                let mut entry = change_entry(
-                    rules,
-                    state,
-                    &mut values,
-                    target,
-                    open.instance.clone().filter(|_| target_per),
-                    change,
-                    None,
-                )?;
+                let instance = open.instance.as_deref();
+                let mut entry =
+                    change_entry(rules, state, &mut values, target, instance, change, None)?;
                 entry.why = Some(why.clone());
                 entries.push(entry);
             }
@@ -1184,19 +1176,13 @@ impl Trackers {
     /// `Undo: <label>`: these entries, exactly as the line named them, leave the ledger.
     pub fn undo(&mut self, expected: &[Entry]) {
         let session = self.played;
-        let Some(path) = self.path() else { return };
-        if self.pending.is_some() {
-            self.reason = Some((Place::Result, "Trackers not saved. Try again first.".into()));
-            return;
-        }
-        let result = ledger::commit(&path, |ledger| {
+        self.act_on_ledger(Place::Result, |_, ledger| {
             let target = undo_target(ledger, session);
             if target != expected {
                 return Err("The ledger changed on disk. Nothing was undone.".into());
             }
             Ok(Op::Remove(target))
         });
-        self.finish(Place::Result, result);
     }
 
     /// Save the act that waits, once.
