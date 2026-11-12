@@ -122,8 +122,15 @@ impl Source {
             .map_err(|_| format!("Splat cannot read {name}’s note."))?;
         let body = body_of(&text);
         let mut played: BTreeMap<String, usize> = BTreeMap::new();
+        // A fight whose run is still unfinished (paused) is still to come; it keeps `Resume`.
+        let paused = |run: Uuid| {
+            plan.saved_runs.iter().any(|saved| {
+                saved.id == Some(run)
+                    && saved.standing == crate::encounter_run::Standing::Unfinished
+            })
+        };
         for event in &book.events {
-            if event.is_in(Some(note.id)) && event.run.is_some() {
+            if event.is_in(Some(note.id)) && event.run.is_some_and(|run| !paused(run)) {
                 *played.entry(event.title.to_lowercase()).or_default() += 1;
             }
         }
@@ -520,9 +527,9 @@ pub(super) struct Carries {
     embeds: Option<Embeds>,
 }
 
-/// The embeds of the open note, with the draft's revision and the content's generation they
-/// were read for.
-type Embeds = ((u64, Option<u64>), Arc<Vec<EmbedLine>>);
+/// The embeds of the open note, and Read's words with each embed line marked, with the
+/// draft's revision and the content's generation they were read for.
+type Embeds = ((u64, Option<u64>), Arc<Vec<EmbedLine>>, Option<Arc<str>>);
 
 impl Carries {
     /// The folder was scanned: an embed's note can have changed or gone.
@@ -547,10 +554,16 @@ impl Carries {
             return;
         };
         let revision = draft.revision();
+        // A later save writes the note without a change of its words, so an act whose save
+        // failed learns of it on any frame, until it does.
+        if let Some(Outcome::Done { undo, .. }) = self.results.get_mut(&session)
+            && !undo.written()
+        {
+            undo.follow_save(draft);
+        }
         let ended = match self.results.get_mut(&session) {
             Some(Outcome::Done { undo, seen, .. }) if *seen != revision => {
                 *seen = revision;
-                undo.follow_save(draft);
                 !undo.live(draft)
             }
             Some(Outcome::Refused { seen, .. }) => *seen != revision,
@@ -884,7 +897,11 @@ impl Sessions {
     /// The open note's embeds of session notes' headings, read when its words or the content
     /// change and at each folder scan, never on a quiet frame. An embed of another note that
     /// the content holds stays a link, as today.
-    fn embeds(&mut self, index: Option<&crate::lookup::ContentIndex>) -> Arc<Vec<EmbedLine>> {
+    fn embeds(
+        &mut self,
+        index: Option<&crate::lookup::ContentIndex>,
+        book: &Book,
+    ) -> Arc<Vec<EmbedLine>> {
         let Some(draft) = &self.draft else {
             return Arc::default();
         };
@@ -892,12 +909,20 @@ impl Sessions {
             draft.revision(),
             index.map(crate::lookup::ContentIndex::generation),
         );
-        if let Some((seen, embeds)) = &self.carries.embeds
+        if let Some((seen, embeds, _)) = &self.carries.embeds
             && *seen == key
         {
             return Arc::clone(embeds);
         }
-        let carried = carried_from(&draft.text());
+        // The embed that Carry over wrote is the recap section's one line, while the note says
+        // it carried the recap. Any other embed is the DM's, and is never repaired.
+        let carried = carried(&draft.text());
+        let carried = carried
+            .carried_parts
+            .contains(&Part::Recap)
+            .then_some(carried.carried_from)
+            .flatten()
+            .filter(|_| section_lines(&draft.body, RECAP).count() == 1);
         let mut embeds = Vec::new();
         let mut section = "";
         for (at, line) in draft.body.lines().enumerate() {
@@ -928,7 +953,7 @@ impl Sessions {
                     .map_or_else(gone, |words| Shown::Words {
                         from: note.id,
                         label: note.label(),
-                        words,
+                        words: super::words_to_read(&words, book),
                         update,
                     }),
                 None if index.is_some_and(|index| {
@@ -946,32 +971,41 @@ impl Sessions {
             });
         }
         let embeds = Arc::new(embeds);
-        self.carries.embeds = Some((key, Arc::clone(&embeds)));
+        self.carries.embeds = Some((key, Arc::clone(&embeds), None));
         embeds
     }
 
     /// Read's words with each embed line marked, so that Read draws it by its target.
+    /// The marked words are made once for each read of the embeds, never on a quiet frame.
     pub(super) fn mark_embeds(
         &mut self,
         body: &str,
         index: Option<&crate::lookup::ContentIndex>,
-    ) -> (String, Arc<Vec<EmbedLine>>) {
-        let embeds = self.embeds(index);
-        if embeds.is_empty() {
-            return (body.to_owned(), embeds);
+        book: &Book,
+    ) -> (Arc<str>, Arc<Vec<EmbedLine>>) {
+        let embeds = self.embeds(index, book);
+        if let Some((_, _, Some(marked))) = &self.carries.embeds {
+            return (Arc::clone(marked), embeds);
         }
-        let marked = body
-            .split_inclusive('\n')
-            .map(|line| {
-                match embeds
-                    .iter()
-                    .position(|embed| embed.line == line.trim_end())
-                {
-                    Some(at) => format!("{EMBED_MARK}{at}{EMBED_MARK}\n"),
-                    None => line.to_owned(),
-                }
-            })
-            .collect();
+        let marked: Arc<str> = if embeds.is_empty() {
+            body.into()
+        } else {
+            body.split_inclusive('\n')
+                .map(|line| {
+                    match embeds
+                        .iter()
+                        .position(|embed| embed.line == line.trim_end())
+                    {
+                        Some(at) => format!("{EMBED_MARK}{at}{EMBED_MARK}\n"),
+                        None => line.to_owned(),
+                    }
+                })
+                .collect::<String>()
+                .into()
+        };
+        if let Some((_, _, cached)) = &mut self.carries.embeds {
+            *cached = Some(Arc::clone(&marked));
+        }
         (marked, embeds)
     }
 
@@ -982,7 +1016,6 @@ impl Sessions {
         ui: &mut egui::Ui,
         text: &str,
         embeds: &[EmbedLine],
-        book: &Book,
     ) {
         let mut part = String::new();
         let mut open = None;
@@ -1023,7 +1056,7 @@ impl Sessions {
                             update = Some((embed.at, embed.line.clone(), new.clone()));
                         }
                     });
-                    crate::markdown_view::show_reader(ui, &super::words_to_read(words, book));
+                    crate::markdown_view::show_reader(ui, words);
                 }
                 Shown::Gone(words) => {
                     design::small_message(ui, Tone::Warning, words);
@@ -1085,7 +1118,7 @@ mod tests {
     use egui_kittest::kittest::Queryable;
 
     const LAST: &str = "## Recap of last time\n\nThe party left at dawn.\n\n\
-        ## Plan for tonight\n\n- [[Bridge Ambush]]\n- [x] [[Shrine of Cinders]]\n\
+        ## Plan for tonight\n\n- [[Bridge Ambush]]\n- [[Ford Ambush]]\n- [x] [[Shrine of Cinders]]\n\
         - [ ] Talk to [[Hobb]] about the ropes\n- [x] Read the rumours\nRemember the toll.\n\n\
         ## What happened\n\nWolves at the ford.\n\n\
         ## Open threads\n\n- [ ] Who burned the ropes?\n- [x] Who paid the toll?\nThe ferry is gone.\n";
@@ -1116,20 +1149,49 @@ mod tests {
         .unwrap()
     }
 
-    /// The book of the last session: `Bridge Ambush` was played; `Shrine of Cinders` was not.
+    /// The run of `Ford Ambush`, which `paused` saves unfinished.
+    const FORD_RUN: Uuid = Uuid::from_u128(7);
+
+    /// The book of the last session: `Bridge Ambush` was played and `Ford Ambush` was started;
+    /// `Shrine of Cinders` was not.
     fn played(session: Uuid) -> Book {
         let mut book = Book::default();
-        book.add(Kind::Encounter, Some(session));
-        book.events[0].title = "Bridge Ambush".into();
-        book.events[0].run = Some(Uuid::nil());
+        for (title, run) in [("Bridge Ambush", Uuid::nil()), ("Ford Ambush", FORD_RUN)] {
+            book.add(Kind::Encounter, Some(session));
+            let event = book.events.last_mut().unwrap();
+            event.title = title.into();
+            event.run = Some(run);
+        }
         book
     }
 
+    /// `Ford Ambush`'s run, saved and not ended: a paused fight.
+    fn paused() -> crate::encounter_run::SavedRunInfo {
+        crate::encounter_run::SavedRunInfo {
+            path: "Ford Ambush.json".into(),
+            id: Some(FORD_RUN),
+            source: None,
+            encounter: "Ford Ambush".into(),
+            label: "Ford Ambush".into(),
+            standing: crate::encounter_run::Standing::Unfinished,
+            saved_at: None,
+            unsent: Vec::new(),
+        }
+    }
+
     fn with_plan<R>(fights: &[PlanFight], add: impl FnOnce(&Plan<'_>) -> R) -> R {
+        with_runs(fights, &[], add)
+    }
+
+    fn with_runs<R>(
+        fights: &[PlanFight],
+        saved_runs: &[crate::encounter_run::SavedRunInfo],
+        add: impl FnOnce(&Plan<'_>) -> R,
+    ) -> R {
         let mut group = |_: &mut egui::Ui| {};
         let plan = Plan {
             fights,
-            saved_runs: &[],
+            saved_runs,
             groups: &[],
             group_blocked: None,
             group_open: false,
@@ -1158,10 +1220,12 @@ mod tests {
         let tonight = note(dir.path(), 2, "The Crossing", TONIGHT);
         let fights = [
             fight("Bridge Ambush"),
+            fight("Ford Ambush"),
             fight("Shrine of Cinders"),
             fight("Ashfall"),
         ];
-        let source = with_plan(&fights, |plan| {
+        // The played fight stays out; the paused one carries, and keeps its `Resume`.
+        let source = with_runs(&fights, &[paused()], |plan| {
             Source::read(&last, dir.path(), plan, &played(last.id)).unwrap()
         });
         let before = fs::read_to_string(&tonight.path).unwrap();
@@ -1178,7 +1242,7 @@ mod tests {
         let link = last.link();
         assert!(after.contains(&format!(
             "## Recap of last time\n\n![[{link}#What happened]]\n\n## Plan for tonight\n\n\
-             - [[Ashfall]]\n- [ ] [[Shrine of Cinders]]\n- [ ] Talk to [[Hobb]] about the ropes\n\n\
+             - [[Ashfall]]\n- [[Ford Ambush]]\n- [ ] [[Shrine of Cinders]]\n- [ ] Talk to [[Hobb]] about the ropes\n\n\
              ## What happened\n\n## Open threads\n\n- [ ] Who burned the ropes?\nThe ferry is gone.\n"
         )));
         assert!(after.contains(&format!("carried_from: {}\n", last.id)));
@@ -1189,7 +1253,7 @@ mod tests {
         );
         assert_eq!(
             offer.unwrap().result(&source),
-            "Carried over from Session 1: the recap, 2 plan lines and 2 open threads."
+            "Carried over from Session 1: the recap, 3 plan lines and 2 open threads."
         );
         // Every part is done: no action, also when the DM deletes a carried line later.
         assert_eq!(Offer::of(&after, &source), None);
@@ -1220,11 +1284,11 @@ mod tests {
         ));
         assert_eq!(
             offer.result(&source),
-            "Carried over from Session 1: 1 plan line and 2 open threads. Your recap was kept."
+            "Carried over from Session 1: 2 plan lines and 2 open threads. Your recap was kept."
         );
         assert_eq!(
             offer.hover(),
-            "Add the last session’s 1 plan line and 2 open threads to this note."
+            "Add the last session’s 2 plan lines and 2 open threads to this note."
         );
     }
 
@@ -1467,6 +1531,28 @@ mod tests {
         let draft = harness.state().0.draft.as_ref().unwrap();
         assert!(!draft.text().contains("carried_"));
         assert!(!draft.body.contains("Who burned the ropes?"));
+        // The save fails again, and a later save writes the note with no change of its words:
+        // the result says so, and its Undo writes the note back at once.
+        harness.run_steps(1);
+        locked(0o555);
+        harness.get_by_label("Carry over").click();
+        harness.run_steps(2);
+        locked(0o755);
+        harness.state_mut().0.draft.as_mut().unwrap().save();
+        harness.run_steps(2);
+        assert!(read().contains("Who burned the ropes?"));
+        assert!(harness.query_by_label("Notes not saved").is_none());
+        // Act B unticked a scene of the last session, so it is still to come now.
+        assert!(
+            harness
+                .query_by_label(
+                    "Carried over from Session 1: the recap, 3 plan lines and 2 open threads."
+                )
+                .is_some()
+        );
+        harness.get_by_label("Undo carry over").click();
+        harness.run_steps(2);
+        assert_eq!(read(), changed);
 
         // A restart: the note holds what the act wrote, and every part is done.
         let mut draft = Draft::open(&tonight.path).unwrap();
@@ -1581,6 +1667,32 @@ mod tests {
                 .is_some()
         );
         assert_eq!(fs::read_to_string(&tonight.path).unwrap(), before);
+
+        // The DM adds an embed of their own under the recap. Neither line is then Carry over's
+        // alone, so no embed is repaired by `carried_from`: the renamed one says it is gone.
+        fs::write(
+            &renamed,
+            fs::read_to_string(&renamed)
+                .unwrap()
+                .replace("## Later", "## What happened"),
+        )
+        .unwrap();
+        let own = before.replace(
+            "#What happened]]\n",
+            "#What happened]]\n![[Session 9 Gone#What happened]]\n",
+        );
+        fs::write(&tonight.path, &own).unwrap();
+        let page = &mut harness.state_mut().0;
+        page.draft.as_mut().unwrap().follow_disk();
+        page.carries.scanned();
+        harness.run_steps(2);
+        assert!(harness.query_by_label("Update the link").is_none());
+        assert!(
+            harness
+                .query_by_label_contains("Wolves at the ford.")
+                .is_none()
+        );
+        assert_eq!(fs::read_to_string(&tonight.path).unwrap(), own);
     }
 
     fn harness_for(

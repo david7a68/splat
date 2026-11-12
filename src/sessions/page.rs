@@ -3985,7 +3985,7 @@ impl Sessions {
         let body = self.note_body();
         let index = reader_index(ui);
         let model = self.plan_model(index.as_deref(), plan);
-        let (body, embeds) = self.mark_embeds(&body, index.as_deref());
+        let (body, embeds) = self.mark_embeds(&body, index.as_deref(), book);
         let compact = compact_plan_for_reading(
             &body,
             plan.fights,
@@ -3993,7 +3993,7 @@ impl Sessions {
             &model.scene_lines(),
             beside,
         );
-        let summary = (!beside && compact != body)
+        let summary = (!beside && *compact != *body)
             .then(|| section_text(&compact, "Plan for tonight"))
             .flatten();
         let text = words_to_read(&compact, book);
@@ -4018,11 +4018,11 @@ impl Sessions {
                     } else if let Some(summary) = &summary
                         && let Some((before, after)) = text.split_once(summary)
                     {
-                        self.show_reader_with_embeds(ui, before, &embeds, book);
+                        self.show_reader_with_embeds(ui, before, &embeds);
                         ui.label(Type::Small.rich(ui, summary).color(colors().muted));
-                        self.show_reader_with_embeds(ui, after, &embeds, book);
+                        self.show_reader_with_embeds(ui, after, &embeds);
                     } else {
-                        self.show_reader_with_embeds(ui, &text, &embeds, book);
+                        self.show_reader_with_embeds(ui, &text, &embeds);
                     }
                     self.world_changes(ui);
                 });

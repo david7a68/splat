@@ -159,9 +159,13 @@ pub fn run(d: &mut Driver<'_>) {
     d.click(UNDO);
     d.wait_for_text(CARRY);
     let undone = fs::read_to_string(&tonight).unwrap();
+    let last_after = fs::read_to_string(&last).unwrap();
     d.observe(
         "T18.3-undo",
-        undone == before && ticked.contains(&format!("- [x] {SCENE}")) && d.has(CARRY),
+        undone == before
+            && last_after == ticked
+            && ticked.contains(&format!("- [x] {SCENE}"))
+            && d.has(CARRY),
         format!("After acts on another page and another session, Undo carry over puts back {before:?}; the note holds {undone:?}"),
     );
 }
