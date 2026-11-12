@@ -1535,8 +1535,8 @@ first.` So a wrong `Roll for encounters` can go at any time.
   writes the link under `## Plan for tonight` as the first line still to come. So the fight is the next plan
   row and has the primary `Start fight`. The line ends with a mark that no reader shows, the journey and the check as read
   (`<!-- splat:check journey=t-5c1d2e3f4a at=24 sum=1a2b3c4d -->`: the event, the offset, and a short sum of the
-  words), and the row's second line says the day the fight is played on, `… · Day 2 of Road to the ford`; the
-  journey's name shortens with `…`, then goes, then the day, so the row keeps its lines. **When that fight
+  words), and the row's second line says the day the fight is played on, `… · Day 2 of Road to the ford`; as the
+  rating word does, the journey's name goes, then the day, so the row keeps its lines. **When that fight
   begins, its event goes in the journey at that check** (by the lead's ruling after app round 2, W5-D1): it
   follows the journey in the list, the clock starts it at the check (`Day 4, 08:00`), and the journey keeps its
   length and its checks. Its run's `Undo: begin combat` takes the event out, so the file is as it was. When the

@@ -2006,7 +2006,7 @@ A Travel event's checks are lines of the event: `- Checks table: road` (no key w
 them keeps each as one string. A check's identity is its offset in hours, never a day's name. A fight begun from a
 plan line with that mark carries `journey=<event> at=<hours>` in its `%% splat … %%` line: it follows the
 journey, and the clock starts it at the check while the journey still covers it (W5-D1). Its planned row ends
-its second line with `· Day 2 of <journey>`, shortened so the row keeps its lines. A removed event takes the
+its second line with `· Day 2 of <journey>`; the journey's name goes, then the day, so the row keeps its lines. A removed event takes the
 blank line before it, so a removal gives back the file as it was.
 
 Version 2 stores event lists and day IDs in comments below headings. Every write renumbers days to the

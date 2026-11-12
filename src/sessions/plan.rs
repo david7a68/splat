@@ -1544,8 +1544,8 @@ fn road_days(
 }
 
 /// A planned fight's summary with the day it is played on: `… · Day 2 of Road to the ford`.
-/// The journey's name shortens with `…`, then goes, and then the day, so the line keeps its
-/// rows (rule P).
+/// As the row's rating word does, the words show only while the line keeps its rows (rule P):
+/// first the journey's name goes, then the day.
 fn on_road(ui: &egui::Ui, summary: &str, day: Option<&str>) -> String {
     let Some(day) = day else {
         return summary.to_owned();
@@ -1569,32 +1569,11 @@ fn on_road(ui: &egui::Ui, summary: &str, day: Option<&str>) -> String {
         }
     };
     let alone = rows(summary).max(1);
-    let (head, journey) = day.split_once(" of ").unwrap_or((day, ""));
-    let journey: Vec<char> = journey.chars().collect();
-    let cut = |keep: usize| match keep {
-        0 => with(head),
-        keep if keep == journey.len() => with(day),
-        keep => with(&format!(
-            "{head} of {}…",
-            journey[..keep].iter().collect::<String>().trim_end()
-        )),
-    };
-    // The most of the journey's name that keeps the rows; fewer letters never need more.
-    let (mut low, mut high) = (0, journey.len());
-    while low < high {
-        let mid = (low + high).div_ceil(2);
-        if rows(&cut(mid)) <= alone {
-            low = mid;
-        } else {
-            high = mid - 1;
-        }
-    }
-    let words = cut(low);
-    if rows(&words) <= alone {
-        words
-    } else {
-        summary.to_owned()
-    }
+    let short = day.split_once(" of ").map_or(day, |(head, _)| head);
+    [with(day), with(short)]
+        .into_iter()
+        .find(|words| rows(words) <= alone)
+        .unwrap_or_else(|| summary.to_owned())
 }
 
 /// The help line of **How long** when the clock cannot place the journey.
