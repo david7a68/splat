@@ -1231,6 +1231,11 @@ impl<'a> Driver<'a> {
         self.frames.lock().expect("frames").last.clone()
     }
 
+    /// The text the app last put on the clipboard.
+    pub fn copied_text(&self) -> Option<String> {
+        self.frames.lock().expect("frames").copied.clone()
+    }
+
     /// Paste what the app last copied, as Ctrl+V does.
     pub fn paste_copied(&mut self) {
         let text = self

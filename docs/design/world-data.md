@@ -203,7 +203,8 @@ An entry has an optional last heading, `## Log`. Each line is one thing that hap
 
 **Open questions.** An undecided fact is an unchecked task line on the page of its subject:
 `- [ ] What does a missed call cost a team?`. The World page lists all of them with their pages,
-in a row named **Open questions** above the notes.
+in a row named **Open questions** above the notes. Each has a box there: a tick writes `[x]` into
+that line of its page, with `Undo tick`.
 Obsidian shows them as tasks. The two "Open Questions" lists move to their subjects.
 
 **Checks.** The World page has a **Things to check** row above the notes. Each check is read-only, and

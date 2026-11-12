@@ -632,13 +632,23 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     d.begin_task();
     d.click(&short);
     d.expect(&field);
+    // The window is 1200x800 here (the base above).
+    let beside = d
+        .place_of(&format!("{stamp}:"))
+        .zip(d.place_of(&field))
+        .is_some_and(|(label, place)| {
+            label.right() < place.left()
+                && label.bottom() > place.top()
+                && label.top() < place.bottom()
+        });
     d.observe(
         "T18.2",
         d.has("Close Lookup")
             && d.focused_name().as_deref() == Some(field.as_str())
             && d.field_text(&field).as_deref() == Some("")
-            && d.visible_text(&format!("{stamp}:")),
-        "A done scene's Add to Log opens Lookup on its entry with the Log field and the stamp",
+            && d.visible_text(&format!("{stamp}:"))
+            && beside,
+        "A done scene's Add to Log opens Lookup on its entry with the Log field and the stamp on its line at 1200x800",
     );
     d.type_text(TYPED);
     d.press(Key::Enter);
@@ -672,6 +682,44 @@ pub fn log_from_play(d: &mut Driver<'_>) {
         fs::read_to_string(&path).unwrap() == before && !d.has("Undo Log line"),
         "Undo Log line takes back that one line, and the note is as before",
     );
+    // The measured journeys of app round 2 (J6 step 2): Lookup's reader of a campaign World
+    // entry has `Change` on Status, as the World page's reader has. One act writes the value
+    // and its Log line, its Undo is in Lookup's footer, and Lookup keeps the entry. The field
+    // starts from the status on disk, also when another reader or Obsidian changed it after
+    // Lookup opened the entry (Astra's review of PR 287).
+    let away = before.replacen("status: alive", "status: away", 1);
+    fs::write(&path, &away).unwrap();
+    d.app_mut().lookup.refresh();
+    d.settle();
+    d.click("Change Status");
+    d.observe(
+        "T15.4",
+        d.focused_name().as_deref() == Some("Status")
+            && d.field_text("Status").as_deref() == Some("away"),
+        "Change on Status in Lookup puts the keyboard in the field, with the status on disk",
+    );
+    d.type_text("missing");
+    d.press(Key::Enter);
+    d.expect("Undo status change");
+    let changed = fs::read_to_string(&path).unwrap();
+    d.observe(
+        "T15.4",
+        changed.contains("status: missing")
+            && changed.contains(": Status away → missing.\n")
+            && d.has(&format!("Edit {VARRA_BLACK}"))
+            && d.has("Close Lookup"),
+        format!("Change on Status in Lookup writes the value and its Log line: {changed:?}"),
+    );
+    d.state("status-changed-in-lookup", Sizes::Default);
+    d.click("Undo status change");
+    d.observe(
+        "T15.4",
+        fs::read_to_string(&path).unwrap() == away && d.has(&format!("Edit {VARRA_BLACK}")),
+        "Undo status change in Lookup takes back the value and its Log line",
+    );
+    fs::write(&path, &before).unwrap();
+    d.app_mut().lookup.refresh();
+    d.settle();
 
     // From the long scene's menu: the field starts with the scene's words outside its link,
     // selected, so typing replaces them.
@@ -684,6 +732,19 @@ pub fn log_from_play(d: &mut Driver<'_>) {
         d.focused_name().as_deref() == Some(field.as_str())
             && d.field_text(&field).as_deref() == Some(WORDS),
         "The menu's Add to Log fills the field with the scene's words outside its link",
+    );
+    // X30 of app round 2: beside the plan at 1200x800 the stamp stands above a field whose words
+    // would not fit beside it, so no word of the scene is cut; an empty field shares its line
+    // (the first check of this scenario's field).
+    let (label, place) = d.at_size(DEFAULT, |d| {
+        (d.place_of(&format!("{stamp}:")), d.place_of(&field))
+    });
+    d.observe(
+        "T18.2",
+        label
+            .zip(place)
+            .is_some_and(|(label, place)| label.bottom() <= place.top() + 0.5),
+        format!("At 1200x800 the stamp {label:?} stands above the field {place:?} of long words"),
     );
     d.state("log-field-from-scene", Sizes::All);
     d.type_text(TYPED);
@@ -824,5 +885,31 @@ pub fn log_from_play(d: &mut Driver<'_>) {
         )),
         "A deleted entry's typed Log words block nothing, and the footer says them",
     );
+    // X28 of app round 2: the notice offers the words with `Copy text`, as a lost draft does,
+    // and stays until the DM copies or dismisses it, also while Lookup shows no entry.
+    let notice = format!("“{VARRA_BLACK}” was deleted. The Log line was not added: “{TYPED}”");
+    let copy = format!("Copy the Log line for {VARRA_BLACK}");
+    d.observe(
+        "T18.2-guard",
+        d.has(&copy) && d.has(&format!("Dismiss the Log line for {VARRA_BLACK}")),
+        "The deleted entry's notice has Copy text and Dismiss",
+    );
     d.state("log-words-of-a-deleted-entry", Sizes::Default);
+    d.app_mut().lookup.search_for(KEEP);
+    d.settle();
+    d.click("Clear");
+    d.observe(
+        "T18.2-guard",
+        !d.has("Edit Ashfall Keep") && d.visible_text(&notice) && d.has(&copy),
+        "With no entry on show, Lookup's footer still says the deleted entry's words",
+    );
+    d.state("log-words-without-an-entry", Sizes::Default);
+    d.app_mut().lookup.open_id(keep);
+    d.settle();
+    d.click(&copy);
+    d.observe(
+        "T18.2-guard",
+        d.copied_text().as_deref() == Some(TYPED) && !d.visible_text(&notice) && !d.has(&copy),
+        "Copy text puts the words on the clipboard and ends the notice",
+    );
 }

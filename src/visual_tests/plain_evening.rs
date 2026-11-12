@@ -100,7 +100,7 @@ const ADD_COMMAND: &str = "devenv shell -- audit-freeze add";
 const SCENARIO: &str = "plain-evening";
 const WIDE: (f32, f32) = (1200.0, 800.0);
 const NARROW: (f32, f32) = (960.0, 640.0);
-/// Section 2.5 numbers its rows 1 to 34; rows 28 to 31 come with other pull requests.
+/// Section 2.5 numbers its rows 1 to 34.
 const CONTRACT_ROWS: std::ops::RangeInclusive<u32> = 1..=34;
 /// What the test folder becomes in a run's `splat_run_source_path`.
 const WORLD: &str = "<world>";
@@ -1952,7 +1952,301 @@ mod allowed_classes {
             name: "R3a d: the Conditions help and field words, at their place (X7, X8)",
             fits: r3a::conditions,
         },
+        // R3h, after app round 2: row 28, Lookup's reader of a campaign NPC has the Status row
+        // with its Change; row 29, `Add to Log` has its own glyph.
+        Class {
+            row: 28,
+            name: "R3h a: the Status row's words and Change in Lookup's NPC reader",
+            fits: status_row::part,
+        },
+        Class {
+            row: 28,
+            name: "R3h b: an unchanged item below the Status row, straight down by its height",
+            fits: status_row::below,
+        },
+        Class {
+            row: 28,
+            name: "R3h c: an act shows or hides only the Status row's words and Add to Log's glyph",
+            fits: |d, _| status_row::act_words(d),
+        },
+        Class {
+            row: 29,
+            name: "R3h d: Add to Log's `+` becomes its list glyph at the same place; other `+` stay",
+            fits: log_glyph::glyph,
+        },
+        Class {
+            row: 29,
+            name: "R3h e: an act shows or hides only Add to Log's glyph",
+            fits: |d, _| log_glyph::act_words(d),
+        },
     ];
+
+    /// R3h's row 28: the Status row that Lookup's reader of a campaign NPC now shows, with its
+    /// Change. Its words are new; every item below moves straight down by one height for its
+    /// view, the same for all, with no move sideways and no change of size; nothing goes.
+    mod status_row {
+        use super::super::{AllowedRow, Difference};
+        use super::{rect_of, rects};
+
+        const CHANGE: &str = "Button: Change Status";
+        /// The Status row as section 2.5's row 28 states it, for each view of the plain
+        /// evening: the height every item below it moves down by (a `Scan` row beside the label,
+        /// or label, value and Change stacked at 960x640), and where its value and Change stand
+        /// from the label's top.
+        const ROW: [(&str, f32, f32); 2] = [
+            ("1200x800 Lookup open", 36.0, -7.0),
+            ("960x640 Lookup open", 62.0, 18.0),
+        ];
+        /// Each new item of the row, its size, and where it stands: on the label, or on the
+        /// value's line.
+        const PARTS: [(&str, [f32; 2], bool); 8] = [
+            ("Label: Status", [33.8, 16.0], false),
+            ("TextRun: Status", [33.8, 16.0], false),
+            ("Status", [33.8, 16.0], false),
+            ("Label: alive", [28.7, 30.0], true),
+            ("TextRun: alive", [28.7, 30.0], true),
+            ("alive", [28.7, 30.0], true),
+            (CHANGE, [63.8, 30.0], true),
+            ("Change", [47.8, 18.0], true),
+        ];
+
+        fn same_view<'a>(
+            d: &'a Difference,
+            rows: &'a [AllowedRow],
+        ) -> impl Iterator<Item = &'a Difference> {
+            rows.iter()
+                .filter(|row| row.row == 28)
+                .map(|row| &row.difference)
+                .filter(move |other| other.screen == d.screen && other.view == d.view)
+        }
+
+        fn new_rect(d: &Difference, rows: &[AllowedRow], name: &str) -> Option<[f32; 4]> {
+            same_view(d, rows)
+                .find(|o| o.what == "control" && o.change == "new" && o.name == name)
+                .and_then(|o| rect_of(&o.detail, "at "))
+        }
+
+        /// The view's row: its shift and value line, and the new Status label's left and top,
+        /// when the label stands at the reader's left (the left of what moves) and every move
+        /// is that one straight shift of an item at or below the label, in the reader's column.
+        fn shift(d: &Difference, rows: &[AllowedRow]) -> Option<(f32, f32, f32, f32)> {
+            let &(_, dy, value) = ROW.iter().find(|(view, ..)| *view == d.view)?;
+            if !d.screen.starts_with("lookup-reader ") || !d.screen.ends_with(", npc") {
+                return None;
+            }
+            let [left, top, ..] = new_rect(d, rows, "Label: Status")?;
+            let moves: Vec<_> = same_view(d, rows)
+                .filter(|o| o.change == "moved")
+                .map(|o| rects(&o.detail))
+                .collect::<Option<_>>()?;
+            let reader = moves.iter().map(|(old, _)| old[0]).fold(f32::MAX, f32::min);
+            let straight = moves.iter().all(|(old, new)| {
+                (new[0] - old[0]).abs() < 0.05
+                    && (new[2] - old[2]).abs() < 0.05
+                    && (new[3] - old[3]).abs() < 0.05
+                    && (new[1] - old[1] - dy).abs() < 0.05
+                    && old[1] >= top - 0.5
+            });
+            (straight && !moves.is_empty() && (reader - left).abs() < 0.05)
+                .then_some((dy, value, left, top))
+        }
+
+        pub(super) fn below(d: &Difference, rows: &[AllowedRow]) -> bool {
+            ["control", "text"].contains(&d.what.as_str())
+                && d.change == "moved"
+                && shift(d, rows).is_some()
+        }
+
+        /// A word of the Status row at its size and place: the label at the reader's left,
+        /// the value and Change on the value's line, Change whole inside the window and its
+        /// word inside its target (review round 1 of PR 287).
+        pub(super) fn part(d: &Difference, rows: &[AllowedRow]) -> bool {
+            let Some((_, value, left, top)) = shift(d, rows) else {
+                return false;
+            };
+            let Some(&(_, [w, h], on_value)) = PARTS.iter().find(|(name, ..)| *name == d.name)
+            else {
+                return false;
+            };
+            let window: f32 = d
+                .view
+                .split('x')
+                .next()
+                .and_then(|w| w.parse().ok())
+                .unwrap_or(0.0);
+            let change = new_rect(d, rows, CHANGE);
+            ["control", "text"].contains(&d.what.as_str())
+                && d.change == "new"
+                && rect_of(&d.detail, "at ").is_some_and(|[x, y, rw, rh]| {
+                    let line = if on_value { top + value } else { top };
+                    (rw - w).abs() < 0.05
+                        && (rh - h).abs() < 0.05
+                        && x >= left - 0.05
+                        && x + rw <= window
+                        && match d.name.as_str() {
+                            "Change" => change.is_some_and(|[cx, cy, cw, ch]| {
+                                x >= cx && y >= cy && x + rw <= cx + cw && y + rh <= cy + ch
+                            }),
+                            "Label: Status" | "TextRun: Status" | "Status" => {
+                                (x - left).abs() < 0.05 && (y - top).abs() < 0.05
+                            }
+                            _ => (y - line).abs() < 0.05,
+                        }
+                })
+        }
+
+        /// The act that opens a campaign NPC's reader in Lookup shows the row's three words,
+        /// and the one that closes it hides them, as the reference's act shows or hides that
+        /// reader (its `Add to Log` and its `· alive · Campaign` kind line); the glyph of row 29
+        /// may come with them.
+        pub(super) fn act_words(d: &Difference) -> bool {
+            let (verb, side) =
+                if d.name.starts_with("open lookup-reader ") && d.name.ends_with(", npc") {
+                    ("appeared + ", true)
+                } else if d.name == "Ctrl+K closes Lookup" {
+                    ("went + ", false)
+                } else {
+                    return false;
+                };
+            let words: Vec<_> = d
+                .detail
+                .split(" | ")
+                .map(|part| part.strip_prefix(verb))
+                .collect();
+            let mut row: Vec<_> = words
+                .iter()
+                .flatten()
+                .copied()
+                .filter(|word| *word != "\u{e2f8}")
+                .collect();
+            row.sort_unstable();
+            d.what == "act"
+                && d.change == "changed"
+                && words.iter().all(Option::is_some)
+                && row == ["Change", "Status", "alive"]
+                && super::log_glyph::reference_act(d).is_some_and(|act| {
+                    let shown = if side { &act.appeared } else { &act.gone };
+                    shown.iter().any(|word| word == "Add to Log")
+                        && shown
+                            .iter()
+                            .any(|word| word.ends_with("· alive · Campaign"))
+                })
+        }
+    }
+
+    /// R3h's row 29: the `+` (`icons::ADD`) of the reader's `Add to Log` becomes its list glyph
+    /// (`icons::ADD_TO_LOG`) at the same place. G7 pairs a view's `+` glyphs in order, so taking
+    /// one away shows as a chain of moves and one loss: the class takes them only when the
+    /// places that the `+` glyphs leave, less those they take, are exactly the new glyph's one
+    /// place, at one size. So every other `+` keeps its place.
+    mod log_glyph {
+        use super::super::{Act, AllowedRow, Difference, Reference, folder, read};
+        use super::{rect_of, rects};
+
+        const ADD: &str = "\u{e3d4}";
+        const ADD_TO_LOG: &str = "\u{e2f8}";
+
+        /// The frozen reference, read once.
+        fn reference() -> &'static Reference {
+            static REFERENCE: std::sync::OnceLock<Reference> = std::sync::OnceLock::new();
+            REFERENCE.get_or_init(|| read(&folder().join("reference.json")))
+        }
+
+        /// The reference's record of the act that a difference names (`act 86` is the 86th).
+        pub(super) fn reference_act(d: &Difference) -> Option<&'static Act> {
+            let at: usize = d.screen.strip_prefix("act ")?.parse().ok()?;
+            let act = reference().acts.get(at.checked_sub(1)?)?;
+            (act.act == d.name).then_some(act)
+        }
+
+        /// The reference's `Add to Log` in this view holds this place: the glyph is that
+        /// action's, not another action's `+` (Astra's review of PR 287).
+        fn in_add_to_log(screen: &str, view: &str, at: &[f32; 4]) -> bool {
+            reference()
+                .views
+                .iter()
+                .filter(|v| v.screen == screen && v.view == view)
+                .flat_map(|v| &v.controls)
+                .any(|control| {
+                    control.0 == "Button: Add to Log"
+                        && control.1.len() >= 4
+                        && at[0] >= control.1[0] - 0.05
+                        && at[1] >= control.1[1] - 0.05
+                        && at[0] + at[2] <= control.1[0] + control.1[2] + 0.05
+                        && at[1] + at[3] <= control.1[1] + control.1[3] + 0.05
+                })
+        }
+
+        pub(super) fn glyph(d: &Difference, rows: &[AllowedRow]) -> bool {
+            let ours = |o: &Difference| {
+                o.what == "text"
+                    && o.screen == d.screen
+                    && o.view == d.view
+                    && ((o.name == ADD && ["moved", "gone"].contains(&o.change.as_str()))
+                        || (o.name == ADD_TO_LOG && o.change == "new"))
+            };
+            if !ours(d) {
+                return false;
+            }
+            let (mut left, mut taken, mut new) = (Vec::new(), Vec::new(), Vec::new());
+            for o in rows
+                .iter()
+                .filter(|row| row.row == 29)
+                .map(|row| &row.difference)
+            {
+                if !ours(o) {
+                    continue;
+                }
+                match o.change.as_str() {
+                    "moved" => match rects(&o.detail) {
+                        Some((old, to)) => {
+                            left.push(old);
+                            taken.push(to);
+                        }
+                        None => return false,
+                    },
+                    "gone" => match rect_of(&o.detail, "was ") {
+                        Some(old) => left.push(old),
+                        None => return false,
+                    },
+                    _ => match rect_of(&o.detail, "at ") {
+                        Some(at) => new.push(at),
+                        None => return false,
+                    },
+                }
+            }
+            let near =
+                |a: &[f32; 4], b: &[f32; 4]| a.iter().zip(b).all(|(a, b)| (a - b).abs() < 0.05);
+            for to in &taken {
+                match left.iter().position(|old| near(old, to)) {
+                    Some(at) => {
+                        left.remove(at);
+                    }
+                    None => return false,
+                }
+            }
+            new.len() == 1
+                && left.len() == 1
+                && near(&left[0], &new[0])
+                && in_add_to_log(&d.screen, &d.view, &new[0])
+        }
+
+        /// The glyph shows or goes only in an act that shows or hides the reference's `Add to
+        /// Log` the same way (review round 1 of PR 287).
+        pub(super) fn act_words(d: &Difference) -> bool {
+            let side = match d.detail.as_str() {
+                "appeared + \u{e2f8}" => true,
+                "went + \u{e2f8}" => false,
+                _ => return false,
+            };
+            d.what == "act"
+                && d.change == "changed"
+                && reference_act(d).is_some_and(|act| {
+                    let shown = if side { &act.appeared } else { &act.gone };
+                    shown.iter().any(|word| word == "Add to Log")
+                })
+        }
+    }
 
     /// P4's classes: the dock's `Effect`, its icon, word and key letter, and acts that show or
     /// hide only those. Each is new; none lets an item of today go, move, narrow or be cut.
@@ -5814,6 +6108,281 @@ mod allowed_classes {
                 class_of(row, &with_faults).is_none(),
                 "a class allows {}",
                 row.difference
+            );
+        }
+        // R3h's classes refuse an item of today that goes, moves sideways, moves by another
+        // height or changes size below the Status row, another word in its band, a `+` that
+        // leaves a place other than the new glyph's, and an act that hides another word.
+        let view = |change: &str, name: &str, detail: &str| AllowedRow {
+            row: 28,
+            why: String::new(),
+            difference: Difference {
+                screen: "lookup-reader Oren Thistlewick, npc".into(),
+                view: "1200x800 Lookup open".into(),
+                what: "control".into(),
+                change: change.into(),
+                name: name.into(),
+                detail: detail.into(),
+            },
+        };
+        let status_rows = vec![
+            view("new", "Button: Change Status", "at 946.2 196 63.8x30"),
+            view("new", "Label: Status", "at 781 203 33.8x16"),
+            view(
+                "moved",
+                "Button: Source and identifiers",
+                "781 289 142.8x26 -> 781 325 142.8x26",
+            ),
+            view(
+                "moved",
+                "Label: Keeps watch on the road to the ford.",
+                "781 212 242.5x22 -> 781 248 242.5x22",
+            ),
+        ];
+        assert!(classes(&status_rows).iter().all(Option::is_some));
+        for (fault, why) in [
+            (
+                view(
+                    "moved",
+                    "Label: Keeps watch",
+                    "781 212 242.5x22 -> 790 248 242.5x22",
+                ),
+                "a move sideways",
+            ),
+            (
+                view(
+                    "moved",
+                    "Label: Keeps watch",
+                    "781 212 242.5x22 -> 781 260 242.5x22",
+                ),
+                "another height",
+            ),
+            (
+                view(
+                    "moved",
+                    "Label: Keeps watch",
+                    "781 212 242.5x22 -> 781 248 200x22",
+                ),
+                "a cut",
+            ),
+            (
+                view("gone", "Label: Keeps watch", "was 781 212 242.5x22"),
+                "an item gone",
+            ),
+            (
+                view("new", "Label: Owes Nell a favour", "at 781 203 90x16"),
+                "another word",
+            ),
+            (
+                view("new", "Label: Status", "at 781 400 33.8x16"),
+                "a word below the band",
+            ),
+            (
+                view(
+                    "moved",
+                    "Label: Oren Thistlewick",
+                    "781 126 200x36 -> 781 162 200x36",
+                ),
+                "the title moved",
+            ),
+            (
+                view(
+                    "moved",
+                    "Button: New session",
+                    "631.9 44 124.1x30 -> 631.9 80 124.1x30",
+                ),
+                "a control left of the reader moved",
+            ),
+        ] {
+            let mut rows = status_rows.clone();
+            rows.push(fault);
+            assert!(
+                classes(&rows).last().unwrap().is_none(),
+                "{why} was accepted"
+            );
+        }
+        let glyph = |change: &str, name: &str, detail: &str| AllowedRow {
+            row: 29,
+            why: String::new(),
+            difference: Difference {
+                screen: "lookup-reader Captain Varra, npc".into(),
+                view: "1200x800 Lookup open".into(),
+                what: "text".into(),
+                change: change.into(),
+                name: name.into(),
+                detail: detail.into(),
+            },
+        };
+        let swap = vec![
+            glyph("moved", "\u{e3d4}", "1125.3 131 14x18 -> 643.9 50 14x18"),
+            glyph("moved", "\u{e3d4}", "643.9 50 14x18 -> 522.5 476 14x18"),
+            glyph("gone", "\u{e3d4}", "was 522.5 476 14x18"),
+            glyph("new", "\u{e2f8}", "at 1125.3 131 14x18"),
+        ];
+        assert!(classes(&swap).iter().all(Option::is_some));
+        for (rows, why) in [
+            (swap[2..3].to_vec(), "a `+` gone with no new glyph"),
+            (
+                vec![
+                    glyph("gone", "\u{e3d4}", "was 522.5 476 14x18"),
+                    glyph("new", "\u{e2f8}", "at 1125.3 131 14x18"),
+                ],
+                "a `+` gone from another place",
+            ),
+            (
+                vec![
+                    glyph("moved", "\u{e3d4}", "1125.3 131 14x18 -> 700 50 14x18"),
+                    glyph("gone", "\u{e3d4}", "was 643.9 50 14x18"),
+                    glyph("new", "\u{e2f8}", "at 1125.3 131 14x18"),
+                ],
+                "a `+` that moved to a new place",
+            ),
+            (
+                vec![
+                    glyph("gone", "\u{e3d4}", "was 643.9 50 14x18"),
+                    glyph("new", "\u{e2f8}", "at 643.9 50 14x18"),
+                ],
+                "another action's `+` (`New session`) became the glyph",
+            ),
+        ] {
+            assert!(
+                classes(&rows).iter().any(Option::is_none),
+                "{why} was accepted"
+            );
+        }
+        let act = |row: u32, detail: &str| AllowedRow {
+            row,
+            why: String::new(),
+            difference: Difference {
+                screen: "act 86".into(),
+                view: String::new(),
+                what: "act".into(),
+                change: "changed".into(),
+                name: "open lookup-reader Captain Varra, npc".into(),
+                detail: detail.into(),
+            },
+        };
+        assert!(
+            class_of(
+                &act(
+                    28,
+                    "appeared + Change | appeared + Status | appeared + alive"
+                ),
+                &[]
+            )
+            .is_some()
+        );
+        for fault in [
+            act(
+                28,
+                "appeared + Change | appeared + Status | went + Add to fight",
+            ),
+            act(28, "appeared + Change | went - Status"),
+            act(29, "appeared + \u{e2f8} | went + Edit"),
+        ] {
+            assert!(
+                class_of(&fault, &[]).is_none(),
+                "a class allows {}",
+                fault.difference
+            );
+        }
+        // Review round 1 of PR 287: each class takes only what its row states. A Change of
+        // no width or outside the window, a row taller than measured, an act that hides Status
+        // without its reader, another action's `+`, and the glyph in an act without `Add to Log`.
+        let real = &allowed.rows;
+        let with = |name: &str, detail: &str| -> Vec<AllowedRow> {
+            let mut rows = real.clone();
+            let row = rows
+                .iter_mut()
+                .find(|r| {
+                    r.row == 28
+                        && r.difference.view == "1200x800 Lookup open"
+                        && r.difference.name == name
+                })
+                .unwrap();
+            row.difference.detail = detail.into();
+            rows
+        };
+        let taller: Vec<AllowedRow> = real
+            .iter()
+            .cloned()
+            .map(|mut r| {
+                if r.row == 28
+                    && r.difference.view == "1200x800 Lookup open"
+                    && r.difference.change == "moved"
+                    && let Some((old, mut new)) = rects(&r.difference.detail)
+                {
+                    new[1] += 28.0;
+                    r.difference.detail = format!(
+                        "{} {} {}x{} -> {} {} {}x{}",
+                        old[0], old[1], old[2], old[3], new[0], new[1], new[2], new[3]
+                    );
+                }
+                r
+            })
+            .collect();
+        let run_setup = |change: &str, detail: &str| AllowedRow {
+            row: 29,
+            why: String::new(),
+            difference: Difference {
+                screen: "run-setup".into(),
+                view: "1200x800 Lookup closed".into(),
+                what: "text".into(),
+                change: change.into(),
+                name: if change == "gone" {
+                    "\u{e3d4}"
+                } else {
+                    "\u{e2f8}"
+                }
+                .into(),
+                detail: detail.into(),
+            },
+        };
+        let next_turn = |row: u32, detail: &str| AllowedRow {
+            row,
+            why: String::new(),
+            difference: Difference {
+                screen: "act 1".into(),
+                view: String::new(),
+                what: "act".into(),
+                change: "changed".into(),
+                name: "Next turn".into(),
+                detail: detail.into(),
+            },
+        };
+        for (rows, why) in [
+            (
+                with("Button: Change Status", "at 946.2 196 0x30"),
+                "a: a Change of no width",
+            ),
+            (
+                with("Button: Change Status", "at 946.2 196 100x30"),
+                "a: a Change of another size",
+            ),
+            (
+                with("Button: Change Status", "at 2000 196 63.8x30"),
+                "a: a Change outside the window",
+            ),
+            (taller, "b: 28 px more than the row"),
+            (
+                vec![
+                    run_setup("gone", "was 100 100 14x18"),
+                    run_setup("new", "at 100 100 14x18"),
+                ],
+                "d: another action's `+` on run setup",
+            ),
+            (
+                vec![next_turn(28, "went + Status")],
+                "c: Next turn hides Status",
+            ),
+            (
+                vec![next_turn(29, "went + \u{e2f8}")],
+                "e: Next turn hides the glyph",
+            ),
+        ] {
+            assert!(
+                classes(&rows).iter().any(Option::is_none),
+                "{why} was accepted"
             );
         }
     }
