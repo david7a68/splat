@@ -784,11 +784,15 @@ pub struct StartFight {
     pub npc: bool,
 }
 
+/// Whether a Lookup item is a World entry: a world note, or a note of kind `world`.
+pub fn is_world(item: &Item) -> bool {
+    item.entry.kind == "world" || item.is_world_note()
+}
+
 /// A creature or an NPC that a fight can start with. A party member's copy is neither.
 pub fn start_fight(item: &Item, index: &ContentIndex) -> Option<StartFight> {
     let entry = &item.entry;
-    let npc = entry.kind == "world" || item.is_world_note();
-    if npc {
+    if is_world(item) {
         if !fights(entry) {
             return None;
         }

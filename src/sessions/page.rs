@@ -563,22 +563,16 @@ fn compact_plan_for_reading(
         .lines()
         .filter(|line| !line.trim().is_empty())
         .collect();
-    let fight_or_group = |name: &str| {
-        fights
-            .iter()
-            .any(|fight| fight.name.eq_ignore_ascii_case(name))
-            || groups
-                .iter()
-                .any(|group| group.name.eq_ignore_ascii_case(name))
-    };
     // A scene is a row beside the note too.
     let scenes: Vec<String> = super::plan_lines(body)
         .into_iter()
         .filter_map(|line| match line {
             super::PlanLine::Task(task)
-                if !super::each_linked_name(&task.words)
-                    .iter()
-                    .any(|name| fight_or_group(name)) =>
+                if !plan::links_fight_or_group(
+                    &super::each_linked_name(&task.words),
+                    fights,
+                    groups,
+                ) =>
             {
                 Some(task.line.trim_end().to_owned())
             }

@@ -2154,11 +2154,7 @@ impl Splat {
                 self.encounters.open_saved_run(&path, campaign);
             }
             if let Some(fight) = self.sessions.wants_start_fight.take() {
-                self.encounters
-                    .start_fight_with(&fight, campaign, self.campaigns.modules());
-                if !self.encounters.go_to_run {
-                    self.page = Page::Encounters;
-                }
+                self.start_fight_with(&fight);
             }
             // Encounters shows why, and a button that seems dead tells the table nothing.
             if asked && !self.encounters.go_to_run {

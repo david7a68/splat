@@ -543,8 +543,24 @@ fn world_detail(index: &ContentIndex, at: usize) -> String {
 }
 
 fn is_world(index: &ContentIndex, at: usize) -> bool {
-    let item = &index.items[at];
-    item.entry.kind == "world" || item.is_world_note()
+    crate::world::is_world(&index.items[at])
+}
+
+/// Whether a plan line's linked names hold a planned fight or a saved group. A task line that
+/// links neither is a scene.
+pub(super) fn links_fight_or_group(
+    names: &[String],
+    fights: &[PlanFight],
+    groups: &[Arc<crate::encounter_run::RunGroup>],
+) -> bool {
+    names.iter().any(|name| {
+        fights
+            .iter()
+            .any(|fight| fight.name.eq_ignore_ascii_case(name))
+            || groups
+                .iter()
+                .any(|group| group.name.eq_ignore_ascii_case(name))
+    })
 }
 
 /// The one entry that a scene's words link, when they link exactly one.
@@ -774,16 +790,9 @@ impl Sessions {
                 PlanLine::Task(task) => (each_linked_name(&task.words), Some(task)),
                 PlanLine::Links(names) => (names, None),
             };
-            let fight_or_group = names.iter().any(|name| {
-                plan.fights
-                    .iter()
-                    .any(|fight| fight.name.eq_ignore_ascii_case(name))
-                    || plan
-                        .groups
-                        .iter()
-                        .any(|group| group.name.eq_ignore_ascii_case(name))
-            });
-            if let Some(task) = task.filter(|_| !fight_or_group) {
+            if let Some(task) =
+                task.filter(|_| !links_fight_or_group(&names, plan.fights, plan.groups))
+            {
                 let entry = index
                     .as_ref()
                     .and_then(|index| scene_entry(index, &task.words));
