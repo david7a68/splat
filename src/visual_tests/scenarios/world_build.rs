@@ -5435,6 +5435,23 @@ pub fn package_about(d: &mut Driver<'_>) {
             "Edit Markdown's footer at 960, 1200, 1920: none with nothing to say {footer_empty:?}; the write's Undo, then the reason {footer_refused:?}; Discard's Undo, then the write's {footer_discarded:?}; after Undo discard {footer_undone:?}"
         ),
     );
+    // Round 26 follow-up (found by package L): with the footer on screen, Lookup opened from the
+    // rail keeps its search field's focus, and the DM's typed words arrive there, not in the
+    // editor behind it.
+    let draft_before = d.editor_text();
+    d.click("Lookup");
+    d.type_text("Cinder");
+    let focus = d.focused_name();
+    let typed = d.field_text(SEARCH_LOOKUP);
+    let draft_kept = d.editor_text() == draft_before;
+    d.press_ctrl(egui::Key::K);
+    d.observe(
+        "iter-26-A2-lookup-keeps-focus",
+        focus.as_deref() == Some(SEARCH_LOOKUP) && typed.as_deref() == Some("Cinder") && draft_kept,
+        format!(
+            "Lookup from the rail with the footer on screen: focus {focus:?}, search {typed:?}, draft unchanged {draft_kept}"
+        ),
+    );
     d.observe(
         "iter-24-L-FB3-states",
         [&refused, &discarded, &undone]
