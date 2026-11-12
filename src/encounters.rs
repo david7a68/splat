@@ -2773,6 +2773,13 @@ impl Encounters {
             self.error = Some(reason.to_owned());
             return;
         }
+        // The campaign as it is at the click: a party sheet or an encounter written a moment
+        // ago, before the next content poll, is part of what the fight saves or reuses.
+        self.error = None;
+        self.reload_snapshot(active, modules);
+        if self.error.is_some() {
+            return;
+        }
         let Some(snapshot) = &self.snapshot else {
             return;
         };
@@ -7077,6 +7084,30 @@ mod tests {
                 "{name}: a new encounter, not the one with other values"
             );
         }
+
+        // Review of PR 261: a party sheet written a moment before the click, before the next
+        // content poll, is in the fight that the click saves.
+        let mut encounters = fresh();
+        let late = creature(dir.path(), "Late Arrival", true);
+        encounters.start_fight_with(
+            &StartFight {
+                name: "Ruffian".into(),
+                creature: Some(bandit),
+                npc: false,
+            },
+            &active,
+            &[],
+        );
+        assert!(encounters.run.is_some(), "the run starts");
+        let saved = Draft::open(dir.path(), "Encounters/Fight with Ruffian.md").unwrap();
+        assert!(
+            saved
+                .setup
+                .roster
+                .iter()
+                .any(|slot| slot.creature.as_ref().and_then(|r| r.id) == Some(late)),
+            "Start fight must include the party on disk at the click"
+        );
 
         // Blocked as the editor's Start fight is, with its words, and nothing is written.
         let mut encounters = fresh();

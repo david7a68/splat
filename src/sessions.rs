@@ -1168,19 +1168,17 @@ pub fn plan_lines(body: &str) -> Vec<PlanLine> {
         .collect()
 }
 
-/// The note's words with one line replaced, or taken out with `None`. The line is found by its
-/// whole text, nearest its old place `at`. `None` comes back when no line has that text.
+/// The note's words with one line replaced, or taken out with `None`. The line is the one at
+/// `at` that the act was drawn from, and it must still hold `line` exactly. `None` comes back
+/// when that place holds other words: the act never looks for another line that reads the same.
 pub fn change_line(body: &str, at: usize, line: &str, new: Option<&str>) -> Option<String> {
     let lines: Vec<&str> = body.split_inclusive('\n').collect();
-    let found = lines
-        .iter()
-        .enumerate()
-        .filter(|(_, text)| text.trim_end_matches(['\n', '\r']) == line)
-        .min_by_key(|(index, _)| index.abs_diff(at))?
-        .0;
+    if lines.get(at)?.trim_end_matches(['\n', '\r']) != line {
+        return None;
+    }
     let mut out = String::with_capacity(body.len());
     for (index, text) in lines.iter().enumerate() {
-        if index != found {
+        if index != at {
             out.push_str(text);
         } else if let Some(new) = new {
             out.push_str(new);
@@ -1797,12 +1795,13 @@ impl NoteUndo {
 
     /// Put back the words from before the act. A fragment that waits in the draft leaves the
     /// draft, with no look at the disk, as typed words would. A written one goes back through
-    /// the act's own checked path, and is saved at once.
+    /// the act's own checked path, and is saved at once. A fragment whose save failed, and that
+    /// a later save wrote with the draft, is a written one too.
     pub fn undo(&self, draft: &mut Draft) -> Result<(), ActFault> {
         if !self.owns(draft) {
             return Err(ActFault::OtherNote);
         }
-        if self.written {
+        if self.written || !draft.unsaved() {
             return draft
                 .apply(self.note, Apply::Now, |words| {
                     (words == self.after).then(|| self.before.clone())
@@ -2835,13 +2834,16 @@ mod tests {
             "* [ ] The miller is the informer"
         );
 
-        // Two lines with the same words: the one nearest the old place goes.
+        // Two lines with the same words: the act changes the one at its own place, and a place
+        // that holds other words now changes nothing, even when another line reads the same.
         let twice = "## Plan for tonight\n\n- [ ] A\n- [[Bridge]]\n- [ ] A\n";
         assert_eq!(
             change_line(twice, 4, "- [ ] A", None).unwrap(),
             "## Plan for tonight\n\n- [ ] A\n- [[Bridge]]\n"
         );
         assert_eq!(change_line(twice, 2, "- [ ] B", None), None);
+        assert_eq!(change_line(twice, 3, "- [ ] A", None), None);
+        assert_eq!(change_line(twice, 9, "- [ ] A", None), None);
 
         assert_eq!(
             add_scene(

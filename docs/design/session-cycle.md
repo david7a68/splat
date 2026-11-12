@@ -1482,8 +1482,9 @@ new, and one save is new; the table says which.
 **What `Draft::apply` does with an outside edit.** It calls `follow_disk` first, so an edit made in Obsidian a
 moment before is in the text that it changes. With unsaved typed words and a changed file, a new act is not
 applied, and its place says `The note changed on disk. Choose in the note first.` An act on a line that
-exists finds the line by its whole text, nearest its old place; when the line is gone or changed, it writes
-nothing and says `That line changed on disk.`
+exists names the line it was drawn from: its place and its whole text as read. When the line at that place
+holds other words now, it writes nothing, says `That line changed on disk.` where the DM acted, and the row
+draws again from the file. It never looks for another line that reads the same (built in P3).
 
 **When an Undo ends.**
 

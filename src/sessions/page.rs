@@ -277,6 +277,8 @@ pub struct Sessions {
     removed_group: Option<(Option<Uuid>, usize, String, String, f32, String)>,
     /// The plan's scenes: the Scene field and the results of scene acts.
     scenes: plan::Scenes,
+    /// The note's plan as rows, built when the note, the content or the encounters change.
+    plan_model: plan::PlanModelCache,
     /// The fight behind the open event, read once.
     fight: Option<(Uuid, Result<FightSummary, String>)>,
     /// What the session before the selected one left, read once for each selection.
@@ -584,11 +586,22 @@ fn recap_preview(body: &str) -> Option<String> {
     None
 }
 
-/// Keep plan links in the file, but do not repeat fights and groups in Read.
+/// The campaign's content index, as every reader of the page finds it.
+fn reader_index(ui: &egui::Ui) -> Option<std::sync::Arc<crate::lookup::ContentIndex>> {
+    ui.ctx().data(|data| {
+        data.get_temp::<std::sync::Arc<crate::lookup::ContentIndex>>(egui::Id::new(
+            "reader_link_index",
+        ))
+    })
+}
+
+/// Keep plan links in the file, but do not repeat fights, groups and scenes in Read. `scenes`
+/// are the scenes' whole lines, as the plan model found them.
 fn compact_plan_for_reading(
     body: &str,
     fights: &[PlanFight],
     groups: &[std::sync::Arc<crate::encounter_run::RunGroup>],
+    scenes: &[&str],
     beside: bool,
 ) -> String {
     let Some(plan) = section_text(body, "Plan for tonight") else {
@@ -598,26 +611,10 @@ fn compact_plan_for_reading(
         .lines()
         .filter(|line| !line.trim().is_empty())
         .collect();
-    // A scene is a row beside the note too.
-    let scenes: Vec<String> = super::plan_lines(body)
-        .into_iter()
-        .filter_map(|line| match line {
-            super::PlanLine::Task(task)
-                if !plan::links_fight_or_group(
-                    &super::each_linked_name(&task.words),
-                    fights,
-                    groups,
-                ) =>
-            {
-                Some(task.line.trim_end().to_owned())
-            }
-            _ => None,
-        })
-        .collect();
     let only_planned_links = !lines.is_empty()
         && lines.iter().all(|line| {
             // A scene's line starts at the line's start; a nested copy of it is note text.
-            if scenes.iter().any(|scene| scene == line.trim_end()) {
+            if scenes.iter().any(|scene| *scene == line.trim_end()) {
                 return true;
             }
             let link = line
@@ -3949,7 +3946,9 @@ impl Sessions {
             return;
         }
         let body = self.note_body();
-        let compact = compact_plan_for_reading(&body, plan.fights, plan.groups, beside);
+        let model = self.plan_model(reader_index(ui).as_deref(), plan);
+        let compact =
+            compact_plan_for_reading(&body, plan.fights, plan.groups, &model.scene_lines(), beside);
         let summary = (!beside && compact != body)
             .then(|| section_text(&compact, "Plan for tonight"))
             .flatten();
@@ -5624,6 +5623,7 @@ impl Sessions {
                 self.tab = shown;
                 self.clear_success();
             }
+            let model = self.plan_model(reader_index(ui).as_deref(), plan);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if (shown == Tab::Note || (shown == Tab::Plan && beside))
                     && (!self.reading_note
@@ -5631,6 +5631,7 @@ impl Sessions {
                             &self.note_body(),
                             plan.fights,
                             plan.groups,
+                            &model.scene_lines(),
                             beside,
                         )))
                 {
@@ -7352,29 +7353,24 @@ mod tests {
             summary: String::new(),
         }];
         let source = "## Plan for tonight\n\n- [[Bridge Ambush]]\n- [[Bridge Ambush]]\n\n## What happened\n\nWe crossed the bridge.\n";
-        let compact = compact_plan_for_reading(source, &fights, &[], true);
+        let compact = compact_plan_for_reading(source, &fights, &[], &plan::PlanModel::build(source, &fights, &[], None).scene_lines(), true);
         assert!(!compact.contains("Plan for tonight"));
         assert!(!compact.contains("[[Bridge Ambush]]"));
         assert!(compact.contains("We crossed the bridge."));
         assert_eq!(source.matches("[[Bridge Ambush]]").count(), 2);
-        let tab = compact_plan_for_reading(source, &fights, &[], false);
+        let tab = compact_plan_for_reading(source, &fights, &[], &plan::PlanModel::build(source, &fights, &[], None).scene_lines(), false);
         assert!(tab.contains("2 fights, in the plan"));
         assert!(!tab.contains("at left"));
         let empty = source.replace("We crossed the bridge.", "");
-        assert!(!has_written_text(&compact_plan_for_reading(
-            &empty,
-            &fights,
-            &[],
-            true
-        )));
+        assert!(!has_written_text(&compact_plan_for_reading(&empty, &fights, &[], &plan::PlanModel::build(&empty, &fights, &[], None).scene_lines(), true)));
         let repeated = format!(
             "## Recap of last time\n\n- [[Bridge Ambush]]\n- [[Bridge Ambush]]\n\n{source}"
         );
-        let compact = compact_plan_for_reading(&repeated, &fights, &[], true);
+        let compact = compact_plan_for_reading(&repeated, &fights, &[], &plan::PlanModel::build(&repeated, &fights, &[], None).scene_lines(), true);
         assert_eq!(compact.matches("[[Bridge Ambush]]").count(), 2);
         assert!(compact.starts_with("## Recap of last time\n\n- [[Bridge Ambush]]"));
         let mixed = source.replace("- [[Bridge Ambush]]\n\n##", "- Ask the ferryman.\n\n##");
-        assert_eq!(compact_plan_for_reading(&mixed, &fights, &[], true), mixed);
+        assert_eq!(compact_plan_for_reading(&mixed, &fights, &[], &plan::PlanModel::build(&mixed, &fights, &[], None).scene_lines(), true), mixed);
     }
 
     #[test]
@@ -7416,11 +7412,11 @@ mod tests {
                 "## Plan for tonight\n\n{links}\n\n## What happened\n\nWe reached the mill.\n"
             );
             let before = source.clone();
-            let compact = compact_plan_for_reading(&source, &fights, &groups, true);
+            let compact = compact_plan_for_reading(&source, &fights, &groups, &plan::PlanModel::build(&source, &fights, &groups, None).scene_lines(), true);
             assert!(!compact.contains("Plan for tonight"));
             assert!(compact.contains("We reached the mill."));
             assert!(
-                compact_plan_for_reading(&source, &fights, &groups, false)
+                compact_plan_for_reading(&source, &fights, &groups, &plan::PlanModel::build(&source, &fights, &groups, None).scene_lines(), false)
                     .contains(&format!("{count}, in the plan"))
             );
             assert_eq!(source, before);
@@ -7436,7 +7432,7 @@ mod tests {
         ] {
             let source = format!("## Plan for tonight\n\n{lines}\n");
             assert_eq!(
-                compact_plan_for_reading(&source, &fights, &groups, true),
+                compact_plan_for_reading(&source, &fights, &groups, &plan::PlanModel::build(&source, &fights, &groups, None).scene_lines(), true),
                 source
             );
         }
