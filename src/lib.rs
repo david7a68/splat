@@ -454,8 +454,6 @@ impl Splat {
             Some("Wait for processing to finish, or cancel it, to change campaigns.")
         } else if self.sessions.busy_with_edit() || self.timeline.not_saved() {
             Some("Resolve the unsaved session file to change campaigns.")
-        } else if self.trackers.pending.is_some() {
-            Some("Save the tracker act that waits to change campaigns.")
         } else if self.world_page.dirty()
             || self.world_page.has_generated()
             || self.any_unsaved_edits()
@@ -567,9 +565,6 @@ impl Splat {
         }
         if self.timeline.not_saved() {
             items.push(("The timeline is not saved.".to_owned(), Page::Timeline));
-        }
-        if self.trackers.pending.is_some() {
-            items.push(("A tracker act is not saved.".to_owned(), self.page));
         }
         if self.sessions.recording_label().is_some() {
             items.push((
@@ -1058,34 +1053,29 @@ impl Splat {
         });
     }
 
-    /// The rail's tracker sign: `Due N` only while a notice is due, or a ledger that cannot be
-    /// read or saved. With no house rule note in play it shows nothing. A click opens Trackers.
+    /// The rail's tracker sign: `Due N` only while a notice is due, or a ledger or house rule
+    /// file that cannot be read. With no house rule note in play it shows nothing. A click opens Trackers.
     fn trackers_status(&mut self, ui: &mut egui::Ui) {
         if !self.trackers.in_play() {
             return;
         }
         let due = self.trackers.due();
         let due_word = format!("Due {due}");
-        let (state, hover) = if self.trackers.unreadable.is_some() {
+        let not_read = if self.trackers.unreadable.is_some() {
+            Some(trackers::ledger::FILE)
+        } else if self.trackers.rules.unreadable.is_some() {
+            Some("A house rule file")
+        } else {
+            None
+        };
+        let (state, hover) = if let Some(file) = not_read {
             (
                 Status {
                     icon: icons::ERROR,
                     word: "Trackers not read",
                     color: colors().result.error,
                 },
-                format!(
-                    "{} cannot be read. Open Trackers (Ctrl+T).",
-                    trackers::ledger::FILE
-                ),
-            )
-        } else if self.trackers.pending.is_some() {
-            (
-                Status {
-                    icon: icons::ERROR,
-                    word: "Trackers not saved",
-                    color: colors().result.error,
-                },
-                "Trackers not saved. Open Trackers (Ctrl+T).".to_owned(),
+                format!("{file} cannot be read. Open Trackers (Ctrl+T)."),
             )
         } else if due > 0 {
             (

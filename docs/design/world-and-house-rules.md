@@ -355,8 +355,9 @@ row shows no time.
 - **Repair.** A row for an unknown tracker or word stays in the file and shows in a problems list. The DM fixes
   it with find and replace, because the keys are plain words.
 - **Saving.** As built, an act reads `Trackers.md` as it is on disk at the press and writes with the shared atomic
-  write and its outside-change check (`file_batch::apply`). There is no merge: an outside edit stays, a retry adds an
-  entry whose ID is already in the file no second time, and an Undo whose entries changed on disk writes nothing.
+  write and its outside-change check (`file_batch::apply`). There is no merge: an outside edit stays, and an Undo whose entries changed on disk writes nothing. A save that
+  fails records nothing and keeps nothing: the result line says `Trackers.md was not saved: <reason>. Nothing was
+  recorded.`, and the DM presses again.
 - **The Timeline stays the story.** A race makes dozens of changes, and they do not go on the Timeline unless the DM
   presses **Add to Timeline**.
 

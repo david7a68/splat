@@ -1,7 +1,9 @@
 //! The Trackers view of the Lookup panel: the Due rows, then the pinned trackers in the note's
 //! order, then `More trackers`, in one scroll area; the result line keeps its place at the
 //! panel's bottom edge. The view draws from the ledger as read, and every press is one act.
-use super::{Place, Rules, State, Trackers, ledger::Entry, ledger::NoticeRef, mark_of, short_name};
+use super::{
+    Rules, State, Trackers, Unrecorded, ledger::Entry, ledger::NoticeRef, mark_of, short_name,
+};
 use crate::design::{self, Action, Density, Tone, Type, colors, icons};
 use eframe::egui;
 use std::collections::HashSet;
@@ -14,6 +16,31 @@ pub(crate) struct ViewState {
     focus_asking: bool,
     /// Proposed changes the DM unticked, by notice. Ticked is the default.
     unticked: HashSet<(NoticeRef, usize)>,
+}
+
+impl ViewState {
+    /// The amount field again, with the number typed for an act that recorded nothing.
+    pub(super) fn ask_again(
+        &mut self,
+        key: &str,
+        instance: Option<&str>,
+        label: &str,
+        amount: i64,
+    ) {
+        self.asking = Some((
+            key.to_owned(),
+            instance.map(str::to_owned),
+            label.to_owned(),
+            amount.to_string(),
+        ));
+        self.focus_asking = true;
+    }
+
+    /// The words in the amount field, while it is open.
+    #[cfg(test)]
+    pub(super) fn typed(&self) -> Option<&str> {
+        self.asking.as_ref().map(|(_, _, _, typed)| typed.as_str())
+    }
 }
 
 /// One act the DM asked for in this frame.
@@ -30,7 +57,6 @@ enum Act {
     Undo(Vec<Entry>),
     AddToTimeline(String, String),
     UndoAdd(String),
-    Retry,
     ReadAgain,
 }
 
@@ -41,22 +67,12 @@ impl Trackers {
     }
 }
 
-/// The empty state, the file that cannot be read, or the trackers with the result line.
+/// The result line, then the empty state, a file that cannot be read, or the trackers.
 pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, from_top: bool) {
-    if !trackers.in_play() {
-        ui.add_space(design::S);
-        for words in [
-            "No house rules are in play.",
-            "Turn one on in Campaign → Rules and runs.",
-        ] {
-            ui.label(Type::Body.rich(ui, words).color(colors().muted));
-        }
-        return;
-    }
     let mut act = None;
-    let has_result = trackers.pending.is_some()
-        || matches!(trackers.reason, Some((Place::Result, _)))
-        || !trackers.newest().is_empty();
+    // The result line comes first: why an act recorded nothing stays in view, also when the
+    // row it was pressed on went away.
+    let has_result = trackers.reason.is_some() || trackers.result.is_some();
     if has_result && trackers.unreadable.is_none() {
         egui::TopBottomPanel::bottom("trackers_result")
             .frame(egui::Frame::NONE)
@@ -68,6 +84,19 @@ pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, from_top: bool) {
                 ui.add_space(design::XS);
                 result_line(ui, trackers, &mut act);
             });
+    }
+    if !trackers.in_play() {
+        ui.add_space(design::S);
+        for words in [
+            "No house rules are in play.",
+            "Turn one on in Campaign → Rules and runs.",
+        ] {
+            ui.label(Type::Body.rich(ui, words).color(colors().muted));
+        }
+        if let Some(act) = act {
+            apply(trackers, act);
+        }
+        return;
     }
     // What is due is in view when the view opens.
     let mut area = egui::ScrollArea::vertical()
@@ -104,7 +133,6 @@ fn apply(trackers: &mut Trackers, act: Act) {
             trackers.added = None;
             trackers.wants_undo_add = Some(event);
         }
-        Act::Retry => trackers.retry(),
         Act::ReadAgain => {
             trackers.baseline = None;
             trackers.read_disk();
@@ -143,20 +171,23 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
         return;
     }
     let Trackers {
-        rules,
-        state,
-        view,
-        reason,
-        pending,
-        ..
+        rules, state, view, ..
     } = trackers;
-    let blocked = pending
-        .as_ref()
-        .map(|_| "Trackers not saved. Try again first.");
+    // A definition that cannot be read shows no value, never an old one.
+    if let Some(error) = &rules.unreadable {
+        design::message(
+            ui,
+            Tone::Error,
+            &format!(
+                "{error} Splat shows no tracker and records nothing until it can be read. It reads the notes again when its window gets focus."
+            ),
+        );
+        return;
+    }
     if !state.due.is_empty() {
         design::group_heading(ui, "Due", state.due.len());
         for notice in &state.due {
-            notice_row(ui, rules, view, reason, blocked, notice, act);
+            notice_row(ui, rules, view, notice, act);
         }
         ui.add_space(design::S);
     }
@@ -170,7 +201,7 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
     if usable(true).next().is_some() {
         design::group_heading(ui, "Pinned", 0);
         for (key, def) in usable(true) {
-            tracker_lines(ui, rules, state, view, reason, blocked, key, def, act);
+            tracker_lines(ui, rules, state, view, key, def, act);
         }
     }
     let more = usable(false).count();
@@ -182,7 +213,7 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
             design::group_heading_text(ui, "More trackers", more),
             |ui| {
                 for (key, def) in usable(false) {
-                    tracker_lines(ui, rules, state, view, reason, blocked, key, def, act);
+                    tracker_lines(ui, rules, state, view, key, def, act);
                 }
             },
         );
@@ -223,8 +254,6 @@ fn notice_row(
     ui: &mut egui::Ui,
     rules: &Rules,
     view: &mut ViewState,
-    reason: &Option<(Place, String)>,
-    blocked: Option<&str>,
     notice: &super::Notice,
     act: &mut Option<Act>,
 ) {
@@ -244,7 +273,7 @@ fn notice_row(
     let ends_words = mark.tables.is_empty() && mark.changes.is_empty();
     if ends_words {
         words_ending_with(ui, &words, finish_width(ui), |ui| {
-            finish(ui, &short, blocked, notice, mark, view, act)
+            finish(ui, &short, notice, mark, view, act)
         });
     } else {
         ui.add(egui::Label::new(Type::Body.rich(ui, &words)).wrap());
@@ -259,13 +288,13 @@ fn notice_row(
                 if Action::secondary(&label)
                     .icon(icons::DICE)
                     .density(Density::Read)
-                    .blocked(blocked.or(each_rolled.then_some("Each name has its roll.")))
+                    .blocked(each_rolled.then_some("Each name has its roll."))
                     .show(ui)
                     .clicked()
                 {
                     *act = Some(Act::Roll(notice.clone(), key.to_owned()));
                 }
-                if each_rolled && blocked.is_none() {
+                if each_rolled {
                     design::blocked_reason(ui, Some("Each name has its roll."));
                 }
             }
@@ -313,14 +342,7 @@ fn notice_row(
         }
     }
     if !ends_words {
-        right_line(ui, |ui| {
-            finish(ui, &short, blocked, notice, mark, view, act)
-        });
-    }
-    if let Some((Place::Notice(id), why)) = reason
-        && *id == notice.id
-    {
-        design::small_message(ui, Tone::Warning, why);
+        right_line(ui, |ui| finish(ui, &short, notice, mark, view, act));
     }
     ui.add_space(design::XS);
 }
@@ -387,7 +409,6 @@ fn finish_width(ui: &egui::Ui) -> f32 {
 fn finish(
     ui: &mut egui::Ui,
     short: &str,
-    blocked: Option<&str>,
     notice: &super::Notice,
     mark: &super::Mark,
     view: &ViewState,
@@ -396,7 +417,6 @@ fn finish(
     design::row_menu(ui, short, |ui| {
         if Action::quiet("Dismiss")
             .density(Density::Read)
-            .blocked(blocked)
             .show(ui)
             .clicked()
         {
@@ -408,7 +428,6 @@ fn finish(
     if Action::quiet("Done")
         .density(Density::Read)
         .name(&name)
-        .blocked(blocked)
         .show(ui)
         .clicked()
     {
@@ -420,14 +439,11 @@ fn finish(
 }
 
 /// A tracker's lines: one line, or a heading and one line for each instance.
-#[allow(clippy::too_many_arguments)]
 fn tracker_lines(
     ui: &mut egui::Ui,
     rules: &Rules,
     state: &State,
     view: &mut ViewState,
-    reason: &Option<(Place, String)>,
-    blocked: Option<&str>,
     key: &str,
     def: &super::Definition,
     act: &mut Option<Act>,
@@ -499,7 +515,6 @@ fn tracker_lines(
                         Some(name) => format!("{}: {name}", quick.label),
                         None => quick.label.clone(),
                     })
-                    .blocked(blocked)
                     .show(ui);
                 if response.clicked() {
                     // Read on the click only: a dice amount is parsed to tell it from `ask`.
@@ -522,11 +537,6 @@ fn tracker_lines(
                 }
             }
         });
-        if let Some((Place::Tracker(k, i), why)) = reason
-            && (k.as_str(), i.as_deref()) == (key, instance)
-        {
-            design::small_message(ui, Tone::Warning, why);
-        }
     }
     ui.add_space(design::XS);
 }
@@ -559,28 +569,17 @@ fn amount_field(ui: &mut egui::Ui, view: &mut ViewState, label: &str, act: &mut 
     }
 }
 
-/// The last act of the session being played, with `Undo: <label>` and `Add to Timeline`; or the
-/// save that waits; or why the last act wrote nothing.
+/// Why the last act recorded nothing, then the last act of the session being played, with
+/// `Undo: <label>` and `Add to Timeline`.
 fn result_line(ui: &mut egui::Ui, trackers: &Trackers, act: &mut Option<Act>) {
-    if let Some((_, error, _)) = &trackers.pending {
-        design::message_with_actions(
-            ui,
-            Tone::Error,
-            &format!("Trackers not saved. {error} The act waits."),
-            |ui| {
-                if Action::secondary("Try again")
-                    .density(Density::Read)
-                    .show(ui)
-                    .clicked()
-                {
-                    *act = Some(Act::Retry);
-                }
-            },
-        );
-        return;
-    }
-    if let Some((Place::Result, why)) = &trackers.reason {
-        design::message(ui, Tone::Warning, why);
+    match &trackers.reason {
+        Some(Unrecorded::Refused(why)) => {
+            design::message(ui, Tone::Warning, why);
+        }
+        Some(Unrecorded::NotSaved(error)) => {
+            design::message(ui, Tone::Error, &not_saved(error));
+        }
+        None => {}
     }
     let entries = trackers.newest();
     let (Some(first), Some((label, words))) = (entries.first(), &trackers.result) else {
@@ -633,4 +632,13 @@ fn result_line(ui: &mut egui::Ui, trackers: &Trackers, act: &mut Option<Act>) {
     if add_clicked {
         *act = Some(Act::AddToTimeline(first.id.clone(), label.clone()));
     }
+}
+
+/// The words of a failed save: the file, the reason, and that nothing was recorded.
+pub(super) fn not_saved(error: &str) -> String {
+    format!(
+        "{} was not saved: {}. Nothing was recorded.",
+        super::ledger::FILE,
+        error.trim_end_matches('.')
+    )
 }

@@ -361,5 +361,18 @@ pub fn run(d: &mut Driver<'_>) {
             ),
             "The view's problems name a ledger row that counts for nothing",
         );
+
+        // A press whose note went away from disk: its row goes, and the words stay in view on
+        // the result line, with what the DM can do.
+        fs::remove_file(root(d).join("Tournament.md")).unwrap();
+        d.app_mut().trackers.press("favor", None, "Crowd loves it", None);
+        d.settle();
+        d.observe(
+            "T19.2",
+            d.has_containing("A house rule note changed on disk. Nothing was recorded.")
+                && d.has_containing("Splat reads the notes again when its window gets focus.")
+                && !d.has("Crowd loves it"),
+            "A refused press says so on the result line when its row went away",
+        );
     });
 }

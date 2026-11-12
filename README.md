@@ -650,9 +650,9 @@ last act of the session being played, with **Undo: <label>**, which steps back n
 restart, and **Add to Timeline**, which makes a Major event with the act's label. A wrong press seen late is
 corrected by the opposite quick action. An act reads the file and the house rule notes as they are on disk when you press, so an entry you edit
 in Obsidian counts at once and is never written over; an act on a definition or an entry that changed on disk writes
-nothing and says so. A file that cannot be read blocks every act and shows `Trackers not read`; a save that fails
-keeps the act waiting under **Try again**, which checks it again against the files and adds it once. Until then a
-campaign switch waits, and closing Splat names it. Entries for a tracker that no note in play has are kept and not
+nothing and says so. A file that cannot be read (`Trackers.md`, `Campaign.md` or a house rule note in play) blocks every act and
+shows `Trackers not read`. A save that fails records nothing and keeps nothing: the bottom of Trackers says
+`Trackers.md was not saved` with the reason, and you press again. Entries for a tracker that no note in play has are kept and not
 counted; the end of Trackers names them. To take back an entry of an older session, edit `Trackers.md` in Obsidian. In a fight the run shows no tracker part: use Ctrl+T, press, and
 go back.
 

@@ -132,8 +132,7 @@ pub fn new_id(prefix: &str) -> String {
 /// One act, as a change of the list on disk.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Op {
-    /// New entries at the end. An entry whose ID is already in the file is not added again,
-    /// so a retry never makes a second entry for one press.
+    /// New entries at the end. An entry whose ID is already in the file is not added again.
     Append(Vec<Entry>),
     /// These entries, exactly as they were read, leave the list.
     Remove(Vec<Entry>),
@@ -236,8 +235,8 @@ pub enum Fault {
     NotRead(String),
     /// The act does not fit the list on disk now. Nothing is written.
     Refused(String),
-    /// The write failed. The act waits, and a retry adds it once.
-    NotSaved(String, Op),
+    /// The write failed. Nothing is written, and nothing waits.
+    NotSaved(String),
 }
 
 /// The file as it is on disk now: its bytes, or none when it does not exist.
@@ -273,14 +272,14 @@ pub fn commit(
         .unwrap_or_default();
     let text = match next.render(&old) {
         Ok(text) => text,
-        Err(error) => return Err(Fault::NotSaved(error, op)),
+        Err(error) => return Err(Fault::NotSaved(error)),
     };
     if let Err(error) = crate::file_batch::apply(&[crate::file_batch::Change {
         path: path.to_path_buf(),
         before: before.clone(),
         after: Some(text.clone().into_bytes()),
     }]) {
-        return Err(Fault::NotSaved(error, op));
+        return Err(Fault::NotSaved(error));
     }
     Ok((text.into_bytes(), next, op))
 }
