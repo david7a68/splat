@@ -2786,8 +2786,10 @@ impl<'a> Driver<'a> {
                 owed.is_empty(),
                 format!(
                     "{window}: footers {footers:?}; {} next actions; cut after a footer took their \
-                     room: {owed:?}; held by a guard: {held:?}",
-                    seen.len()
+                     room: {owed:?}; held by a guard: {held:?}; last reveals (room lost, needed, \
+                     scrolled): {:?}",
+                    seen.len(),
+                    seen.iter().map(|next| next.last).collect::<Vec<_>>()
                 ),
             );
         }

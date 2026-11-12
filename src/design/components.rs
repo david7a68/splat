@@ -2854,6 +2854,8 @@ struct NextAction {
     promised: bool,
     /// The last reveal stopped at the room lost, short of what the row needed.
     capped: bool,
+    /// For checks: the room lost, what the row needed and the scroll, at the last reveal.
+    last: (f32, f32, f32),
 }
 
 /// A next action as the reveal saw it in the last finished pass, for checks.
@@ -2869,6 +2871,8 @@ pub(crate) struct NextSeen {
     pub capped: bool,
     /// What holds the reveal back: `pointer` or `field`.
     pub held: Option<&'static str>,
+    /// The room lost, what the row needed and the scroll, at the last reveal.
+    pub last: (f32, f32, f32),
 }
 
 #[cfg(test)]
@@ -2886,8 +2890,8 @@ pub(crate) fn next_actions(ctx: &egui::Context) -> Vec<NextSeen> {
 /// exactly what the row needs to be whole again, never by more than `d`. A row that was already
 /// cut or out of view is never pulled back. Two guards hold the reveal back until they let go:
 /// a pointer that rests over the pane's content and has not moved since the loss (a scroll would
-/// put another control under it), and a focused text field of the pane that the scroll would move
-/// out of view. The DM's own scroll or press in the pane ends what is owed. A footer that
+/// put another control under it), and a focused field (any focused control) of the pane that the
+/// scroll would move out of view. The DM's own scroll or press in the pane ends what is owed. A footer that
 /// shrinks and a window that grows scroll nothing.
 ///
 /// Every primary `Action` does this by itself. Call it for an action the DM needs next that is
@@ -2944,7 +2948,6 @@ pub fn keep_above_footer(ui: &Ui, response: &Response) {
     let mut top = rect.top();
     let field = ctx
         .memory(|memory| memory.focused())
-        .filter(|id| egui::text_edit::TextEditState::load(ctx, *id).is_some())
         .and_then(|id| ctx.read_response(id))
         .map(|field| field.rect)
         .filter(|field| field.intersects(clip));
@@ -2964,6 +2967,7 @@ pub fn keep_above_footer(ui: &Ui, response: &Response) {
         ctx.request_discard("a next action came back into view above its footer");
         top -= by;
         next.capped = by < need;
+        next.last = (next.owed, need, by);
         next.owed = 0.0;
         None
     };
@@ -2984,6 +2988,7 @@ pub fn keep_above_footer(ui: &Ui, response: &Response) {
             promised: next.promised,
             capped: next.capped,
             held,
+            last: next.last,
         });
     });
 }
