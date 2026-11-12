@@ -100,8 +100,8 @@ const ADD_COMMAND: &str = "devenv shell -- audit-freeze add";
 const SCENARIO: &str = "plain-evening";
 const WIDE: (f32, f32) = (1200.0, 800.0);
 const NARROW: (f32, f32) = (960.0, 640.0);
-/// Section 2.5 numbers its rows 1 to 21.
-const CONTRACT_ROWS: std::ops::RangeInclusive<u32> = 1..=21;
+/// Section 2.5 numbers its rows 1 to 22.
+const CONTRACT_ROWS: std::ops::RangeInclusive<u32> = 1..=22;
 /// What the test folder becomes in a run's `splat_run_source_path`.
 const WORLD: &str = "<world>";
 const SAME: &str = "the same as at the start";
@@ -383,7 +383,7 @@ impl std::fmt::Display for Difference {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 struct AllowedRow {
     /// The row of section 2.5 that permits this difference.
     row: u32,
@@ -1807,6 +1807,22 @@ mod allowed_classes {
             name: "P3 t: an act's words of these classes",
             fits: |d, _| scenes::act_words(d),
         },
+        // R1c, row 22: History scrolls once to the run it opens (V31), with V11's line.
+        Class {
+            row: 2,
+            name: "R1c c: the opened row's words start at the link's right edge (V9)",
+            fits: history::words_at_the_link,
+        },
+        Class {
+            row: 22,
+            name: "R1c a: History scrolled once to the opened run, and V11's line under Read-only",
+            fits: history::scrolled,
+        },
+        Class {
+            row: 22,
+            name: "R1c b: an act's words that scrolled out of or into History's view",
+            fits: history::act_words,
+        },
         // P7, F7.
         Class {
             row: 10,
@@ -1824,6 +1840,559 @@ mod allowed_classes {
             fits: |d, _| rewards::act_words(d),
         },
     ];
+
+    /// R1c's classes, row 22. When a run opens in History, the list scrolls once so that the
+    /// run's row is at its top (V31), and the line under Read-only is `S` below it and `M`
+    /// above `FINAL STATE` (V11). Each class proves itself from all the rows of its view, name
+    /// by name, because G7 pairs the items of one name by their order: an item that scrolled
+    /// out can show as another item of its name that moved.
+    mod history {
+        use super::super::{AllowedRow, Difference};
+        use std::collections::BTreeMap;
+
+        /// Rectangles `x y w h` of the items of one name.
+        type Places = Vec<[f32; 4]>;
+
+        /// The acts that open, show or close a run in History.
+        const ACTS: [&str; 5] = [
+            "Whole run",
+            "Ctrl+K opens Lookup",
+            "Ctrl+K closes Lookup",
+            "close the ended run",
+            "close the older run",
+        ];
+        /// V11 moves what is under Read-only up by at most this much more than the scroll.
+        const V11: f32 = 8.0;
+        /// The Read-only line's words were as tall as a control, and are as tall as a line.
+        const OLD_LINE: f32 = 26.0;
+        const NEW_LINE: f32 = 16.0;
+
+        /// History with an opened run, and the hovers taken there.
+        fn screen(d: &Difference) -> bool {
+            d.screen.starts_with("run-ended: played ")
+        }
+
+        /// `x y w h` of `x y wxh` or `x y wxh, seen …`.
+        fn numbers(text: &str) -> Option<[f32; 4]> {
+            let whole = text.split(',').next()?.replace('x', " ");
+            let numbers: Vec<f32> = whole
+                .split_whitespace()
+                .map(|n| n.parse().ok())
+                .collect::<Option<_>>()?;
+            numbers.try_into().ok()
+        }
+
+        /// The item after, as written: `x y wxh` with its `seen` part when only part shows.
+        fn after_text(d: &Difference) -> Option<&str> {
+            match d.change.as_str() {
+                "gone" => None,
+                "new" => d.detail.strip_prefix("at "),
+                _ => Some(d.detail.split_once(" -> ")?.1),
+            }
+        }
+
+        /// The part of the item in view after: its `seen` part, or the whole item.
+        fn shown_after(d: &Difference) -> Option<[f32; 4]> {
+            let after = after_text(d)?;
+            match after.split_once(", seen ") {
+                Some((_, seen)) => numbers(seen),
+                None => numbers(after),
+            }
+        }
+
+        /// The item's place before and after.
+        fn places(d: &Difference) -> (Option<[f32; 4]>, Option<[f32; 4]>) {
+            match d.change.as_str() {
+                "gone" => (d.detail.strip_prefix("was ").and_then(numbers), None),
+                "new" => (None, d.detail.strip_prefix("at ").and_then(numbers)),
+                _ => d
+                    .detail
+                    .split_once(" -> ")
+                    .map_or((None, None), |(a, b)| (numbers(a), numbers(b))),
+            }
+        }
+
+        /// How far the list scrolled in a view: how far the opened run's own row moved, with
+        /// its place across and its size kept.
+        fn scroll(d: &Difference, rows: &[AllowedRow]) -> Option<f32> {
+            rows.iter()
+                .map(|row| &row.difference)
+                .filter(|o| (&o.screen, &o.view) == (&d.screen, &d.view))
+                .filter(|o| o.what == "control" && o.change == "moved")
+                .filter(|o| o.name.starts_with("Button: Close the run of "))
+                .find_map(|o| match places(o) {
+                    (Some(a), Some(b)) if a[0] == b[0] && a[2..] == b[2..] => Some(b[1] - a[1]),
+                    _ => None,
+                })
+        }
+
+        /// Where the bands of a History view start in its frozen view, for items of `d`'s
+        /// kind: the middle of the Read-only line, and the top of `FINAL STATE`.
+        fn marks(d: &Difference) -> Option<(f32, f32)> {
+            let view = reference()
+                .views
+                .iter()
+                .find(|view| (&view.screen, &view.view) == (&d.screen, &d.view))?;
+            let items = if d.what == "control" {
+                &view.controls
+            } else {
+                &view.texts
+            };
+            let find = |end: &str| items.iter().find(|item| item.0.ends_with(end));
+            let line = find("Read-only").map(|item| item.1[1] + item.1[3] / 2.0)?;
+            Some((line, find("FINAL STATE")?.1[1]))
+        }
+
+        /// An item's band, by where it was: 0 the list above the Read-only line, 1 that line,
+        /// 2 the line under it (Continue fight or its reason), 3 `FINAL STATE` and below.
+        fn band(a: &[f32; 4], (line, last): (f32, f32)) -> usize {
+            let middle = a[1] + a[3] / 2.0;
+            if (middle - line).abs() < 0.5 {
+                1
+            } else if middle < line {
+                0
+            } else if a[1] < last {
+                2
+            } else {
+                3
+            }
+        }
+
+        /// The decisions' rule, proved for the whole view of `d`. The list scrolled by one
+        /// offset, the run's own row's, and V11 gave the line under Read-only `S` above and
+        /// `M` below. So each item of today is one to one an item after (G7 pairs the items
+        /// of one name by their order, so each name pairs by place, less what scrolled out at
+        /// the top or in from below), with its place across and its size kept, and every
+        /// item of one band moves by the SAME amount: the list and the Read-only line's top by
+        /// the scroll alone (only that line's own height changes, 26 to 16 px); the line under
+        /// it, and everything from `FINAL STATE` down, each by one shift of at most V11 more.
+        /// The bands keep their order and do not overlap. An item after may be cut only by the
+        /// list's own edges.
+        pub(super) fn scrolled(d: &Difference, rows: &[AllowedRow]) -> bool {
+            if !screen(d) || !["control", "text"].contains(&d.what.as_str()) {
+                return false;
+            }
+            let (Some(dy), Some(marks)) = (scroll(d, rows), marks(d)) else {
+                return false;
+            };
+            if places(d) == (None, None) {
+                return false;
+            }
+            let view: Vec<&Difference> = rows
+                .iter()
+                .map(|row| &row.difference)
+                .filter(|o| (&o.screen, &o.view, &o.what) == (&d.screen, &d.view, &d.what))
+                .collect();
+            let pairs: Vec<_> = view
+                .iter()
+                .filter_map(|o| match (places(o).0, shown_after(o)) {
+                    (Some(a), Some(shown)) => Some((a, shown)),
+                    _ => None,
+                })
+                .collect();
+            // The edges of what stayed in view: the top of what shows after, and the bottom
+            // before.
+            let top = pairs
+                .iter()
+                .map(|(_, b)| b[1])
+                .fold(f32::INFINITY, f32::min);
+            let bottom = pairs
+                .iter()
+                .map(|(a, _)| a[1] + a[3])
+                .fold(f32::NEG_INFINITY, f32::max);
+            // An item after may be cut only by the list's own edges, top or bottom: never
+            // across, and never inside the view.
+            let edge = view
+                .iter()
+                .filter_map(|o| shown_after(o))
+                .map(|b| b[1] + b[3])
+                .fold(f32::NEG_INFINITY, f32::max);
+            let whole_across = |o: &Difference| {
+                let (Some(whole), Some(shown)) = (places(o).1, shown_after(o)) else {
+                    return true;
+                };
+                let cut_top = shown[1] > whole[1] + 0.05;
+                let cut_bottom = shown[1] + shown[3] < whole[1] + whole[3] - 0.05;
+                shown[0] == whole[0]
+                    && shown[2] == whole[2]
+                    && (!cut_top || (shown[1] - top).abs() < 0.5)
+                    && (!cut_bottom || (shown[1] + shown[3] - edge).abs() < 0.5)
+            };
+            // Each name's items, today's and after, less what scrolled out of or into view.
+            let mut names: BTreeMap<&str, (Places, Places)> = BTreeMap::new();
+            for o in &view {
+                if !whole_across(o) {
+                    return false;
+                }
+                let (a, b) = places(o);
+                let (before, after) = names.entry(o.name.as_str()).or_default();
+                before.extend(a.filter(|a| a[1] + dy + a[3] > top + 0.5));
+                after.extend(b.filter(|b| b[1] - dy + V11 < bottom - 0.5));
+            }
+            // Each band's one shift beyond the scroll, and its extent after.
+            let line_top = marks.0 - OLD_LINE / 2.0;
+            let mut shift = [Some(0.0), Some(0.0), None, None];
+            let mut extent = [(f32::INFINITY, f32::NEG_INFINITY); 4];
+            for (before, after) in names.values_mut() {
+                if before.len() != after.len() {
+                    return false;
+                }
+                before.sort_by(|a, b| a[1].total_cmp(&b[1]));
+                after.sort_by(|a, b| a[1].total_cmp(&b[1]));
+                for (a, b) in before.iter().zip(after.iter()) {
+                    let band = band(a, marks);
+                    // The Read-only line's items go to the line's top, which only scrolled.
+                    let up = b[1] - if band == 1 { line_top } else { a[1] } - dy;
+                    let height =
+                        a[3] == b[3] || (band == 1 && a[3] == OLD_LINE && b[3] == NEW_LINE);
+                    if a[0] != b[0] || a[2] != b[2] || !height {
+                        return false;
+                    }
+                    match shift[band] {
+                        Some(shift) if (shift - up).abs() > 0.05 => return false,
+                        _ => shift[band] = Some(up),
+                    }
+                    extent[band] = (extent[band].0.min(b[1]), extent[band].1.max(b[1] + b[3]));
+                }
+            }
+            let order = extent.iter().filter(|(top, _)| top.is_finite());
+            shift
+                .iter()
+                .flatten()
+                .all(|shift| (-V11 - 0.05..=0.05).contains(shift))
+                && order
+                    .clone()
+                    .zip(order.skip(1))
+                    .all(|(upper, lower)| upper.1 <= lower.0 + 0.05)
+        }
+
+        /// One blank of the opened row's words between two glyphs' boxes:
+        /// `read_encounter_has_one_blank_each_side_of_each_separator` measures 3.44 px.
+        const BLANK: f32 = 3.5;
+
+        /// V9, row 2: F1's words after `Read encounter` start at the link's right edge. They
+        /// keep their line, their height and their visible part (the whole item, or cut only
+        /// where today's is cut). Their text run keeps its width; the painted words grow by
+        /// at most the one blank that the justified layout took from a separator, and never
+        /// past their text run. The text run and the painted words start at one x in the view.
+        pub(super) fn words_at_the_link(d: &Difference, rows: &[AllowedRow]) -> bool {
+            let bare = |o: &Difference| {
+                o.name
+                    .trim_start_matches("Label: ")
+                    .trim_start_matches("TextRun: ")
+                    .to_owned()
+            };
+            // How far in from the whole item its visible part starts and ends, on each side.
+            let cut = |text: &str| {
+                let whole = numbers(text)?;
+                let seen = match text.split_once(", seen ") {
+                    Some((_, seen)) => numbers(seen)?,
+                    None => whole,
+                };
+                Some([
+                    seen[0] - whole[0],
+                    seen[1] - whole[1],
+                    whole[0] + whole[2] - seen[0] - seen[2],
+                    whole[1] + whole[3] - seen[1] - seen[3],
+                ])
+            };
+            let at = |o: &Difference| {
+                let (before, after) = o.detail.split_once(" -> ")?;
+                let (a, b) = (numbers(before)?, numbers(after)?);
+                let grows = b[2] - a[2];
+                let width = if o.what == "control" {
+                    grows.abs() < 0.05
+                } else {
+                    (-0.05..=BLANK).contains(&grows)
+                };
+                let same_cut = cut(before)?
+                    .iter()
+                    .zip(cut(after)?)
+                    .all(|(a, b)| (a - b).abs() < 0.05);
+                (a[1] == b[1] && a[3] == b[3] && width && same_cut).then_some(b)
+            };
+            let run_width = |o: &Difference, b: [f32; 4]| (o.what == "control").then_some(b[2]);
+            let Some(b) = at(d).filter(|_| {
+                d.screen == "session-tonight: planned fight open"
+                    && ["moved", "resized", "width"].contains(&d.change.as_str())
+                    && super::f1_new_text(&d.name)
+            }) else {
+                return false;
+            };
+            let x = b[0];
+            // The link's right edge in the frozen view: the link itself does not change.
+            let link = reference()
+                .views
+                .iter()
+                .filter(|view| (&view.screen, &view.view) == (&d.screen, &d.view))
+                .flat_map(|view| &view.controls)
+                .find(|item| item.0 == "Link: Read encounter")
+                .map(|item| item.1[0] + item.1[2]);
+            link.is_some_and(|link| (link - x).abs() < 0.05)
+                && rows.iter().map(|row| &row.difference).any(|o| {
+                    (&o.screen, &o.view) == (&d.screen, &d.view)
+                        && o.what != d.what
+                        && bare(o) == bare(d)
+                        && at(o).is_some_and(|other| {
+                            // The painted words are no wider than their text run.
+                            let (run, words) = match run_width(d, b) {
+                                Some(run) => (run, other[2]),
+                                None => (run_width(o, other).unwrap_or(0.0), b[2]),
+                            };
+                            (other[0] - x).abs() < 0.05 && words <= run + 0.05
+                        })
+                })
+        }
+
+        /// The frozen plain reference, read once.
+        fn reference() -> &'static super::super::Reference {
+            static REFERENCE: std::sync::OnceLock<super::super::Reference> =
+                std::sync::OnceLock::new();
+            REFERENCE
+                .get_or_init(|| super::super::read(&super::super::folder().join("reference.json")))
+        }
+
+        /// An act around History whose every changed word is a text that scrolled out of or
+        /// into a History view.
+        pub(super) fn act_words(d: &Difference, rows: &[AllowedRow]) -> bool {
+            if d.what != "act" || d.change != "changed" || !ACTS.contains(&d.name.as_str()) {
+                return false;
+            }
+            let scrolled_words = |word: &str| {
+                rows.iter().map(|row| &row.difference).any(|o| {
+                    screen(o)
+                        && o.what == "text"
+                        && ["gone", "new"].contains(&o.change.as_str())
+                        && o.name == word
+                })
+            };
+            d.detail.split(" | ").all(|part| {
+                ["appeared + ", "appeared - ", "went + ", "went - "]
+                    .iter()
+                    .find_map(|prefix| part.strip_prefix(prefix))
+                    .is_some_and(scrolled_words)
+            })
+        }
+
+        /// The faults R1c's classes refuse, beside one scroll of the opened run's row.
+        #[test]
+        fn the_r1c_classes_refuse_a_loss_a_sideways_move_a_narrowing_and_other_words() {
+            let row =
+                |screen: &str, what: &str, change: &str, name: &str, detail: &str| AllowedRow {
+                    row: 22,
+                    why: String::new(),
+                    difference: Difference {
+                        screen: screen.into(),
+                        view: "960x640 Lookup closed".into(),
+                        what: what.into(),
+                        change: change.into(),
+                        name: name.into(),
+                        detail: detail.into(),
+                    },
+                };
+            const LAST: &str = "run-ended: played last";
+            let scroll = row(
+                LAST,
+                "control",
+                "moved",
+                "Button: Close the run of Wolves",
+                "847.2 445 50.8x28 -> 847.2 164 50.8x28",
+            );
+            let continued = |change: &str, detail: &str| {
+                row(LAST, "control", change, "Button: Continue fight", detail)
+            };
+            let fits =
+                |rows: &[AllowedRow]| rows.iter().all(|row| super::class_of(row, rows).is_some());
+            // Today's view: the scroll, V11's line, one item out at the top, one in below.
+            let good = [
+                scroll.clone(),
+                continued("moved", "180 517 134.1x28 -> 180 228 134.1x28"),
+                row(
+                    LAST,
+                    "control",
+                    "moved",
+                    "Label: Read-only",
+                    "180 490 70x16 -> 180 204 70x16",
+                ),
+                row(
+                    LAST,
+                    "control",
+                    "resized",
+                    "Label: Ended manually",
+                    "258 485 86x26 -> 258 204 86x16",
+                ),
+                row(
+                    LAST,
+                    "control",
+                    "gone",
+                    "Button: Resume",
+                    "was 753.1 99 95.8x28",
+                ),
+                row(
+                    LAST,
+                    "control",
+                    "new",
+                    "Label: COMBAT LOG",
+                    "at 180 512 73.8x14",
+                ),
+                row(
+                    LAST,
+                    "control",
+                    "moved",
+                    "Label: HP 0/22",
+                    "306.8 603 44.2x26 -> 306.8 320 44.2x26",
+                ),
+                row(
+                    LAST,
+                    "control",
+                    "moved",
+                    "Label: HP 21/22",
+                    "306.8 633 44.2x26 -> 306.8 350 44.2x26",
+                ),
+            ];
+            assert!(fits(&good), "today's scroll fits its class");
+            // V9: the words' text run and painted words start at one x, on their line.
+            const OPEN: &str = "session-tonight: planned fight open";
+            const WORDS: &str = " · Low · XP 400 of 2,800";
+            let words = |what: &str, detail: &str| {
+                let name = if what == "control" {
+                    format!("TextRun: {WORDS}")
+                } else {
+                    WORDS.to_owned()
+                };
+                let change = if what == "control" {
+                    "moved"
+                } else {
+                    "resized"
+                };
+                AllowedRow {
+                    row: 2,
+                    ..row(OPEN, what, change, &name, detail)
+                }
+            };
+            let painted = words("text", "494.8 549.6 146.4x18 -> 493.1 549.6 149.4x18");
+            assert!(fits(&[
+                words("control", "564.8 549.6 149.4x18 -> 493.1 549.6 149.4x18"),
+                painted.clone(),
+            ]));
+            assert!(
+                !fits(&[
+                    words("control", "564.8 549.6 149.4x18 -> 480 549.6 149.4x18"),
+                    words("text", "494.8 549.6 146.4x18 -> 480 549.6 149.4x18"),
+                ]),
+                "V9 words moved together over the link were accepted"
+            );
+            let run = |after: &str| words("control", &format!("564.8 549.6 149.4x18 -> {after}"));
+            let text = |after: &str| words("text", &format!("494.8 549.6 146.4x18 -> {after}"));
+            for (fault, why) in [
+                ([run("480 549.6 149.4x18"), painted.clone()], "apart"),
+                ([run("493.1 560 149.4x18"), painted.clone()], "lower"),
+                ([run("493.1 549.6 120x18"), painted.clone()], "cut"),
+                // The review of PR 275: cut by their visible part, or far wider.
+                (
+                    [
+                        run("493.1 549.6 149.4x18, seen 493.1 549.6 74.7x18"),
+                        text("493.1 549.6 149.4x18, seen 493.1 549.6 74.7x18"),
+                    ],
+                    "cut to half their width",
+                ),
+                (
+                    [
+                        run("493.1 549.6 149.4x18, seen 493.1 553.6 149.4x10"),
+                        text("493.1 549.6 149.4x18, seen 493.1 553.6 149.4x10"),
+                    ],
+                    "cut through the middle",
+                ),
+                (
+                    [run("493.1 549.6 649.4x18"), text("493.1 549.6 649.4x18")],
+                    "500 px wider",
+                ),
+                (
+                    [run("493.1 549.6 149.4x18"), text("493.1 549.6 160x18")],
+                    "painted wider than their text run",
+                ),
+            ] {
+                assert!(!fits(&fault), "V9 words {why} were accepted");
+            }
+            // Two HP rows of one band, 4 px apart today, each moved by an amount of its own
+            // within V11, so that they overlap by 4 px (the review of PR 275).
+            let hp = |name: &str, detail: &str| row(LAST, "control", "moved", name, detail);
+            assert!(
+                !fits(&[
+                    scroll.clone(),
+                    hp("Label: HP 20/22", "306.8 603 44.2x26 -> 306.8 322 44.2x26"),
+                    hp("Label: HP 21/22", "306.8 633 44.2x26 -> 306.8 344 44.2x26"),
+                ]),
+                "two rows of one band moved by amounts of their own were accepted"
+            );
+            for (fault, why) in [
+                (
+                    continued("gone", "was 180 517 134.1x28"),
+                    "Continue fight gone",
+                ),
+                (
+                    continued("moved", "190 517 134.1x28 -> 200 228 134.1x28"),
+                    "Continue fight moved sideways",
+                ),
+                (
+                    continued("width", "180 517 134.1x28 -> 180 228 120x28"),
+                    "Continue fight narrower",
+                ),
+                (
+                    continued(
+                        "moved",
+                        "180 517 134.1x28 -> 180 228 134.1x28, seen 180 228 60x28",
+                    ),
+                    "Continue fight cut across",
+                ),
+                (
+                    continued(
+                        "moved",
+                        "180 517 134.1x28 -> 180 228 134.1x28, seen 180 240 134.1x16",
+                    ),
+                    "Continue fight cut inside the view",
+                ),
+                (
+                    continued("moved", "180 517 134.1x28 -> 180 200 134.1x28"),
+                    "Continue fight moved further than the scroll and V11",
+                ),
+                (
+                    row(
+                        LAST,
+                        "control",
+                        "resized",
+                        "Label: HP 0/22",
+                        "306.8 603 44.2x26 -> 306.8 320 44.2x16",
+                    ),
+                    "a row that is not the Read-only line resized",
+                ),
+                (
+                    row(
+                        "session-tonight",
+                        "control",
+                        "gone",
+                        "Button: Resume",
+                        "was 753.1 99 95.8x28",
+                    ),
+                    "another screen",
+                ),
+                (
+                    row(
+                        "act 28",
+                        "act",
+                        "changed",
+                        "Whole run",
+                        "appeared + Start fight",
+                    ),
+                    "an act's word that did not scroll",
+                ),
+            ] {
+                let mut rows = vec![scroll.clone(), fault];
+                rows.push(row(LAST, "text", "gone", "Resume", "was 753.1 99 95.8x28"));
+                assert!(!fits(&rows), "{why} was accepted");
+            }
+        }
+    }
 
     /// P7's classes. Every difference is new, whole and of the plan's views; none lets an item
     /// of today go, move, narrow or be cut.

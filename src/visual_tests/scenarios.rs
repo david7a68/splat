@@ -4218,6 +4218,14 @@ pub mod encounter_build {
             !file.exists() && !d.has(&format!("More actions for {NEW_NAME}")),
             "Remove… takes the encounter's file away, and its row goes",
         );
+        // V6: a finished change has the success tone, as a deleted run's result has.
+        let removed = painted_paragraph(d, &format!("Removed encounter {NEW_NAME}."));
+        d.observe(
+            "V6-removed-tone",
+            removed
+                .is_some_and(|words| d.has_tone_bar(words, crate::design::colors().result.success)),
+            format!("Removed encounter has the success tone: {removed:?}"),
+        );
         d.state("encounter-removed", Sizes::All);
         d.click(BACK_TO_RUN);
         d.click(NEXT_TURN);
@@ -15664,6 +15672,48 @@ pub mod encounter_groups {
 pub mod encounter_history {
     use super::*;
     const OPEN_OLD: &str = "Open the run of Old Mill Raid";
+
+    /// V31: the run that opened in History, as the list shows it: its row, its Read-only line
+    /// and every Final state row in view. The names of those that are not.
+    fn opened_run_in_view(d: &Driver<'_>) -> Result<usize, Vec<String>> {
+        let nodes = d.nodes();
+        let rows: Vec<_> = nodes
+            .iter()
+            .filter(|node| node.name.starts_with("HP ") && node.name.contains('/'))
+            .collect();
+        let hidden: Vec<String> = nodes
+            .iter()
+            .filter(|node| node.name.starts_with("Close the run of ") || node.name == "Read-only")
+            .chain(rows.iter().copied())
+            .filter(|node| !node.fully_in_view())
+            .map(|node| node.name.clone())
+            .collect();
+        if rows.len() >= 2 && hidden.is_empty() && d.visible_text("Read-only") {
+            Ok(rows.len())
+        } else {
+            Err(hidden)
+        }
+    }
+
+    /// V31: open the run at this size; then it is in view, and the list scrolled once.
+    fn open_brings_the_run_into_view(d: &mut Driver<'_>, what: &str) {
+        for size in [SMALL, DEFAULT] {
+            let shown = d.act_at_size(size, |d| {
+                if d.has_containing(&OPEN_OLD.replace("Open", "Close")) {
+                    d.click_starting(OPEN_OLD.replace("Open", "Close").as_str());
+                }
+                d.click_starting(OPEN_OLD);
+                d.expect("Read-only");
+                opened_run_in_view(d)
+            });
+            d.observe(
+                "V31-history-in-view",
+                shown.is_ok(),
+                format!("{what}, opened at {size:?}: the row and Final state in view: {shown:?}"),
+            );
+        }
+    }
+
     pub fn run(d: &mut Driver<'_>) {
         d.expect(READY_TO_RUN);
         d.expect(HISTORY);
@@ -15733,6 +15783,7 @@ pub mod encounter_history {
         d.expect("Read-only");
         let unchanged =
             d.app_mut().timeline.events.len() == before && !d.app_mut().encounters.has_run();
+        open_brings_the_run_into_view(d, "Open in History");
         d.observe(
             "T4.6",
             unchanged,
@@ -15762,6 +15813,7 @@ pub mod encounter_history {
             .id
             == live;
         d.observe("T4.6", still_open, "History leaves the current fight open");
+        open_brings_the_run_into_view(d, "Open in History beside an open run");
         d.observe(
             "T4.4",
             d.nodes().iter().filter(|node| node.name == RUN && node.role == egui::accesskit::Role::Label).count() == 1,

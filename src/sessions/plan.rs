@@ -624,31 +624,74 @@ fn planned_summary(ui: &mut egui::Ui, summary: &str, rating: Option<&crate::diff
 }
 
 /// The opened planned fight's link to its encounter. With its difficulty known, the line ends
-/// with ` · Low · XP 550 of 750` (F1), when the line has room for the whole.
-fn read_encounter(ui: &mut egui::Ui, rating: Option<&crate::difficulty::Rating>) -> egui::Response {
+/// with ` · Low · XP 550 of 750` (F1), when the line has room for the whole. With no word
+/// because an input is not known, it says whose: ` · XP not known: Nameless Thing` (W1-D2).
+fn read_encounter(
+    ui: &mut egui::Ui,
+    difficulty: Option<&crate::difficulty::Difficulty>,
+) -> egui::Response {
     // The link keeps its place; the words take the room to its right on the same line.
     let link = design::link(ui, "Read encounter");
-    if let Some(rating) = rating {
-        let c = colors();
+    let Some(difficulty) = difficulty else {
+        return link;
+    };
+    let c = colors();
+    let room = ui.max_rect().right() - link.rect.right();
+    let muted = |words: &str| {
         let mut job = egui::text::LayoutJob::default();
-        crate::difficulty::append(&mut job, ui, Type::Body, " · ", c.muted);
-        crate::difficulty::append(&mut job, ui, Type::Body, rating.word.text(), c.text);
-        crate::difficulty::append(
-            &mut job,
-            ui,
-            Type::Body,
-            &format!(" · {}", rating.numbers()),
-            c.muted,
-        );
-        let width = crate::difficulty::width(ui, &job);
-        let room = ui.max_rect().right() - link.rect.right();
-        if width <= room {
-            let rect = egui::Rect::from_min_size(
-                link.rect.right_top(),
-                egui::vec2(width, link.rect.height()),
+        crate::difficulty::append(&mut job, ui, Type::Body, &format!(" · {words}"), c.muted);
+        job
+    };
+    // The reason whole, else without its names, which hover and the accessible name keep.
+    let mut whole = None;
+    let job = match (&difficulty.rating, &difficulty.missing) {
+        (Some(rating), _) => {
+            let mut job = egui::text::LayoutJob::default();
+            crate::difficulty::append(&mut job, ui, Type::Body, " · ", c.muted);
+            crate::difficulty::append(&mut job, ui, Type::Body, rating.word.text(), c.text);
+            crate::difficulty::append(
+                &mut job,
+                ui,
+                Type::Body,
+                &format!(" · {}", rating.numbers()),
+                c.muted,
             );
-            let response = ui.put(rect, egui::Label::new(job).extend());
+            job
+        }
+        (None, Some(missing)) => {
+            let Some(words) = missing.words() else {
+                return link;
+            };
+            let job = muted(&words);
+            if crate::difficulty::width(ui, &job) <= room {
+                job
+            } else {
+                whole = Some(words);
+                muted(missing.short())
+            }
+        }
+        (None, None) => return link,
+    };
+    let width = crate::difficulty::width(ui, &job);
+    if width <= room {
+        // The words start at the link's right edge, so the blank before the first separator
+        // is the blank of the job's own leading space (V9). `ui.put` would lay them out
+        // justified and centred. The label keeps the link's height, as before.
+        let rect =
+            egui::Rect::from_min_size(link.rect.right_top(), egui::vec2(width, link.rect.height()));
+        let response = ui
+            .scope_builder(
+                egui::UiBuilder::new().max_rect(rect).layout(
+                    egui::Layout::left_to_right(egui::Align::Center).with_cross_justify(true),
+                ),
+                |ui| ui.add(egui::Label::new(job).extend()),
+            )
+            .inner;
+        if let Some(rating) = &difficulty.rating {
             crate::difficulty::describe(ui, response, rating);
+        } else if let Some(whole) = whole {
+            design::named(ui, &response, &whole);
+            response.on_hover_text(whole);
         }
     }
     link
@@ -2303,7 +2346,7 @@ impl Sessions {
                         }
                         if self.open_planned.as_ref() == Some(&fight.path) {
                             plan_details(ui, |ui| {
-                                if read_encounter(ui, fight.difficulty.rating.as_ref().filter(|_| !running && saved.is_none())).clicked() { self.wants_lookup = Some(fight.name.clone()); }
+                                if read_encounter(ui, Some(&fight.difficulty).filter(|_| !running && saved.is_none())).clicked() { self.wants_lookup = Some(fight.name.clone()); }
                             });
                         }
                         plan_rule(ui);
@@ -3548,6 +3591,84 @@ mod tests {
                 assert_eq!(plain, restored);
             });
         });
+    }
+
+    /// V9 and W1-D2: the opened planned fight's line has the same blank on each side of every
+    /// separator, with the word and its numbers, and with the reason when no word shows.
+    #[test]
+    fn read_encounter_has_one_blank_each_side_of_each_separator() {
+        use crate::difficulty::{Difficulty, Missing, Unknown};
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let rated = Difficulty {
+            xp: 6300,
+            rating: Some(crate::difficulty::above_high()),
+            unknown: 0,
+            missing: None,
+        };
+        let unknown = Difficulty {
+            xp: 0,
+            rating: None,
+            unknown: 2,
+            missing: Some(Missing {
+                what: Unknown::Xp,
+                at: vec![0, 1],
+                names: vec!["Nameless Thing".into(), "Wisp".into()],
+            }),
+        };
+        for (difficulty, words) in [
+            (rated, "Read encounter · Above High · XP 6,300"),
+            (
+                unknown,
+                "Read encounter · XP not known: Nameless Thing and 1 more",
+            ),
+        ] {
+            // The second frame has the app's fonts.
+            let frame = || {
+                ctx.run(Default::default(), |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        ui.set_width(design::LIST_MEASURE);
+                        plan_details(ui, |ui| {
+                            read_encounter(ui, Some(&difficulty));
+                        });
+                    });
+                })
+            };
+            frame();
+            let output = frame();
+            // Each glyph on the line by its advance, in order from the left: the blank is the
+            // space between two glyphs' boxes, as the font sets it. Glyphs sit on whole pixels,
+            // so the blanks agree to 1 px.
+            let mut glyphs = Vec::new();
+            for shape in &output.shapes {
+                if let egui::Shape::Text(text) = &shape.shape {
+                    for row in &text.galley.rows {
+                        for glyph in &row.glyphs {
+                            let left = text.pos.x + glyph.pos.x;
+                            glyphs.push((glyph.chr, left, left + glyph.advance_width));
+                        }
+                    }
+                }
+            }
+            glyphs.sort_by(|a, b| a.1.total_cmp(&b.1));
+            let line: String = glyphs.iter().map(|glyph| glyph.0).collect();
+            assert_eq!(line.replace('\u{a0}', " "), words);
+            let ink: Vec<_> = glyphs
+                .iter()
+                .filter(|glyph| !glyph.0.is_whitespace())
+                .collect();
+            let blanks: Vec<(f32, f32)> = (1..ink.len() - 1)
+                .filter(|at| ink[*at].0 == '·')
+                .map(|at| (ink[at].1 - ink[at - 1].2, ink[at + 1].1 - ink[at].2))
+                .collect();
+            assert!(
+                !blanks.is_empty()
+                    && blanks
+                        .iter()
+                        .all(|(before, after)| (before - after).abs() <= 1.0 && *before >= 2.0),
+                "{words}: the blank before and after each separator: {blanks:?}"
+            );
+        }
     }
 
     #[test]

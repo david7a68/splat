@@ -1524,14 +1524,15 @@ fn campaign_party(
 
 /// The roster's difficulty: each character on the party's side by level, and each creature
 /// against the party by XP. Allies on the party's side count for neither. A participant whose
-/// entry is gone counts as not known.
+/// entry is gone counts as not known. An input that is not known is named as the roster's
+/// summary names it, so an opened row can say whose it is.
 fn roster_difficulty(
     setup: &Setup,
     catalogue: &Catalogue,
     scale: &crate::difficulty::Scale,
 ) -> crate::difficulty::Difficulty {
-    let mut party = Vec::new();
-    let mut foes = Vec::new();
+    let (mut party, mut party_names) = (Vec::new(), Vec::new());
+    let (mut foes, mut foe_names) = (Vec::new(), Vec::new());
     for slot in &setup.roster {
         let side = slot
             .overrides
@@ -1546,14 +1547,41 @@ fn roster_difficulty(
             .map(|entry| &entry.entry);
         if side.trim() == "party" {
             match entry {
-                Some(entry) => party.extend(crate::difficulty::character_level(entry)),
-                None => party.push(None),
+                Some(entry) => {
+                    if let Some(level) = crate::difficulty::character_level(entry) {
+                        party.push(level);
+                        party_names.push(Some(entry.name.clone()));
+                    }
+                }
+                None => {
+                    party.push(None);
+                    party_names.push(None);
+                }
             }
         } else {
             foes.push(entry.and_then(crate::difficulty::creature_xp));
+            let name = entry.map_or_else(|| "Unknown creature".to_owned(), |e| e.name.clone());
+            foe_names.push(groups::shown_name(&slot.overrides, name));
         }
     }
-    scale.weigh(&party, foes)
+    let roster_party = !party.is_empty();
+    scale.weigh(&party, foes).named(|what, at| match what {
+        crate::difficulty::Unknown::Xp => foe_names.get(at).cloned(),
+        crate::difficulty::Unknown::Level if roster_party => party_names.get(at).cloned()?,
+        // The campaign's party stands in: its copy's name, or its file's for a copy
+        // that cannot be read.
+        crate::difficulty::Unknown::Level => {
+            let id = scale.party.keys().nth(at)?;
+            catalogue
+                .entries
+                .get(id)
+                .map(|entry| entry.entry.name.clone())
+                .or_else(|| {
+                    let path = &catalogue.unreadable.get(id)?.path;
+                    Some(path.file_stem()?.to_string_lossy().into_owned())
+                })
+        }
+    })
 }
 
 fn roster_summary(setup: &Setup, catalogue: &Catalogue) -> String {
@@ -2477,6 +2505,8 @@ pub struct Encounters {
     save_refused: bool,
     /// History is a read-only snapshot and never owns the open-run slot.
     history_read: Option<(std::path::PathBuf, crate::encounter_run::FightSummary)>,
+    /// A run just opened in History: the list scrolls once, so its Final state is in view.
+    history_reveal: bool,
     /// Why the fight read in History cannot go on (`continue_blocked`), when it cannot.
     history_blocked: Option<&'static str>,
     /// What the rule's answers were worked out from: the Timeline's count of changes, the
@@ -2894,6 +2924,7 @@ impl Encounters {
         match crate::encounter_run::fight_summary(path, active.id) {
             Ok(summary) if summary.ended => {
                 self.history_read = Some((path.to_path_buf(), summary));
+                self.history_reveal = true;
                 self.error = None;
             }
             Ok(_) if self.has_run() => self.error = Some(BLOCKED_BY_RUN.to_owned()),
@@ -4199,8 +4230,9 @@ impl Encounters {
                 "Undo remove group",
                 None,
             ),
+            // V6: a finished change has the success tone, as a removed group's result has.
             KeptResult::EncounterRemoved => (
-                Tone::Info,
+                Tone::Success,
                 self.removed_encounter
                     .as_ref()
                     .map_or_else(String::new, |removed| {
@@ -4607,11 +4639,19 @@ impl Encounters {
                     &page,
                     start_blocked,
                     live.as_ref(),
-                    self.history_read.as_ref(),
-                    self.history_blocked,
+                    self.history_read
+                        .as_ref()
+                        .map(|(path, summary)| list::Reading {
+                            path,
+                            summary,
+                            not_last: self.history_blocked,
+                            reveal: self.history_reveal,
+                        }),
                     &mut action,
                 );
             });
+        // The scroll to a run that opened in History is made once, by the frame that drew it.
+        self.history_reveal = false;
         let Some(action) = action else {
             return;
         };

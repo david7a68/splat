@@ -5290,23 +5290,9 @@ impl Run {
         // line, as beside Lookup in a small window, Undo and Continue fight take a line below.
         let gap = ui.spacing().item_spacing.x;
         let title_width = self.ended_title_width(ui, &outcome);
-        let glance = |action: Action<'_>| action.density(Density::Glance).natural_width(ui) + gap;
-        let mut actions = glance(Action::primary(if self.close_block().is_some() {
-            "Close after sync"
-        } else {
-            "Close run"
-        }));
-        if !self.undo_continues() || self.undo_blocked().is_some() {
-            actions += match self.continue_words() {
-                Some(reason) => continue_reason_width(ui, reason) + gap,
-                None => glance(continue_action()),
-            };
-        }
-        if !self.history.is_empty() && self.undo_blocked().is_none() {
-            actions += glance(self.undo_action("Undo"));
-        }
-        let one_line = title_width + actions <= ui.available_width();
+        let one_line = title_width + self.ended_actions_width(ui) <= ui.available_width();
         let first_line = design::L * 4.0;
+        let (reason_room, second_line) = self.ended_second_line(ui, ui.available_width());
         let (header_rect, _) = ui.allocate_exact_size(
             vec2(
                 ui.available_width(),
@@ -5314,7 +5300,7 @@ impl Run {
                     + if one_line {
                         0.0
                     } else {
-                        Density::Glance.control() + design::S
+                        second_line + design::S
                     },
             ),
             egui::Sense::hover(),
@@ -5501,10 +5487,16 @@ impl Run {
                 },
             );
             if one_line {
-                self.ended_continue(ui);
-                ui.add_space((ui.available_rect_before_wrap().right() - roster_right).max(0.0));
+                self.ended_continue(ui, f32::INFINITY);
                 let room = ui.available_width() - title_width - gap;
-                self.ended_undo(ui, room);
+                // Undo stays at the roster's right edge, but never gives its target to it.
+                let align = (ui.available_rect_before_wrap().right() - roster_right).max(0.0);
+                let align = match self.ended_undo_whole(ui) {
+                    Some(whole) => align.min((room - whole).max(0.0)),
+                    None => align,
+                };
+                ui.add_space(align);
+                self.ended_undo(ui, room - align);
             }
             self.save_status(ui);
             ui.with_layout(Layout::top_down(Align::LEFT), |ui| {
@@ -5524,7 +5516,7 @@ impl Run {
                     .max_rect(header_rect.with_min_y(header_rect.top() + first_line)),
             );
             second.with_layout(Layout::right_to_left(Align::Min), |ui| {
-                self.ended_continue(ui);
+                self.ended_continue(ui, reason_room);
                 let room = ui.available_width();
                 self.ended_undo(ui, room);
             });
@@ -5549,17 +5541,91 @@ impl Run {
             + design::number_width(ui, &saved, &small)
     }
 
+    /// The width of the ended header's actions on the title's line. Beside Continue fight or
+    /// its reason, Undo keeps its target, so the actions take the second line when the whole
+    /// target does not fit (V26, V27). Undo is at the roster's right edge, so beside the log
+    /// panel the actions to its right take at least the panel's width.
+    fn ended_actions_width(&self, ui: &egui::Ui) -> f32 {
+        let gap = ui.spacing().item_spacing.x;
+        let glance = |action: Action<'_>| action.density(Density::Glance).natural_width(ui) + gap;
+        let mut actions = glance(Action::primary(if self.close_block().is_some() {
+            "Close after sync"
+        } else {
+            "Close run"
+        }));
+        if !self.undo_continues() || self.undo_blocked().is_some() {
+            actions += match self.continue_words() {
+                Some(reason) => continue_reason_width(ui, reason) + gap,
+                None => glance(continue_action()),
+            };
+        }
+        match self.ended_undo_whole(ui) {
+            Some(whole) => {
+                if !self.hide_panel {
+                    let panel = design::side_panel_width(ui.ctx().content_rect().width());
+                    actions = actions.max(panel + design::S);
+                }
+                actions + whole + gap
+            }
+            None if !self.history.is_empty() && self.undo_blocked().is_none() => {
+                actions + glance(self.undo_action("Undo"))
+            }
+            None => actions,
+        }
+    }
+
+    /// The header's second line, when the actions take it: the room for the sentence that
+    /// stands where Continue fight would be, beside Undo's whole target, and the line's
+    /// height. The sentence wraps narrower there, so Undo keeps its target (V27).
+    fn ended_second_line(&self, ui: &egui::Ui, width: f32) -> (f32, f32) {
+        let control = Density::Glance.control();
+        let Some(reason) = self
+            .continue_words()
+            .filter(|_| !self.undo_continues() || self.undo_blocked().is_some())
+        else {
+            return (f32::INFINITY, control);
+        };
+        let gap = ui.spacing().item_spacing.x;
+        let undo = self.ended_undo_whole(ui).map_or(0.0, |undo| undo + gap);
+        let room = continue_reason_width(ui, reason)
+            .min(width - undo - gap)
+            .max(design::L * 6.0);
+        let lines = ui.fonts_mut(|fonts| {
+            fonts
+                .layout(
+                    reason.to_owned(),
+                    Type::Small.font(ui),
+                    colors().muted,
+                    room,
+                )
+                .size()
+                .y
+        });
+        (room, control.max(lines))
+    }
+
+    /// The width of Undo with its whole target, when the ended header shows it beside
+    /// Continue fight or its reason. Then Undo never gives up its target.
+    fn ended_undo_whole(&self, ui: &egui::Ui) -> Option<f32> {
+        let continues = !self.undo_continues() || self.undo_blocked().is_some();
+        (continues && !self.history.is_empty() && self.undo_blocked().is_none()).then(|| {
+            self.undo_action(&self.undo_label())
+                .density(Density::Glance)
+                .natural_width(ui)
+        })
+    }
+
     /// One control takes the ending away. While the ending is the newest step, that is Undo.
     /// After a loot roll, or with no steps, it is Continue fight, beside Close run: the two
     /// ways out of an ended fight, with the one that changes nothing last.
-    fn ended_continue(&mut self, ui: &mut egui::Ui) {
+    fn ended_continue(&mut self, ui: &mut egui::Ui, room: f32) {
         if self.undo_continues() && self.undo_blocked().is_none() {
             return;
         }
         // Continue fight, and Undo of an ending from the run file, are for the fight that was
         // played last. For another fight, the reason stands where the control would be.
         if let Some(reason) = self.continue_words() {
-            let width = continue_reason_width(ui, reason);
+            let width = continue_reason_width(ui, reason).min(room);
             ui.allocate_ui_with_layout(
                 vec2(width, Type::Small.line()),
                 Layout::top_down(Align::LEFT),
@@ -5586,19 +5652,28 @@ impl Run {
             return;
         }
         let full = self.undo_label();
-        let fits = self
-            .undo_action(&full)
-            .density(Density::Glance)
-            .natural_width(ui)
-            <= room;
-        let action = if fits {
-            self.undo_action(&full)
-        } else {
-            self.undo_action("Undo").name(&full).hint(&full)
-        };
-        if action.density(Density::Glance).show(ui).clicked() {
+        if self.ended_undo_action(ui, &full, room).show(ui).clicked() {
             self.undo();
             self.return_focus = self.lookup_open;
+        }
+    }
+
+    /// Undo as the ended header's line has `room` for it. Whole when it fits. Beside Continue
+    /// fight or its reason, Undo keeps its target in the line's room, and a target that is
+    /// still too long ends in `…`; alone, Undo gives up its target. A cut target keeps its
+    /// whole words in hover and in the accessible name.
+    fn ended_undo_action<'a>(&'a self, ui: &egui::Ui, full: &'a str, room: f32) -> Action<'a> {
+        let whole = self.undo_action(full).density(Density::Glance);
+        // The one-line header gives Undo exactly its whole width.
+        if whole.natural_width(ui) <= room + 0.5 {
+            whole
+        } else if self.ended_undo_whole(ui).is_some() {
+            whole.name(full).hint(full)
+        } else {
+            self.undo_action("Undo")
+                .density(Density::Glance)
+                .name(full)
+                .hint(full)
         }
     }
 }
@@ -7575,6 +7650,73 @@ fn optional_number(
 
 #[cfg(test)]
 mod tests {
+    /// V26, V27 and the review of PR 275: beside Continue fight on the ended header's second
+    /// line, a target too long for the line ends in `…` inside the line, and the hover and the
+    /// accessible name hold the whole words, as the one-line header does.
+    #[test]
+    fn ended_undo_long_target_ends_in_view_with_its_whole_words_in_hover_and_name() {
+        use egui_kittest::kittest::Queryable;
+        let mut run = super::super::tests::run();
+        run.state.phase = super::super::Phase::Ended {
+            outcome: "Party won".into(),
+        };
+        run.state.round = 2;
+        run.history.push(run.state.clone());
+        let target =
+            "2 loot rolls on treasure-from-the-ancient-dragon-vault-and-the-forgotten-kings-tomb";
+        run.history_labels.push(target.into());
+        run.history_from_sheet.push(false);
+        run.lookup_open = true;
+        run.hide_panel = true;
+        let full = format!("Undo: {target}");
+        let run = std::rc::Rc::new(std::cell::RefCell::new(run));
+        let shown = run.clone();
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(454.0, 640.0))
+            .build(move |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    shown.borrow_mut().ended_view(ui);
+                });
+            });
+        crate::design::theme::install(&harness.ctx);
+        harness.run_steps(4);
+        let painted: Vec<_> = harness
+            .output()
+            .shapes
+            .iter()
+            .filter_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.job.text.starts_with("Undo") => {
+                    let glyphs: String = text
+                        .galley
+                        .rows
+                        .iter()
+                        .flat_map(|row| row.glyphs.iter().map(|g| g.chr))
+                        .collect();
+                    Some((glyphs, text.visual_bounding_rect(), shape.clip_rect))
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(painted.len(), 1, "one Undo: {painted:?}");
+        let (glyphs, rect, clip) = &painted[0];
+        assert!(
+            clip.contains_rect(*rect),
+            "Undo is cut by its clip: {painted:?}"
+        );
+        assert!(
+            glyphs.starts_with("Undo: 2 loot rolls on treasure") && glyphs.ends_with('…'),
+            "Undo keeps its target in the line's room and ends in …: {glyphs:?}"
+        );
+        // The accessible name, and the hover, hold the whole words.
+        harness.get_by_label(&full).hover();
+        harness.run_steps(60);
+        assert_eq!(
+            harness.query_all_by_label(&full).count(),
+            2,
+            "Undo's hover holds its whole words"
+        );
+    }
+
     #[test]
     fn iter8_b_setup_places_show_while_typing_and_fields_hold_still() {
         use egui_kittest::kittest::Queryable;
