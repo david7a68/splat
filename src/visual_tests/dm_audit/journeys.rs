@@ -498,11 +498,22 @@ fn improvised_evening(a: &mut Audit<'_, '_>) {
     a.click(Nav, &format!("Start fight: {WOLVES}"));
     started(a, WOLVES);
     let plan = section(&note_on_disk(a.d), "Plan for tonight").to_owned();
+    let travel = saved_event(a.d, "Travel").map(|(event, _)| event.id);
+    let lines: Vec<&str> = plan.lines().collect();
+    let wolves = lines
+        .iter()
+        .position(|line| line.starts_with(&format!("- [[{WOLVES}]]")));
     a.outcome(
-        "the plan holds the Wolf Pack once, above the skipped fight",
+        "the plan holds the Wolf Pack once, directly above the skipped fight, tied to the \
+         journey's check at 24h",
         plan.matches(&format!("[[{WOLVES}]]")).count() == 1
-            && plan.contains(&format!("- [[{WOLVES}]]\n- [[{SHRINE}]]\n")),
-        &plan,
+            && wolves.is_some_and(|at| {
+                lines.get(at + 1) == Some(&format!("- [[{SHRINE}]]").as_str())
+                    && travel.as_ref().is_some_and(|travel| {
+                        lines[at].contains(&format!("<!-- splat:check journey={travel} at=24 "))
+                    })
+            }),
+        (&plan, &travel),
     );
 
     a.task("Roll and begin the Wolf Pack fight");
@@ -1099,7 +1110,7 @@ fn the_race(a: &mut Audit<'_, '_>) {
 
     a.task("Put the seal on the Timeline");
     a.click(Do, "Add to Timeline");
-    let seal = saved_event(a.d, "Take seal");
+    let seal = saved_event(a.d, "Take seal: Old Guard");
     a.outcome(
         "Timeline.md holds the seal as an event of Day 1",
         seal.as_ref().is_some_and(|(_, day)| *day == 1),
