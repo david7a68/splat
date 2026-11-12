@@ -2087,9 +2087,11 @@ impl Run {
             });
         if let Some(command) = command {
             self.run_command(command);
-            // Added words leave the draft; words the run refused stay, with the reason.
+            // Added words leave the draft; words the run refused stay, with the reason. In a
+            // fight, focus goes back to Amount, as after the dock's field.
             if added && self.error.is_none() {
                 self.effect_fields.remove(&key);
+                self.focus_amount = self.state.phase == Phase::Running;
             }
         }
     }
