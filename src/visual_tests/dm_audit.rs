@@ -22,7 +22,7 @@ use super::{
     fixture::{Seed, World},
     steps::*,
 };
-use eframe::egui::Key;
+use eframe::egui::{self, Key};
 use serde::{Deserialize, Serialize};
 use std::{
     fmt::Write as _,
@@ -227,6 +227,18 @@ fn before_the_session(a: &mut Audit<'_, '_>) {
     a.task("Recall what happened last session, and where the story stands");
     recall_last_session(a);
 
+    // F5: what last week left joins tonight's note in one act.
+    a.task("Carry over what last week left into tonight's note");
+    a.click(Do, "Carry over");
+    a.fact(format!(
+        "tonight's note holds last week's open thread: {}",
+        a.d.app()
+            .sessions
+            .selected_path()
+            .and_then(|path| std::fs::read_to_string(path).ok())
+            .is_some_and(|note| note.contains(MILLER) && note.contains("carried_from: "))
+    ));
+
     a.task("Compare the party's passive Perception, to plan an ambush");
     a.click(Nav, NAV_PARTY);
     a.fact(format!(
@@ -322,24 +334,40 @@ fn before_the_session(a: &mut Audit<'_, '_>) {
     }
 }
 
-/// The Last time line previews only a recap or `What happened`, and last week's words are under
-/// another heading. So the DM opens the last session from its link, reads, and comes back.
+/// Whether the Last time line itself paints last week's words whole.
+fn last_time_shows(d: &Driver<'_>, words: &str) -> bool {
+    d.place_of("Last time:").is_some_and(|label| {
+        let line = egui::Rect::from_x_y_ranges(
+            0.0..=d.window_size().0,
+            label.center().y - crate::design::XL / 2.0..=label.center().y + crate::design::XL / 2.0,
+        );
+        d.painted_in(line).contains(words)
+    })
+}
+
+/// Last week's words are under none of the recap headings, so the Last time line shows the
+/// note's first written line (F5's repair, W5-D5). When the line shows them whole, the DM reads
+/// them there; otherwise the DM opens the last session from its link, reads, and comes back.
 fn recall_last_session(a: &mut Audit<'_, '_>) {
     a.d.expect("Last time:");
+    let shown = last_time_shows(a.d, MILLER);
     a.fact(format!(
-        "the Last time line shows last week's words with no act: {}",
-        a.d.visible_text(MILLER)
+        "the Last time line shows last week's words with no act: {shown}"
     ));
-    a.act(Find, "open last session from Last time", |d| {
-        d.click_link(&format!("Session 1: {LAST_WEEK}"));
-    });
+    if !shown {
+        a.act(Find, "open last session from Last time", |d| {
+            d.click_link(&format!("Session 1: {LAST_WEEK}"));
+        });
+    }
     a.fact(format!(
         "last week's words are in view: {}",
         a.d.visible_text(MILLER)
     ));
-    a.act(Find, "back to tonight's session", |d| {
-        d.click_starting(&format!("Session 2: {TONIGHT_SESSION}"));
-    });
+    if !shown {
+        a.act(Find, "back to tonight's session", |d| {
+            d.click_starting(&format!("Session 2: {TONIGHT_SESSION}"));
+        });
+    }
 }
 
 /// One turn. The player or monster acts, and the DM records the result.

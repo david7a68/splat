@@ -229,6 +229,9 @@ reason after Unsaved and Discard in the save row. While Save is blocked, Discard
 says `Discard to switch campaign.`; while Save is open it says `Save or discard to switch campaign.` Reserve its height so the first edit moves no content. Run
 settings keep their full save actions on a second line at the right edge, so neither action is cut short.
 
+A quiet action that ends a line of text, such as the Last time line's `Carry over`, uses `in_line`: it is
+24 px high (`XL`), as a link is, so the line keeps the height it has without the action.
+
 A quiet action at the start of a line uses `line_start`: its words start at the text edge of the line above,
 and its padding hangs `S` into the gutter. Outside a message, such an action has no icon (Lookup's `Show N results`, `New NPC “<name>”`, `New location “<name>”`, `Generate NPC`
 and `Copy the marker`), so its whole target clears every splitter without a wider gutter. Inside a message
@@ -1520,8 +1523,26 @@ Read view keeps only its inline Write link; hide tab-row Write until the note ha
 centres on the title action row. A saved note is the calm, usual state: `✓ Notes saved` is muted
 (`document.clean`) on the session page and in the Notes panel, also just after a write. Last time is one line linking the previous session and recap, with full recap
 on hover. When another note shares that session's title, the link adds its file name
-(`Session 1: The Bridge (Session 1 - The Bridge.md)`), as the list's second line does. Without recap, use prose under What happened and omit link-only lines; without either, show the
-session link alone. An older session warns once and links the session being played, which the list marks
+(`Session 1: The Bridge (Session 1 - The Bridge.md)`), as the list's second line does. The preview is the
+prose under the last note's What happened, omitting link-only lines; then its newest processed recording's
+Recap, the one source that carry-over reads too; then the note's first written line outside its title, date,
+`Recap of last time` and `Plan for tonight`; with none of these, show the session link alone. While the
+session is the current one and has no event, no run and no live recording, and the last session holds a part
+to carry, a quiet `Carry over` (`Action::in_line`, 24 px, so the line keeps its height) ends the line, `L` after
+the preview, with what it adds on hover. The preview gives it room first, to nothing, then the link's words
+shorten; nothing wraps. A last note that cannot be read blocks it: `Splat cannot read Session 1’s note.` It
+adds, through `Draft::apply_with_properties` and in one save, the recap as one embed line
+`![[<note>#What happened]]` (or the processed recap under `> This draft was written automatically. Check it
+against your memory.`, which the embed replaces once What happened has prose), the plan lines still to come
+with empty boxes and the open threads, each below what its heading holds and never twice, and the properties
+`carried_from` and `carried_parts`. The result is an `undo_message` under the line, success tone, naming only
+what it added, with `Undo carry over`, which puts back the exact text and properties. The result belongs to
+its session: another session or page leaves it, and any other change of the note's text ends it. A refusal
+shows there in a warning. Read draws an embed of a session note's heading as that heading's words under a
+`Type::Small` muted `From` and a small link to the session; the embed that Carry over wrote follows its session
+by `carried_from` after a rename outside Obsidian, with a quiet `Update the link` and `Undo link`; a note or
+heading that is gone is a warning `small_message`, `The recap’s source is gone: <note> › <heading>.`, and the
+line stays in the note. An older session warns once and links the session being played, which the list marks
 Playing. The action says Return to the session being played. When the two session numbers match, the warning
 names both note files. Reading old notes changes neither the destination for new events nor runs: use the newest session
 unless the DM chooses another, and name that destination on Timeline before adding.
