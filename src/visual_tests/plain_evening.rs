@@ -2208,6 +2208,13 @@ mod allowed_classes {
         /// Rectangles `x y w h` of the items of one name.
         type Places = Vec<[f32; 4]>;
 
+        thread_local! {
+            /// A check's own frozen History bands, in place of the file's. R1c's checks are
+            /// written against the reference before R1c; a reference frozen later holds R1c.
+            static PINNED_MARKS: std::cell::Cell<Option<(f32, f32)>> =
+                const { std::cell::Cell::new(None) };
+        }
+
         /// The acts that open, show or close a run in History.
         const ACTS: [&str; 5] = [
             "Whole run",
@@ -2284,6 +2291,9 @@ mod allowed_classes {
         /// Where the bands of a History view start in its frozen view, for items of `d`'s
         /// kind: the middle of the Read-only line, and the top of `FINAL STATE`.
         fn marks(d: &Difference) -> Option<(f32, f32)> {
+            if let Some(pinned) = PINNED_MARKS.with(std::cell::Cell::get) {
+                return Some(pinned);
+            }
             let view = reference()
                 .views
                 .iter()
@@ -2532,6 +2542,10 @@ mod allowed_classes {
         /// The faults R1c's classes refuse, beside one scroll of the opened run's row.
         #[test]
         fn the_r1c_classes_refuse_a_loss_a_sideways_move_a_narrowing_and_other_words() {
+            // The bands of `run-ended: played last` at 960x640 in the reference these rows were
+            // written against (frozen at 3dee0a40): the Read-only line's middle at 490 + 16 / 2,
+            // and `FINAL STATE` at 551.
+            PINNED_MARKS.with(|marks| marks.set(Some((498.0, 551.0))));
             let row =
                 |screen: &str, what: &str, change: &str, name: &str, detail: &str| AllowedRow {
                     row: 22,
