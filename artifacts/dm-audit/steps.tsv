@@ -245,9 +245,5 @@ after	Link the fight in the note	Nav	open the fight on the Timeline	1	Session	Ti
 after	Link the fight in the note	Do	Copy link	1	Timeline		false
 after	Link the fight in the note	Nav	Session	1	Timeline	Session	false
 after	Link the fight in the note	Do	paste the link at the end of the note	3	Session		false
+after	Put the fight's rewards in the note	Do	Add rewards	1	Session		false
 after	Check the party's HP for next time	Nav	Party	1	Session	Party	false
-after	Set-up	Setup	the plan holds a done scene with Hobb the Miller	5	Party	Session	false
-after	Put what an NPC said in the NPC's own note	Panel	Add to Log: Hobb the Miller	1	Session		false
-after	Put what an NPC said in the NPC's own note	Do	type the line	1	Session		false
-after	Put what an NPC said in the NPC's own note	Do	add it	1	Session		false
-after	Put what an NPC said in the NPC's own note	Panel	close Lookup	1	Session		false

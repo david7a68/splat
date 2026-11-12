@@ -624,31 +624,74 @@ fn planned_summary(ui: &mut egui::Ui, summary: &str, rating: Option<&crate::diff
 }
 
 /// The opened planned fight's link to its encounter. With its difficulty known, the line ends
-/// with ` · Low · XP 550 of 750` (F1), when the line has room for the whole.
-fn read_encounter(ui: &mut egui::Ui, rating: Option<&crate::difficulty::Rating>) -> egui::Response {
+/// with ` · Low · XP 550 of 750` (F1), when the line has room for the whole. With no word
+/// because an input is not known, it says whose: ` · XP not known: Nameless Thing` (W1-D2).
+fn read_encounter(
+    ui: &mut egui::Ui,
+    difficulty: Option<&crate::difficulty::Difficulty>,
+) -> egui::Response {
     // The link keeps its place; the words take the room to its right on the same line.
     let link = design::link(ui, "Read encounter");
-    if let Some(rating) = rating {
-        let c = colors();
+    let Some(difficulty) = difficulty else {
+        return link;
+    };
+    let c = colors();
+    let room = ui.max_rect().right() - link.rect.right();
+    let muted = |words: &str| {
         let mut job = egui::text::LayoutJob::default();
-        crate::difficulty::append(&mut job, ui, Type::Body, " · ", c.muted);
-        crate::difficulty::append(&mut job, ui, Type::Body, rating.word.text(), c.text);
-        crate::difficulty::append(
-            &mut job,
-            ui,
-            Type::Body,
-            &format!(" · {}", rating.numbers()),
-            c.muted,
-        );
-        let width = crate::difficulty::width(ui, &job);
-        let room = ui.max_rect().right() - link.rect.right();
-        if width <= room {
-            let rect = egui::Rect::from_min_size(
-                link.rect.right_top(),
-                egui::vec2(width, link.rect.height()),
+        crate::difficulty::append(&mut job, ui, Type::Body, &format!(" · {words}"), c.muted);
+        job
+    };
+    // The reason whole, else without its names, which hover and the accessible name keep.
+    let mut whole = None;
+    let job = match (&difficulty.rating, &difficulty.missing) {
+        (Some(rating), _) => {
+            let mut job = egui::text::LayoutJob::default();
+            crate::difficulty::append(&mut job, ui, Type::Body, " · ", c.muted);
+            crate::difficulty::append(&mut job, ui, Type::Body, rating.word.text(), c.text);
+            crate::difficulty::append(
+                &mut job,
+                ui,
+                Type::Body,
+                &format!(" · {}", rating.numbers()),
+                c.muted,
             );
-            let response = ui.put(rect, egui::Label::new(job).extend());
+            job
+        }
+        (None, Some(missing)) => {
+            let Some(words) = missing.words() else {
+                return link;
+            };
+            let job = muted(&words);
+            if crate::difficulty::width(ui, &job) <= room {
+                job
+            } else {
+                whole = Some(words);
+                muted(missing.short())
+            }
+        }
+        (None, None) => return link,
+    };
+    let width = crate::difficulty::width(ui, &job);
+    if width <= room {
+        // The words start at the link's right edge, so the blank before the first separator
+        // is the blank of the job's own leading space (V9). `ui.put` would lay them out
+        // justified and centred. The label keeps the link's height, as before.
+        let rect =
+            egui::Rect::from_min_size(link.rect.right_top(), egui::vec2(width, link.rect.height()));
+        let response = ui
+            .scope_builder(
+                egui::UiBuilder::new().max_rect(rect).layout(
+                    egui::Layout::left_to_right(egui::Align::Center).with_cross_justify(true),
+                ),
+                |ui| ui.add(egui::Label::new(job).extend()),
+            )
+            .inner;
+        if let Some(rating) = &difficulty.rating {
             crate::difficulty::describe(ui, response, rating);
+        } else if let Some(whole) = whole {
+            design::named(ui, &response, &whole);
+            response.on_hover_text(whole);
         }
     }
     link
@@ -1347,14 +1390,361 @@ enum TravelUndo {
 pub(super) struct Travel {
     block: checks::State,
     /// The open journey's start on the clock, while the Timeline is as it was: its count of
-    /// changes, the event, and the minute.
-    start: Option<(u64, String, Option<u64>)>,
+    /// changes, the event, its place in the list, and the minute.
+    start: Option<(u64, String, Option<usize>, Option<u64>)>,
     focus_length: bool,
     /// Each journey's last Timeline act, by its event. Leaving the page ends them.
     done: checks::Results,
-    /// `Plan “<name>”`: the journey, the name, and the note's Undo. It lasts while the note's
-    /// words are what the act left, as every note act's Undo does; a page change keeps it.
-    planned: Option<(String, String, NoteUndo)>,
+    /// `Plan “<name>”`: the journey, the name and the check it was clicked on, and the note's
+    /// Undo. It lasts while the note's words are what the act left, as every note act's Undo
+    /// does; a page change keeps it.
+    planned: Option<(String, checks::Planned, NoteUndo)>,
+}
+
+/// F7's action and its words.
+const ADD_REWARDS: &str = "Add rewards";
+const REWARDS_BLOCKED: &str = "Splat cannot read this fight’s run, so its rewards are not known.";
+
+/// Where a played row has `Add rewards`.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum RewardsAt {
+    Row,
+    Link,
+    Menu,
+}
+
+/// What the DM pressed for a played fight: `Add rewards`, or `Undo rewards`, by its event.
+enum RewardsAct {
+    Add(String, Uuid),
+    Undo(String),
+}
+
+/// One `Add rewards` that holds: the block as it left it, and the words of its result.
+struct RewardsDone {
+    written: crate::sessions::Rewarded,
+    /// `XP 400, as in your last rewards.`, or the words for no XP or a choice not known.
+    choice: String,
+    with_xp: bool,
+    not_rolled: usize,
+    unknown: u64,
+}
+
+/// What the selected note says now, read once for each revision of its draft.
+struct RewardsSeen {
+    revision: u64,
+    /// The Timeline IDs that a list line starts with: those fights say `In notes`.
+    listed: std::collections::BTreeSet<String>,
+    /// The XP lines' sum and how many fights it sums.
+    tonight: (u64, usize),
+}
+
+/// The rewards record (F7) in the plan. Each result is kept by its session note's ID and its
+/// fight, and shows under that fight's row while its block stands as the act left it. Another
+/// act, another session or another page leaves it.
+#[derive(Default)]
+pub(super) struct Rewards {
+    done: BTreeMap<(Uuid, String), RewardsDone>,
+    /// What an act could not do, where the DM acted: the note, the fight, the words, and the
+    /// draft's revision it met. A change of the note ends it.
+    fault: Option<(Uuid, String, String, u64)>,
+    seen: Option<RewardsSeen>,
+    /// Whether `Add rewards` fits on a played row: by the title, its lead icon, the row's width
+    /// and the action's. Worked out when one of them changes, not each frame.
+    fit: BTreeMap<(String, &'static str, i64, i64), RewardsAt>,
+}
+
+impl Rewards {
+    /// Read the selected note again when its draft changed; a result whose block no longer
+    /// stands as the act left it ends.
+    fn see(&mut self, draft: Option<&crate::sessions::Draft>, session: Option<Uuid>, book: &Book) {
+        let (Some(draft), Some(note)) = (draft, session) else {
+            self.seen = None;
+            return;
+        };
+        if self
+            .seen
+            .as_ref()
+            .is_some_and(|seen| seen.revision == draft.revision())
+        {
+            return;
+        }
+        let fights = played_fights(book);
+        self.done.retain(|(id, _), done| {
+            *id != note || crate::sessions::remove_rewards(&draft.body, &done.written).is_some()
+        });
+        self.seen = Some(RewardsSeen {
+            revision: draft.revision(),
+            listed: crate::sessions::listed_references(&draft.body),
+            tonight: crate::sessions::xp_in_note(&draft.body, &|id| fights.contains(id)),
+        });
+    }
+
+    fn listed(&self, event: &str) -> bool {
+        self.seen
+            .as_ref()
+            .is_some_and(|seen| seen.listed.contains(event))
+    }
+
+    /// Where a played row has `Add rewards` (rule 2, the fit rule): in its action band while the
+    /// title keeps the width and the line breaks it has beside the menu alone, at the action's
+    /// own width; else as the last link of the opened row while that line has room for it; else
+    /// as a line of the row's menu. No line is added. `row` is the row's width with its icon.
+    fn fits(
+        &mut self,
+        ui: &egui::Ui,
+        title: &str,
+        icon: &'static str,
+        row: f32,
+        action: f32,
+    ) -> RewardsAt {
+        let key = (
+            title.to_owned(),
+            icon,
+            (row * 10.0).round() as i64,
+            (action * 10.0).round() as i64,
+        );
+        if let Some(fits) = self.fit.get(&key) {
+            return *fits;
+        }
+        let word = |words: &str, kind: Type| {
+            ui.painter()
+                .layout_no_wrap(words.to_owned(), kind.font(ui), colors().text)
+                .size()
+                .x
+        };
+        let galley = |text: egui::RichText, room: f32| {
+            egui::WidgetText::from(text).into_galley(
+                ui,
+                Some(egui::TextWrapMode::Wrap),
+                room,
+                egui::TextStyle::Body,
+            )
+        };
+        // As `plan_row_with` lays it out: the icon, a gap, and the title beside the band.
+        let column = row - galley(Type::Body.rich(ui, icon), f32::INFINITY).size().x - design::S;
+        // The title's width and where each of its lines breaks, beside a band.
+        let layout = |band: f32| {
+            let title = galley(
+                Type::Body.rich(ui, title).underline(),
+                (column - band - design::S).max(design::XL).max(1.0),
+            );
+            let breaks: Vec<usize> = title
+                .rows
+                .iter()
+                .map(|row| row.char_count_excluding_newline())
+                .collect();
+            (breaks, title.size().x)
+        };
+        // As `fight_block` lays out its links, beside the opened row's indent.
+        let spacing = ui.spacing().item_spacing.x;
+        let links = ["Log", "Whole run", "Timeline", ADD_REWARDS]
+            .map(|link| word(link, Type::Body))
+            .iter()
+            .sum::<f32>()
+            + 3.0 * word("·", Type::Small)
+            + 7.0 * spacing;
+        let (with, alone) = (layout(action), layout(Density::Read.control()));
+        let fits = if with.0 == alone.0 && (with.1 - alone.1).abs() < 0.5 {
+            RewardsAt::Row
+        } else if links <= row - Type::Body.size() - design::S {
+            RewardsAt::Link
+        } else {
+            RewardsAt::Menu
+        };
+        if self.fit.len() > 256 {
+            self.fit.clear();
+        }
+        self.fit.insert(key, fits);
+        fits
+    }
+
+    /// A fight's result and its fault, under its row: a result that belongs to one row stays
+    /// under that row (the plan's footer rule), and a fight's row never folds.
+    fn message(
+        &self,
+        ui: &mut egui::Ui,
+        note: Uuid,
+        event: &str,
+        revision: u64,
+    ) -> Option<RewardsAct> {
+        let mut act = None;
+        if let Some((id, at, words, met)) = &self.fault
+            && (*id, at.as_str(), *met) == (note, event, revision)
+        {
+            ui.add_space(design::S);
+            design::message(ui, Tone::Warning, words);
+        }
+        if let Some(done) = self.done.get(&(note, event.to_owned())) {
+            let mut words = format!("Rewards added under Loot and rewards. {}", done.choice);
+            if done.with_xp
+                && let Some(RewardsSeen {
+                    tonight: (xp, fights @ 1..),
+                    ..
+                }) = &self.seen
+            {
+                words.push_str(&format!(
+                    " XP tonight: {} for {fights} {}.",
+                    crate::encounter_run::grouped_number(*xp),
+                    if *fights == 1 { "fight" } else { "fights" }
+                ));
+            }
+            match done.not_rolled {
+                0 => {}
+                1 => words.push_str(" 1 loot roll was not made."),
+                n => words.push_str(&format!(" {n} loot rolls were not made.")),
+            }
+            match done.unknown {
+                0 => {}
+                1 => words.push_str(" 1 award is not known."),
+                n => words.push_str(&format!(" {n} awards are not known.")),
+            }
+            ui.add_space(design::S);
+            if design::undo_message(ui, Tone::Success, &words, "Undo rewards") {
+                act = Some(RewardsAct::Undo(event.to_owned()));
+            }
+        }
+        act
+    }
+}
+
+/// A fight's rewards block: its reference, then under it the XP line, when it has one, and
+/// each loot line.
+fn rewards_block(reference: &str, xp: Option<&str>, loot: &[String]) -> String {
+    let mut block = format!("- {reference}\n");
+    for line in xp.into_iter().chain(loot.iter().map(String::as_str)) {
+        block.push_str(&format!("  - {line}\n"));
+    }
+    block
+}
+
+/// The words of an `Add rewards` result for its XP choice, from the newest block before it.
+fn rewards_choice(with_xp: Option<bool>, xp: u64) -> String {
+    match with_xp {
+        Some(true) => format!(
+            "XP {}, as in your last rewards.",
+            crate::encounter_run::grouped_number(xp)
+        ),
+        Some(false) => "No XP, as in your last rewards.".to_owned(),
+        None => "XP added. Delete that line to leave XP out from now on.".to_owned(),
+    }
+}
+
+/// The Timeline IDs of the fights that were played: a reference to another event is not a
+/// rewards block.
+fn played_fights(book: &Book) -> std::collections::BTreeSet<String> {
+    book.events
+        .iter()
+        .filter(|event| event.run.is_some())
+        .map(|event| event.id.clone())
+        .collect()
+}
+
+impl Sessions {
+    /// `Add rewards` or `Undo rewards`, through the note's one act path: it follows the disk,
+    /// patches one block and saves at once. The run, the earlier notes and the Timeline are read
+    /// now. What it could not do shows under the fight's row.
+    fn rewards_act(
+        &mut self,
+        act: RewardsAct,
+        book: &Book,
+        session: Option<Uuid>,
+        plan: &Plan<'_>,
+    ) {
+        let (Some(note), Some(draft)) = (session, &mut self.draft) else {
+            return;
+        };
+        let rewards = &mut self.rewards;
+        rewards.fault = None;
+        let (event, result) = match act {
+            RewardsAct::Undo(event) => {
+                let Some(done) = rewards.done.get(&(note, event.clone())) else {
+                    return;
+                };
+                let written = done.written.clone();
+                let result = draft.apply(note, Apply::Now, |text| {
+                    crate::sessions::remove_rewards(text, &written)
+                });
+                if matches!(result, Ok(_) | Err(ActFault::NotSaved(..))) {
+                    rewards.done.remove(&(note, event.clone()));
+                }
+                (event, result.map(drop))
+            }
+            RewardsAct::Add(event, run) => {
+                let Some(at) = book.events.iter().position(|one| one.id == event) else {
+                    return;
+                };
+                let reference =
+                    timeline::reference(&book.events[at], timeline::day_numbers(&book.events)[at]);
+                let read = match (&plan.run_directory, &self.campaign) {
+                    (Some(directory), Some(campaign)) => {
+                        crate::encounter_run::find_run(directory, campaign.id, run)
+                            .and_then(|path| crate::encounter_run::rewards(&path, campaign.id))
+                    }
+                    _ => Err(String::new()),
+                };
+                let Ok(found) = read else {
+                    rewards.fault =
+                        Some((note, event, REWARDS_BLOCKED.to_owned(), draft.revision()));
+                    return;
+                };
+                let earlier = self.folder.as_deref().map_or_else(
+                    || vec![None],
+                    |folder| crate::sessions::earlier_notes(folder, note),
+                );
+                let fights = played_fights(book);
+                let (xp, xp_sum, unknown) = found.xp_line();
+                let (mut made, mut refused) = (None, None);
+                let result = draft.apply(note, Apply::Now, |text| {
+                    // Put there on disk a moment ago: the row then says `In notes`.
+                    if crate::sessions::listed_references(text).contains(&event) {
+                        return None;
+                    }
+                    let notes =
+                        std::iter::once(Some(text)).chain(earlier.iter().map(Option::as_deref));
+                    let with_xp =
+                        crate::sessions::rewards_with_xp(notes, &|id| fights.contains(id));
+                    let xp_shown = (with_xp != Some(false)).then_some(xp.as_str());
+                    let block = rewards_block(&reference, xp_shown, &found.loot);
+                    let (after, written, at) =
+                        match crate::sessions::add_rewards(text, &event, &block) {
+                            Ok(made) => made,
+                            Err(why) => {
+                                refused = Some(why);
+                                return None;
+                            }
+                        };
+                    // The note beside the plan shows the block's last line.
+                    let shown = after[..at + block.len() - 1].chars().count();
+                    made = Some((written, with_xp, shown));
+                    Some(after)
+                });
+                if let (Ok(_) | Err(ActFault::NotSaved(..)), Some((written, with_xp, shown))) =
+                    (&result, made)
+                {
+                    let has_xp = with_xp != Some(false);
+                    rewards.done.insert(
+                        (note, event.clone()),
+                        RewardsDone {
+                            written,
+                            choice: rewards_choice(with_xp, xp_sum),
+                            with_xp: has_xp,
+                            not_rolled: found.not_rolled,
+                            unknown: unknown * u64::from(has_xp),
+                        },
+                    );
+                    self.caret_to_show = Some(shown);
+                }
+                if let Some(why) = refused {
+                    rewards.fault = Some((note, event, why.to_owned(), draft.revision()));
+                    return;
+                }
+                (event, result.map(drop))
+            }
+        };
+        if let Err(fault) = result {
+            rewards.fault = Some((note, event, fault.words().to_owned(), draft.revision()));
+        }
+    }
 }
 
 impl Sessions {
@@ -1379,14 +1769,44 @@ impl Sessions {
         let focus = std::mem::take(&mut travel.focus_length);
         let mut undo = TravelUndo::None;
         ui.add_space(design::XS);
+        // The plan line's message shows on the line of the check it came from. With that check
+        // gone, it takes the kept line, unless a roll's result holds it: then it ends the block.
+        let plan_line = travel
+            .planned
+            .as_ref()
+            .filter(|(id, _, _)| *id == event.id)
+            .map(|(_, line, _)| line);
+        let on_check = plan_line.filter(|line| event.checks.iter().any(|check| line.on(check)));
+        let elsewhere = plan_line.filter(|_| on_check.is_none());
+        let done = travel.done.get(&event.id);
+        let plan_words = elsewhere.map(checks::Planned::words);
+        let (kept, last) = match (done, &plan_words) {
+            (Some(done), _) => (
+                Some((done.words.as_str(), done.undo, TravelUndo::Checks)),
+                plan_words.as_deref(),
+            ),
+            (None, Some(words)) => (
+                Some((words.as_str(), "Undo plan line", TravelUndo::PlanLine)),
+                None,
+            ),
+            (None, None) => (None, None),
+        };
         let header = checks::View {
             event,
             start,
             length: &event.duration,
             tables: plan.tables,
             planned,
+            plan_line: on_check,
         };
         let mut act = checks::header(ui, &header, &mut travel.block);
+        if design::undo_line(
+            ui,
+            Tone::Success,
+            kept.map(|(words, undo, _)| (words, undo)),
+        ) {
+            undo = kept.map_or(TravelUndo::None, |(_, _, which)| which);
+        }
         let typed = length_draft.words(event);
         let help = checks::span(start, &typed).or_else(|| {
             timeline::read_duration(&typed)
@@ -1402,28 +1822,16 @@ impl Sessions {
             length: &length,
             tables: plan.tables,
             planned,
+            plan_line: on_check,
         };
         act = checks::lines(ui, &view, &mut travel.block).or(act);
-        let done = travel.done.get(&event.id);
-        let plan_line = travel
-            .planned
-            .as_ref()
-            .filter(|(id, _, _)| *id == event.id)
-            .map(|(_, name, _)| name.as_str());
-        if let Some(done) = done {
-            ui.add_space(design::S);
-            if design::undo_message(ui, Tone::Success, &done.words, done.undo) {
-                undo = TravelUndo::Checks;
-            }
+        if act == Some(checks::Act::UndoPlan) {
+            act = None;
+            undo = TravelUndo::PlanLine;
         }
-        if let Some(name) = plan_line {
+        if let Some(words) = last {
             ui.add_space(design::S);
-            if design::undo_message(
-                ui,
-                Tone::Success,
-                &format!("“{name}” is in tonight’s plan."),
-                "Undo plan line",
-            ) {
+            if design::undo_message(ui, Tone::Success, words, "Undo plan line") {
                 undo = TravelUndo::PlanLine;
             }
         }
@@ -1432,26 +1840,28 @@ impl Sessions {
 
     /// The open journey's start on the clock, worked out again only when the Timeline changed
     /// or another journey opened.
-    fn journey_start(&mut self, book: &Book, open: Option<&str>) -> Option<u64> {
-        let open = open?;
-        if let Some((changes, id, start)) = &self.travel.start
+    /// Also the open event's place in the list, for `checks::settle_length`.
+    fn journey_start(&mut self, book: &Book, open: Option<&str>) -> (Option<usize>, Option<u64>) {
+        let Some(open) = open else {
+            return (None, None);
+        };
+        if let Some((changes, id, at, start)) = &self.travel.start
             && *changes == book.changes()
             && id == open
         {
-            return *start;
+            return (*at, *start);
         }
-        let start = book
-            .events
-            .iter()
-            .position(|event| event.id == open && checks::shown(event))
+        let at = book.events.iter().position(|event| event.id == open);
+        let start = at
+            .filter(|at| checks::shown(&book.events[*at]))
             .and_then(|at| timeline::clock(&book.events)[at]);
-        self.travel.start = Some((book.changes(), open.to_owned(), start));
-        start
+        self.travel.start = Some((book.changes(), open.to_owned(), at, start));
+        (at, start)
     }
 
     /// Take back the plan line of `Plan “…”`, while the note is as that act left it.
     fn undo_plan_line(&mut self) {
-        let (Some((_, name, undo)), Some(draft)) = (self.travel.planned.take(), &mut self.draft)
+        let (Some((_, line, undo)), Some(draft)) = (self.travel.planned.take(), &mut self.draft)
         else {
             return;
         };
@@ -1459,7 +1869,7 @@ impl Sessions {
         if let Err(fault) = undo.undo(draft) {
             self.travel
                 .block
-                .failed(&checks::Act::Plan(name), fault.words().to_owned());
+                .failed(&checks::Act::Plan(line), fault.words().to_owned());
         }
     }
 
@@ -1483,7 +1893,8 @@ impl Sessions {
                 .iter()
                 .any(|event| event.id == id && event.duration.trim().is_empty());
         }
-        if let checks::Act::Plan(name) = &act {
+        if let checks::Act::Plan(chosen) = &act {
+            let name = &chosen.name;
             let (Some(draft), Some(note)) = (&mut self.draft, session) else {
                 return;
             };
@@ -1492,11 +1903,11 @@ impl Sessions {
                 Some(plan_first(words, &line, &book.events, session, plan.fights))
             });
             match written {
-                Ok(undo) => self.travel.planned = Some((id.to_owned(), name.clone(), undo)),
+                Ok(undo) => self.travel.planned = Some((id.to_owned(), chosen.clone(), undo)),
                 Err(fault) => {
                     let words = fault.words().to_owned();
                     if let crate::sessions::ActFault::NotSaved(_, undo) = fault {
-                        self.travel.planned = Some((id.to_owned(), name.clone(), undo));
+                        self.travel.planned = Some((id.to_owned(), chosen.clone(), undo));
                     }
                     self.travel.block.failed(&act, words);
                 }
@@ -1788,8 +2199,10 @@ impl Sessions {
         let mut ruling = None;
         let mut pane = None;
         // A journey's checks: the clock at the open journey's start, and the results that hold.
-        checks::settle_length(book, open_event.as_deref());
-        let journey_start = self.journey_start(book, open_event.as_deref());
+        let (open_at, _) = self.journey_start(book, open_event.as_deref());
+        checks::settle_length(book, open_at);
+        // A length that settled changed the Timeline, so the start is read again.
+        let (_, journey_start) = self.journey_start(book, open_event.as_deref());
         self.travel.done.follow(book);
         if self
             .travel
@@ -1801,6 +2214,9 @@ impl Sessions {
         }
         let mut length_taken = checks::Taken::Nothing;
         let mut travel_act = None;
+        self.rewards.see(self.draft.as_ref(), session, book);
+        let revision = self.draft.as_ref().map(crate::sessions::Draft::revision);
+        let mut rewards_act = None;
         let mut travel_undo = (TravelUndo::None, String::new());
         // A name a result links: an encounter or a group, and whether a row for it is to come.
         let in_plan = |name: &str| {
@@ -1847,6 +2263,8 @@ impl Sessions {
                     .into_iter().map(|action| action.density(Density::Read).natural_width(ui)).fold(0.0, f32::max)
                     + Density::Read.control() + design::S;
                 let widths = [width - action_width - design::S, action_width];
+                let rewards_width = Action::quiet(ADD_REWARDS).density(Density::Read).natural_width(ui)
+                    + Density::Read.control() + design::S;
                 let mut any = false;
                 let mut primary_available = plan.open_run.is_none() && !self.confirm_record;
                 for (at, event) in book.events.iter_mut().enumerate() {
@@ -1874,10 +2292,18 @@ impl Sessions {
                         event.summary(None)
                     };
                     let row = ui.push_id(event.id.clone(), |ui| {
-                        let row_widths = if event.run.is_some() && (running || saved.is_none()) {
+                        // A fight that ended: its rewards (F7), on the row when the title keeps its lines.
+                        let ended = event.run.filter(|_| !running && saved.is_none());
+                        let lead = if is_open { icons::DOWN } else { icons::NEXT };
+                        let listed = self.rewards.listed(&event.id);
+                        let place = self.rewards.fits(ui, &label, lead, ui.available_width(), rewards_width);
+                        let on_row = ended.is_some() && place == RewardsAt::Row;
+                        let row_widths = if on_row {
+                            [width - rewards_width - design::S, rewards_width]
+                        } else if event.run.is_some() && (running || saved.is_none()) {
                             [width - Density::Read.control() - design::S, Density::Read.control()]
                         } else { widths };
-                        plan_row(ui, &row_widths, if is_open { icons::DOWN } else { icons::NEXT }, |ui| {
+                        plan_row(ui, &row_widths, lead, |ui| {
                             if plan_link(ui, &label, is_open).clicked() { toggle = Some(event.id.clone()); }
                         }, |ui| {
                             if running {
@@ -1921,7 +2347,24 @@ impl Sessions {
                                         remove = Some(event.id.clone()); ui.close();
                                     }
                                     if running { wrapped_words(ui, Type::Small, "This run is open. Close it first.", c.muted); }
+                                    // Last, so no line of today's menu moves.
+                                    if let Some(run) = ended.filter(|_| place == RewardsAt::Menu) {
+                                        if listed {
+                                            design::status(ui, Status { icon: icons::OK, word: "In notes", color: c.document.saved });
+                                        } else if Action::quiet(ADD_REWARDS).show(ui).clicked() {
+                                            rewards_act = Some(RewardsAct::Add(event.id.clone(), run)); ui.close();
+                                        }
+                                    }
                                 });
+                                if let Some(run) = ended.filter(|_| on_row) {
+                                    if listed {
+                                        ui.add_space(design::S);
+                                        design::status(ui, Status { icon: icons::OK, word: "In notes", color: c.document.saved });
+                                    } else if Action::quiet(ADD_REWARDS).name(&format!("Add rewards: {label}"))
+                                        .density(Density::Read).show(ui).clicked() {
+                                        rewards_act = Some(RewardsAct::Add(event.id.clone(), run));
+                                    }
+                                }
                                 if !running && event.run.is_none() {
                                     let linked = body.contains(&format!("^{}", event.id));
                                     if linked {
@@ -1939,21 +2382,30 @@ impl Sessions {
                                 self.fight = None;
                                 wrapped_words(ui, Type::Small, "This fight is running. Its final HP shows here when it ends.", c.muted);
                             } else if let Some(run) = event.run {
-                                self.fight_block(ui, run, &event.id, plan);
+                                let link = ended.filter(|_| place == RewardsAt::Link).map(|_| listed);
+                                if self.fight_block(ui, run, &event.id, plan, link) {
+                                    rewards_act = Some(RewardsAct::Add(event.id.clone(), run));
+                                }
                             } else {
-                                changed |= event_fields(ui, event);
+                                // A journey's checks come first, under its row; Title and Notes follow them.
                                 if checks::shown(event) {
                                     let (act, taken, undo) = self.travel_block(ui, event, journey_start, plan, &in_plan, &mut book.length);
                                     if taken != checks::Taken::Nothing { length_taken = taken; }
                                     if let Some(act) = act { travel_act = Some((event.id.clone(), act)); }
                                     if undo != TravelUndo::None { travel_undo = (undo, event.id.clone()); }
+                                    ui.add_space(design::XS);
                                 }
+                                changed |= event_fields(ui, event);
                                 if let Some(action) = rest_ruling(ui, event, ruling_undo.as_ref() == Some(&event.id)) {
                                     ruling = Some((event.id.clone(), action));
                                 }
                                 if design::link(ui, "Timeline").clicked() { self.wants_event = Some(event.id.clone()); }
                             }
                             });
+                        }
+                        if let (Some(note), Some(revision)) = (session, revision)
+                            && let Some(act) = self.rewards.message(ui, note, &event.id, revision) {
+                            rewards_act = Some(act);
                         }
                         if self.row_notice == Some((session, at)) && self.deleted_run.is_some() {
                             ui.add_space(design::S);
@@ -2030,7 +2482,7 @@ impl Sessions {
                         }
                         if self.open_planned.as_ref() == Some(&fight.path) {
                             plan_details(ui, |ui| {
-                                if read_encounter(ui, fight.difficulty.rating.as_ref().filter(|_| !running && saved.is_none())).clicked() { self.wants_lookup = Some(fight.name.clone()); }
+                                if read_encounter(ui, Some(&fight.difficulty).filter(|_| !running && saved.is_none())).clicked() { self.wants_lookup = Some(fight.name.clone()); }
                             });
                         }
                         plan_rule(ui);
@@ -2125,6 +2577,9 @@ impl Sessions {
         }
         if let Some(act) = scene_act {
             self.scene_act(act, session);
+        }
+        if let Some(act) = rewards_act {
+            self.rewards_act(act, book, session, plan);
         }
         // A draft is open only for a selected session, so the act has its session.
         if let Some((position, name)) = remove_fight
@@ -2793,8 +3248,18 @@ impl Sessions {
         }
     }
 
-    /// How a fight ended, in place: final HP and the log, with no run to reopen.
-    fn fight_block(&mut self, ui: &mut egui::Ui, run: Uuid, event_id: &str, plan: &Plan<'_>) {
+    /// How a fight ended, in place: final HP and the log, with no run to reopen. `rewards` is
+    /// whether its rewards are in the note, when its row has no room for them (F7): the last
+    /// link is then `Add rewards`, or the words `In notes`. Returns whether the DM pressed it.
+    fn fight_block(
+        &mut self,
+        ui: &mut egui::Ui,
+        run: Uuid,
+        event_id: &str,
+        plan: &Plan<'_>,
+        rewards: Option<bool>,
+    ) -> bool {
+        let mut add_rewards = false;
         let path = plan.run_directory.as_ref().and_then(|directory| {
             crate::encounter_run::find_run(directory, self.campaign.as_ref()?.id, run).ok()
         });
@@ -2806,7 +3271,7 @@ impl Sessions {
             self.fight = Some((run, result));
         }
         let Some((_, result)) = &self.fight else {
-            return;
+            return false;
         };
         match result {
             Err(error) => {
@@ -2890,6 +3355,14 @@ impl Sessions {
                     if word_link(ui, "Timeline").clicked() {
                         self.wants_event = Some(event_id.to_owned());
                     }
+                    if let Some(listed) = rewards {
+                        ui.label(Type::Small.rich(ui, "·").color(colors().muted));
+                        if listed {
+                            ui.label(Type::Body.rich(ui, "In notes").color(colors().muted));
+                        } else if word_link(ui, ADD_REWARDS).clicked() {
+                            add_rewards = true;
+                        }
+                    }
                 });
                 if self.show_fight_log {
                     egui::ScrollArea::vertical()
@@ -2903,6 +3376,7 @@ impl Sessions {
                 }
             }
         }
+        add_rewards
     }
 }
 
@@ -3257,6 +3731,84 @@ mod tests {
                 assert_eq!(plain, restored);
             });
         });
+    }
+
+    /// V9 and W1-D2: the opened planned fight's line has the same blank on each side of every
+    /// separator, with the word and its numbers, and with the reason when no word shows.
+    #[test]
+    fn read_encounter_has_one_blank_each_side_of_each_separator() {
+        use crate::difficulty::{Difficulty, Missing, Unknown};
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let rated = Difficulty {
+            xp: 6300,
+            rating: Some(crate::difficulty::above_high()),
+            unknown: 0,
+            missing: None,
+        };
+        let unknown = Difficulty {
+            xp: 0,
+            rating: None,
+            unknown: 2,
+            missing: Some(Missing {
+                what: Unknown::Xp,
+                at: vec![0, 1],
+                names: vec!["Nameless Thing".into(), "Wisp".into()],
+            }),
+        };
+        for (difficulty, words) in [
+            (rated, "Read encounter · Above High · XP 6,300"),
+            (
+                unknown,
+                "Read encounter · XP not known: Nameless Thing and 1 more",
+            ),
+        ] {
+            // The second frame has the app's fonts.
+            let frame = || {
+                ctx.run(Default::default(), |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        ui.set_width(design::LIST_MEASURE);
+                        plan_details(ui, |ui| {
+                            read_encounter(ui, Some(&difficulty));
+                        });
+                    });
+                })
+            };
+            frame();
+            let output = frame();
+            // Each glyph on the line by its advance, in order from the left: the blank is the
+            // space between two glyphs' boxes, as the font sets it. Glyphs sit on whole pixels,
+            // so the blanks agree to 1 px.
+            let mut glyphs = Vec::new();
+            for shape in &output.shapes {
+                if let egui::Shape::Text(text) = &shape.shape {
+                    for row in &text.galley.rows {
+                        for glyph in &row.glyphs {
+                            let left = text.pos.x + glyph.pos.x;
+                            glyphs.push((glyph.chr, left, left + glyph.advance_width));
+                        }
+                    }
+                }
+            }
+            glyphs.sort_by(|a, b| a.1.total_cmp(&b.1));
+            let line: String = glyphs.iter().map(|glyph| glyph.0).collect();
+            assert_eq!(line.replace('\u{a0}', " "), words);
+            let ink: Vec<_> = glyphs
+                .iter()
+                .filter(|glyph| !glyph.0.is_whitespace())
+                .collect();
+            let blanks: Vec<(f32, f32)> = (1..ink.len() - 1)
+                .filter(|at| ink[*at].0 == '·')
+                .map(|at| (ink[at].1 - ink[at - 1].2, ink[at + 1].1 - ink[at].2))
+                .collect();
+            assert!(
+                !blanks.is_empty()
+                    && blanks
+                        .iter()
+                        .all(|(before, after)| (before - after).abs() <= 1.0 && *before >= 2.0),
+                "{words}: the blank before and after each separator: {blanks:?}"
+            );
+        }
     }
 
     #[test]
@@ -3844,6 +4396,448 @@ mod tests {
         );
         page.scene_act(SceneAct::UndoAdd, Some(note.id));
         assert_eq!(fs::read_to_string(&note.path).unwrap(), before);
+    }
+
+    /// F7, rule 2: `Add rewards` goes on a played row only when the title keeps its width and
+    /// its line breaks, laid out as `wrapped_link` lays it out. Two lines are not enough.
+    #[test]
+    fn the_rewards_fit_keeps_each_title_as_it_is() {
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(500.0, 800.0))
+            .build_state(
+                |ctx, faults: &mut Vec<String>| {
+                    faults.clear();
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        ui.set_width(330.0);
+                        let mut rewards = Rewards::default();
+                        let band = Action::quiet(ADD_REWARDS)
+                            .density(Density::Read)
+                            .natural_width(ui)
+                            + Density::Read.control()
+                            + design::S;
+                        let words: Vec<_> = "Ambush of the caravan at the abandoned bridge over the river beside the mill at dawn"
+                            .split_whitespace()
+                            .collect();
+                        let titles = (3..=words.len())
+                            .map(|n| words[..n].join(" "))
+                            .chain((3..18).map(|n| format!("{}at the bridge", "Wolf ".repeat(n))));
+                        // How many titles take the action on the row, and how many do not.
+                        let mut placed = [0, 0];
+                        for title in titles {
+                            let on_row =
+                                rewards.fits(ui, &title, icons::NEXT, 330.0, band) == RewardsAt::Row;
+                            placed[usize::from(on_row)] += 1;
+                            if !on_row {
+                                continue;
+                            }
+                            let galley = |text: egui::RichText, room| {
+                                egui::WidgetText::from(text).into_galley(
+                                    ui,
+                                    Some(egui::TextWrapMode::Wrap),
+                                    room,
+                                    egui::TextStyle::Body,
+                                )
+                            };
+                            let column = 330.0
+                                - galley(Type::Body.rich(ui, icons::NEXT), f32::INFINITY).size().x
+                                - design::S;
+                            let measure = |action: f32| {
+                                galley(
+                                    Type::Body.rich(ui, &title).underline(),
+                                    (column - action - design::S).max(design::XL).max(1.0),
+                                )
+                                .size()
+                            };
+                            let (before, after) = (measure(Density::Read.control()), measure(band));
+                            if (before - after).length() > 0.5 {
+                                faults.push(format!("{title:?}: {before:?} -> {after:?}"));
+                            }
+                        }
+                        if placed.contains(&0) {
+                            faults.push(format!("off the row and on it: {placed:?}"));
+                        }
+                    });
+                },
+                Vec::<String>::new(),
+            );
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        assert!(
+            harness.state().is_empty(),
+            "a title of today changed its size: {:?}",
+            harness.state()
+        );
+    }
+
+    /// F7, T18.1: `Add rewards` writes one block in the session note through the note's one act
+    /// path, with its own Undo kept by the note and the fight.
+    #[test]
+    fn rewards_are_a_note_act_with_their_own_undo() {
+        use crate::encounter_run::{Participant, write_ended_run_with};
+        use crate::sessions::{NewNote, create_note};
+        use egui_kittest::kittest::Queryable;
+        let root = tempfile::tempdir().unwrap();
+        let (sessions, runs) = (root.path().join("Sessions"), root.path().join("Runs"));
+        fs::create_dir_all(&sessions).unwrap();
+        let campaign = Uuid::new_v4();
+        let creature = |name: &str, cr: &str| {
+            let fields = format!(
+                "splat_id: {}\nsplat_kind: creature\nsplat_name: {name}\nsplat_creature: {{type: beast, cr_text: \"{cr}\"}}\nsplat_stats:\n  max_hp: {{value: 11}}\n  armor_class: {{value: 13}}\n",
+                Uuid::new_v4()
+            );
+            let text =
+                splat::content::formats::fixture("Fixture.md", &fields, "\n## Actions\nBite.\n");
+            splat::content::Entry::parse("creature.md", &text.unwrap()).unwrap()
+        };
+        let joined = |key: &str, entry| {
+            Participant::new(
+                key.into(),
+                "enemies".into(),
+                entry,
+                &serde_yaml_ng::Mapping::new(),
+                true,
+            )
+            .unwrap()
+        };
+        // Each fight ends with its first creature at 0 HP, as the run file holds it.
+        let ended = |name: &str, details: &str, participants| {
+            let fact =
+                write_ended_run_with(campaign, &runs, name, None, "Won", participants, details)
+                    .unwrap();
+            let path = crate::encounter_run::find_run(&runs, campaign, fact.id).unwrap();
+            let mut saved: serde_json::Value =
+                serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+            saved["state"]["participants"][0]["hp"] = 0.into();
+            fs::write(&path, saved.to_string()).unwrap();
+            fact
+        };
+        let bridge = ended(
+            "Bridge",
+            "# Bridge\n\n## Loot\n\n- 30 gp\n",
+            vec![
+                joined("wolf", creature("Wolf", "1 (XP 200; PB +2)")),
+                joined("wolf2", creature("Wolf", "1 (XP 200; PB +2)")),
+            ],
+        );
+        let shrine = ended(
+            "Shrine",
+            "# Shrine",
+            vec![joined("varra", creature("Captain Varra", ""))],
+        );
+        let note = create_note(
+            &sessions,
+            &NewNote {
+                number: 2,
+                title: "The Crossing",
+                date: "2026-11-01",
+                campaign: "Marches",
+                template: "## What happened\n\n## Loot and rewards\n\n## Open threads\n\n",
+            },
+        )
+        .unwrap();
+        let mut book = Book::default();
+        book.open(Some(&sessions));
+        book.record_run(&bridge, Some(note.id), false);
+        book.record_run(&shrine, Some(note.id), false);
+        let id = |name: &str| {
+            book.events
+                .iter()
+                .find(|event| event.title == name)
+                .unwrap()
+                .id
+                .clone()
+        };
+        let (a, b) = (id("Bridge"), id("Shrine"));
+        let read = || fs::read_to_string(&note.path).unwrap();
+        let page = Sessions {
+            selected: Some(note.id),
+            notes: vec![note.clone()],
+            folder: Some(sessions.clone()),
+            draft: Some(Draft::open(&note.path).unwrap()),
+            campaign: Some(crate::persistence::Campaign {
+                id: campaign,
+                name: "Marches".into(),
+                path: root.path().to_owned(),
+                dndbeyond_campaign_id: None,
+                dndbeyond_campaign_name: None,
+            }),
+            ..Sessions::default()
+        };
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(design::FORM_WIDTH, 800.0))
+            .build_state(
+                |ctx, (page, book): &mut (Sessions, Book)| {
+                    let mut group = |_: &mut egui::Ui| {};
+                    let plan = Plan {
+                        fights: &[],
+                        saved_runs: &[],
+                        groups: &[],
+                        group_blocked: None,
+                        group_open: false,
+                        group_discarded: false,
+                        group_discarded_name: String::new(),
+                        group_discarded_order: 0,
+                        arrivals_open: false,
+                        group_editor: std::cell::RefCell::new(&mut group),
+                        blocked: None,
+                        run_directory: Some(page.folder.clone().unwrap().with_file_name("Runs")),
+                        open_run: None,
+                        open_state: String::new(),
+                        open_encounter: None,
+                        party: &[],
+                        tables: &[],
+                    };
+                    egui::CentralPanel::default().show(ctx, |ui| page.plan_pane(ui, book, &plan));
+                },
+                (page, book),
+            );
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        let shown = |harness: &egui_kittest::Harness<'_, (Sessions, Book)>, words: &str| {
+            harness.query_by_label_contains(words).is_some()
+        };
+        let block_a = format!(
+            "- [[Timeline#^{a}|Bridge]]\n  - XP 200 for 1 at 0 HP · 1 still stood (XP 200)\n  - 30 gp\n"
+        );
+        let block_b = format!(
+            "- [[Timeline#^{b}|Shrine]]\n  - XP 0 for 0 at 0 HP. XP not known for Captain Varra: enter an award here.\n"
+        );
+
+        // An edit on disk a moment before is in the words that the act changes. With no block
+        // in any note, the block has XP and the result says how to stop it. The row then says
+        // `In notes`, and the note beside the plan is asked to show the block.
+        let outside = read().replace("## What happened\n", "## What happened\n\nThe ford held.\n");
+        fs::write(&note.path, &outside).unwrap();
+        harness.get_by_label("Add rewards: Bridge").click();
+        harness.run_steps(2);
+        let with_a = outside.replace(
+            "## Loot and rewards\n\n",
+            &format!("## Loot and rewards\n\n{block_a}\n"),
+        );
+        assert_eq!(read(), with_a);
+        assert!(shown(
+            &harness,
+            "Rewards added under Loot and rewards. XP added. Delete that line to leave XP out from now on. XP tonight: 200 for 1 fight."
+        ));
+        assert!(harness.query_by_label("Add rewards: Bridge").is_none());
+        assert!(shown(&harness, "In notes"));
+        assert!(harness.state().0.caret_to_show.is_some());
+
+        // A: Bridge. B: Shrine, another fight. It follows the newest block, which has XP, and
+        // names the award that is not known, which the sum leaves out. A's Undo stays.
+        harness.state_mut().0.caret_to_show = None;
+        harness.get_by_label("Add rewards: Shrine").click();
+        harness.run_steps(2);
+        let with_both = with_a.replace(&block_a, &format!("{block_a}{block_b}"));
+        assert_eq!(read(), with_both);
+        assert!(shown(
+            &harness,
+            "XP 0, as in your last rewards. XP tonight: 200 for 2 fights. 1 award is not known."
+        ));
+        assert_eq!(harness.query_all_by_label("Undo rewards").count(), 2);
+        // Undo of A takes back A's block alone; B's stays.
+        harness
+            .query_all_by_label("Undo rewards")
+            .next()
+            .unwrap()
+            .click();
+        harness.run_steps(2);
+        assert_eq!(
+            read(),
+            outside.replace(
+                "## Loot and rewards\n\n",
+                &format!("## Loot and rewards\n\n{block_b}\n")
+            )
+        );
+        assert!(harness.query_by_label("Add rewards: Bridge").is_some());
+        assert_eq!(harness.query_all_by_label("Undo rewards").count(), 1);
+
+        // Another session and back keeps an Undo: it is the note's. Undo B gives the words
+        // back exactly.
+        harness.state_mut().0.select(None);
+        harness.run_steps(2);
+        harness.state_mut().0.select(Some(note.id));
+        harness.run_steps(2);
+        harness.get_by_label("Undo rewards").click();
+        harness.run_steps(2);
+        assert_eq!(read(), outside);
+
+        // The DM deletes the XP line: the next block has none, as the newest block says.
+        let no_xp = with_a.replace("  - XP 200 for 1 at 0 HP · 1 still stood (XP 200)\n", "");
+        harness.get_by_label("Add rewards: Bridge").click();
+        harness.run_steps(2);
+        // An item typed under the block in Obsidian, after a blank line, is the block's: Undo
+        // takes back nothing and says so under the row.
+        let typed = read().replace(&block_a, &format!("{block_a}\n  - Varra's signet ring\n"));
+        fs::write(&note.path, &typed).unwrap();
+        harness.get_by_label("Undo rewards").click();
+        harness.run_steps(2);
+        assert_eq!(read(), typed);
+        assert!(shown(&harness, "That line changed on disk."));
+        assert!(harness.query_by_label("Undo rewards").is_none());
+        fs::write(&note.path, &no_xp).unwrap();
+        harness.state_mut().0.draft.as_mut().unwrap().follow_disk();
+        harness.run_steps(2);
+        assert!(
+            harness.query_by_label("Undo rewards").is_none(),
+            "the block is no longer the act's"
+        );
+        harness.get_by_label("Add rewards: Shrine").click();
+        harness.run_steps(2);
+        assert!(read().contains("- [[Timeline#^"));
+        assert!(!read().contains("XP not known"));
+        assert!(shown(&harness, "No XP, as in your last rewards."));
+        assert!(!shown(&harness, "XP tonight"));
+        fs::write(&note.path, &outside).unwrap();
+        harness.state_mut().0.draft.as_mut().unwrap().follow_disk();
+        harness.run_steps(2);
+
+        // Unsaved typed words and a changed file: the act writes nothing and says why.
+        {
+            let draft = harness.state_mut().0.draft.as_mut().unwrap();
+            draft.body.push_str("Words being typed.\n");
+            draft.edited();
+        }
+        let changed = outside.replace("The ford held.", "The ford held. Obsidian");
+        fs::write(&note.path, &changed).unwrap();
+        harness.get_by_label("Add rewards: Bridge").click();
+        harness.run_steps(2);
+        assert_eq!(read(), changed);
+        assert!(shown(
+            &harness,
+            "The note changed on disk. Choose in the note first."
+        ));
+
+        // A failed save says so; the block waits in the draft, with its Undo.
+        harness.state_mut().0.draft = Some(Draft::open(&note.path).unwrap());
+        harness.run_steps(2);
+        let mut permissions = fs::metadata(&sessions).unwrap().permissions();
+        std::os::unix::fs::PermissionsExt::set_mode(&mut permissions, 0o555);
+        fs::set_permissions(&sessions, permissions.clone()).unwrap();
+        harness.get_by_label("Add rewards: Bridge").click();
+        harness.run_steps(2);
+        std::os::unix::fs::PermissionsExt::set_mode(&mut permissions, 0o755);
+        fs::set_permissions(&sessions, permissions).unwrap();
+        assert_eq!(read(), changed);
+        assert!(shown(&harness, "Notes not saved"));
+        assert!(
+            harness
+                .state()
+                .0
+                .draft
+                .as_ref()
+                .unwrap()
+                .body
+                .contains(&block_a)
+        );
+        assert!(harness.query_by_label("Undo rewards").is_some());
+        harness.state_mut().0.draft.as_mut().unwrap().save();
+        assert!(read().contains(&block_a));
+
+        // After a restart the note holds the block, and the row says `In notes`, with no Undo.
+        harness.state_mut().0 = Sessions {
+            selected: Some(note.id),
+            notes: vec![note.clone()],
+            folder: Some(sessions.clone()),
+            draft: Some(Draft::open(&note.path).unwrap()),
+            campaign: harness.state().0.campaign.clone(),
+            ..Sessions::default()
+        };
+        harness.run_steps(2);
+        assert!(shown(&harness, "In notes"));
+        assert!(harness.query_by_label("Undo rewards").is_none());
+
+        // The act reads its new words again before it writes. A block that would be code in a
+        // code block that is not closed writes nothing, says so, and a second press neither.
+        let restarted = read();
+        let prefix = &restarted[..restarted.len() - crate::sessions::body_of(&restarted).len()];
+        let open_fence = format!("{prefix}# Session\n\n```\nunfinished example\n");
+        fs::write(&note.path, &open_fence).unwrap();
+        harness.state_mut().0.draft.as_mut().unwrap().follow_disk();
+        harness.run_steps(2);
+        for _ in 0..2 {
+            harness.get_by_label("Add rewards: Bridge").click();
+            harness.run_steps(2);
+            assert_eq!(read(), open_fence);
+            assert!(shown(&harness, crate::sessions::REWARDS_IN_CODE));
+        }
+        // Undo compares whole lines: a one-line block moved into a quote just before a heading
+        // is not the act's any more. The file keeps its bytes, and the row says so.
+        fs::write(
+            &note.path,
+            format!("{prefix}# Session\n\n- [[Timeline#^{a}|Bridge]]\n  - 30 gp\n"),
+        )
+        .unwrap();
+        harness.get_by_label("Add rewards: Shrine").click();
+        harness.run_steps(2);
+        let single = format!("- [[Timeline#^{b}|Shrine]]\n");
+        assert!(read().ends_with(&single));
+        let quoted = format!("{prefix}# Session\n\n> {single}## Keep this heading\nKeep this.\n");
+        fs::write(&note.path, &quoted).unwrap();
+        harness.get_by_label("Undo rewards").click();
+        harness.run_steps(2);
+        assert_eq!(read(), quoted);
+        assert!(shown(&harness, "That line changed on disk."));
+        fs::write(&note.path, &restarted).unwrap();
+        harness.state_mut().0.draft.as_mut().unwrap().follow_disk();
+        harness.run_steps(2);
+
+        // A run that cannot be read: nothing is written, and the row says why.
+        let before = read();
+        fs::remove_file(crate::encounter_run::find_run(&runs, campaign, shrine.id).unwrap())
+            .unwrap();
+        harness.get_by_label("Add rewards: Shrine").click();
+        harness.run_steps(2);
+        assert_eq!(read(), before);
+        assert!(shown(&harness, REWARDS_BLOCKED));
+
+        // A title that fills the row: the action is the last link of the opened row.
+        let long = "Wolves at the Ford Below the Burning Shrine Road and the Old Toll Bridge";
+        harness
+            .state_mut()
+            .1
+            .events
+            .iter_mut()
+            .find(|event| event.id == a)
+            .unwrap()
+            .title = long.into();
+        fs::write(&note.path, &outside).unwrap();
+        harness.state_mut().0.draft.as_mut().unwrap().follow_disk();
+        harness.run_steps(2);
+        assert!(
+            harness
+                .query_by_label(&format!("Add rewards: {long}"))
+                .is_none()
+        );
+        harness.get_by_label(long).click();
+        harness.run_steps(2);
+        harness.get_by_label(ADD_REWARDS).click();
+        harness.run_steps(2);
+        assert!(read().contains(&format!("- [[Timeline#^{a}|{long}]]\n  - XP 200")));
+        assert!(shown(&harness, "In notes"));
+
+        // Too narrow for the link after Timeline: no line is added, and the action is the last
+        // line of the row's menu.
+        fs::write(&note.path, &outside).unwrap();
+        harness.state_mut().0.draft.as_mut().unwrap().follow_disk();
+        harness.set_size(egui::vec2(330.0, 800.0));
+        harness.run_steps(2);
+        assert!(harness.query_by_label(ADD_REWARDS).is_none());
+        harness
+            .get_by_label(&format!("More actions for {long}"))
+            .click();
+        harness.run_steps(2);
+        harness.get_by_label(ADD_REWARDS).click();
+        harness.run_steps(2);
+        assert!(read().contains(&format!("- [[Timeline#^{a}|{long}]]\n  - XP 200")));
+        // The menu then says `In notes` in the action's place.
+        assert!(!shown(&harness, "In notes"));
+        harness
+            .get_by_label(&format!("More actions for {long}"))
+            .click();
+        harness.run_steps(2);
+        assert!(shown(&harness, "In notes"));
+        assert!(harness.query_by_label(ADD_REWARDS).is_none());
     }
 
     #[test]

@@ -383,7 +383,7 @@ today and its fit rule. No row adds a line, changes a row's height or takes widt
 | # | Screen | What differs | Band today | Fit rule |
 |---|---|---|---|---|
 | 1 | A planned fight's row, on the plan and in **Ready to run** | The summary ends with one word, such as `· Low` (F1), when the XP, the levels and the budget table are known | The summary: `src/sessions/plan.rs:795`; `src/encounters/list.rs:553-558` | Only when the summary keeps its lines and words |
-| 2 | An opened planned fight | The line of `Read encounter` ends with `· Low · XP 550 of 750` (F1) | `plan.rs:832-835` | The line holds one link today. The word goes first, then the numbers, as F1's table says; the words show only when the whole fits on the line |
+| 2 | An opened planned fight | The line of `Read encounter` ends with `· Low · XP 550 of 750` (F1); with no word because an input is not known, with `· XP not known: <name>` (W1-D2). The words start at the link's right edge, so each `·` has the same blank on each side (V9) | `plan.rs:832-835` | The line holds one link today. The word goes first, then the numbers, as F1's table says; the words show only when the whole fits on the line |
 | 3 | The encounter editor | `· XP 550 of 2,500 · Low` (F1) at the end of the `Roster` heading, or of the tab row below 760 px | `src/encounters.rs:4381`; `:3932-3955` | One line. The numbers go first, then the word |
 | 4 | Arrivals | A group's XP is followed by `→ Moderate` (F1) | `src/encounter_run/view.rs:3468-3520` | Only where the totals and the status words are in the heading today (`:3479-3492`) and stay there |
 | 5 | A row marked `Conc` that takes damage | The row's second line ends with `Conc save DC 10` until the next step (F2) | `view.rs:6476-6486` | Only when the line keeps its lines and folds nothing that shows today. Else in the hover and accessible name only |
@@ -392,6 +392,9 @@ today and its fit rule. No row adds a line, changes a row's height or takes widt
 | 8 | A campaign World entry's reader | `Add to Log` after `Edit`, and after `Start fight` where it shows (F6) | The header: `src/world.rs:1733-1768` | Section 1.2: its word, then its icon, then not shown |
 | 9 | A campaign creature's or NPC's reader, with no run open | A quiet `Start fight` after `Edit` (F3) | The same header | Section 1.2: with its word, or not shown |
 | 10 | An ended fight's plan row | `Add rewards` (F7) | The action band: `plan.rs:692-694`; the opened row's links: `:1313-1321` | On the row only when the title keeps its lines beside the action's own width. Else the last link of the opened row, after `Timeline`. A fight whose reference an old note already has as a list line says `In notes` |
+| 8 | A campaign World entry's reader | `Add to Log` after `Edit` (F6) | The header: `src/world.rs:1733-1768` | Section 1.2: its word, then its icon, then not shown |
+| 9 | A campaign creature's or NPC's reader, with no run open | A quiet `Start fight` after `Add to Log` (F3) | The same header | Section 1.2: with its word, or not shown |
+| 10 | An ended fight's plan row | `Add rewards` (F7) | The action band: `plan.rs:692-694`; the opened row's links: `:1313-1321` | On the row only when the title keeps its width and its line breaks beside the action's own width. Else the last link of the opened row, after `Timeline`, while that line has room. Else the last line of the row's menu (measured in P7: the links with `Add rewards` take about 326 px, and the plan at 330 px gives them 296). A fight whose reference an old note already has as a list item says `In notes`, also in the menu |
 | 12 | A Travel row's menu | One more line, `Roll for encounters`, when the campaign has a marked table (F9) | `plan.rs:727-735`; `src/timeline/page.rs:875-877` | A menu line |
 | 13 | A **Ready to run** row's menu, for an encounter with no saved run | One more line, `Remove…` (F3) | `src/encounters/list.rs:560-565` | A menu line |
 
@@ -409,6 +412,7 @@ that G7 allows.
 | 19 | A **Change** of status, place or group | It writes its Log line when a session is being played by W14's test. Today the test is "dated today" (`page.rs:1929-1937`). So a change during a fight or a recording on a note with another date, and a change in prep for a session dated later, now write a line | Rule M: one definition of the session being played |
 | 20 | The run's notice line, when a conflict's name is wider than the line beside the bare `Undo` | The name shortens as the dock's name does. Today nothing gives | Rule K |
 | 21 | A package creature's reader, with no run open | A quiet `Start fight` in a header that holds no action today (F3) | Rule Q |
+| 22 | History on the Encounters page, after `Whole run` or `Open` | The list scrolls once, at that act, so the opened run's row is at its top and its outcome, the line under Read-only and the whole Final state are in view below it (V31). The line under Read-only is `S` below it and `M` above `FINAL STATE` (V11), so what is under Read-only moves up by at most 8 px more, and the Read-only line's words are as tall as a line. Otherwise only the list's scroll offset differs: what it holds is as today, and nothing moves sideways, is cut or is resized | By the lead's ruling after app round 1 |
 
 Nothing else differs. A free-words effect from an encounter or an older run gives no reminder. A Travel row
 shows no checks and no new field until the DM asks. The rail says nothing about trackers unless a notice is
@@ -517,6 +521,7 @@ Case A, the plan at 330 px
 |---|---|
 | The XP, every level and the budget table are known | The words above |
 | A creature has no XP and no CR; a level is not known; there are no sheets; the rules have no table; there is no creature against the party | Nothing. The line is as today |
+| A creature's XP or a character's level is not known, and the party and the table are known (by the lead's ruling after app round 1, W1-D2) | The summary is as today. The opened row's line says why, in `muted`: `Read encounter · XP not known: Nameless Thing`, or `Level not known: <name>`; with more names, the first and `and 2 more`. The names are in `Scale::weigh`'s typed answer (`Difficulty::missing`) |
 | Run open | The open fight's plan row shows its status link, not a word. Arrivals shows the live word |
 
 **What the file stores.** Nothing. **Undo.** None is needed. **Keyboard.** Nothing takes focus.
@@ -1192,17 +1197,28 @@ for player characters. Editing a Log line in Splat (Edit and Obsidian do it).
 
 **The note owns the rewards.** `Add rewards` writes one block in the session note: a list line that starts
 with the fight's Timeline reference, and under it an XP line and the loot lines. The run stores nothing about
-it. **A fight has its rewards in the notes when the note has a list line that starts with its reference,
+it. **A fight has its rewards in the notes when the note has a list item that starts with its reference,
 anywhere in the note.** The heading `## Loot and rewards` is only where a new block goes; a DM who renames it
-or moves the block loses nothing.
+or moves the block loses nothing. Splat reads the note's real Markdown blocks once (`outline` in
+`src/sessions.rs`), and the insertion, `In notes`, the XP choice and Undo all ask that one reading. **Text in a
+code fence is never a heading and never a block.** **A list item inside a callout or a quote is a block**, as
+the DM sees it: the row says `In notes`, the XP search reads it, and Undo leaves it, because it is no longer
+the item that the act wrote. **The act reads its own result again before it writes:** it writes only when the
+new words hold the fight's one block, exactly as the act made it, under the heading, so `In notes` is true
+after the write. Otherwise it writes nothing and says why under the row: `A code block in the note is not
+closed, so nothing was written. Close it, then add rewards.`, or, when no reason is known, `The note would not
+show these rewards as a list, so nothing was written.`
 
 **Where it lives.** On the Session page, on the plan row of a fight that has ended. That row's action band
 holds only the menu today (`src/sessions/plan.rs:692-694`), and its title has the rest of the line.
-`Add rewards` is a quiet action in that band, left of the menu, only when the title keeps the lines that it
-has today beside the action's own width. P7 works this out when the title or the width changes, not each
+`Add rewards` is a quiet action in that band, left of the menu, only when the title keeps the width and the
+line breaks that it has today beside the action's own width; the same number of lines is not enough. P7 works this out when the title or the width changes, not each
 frame. When the title uses the width, it is the last of the opened row's links: `Log · Whole run · Timeline ·
-Add rewards` (`:4918-4926`), so no link of today moves. After the act, the same place says `In notes`: the
-status that an event's row has today (`:4392`), or muted words in the opened row.
+Add rewards` (`:4918-4926`), so no link of today moves, while that line has room for it. Measured in P7, that
+line takes about 326 px and the plan at 330 px gives it 296, so there it is the last line of the row's menu
+(rule 2: a menu that exists in that place), and the opened row gains no line. After the act, the same place says `In notes`: the
+status that an event's row has today (`:4392`), muted words in the opened row, or the same status as the
+last line of the row's menu.
 
 ```text
 Case A, the plan at 330 px
@@ -1224,8 +1240,8 @@ Case A, the plan at 330 px
   also those marked absent at 0 HP, and each character's share. F1's function gives the numbers. The line
   names what it counted and what still stood, so the DM can change it. With nobody at 0 HP it says `XP 0 for 0
   at 0 HP`. When a creature at 0 HP has no XP that Splat knows (a made-up creature, an NPC with no stat
-  block), the line says so: `XP 450 for 3 at 0 HP. XP not known for Captain Varra: enter an award here.` It
-  is still an XP line, and the link and the loot are written. An amount that is not known is left out of
+  block), the line says so: `XP 450 for 3 at 0 HP. XP not known for Captain Varra: enter an award here.` The
+  count is of the creatures whose XP is summed. It is still an XP line, and the link and the loot are written. An amount that is not known is left out of
   every sum and is never counted as zero. This is the rule (section 7).
 - **Loot,** as lines under it: the encounter's loot and the loot of each creature at 0 HP. A roll that was
   made has its result. A roll that was not made is written with `(not rolled)`, as `Copy loot` writes it
@@ -1235,7 +1251,9 @@ Case A, the plan at 330 px
 newest rewards block: in this note first (the last block in its text), then in the note of each earlier
 session, newest first. A note
 with no block is passed. A note that cannot be read stops the search; P7 reads the notes in order and keeps
-an unreadable one in its place.
+an unreadable one in its place. A file that claims a session but whose properties cannot be read has no known
+place, so it stops the search right after this note. Splat finds these files with the same scan of the folder
+and its subfolders that finds the readable notes (built in P7: `earlier_notes`, `rewards_with_xp`).
 
 | The search finds | `Add rewards` writes | The result says |
 |---|---|---|
@@ -1293,8 +1311,17 @@ not made.`; with an award that is not known, `1 award is not known.` `Undo rewar
 The last line of the first block is one that the DM typed. An XP line is a line under a fight's line that
 starts with `XP`; the sum reads its first number, so `(XP 200)` is not counted.
 
-**Undo.** `Undo rewards` removes the block that the act added, when it still stands as Splat left it (section
-4.1). **Keyboard.** Tab reaches `Add rewards` in the row or among the opened row's links, and the result's
+**Undo.** `Undo rewards` acts only while the block is still the complete, unchanged list item that the act
+wrote: an item that the DM typed under it, also after a blank line, is part of it, as CommonMark reads it. The
+bytes from the start of the block's first line to the end of its last line must be exactly the bytes that the
+act wrote, so a quote mark, an indent or any other change refuses it.
+Then it removes that item, and the heading only when the act added the heading and nothing else is under it.
+When the block changed, Undo writes nothing: the result and its Undo end, and a press that meets the change
+on disk says `That line changed on disk.` under the row, the words of the other note acts. By the lead's
+ruling for P7 it is kept by the note's ID and the fight, not by the note's whole text: another act, an edit
+elsewhere in the note, another session or another page leaves it. When act A added the heading and act B
+wrote under it, Undo of A keeps the heading for B, and Undo of B keeps it too: only A's Undo knew that the
+heading was the act's, and its bytes are the same as a template's heading. **Keyboard.** Tab reaches `Add rewards` in the row or among the opened row's links, and the result's
 action after its words.
 
 **What stays with the DM.** Who earned XP, whether a creature that fled counts, how loot is shared, and when
@@ -1391,18 +1418,36 @@ first.` So a wrong `Roll for encounters` can go at any time.
 
 ```text
 ▾  Road to the ford by the old quarry     Add to notes ⋯
-   Title      [Road to the ford by the old quarry ]
-   Notes      [                                   ]
-   Encounter checks    On the road ⌄ · 1d20 each day
+   Encounter checks
+   On the road ⌄ · 1d20 each day
+   ✓ 2 travel checks rolled.   ↶ Undo roll
    How long   [2 days                ]
               Day 3, 08:00 to Day 5, 08:00
      Day 3   12 · Nothing stirs.                    Clear
      Day 4   16 · Wolf Pack pick up the trail
              near the quarry gate.                  Clear
              Plan “Wolf Pack”
+   Title      [Road to the ford by the old quarry ]
+   Notes      [                                   ]
    Timeline
-✓ 2 travel checks rolled.   ↶ Undo roll
 ```
+
+- **The block comes first in the open row,** before **Title** and **Notes**, so the rolls stay near the row
+  (repair R1b). A Travel row without the block is as today. `Encounter checks` is a label above the table
+  menu, as every field's label is; `· 1d20 each day` follows the menu on its line, and dice words that move
+  to a line of their own start with the words, never with `·`.
+- **An act's result has one kept line** under the table's line: `2 travel checks rolled.` with `Undo roll`,
+  and the results of `Roll for encounters` and `Clear` there too. The line is reserved while the block shows, so a result coming or
+  going moves nothing below it, and at 960x640 it is in view where the DM pressed `Roll`. Words that do not
+  fit beside Undo end in `…`; the hover keeps them whole.
+- **The plan line's message** (`“Wolf Pack” is in tonight’s plan.` with `Undo plan line`, the note's Undo)
+  shows in place of the `Plan “Wolf Pack”` line of the check that the DM clicked; `In the plan` takes that place
+  when the Undo ends. The offer keeps from the start the height that its message needs at that width: one line
+  when the words and Undo fit, else the words with Undo under them (at 960x640 the message of `Bridge Ambush`
+  needs about 420 px and the row has less). So nothing moves when the message comes or goes, and it is never cut.
+  When that check is gone (cleared or rolled again) while the Undo lives, the message takes the kept line. If a
+  roll's result holds the kept line, the message ends the block, as before: the one known case where it moves
+  what is below (repair R1b, the owner's ruling).
 
 - **How long** is the Timeline's field. It is part of the block, so a plain Travel row does not gain a line.
 - **One check at each whole interval from the start, and none at the journey's end.** Two days give two
@@ -1410,8 +1455,8 @@ first.` So a wrong `Roll for encounters` can go at any time.
   results stay, under `Outside this journey now`. An empty length, or one that the clock cannot read, gives
   one line, `This journey`. `Roll all 2` shows under the lines while two or more are not rolled.
 - **The lines on screen follow the length as the DM types it.** New in P5, on Timeline and on the
-  Session page: the file takes the length on Enter or when the field loses focus. Today each key changes the
-  event (`src/timeline/page.rs:1011-1019`). An outside change to the event meets the Timeline's choices of
+  Session page, only for a journey whose block shows: the file takes the length on Enter or when the field
+  loses focus. Every other event's **How long** changes the event on each key, as before P5 (repair R1b). An outside change to the event meets the Timeline's choices of
   today at that save. `Roll for encounters` puts focus in **How long** when the
   journey has no length.
 - **A check belongs to its offset** from the journey's start: 0 hours, 24 hours, and so on. Its name is read

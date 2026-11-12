@@ -713,6 +713,26 @@ fn after_the_session(a: &mut Audit<'_, '_>) {
             .is_some_and(|text| text.contains("[[Timeline#^") && text.contains(TONIGHT))
     ));
 
+    // F7: the fight's link, its XP and its loot in the note, in one act from its row; the last
+    // link of the opened row when the title takes the row's width.
+    a.task("Put the fight's rewards in the note");
+    a.act(Do, "Add rewards", |d| {
+        let on_row = format!("Add rewards: {TONIGHT}");
+        d.click(if d.has(&on_row) {
+            &on_row
+        } else {
+            "Add rewards"
+        });
+    });
+    a.fact(format!(
+        "the note holds the fight's rewards block: {}",
+        a.d.editor_text().is_some_and(|text| {
+            text.split("## Loot and rewards")
+                .nth(1)
+                .is_some_and(|rest| rest.contains(&format!("|{TONIGHT}]]\n  - XP ")))
+        })
+    ));
+
     a.task("Check the party's HP for next time");
     a.click(Nav, NAV_PARTY);
     a.fact(format!(
