@@ -669,7 +669,7 @@ reading the code, not from a test run.
 | T20.3 | A count of 10 says 10, then 9 when its turn ends, says `time is up` at 0, and removes nothing. Undo of `Next turn` gives it back, also after a restart | run-effects | state | New |
 | T20.4 | Case D: a conflict on a 16-letter name and three reminders that start with the same words keep the notice line's order, and the reminders take only the room between Review and Undo. No row changes its height for its effects, and a count's slot moves no word | run-effects, run-sync-conflict | view, state | New |
 | T20.5 | A use is spent in 1 and a spent recharge rolls in 1, on the row, each as one named Undo step. A counted condition's name opens its rule, and its count opens Conditions | run-effects | cost, state | New |
-| T20.6 | Damage to a `Conc` row adds its save DC at the end of its second line until the next step, with no action, notice or new line, and only in the room the effects leave | (unit test: `conditions_concentration_notes_and_manual_ending_can_be_undone`) | state | New |
+| T20.6 | Damage to a `Conc` row adds its save DC at the end of its second line until the next step, with no action, notice or new line, and only in the room the effects leave | run-effects | state | New |
 | G1 | Every disabled control states why, in text or a working tooltip | all | state | Fail |
 | G2 | Go through every top-level page and back: each page restores section 3 state | nav-state **new** | state | Fail |
 | G3 | No dead nav items | nav-state **new** | state | Fail |

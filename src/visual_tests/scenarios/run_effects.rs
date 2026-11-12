@@ -173,4 +173,27 @@ pub fn run(d: &mut Driver<'_>) {
         "The count opens Conditions, which lists each effect",
     );
     d.state("effects-in-conditions", Sizes::Default);
+
+    // T20.6: damage to a row marked Conc gives its save's DC, with no action, notice or new
+    // line, until the next step.
+    let before = heights(d, &rows);
+    d.click_row(&current);
+    d.type_text("5");
+    d.press(Key::Enter);
+    let dc = row_name(d, &current).contains("Conc save DC 10");
+    let after = heights(d, &rows);
+    d.observe(
+        "T20.6",
+        dc && after == before,
+        format!(
+            "The row names the save's DC and keeps its height: {}",
+            row_name(d, &current)
+        ),
+    );
+    d.press(Key::N);
+    d.observe(
+        "T20.6",
+        !row_name(d, &current).contains("Conc save DC"),
+        "The DC lasts until the next step",
+    );
 }
