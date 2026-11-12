@@ -1404,18 +1404,36 @@ first.` So a wrong `Roll for encounters` can go at any time.
 
 ```text
 ▾  Road to the ford by the old quarry     Add to notes ⋯
-   Title      [Road to the ford by the old quarry ]
-   Notes      [                                   ]
-   Encounter checks    On the road ⌄ · 1d20 each day
+   Encounter checks
+   On the road ⌄ · 1d20 each day
+   ✓ 2 travel checks rolled.   ↶ Undo roll
    How long   [2 days                ]
               Day 3, 08:00 to Day 5, 08:00
      Day 3   12 · Nothing stirs.                    Clear
      Day 4   16 · Wolf Pack pick up the trail
              near the quarry gate.                  Clear
              Plan “Wolf Pack”
+   Title      [Road to the ford by the old quarry ]
+   Notes      [                                   ]
    Timeline
-✓ 2 travel checks rolled.   ↶ Undo roll
 ```
+
+- **The block comes first in the open row,** before **Title** and **Notes**, so the rolls stay near the row
+  (repair R1b). A Travel row without the block is as today. `Encounter checks` is a label above the table
+  menu, as every field's label is; `· 1d20 each day` follows the menu on its line, and dice words that move
+  to a line of their own start with the words, never with `·`.
+- **An act's result has one kept line** under the table's line: `2 travel checks rolled.` with `Undo roll`,
+  and the results of `Roll for encounters` and `Clear` there too. The line is reserved while the block shows, so a result coming or
+  going moves nothing below it, and at 960x640 it is in view where the DM pressed `Roll`. Words that do not
+  fit beside Undo end in `…`; the hover keeps them whole.
+- **The plan line's message** (`“Wolf Pack” is in tonight’s plan.` with `Undo plan line`, the note's Undo)
+  shows in place of the `Plan “Wolf Pack”` line of the check that the DM clicked; `In the plan` takes that place
+  when the Undo ends. The offer keeps from the start the height that its message needs at that width: one line
+  when the words and Undo fit, else the words with Undo under them (at 960x640 the message of `Bridge Ambush`
+  needs about 420 px and the row has less). So nothing moves when the message comes or goes, and it is never cut.
+  When that check is gone (cleared or rolled again) while the Undo lives, the message takes the kept line. If a
+  roll's result holds the kept line, the message ends the block, as before: the one known case where it moves
+  what is below (repair R1b, the owner's ruling).
 
 - **How long** is the Timeline's field. It is part of the block, so a plain Travel row does not gain a line.
 - **One check at each whole interval from the start, and none at the journey's end.** Two days give two
@@ -1423,8 +1441,8 @@ first.` So a wrong `Roll for encounters` can go at any time.
   results stay, under `Outside this journey now`. An empty length, or one that the clock cannot read, gives
   one line, `This journey`. `Roll all 2` shows under the lines while two or more are not rolled.
 - **The lines on screen follow the length as the DM types it.** New in P5, on Timeline and on the
-  Session page: the file takes the length on Enter or when the field loses focus. Today each key changes the
-  event (`src/timeline/page.rs:1011-1019`). An outside change to the event meets the Timeline's choices of
+  Session page, only for a journey whose block shows: the file takes the length on Enter or when the field
+  loses focus. Every other event's **How long** changes the event on each key, as before P5 (repair R1b). An outside change to the event meets the Timeline's choices of
   today at that save. `Roll for encounters` puts focus in **How long** when the
   journey has no length.
 - **A check belongs to its offset** from the journey's start: 0 hours, 24 hours, and so on. Its name is read

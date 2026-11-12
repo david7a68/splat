@@ -1150,12 +1150,12 @@ impl TimelinePage {
         notes: &mut crate::sessions::page::Sessions,
     ) {
         let c = colors();
-        checks::settle_length(book, self.selected.as_deref());
-        let Some(id) = self
+        let index = self
             .selected
-            .clone()
-            .filter(|id| book.events.iter().any(|event| event.id == *id))
-        else {
+            .as_ref()
+            .and_then(|id| book.events.iter().position(|event| event.id == *id));
+        checks::settle_length(book, index);
+        let Some(index) = index else {
             ui.label(Type::Heading.rich(ui, "An event").color(c.text));
             ui.add(
                 egui::Label::new(
@@ -1170,12 +1170,8 @@ impl TimelinePage {
             );
             return;
         };
+        let id = book.events[index].id.clone();
         let days = day_numbers(&book.events);
-        let index = book
-            .events
-            .iter()
-            .position(|event| event.id == id)
-            .expect("the selected event");
         let link = reference(&book.events[index], days[index]);
         let unsaved = book.event_unsaved(&id);
         let blocked = book
@@ -1401,10 +1397,18 @@ impl TimelinePage {
                         _ => "",
                     };
                     let focus = std::mem::take(&mut self.focus_length);
-                    let (words, taken) =
-                        checks::length_input(ui, &mut book.length, event, hint, focus);
-                    length = words;
-                    length_taken = taken;
+                    if checks::shown(event) {
+                        let (words, taken) =
+                            checks::length_input(ui, &mut book.length, event, hint, focus);
+                        length = words;
+                        length_taken = taken;
+                    } else {
+                        // With no checks to follow it, the event changes as the DM types.
+                        let width = ui.available_width();
+                        changed |=
+                            design::text_input(ui, "How long", &mut event.duration, hint, width)
+                                .changed();
+                    }
                 });
             }
             ruling = rest_ruling_line(ui, event);
@@ -1444,13 +1448,14 @@ impl TimelinePage {
                     length: &length,
                     tables,
                     planned: &|_| None,
+                    plan_line: None,
                 };
                 checks_act = checks::header(ui, &view, &mut self.checks).or(checks_act.take());
+                // The act's result keeps its line under the table, so it moves no field.
+                let done = self.checks_done.get(&id);
+                let result = done.map(|done| (done.words.as_str(), done.undo));
+                undo_checks |= design::undo_line(ui, Tone::Success, result);
                 checks_act = checks::lines(ui, &view, &mut self.checks).or(checks_act.take());
-                if let Some(done) = self.checks_done.get(&id) {
-                    ui.add_space(design::S);
-                    undo_checks |= design::undo_message(ui, Tone::Success, &done.words, done.undo);
-                }
             }
             ui.add_space(design::M);
             changed |= design::text_field(ui, "Where", &mut event.place, None, None).changed();
