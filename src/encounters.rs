@@ -2855,6 +2855,25 @@ impl Encounters {
             .simulate_sync_state(name, state);
     }
 
+    /// Every row with each time taken away, each effect as its plain words (rule P, X5).
+    /// Returns the conditions as they were, for `simulate_conditions`.
+    #[cfg(test)]
+    pub(crate) fn simulate_untimed(&mut self) -> Vec<Vec<crate::encounter_run::Condition>> {
+        self.run.as_mut().expect("an open run").simulate_untimed()
+    }
+
+    /// Give each row back the conditions that `simulate_untimed` returned.
+    #[cfg(test)]
+    pub(crate) fn simulate_conditions(
+        &mut self,
+        conditions: Vec<Vec<crate::encounter_run::Condition>>,
+    ) {
+        self.run
+            .as_mut()
+            .expect("an open run")
+            .simulate_conditions(conditions);
+    }
+
     /// A participant under another name. No fixture has a name this long.
     #[cfg(test)]
     pub fn simulate_rename(&mut self, name: &str, to: &str) {

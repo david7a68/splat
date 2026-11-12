@@ -211,6 +211,47 @@ pub(crate) fn history_edges(d: &mut Driver<'_>) {
     }
 }
 
+/// The selected name as the dock paints it.
+fn dock_name(d: &Driver<'_>) -> String {
+    d.nodes()
+        .iter()
+        .find(|node| node.name.starts_with("Selected: "))
+        .map_or_else(String::new, |node| d.painted_in(node.rect))
+}
+
+/// X65, X53: beside Lookup a row at 0 HP has `Death saves` first on the tile line, over the
+/// dock, so the dock's toggles keep the places they have for a row with HP, and the selected
+/// name keeps its slot: `Vault Guard` whole, not `Vault…`.
+fn death_saves_move_nothing(d: &mut Driver<'_>) {
+    let toggles = |d: &Driver<'_>| [d.place_of("Concentrating"), d.place_of("Absent")];
+    for size in [SMALL, DEFAULT] {
+        let (down, saves, amount, name) = d.at_size(size, |d| {
+            (
+                toggles(d),
+                d.place_of("Death saves"),
+                d.place_of("Amount"),
+                dock_name(d),
+            )
+        });
+        d.click_row("Brannoch Vale");
+        let up = d.at_size(size, |d| toggles(d));
+        d.click_row("Vault Guard");
+        d.observe(
+            "X65",
+            down.iter().all(Option::is_some)
+                && down == up
+                && saves
+                    .zip(amount)
+                    .is_some_and(|(saves, amount)| saves.bottom() <= amount.top())
+                && name == "Vault Guard",
+            format!(
+                "At {size:?}: toggles at 0 HP {down:?}, with HP {up:?}; Death saves {saves:?} \
+                 over Amount {amount:?}; the dock's name {name:?}"
+            ),
+        );
+    }
+}
+
 pub fn run(d: &mut Driver<'_>) {
     // The fight belongs to a session, so the plan and Timeline have it.
     d.click(NAV_SESSIONS);
@@ -633,6 +674,7 @@ pub fn run(d: &mut Driver<'_>) {
         "Continue fight leaves Lookup on its entry",
     );
     d.state("fight-continued-beside-lookup", Sizes::All);
+    death_saves_move_nothing(d);
     close_lookup(d);
     // Everything that reads the fight says it is live again.
     let told = story(d);

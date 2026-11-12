@@ -1458,15 +1458,20 @@ the dice, never before the name. In a wider dock the total (`= 4`, named `Rolled
 the block's edge, and a total of three digits gives up `=` there. Each place holds three digits whole; a longer total
 ends in `…`, and hover keeps the roll's whole line. No control of the dock moves when a total comes, changes or goes.
 Fit whole words, retain a distinguishing last word or copy number or
-letter, end shortened names with an ellipsis and drop trailing joining words. Hover and accessibility keep
-full names.
+letter, end shortened names with an ellipsis and drop trailing joining words: `Seraphina… Bell`, `Cinder… 2`.
+The dock's name keeps its last word while its slot holds the first word, `…` and the last word; else it is its
+first word's start and `…`, within the slot, so no control moves. The limit: in the 442 px dock at 960x640 the
+slot is 79 px (95 beside Lookup), and `Seraphina… Bell` needs 107, so it shows `Seraphina…`; from a 596 px
+dock the slot is 192 px. Hover and accessibility keep full names. A row at 0 HP with the panel hidden has `Death saves` first on the
+action tiles' line above the dock, so no control of the dock moves and the name keeps its slot.
 
 ### Effects and turn reminders
 
 An effect is words that the DM pins to one row, with or without a time. The dock's second line has a quiet
 `Effect` (`Action::quiet`, key `E`, icon `PIN`) `L` after Absent, in the room that is spare there, so no
-control of the line moves. It shows with its word while that room holds it and the selected name keeps its
-size and its words; else with its icon; and not at all otherwise. With several rows selected it is absent.
+control of the line moves. That room alone decides: it shows with its word while the room holds it, also
+beside a name that its slot cut; else with its icon; and not at all otherwise. Where it has no room, the
+Conditions tab's field says `Other effect, such as Bless 10 rounds`. With several rows selected it is absent.
 `Effect` makes line two one `add_field`, `Effect on <name>, such as Bless 10 rounds`, that belongs to its row:
 Enter adds and Escape clears, and both put focus in Amount; another selection or Next turn closes it, and its
 words wait for that row. `E` opens that field, or the Conditions tab's `Other effect…` field with focus when
@@ -1475,26 +1480,34 @@ words wait for that row. `E` opens that field, or the Conditions tab's `Other ef
 name with a time is that condition with a count, and words already on the row change their time.
 
 A row's effects never add a line or change its height: the row has the lines and the height of the same row
-with no effect. They take the conditions' place in today's order, before plain conditions; every other word
-keeps its place. Each effect shows whole while the line has room; else the first ones and a count of the rest,
-`⚑ +2`; else the first one's words shortened from their end and the count; else the count of all, `⚑ 3`; else
-nothing on the row. A count has a slot as wide as its widest form (`10`, `· last round`, `· ⚠ time is up`), so a
+with each time taken away, where each effect is its plain words and an official condition with a time is that
+condition. They take the conditions' place in today's order, before plain conditions; every other word keeps
+its place. On the row that has the turn, an effect shown on each turn comes first, and keeps its first words
+before the last plain condition folds into `1 more`. Each effect shows whole while the line has room; else the
+first ones and a count of the rest, `⚑ +2`, a space after their slot with no dot; else the first one's words
+shortened from their end and the count; else the count of all, `⚑ 3`; else the row shows the effects as their
+plain words, as the row with no time does. A count has a slot as wide as its widest form (`10`, `· last round`, `· ⚠ time is up`), so a
 change of count moves no word, and its underline stops at its last letter. Words read `Bless 9`, `Bless · last
 round`, `Bless · time is up` (the `result.warning` icon, words in `text`), `Legendary actions 2 of 3`, `Fire
 Breath ready`, `Fire Breath spent ⚄`. An official condition's name opens its rule; the count is its own
 target of at least `XL`: a running count or words shown on each turn open Conditions, `time is up` removes,
-uses spend one (at none, give all back), a ready recharge is marked spent and a spent one rolls 1d6. The row's
+uses spend one (at none, give all back), a ready recharge is marked spent and a spent one rolls 1d6: its die
+shows in the dice total's place, named `Rolled 2 for Cinder Drake: Fire Breath`, and the run's footer and the
+total's hover say `Rolled 2 for Cinder Drake: Fire Breath still spent.` until the DM's next act: any step, roll or
+Undo. The row's
 hover and accessible name hold every whole word. After damage to a row marked Conc, `Conc save DC 12` ends
 its second line until the next step, only in the room that the effects leave; else only in the hover and the
-accessible name. Conditions lists each effect with its whole words. An ended run shows them as words, and a
-click does nothing.
+accessible name. In Conditions an official condition's count is on its tick, `✓ Frightened 10`, while the
+grid fits its room; else it is listed under Other effects, which lists other words with their whole words. The
+tab's help says `No HP, AC or roll changes by itself. A time you type counts down on that creature’s turns.` An
+ended run shows them as words, and a click does nothing.
 
 The notice line has a third part after the state notice and the sheet summary: the current turn's reminders,
 from effects with a time, `Tone::Info` icon `PIN` and `text` words. They show whole in the room that the state
 notice, the summary and today's Undo label leave; else their count; else not at all, and the row has them.
 `Next:` gives way to them. No reminder makes Undo shorter or a state notice lose a word. A conflict's name
-wider than the line beside the bare Undo shortens as the dock's name does; the icon, `Conflict` and Review
-stay.
+wider than the line beside the bare Undo shortens by the header's rule for its names; the icon, `Conflict`
+and Review stay. The dock's selected name follows the dock's rule.
 
 Overflow clips above a separate page-filled band and hairline. Count rows above and below, including rows cut
 by the edge, and their Conflict, 0 HP and Bloodied states. Each turn scrolls current and next rows into view.

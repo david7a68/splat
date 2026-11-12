@@ -5883,6 +5883,23 @@ pub mod run_long_names {
             !d.has("Effect: words for this row"),
             "Effect gives up its place beside the longest name at 960x640",
         );
+        // X9, X53: where the room after Absent holds it, `Effect` shows also beside a name that
+        // its slot cut, and the cut name keeps its telling last word.
+        for size in [DEFAULT, LARGE] {
+            let (effect, name) = d.at_size(size, |d| {
+                let name = d
+                    .nodes()
+                    .iter()
+                    .find(|node| node.name == format!("Selected: {LONG_NAME}"))
+                    .map_or_else(String::new, |node| d.painted_in(node.rect));
+                (d.has("Effect: words for this row"), name)
+            });
+            d.observe(
+                "X9",
+                effect && name.starts_with(FIRST_NAME) && name.ends_with("… Bell"),
+                format!("At {size:?}: Effect {effect} beside the dock's name {name:?}"),
+            );
+        }
         d.begin_task();
         d.click_row(LONG_NAME);
         d.press(Key::E);
@@ -5911,6 +5928,16 @@ pub mod run_long_names {
         d.click(NEXT_TURN);
         d.state("long-name-has-the-turn", Sizes::All);
         check_columns_stay(d, "With the turn");
+        // X5: a row's lines are those of the same row with each time taken away, so the
+        // effect shows where its plain words would, beside a name of three lines too.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let words = d.at_size(size, |d| d.row_words(LONG_NAME));
+            d.observe(
+                "X5",
+                words.contains("Bless 10"),
+                format!("At {size:?} the long name's row paints: {words}"),
+            );
+        }
         let turn = current_participant(d);
         let header = d.header_rect();
         let words = d.painted_in(header);
