@@ -3,18 +3,21 @@
 Each journey script (`src/visual_tests/dm_audit/journeys.rs`) plays the real app. Where a step could not be
 done as section 2 of `docs/design/session-cycle.md` walks it, or cost more, or the app showed a wrong state,
 the fault is below, and the script takes the route a DM would have to take, so that the measure is true. No
-app code changed in this pull request. "The driver's words" are what the driver printed when the designed act
+app code changed in this pull request. The journeys were first played on `main` at `9d3e0677`, and frozen after
+the merge of `main` at `bd7ff4b0`, which holds pull request 280. "The driver's words" are what the driver printed when the designed act
 found no control, or a fact that the journey's `summary.tsv` records.
 
-## J2-1, J6-1. After `Roll for encounters`, the focus is not in `How long`
+## J2-1, J6-1. After `Roll for encounters`, the focus was not in `How long` (gone on `main` `bd7ff4b0`)
 
 - **Journey and step:** J2 step 6 (two days overland), at 1200x800; and J6's Travel row with its checks.
 - **What I did:** `More Add actions`, `Add Travel`, the row's menu, `Roll for encounters`, then typed `2 days`.
-- **What I saw:** the typed words went nowhere; the block said `Cannot roll`, and `How long` stayed empty.
-  Section 2.2 step 6 says `Roll for encounters` "puts focus in **How long**". With one marked table in the
-  campaign, nothing has focus. (`travel-checks` tests the focus only with several tables and no table chosen.)
-- **The driver's words:** `after Roll for encounters, the focus is in None` (J2 and J6 `summary.tsv`).
-- **Route measured:** click `How long`, then type: 1 more act in each journey.
+- **What I saw on `9d3e0677`:** the typed words went nowhere; the block said `Cannot roll`, and `How long` stayed
+  empty. Section 2.2 step 6 says `Roll for encounters` "puts focus in **How long**". With one marked table in the
+  campaign, nothing had focus, and the DM clicked the field first: 1 more act in each journey.
+- **The driver's words:** `after Roll for encounters, the focus is in None` (J2 and J6 `summary.tsv` then).
+- **Now:** after the merge of `main` at `bd7ff4b0` (pull requests 280 and 281), the focus is in `How long`, and both
+  steps cost what the design says. The script keeps both routes, so the fact in `summary.tsv` says where the focus
+  is, and G6 goes red if it moves again.
 
 ## J6-2. Lookup's reader of an NPC has no `Change` on Status
 
@@ -64,3 +67,13 @@ found no control, or a fact that the journey's `summary.tsv` records.
   ["Moderate", "Low"]`).
 - **Not a fault of the design:** section 2.6 does not walk this step. It is measured so that a later change can
   be weighed.
+
+## J3-2. A removed scene's `Undo remove` went away when the next fight began (W6-D1; repaired by 280)
+
+- **Journey and step:** J3, after the second fight: `Remove from tonight` on the scene, `Start fight` on the fight
+  before it, then **Session** for `Undo remove`.
+- **What I saw on `9d3e0677`:** the plan had no `Undo remove`, and the scene's line stayed out of the note.
+- **The driver's words:** `journey-j3: no visible node for control "Undo remove".` and the fact `the scene's line
+  is back in the note: false`.
+- **Now:** on `bd7ff4b0` (pull request 280), `Undo remove` is on the Session page after the fight began, and the
+  line is back (fact true): 2 acts, with the transition back to the Session page.

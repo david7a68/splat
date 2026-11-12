@@ -201,19 +201,19 @@ before the features) where the design gives it. **T** is a page transition.
 | — | He gives up: end the fight | Do 3 = **3** | as today | 3 |
 | 4 | A line in his Log | Panel 2, Do 3 = **5** | 5 | 6 |
 | 5 | Close, keep the rewards, add loot nobody planned | Nav 1, Find 1, Do 3 = **5**, T | 5, T | 4 |
-| 6 | Two days overland, with the checks rolled | Find 2, Do 5 = **7** | 6 | 12, T T |
+| 6 | Two days overland, with the checks rolled | Find 2, Do 4 = **6** | 6 | 12, T T |
 | 7 | The second day names the Wolf Pack: plan it, start it | Nav 1, Do 1 = **2**, T | 2, T | 3, T |
 | — | Roll and begin the Wolf Pack fight | Do 11 = **11** | as today | 11 |
 | — | End the Wolf Pack fight | Nav 1, Do 2 = **3**, T | as today | 3, T |
 | — | The Wolf Pack fight's rewards in the note | Do 1 = **1** | — | no route |
-| — | Mark the talk with him done, and log what happened | Panel 2, Find 1, Do 4 = **7** | — | — |
-| | **Steps 2 to 7** | **22, 3 T** | **21, 3 T** | **35, 6 T** |
-| | **The whole journey** | **58, 4 T** (Nav 4, Panel 6, Find 4, Do 44) | | |
+| — | Mark the talk with him done, and log what happened | Panel 2, Do 4 = **6** | — | — |
+| | **Steps 2 to 7** | **21, 3 T** | **21, 3 T** | **35, 6 T** |
+| | **The whole journey** | **56, 4 T** (Nav 4, Panel 6, Find 3, Do 43) | | |
 
 Step 5's `Add rewards` is a line of the row's menu: beside the note at 1200x800 the plan is too narrow for it on
 the row or as the opened row's last link (the fit rule of section 2.5, row 10). The menu costs the Find that the
-design counts for opening the row. The last task's Find is the scenes' fold (`1 scene`), and one of its four Do
-is the scroll that brings the scene's row into view.
+design counts for opening the row. One of the last task's four Do is the scroll that brings the done scene's row
+into view.
 
 ### J3, the broken evening (960x640, Lookup open)
 
@@ -231,11 +231,15 @@ is the scroll that brings the scene's row into view.
 | — | End the second fight | Nav 1, Do 2 = **3**, T | as today | 3, T |
 | W6-D1 | Take a scene off tonight's plan | Find 1, Do 1 = **2** | — | — |
 | W6-D1 | Begin the fight before it | Nav 1 = **1**, T | — | — |
-| W6-D1 | The scene is wanted after all: `Undo remove` | P280 | — | — |
+| W6-D1 | The scene is wanted after all: **Session**, `Undo remove` | Nav 1, Do 1 = **2**, T | — | — |
 | | **Steps 1, 2, 3 and 5 (recovery)** | **3** | **3** (8 with step 4) | **8** with step 4, with pull request 232 |
+| | **The whole journey** | **26, 3 T** (Nav 3, Sub 1, Panel 1, Find 3, Do 18) | | |
 
 After the restart the app opens on the run, the wolf's row says `Poisoned 2`, and `Undo` names the last saved
-step (facts in `journeys/J3/summary.tsv`). The design's 8 for steps 1 to 5 holds 5 for step 4, which the driver
+step. The line added in Obsidian shows in the plan once the app's one-second poll has run, and the later
+`Remove from tonight` and `Undo remove` keep it in the file. With pull request 280, `Undo remove` stays in reach
+after the next fight begins (W6-D1 of the first scored round), from the Session page (facts in
+`journeys/J3/summary.tsv`). The design's 8 for steps 1 to 5 holds 5 for step 4, which the driver
 cannot play.
 
 ### J4, the race (1200x800)
@@ -278,16 +282,15 @@ cannot play.
 | 8 | Three scenes | Do 4 = **4** | 4 | 4 |
 | 9 | Is each fight right for this party? | **0** | 0 to 2 | by hand |
 | — | Make the Gate Watch harder in the encounter editor | Nav 2, Find 3, Do 2 = **7**, T T | — | — |
-| — | Prepare the road: a Travel row with its checks | Find 2, Do 5 = **7** | — | — |
+| — | Prepare the road: a Travel row with its checks | Find 2, Do 4 = **6** | — | — |
 | 10 | Start the first fight | Nav 1 = **1**, T | 1, T | 1 |
 | | **Steps 1 to 10** | **25, 2 T** (Nav 2, Panel 2, Find 1, Do 20) | **23 to 25, 2 T** | **20**, with no route for 5, 7 and 9 |
-| | **The whole journey** | **39, 4 T** (Nav 4, Panel 2, Find 6, Do 27) | | |
+| | **The whole journey** | **38, 4 T** (Nav 4, Panel 2, Find 6, Do 26) | | |
 
 ### Above the design
 
 | Journey and step | Measured | Designed | The acts, in order | Why |
 |---|---:|---:|---|---|
-| J2 step 6 | 7 | 6 | `More Add actions`, `Add Travel`, the row's menu, `Roll for encounters`, click `How long`, type `2 days`, `Roll all 2` | The focus is not in `How long` after `Roll for encounters` (FINDINGS J2-1). The same act costs 1 more in J6's road |
 | J6 step 2 | 7 | 5 | Ctrl+K, type `verori`, `Edit Verori`, click Status, select all, type `dead`, `Save changes` | Lookup's reader is compact and has no `Change` on Status (FINDINGS J6-2) |
 | J3 step 2 | 5 | not counted; the walk implies 4 | select the wolf, **Conditions**, click `Other effect` and type, Enter | At 960x640 with Lookup open the dock has no `Effect` and `E` is off; the Conditions tab closes Lookup (FINDINGS J3-1) |
 | J4, the arena fight's start | 2 | 1 (no tracker act in the fight) | `Start fight`, Ctrl+T | Trackers stays open in the run, in the fight panel's place (FINDINGS J4-1) |
