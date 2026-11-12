@@ -387,12 +387,12 @@ fn notice_row(
 fn notice_words(rules: &Rules, notice: &super::Notice, mark: Says<'_>) -> String {
     match (&notice.id, notice.days.as_slice(), &notice.instance) {
         (NoticeRef::Day { day, .. }, [_], _) => format!("Day {day}: {}", mark.say),
-        (NoticeRef::Day { mark: key, day }, days, _) => {
-            let title = rules
-                .day_mark(key)
-                .map_or(key.as_str(), super::DayMark::title);
-            format!("{title} ×{}. Next: Day {day}. {}", days.len(), mark.say)
-        }
+        (NoticeRef::Day { mark: key, day }, days, _) => format!(
+            "{} ×{}. Next: Day {day}. {}",
+            rules.day_title(key),
+            days.len(),
+            mark.say
+        ),
         (_, _, Some(name)) => format!("{name}: {}", mark.say),
         (_, _, None) => mark.say.to_owned(),
     }
