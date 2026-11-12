@@ -3963,10 +3963,7 @@ impl Library {
                 .and_then(|offer| {
                     let count = self.link_rename_count(&offer.old, &offer.new);
                     (count > 0).then(|| {
-                        (
-                            format!("Change links from “{}” to “{}”.", offer.old, offer.new),
-                            format!("Update {}", design::count(count, "link", "links")),
-                        )
+                        crate::content_workspace::link_offer_words(&[&offer.old], &offer.new, count)
                     })
                 }),
             links: self
