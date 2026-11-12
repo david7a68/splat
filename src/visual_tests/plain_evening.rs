@@ -2017,9 +2017,8 @@ mod allowed_classes {
                 // The link that Read showed in a task line is now on the scene's row.
                 "resized" => {
                     LINKS.contains(&name)
-                        && moved(d).is_some_and(|(before, after)| {
-                            before[0] >= READ_X && after[0] < READ_X
-                        })
+                        && moved(d)
+                            .is_some_and(|(before, after)| before[0] >= READ_X && after[0] < READ_X)
                 }
                 _ => false,
             }
