@@ -676,6 +676,7 @@ impl Reader {
                                 && let Some(draft) = self.edits.remove(&id)
                             {
                                 self.discarded = Some((id, draft));
+                                self.stamp(super::FooterAct::Discarded);
                             }
                         });
                     },
@@ -1076,6 +1077,7 @@ impl Reader {
             self.form_focused = false;
             if draft.dirty() {
                 self.discarded = Some((id, draft));
+                self.stamp(super::FooterAct::Discarded);
             }
             return None;
         }
@@ -1085,6 +1087,7 @@ impl Reader {
                     self.picker = None;
                     self.form_focused = false;
                     self.undo = Some(change);
+                    self.stamp(super::FooterAct::Change);
                     self.kept = None;
                     return Some(Go::Reload(id));
                 }

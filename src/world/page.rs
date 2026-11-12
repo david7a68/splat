@@ -154,6 +154,8 @@ pub struct WorldPage {
     generated_shown: bool,
     /// The NPC that Discard let go, with its table facts, for one `Undo discard`.
     discarded_npc: Option<Held>,
+    /// When the page's result (`Note repaired.` or the NPC's discard) was made.
+    result_order: u64,
     generator_problems: Vec<crate::npc_generator::TableProblem>,
     generator_sources: Vec<String>,
     error: Option<PageError>,
@@ -613,6 +615,7 @@ impl WorldPage {
                         self.view = View::Reader;
                         self.selected = repair.entry_id();
                         self.repaired = self.selected;
+                        self.result_order = super::next_order();
                         // The repair is the newer result. A change result kept from before the
                         // note broke has nothing left to undo, and would hide `Note repaired.`.
                         // Another note's rename keeps its Undo.
@@ -660,7 +663,7 @@ impl WorldPage {
                 else {
                     // The result sits in the pane's footer, as it does below a note (round 26
                     // FF1), so the empty state's advice keeps its place.
-                    let lines: Vec<_> = self.result(None).iter().map(|r| r.line()).collect();
+                    let lines: Vec<_> = self.result(None).iter().map(|(r, _)| r.line()).collect();
                     if super::draw_footer(ui, "world_footer", &lines).0.is_some() {
                         self.undo_discard();
                     }
@@ -682,9 +685,12 @@ impl WorldPage {
                 // Every result, reason and Undo of the open note sits in the pane's footer,
                 // pinned below the reader, so none of them moves the note (round 26).
                 let page = self.result(Some(item.entry.id));
-                let lines = self
-                    .reader
-                    .footer_lines(item, index, Some(campaign), page.as_ref());
+                let lines = self.reader.footer_lines(
+                    item,
+                    index,
+                    Some(campaign),
+                    page.as_ref().map(|(page, order)| (page, *order)),
+                );
                 let (pressed, bottom) = super::draw_footer(ui, "world_footer", &lines);
                 match pressed {
                     Some(super::FooterAct::Page) => self.undo_discard(),
@@ -769,15 +775,18 @@ impl WorldPage {
         }
     }
 
-    /// The result this page shows below the file line: the NPC Discard let go, or the repair
-    /// that made the open note readable.
-    fn result(&self, open: Option<Uuid>) -> Option<super::PageResult> {
+    /// The result this page shows in the footer: the NPC Discard let go, or the repair that made
+    /// the open note readable, with when it was made (`world::next_order`).
+    fn result(&self, open: Option<Uuid>) -> Option<(super::PageResult, u64)> {
         if let Some((npc, _, _)) = self.discarded_npc.as_ref()
             && self.generated.is_none()
         {
-            Some(super::PageResult::Discarded(npc.name.clone()))
+            Some((
+                super::PageResult::Discarded(npc.name.clone()),
+                self.result_order,
+            ))
         } else if open.is_some() && self.repaired == open {
-            Some(super::PageResult::Repaired)
+            Some((super::PageResult::Repaired, self.result_order))
         } else {
             None
         }
@@ -962,6 +971,7 @@ impl WorldPage {
             if choice.discard
                 && let Some(npc) = self.generated.take()
             {
+                self.result_order = super::next_order();
                 self.discarded_npc = Some((
                     npc,
                     std::mem::take(&mut self.generator_problems),

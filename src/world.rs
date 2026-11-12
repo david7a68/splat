@@ -1855,9 +1855,18 @@ impl GroupFault {
     }
 }
 
+/// When a result was made: one count for every World and Lookup result, so a footer lists its
+/// results with a live Undo newest first, whatever their kind (round 26 review 3).
+pub(crate) fn next_order() -> u64 {
+    static ORDER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    ORDER.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1
+}
+
 /// Lookup's and the World page's reader, and its controls for the item on show.
 #[derive(Default)]
 pub struct Reader {
+    /// When each kept result was made (`next_order`), by the action its Undo takes.
+    orders: HashMap<FooterAct, u64>,
     showing: Option<Uuid>,
     status: String,
     status_editing: bool,
@@ -1947,7 +1956,7 @@ pub(crate) enum FooterRank {
 }
 
 /// What a footer line's action does. The pane takes it after the footer draws.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum FooterAct {
     /// Undo the value, edit-form or row change (`Reader::undo`).
     Change,
@@ -1982,6 +1991,8 @@ pub(crate) enum FooterKind {
 /// that comes and goes. It sits below the pane's scroll area, so it never moves the note.
 #[derive(Clone)]
 pub(crate) struct FooterLine {
+    /// When its result was made (`next_order`): newer results come first within a rank.
+    pub order: u64,
     pub rank: FooterRank,
     pub tone: Tone,
     pub words: String,
@@ -1991,11 +2002,18 @@ pub(crate) struct FooterLine {
 impl FooterLine {
     pub(crate) fn new(rank: FooterRank, tone: Tone, words: &str, kind: FooterKind) -> Self {
         Self {
+            order: 0,
             rank,
             tone,
             words: words.to_owned(),
             kind,
         }
+    }
+
+    /// The line, made at `order`.
+    pub(crate) fn at(mut self, order: u64) -> Self {
+        self.order = order;
+        self
     }
 
     pub(super) fn discarded(name: &str, act: FooterAct) -> Self {
@@ -2476,6 +2494,7 @@ impl Reader {
                         match result {
                             Ok(rename) => {
                                 self.file_undo = Some(rename);
+                                self.stamp(FooterAct::FileRename);
                                 return Some(Go::Reload(item.entry.id));
                             }
                             Err(error) => self.error = Some(error),
@@ -2506,6 +2525,7 @@ impl Reader {
                         match result {
                             Ok(change) => {
                                 self.name_undo = Some(change);
+                                self.stamp(FooterAct::Name);
                                 return Some(Go::Reload(item.entry.id));
                             }
                             Err(error) => self.error = Some(error),
@@ -2550,6 +2570,7 @@ impl Reader {
                     match new_identity(campaign, path) {
                         Ok((undo, id)) => {
                             self.identity_undo = Some((campaign.id, undo));
+                            self.stamp(FooterAct::Identity);
                             return Some(Go::Reload(id));
                         }
                         Err(error) => self.error = Some(error),
@@ -2902,6 +2923,7 @@ impl Reader {
                 self.group_error = false;
                 self.group_error_unread_file = false;
                 self.undo = Some(change);
+                self.stamp(FooterAct::Change);
                 self.kept = None;
                 self.picker = None;
                 self.place_choices_open = false;
@@ -3313,7 +3335,7 @@ impl Reader {
         item: &Item,
         index: &ContentIndex,
         campaign: Option<&Campaign>,
-        page: Option<&PageResult>,
+        page: Option<(&PageResult, u64)>,
     ) -> Vec<FooterLine> {
         self.prepare(item);
         let id = item.entry.id;
@@ -3349,9 +3371,11 @@ impl Reader {
         {
             self.identity_undo = None;
         }
+        let page_order = page.map_or(0, |(_, order)| order);
+        let page = page.map(|(page, _)| page);
         if editing {
             lines.extend(page.map(|page| page.line()));
-            return lines;
+            return self.newest_first(lines, page_order);
         }
         let undo = |words: &str, label: &'static str, act| {
             FooterLine::new(
@@ -3415,6 +3439,32 @@ impl Reader {
                 FooterKind::Plain,
             ));
         }
+        self.newest_first(lines, page_order)
+    }
+
+    /// A kept result was made now: it goes first among the results with a live Undo.
+    pub(super) fn stamp(&mut self, act: FooterAct) {
+        self.orders.insert(act, next_order());
+    }
+
+    /// Each line with the order its action was made at; then the footer's order: results with
+    /// a live Undo newest first, then reasons, then notices.
+    fn newest_first(&self, lines: Vec<FooterLine>, page: u64) -> Vec<FooterLine> {
+        let mut lines: Vec<_> = lines
+            .into_iter()
+            .map(|line| {
+                let order = match &line.kind {
+                    FooterKind::Undo { act, .. } | FooterKind::Discarded { act, .. } => match act {
+                        FooterAct::Page => page,
+                        act => self.orders.get(act).copied().unwrap_or(0),
+                    },
+                    _ if line.rank == FooterRank::Notice => page,
+                    _ => 0,
+                };
+                line.at(order)
+            })
+            .collect();
+        lines.sort_by_key(|line| (line.rank, std::cmp::Reverse(line.order)));
         lines
     }
 
@@ -3941,6 +3991,8 @@ impl Reader {
                         Ok(mut change) => {
                             change.word = change_words("Stat block", None, Some(&stat_block.name));
                             self.undo = Some(change);
+                            // A field of its own: `adding` still borrows the form.
+                            self.orders.insert(FooterAct::Change, next_order());
                             self.kept = None;
                         }
                         Err(error) => self.error = Some(error),

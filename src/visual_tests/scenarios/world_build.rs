@@ -1210,8 +1210,50 @@ pub fn broken(d: &mut Driver<'_>) {
     reload(d);
     d.click_containing("Lamp Warden · ");
     let lamp_original = fs::read_to_string(&lamp).unwrap();
+    // Round 26 review 3: results with a live Undo are listed newest first, whatever their kind.
+    // Order 1: an edit's Discard, then the name change. Order 2: the name change, then a Discard.
+    let newer_above = |d: &mut Driver<'_>, newer: &str, older: &str| {
+        let (newer_at, older_at) = (d.place_of(newer), d.place_of(older));
+        (
+            newer_at
+                .zip(older_at)
+                .is_some_and(|(newer, older)| newer.top() < older.top()),
+            format!("{newer:?} at {newer_at:?}, {older:?} at {older_at:?}"),
+        )
+    };
+    d.click("Edit Lamp Warden");
+    d.type_into("Status", "awake");
+    d.click("Discard");
+    let discard = d.name_starting("Undo discard of ");
     d.click("Rename the note to Lamp");
     d.wait_for_text("Undo name change");
+    let first = newer_above(d, "Undo name change", &discard);
+    d.click("Undo name change");
+    d.settle();
+    assert_eq!(
+        fs::read_to_string(&lamp).unwrap(),
+        lamp_original,
+        "A's rename undone"
+    );
+    d.click("Rename the note to Lamp");
+    d.wait_for_text("Undo name change");
+    d.click("Edit Lamp");
+    d.type_into("Status", "asleep");
+    d.click("Discard");
+    let discard = d.name_starting("Undo discard of ");
+    let second = newer_above(d, &discard, "Undo name change");
+    d.observe(
+        "iter-26-D-newest-first",
+        first.0 && second.0,
+        format!(
+            "Discard then rename: {}; rename then Discard: {}",
+            first.1, second.1
+        ),
+    );
+    // The next Edit ends the discard's Undo; the clean form closes with Cancel.
+    d.click("Edit Lamp");
+    d.click("Cancel");
+    d.expect("Undo name change");
     let lamp_renamed = fs::read_to_string(&lamp).unwrap();
     assert!(
         lamp_renamed.contains("splat_name: Lamp\n"),
@@ -7748,18 +7790,22 @@ pub fn world_note_deleted(d: &mut Driver<'_>) {
         .into_iter()
         .find(|node| node.name.starts_with("Watchkeeper · ") && node.name.contains("NPC"))
         .map(|node| node.name);
+    // The neighbour is required: the stat block's own result row, a creature, with no mark.
+    let guard = d
+        .nodes()
+        .into_iter()
+        .find(|node| node.name.starts_with("Watchkeeper Guard · "))
+        .map(|node| node.name);
     d.observe(
         "iter-26-D-AE2",
         row.as_ref().is_some_and(|row| {
             row.find(&mark)
                 .zip(row.find("A note for tonight"))
                 .is_some_and(|(mark, summary)| mark < summary)
-        }) && d
-            .nodes()
-            .iter()
-            .filter(|node| node.name.starts_with("Watchkeeper Guard · "))
-            .all(|node| !node.name.contains(&mark)),
-        format!("Lookup's result row is {row:?}"),
+        }) && guard.as_ref().is_some_and(|guard| {
+            guard.contains("Creature") && !guard.contains(design::icons::WARN)
+        }),
+        format!("Lookup's result row is {row:?}; the stat block's row is {guard:?}"),
     );
     d.state("npc-place-deleted-in-lookup", Sizes::All);
     d.press(Key::Escape);
