@@ -280,12 +280,12 @@ fn improvised_evening(a: &mut Audit<'_, '_>) {
     );
     a.setup("save, quit and open the app at the table", restart);
     a.phase = "during";
+
+    a.task("Play the planned NPC: read Warden Ostrel");
     a.fact(format!(
         "the planned fight stays on the plan, skipped: {}",
         a.d.has(&format!("Start fight: {SHRINE}"))
     ));
-
-    a.task("Play the planned NPC: read Warden Ostrel");
     a.act(Panel, "open him from the scene", |d| {
         d.click_starting(&format!("{OSTREL} (opens"));
     });
@@ -515,12 +515,8 @@ fn broken_evening(a: &mut Audit<'_, '_>) {
         d.focus_window(true);
         d.settle();
     });
+    // Nothing opens on the Run page; the plan shows the line when the DM next looks at it.
     a.task("The note changed in Obsidian: see it in Splat");
-    a.fact(format!(
-        "the app holds the file's new line: {}",
-        a.d.app().sessions.selected_path().is_some()
-            && note_on_disk(a.d).contains("Pay the ferryman")
-    ));
 
     a.task("End the second fight");
     counted_end(a, None);
@@ -528,6 +524,10 @@ fn broken_evening(a: &mut Audit<'_, '_>) {
 
     a.phase = "after the fight";
     a.task("Take a scene off tonight's plan");
+    a.fact(format!(
+        "the plan holds the line added in Obsidian: {}",
+        a.d.has_containing("Pay the ferryman")
+    ));
     a.click(Find, "More actions for Ask the watch about the ropes");
     a.click(Do, "Remove from tonight");
 
@@ -880,13 +880,8 @@ fn week_between(a: &mut Audit<'_, '_>) {
     a.act(Do, "add an Oni", |d| d.click_first(ADD));
     a.click(Do, SAVE_ENCOUNTER);
     a.click(Nav, NAV_SESSIONS);
-    let summary =
-        a.d.nodes()
-            .into_iter()
-            .find(|node| node.name.starts_with(&format!("{GATE} · ")))
-            .map(|node| node.name);
     a.fact(format!(
-        "the rows' words after the change: {:?}; the Gate Watch row: {summary:?}",
+        "the planned fights' rows say after the change: {:?}",
         words(a.d)
     ));
 
