@@ -5493,7 +5493,7 @@ pub mod run_lookup {
         // slot; no control of the dock moves, and Lookup keeps the spell.
         let sizes = [SMALL, DEFAULT, LARGE];
         let before = sizes.map(|size| d.at_size(size, super::session_plan::dock_places));
-        for (expression, total) in [("1d1+3", 4), ("1d1+99", 100)] {
+        for (expression, total) in [("1d1+3", 4), ("100d1", 100)] {
             d.type_into("Dice", expression);
             d.press(Key::Enter);
             for (size, before) in sizes.into_iter().zip(&before) {
