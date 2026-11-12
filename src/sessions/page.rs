@@ -4331,7 +4331,8 @@ impl Sessions {
                 Some(Written {
                     title: note.label(),
                     detail: format!("Session note · {}", note.date),
-                    text: words_to_read(&body, book),
+                    // Search shows found lines as they read: a travel check's mark is no word.
+                    text: words_to_read(&crate::timeline::checks::without_marks(&body), book),
                     place: WrittenIn::Session(note.id),
                 })
             })

@@ -4227,6 +4227,35 @@ mod tests {
         assert_eq!(scene.task.line, line, "acts on the line keep it whole");
     }
 
+    /// Review round 2, finding 3: Lookup's search of session notes shows found lines as they
+    /// read, so a plan line's mark is not among its words.
+    #[test]
+    fn pr284_r2_search_shows_no_mark() {
+        use crate::sessions::{NewNote, create_note};
+        let dir = tempfile::tempdir().unwrap();
+        let note = create_note(
+            dir.path(),
+            &NewNote {
+                number: 1,
+                title: "Road",
+                date: "2026-11-12",
+                campaign: "Marches",
+                template: "## Plan for tonight\n- [[Bridge Ambush]] <!-- splat:check journey=t-road at=24 sum=12345678 --> Bring silver weapons.\n",
+            },
+        )
+        .unwrap();
+        let sessions = Sessions {
+            notes: vec![note],
+            ..Sessions::default()
+        };
+        let written = sessions.written(&Book::default());
+        let text = &written[0].text;
+        assert!(
+            text.contains("Bring silver weapons.") && !text.contains("splat:check"),
+            "{text:?}"
+        );
+    }
+
     /// Review finding 2: Begin reads the session note as the file holds it at that moment, not
     /// the open draft, which can be older.
     #[test]

@@ -132,6 +132,13 @@ pub fn marked(line: &str) -> MarkedLine {
     }
 }
 
+/// A note's words as readers show them: each line's words without its mark, byte for byte.
+pub fn without_marks(text: &str) -> String {
+    text.split_inclusive('\n')
+        .map(|line| marked(line).words)
+        .collect()
+}
+
 impl RoadMark {
     /// The mark for a check of this journey, when its offset can be read.
     pub fn new(journey: &str, check: &Check) -> Option<Self> {
