@@ -3735,6 +3735,23 @@ pub mod encounter_run {
 
         d.click_row(TARGET);
         d.state("participant-selected", Sizes::Default);
+        // T20.1: the dock's Effect shows its key while the key works, as each dock key does;
+        // beside Lookup the letters are text, and the key is not shown.
+        let effect_key = |d: &Driver<'_>| {
+            d.place_of("Effect: words for this row")
+                .map(|effect| d.painted_in(effect).replace('\u{a0}', " "))
+        };
+        let closed = effect_key(d);
+        look_up(d, KEYBOARD_LOOKUP);
+        let open = effect_key(d);
+        d.press_ctrl(Key::K);
+        d.click_row(TARGET);
+        d.observe(
+            "T20.1",
+            closed.as_deref().is_some_and(|words| words.contains("Effect") && words.contains('E'))
+                && open.as_deref().is_none_or(|words| !words.contains(" E")),
+            format!("Effect with Lookup closed: {closed:?}; open: {open:?}"),
+        );
         d.type_text(DAMAGE);
         d.press(Key::Enter);
         d.observe(
@@ -5007,6 +5024,26 @@ pub mod run_long_names {
         d.click_row(LONG_NAME);
         d.state("long-name", Sizes::All);
         check_columns_stay(d, "Selected");
+        // T20.1: beside the longest name the dock has no Effect, and the name keeps its size
+        // and its words as before; E adds the effect through the Conditions tab's field in 4.
+        d.observe(
+            "T20.1",
+            !d.has("Effect: words for this row"),
+            "Effect gives up its place beside the longest name at 960x640",
+        );
+        d.begin_task();
+        d.click_row(LONG_NAME);
+        d.press(Key::E);
+        d.type_text("Bless 10 rounds");
+        d.press(Key::Enter);
+        d.goal_within("T20.1", "pin an effect beside the longest name", 4);
+        d.observe(
+            "T20.1",
+            d.nodes()
+                .iter()
+                .any(|node| node.name.starts_with(LONG_NAME) && node.name.contains("Bless 10")),
+            "The Conditions tab's field read the time",
+        );
         let row = d.row_words(LONG_NAME);
         d.observe(
             "Long names",
@@ -6142,6 +6179,60 @@ pub mod run_sync_conflict {
             "The Log keeps the full sheet change",
         );
         d.click(STOP_SYNC);
+        // T20.4, case D: a conflict on a 16-letter name, and three reminders on the current
+        // turn that start with the same words. The conflict comes first and stays whole or
+        // shortens as the dock's name does; Review and Undo stay; the reminders give way.
+        let current = current_participant(d).expect("a turn");
+        d.click_row(&current);
+        for words in [
+            "Wis save DC 15 (Hold Person) on its turn",
+            "Wis save DC 15 (Hold Person) ends 10 rounds",
+            "Wis save DC 15 (Hold Monster) on its turn",
+        ] {
+            d.press(Key::E);
+            d.type_text(words);
+            d.press(Key::Enter);
+        }
+        let rows_before = roster_places(d);
+        d.app_mut()
+            .encounters
+            .simulate_sync_conflict("Oren Thistlewick");
+        d.settle();
+        look_up(d, "hold person");
+        let undo = d.name_starting("Undo");
+        let line = |d: &Driver<'_>| {
+            let conflict = d.place_of("Conflict: Oren Thistlewick").or_else(|| {
+                d.nodes()
+                    .into_iter()
+                    .find(|node| node.name.starts_with("Sync conflict: Oren"))
+                    .map(|node| node.shown)
+            });
+            let review = d.place_of("Review");
+            let undo = d.place_of(&undo);
+            let reminders = d.has_containing(&format!("Reminders for {current}"));
+            (conflict, review, undo, reminders)
+        };
+        for size in [SMALL, DEFAULT] {
+            let (conflict, review, undo, reminders) = d.at_size(size, line);
+            let clear = conflict
+                .zip(review)
+                .zip(undo)
+                .is_some_and(|((conflict, review), undo)| {
+                    conflict.right() <= review.left() + 1.0 && review.right() < undo.left()
+                });
+            d.observe(
+                "T20.4",
+                clear && !reminders,
+                format!("{size:?}: conflict {conflict:?}, Review {review:?}, Undo {undo:?}, reminders shown {reminders}"),
+            );
+        }
+        d.state("conflict-and-reminders-beside-lookup", Sizes::Default);
+        d.press_ctrl(Key::K);
+        d.observe(
+            "T20.4",
+            roster_places(d) == rows_before,
+            "Reminders and a conflict move no row",
+        );
         d.begin_task();
         d.unreached(
             "wrong campaign, a duplicate character, and a live read after a reconnect (a simulated read goes through the real comparison)",
