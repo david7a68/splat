@@ -884,7 +884,7 @@ group, a group moved or deleted on save, a removed encounter (`Removed encounter
 `Edit in Obsidian` with `message_with_actions`, so the link starts at the warning's words, in the edit form and in a
 reader with no file line.
 
-Set values show labelled rows: Stat block, In, Part of and Status. An NPC also shows its empty Stat block row. A full NPC reader's kind line shows NPC and its owner; Status stays in its own row. A compact reader keeps status on the kind line because it has no Status row. A compact reader has no file line either: while a duplicate-note repair message shows, its kind line drops the fault and names the open file instead (`NPC · Campaign · NPCs/Rook Ambry copy.md`). The result rows keep the fault. Use a fixed label column, aligned
+Set values show labelled rows: Stat block, In, Part of and Status. An NPC also shows its empty Stat block row. An NPC reader's kind line shows NPC and its owner; Status stays in its own row. A compact reader (Lookup) shows a campaign entry's Status row with its Change too, so the DM changes a status where the entry is read, with the same write, Log line and `Undo status change` in Lookup's footer; `Change` puts the keyboard in the field with its words selected. A compact reader of an entry with no Status row (a package's) keeps status on the kind line. A compact reader has no file line: while a duplicate-note repair message shows, its kind line drops the fault and names the open file instead (`NPC · Campaign · NPCs/Rook Ambry copy.md`). The result rows keep the fault. Use a fixed label column, aligned
 values and a 32 px pitch. Change uses one column at the widest visible value in the block plus an `L`
 gap, capped at the value measure. Values wrap within their column, with Change level with the value's first line (a missing link's name line, not
 `Not found` below it). Read mode hides empty relationship and status values. An NPC keeps its empty Stat block row and Change action, so assigning its first stat block still takes three interactions from the reader. This row says `not set`. A set value is `Body` in the text colour, as a set link is, so a value and its absence differ at a glance; only `not set` and `not read` stay muted `Small`. Edit on the title line opens all fields, including empty ones. A typed page with no set values shows its prose directly, except for this NPC Stat block row: with no row, the value block adds no gap, so the prose starts as far below the file line as a plain note's does. Missing links retain names and keep `Not found` on one line beside a label column. A missing link's icon and name
@@ -945,7 +945,7 @@ entry, or a package creature, whose header has no Edit) has a quiet `Start fight
 `XS` apart (after the measured title, one `L` on, when there is no Edit), named `Start a fight with <name>` and
 blocked as the encounter editor's `Start fight` is. While the encounter editor is the page, Lookup's reader has
 no `Start fight`: the editor's own primary `Start fight` is the one there. A campaign world entry also has a quiet `Add to Log`
-(`icons::ADD`) `XS` after `Start fight`, or after Edit when there is no `Start fight`, so `Start fight` keeps
+(`icons::ADD_TO_LOG`, a list with a plus, so it is not the bare `+` of `Add to fight`) `XS` after `Start fight`, or after Edit when there is no `Start fight`, so `Start fight` keeps
 its place whether or not the DM ever adds to a Log. They take only the room after the
 title on the title's line: the title keeps its width and the row gains no line and no menu. The header shows
 the first of these that fits: both words; `Start fight` and `Add to Log` as its icon (`icon_button`, its name
@@ -957,7 +957,8 @@ opens the run's made-up form in Arrivals, with the name filled in and the keyboa
 `add_field` under the kind line, named `Log line for <name>`, with the placeholder `What happened?` and the
 keyboard in it; the line's stamp (`Session 12, Day 3:`, the stamp of a Change at that moment, or the day alone
 when no session is being played) stands before it in `Type::Small` `muted`, on the field's line while the field
-keeps 224 px, else above it. Enter adds one line at the end of the entry's `## Log` (Splat makes the heading
+keeps 224 px, whatever words it holds, else above it. Stamp and field end at the reader's measure
+(`READER_MEASURE`, 488 px), as its rules do. Enter adds one line at the end of the entry's `## Log` (Splat makes the heading
 when the note has none) and closes the field; Escape clears and closes it. Its result, `Added to <name>’s Log.`
 with `Undo Log line`, sits in the pane's message footer, as every World and Lookup result does; Undo removes
 that line only while the file holds what the act wrote, and ends when the entry's text changes or the reader
@@ -965,8 +966,10 @@ shows another entry. A failed read or write is the error of the last action, als
 file, and the field keeps its words. The typed words belong to the campaign and the entry, not the session:
 the stamp is the session being played at Enter. They wait while the reader shows another entry and across a
 campaign change, and the campaign switch's guard and the close warning count them. When the entry is gone
-(deleted, or another note took its ID), its draft waits for nothing, and the pane's footer says once:
-`“<name>” was deleted. The Log line was not added: “<words>”`. While the entry's edit form is open the field waits
+(deleted, or another note took its ID), its draft waits for nothing, and the pane's footer says
+`“<name>” was deleted. The Log line was not added: “<words>”` with `Copy text` and, an `L` gap after it, `Dismiss`
+(the choices of a lost draft), whatever the reader shows and also while Lookup shows no entry, until the DM copies
+or dismisses it. While the entry's edit form is open the field waits
 under `Save or discard your edit first.` A package's entry has no `Add to Log`. Edit replaces the rows and
 the text with one form. Read and Edit show Stat block, In, Part of, then Status, so a value keeps its place when the DM
 presses Edit; conflict lines after Overwrite use the same order. Text follows in the reader's prose type,
@@ -1016,6 +1019,12 @@ Task marks at the start of a list item show an empty box for `[ ]` and a checked
 A note row has selected fill only while its reader is open. Open questions, Things to check, creation and repair
 keep the remembered note without selected fill. Open questions answers "which questions are open?": each question is
 `Body` first and opens its note at its heading; `In <note>` follows in `Small`. Dates outside events use the same form.
+Each question has a box before its words, the theme's checkbox with a 24 px target and an `S` gap, named
+`Open: <words>`. A tick writes `[x]` into that line of its note at once, through the World's write path, only while
+the line is as it was read; otherwise it writes nothing and the pane's footer says `This question changed in <note>.
+Nothing was written.` Its result, `“<words>” ticked in <note>.` with `Undo tick`, sits in the pane's footer, kept by
+the note and the line, newest first. An open edit form of the note blocks it (`Save or discard your edit of <note>
+first.`). A question in a note without properties, which Splat does not write, keeps the box's room and has no box.
 `Things to check` lists advice (no summary, nothing points here, pages to write), not faults: its row counts
 suggestions (`3 suggestions`), and `needs fixing` stays for faults only.
 

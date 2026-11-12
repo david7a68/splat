@@ -885,6 +885,44 @@ fn next_morning(a: &mut Audit<'_, '_>) {
         "the ledger holds the wagon's Done: {}",
         ledger.contains("mark: wagon") && ledger.contains("done: true")
     ));
+
+    settle_a_question(a);
+}
+
+/// X45 of app round 2: the table settles a question that the DM left open in a World note, and
+/// the DM ticks it where Open questions lists it.
+fn settle_a_question(a: &mut Audit<'_, '_>) {
+    const QUESTION: &str = "Who paid the toll collectors?";
+    let note = |d: &mut Driver<'_>| {
+        d.app_mut()
+            .campaigns
+            .active_campaign()
+            .map(|campaign| campaign.path.join(HOBB_PATH))
+            .expect("a campaign")
+    };
+    a.setup("Hobb's note holds an open question", |d| {
+        let path = note(d);
+        let text = fs::read_to_string(&path).expect("Hobb's note");
+        let asked = text.replacen(
+            "Keeps the mill at the ford.\n",
+            &format!("Keeps the mill at the ford.\n\n- [ ] {QUESTION}\n"),
+            1,
+        );
+        fs::write(&path, asked).expect("write Hobb's note");
+        d.app_mut().lookup.refresh();
+        d.settle();
+    });
+    a.task("The table settles an open question: tick it");
+    a.click(Nav, NAV_WORLD);
+    a.act(Sub, "Open questions", |d| {
+        d.click_containing("Open questions · ")
+    });
+    a.click(Do, &format!("Open: {QUESTION}"));
+    let path = note(a.d);
+    a.fact(format!(
+        "Hobb's note holds the tick: {}",
+        fs::read_to_string(path).is_ok_and(|text| text.contains(&format!("- [x] {QUESTION}\n")))
+    ));
 }
 
 /// The World NPC of F6's task, whom a done scene links.

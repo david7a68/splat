@@ -653,8 +653,8 @@ reading the code, not from a test run.
 | T15.1 | A page shows each line on another page that names it, under that page, and a press opens the line's page | world-facts | state | New |
 | T15.2 | A group lists its members, each with what it is | world-facts | state | New |
 | T15.3 | A page shows the dated entries that concern it, oldest first | world-facts | state | New |
-| T15.4 | A change in play writes one Log line in the entry, the session lists it, and one undo removes the value and the line | world-facts | state | New |
-| T15.5 | The World page lists the open questions and the problems, and each opens its page | world-facts | state | New |
+| T15.4 | A change in play writes one Log line in the entry, the session lists it, and one undo removes the value and the line. Lookup's reader changes a status the same way | world-facts, log-from-play | state | New |
+| T15.5 | The World page lists the open questions and the problems, and each opens its page. A question's box ticks that line of its note, with `Undo tick`; a line changed on disk is not ticked | world-facts | state | New |
 | T16.1 | An action tile arms in 1, and every row shows the chance to hit it | run-rolls | cost | New |
 | T16.2 | A click on a row rolls against it and Enter applies the damage, in 2 | run-rolls | cost | New |
 | T16.3 | A second attack against the same target applies in 2 | run-rolls | cost | New |

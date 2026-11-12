@@ -2397,9 +2397,12 @@ impl Reader {
                 item.entry.path
             )
         } else {
+            // An NPC's kind line leaves its status to the Status row, wherever that row shows:
+            // in World, and for a campaign entry in Lookup.
+            let status_row = !self.compact || (campaign.is_some() && item.is_private());
             format!(
                 "{} · {}",
-                if !self.compact && world_type(&item.entry) == "npc" {
+                if status_row && world_type(&item.entry) == "npc" {
                     "NPC"
                 } else {
                     &item.subtitle
