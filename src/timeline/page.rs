@@ -55,8 +55,6 @@ pub struct TimelinePage {
     selected: Option<String>,
     copied: Option<(String, Instant)>,
     focus_title: bool,
-    /// Draws that asked for the Title's focus since `focus_title` was set.
-    title_tries: u8,
     reset_detail: bool,
     scroll_to: Option<usize>,
     /// The Place after list just opened, so it shows the event's own place.
@@ -165,9 +163,6 @@ pub(crate) fn body_above<R>(
     ui.scope_builder(egui::UiBuilder::new().max_rect(body), add)
         .inner
 }
-
-/// How many draws the Title asks for focus after an add, before it gives up.
-const TITLE_FOCUS_TRIES: u8 = 3;
 
 /// What the DM chose in the Timeline list's message footer, done after the footer is drawn.
 #[derive(Clone, Debug, PartialEq)]
@@ -1274,16 +1269,8 @@ impl TimelinePage {
                 .then_some("Optional. Days number themselves, so a name is extra.");
             let title = design::text_field(ui, "Title", &mut event.title, hint, None);
             changed |= title.changed();
-            // The request holds until the Title has focus, for at most a few draws: a pass that
-            // a message footer discards to measure itself would otherwise drop it.
-            if self.focus_title {
-                self.title_tries += 1;
-                if title.has_focus() || self.title_tries > TITLE_FOCUS_TRIES {
-                    self.focus_title = false;
-                    self.title_tries = 0;
-                } else {
-                    title.request_focus();
-                }
+            if std::mem::take(&mut self.focus_title) {
+                title.request_focus();
             }
         });
         ui.add_space(design::S);
@@ -1643,7 +1630,6 @@ impl TimelinePage {
         ) {
             self.reveal(&id, book);
             self.focus_title = true;
-            self.title_tries = 0;
             self.just_added = Some((id, Instant::now()));
         }
         if let Some(words) = self.dated.clone()
@@ -1677,7 +1663,6 @@ impl TimelinePage {
                 let id = book.add(Kind::Day, current);
                 self.reveal(&id, book);
                 self.focus_title = true;
-                self.title_tries = 0;
                 self.just_added = Some((id, Instant::now()));
             }
             return;
