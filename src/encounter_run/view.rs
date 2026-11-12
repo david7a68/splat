@@ -5394,20 +5394,28 @@ impl Run {
             return;
         }
         let full = self.undo_label();
-        let fits = self.ended_undo_whole(ui).is_some()
-            || self
-                .undo_action(&full)
-                .density(Density::Glance)
-                .natural_width(ui)
-                <= room;
-        let action = if fits {
-            self.undo_action(&full)
-        } else {
-            self.undo_action("Undo").name(&full).hint(&full)
-        };
-        if action.density(Density::Glance).show(ui).clicked() {
+        if self.ended_undo_action(ui, &full, room).show(ui).clicked() {
             self.undo();
             self.return_focus = self.lookup_open;
+        }
+    }
+
+    /// Undo as the ended header's line has `room` for it. Whole when it fits. Beside Continue
+    /// fight or its reason, Undo keeps its target in the line's room, and a target that is
+    /// still too long ends in `…`; alone, Undo gives up its target. A cut target keeps its
+    /// whole words in hover and in the accessible name.
+    fn ended_undo_action<'a>(&'a self, ui: &egui::Ui, full: &'a str, room: f32) -> Action<'a> {
+        let whole = self.undo_action(full).density(Density::Glance);
+        // The one-line header gives Undo exactly its whole width.
+        if whole.natural_width(ui) <= room + 0.5 {
+            whole
+        } else if self.ended_undo_whole(ui).is_some() {
+            whole.name(full).hint(full)
+        } else {
+            self.undo_action("Undo")
+                .density(Density::Glance)
+                .name(full)
+                .hint(full)
         }
     }
 }
@@ -7326,6 +7334,73 @@ fn optional_number(
 
 #[cfg(test)]
 mod tests {
+    /// V26, V27 and the review of PR 275: beside Continue fight on the ended header's second
+    /// line, a target too long for the line ends in `…` inside the line, and the hover and the
+    /// accessible name hold the whole words, as the one-line header does.
+    #[test]
+    fn ended_undo_long_target_ends_in_view_with_its_whole_words_in_hover_and_name() {
+        use egui_kittest::kittest::Queryable;
+        let mut run = super::super::tests::run();
+        run.state.phase = super::super::Phase::Ended {
+            outcome: "Party won".into(),
+        };
+        run.state.round = 2;
+        run.history.push(run.state.clone());
+        let target =
+            "2 loot rolls on treasure-from-the-ancient-dragon-vault-and-the-forgotten-kings-tomb";
+        run.history_labels.push(target.into());
+        run.history_from_sheet.push(false);
+        run.lookup_open = true;
+        run.hide_panel = true;
+        let full = format!("Undo: {target}");
+        let run = std::rc::Rc::new(std::cell::RefCell::new(run));
+        let shown = run.clone();
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(454.0, 640.0))
+            .build(move |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    shown.borrow_mut().ended_view(ui);
+                });
+            });
+        crate::design::theme::install(&harness.ctx);
+        harness.run_steps(4);
+        let painted: Vec<_> = harness
+            .output()
+            .shapes
+            .iter()
+            .filter_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.job.text.starts_with("Undo") => {
+                    let glyphs: String = text
+                        .galley
+                        .rows
+                        .iter()
+                        .flat_map(|row| row.glyphs.iter().map(|g| g.chr))
+                        .collect();
+                    Some((glyphs, text.visual_bounding_rect(), shape.clip_rect))
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(painted.len(), 1, "one Undo: {painted:?}");
+        let (glyphs, rect, clip) = &painted[0];
+        assert!(
+            clip.contains_rect(*rect),
+            "Undo is cut by its clip: {painted:?}"
+        );
+        assert!(
+            glyphs.starts_with("Undo: 2 loot rolls on treasure") && glyphs.ends_with('…'),
+            "Undo keeps its target in the line's room and ends in …: {glyphs:?}"
+        );
+        // The accessible name, and the hover, hold the whole words.
+        harness.get_by_label(&full).hover();
+        harness.run_steps(60);
+        assert_eq!(
+            harness.query_all_by_label(&full).count(),
+            2,
+            "Undo's hover holds its whole words"
+        );
+    }
+
     #[test]
     fn iter8_b_setup_places_show_while_typing_and_fields_hold_still() {
         use egui_kittest::kittest::Queryable;
