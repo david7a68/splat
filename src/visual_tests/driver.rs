@@ -1865,10 +1865,11 @@ impl<'a> Driver<'a> {
         self.click_rect(rect, &format!("Click: {name} for {text}"));
     }
 
-    /// Where the text is, scrolled into view if the row is out of view.
+    /// Where the text is, scrolled into view if the row is out of view. A message part's group
+    /// is named with all its messages, so it is not the row of one of them.
     pub fn row_of(&mut self, text: &str) -> egui::Rect {
         self.aim(&format!("row with {text:?}"), |node| {
-            node.name.contains(text) && !matches!(node.role, Role::TextRun)
+            node.name.contains(text) && !matches!(node.role, Role::TextRun | Role::GenericContainer)
         })
     }
 
@@ -2657,6 +2658,16 @@ impl<'a> Driver<'a> {
         self.outcome.violations.extend(ergonomics::missing_glyphs(
             &self.harness.ctx,
             &self.harness.output().shapes,
+            self.scenario,
+            state,
+            &window,
+        ));
+        let label_texts = ergonomics::label_texts(&self.harness);
+        let labels = label_texts.iter().map(String::as_str).collect();
+        self.outcome.violations.extend(ergonomics::wide_help(
+            &self.harness.ctx,
+            &self.harness.output().shapes,
+            &labels,
             self.scenario,
             state,
             &window,
