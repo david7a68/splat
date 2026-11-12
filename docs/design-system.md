@@ -594,7 +594,7 @@ number field in the action's place; it holds focus until Enter or Escape, and Es
 The result line keeps its place at the panel's bottom
 edge above a hairline: the last act of the session being played as a success message, then `Undo: <label>` at the
 words and `Add to Timeline` at the right end, or each on its own line when both do not fit. After `Add to
-Timeline` it says `Added to the Timeline.` with `Undo add` for 30 seconds. Why an act recorded nothing shows on
+Timeline` it says `Added to the Timeline.` with `Undo add` for 30 seconds; while the Timeline cannot save that event, it says the Timeline's own words as an error (`The timeline was not saved. <reason>`) with `Undo add`, and the event waits in the Timeline's draft. Why an act recorded nothing shows on
 the result line too, above the last act, until the next act or until the ledger is read again: a refusal as a
 warning, and a failed save as the error `Trackers.md was not saved: <reason>. Nothing was recorded.` The result line
 is drawn before anything else of the view, so these words stay in view when the row pressed went away. Nothing

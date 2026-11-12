@@ -982,6 +982,8 @@ pub struct Added {
     pub entry: String,
     pub event: String,
     pub at: Instant,
+    /// The Timeline's words while this event is not saved in `Timeline.md`.
+    pub not_saved: Option<String>,
 }
 
 /// The trackers of the active campaign: the definitions in play, the ledger as read, and the
@@ -1202,8 +1204,12 @@ impl Trackers {
                 self.read_disk();
                 self.reason = Some(Unrecorded::Refused(reason));
             }
-            // Nothing waits: the value, the Due rows and the result line stay as the file is.
-            Err(Fault::NotSaved(error)) => self.reason = Some(Unrecorded::NotSaved(error)),
+            // Nothing waits: the value, the Due rows and the result line show what the file
+            // holds now, also an edit made in Obsidian a moment before.
+            Err(Fault::NotSaved(error)) => {
+                self.read_disk();
+                self.reason = Some(Unrecorded::NotSaved(error));
+            }
         }
     }
 
@@ -1740,6 +1746,19 @@ mod tests {
         );
         assert_eq!(t.result, shown);
         assert_eq!(value(&race, "favor", None), 1);
+        // An edit in Obsidian a moment before a failed save: the view shows what the file holds.
+        let outside = String::from_utf8(before.clone()).unwrap().replace(
+            "  add: 2\n  why: Typed in Obsidian",
+            "  add: 8\n  why: Typed in Obsidian",
+        );
+        fs::write(&path, &outside).unwrap();
+        let t = &mut race.trackers;
+        t.press("favor", None, "Crowd loves it", None);
+        assert_eq!(fs::read_to_string(&path).unwrap(), outside);
+        assert!(matches!(t.reason, Some(Unrecorded::NotSaved(_))));
+        assert_eq!(value(&race, "favor", None), 7);
+        fs::write(&path, &before).unwrap();
+        race.trackers.read_disk();
         // A number typed for `add: ask` stays in its field when the save fails.
         let note = race.campaign.path.join("Tournament.md");
         let text = fs::read_to_string(&note).unwrap();
@@ -1764,6 +1783,45 @@ mod tests {
         assert_eq!(t.reason, None);
         assert_eq!(t.ledger.changes.len(), entries + 1);
         assert_eq!(value(&race, "favor", None), 2);
+
+        // `Add to Timeline` whose Timeline save fails says the Timeline's own words, not
+        // success. The event waits in the Timeline's draft, and saves later.
+        let mut app = crate::Splat {
+            trackers: std::mem::take(&mut race.trackers),
+            ..Default::default()
+        };
+        app.timeline.open(Some(&race.campaign.path));
+        let entry = app.trackers.newest()[0].id.clone();
+        app.trackers.wants_timeline = Some((entry, "Crowd loves it".into()));
+        readonly.set_mode(0o555);
+        fs::set_permissions(&race.campaign.path, readonly.clone()).unwrap();
+        app.add_tracker_act_to_timeline();
+        app.timeline.save();
+        readonly.set_mode(0o755);
+        fs::set_permissions(&race.campaign.path, readonly.clone()).unwrap();
+        // The shell's next frame.
+        app.add_tracker_act_to_timeline();
+        let words = app
+            .trackers
+            .added
+            .as_ref()
+            .and_then(|added| added.not_saved.clone());
+        assert!(
+            words
+                .as_deref()
+                .is_some_and(|words| words.starts_with("The timeline was not saved.")),
+            "{words:?}"
+        );
+        app.timeline.save();
+        app.add_tracker_act_to_timeline();
+        assert_eq!(
+            app.trackers
+                .added
+                .as_ref()
+                .map(|added| added.not_saved.clone()),
+            Some(None)
+        );
+        race.trackers = std::mem::take(&mut app.trackers);
 
         // A restart: the values, the result line and its Undo come from the file.
         let mut again = Trackers::default();

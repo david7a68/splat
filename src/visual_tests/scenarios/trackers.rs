@@ -374,5 +374,12 @@ pub fn run(d: &mut Driver<'_>) {
                 && !d.has("Crowd loves it"),
             "A refused press says so on the result line when its row went away",
         );
+        d.act_at_size(SMALL, |d| {
+            d.observe(
+                "T19.2",
+                d.in_view_containing("A house rule note changed on disk. Nothing was recorded."),
+                "The refusal is in view at 960x640 with Lookup narrow",
+            );
+        });
     });
 }

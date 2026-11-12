@@ -590,7 +590,12 @@ fn result_line(ui: &mut egui::Ui, trackers: &Trackers, act: &mut Option<Act>) {
         .as_ref()
         .filter(|added| added.entry == first.id)
     {
-        if design::undo_message(ui, Tone::Success, "Added to the Timeline.", "Undo add") {
+        // The event waits in the Timeline's draft when its save failed: say so, not success.
+        let (tone, words) = match &added.not_saved {
+            Some(words) => (Tone::Error, words.as_str()),
+            None => (Tone::Success, "Added to the Timeline."),
+        };
+        if design::undo_message(ui, tone, words, "Undo add") {
             *act = Some(Act::UndoAdd(added.event.clone()));
         }
         return;

@@ -1318,7 +1318,11 @@ impl Splat {
                 entry,
                 event,
                 at: std::time::Instant::now(),
+                not_saved: None,
             });
+        }
+        if let Some(added) = &mut self.trackers.added {
+            added.not_saved = self.timeline.event_not_saved(&added.event);
         }
         if let Some(event) = self.trackers.wants_undo_add.take() {
             self.timeline.undo_add(&event);
