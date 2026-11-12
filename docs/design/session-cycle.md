@@ -425,12 +425,15 @@ that G7 allows.
 | 20 | The run's notice line, when a conflict's name is wider than the line beside the bare `Undo` | The name shortens by the header's rule for its names; the dock's name follows the dock's rule (row 33). Today nothing gives | Rule K |
 | 21 | A package creature's reader, with no run open | A quiet `Start fight` in a header that holds no action today (F3) | Rule Q |
 | 22 | The **Last time** line | When the last note has no prose under `What happened` and no processed recap, the preview is the note's first written line outside its title and date, `Recap of last time` and `Plan for tonight`. Today the line shows the link alone (`recap_preview`, `src/sessions/page.rs`) | The lead's ruling W5-D5, from the first scored round on the app: the measured evening's two reads of last week cost 2 each because the line showed none of last week's words |
-| 22 | History on the Encounters page, after `Whole run` or `Open` | The list scrolls once, at that act, so the opened run's row is at its top and its outcome, the line under Read-only and the whole Final state are in view below it (V31). The line under Read-only is `S` below it and `M` above `FINAL STATE` (V11), so what is under Read-only moves up by at most 8 px more, and the Read-only line's words are as tall as a line. Otherwise only the list's scroll offset differs: what it holds is as today, and nothing moves sideways, is cut or is resized | By the lead's ruling after app round 1 |
+| 22 | History on the Encounters page, after `Whole run` or `Open` | The list scrolls at that act (row 26 says when it follows the run again), so the opened run's row is at its top and its outcome, the line under Read-only and the whole Final state are in view below it (V31). The line under Read-only is `S` below it and `M` above `FINAL STATE` (V11), so what is under Read-only moves up by at most 8 px more, and the Read-only line's words are as tall as a line. Otherwise only the list's scroll offset differs: what it holds is as today, and nothing moves sideways, is cut or is resized | By the lead's ruling after app round 1 |
 | 23 | A scene's row on the plan | Its words start at the fights' title column (12 px further left) and are drawn at the plan row title's size, `Body`, at every window size; its box's 24 px target ends at that column; its second line sits at a fight row's pitch (V2, V8). So a scene row's height changes, and every item below a changed scene row moves straight up by the sum of the height changes of the scene rows above it; nothing moves sideways, changes size, is cut or goes. A done scene's `Add to Log` (row 8's feature on the plan) is on its row where its words now keep their rows beside it. A done scene's words are muted (V1), which G7 does not measure | By the lead's ruling after app round 1 |
 | 24 | The **Tonight** line, with the scenes folded | `N scenes` has the section caret of a folded section before it, as `HISTORY` has (V14): the link is wider by the caret, at its place and height | By the lead's ruling after app round 1 |
 | 32 | Run dock, line two | `Effect` (row 6) is decided by the room after **Absent** alone, so it shows also beside a selected name that its slot cut (X9). Nothing of today's dock moves; an act shows or hides only `Effect`'s and rows 33 and 34's words | By the lead's ruling after app round 2 |
 | 33 | Run dock, the selected name | A name that its slot cuts keeps its last word after its first whole words, `Ashfang, Eldest… Ridge` for `Ashfang, Eldest Wolf…`, at the same place and height in the same slot (X53). The run header's names, the notice line's and Undo's are as today | By the lead's ruling after app round 2 |
 | 34 | The **Conditions** tab | Its help says `No HP, AC or roll changes by itself. A time you type counts down on that creature’s turns. Other effects stay local and do not sync.` at its place, and may take one more line below its first (X7). Where the dock has no room for `Effect`, the field's words are `Other effect, such as Bless 10 rounds` (X8) | By the lead's ruling after app round 2 |
+| 26 | History on the Encounters page, with a run opened there | Until the DM scrolls the list, the run stays at the list's top when the list's visible height changes, as at 960x640 after it opened at 1200x800 (X36); the top is a clean edge, the top of the row's own gap below the list's clip margin, and the list keeps room below its end while the run is open, so the row reaches the top also when little follows it (X37). `COMBAT LOG` is `M` below the last Final state row, so the log moves down by 6 px (X66). Otherwise only the list's scroll offset differs: items keep their place across and their size, and only the list's edges cut them | By the lead's ruling after app round 2 |
+| 27 | The encounter editor beside Lookup at 960x640 | `Save encounter` and `Start fight` keep their place across and move up to the name field's line, which ends before them (X51). Everything below the header moves straight up by the line they left, and what comes into view at the pane's bottom shows | By the lead's ruling after app round 2 |
+| 25 | The **Last time** line of a session before play, while it offers `Carry over` | `Carry over` sits `L` after the line's last word: the preview's, or the link's when no word of the preview fits (X24). It moves straight left on its line, at its size, from the pane's right edge; nothing else on the line moves, and the preview keeps its words. In the plain evening the new session's line has no preview, so the action stands `L` after its link | By the lead's ruling after app round 2 |
 
 Nothing else differs. A free-words effect from an encounter or an older run gives no reminder. A Travel row
 shows no checks and no new field until the DM asks. The rail says nothing about trackers unless a notice is
@@ -539,7 +542,7 @@ Case A, the plan at 330 px
 |---|---|
 | The XP, every level and the budget table are known | The words above |
 | A creature has no XP and no CR; a level is not known; there are no sheets; the rules have no table; there is no creature against the party | Nothing. The line is as today |
-| A creature's XP or a character's level is not known, and the party and the table are known (by the lead's ruling after app round 1, W1-D2) | The summary is as today. The opened row's line says why, in `muted`: `Read encounter · XP not known: Nameless Thing`, or `Level not known: <name>`; with more names, the first and `and 2 more`. The names are in `Scale::weigh`'s typed answer (`Difficulty::missing`) |
+| A creature's XP or a character's level is not known, and the party and the table are known (by the lead's ruling after app round 1, W1-D2) | The summary is as today. The opened row's line says why, in `muted`: `Read encounter · XP not known: Nameless Thing`, or `Level not known: <name>`; with more names, the first and `and 2 more`. The names are in `Scale::weigh`'s typed answer (`Difficulty::missing`). The encounter editor, where the DM can repair the cause, says it too (by the lead's ruling after app round 2, X2): `ROSTER 6 · XP not known: Nameless Thing`, and in the tab row below 760 px where the word would be. Without room the names shorten from their end and go only when no letter fits |
 | Run open | The open fight's plan row shows its status link, not a word. Arrivals shows the live word |
 
 **What the file stores.** Nothing. **Undo.** None is needed. **Keyboard.** Nothing takes focus.
@@ -974,12 +977,24 @@ Seals
 - **A quick action** is one press. An action that asks for a number (`add: ask`) puts a number field in its
   own place; the field holds focus until Enter or Escape.
 - **A wrong press.** `Undo: <label>` takes it back while it is the newest act. Later, the opposite quick
-  action corrects the value in one press, as an erasure does on paper; the history keeps both.
+  action corrects the value in one press, as an erasure does on paper; the history keeps both. A notice that the
+  wrong press raised ends with it when nothing is recorded on the notice (no roll, `Done` or `Dismiss`): a notice
+  at a value is due only while the value is at or past its mark. The result line says `<name> is no longer due.`,
+  and Undo of the opposite press brings the notice back. Nothing is written for it (by the lead's ruling after app
+  round 2, W6-D1).
 - **The result line** names the last act and has `Undo` and `Add to Timeline`. After `Add to Timeline` it says
   `Added to the Timeline.` with `Undo add`.
-- **A tracker's history,** with **Remove**, and the list of problems show in the house rule note's reader. Not built in
-  P9: the reader is `src/world.rs`, which P6 changes at the same time. P9 shows each problem in the view, at the end
-  of its scroll area, and an entry with another stamp stays until it is edited out in Obsidian.
+- **A tracker's history,** with **Remove**, and the list of problems show in the house rule note's reader. P9
+  left them out, because P6 changed the reader (`src/world.rs`) at the same time; they were built after P6 landed.
+  The view keeps every problem at the end of its scroll area; the reader lists the note's own, also a value that
+  an edit in Obsidian forced below its `min` (`Crowd Favor is -2, below its min of 0.`), which Splat never
+  changes. Under the note's text in Lookup's reader each tracker and each day mark has a folded `<NAME> HISTORY
+  N`, a tracker's with its start value, and its entries in the ledger's order; a row with another stamp has
+  `Remove` in its menu. The result, `Removed: <label>.` with `Undo remove`, and why a Remove wrote nothing, are in
+  the reader's footer, where the DM acted, also when the note's file was moved at the click. The rows are worked
+  out when the ledger or a definition changes; a folded history does no work, and an open one draws only the
+  rows in view. `Undo remove` writes nothing when the entry before a removed one changed on disk. A row does not
+  name its session (a stated limit).
 - **In a fight** the DM marks the paper sheet. Ctrl+T still opens the view (three acts for each press), and
   the run offers nothing more. After the fight the DM enters the fight's marks; a mark that those raise
   shows then.
@@ -990,22 +1005,25 @@ Seals
 `PINNED`, `MORE TRACKERS 1`. `Roll <table’s name>`. `Done`. `Dismiss`. Result: `<label>: Favor 2.`; with a
 table `… Rolled 4 on 1d6: A healing potion.`; with a new notice `… Due: Bell.`; after `Done`, `Bell done.`;
 after a dismissal `Bell dismissed.` `Undo: <label>`. `Add to Timeline`. A blocked action: `Favor cannot go
-below 0.` With no note in play, Ctrl+T opens the empty state `No house rules are in play.` with `Turn one on
-in Campaign → Rules and runs.`
+below 0.` With no note in play, Ctrl+T opens the empty state `No house rules in play` with `Turn one on
+in Campaign → Rules and runs.` Under **House rules in play** in Campaign → Rules and runs: `Trackers (Ctrl+T) shows
+the trackers of each note in play.`
 
 | State | What shows |
 |---|---|
 | No house rule note in play; or in play with nothing due | Nothing in the rail |
 | A notice is due | Rail: bell and `Due 1`, in the text colour |
-| `Trackers.md` cannot be read | Rail: error icon and `Trackers not read`. The view names the file, says the history is safe, and offers `Try again` and `Show file`. Quick actions are blocked with that reason |
+| `Trackers.md` cannot be read | Rail: error icon and `Trackers not read`. The view names the file, says the history is safe, and offers `Try again` and `Show file`. Quick actions are blocked with that reason. The house rule note's reader names the file and shows no history and no value |
 | A save of `Trackers.md` fails | Nothing is recorded and nothing waits (the lead's ruling after review round 2 of P9: a waiting act needed a snapshot of more and more state). The result line, at the view's bottom edge, says `Trackers.md was not saved: <reason>. Nothing was recorded.` as an error until the next act or until the ledger is read again. The DM presses the action again: one more act. A dice act rolls again; nothing was recorded, so no roll is lost from the record. A number typed for `add: ask` stays in its field |
 | `Campaign.md` or a house rule note in play cannot be read | No empty list: the view names the file, shows no value and no old one, and every act is refused with the same words. The rail says `Trackers not read`. A note that was moved or renamed outside Splat says that Splat reads the notes again when its window gets focus |
 | `Trackers.md` changed on disk | Splat reads it again within a second, and every act reads it at the press, so an edit in Obsidian counts at once and is never written over (as built in P9: no merge and no notice are needed). An Undo whose entries changed on disk writes nothing and says `The ledger changed on disk. Nothing was undone.` |
 
 **What the files store.** Definitions are in the house rule note's Splat data, as before, with one new
 optional word: `for:` on a mark's table. The ledger is one ordered list. Each act is one entry. A notice's
-state is not stored: a notice is open until an entry finishes or dismisses it, and it is worked out from the
-changes. An entry holds what it replaced where that cannot be worked out: `was` on a `set`. `why` holds the
+state is not stored: a notice is open until an entry finishes or dismisses it, or, while no entry of the ledger
+names it, until a later change takes its value back below its mark; it is worked out from the changes, so no act
+and no outside edit hides a notice with a roll. A Remove, an `Undo remove` or an Undo that would leave a recorded
+entry on a notice that no change raises any more writes nothing and names that entry. An entry holds what it replaced where that cannot be worked out: `was` on a `set`. `why` holds the
 action's label, so the result line and `Undo: <label>` name the act after a restart. The changes of one
 press share a `use` and undo together.
 
@@ -1023,7 +1041,7 @@ gift`), or `Undo: Bell done`, `Undo: Bell dismissed`, `Undo: Rival Track roll`. 
 before it, so the DM steps back, newest first. The ledger is a file, so the steps are there after a restart.
 Undo of an entry that raised a notice removes the notice and its entries. An entry with another stamp leaves
 by **Remove** in the tracker's history. `Add to Timeline` is a second act: it makes a Major event with the
-action's label, in the session being played, with the Timeline's own Undo (section 4.1).
+action's label and the line it changed (`Take seal: Old Guard`), in the session being played, with the Timeline's own Undo (section 4.1).
 
 **Keyboard.** Ctrl+T, there and back. Tab walks the Due rows, then the trackers' actions. Enter presses an
 action. Escape closes Lookup.
@@ -1034,8 +1052,8 @@ tracker's number stands for. A proposed change applies only when the DM presses 
 **Day marks (P11).** A day mark (`at`, or `every` with `from`, in days) is open while the day count of the
 Timeline has reached its day and no ledger entry ends it; raising it writes nothing. Its row starts with its day:
 `Day 32: Move the rival powers.` Days of one mark that are due together are one row, as
-[World and house rules](world-and-house-rules.md) says: `End of month ×3. Next: Day 32. …`, with `Next` in the place
-of `Done` (it ends the oldest day) and `Dismiss all` in the row's menu. Day rows come first, oldest day first, then
+[World and house rules](world-and-house-rules.md) says: `End of month ×3. Next: Day 32. …`, whose `Done` names the
+day it ends, the oldest (`Done: Day 32`), and `Dismiss all` in the row's menu. Day rows come first, oldest day first, then
 the notices of marks at a value. The Due count counts rows, so a row of three days is `Due 1`. The result line says
 `End of month, Day 32 done.` and `Undo: End of month, Day 32 done`, or `Undo: End of month ×3 dismissed`. The day
 count has one answer, which the view, the rail's count and every act read (`trackers::today`). It is not known while
@@ -1098,7 +1116,7 @@ nothing wraps (section 2.5, row 11).
 
 ```text
 Case A, before and after
-Last time:  Session 1: The Road — Hobb the miller says the toll collectors …    Carry over
+Last time:  Session 1: The Road — Hobb the miller says the toll collectors …  Carry over
 
 Last time:  Session 1: The Road — Hobb the miller says the toll collectors …
 …
@@ -1109,7 +1127,7 @@ The result sits in the Session page's message footer, as every result of that pa
 landed (P8 followed it at the merge with `main`), so the line, the tabs and the plan never move.
 
 **An embed in Read.** Read draws an embed of a session note's heading as that heading's text, under a muted
-line, `From Session 1: The Road`, which links that session. The rule is by the embed's target, not by who
+line, `From Session 1: The Road`, which links that session (one gap, `S`, after `From` in every layout). The rule is by the embed's target, not by who
 wrote the line, so an embed that the DM typed is drawn the same way (section 2.5, row 18). Today Read shows it
 as a link. In Write it is the one line of source. The target resolves as every campaign link does, with its
 folder; an ambiguous target, and an embed inside a callout or a list item, stay links (a P8 limit).
@@ -1128,7 +1146,7 @@ your notes.` `Undo carry over`.
 | The last note cannot be read | The action is blocked: `Splat cannot read Session 1’s note.` |
 | This note changed on disk and Splat holds unsaved words | The act does nothing and says `The note changed on disk. Choose in the note first.` |
 | The embed's note was renamed outside Obsidian | As the next row. Splat never rewrites an embed: the DM links again by hand. (P8 cut `Update the link` and `Undo link`: a sole recap embed that the DM kept could not be told from the one `Carry over` wrote, so the repair could rewrite the DM's own link; review of PR 277) |
-| The embed's note or its heading is gone | Read says `The recap’s source is gone: Session 1 The Road › What happened.` in the embed's place. The line stays in the note |
+| The embed's note or its heading is gone | Read says `The recap’s source is gone: Session 1 The Road › What happened. Link the session again in Write.` in the embed's place. The line stays in the note. Only a session note at the target's whole path that has the heading keeps it a link (the index has not read that note yet, or the target names part of its path); a note with the same last name in another folder does not (review of PR 277, round 2) |
 
 **What the note stores.** The lines, and two flat properties in the same save. Obsidian's Properties view
 shows both as it shows `session_id`.
@@ -1544,7 +1562,31 @@ first.` So a wrong `Roll for encounters` can go at any time.
   time, also after a restart, and whatever the words now say.
 - **A result that links an encounter or a group offers `Plan “<name>”`** for each, at most three. One click
   writes the link under `## Plan for tonight` as the first line still to come. So the fight is the next plan
-  row and has the primary `Start fight`. Then the line says `In the plan`, while the plan has a row still to
+  row and has the primary `Start fight`. The line ends with a mark that no reader shows, the journey and the check as read
+  (`<!-- splat:check journey=t-5c1d2e3f4a at=24 sum=1a2b3c4d5e6f7a8b -->`: the event, the offset, and 64 bits of
+  the words' SHA-256). The mark is one whole comment and nothing else: every reader and writer of the line
+  keeps the words before and after it byte for byte; every reader that shows the line's words (the rows, Read,
+  Add to Log, Lookup's search) shows them without it. `Carry over` copies the whole line, mark and all, and
+  Begin then says that the journey is in an earlier session. Half a comment is no mark, and a whole one whose terms cannot be read is no mark either: an
+  ordinary line and an ordinary fight, with no notice. And the row's second line says the day the fight is played on, `… · Day 2 of Road to the ford`; as the
+  rating word does, the journey's name goes, then the day, so the row keeps its lines. **When that fight
+  begins, its event goes in the journey at that check** (by the lead's ruling after app round 2, W5-D1): it
+  follows the journey in the list, the clock starts it at the check (`Day 4, 08:00`), and the journey keeps its
+  length and its checks. Its run's `Undo: begin combat` takes the event out, so the file is as it was to the
+  byte (with or without blank lines between events and a final line break), also after a restart. `Begin
+  combat` decides from one read of the note and `Timeline.md` as they are on disk at that moment: the played
+  fights in the file give the plan line this fight takes, and the file and the Timeline as Splat holds it must
+  both have its journey and check. It saves the fight at once, and after that save's merge reads the plan line
+  and the check again.
+  When the journey or the check changed or went (rolled again, cleared, edited in Obsidian, a shorter
+  journey), the fight goes after the session's last event as any fight does, and the run's notice line says
+  `Its travel check changed, so this fight follows the last event.`; for a line carried over or copied to
+  another session's note, `Its journey is in an earlier session, so this fight follows the last event.`; when
+  `Timeline.md` cannot be read, `Splat cannot read its travel check now, so this fight follows the last event.`
+  A note that cannot be read gives no mark, so an ordinary fight and no notice. One
+  rule (`checks::covers`) says whether a journey covers a check, for the block, for Begin and for the clock: a
+  journey made zero long covers none. A fight planned any other
+  way has no mark and is as before. Then the line says `In the plan`, while the plan has a row still to
   come for that
   link: Splat reads this by the plan's own rule, which takes one played event for each link
   (`src/sessions/plan.rs:529-549`), and stores no mark. F5's "not played" uses the same rule. After that
@@ -1566,7 +1608,10 @@ first.` So a wrong `Roll for encounters` can go at any time.
 `each watch`, or `every 4 hours`. `Choose a table`. `No checks`. `Roll`. `Enter a roll`. `Roll all 2`. `This
 journey`. `Clear`. `Plan “Wolf Pack”`. `In the plan`. `Outside this journey now`. Results: `Encounter checks
 added to this journey.` `Undo checks`; `2 travel checks rolled.` `Undo roll`; `Check cleared.` `Undo clear`;
-`“Wolf Pack” is in tonight’s plan.` `Undo plan line`.
+`“Wolf Pack” is in tonight’s plan.` `Undo plan line`. The planned row: `· Day 2 of Road to the ford`. The run's notice
+when the check changed: `Its travel check changed, so this fight follows the last event.`; carried over: `Its
+journey is in an earlier session, so this fight follows the last event.`; `Timeline.md` not read: `Splat cannot read
+its travel check now, so this fight follows the last event.`
 
 | State | What shows |
 |---|---|
@@ -1590,6 +1635,14 @@ An older Splat keeps lines that it does not know and writes them back (`:413-423
   %% splat session=070eca36-331c-46cc-b5a6-32a6e35265da %%
 ```
 
+- **A fight played at a check** keeps the journey and the offset on its own line, never a day: `%% splat
+  session=… journey=t-5c1d2e3f4a at=24 %%`. The clock reads its start from the journey's start and the
+  offset, while it is a fight, the journey is before it in the list and still covers that offset; any other
+  kind, or a fight its journey no longer covers, follows the event before it. The clock after the journey is the
+  later of the journey's end and each such fight's end, so a long fight carries the day on. The fight came in
+  after the journey's last line as a line break and its own lines; its removal takes that line break too, so its
+  Undo gives back the file to the byte with or without blank lines between events. Every other removal is as
+  before.
 - **What Splat reads back:** the table's key; from each check line, the offset in its label, the number
   before `·` and the words after it. It writes each value in quotes, so that an older Splat, which keeps a
   line that it does not know as a YAML value (`src/timeline/formats.rs:86-89`), keeps it as one string, also
@@ -1651,7 +1704,8 @@ draws again from the file. It never looks for another line that reads the same (
   (`UNDO_ADD_FOR`, `src/sessions/plan.rs:22`, `src/timeline/page.rs:13`).
 - **`Undo remove encounter`:** as a saved group's `Undo remove group` today. It writes the file back only
   when no file has that path.
-- **A run step and a ledger entry** stay, also after a restart.
+- **A run step and a ledger entry** stay, also after a restart. `Undo remove` of a tracker's history is one step,
+  as the Timeline's removal: the next Remove replaces it, and a restart ends it.
 - **An Undo shows where the DM acted,** also when the act changed a file that is not in view.
 
 Each row is one new write, with the fragment as the file holds it. Longer fragments are in section 3.
@@ -1665,13 +1719,15 @@ Each row is one new write, with the fragment as the file holds it. Longer fragme
 | `Remove…` on an encounter (F3) | The encounter note | The file, removed | `Undo remove encounter` |
 | An effect: add, spend, give back, mark spent, recharge roll, remove (F2) | The run file | `{"name": "Frightened", "rounds": 10, "left": 9}` in the participant's `conditions` | The run's `Undo: <step>` |
 | A tracker press, roll, `Done`, `Dismiss` (F4) | `Trackers.md` | One entry at the end of `changes` (F4). A press that changes two trackers writes two entries that share a `use`, in one save | `Undo: <label>`, step by step |
+| `Remove` in a tracker's history (F4) | `Trackers.md` | The entry out of `changes`, with the others of its `use` and the entries of each notice it raised, in one save. It writes nothing when the entry changed on disk or a later notice depends on it | `Undo remove` in the reader's footer: each entry back after the one it followed; nothing when a notice raised since needs them out. One step, until the next Remove, as the Timeline's; not after a restart |
 | `Add to Timeline` after a tracker act (F4) | `Timeline.md` | `- Major event: **Throw a gift** ^t-7d2c9a41be`, with its `Session` line | Today's `Undo add`, on the Trackers result line |
 | `Carry over` (F5) | This session's note | The embed line or the copied recap, the copied lines, and `carried_from` with `carried_parts`, in one save (F5) | `Undo carry over`, which puts back what the act replaced |
 | `Add to Log` (F6) | The World entry's note | `- [[Session 12]], Day 3: Told the party who burned the ropes.` at the end of `## Log` | `Undo Log line` |
 | `Add rewards` (F7) | The session note | One list line that starts with the fight's reference, with its XP line and its loot lines (F7) | `Undo rewards` |
 | `Roll for encounters`; a table choice; `No checks` (F9) | `Timeline.md` | `  - Checks table: road` in the event, or `  - Checks table:` while no table is chosen | `Undo checks`; later `No checks` |
 | `Roll`, `Roll all`, `Enter a roll`, `Clear` (F9) | `Timeline.md` | `  - Check at 24h: "16 · [[Wolf Pack]] pick up the trail."` | `Undo roll`, `Undo clear`; later `Clear` |
-| `Plan “<name>”` (F9) | The session note | `- [[Wolf Pack]]`, before the first line still to come | `Undo plan line` |
+| `Plan “<name>”` (F9) | The session note | `- [[Wolf Pack]] <!-- splat:check journey=… at=24 sum=… -->`, before the first line still to come | `Undo plan line` |
+| `Begin combat` of a fight from that line (F9, W5-D1) | `Timeline.md` | The fight's event after the journey, with `journey=t-5c1d2e3f4a at=24` in its `%% splat … %%` line | The run's `Undo: begin combat` |
 
 - **No act writes two files of the DM's.** `Start fight` saves the encounter and then starts the run, as the
   editor's `Start fight` does today; this design adds no second save to it.

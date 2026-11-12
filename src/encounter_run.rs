@@ -3065,6 +3065,12 @@ impl Run {
             .map(|p| (p.definition.id, FightRow::from(p)))
             .collect()
     }
+    /// Words for the notice line about the act the DM just took, from outside the run. The
+    /// next run action clears them, as it clears every notice.
+    pub fn tell(&mut self, words: String) {
+        self.notice = Some(words);
+    }
+
     /// What the timeline records about this run.
     pub fn timeline_fact(&self) -> crate::timeline::RunFact {
         crate::timeline::RunFact {
@@ -4870,6 +4876,8 @@ pub struct FightRow {
     pub temporary_hp: i64,
     pub conditions: Vec<Condition>,
     pub present: bool,
+    /// Concentration was marked when the run was saved.
+    pub concentration: bool,
 }
 
 /// A player's character, rather than a creature.
@@ -4888,6 +4896,7 @@ impl From<&Participant> for FightRow {
             temporary_hp: p.temporary_hp,
             conditions: p.conditions.clone(),
             present: p.present,
+            concentration: p.concentration,
         }
     }
 }
@@ -6648,9 +6657,9 @@ mod tests {
         let hp = run.state.participants[0].hp;
         let before = run.timeline_fact();
         let mut story = crate::timeline::Book::default();
-        story.record_change(None, &before, None);
+        story.record_change(None, &before, None, None);
         run.save_as_new_run().unwrap();
-        story.record_change(Some(&before), &run.timeline_fact(), None);
+        story.record_change(Some(&before), &run.timeline_fact(), None, None);
         assert_eq!(story.events.len(), 1);
         assert_eq!(story.events[0].run, Some(run.id));
         assert!(!run.has_disk_conflict());
@@ -8971,7 +8980,7 @@ mod tests {
         let fact = run.as_deref().map(Run::timeline_fact);
         if fact != *said {
             match &fact {
-                Some(fact) => book.record_change(said.as_ref(), fact, session),
+                Some(fact) => book.record_change(said.as_ref(), fact, session, None),
                 None => book.save(),
             }
             *said = fact;

@@ -6754,6 +6754,15 @@ pub(super) fn log_link(ui: &mut egui::Ui) -> egui::Response {
     response.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
+/// Concentration, as a run row marks it and History's Final state repeats it: its icon and
+/// `Conc`, in its own colour.
+pub(crate) fn concentration_mark() -> (String, egui::Color32) {
+    (
+        format!("{} Conc", icons::CONCENTRATING),
+        colors().participant.concentrating,
+    )
+}
+
 fn row_name(p: &Participant, turn: TurnMark, sync: Option<SyncState>) -> String {
     let mut parts = vec![
         p.name.clone(),
@@ -7492,13 +7501,8 @@ impl RowLayout {
         let initiative_span =
             (w.present && !w.initiative).then(|| add_parts(&[("No initiative", c.accent)], 0.0));
         if w.concentration {
-            add_parts(
-                &[(
-                    &*format!("{} Conc", icons::CONCENTRATING),
-                    c.participant.concentrating,
-                )],
-                0.0,
-            );
+            let (words, color) = concentration_mark();
+            add_parts(&[(&*words, color)], 0.0);
         }
         // Effects take the conditions' place, before the plain conditions (section 1.4). Each
         // count has a slot as wide as its widest form, so that a change of count moves no word.

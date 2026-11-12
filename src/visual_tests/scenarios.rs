@@ -5551,7 +5551,7 @@ pub mod run_lookup {
         d.aside(|d| {
             let rail = d.rail_words();
             d.press_ctrl(Key::T);
-            d.expect("No house rules are in play.");
+            d.expect("No house rules in play");
             d.observe(
                 "T19.1",
                 d.has(SEARCH_LOOKUP) && !d.in_view(SPELL) && d.in_view(NEXT_TURN),
@@ -5564,7 +5564,7 @@ pub mod run_lookup {
             d.observe(
                 "T19.3",
                 current_participant(d) == turn
-                    && d.has("No house rules are in play.")
+                    && d.has("No house rules in play")
                     && d.rail_words() == rail
                     && !d.has_containing("due. Open Trackers"),
                 "Beside Trackers the run's letter keys are off, and the rail shows no tracker part",
@@ -5572,7 +5572,7 @@ pub mod run_lookup {
             d.press_ctrl(Key::T);
             d.observe(
                 "T19.1",
-                d.in_view(SPELL) && !d.has_containing("No house rules are in play."),
+                d.in_view(SPELL) && !d.has_containing("No house rules in play"),
                 "Ctrl+T again shows the spell that Lookup held",
             );
         });
@@ -7241,14 +7241,14 @@ pub mod nav_state {
         // shows what Lookup showed before, and Lookup stays open. The page keeps its state.
         d.aside(|d| {
             d.press_ctrl(Key::T);
-            let opened = d.has(SEARCH_LOOKUP) && d.has("No house rules are in play.");
+            let opened = d.has(SEARCH_LOOKUP) && d.has("No house rules in play");
             d.press_ctrl(Key::K);
             let closed = !d.has(SEARCH_LOOKUP);
             d.press_ctrl(Key::K);
-            let reopened = d.has("No house rules are in play.");
+            let reopened = d.has("No house rules in play");
             d.press_ctrl(Key::T);
             let back = d.has(SEARCH_LOOKUP)
-                && !d.has("No house rules are in play.")
+                && !d.has("No house rules in play")
                 && d.has_containing("Search built-in rules");
             d.press_ctrl(Key::K);
             d.observe(
@@ -15894,6 +15894,57 @@ pub mod encounter_history {
                 format!("{what}, opened at {size:?}: the row and Final state in view: {shown:?}"),
             );
         }
+        // X36: opened at 1200x800, then seen at 960x640: the run's row is still at the list's
+        // top, so the party's final HP is still in view.
+        let smaller = d.at_size(SMALL, |d| {
+            opened_run_in_view(d)?;
+            // The row's name, at most the row's own gap and padding below the list's top.
+            let mut below = None;
+            d.each_painted_text(|text, clip| {
+                if text.galley.job.text == "Old Mill Raid"
+                    && clip.intersects(text.visual_bounding_rect())
+                {
+                    below = Some(text.pos.y - clip.top());
+                }
+            });
+            below
+                .filter(|below| (0.0..=crate::design::L).contains(below))
+                .ok_or_else(|| vec![format!("Old Mill Raid's top below the list's: {below:?}")])
+        });
+        d.observe(
+            "X36-history-follows-resize",
+            smaller.is_ok(),
+            format!("{what}, opened at {DEFAULT:?} and seen at {SMALL:?}: {smaller:?}"),
+        );
+        // X37: also where little follows the run, its row reaches the top at a clean edge.
+        super::run_continue::history_edges(d);
+    }
+
+    /// X36: after the DM scrolls History, a resize does not pull the list back to the run.
+    /// The scenario's window is 960x640, where the list keeps the run; at 1200x800 the whole
+    /// list fits, so the way back to 960x640 is where a kept run would pull it again.
+    fn a_scroll_wins_over_a_resize(d: &mut Driver<'_>) {
+        let row = |d: &Driver<'_>| d.place_of(&d.name_starting(&OPEN_OLD.replace("Open", "Close")));
+        let Some(at) = row(d) else {
+            d.observe(
+                "X36-scroll-wins",
+                false,
+                "The opened run's row is not shown",
+            );
+            return;
+        };
+        let before = row(d);
+        // To the list's top, so that no size can hold the DM's offset in a shorter list.
+        d.scroll_up_at(at.center(), 10);
+        let scrolled = row(d);
+        let larger = d.at_size(DEFAULT, row);
+        let back = row(d);
+        d.observe(
+            "X36-scroll-wins",
+            scrolled.zip(before).is_some_and(|(scrolled, before)| scrolled.top() > before.top())
+                && back.map(|r| r.top().round()) == scrolled.map(|r| r.top().round()),
+            format!("The row before {before:?}, after the DM's scroll {scrolled:?}, at {DEFAULT:?} {larger:?}, back {back:?}"),
+        );
     }
 
     pub fn run(d: &mut Driver<'_>) {
@@ -15972,6 +16023,8 @@ pub mod encounter_history {
             "Reading History changes no story and leaves the live-run slot free",
         );
         d.state("ended-run-open", Sizes::All);
+        // The opened run stays at the list's top; the DM closes it to reach In progress.
+        d.click_starting(OPEN_OLD.replace("Open", "Close").as_str());
         resume_run(d, RUN);
         let live = d
             .app_mut()
@@ -15982,7 +16035,6 @@ pub mod encounter_history {
             .unwrap()
             .id;
         go_encounters(d);
-        d.click_starting(OPEN_OLD.replace("Open", "Close").as_str());
         d.click_starting(OPEN_OLD);
         d.expect("Read-only");
         let still_open = d
@@ -16002,6 +16054,7 @@ pub mod encounter_history {
             "An open unfinished run has one row; the strip keeps Next turn primary and Back to run secondary",
         );
         d.state("history-beside-open-run", Sizes::All);
+        a_scroll_wins_over_a_resize(d);
 
         open_saved_encounter(d, RUN);
         d.click("Keep in Ready during a run");
