@@ -1680,7 +1680,9 @@ pub fn run(d: &mut Driver<'_>) {
 
 /// Each row of `allowed.json` is in a named class of its row of section 2.5. A class lets a new
 /// thing appear and an old one move, never go, be cut or get narrower. A row that fits no
-/// class fails, so the list cannot allow a fault by copying the failures.
+/// class fails, so the list cannot allow a fault by copying the failures. Each pull request of
+/// the build plan keeps its own classes here: P5 the Travel menu (row 12), P2 the difficulty
+/// word (rows 1 to 3).
 #[cfg(test)]
 mod allowed_classes {
     use super::*;
@@ -2098,12 +2100,222 @@ mod allowed_classes {
             .map(|class| class.name)
     }
 
+    // P2, F1: the difficulty word. A text that exists today may never be gone, cut, resized or
+    // moved. The one "gone" a class accepts is the old form of a text that the same view shows
+    // again, at the same place and height, with only passive words at its end; each old form
+    // pairs with its own new form, one to one, so two losses cannot share one replacement.
+
+    /// The difficulty word, and the XP before it in the editor and the opened row.
+    const WORDS: [&str; 4] = ["Above High", "Moderate", "High", "Low"];
+    const F1_NEW_TEXT: &str = "F1: a new text that ends a line: the word and the XP";
+    const F1_EXTENDED: &str =
+        "F1: the word added at the end of a text that exists, its start unchanged";
+    const F1_OLD_FORM: &str = "F1: the old form of that text, shown again with the word at its end";
+    const F1_ACT: &str = "F1: an act's words, with the word at the end of texts that exist";
+
+    /// `x y w h` from a difference's `at …` or `was …` detail.
+    fn rect_of(detail: &str, lead: &str) -> Option<[f32; 4]> {
+        let numbers: Vec<f32> = detail
+            .strip_prefix(lead)?
+            .replace('x', " ")
+            .split_whitespace()
+            .map(|n| n.parse().ok())
+            .collect::<Option<_>>()?;
+        <[f32; 4]>::try_from(numbers).ok()
+    }
+
+    /// `6,300 of 6,400` or `11,800`: XP, and the budget when there is one.
+    fn xp_numbers(numbers: &str) -> bool {
+        numbers
+            .split(" of ")
+            .all(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit() || c == ','))
+    }
+
+    /// The words F1 may put at the end of `old` to make `new`: ` · Low`, or in the editor's
+    /// heading ` · XP 400 of 2,800 · Low`. Plan summaries join with a no-break space.
+    fn f1_suffix(old: &str, new: &str) -> bool {
+        let (old, new) = (old.replace('\u{a0}', " "), new.replace('\u{a0}', " "));
+        let Some(rest) = new.strip_prefix(&old) else {
+            return false;
+        };
+        WORDS.iter().any(|word| {
+            rest == format!(" · {word}")
+                || rest
+                    .strip_prefix(" · XP ")
+                    .and_then(|rest| rest.strip_suffix(&format!(" · {word}")))
+                    .is_some_and(xp_numbers)
+        })
+    }
+
+    /// A new text on a line that exists: `Low · XP 400 of 2,800` at the right of the narrow
+    /// editor's tab row, or ` · Low · XP 400 of 2,800` after `Read encounter`.
+    fn f1_new_text(name: &str) -> bool {
+        let name = name
+            .trim_start_matches("Label: ")
+            .trim_start_matches("TextRun: ")
+            .replace('\u{a0}', " ");
+        let name = name.strip_prefix(" · ").unwrap_or(&name);
+        WORDS.iter().any(|word| {
+            name.strip_prefix(word)
+                .and_then(|rest| rest.strip_prefix(" · XP "))
+                .is_some_and(xp_numbers)
+        })
+    }
+
+    /// Each part of an act that changed: `appeared + …`, `went - …`. Every added text is an old
+    /// text of the same kind with F1's words at its end, or a new F1 text; every removed text is
+    /// paired, one to one, with its extended form added in the same kind.
+    fn f1_act(detail: &str) -> bool {
+        let parts: Vec<(&str, &str, &str)> = detail
+            .split(" | ")
+            .filter_map(|part| {
+                let (kind, rest) = part.split_once(' ')?;
+                let (sign, words) = rest.split_once(' ')?;
+                Some((kind, sign, words))
+            })
+            .collect();
+        if parts.len() != detail.split(" | ").count()
+            || parts.iter().any(|(_, sign, _)| !["+", "-"].contains(sign))
+        {
+            return false;
+        }
+        let mut used = vec![false; parts.len()];
+        for (i, (kind, sign, old)) in parts.iter().enumerate() {
+            if *sign != "-" {
+                continue;
+            }
+            let Some(j) = (0..parts.len()).find(|&j| {
+                let (k, s, new) = parts[j];
+                !used[j] && k == *kind && s == "+" && f1_suffix(old, new)
+            }) else {
+                return false;
+            };
+            used[i] = true;
+            used[j] = true;
+        }
+        parts
+            .iter()
+            .zip(&used)
+            .all(|((_, _, words), used)| *used || f1_new_text(words))
+    }
+
+    /// The extended form, at the same place and height, at least as wide, in the same view.
+    fn f1_pair(old: &AllowedRow, new: &AllowedRow) -> bool {
+        let (o, n) = (&old.difference, &new.difference);
+        let rects = rect_of(&o.detail, "was ").zip(rect_of(&n.detail, "at "));
+        o.screen == n.screen
+            && o.view == n.view
+            && o.what == n.what
+            && ["control", "text"].contains(&o.what.as_str())
+            && o.change == "gone"
+            && n.change == "new"
+            && f1_suffix(&o.name, &n.name)
+            && rects.is_some_and(|(was, at)| {
+                was[0] == at[0] && was[1] == at[1] && was[3] == at[3] && at[2] >= was[2]
+            })
+    }
+
+    /// Each row's class: P5's from `CLASSES`, F1's one-row classes, then F1's pairs, one to one.
+    fn classes(rows: &[AllowedRow]) -> Vec<Option<&'static str>> {
+        let f1 = |row: &AllowedRow| (1..=3).contains(&row.row);
+        let mut out: Vec<_> = rows
+            .iter()
+            .map(|row| {
+                let d = &row.difference;
+                class_of(row, rows).or_else(|| {
+                    if !f1(row) {
+                        None
+                    } else if ["control", "text"].contains(&d.what.as_str())
+                        && d.change == "new"
+                        && f1_new_text(&d.name)
+                    {
+                        Some(F1_NEW_TEXT)
+                    } else if d.what == "act" && d.change == "changed" && f1_act(&d.detail) {
+                        Some(F1_ACT)
+                    } else {
+                        None
+                    }
+                })
+            })
+            .collect();
+        for i in 0..rows.len() {
+            if out[i].is_some() || !f1(&rows[i]) {
+                continue;
+            }
+            if let Some(j) = (0..rows.len())
+                .find(|&j| out[j].is_none() && f1(&rows[j]) && f1_pair(&rows[i], &rows[j]))
+            {
+                out[i] = Some(F1_OLD_FORM);
+                out[j] = Some(F1_EXTENDED);
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn the_f1_classes_refuse_a_loss_a_cut_a_move_and_two_losses_for_one_text() {
+        let row = |change: &str, name: &str, detail: &str| AllowedRow {
+            row: 1,
+            why: String::new(),
+            difference: Difference {
+                screen: "s".into(),
+                view: "v".into(),
+                what: "text".into(),
+                change: change.into(),
+                name: name.into(),
+                detail: detail.into(),
+            },
+        };
+        let gone = || row("gone", "5 party · 2 × Ember Cultist", "was 10 20 140x16");
+        let new = |detail: &str| row("new", "5 party · 2 × Ember Cultist · Low", detail);
+        let pair = [gone(), new("at 10 20 172x16")];
+        assert!(classes(&pair).iter().all(Option::is_some));
+        for (rows, why) in [
+            (vec![gone()], "a text gone alone"),
+            (
+                vec![row("new", "5 party · 2 × Ember", "at 10 20 100x16")],
+                "a cut text",
+            ),
+            (
+                vec![row("moved", "Read encounter", "1 2 3x4 -> 1 3 3x4")],
+                "a moved control",
+            ),
+            (
+                vec![row("height", "5 party", "16 -> 32")],
+                "a row that grows",
+            ),
+            (
+                vec![gone(), new("at 10 21 172x16")],
+                "an extended text that moved",
+            ),
+            (
+                vec![gone(), new("at 10 20 140x32")],
+                "an extended text that wrapped",
+            ),
+            (
+                vec![gone(), gone(), new("at 10 20 172x16")],
+                "two losses for one new text",
+            ),
+        ] {
+            assert!(
+                classes(&rows).iter().any(Option::is_none),
+                "{why} was accepted"
+            );
+        }
+        // An act may only swap a text for its extended form, one to one.
+        assert!(f1_act("appeared + 5 party · Low | appeared - 5 party"));
+        assert!(!f1_act(
+            "appeared + 5 party · Low | appeared - 5 party | appeared - 5 party"
+        ));
+        assert!(!f1_act("went - 5 party"));
+    }
+
     #[test]
     fn every_allowed_row_is_in_a_class_of_its_row() {
         let allowed: Allowed = read(&folder().join("allowed.json"));
         let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
-        for row in &allowed.rows {
-            let class = class_of(row, &allowed.rows).unwrap_or_else(|| {
+        for (row, class) in allowed.rows.iter().zip(classes(&allowed.rows)) {
+            let class = class.unwrap_or_else(|| {
                 panic!(
                     "allowed.json row {} fits no class of its row: {}",
                     row.row, row.difference
