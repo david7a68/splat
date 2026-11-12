@@ -447,6 +447,8 @@ pub struct Sessions {
     slash: super::slash::Slash,
     /// A command wrote a file, so Lookup must read the campaign again.
     pub wants_content_refresh: bool,
+    /// The session notes came, went or moved: Lookup's index reads them again.
+    pub wants_index_refresh: bool,
 }
 
 struct MovedRun {
@@ -1906,7 +1908,17 @@ impl Sessions {
             return;
         }
         self.folder_error = None;
-        self.notes = list_notes(folder);
+        let notes = list_notes(folder);
+        // A new, renamed or removed note: the campaign's content holds session notes too, so
+        // Lookup and Read's links find it.
+        let place = |notes: &[Note]| -> Vec<(Uuid, PathBuf)> {
+            notes
+                .iter()
+                .map(|note| (note.id, note.path.clone()))
+                .collect()
+        };
+        self.wants_index_refresh |= place(&notes) != place(&self.notes);
+        self.notes = notes;
         // A new, renamed or removed note can change which titles are shared.
         self.last_time = None;
         self.carries.scanned();

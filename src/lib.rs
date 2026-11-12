@@ -2372,6 +2372,9 @@ impl Splat {
             self.lookup.refresh();
             self.lookup.files_changed = true;
         }
+        if std::mem::take(&mut self.sessions.wants_index_refresh) {
+            self.lookup.refresh();
+        }
         if let Some(name) = self.sessions.wants_lookup.take() {
             self.notes_give_way();
             if !self.lookup.open_name(&name) {

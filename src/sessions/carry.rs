@@ -951,6 +951,16 @@ impl Sessions {
             }
             let gone = || Shown::Gone(format!("The recap’s source is gone: {name} › {heading}."));
             let shown = match index.resolve_link(name, None) {
+                // The content is read again after a session note comes or goes; until then a
+                // session note that has this name is not called gone (`refresh`).
+                crate::world::Go::Missing(_)
+                    if self.notes.iter().any(|note| {
+                        note.link()
+                            .eq_ignore_ascii_case(name.rsplit('/').next().unwrap_or(name))
+                    }) =>
+                {
+                    continue;
+                }
                 crate::world::Go::Missing(_) => gone(),
                 crate::world::Go::Item(at, _) => {
                     let item = &index.items[at];
@@ -1713,14 +1723,13 @@ mod tests {
                 .is_some()
         );
         assert!(has(&harness, "Wolves at the ford."));
-        // A target with its folder shows that note; a part of a path names nothing and says so;
-        // a name that two notes share stays a link. Never the other session's words.
+        // A target with its folder shows that note. A part of a path, and a name that two notes
+        // share, stay links: a session note has that name, so neither is called gone. Never the
+        // other session's words.
         assert!(has(&harness, "The correct first session."));
         assert!(!has(&harness, "The WRONG second session."));
-        assert!(has(
-            &harness,
-            "The recap’s source is gone: Archive/Same › What happened."
-        ));
+        assert!(!has(&harness, "The recap’s source is gone: Archive/Same"));
+        assert!(!has(&harness, "The recap’s source is gone: Same"));
         // The DM's kept recap names nothing: Read says so, and nothing offers to rewrite it.
         assert!(has(
             &harness,
