@@ -308,7 +308,7 @@
       "see the run changed on disk": 19
     },
     "run-effects": {
-      "T20.1: pin an effect by the pointer beside Lookup": 4,
+      "T20.1: pin an effect by the pointer beside Lookup": 5,
       "T20.1: pin an effect with a count to the selected row": 3,
       "T20.5: roll a spent recharge on the row": 1,
       "T20.5: spend a use on the row": 1

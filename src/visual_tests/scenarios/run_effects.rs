@@ -17,14 +17,6 @@ fn by_key(d: &mut Driver<'_>, words: &str) {
     d.press(Key::Enter);
 }
 
-/// Add an effect by the pointer, beside Lookup, where the letter keys are text.
-fn by_pointer(d: &mut Driver<'_>, row: &str, words: &str) {
-    d.click_row(row);
-    d.click(EFFECT);
-    d.type_text(words);
-    d.press(Key::Enter);
-}
-
 /// A row's accessible name, which holds each effect's whole words.
 fn row_name(d: &Driver<'_>, name: &str) -> String {
     let start = format!("{name}, ");
@@ -144,20 +136,30 @@ pub fn run(d: &mut Driver<'_>) {
         ),
     );
 
-    // T20.1 beside Lookup: the letter keys are text, so the pointer adds an effect in 4, and
-    // Lookup stays as the DM left it.
+    // T20.1 beside Lookup at 960x640: the letter keys are text, and the dock has no room for
+    // `Effect` after Absent (its name slot and the dice total's place), so the pointer takes
+    // the Conditions tab's field, as F2 says: select, Conditions, the field, the words, Enter.
+    // Conditions closes Lookup, as a run task does, and Ctrl+K shows it again.
     look_up(d, "frightened");
-    d.begin_task();
-    by_pointer(d, ISELLE, "Frightened 10 rounds");
-    d.goal_within("T20.1", "pin an effect by the pointer beside Lookup", 4);
     d.observe(
         "T20.1",
-        row_name(d, ISELLE).contains("Frightened 10") && d.has(SEARCH_LOOKUP),
-        format!(
-            "The effect joined its row, and Lookup stays: {}",
-            row_name(d, ISELLE)
-        ),
+        !d.has(EFFECT),
+        "Beside Lookup at 960x640 the dock has no room for Effect",
     );
+    d.begin_task();
+    d.click_row(ISELLE);
+    d.click("Conditions for this participant");
+    d.click("Other effect");
+    d.type_text("Frightened 10 rounds");
+    d.press(Key::Enter);
+    d.goal_within("T20.1", "pin an effect by the pointer beside Lookup", 5);
+    d.observe(
+        "T20.1",
+        row_name(d, ISELLE).contains("Frightened 10"),
+        format!("The effect joined its row: {}", row_name(d, ISELLE)),
+    );
+    d.press_ctrl(Key::K);
+    d.observe("T20.1", d.has(SEARCH_LOOKUP), "Ctrl+K shows Lookup again");
     d.state("effects-beside-lookup", Sizes::Default);
     // T20.4: no row changed its height for its effects.
     d.press_ctrl(Key::K);

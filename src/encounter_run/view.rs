@@ -7080,7 +7080,11 @@ impl RowLayout {
                 .iter()
                 .filter(|c| !c.is_effect() || (extra.official_as_plain && official(c)))
                 .count();
-            let plain = if extra.fewest_plain { plain.min(1) } else { plain };
+            let plain = if extra.fewest_plain {
+                plain.min(1)
+            } else {
+                plain
+            };
             Self::measured(ui, input, (plain, BonusFit::All, extra))
         };
         // The row with each time taken away: an official condition that gained a time shows
