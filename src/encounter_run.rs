@@ -3428,8 +3428,9 @@ impl Run {
                 if before.successes != shadow.successes || before.failures != shadow.failures {
                     sync.set_group(SheetGroup::Death.key(),serde_json::json!({"successCount":before.successes,"failCount":before.failures}));
                 }
+                // Only what the sheet knows: an effect's words and a count stay in the run.
                 let group = SheetGroup::Conditions;
-                if before.conditions != shadow.conditions
+                if shadow_differences(&before, shadow).contains(&group)
                     && let Some(conditions) = sync
                         .values()
                         .get(group.key())
@@ -5000,7 +5001,36 @@ pub(crate) fn write_in_progress_run_with(
     write_in_progress_run_marked(campaign, directory, name, participants, details, &[])
 }
 
-/// As `write_in_progress_run_with`, with words the DM typed as conditions, by roster index.
+impl Run {
+    /// Typed words as a run saved before effects kept them: a label, whatever its end says,
+    /// with that version's Log line and Undo step. A fixture of an older run file.
+    #[cfg(test)]
+    pub(crate) fn label_as_older_run(&mut self, index: usize, words: &str) -> Result<(), String> {
+        let mut next = self.state.clone();
+        let p = next
+            .participants
+            .get_mut(index)
+            .ok_or("Participant is missing.")?;
+        p.conditions.push(Condition::Label(words.to_owned()));
+        let undo_label = format!("{words} on {}", p.name);
+        let line = format!("{}: Condition added: {words}.", p.name);
+        next.log.push(line);
+        next.cast = None;
+        next.last_change = Some(Self::change_with_result(&next, &undo_label));
+        self.notice = None;
+        let before = std::mem::replace(&mut self.state, next);
+        self.keep_own_step(before, undo_label, false);
+        self.notice_summary = None;
+        self.last_initiative = None;
+        self.dirty = true;
+        self.error = None;
+        self.reroll = None;
+        Ok(())
+    }
+}
+
+/// As `write_in_progress_run_with`, with words an older run kept as conditions, by roster
+/// index.
 #[cfg(test)]
 pub(crate) fn write_in_progress_run_marked(
     campaign: Uuid,
@@ -5021,7 +5051,7 @@ pub(crate) fn write_in_progress_run_marked(
     }
     run.apply(Command::Begin)?;
     for (index, words) in marks {
-        run.apply(Command::Condition(*index, (*words).to_owned()))?;
+        run.label_as_older_run(*index, words)?;
     }
     let first = run.state.order[0];
     run.apply(Command::Note(first, "Holding the bridge.".into()))?;
@@ -5495,6 +5525,83 @@ mod tests {
         run.undo();
         assert_eq!(run.state.phase, Phase::Running);
         run.apply(Command::Next).unwrap();
+
+        // F2: words with a time at their end are one entry with its count; an official
+        // condition already on the row changes its time and adds nothing.
+        let dir = tempfile::tempdir().unwrap();
+        let mut run = super::tests::run();
+        begin(&mut run);
+        let campaign = stored(&mut run, dir.path());
+        let names: Vec<String> = run.state.participants.iter().map(|p| p.name.clone()).collect();
+        run.apply(Command::Condition(0, "poisoned 2 rounds".into())).unwrap();
+        assert_eq!(run.undo_label(), format!("Undo: effect Poisoned on {}", names[0]));
+        assert_eq!(run.state.participants[0].conditions, vec!["Poisoned 2"]);
+        for words in ["Wis save DC 15 (Hold Person) on its turn", "Fire Breath recharge 5-6"] {
+            run.apply(Command::Condition(1, words.into())).unwrap();
+        }
+        run.apply(Command::Condition(2, "Legendary actions 3 uses".into()))
+            .unwrap();
+        let reminders = |run: &Run| run.turn_reminders().map(|(whole, ..)| whole);
+        assert_eq!(reminders(&run).as_deref(), Some("Poisoned 2"));
+        // The count goes down when its participant's turn ends, in the step of Next turn, and
+        // Undo of that step gives it back, also after a restart.
+        run.apply(Command::Next).unwrap();
+        assert_eq!(run.state.participants[0].conditions, vec!["Poisoned · last round"]);
+        // A recharge and uses give no reminder.
+        assert_eq!(
+            reminders(&run).as_deref(),
+            Some("Wis save DC 15 (Hold Person)")
+        );
+        let mut run = close_and_reopen(&mut run, campaign);
+        run.undo();
+        assert_eq!(run.state.participants[0].conditions, vec!["Poisoned 2"]);
+        run.apply(Command::Next).unwrap();
+        // An absent participant's count does not go down: its turn does not come.
+        run.apply(Command::Presence(0, false)).unwrap();
+        for _ in 0..2 {
+            run.apply(Command::Next).unwrap();
+        }
+        assert_eq!(run.current(), Some(1));
+        assert_eq!(run.state.participants[0].conditions, vec!["Poisoned · last round"]);
+        run.apply(Command::Presence(0, true)).unwrap();
+        for _ in 0..3 {
+            run.apply(Command::Next).unwrap();
+        }
+        // At 0 it says so, in the row and the Log, and Splat removes nothing.
+        assert_eq!(run.state.participants[0].conditions, vec!["Poisoned · time is up"]);
+        let up = format!("{}: Poisoned · time is up.", names[0]);
+        assert_eq!(run.state.log.iter().filter(|line| **line == up).count(), 1);
+        // A use is spent in one step; at none left the same act gives all back.
+        for (left, label) in [
+            ("2 of 3", "spend Legendary actions on"),
+            ("1 of 3", "spend Legendary actions on"),
+            ("0 of 3", "spend Legendary actions on"),
+            ("3 of 3", "Legendary actions back on"),
+        ] {
+            run.apply(Command::Spend(2, 1)).unwrap();
+            assert_eq!(
+                run.state.participants[2].conditions,
+                vec!["Poisoned".to_owned(), format!("Legendary actions {left}")]
+            );
+            assert_eq!(run.undo_label(), format!("Undo: {label} {}", names[2]));
+        }
+        // A ready recharge is marked spent; a spent one rolls on the run's dice.
+        run.apply(Command::Recharge(1, 2)).unwrap();
+        assert_eq!(run.undo_label(), "Undo: Fire Breath spent");
+        assert_eq!(run.state.participants[1].conditions[2], "Fire Breath spent");
+        run.apply(Command::Recharge(1, 2)).unwrap();
+        assert_eq!(run.undo_label(), format!("Undo: recharge roll for {}", names[1]));
+        assert!(run.state.log.last().unwrap().contains(": Fire Breath: Rolled "));
+        assert!(run.apply(Command::Spend(1, 2)).is_err(), "a recharge has no uses");
+        // Act A, an unrelated act B, then Undo of both: A's effect goes with its own step.
+        run.apply(Command::RemoveCondition(0, 0)).unwrap();
+        assert_eq!(run.undo_label(), format!("Undo: remove Poisoned from {}", names[0]));
+        run.apply(Command::Damage(2, 1)).unwrap();
+        run.undo();
+        assert!(run.state.participants[0].conditions.is_empty());
+        run.undo();
+        assert_eq!(run.state.participants[0].conditions, vec!["Poisoned · time is up"]);
+        assert_eq!(run.undo_label(), format!("Undo: recharge roll for {}", names[1]));
     }
 
     #[test]
@@ -6010,10 +6117,71 @@ mod tests {
         assert!(Run::open(&path, campaign).is_err());
         assert!(fight_summary(&path, campaign).is_err());
     }
+    /// F2: a real run file that a version before effects saved, with its Undo steps: the
+    /// plain campaign's run, as G7 keeps it. It opens with its steps, and its words stay
+    /// labels: nothing counts and nothing reminds.
+    #[test]
+    fn a_run_file_saved_before_effects_opens_with_its_steps_and_keeps_its_words() {
+        let folder = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("src/visual_tests/plain_evening/files/emberfall/Encounter Runs");
+        let source = fs::read_dir(&folder)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .find(|path| fs::read_to_string(path).unwrap().contains("Bless 10 rounds"))
+            .expect("the plain campaign's run file");
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(source.file_name().unwrap());
+        fs::copy(&source, &path).unwrap();
+        let saved: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        let campaign: Uuid = saved["campaign"].as_str().unwrap().parse().unwrap();
+        let steps = saved["undo"]["steps"].as_array().unwrap().len();
+        let mut run = Run::open(&path, campaign).unwrap();
+        assert!(!run.undo_unread);
+        assert_eq!(run.history.len(), steps.min(undo::LIMIT));
+        let row = |run: &Run, name: &str| {
+            run.state
+                .participants
+                .iter()
+                .position(|p| p.name == name)
+                .unwrap()
+        };
+        let bless = row(&run, "Brannoch Vale");
+        assert_eq!(
+            run.state.participants[bless].conditions,
+            vec![Condition::Label("Bless 10 rounds".into())]
+        );
+        // Each turn, the old words stay as they are, and no turn has a reminder.
+        let before: Vec<_> = run
+            .state
+            .participants
+            .iter()
+            .map(|p| p.conditions.clone())
+            .collect();
+        for _ in 0..run.state.participants.len() {
+            assert!(run.turn_reminders().is_none());
+            run.apply(Command::Next).unwrap();
+        }
+        let after: Vec<_> = run
+            .state
+            .participants
+            .iter()
+            .map(|p| p.conditions.clone())
+            .collect();
+        assert_eq!(after, before);
+        // The file's own steps undo, and a save keeps an old label a string.
+        while run.history.len() > steps.min(undo::LIMIT) - 3 {
+            run.undo();
+        }
+        run.dirty = true;
+        run.save().unwrap();
+        let text = fs::read_to_string(&path).unwrap();
+        assert!(text.contains("\"Bless 10 rounds\""), "a label stays a string");
+        assert!(!text.contains("\"rounds\":"), "no old words started to count");
+    }
     #[test]
     fn undo_steps_this_version_cannot_read_are_dropped_and_the_run_says_so_once() {
         type Break = fn(&mut serde_json::Value);
-        let breaks: [(&str, Break); 7] = [
+        let breaks: [(&str, Break); 8] = [
             ("another version", |saved| {
                 saved["undo"]["version"] = 2.into()
             }),
@@ -6040,6 +6208,13 @@ mod tests {
                     oldest["order"] = serde_json::json!([0, 1]);
                 },
             ),
+            // F2: a condition entry that this version does not know is not read as another.
+            ("a condition this version cannot read", |saved| {
+                let steps = saved["undo"]["steps"].as_array_mut().unwrap();
+                let damage = steps.last_mut().unwrap();
+                damage["rows"]["0"]["conditions"] =
+                    serde_json::json!(["Poisoned", {"name": "Bless", "hours": 8}]);
+            }),
             // A step changes a row, and never gives its place to another participant.
             ("a step for a participant the run does not have", |saved| {
                 let steps = saved["undo"]["steps"].as_array_mut().unwrap();
@@ -7204,6 +7379,26 @@ mod tests {
                 .log
                 .iter()
                 .any(|line| line.contains("Prone added"))
+        );
+        // F2: one entry holds a condition and its count. A sheet that keeps the condition
+        // keeps its count; one that adds a condition starts it with none; one that removes it
+        // removes both, and says what went.
+        run.apply(Command::Condition(0, "Prone 7 rounds".into())).unwrap();
+        let mut update = sheet(5, &[12, 5]);
+        update["temporaryHitPoints"] = 4.into();
+        read_full_sheet(&mut run, max, &update);
+        assert_eq!(run.state.participants[0].conditions, vec!["Frightened", "Prone 7"]);
+        let mut update = sheet(5, &[5]);
+        update["temporaryHitPoints"] = 4.into();
+        read_full_sheet(&mut run, max, &update);
+        assert_eq!(run.state.participants[0].conditions, vec!["Frightened"]);
+        let notice = run.notice.clone().unwrap();
+        assert!(notice.contains("Prone, 7 rounds left removed"), "{notice}");
+        assert!(
+            run.state
+                .log
+                .iter()
+                .any(|line| line.contains("Prone, 7 rounds left removed"))
         );
     }
     #[test]
