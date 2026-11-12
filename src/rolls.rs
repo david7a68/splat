@@ -1164,6 +1164,9 @@ pub(crate) struct ArmedView {
     pub link: RollLink,
     /// What to do next, such as `Click a target. Escape stops.`
     pub status: String,
+    /// The longest words `status` can say for any armed action and roll mode. The hint keeps
+    /// the lines these take, so `Stop` below it keeps its y in every mode (FK4).
+    pub reserve: String,
     pub actions: Vec<(&'static str, ArmedAction)>,
 }
 
@@ -1650,8 +1653,10 @@ fn line_start_actions<T: Copy>(ui: &mut egui::Ui, actions: &[(&str, T)]) -> Opti
 }
 
 /// The armed action's next step under its tiles: a crosshair, then the words in Small. The
-/// crosshair stays on the first line when the words wrap, centred on it.
-fn armed_hint(ui: &mut egui::Ui, status: &str) {
+/// crosshair stays on the first line when the words wrap, centred on it. The words keep the
+/// lines that `reserve` would take at this width, so what follows does not move when the
+/// roll mode or the action changes the words (FK4).
+fn armed_hint(ui: &mut egui::Ui, status: &str, reserve: &str) {
     let icon_row = ui.fonts_mut(|fonts| fonts.row_height(&Type::Body.font(ui)));
     let text_row = ui.fonts_mut(|fonts| fonts.row_height(&Type::Small.font(ui)));
     // Each starts lower by half of what the other's first line is taller.
@@ -1668,6 +1673,14 @@ fn armed_hint(ui: &mut egui::Ui, status: &str) {
             );
         });
         ui.vertical(|ui| {
+            let job = egui::text::LayoutJob::simple(
+                reserve.to_owned(),
+                Type::Small.font(ui),
+                colors().text,
+                ui.available_width(),
+            );
+            let reserved = ui.fonts_mut(|fonts| fonts.layout_job(job)).size().y;
+            ui.set_min_height(text_drop + reserved);
             ui.add_space(text_drop);
             ui.add(egui::Label::new(Type::Small.rich(ui, status).color(colors().text)).wrap());
         });
@@ -1737,7 +1750,7 @@ pub(crate) fn tiles(ui: &mut egui::Ui, entry: &str, chips: &[(Option<usize>, Chi
     ui.add_space(design::XS);
     if let Some(view) = &armed {
         // What to do now, then what can follow, each on its own line.
-        armed_hint(ui, &view.status);
+        armed_hint(ui, &view.status, &view.reserve);
         if let Some(action) = line_start_actions(ui, &view.actions) {
             ctx.data_mut(|data| data.insert_temp(armed_action_id(), action));
         }

@@ -206,7 +206,7 @@ An entry has an optional last heading, `## Log`. Each line is one thing that hap
 in a row named **Open questions** above the notes.
 Obsidian shows them as tasks. The two "Open Questions" lists move to their subjects.
 
-**Checks.** The World page has a **Problems** row above the notes. Each check is read-only, and
+**Checks.** The World page has a **Things to check** row above the notes. Each check is read-only, and
 each row opens its page. A Log line is not checked for dates or copies.
 
 | Check | Why |
@@ -247,13 +247,13 @@ each row opens its page. A Log line is not checked for dates or copies.
    in order, and holds neither.
 4. **Log.** *Built.* *Changes:* `change` in `src/world.rs`, the session's reading view. *Done when:* marking Hob dead in
    a session shows on the page of Session 1.
-5. **Open questions and Problems.** *Built.* `src/world/checks.rs` and the World page. On the
+5. **Open questions and Things to check.** *Built.* `src/world/checks.rs` and the World page. On the
    Heralds notes of 2026-11-09, it finds 139 sentences that are on two pages or more, 29 lines with
    a date outside an event, and one entry with no summary.
 
 The vault moves one step behind the build. Delete a hand-written list only after the part that
 replaces it works. Steps 2 and 3 need a one-time pass over the vault, which an agent can do, and
-which the Problems list then checks.
+which the Things to check list then checks.
 
 ## Limits, stated
 
