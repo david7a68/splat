@@ -282,7 +282,8 @@ pub fn log_from_play(d: &mut Driver<'_>) {
                     && (size != DEFAULT || action.is_some())
                     && action.is_none_or(|action| {
                         menu.is_some_and(|menu| {
-                            action.right() <= menu.left() && (action.top() - menu.top()).abs() <= 0.5
+                            action.right() <= menu.left()
+                                && (action.top() - menu.top()).abs() <= 0.5
                         })
                     }),
                 format!("Add to Log {action:?}, menu {menu:?}, on other rows {others}"),
