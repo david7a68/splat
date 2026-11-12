@@ -684,11 +684,11 @@ struct State {
 /// The state, groups and scale an answer in Arrivals was worked out from: the count of steps
 /// kept or taken back, and the two reads by their address.
 type ArrivalKey = (u64, usize, usize);
-/// The typed totals' revision, the groups' read by its address and the run's encounter, for
-/// the Arrivals reasons.
-type ReasonsKey = (u64, usize, Option<Uuid>);
-/// The groups' read by its address, and the widths and type size a summary was wrapped for.
-type SummaryKey = (usize, u32, u32, u32);
+/// The typed totals' revision, the groups' revision and the run's encounter, for the Arrivals
+/// reasons.
+type ReasonsKey = (u64, u64, Option<Uuid>);
+/// The groups' revision, and the widths and type size a summary was wrapped for.
+type SummaryKey = (u64, u32, u32, u32);
 /// A group's member summary in Arrivals: the wrapped words, and whether they take a full-width
 /// line above Initiative and Add because `Will add:` and its first member do not fit beside them.
 #[derive(Clone)]
@@ -783,6 +783,12 @@ pub(crate) struct Run {
     arrival_summaries: Option<(SummaryKey, BTreeMap<Uuid, ArrivalSummary>)>,
     /// Bumped by every edit of `group_totals`, so the Arrivals reasons are read again only then.
     totals_revision: u64,
+    /// The groups that `groups_revision` counted last. Held, so their allocation is never freed
+    /// and reused while it is compared: a new read is told apart by identity, not by an address.
+    groups_seen: Option<Arc<Vec<Arc<RunGroup>>>>,
+    /// Bumped whenever `groups` is a read other than `groups_seen` (a reload replaces it, also
+    /// while Arrivals is closed). The Arrivals caches are keyed by it.
+    groups_revision: u64,
     /// The Arrivals reasons for typed totals that cannot be read (FI5), for one
     /// `totals_revision`, one read of the groups and one encounter. Never saved.
     arrival_reasons: Option<(ReasonsKey, Arc<[String]>)>,
@@ -1255,6 +1261,8 @@ impl Run {
             arrival_counts: (0, 0),
             arrival_summaries: None,
             totals_revision: 0,
+            groups_seen: None,
+            groups_revision: 0,
             arrival_reasons: None,
             widest_name: None,
             carried: None,
@@ -4278,6 +4286,8 @@ impl Run {
             arrival_counts: (0, 0),
             arrival_summaries: None,
             totals_revision: 0,
+            groups_seen: None,
+            groups_revision: 0,
             arrival_reasons: None,
             widest_name: None,
             carried: None,

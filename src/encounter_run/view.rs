@@ -2807,18 +2807,30 @@ impl Run {
         }
     }
 
+    /// The revision of the groups' read: it changes whenever `groups` holds another read than
+    /// the one counted last, whatever page was open when it was replaced.
+    fn groups_revision(&mut self) -> u64 {
+        let same = match (&self.groups, &self.groups_seen) {
+            (Some(now), Some(seen)) => Arc::ptr_eq(now, seen),
+            (None, None) => true,
+            _ => false,
+        };
+        if !same {
+            self.groups_revision += 1;
+            self.groups_seen = self.groups.clone();
+        }
+        self.groups_revision
+    }
+
     /// Each offered group whose typed total cannot be read: `<group>: <reason>`, in list order.
     /// Worked out again only after an edit of the typed totals, a new read of the groups or
     /// another encounter (`totals_revision`, the groups' address, `source`).
     fn arrival_reasons(&mut self) -> Arc<[String]> {
+        let groups_revision = self.groups_revision();
         let Some(groups) = self.groups.as_ref() else {
             return Arc::from([]);
         };
-        let key = (
-            self.totals_revision,
-            Arc::as_ptr(groups) as usize,
-            self.source,
-        );
+        let key = (self.totals_revision, groups_revision, self.source);
         if let Some((_, reasons)) = self.arrival_reasons.as_ref().filter(|(at, _)| *at == key) {
             return reasons.clone();
         }
@@ -2856,9 +2868,7 @@ impl Run {
     ) -> super::ArrivalSummary {
         let font = Type::Small.font(ui);
         let key = (
-            self.groups
-                .as_ref()
-                .map_or(0, |groups| Arc::as_ptr(groups) as usize),
+            self.groups_revision(),
             beside.to_bits(),
             full.to_bits(),
             font.size.to_bits(),
@@ -8132,6 +8142,116 @@ mod tests {
         assert!(
             shown(&wheel, focus),
             "iter-26-R-crowded-wheel: the wheel reaches the last reason"
+        );
+        // Astra re-check: a reload replaces the groups while Arrivals is closed, several times
+        // (each old read dropped). Reopened, Arrivals shows the current members and reasons, and
+        // Add adds the current members.
+        use std::{cell::RefCell, rc::Rc};
+        let (pack, vanguard) = (Uuid::new_v4(), Uuid::new_v4());
+        let read = |run: &Run, pack_name: &str, count: u64| {
+            let group = |id: Uuid, name: &str| {
+                Arc::new(super::super::RunGroup {
+                    id,
+                    path: format!("{name}.md"),
+                    name: name.into(),
+                    side: "enemies".into(),
+                    encounter: None,
+                    encounter_name: None,
+                    members: vec![super::super::GroupMember {
+                        entry: run.state.participants[0].definition.clone(),
+                        count,
+                        overrides: Default::default(),
+                    }],
+                    notes: String::new(),
+                    xp: 0,
+                    xp_unknown: vec![],
+                    unavailable: 0,
+                    unavailable_members: vec![],
+                    problem: None,
+                    warnings: vec![],
+                })
+            };
+            Arc::new(vec![group(pack, pack_name), group(vanguard, "Vanguard")])
+        };
+        let mut run = super::super::tests::run();
+        run.groups = Some(read(&run, "Pack A", 2));
+        run.group_totals.insert(pack, "2-5".into());
+        run.group_totals.insert(vanguard, "12".into());
+        let shared = Rc::new(RefCell::new((run, true)));
+        let drawn = shared.clone();
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(vec2(760.0, 800.0))
+            .build(move |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let (run, open) = &mut *drawn.borrow_mut();
+                    if *open {
+                        run.groups_tab(ui);
+                    }
+                });
+            });
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        let texts = |harness: &egui_kittest::Harness<'_>| {
+            harness
+                .output()
+                .shapes
+                .iter()
+                .filter_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) => Some(text.galley.text().to_owned()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+        assert!(
+            texts(&harness)
+                .iter()
+                .any(|text| text.starts_with("Pack A: "))
+                && texts(&harness)
+                    .iter()
+                    .any(|text| text.contains("2\u{a0}×\u{a0}")),
+            "the first read shows: {:?}",
+            texts(&harness)
+        );
+        // Closed, then three reloads, each dropping the read before.
+        shared.borrow_mut().1 = false;
+        harness.run_steps(2);
+        for (name, count) in [("Pack B", 4), ("Pack C", 5), ("Pack D", 3)] {
+            {
+                let (run, _) = &mut *shared.borrow_mut();
+                run.groups = Some(read(run, name, count));
+            }
+            harness.run_steps(2);
+        }
+        shared.borrow_mut().1 = true;
+        harness.run_steps(3);
+        let now = texts(&harness);
+        let members: Vec<_> = now
+            .iter()
+            .filter(|text| text.contains("\u{a0}×\u{a0}"))
+            .collect();
+        assert!(
+            members.len() == 2
+                && members
+                    .iter()
+                    .all(|text| text.starts_with("3\u{a0}×\u{a0}"))
+                && now.iter().any(|text| text.starts_with("Pack D: "))
+                && !now.iter().any(|text| {
+                    ["Pack A: ", "Pack B: ", "Pack C: "]
+                        .iter()
+                        .any(|old| text.starts_with(old))
+                }),
+            "iter-26-R-reload: reopened Arrivals shows the current read: {now:?}"
+        );
+        let before = shared.borrow().0.state.participants.len();
+        harness
+            .get_by_label("Add Vanguard to the initiative list")
+            .click();
+        harness.run_steps(3);
+        let after = shared.borrow().0.state.participants.len();
+        assert_eq!(
+            after,
+            before + 3,
+            "iter-26-R-reload-add: Add adds the current 3 members"
         );
     }
 
