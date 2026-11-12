@@ -39,5 +39,5 @@ during / After the crash: back to the fight: the app opened on Run
 during / After the crash: back to the fight: the wolf's row holds the effect with its count: true
 during / After the crash: back to the fight: Undo names the last saved step: Undo: next turn
 during / Lookup is closed after the restart: find the note again: last week's words are in view: true
-after the fight / Take a scene off tonight's plan: the plan holds the line added in Obsidian, as a row or in the fold `2 scenes`: false
-after the fight / The scene is wanted after all: take the removal back: the scene's line is back in the note: true
+after the fight / Take a scene off tonight's plan: the plan holds the line added in Obsidian, as a row or in the fold `2 scenes`: true; the note on disk holds it: true
+after the fight / The scene is wanted after all: take the removal back: the scene's line is back in the note: true; the line added in Obsidian is still there: true

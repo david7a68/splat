@@ -511,8 +511,8 @@ fn broken_evening(a: &mut Audit<'_, '_>) {
             ),
         )
         .expect("write tonight's note");
-        d.focus_window(false);
-        d.focus_window(true);
+        // The app reads a note that changed on disk on a poll of one second of real time.
+        std::thread::sleep(std::time::Duration::from_millis(1100));
         d.settle();
     });
     // Nothing opens on the Run page; the plan shows the line when the DM next looks at it.
