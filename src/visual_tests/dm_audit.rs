@@ -485,7 +485,9 @@ fn during_the_session(a: &mut Audit<'_, '_>) {
     a.task("A wolf frightens Oren for 10 rounds: give the condition its count");
     a.act(Find, "select Oren", |d| d.click_row("Oren Thistlewick"));
     a.act(Do, "Effect with E", |d| d.press(Key::E));
-    a.act(Do, "type the effect", |d| d.type_text("Frightened 10 rounds"));
+    a.act(Do, "type the effect", |d| {
+        d.type_text("Frightened 10 rounds")
+    });
     a.act(Do, "add with Enter", |d| d.press(Key::Enter));
     a.fact(format!(
         "the row holds one Frightened, with its count: {}",

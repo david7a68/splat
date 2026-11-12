@@ -1,4 +1,485 @@
 {
  "about": "G7's allowed differences from reference.json. Each row names its row of docs/design/session-cycle.md section 2.5 and one difference, whole, as the G7 failure prints it. A row that matches nothing fails. Add rows only for a change that section 2.5 lists.",
- "rows": []
+ "rows": [
+  {
+   "row": 6,
+   "why": "Row 6: a quiet Effect joins the run dock's second line, in the room that is spare after Absent, with its word, then its icon, then not shown; no control of the line moves, and an act shows or hides only its words and its key letter (F2). The class is P4 in plain_evening.rs.",
+   "difference": {
+    "screen": "run-twelve: Brannoch selected",
+    "view": "1200x800",
+    "what": "control",
+    "change": "new",
+    "name": "Button: Effect: words for this row",
+    "detail": "at 546.1 725 88.1x28"
+   }
+  },
+  {
+   "row": 6,
+   "why": "Row 6: a quiet Effect joins the run dock's second line, in the room that is spare after Absent, with its word, then its icon, then not shown; no control of the line moves, and an act shows or hides only its words and its key letter (F2). The class is P4 in plain_evening.rs.",
+   "difference": {
+    "screen": "run-twelve: Brannoch selected",
+    "view": "1200x800",
+    "what": "text",
+    "change": "new",
+    "name": "E",
+    "detail": "at 619.2 731 7x16"
+   }
+  },
+  {
+   "row": 6,
+   "why": "Row 6: a quiet Effect joins the run dock's second line, in the room that is spare after Absent, with its word, then its icon, then not shown; no control of the line moves, and an act shows or hides only its words and its key letter (F2). The class is P4 in plain_evening.rs.",
+   "difference": {
+    "screen": "run-twelve: Brannoch selected",
+    "view": "1200x800",
+    "what": "text",
+    "change": "new",
+    "name": "Effect",
+    "detail": "at 574.1 730 37.1x18"
+   }
+  },
+  {
+   "row": 6,
+   "why": "Row 6: a quiet Effect joins the run dock's second line, in the room that is spare after Absent, with its word, then its icon, then not shown; no control of the line moves, and an act shows or hides only its words and its key letter (F2). The class is P4 in plain_evening.rs.",
+   "difference": {
+    "screen": "run-twelve: Brannoch selected",
+    "view": "1200x800",
+    "what": "text",
+    "change": "new",
+    "name": "",
+    "detail": "at 554.1 730 14x18"
+   }
+  },
+  {
+   "row": 6,
+   "why": "Row 6: a quiet Effect joins the run dock's second line, in the room that is spare after Absent, with its word, then its icon, then not shown; no control of the line moves, and an act shows or hides only its words and its key letter (F2). The class is P4 in plain_evening.rs.",
+   "difference": {
+    "screen": "run-twelve: Brannoch selected",
+    "view": "960x640",
+    "what": "control",
+    "change": "new",
+    "name": "Button: Effect: words for this row",
+    "detail": "at 546.1 565 28x28"
+   }
+  },
+  {
+   "row": 6,
+   "why": "Row 6: a quiet Effect joins the run dock's second line, in the room that is spare after Absent, with its word, then its icon, then not shown; no control of the line moves, and an act shows or hides only its words and its key letter (F2). The class is P4 in plain_evening.rs.",
+   "difference": {
+    "screen": "run-twelve: Brannoch selected",
+    "view": "960x640",
+    "what": "text",
+    "change": "new",
+    "name": "",
+    "detail": "at 553.1 570 14x18"
+   }
+  },
+  {
+   "row": 6,
+   "why": "Row 6: a quiet Effect joins the run dock's second line, in the room that is spare after Absent, with its word, then its icon, then not shown; no control of the line moves, and an act shows or hides only its words and its key letter (F2). The class is P4 in plain_evening.rs.",
+   "difference": {
+    "screen": "run-conditions",
+    "view": "1200x800 Lookup closed",
+    "what": "control",
+    "change": "new",
+    "name": "Button: Effect: words for this row",
+    "detail": "at 546.1 725 88.1x28"
+   }
+  },
+  {
+   "row": 6,
+   "why": "Row 6: a quiet Effect joins the run dock's second line, in the room that is spare after Absent, with its word, then its icon, then not shown; no control of the line moves, and an act shows or hides only its words and its key letter (F2). The class is P4 in plain_evening.rs.",
+   "difference": {
+    "screen": "run-conditions",
+    "view": "1200x800 Lookup closed",
+    "what": "text",
+    "change": "new",
+    "name": "E",
+    "detail": "at 619.2 731 7x16"
+   }
+  },
+  {
+   "row": 6,
+   "why": "Row 6: a quiet Effect joins the run dock's second line, in the room that is spare after Absent, with its word, then its icon, then not shown; no control of the line moves, and an act shows or hides only its words and its key letter (F2). The class is P4 in plain_evening.rs.",
+   "difference": {
+    "screen": "run-conditions",
+    "view": "1200x800 Lookup closed",
+    "what": "text",
+    "change": "new",
+    "name": "Effect",
+    "detail": "at 574.1 730 37.1x18"
+   }
+  },
+  {
+   "row": 6,
+   "why": "Row 6: a quiet Effect joins the run dock's second line, in the room that is spare after Absent, with its word, then its icon, then not shown; no control of the line moves, and an act shows or hides only its words and its key letter (F2). The class is P4 in plain_evening.rs.",
+   "difference": {
+    "screen": "run-conditions",
+    "view": "1200x800 Lookup closed",
+    "what": "text",
+    "change": "new",
+    "name": "",
+    "detail": "at 554.1 730 14x18"
+   }
+  },
+  {
+   "row": 6,
+   "why": "Row 6: a quiet Effect joins the run dock's second line, in the room that is spare after Absent, with its word, then its icon, then not shown; no control of the line moves, and an act shows or hides only its words and its key letter (F2). The class is P4 in plain_evening.rs.",
+   "difference": {
+    "screen": "run-conditions",
+    "view": "960x640 Lookup closed",
+    "what": "control",
+    "change": "new",
+    "name": "Button: Effect: words for this row",
+    "detail": "at 546.1 565 28x28"
+   }
+  },
+  {
+   "row": 6,
+   "why": "Row 6: a quiet Effect joins the run dock's second line, in the room that is spare after Absent, with its word, then its icon, then not shown; no control of the line moves, and an act shows or hides only its words and its key letter (F2). The class is P4 in plain_evening.rs.",
+   "difference": {
+    "screen": "run-conditions",
+    "view": "960x640 Lookup closed",
+    "what": "text",
+    "change": "new",
+    "name": "",
+    "detail": "at 553.1 570 14x18"
+   }
+  },
+  {
+   "row": 6,
+   "why": "Row 6: a quiet Effect joins the run dock's second line, in the room that is spare after Absent, with its word, then its icon, then not shown; no control of the line moves, and an act shows or hides only its words and its key letter (F2). The class is P4 in plain_evening.rs.",
+   "difference": {
+    "screen": "run-conditions",
+    "view": "1200x800 Lookup open",
+    "what": "control",
+    "change": "new",
+    "name": "Button: Effect: words for this row",
+    "detail": "at 530.7 725 73.1x28"
+   }
+  },
+  {
+   "row": 6,
+   "why": "Row 6: a quiet Effect joins the run dock's second line, in the room that is spare after Absent, with its word, then its icon, then not shown; no control of the line moves, and an act shows or hides only its words and its key letter (F2). The class is P4 in plain_evening.rs.",
+   "difference": {
+    "screen": "run-conditions",
+    "view": "1200x800 Lookup open",
+    "what": "text",
+    "change": "new",
+    "name": "Effect",
+    "detail": "at 558.7 730 37.1x18"
+   }
+  },
+  {
+   "row": 6,
+   "why": "Row 6: a quiet Effect joins the run dock's second line, in the room that is spare after Absent, with its word, then its icon, then not shown; no control of the line moves, and an act shows or hides only its words and its key letter (F2). The class is P4 in plain_evening.rs.",
+   "difference": {
+    "screen": "run-conditions",
+    "view": "1200x800 Lookup open",
+    "what": "text",
+    "change": "new",
+    "name": "",
+    "detail": "at 538.7 730 14x18"
+   }
+  },
+  {
+   "row": 6,
+   "why": "Row 6: a quiet Effect joins the run dock's second line, in the room that is spare after Absent, with its word, then its icon, then not shown; no control of the line moves, and an act shows or hides only its words and its key letter (F2). The class is P4 in plain_evening.rs.",
+   "difference": {
+    "screen": "run-conditions",
+    "view": "960x640 Lookup open",
+    "what": "control",
+    "change": "new",
+    "name": "Button: Effect: words for this row",
+    "detail": "at 530.7 565 28x28"
+   }
+  },
+  {
+   "row": 6,
+   "why": "Row 6: a quiet Effect joins the run dock's second line, in the room that is spare after Absent, with its word, then its icon, then not shown; no control of the line moves, and an act shows or hides only its words and its key letter (F2). The class is P4 in plain_evening.rs.",
+   "difference": {
+    "screen": "run-conditions",
+    "view": "960x640 Lookup open",
+    "what": "text",
+    "change": "new",
+    "name": "",
+    "detail": "at 537.7 570 14x18"
+   }
+  },
+  {
+   "row": 6,
+   "why": "Row 6: a quiet Effect joins the run dock's second line, in the room that is spare after Absent, with its word, then its icon, then not shown; no control of the line moves, and an act shows or hides only its words and its key letter (F2). The class is P4 in plain_evening.rs.",
+   "difference": {
+    "screen": "run-conditions: Conditions hover",
+    "view": "1200x800",
+    "what": "control",
+    "change": "new",
+    "name": "Button: Effect: words for this row",
+    "detail": "at 546.1 725 88.1x28"
+   }
+  },
+  {
+   "row": 6,
+   "why": "Row 6: a quiet Effect joins the run dock's second line, in the room that is spare after Absent, with its word, then its icon, then not shown; no control of the line moves, and an act shows or hides only its words and its key letter (F2). The class is P4 in plain_evening.rs.",
+   "difference": {
+    "screen": "run-conditions: Conditions hover",
+    "view": "1200x800",
+    "what": "text",
+    "change": "new",
+    "name": "E",
+    "detail": "at 619.2 731 7x16"
+   }
+  },
+  {
+   "row": 6,
+   "why": "Row 6: a quiet Effect joins the run dock's second line, in the room that is spare after Absent, with its word, then its icon, then not shown; no control of the line moves, and an act shows or hides only its words and its key letter (F2). The class is P4 in plain_evening.rs.",
+   "difference": {
+    "screen": "run-conditions: Conditions hover",
+    "view": "1200x800",
+    "what": "text",
+    "change": "new",
+    "name": "Effect",
+    "detail": "at 574.1 730 37.1x18"
+   }
+  },
+  {
+   "row": 6,
+   "why": "Row 6: a quiet Effect joins the run dock's second line, in the room that is spare after Absent, with its word, then its icon, then not shown; no control of the line moves, and an act shows or hides only its words and its key letter (F2). The class is P4 in plain_evening.rs.",
+   "difference": {
+    "screen": "run-conditions: Conditions hover",
+    "view": "1200x800",
+    "what": "text",
+    "change": "new",
+    "name": "",
+    "detail": "at 554.1 730 14x18"
+   }
+  },
+  {
+   "row": 6,
+   "why": "Row 6: a quiet Effect joins the run dock's second line, in the room that is spare after Absent, with its word, then its icon, then not shown; no control of the line moves, and an act shows or hides only its words and its key letter (F2). The class is P4 in plain_evening.rs.",
+   "difference": {
+    "screen": "run-conditions: Conditions hover",
+    "view": "960x640",
+    "what": "control",
+    "change": "new",
+    "name": "Button: Effect: words for this row",
+    "detail": "at 546.1 565 28x28"
+   }
+  },
+  {
+   "row": 6,
+   "why": "Row 6: a quiet Effect joins the run dock's second line, in the room that is spare after Absent, with its word, then its icon, then not shown; no control of the line moves, and an act shows or hides only its words and its key letter (F2). The class is P4 in plain_evening.rs.",
+   "difference": {
+    "screen": "run-conditions: Conditions hover",
+    "view": "960x640",
+    "what": "text",
+    "change": "new",
+    "name": "",
+    "detail": "at 553.1 570 14x18"
+   }
+  },
+  {
+   "row": 6,
+   "why": "Row 6: a quiet Effect joins the run dock's second line, in the room that is spare after Absent, with its word, then its icon, then not shown; no control of the line moves, and an act shows or hides only its words and its key letter (F2). The class is P4 in plain_evening.rs.",
+   "difference": {
+    "screen": "run-arrivals",
+    "view": "1200x800 Lookup closed",
+    "what": "control",
+    "change": "new",
+    "name": "Button: Effect: words for this row",
+    "detail": "at 546.1 725 88.1x28"
+   }
+  },
+  {
+   "row": 6,
+   "why": "Row 6: a quiet Effect joins the run dock's second line, in the room that is spare after Absent, with its word, then its icon, then not shown; no control of the line moves, and an act shows or hides only its words and its key letter (F2). The class is P4 in plain_evening.rs.",
+   "difference": {
+    "screen": "run-arrivals",
+    "view": "1200x800 Lookup closed",
+    "what": "text",
+    "change": "new",
+    "name": "E",
+    "detail": "at 619.2 731 7x16"
+   }
+  },
+  {
+   "row": 6,
+   "why": "Row 6: a quiet Effect joins the run dock's second line, in the room that is spare after Absent, with its word, then its icon, then not shown; no control of the line moves, and an act shows or hides only its words and its key letter (F2). The class is P4 in plain_evening.rs.",
+   "difference": {
+    "screen": "run-arrivals",
+    "view": "1200x800 Lookup closed",
+    "what": "text",
+    "change": "new",
+    "name": "Effect",
+    "detail": "at 574.1 730 37.1x18"
+   }
+  },
+  {
+   "row": 6,
+   "why": "Row 6: a quiet Effect joins the run dock's second line, in the room that is spare after Absent, with its word, then its icon, then not shown; no control of the line moves, and an act shows or hides only its words and its key letter (F2). The class is P4 in plain_evening.rs.",
+   "difference": {
+    "screen": "run-arrivals",
+    "view": "1200x800 Lookup closed",
+    "what": "text",
+    "change": "new",
+    "name": "",
+    "detail": "at 554.1 730 14x18"
+   }
+  },
+  {
+   "row": 6,
+   "why": "Row 6: a quiet Effect joins the run dock's second line, in the room that is spare after Absent, with its word, then its icon, then not shown; no control of the line moves, and an act shows or hides only its words and its key letter (F2). The class is P4 in plain_evening.rs.",
+   "difference": {
+    "screen": "run-arrivals",
+    "view": "960x640 Lookup closed",
+    "what": "control",
+    "change": "new",
+    "name": "Button: Effect: words for this row",
+    "detail": "at 546.1 565 28x28"
+   }
+  },
+  {
+   "row": 6,
+   "why": "Row 6: a quiet Effect joins the run dock's second line, in the room that is spare after Absent, with its word, then its icon, then not shown; no control of the line moves, and an act shows or hides only its words and its key letter (F2). The class is P4 in plain_evening.rs.",
+   "difference": {
+    "screen": "run-arrivals",
+    "view": "960x640 Lookup closed",
+    "what": "text",
+    "change": "new",
+    "name": "",
+    "detail": "at 553.1 570 14x18"
+   }
+  },
+  {
+   "row": 6,
+   "why": "Row 6: a quiet Effect joins the run dock's second line, in the room that is spare after Absent, with its word, then its icon, then not shown; no control of the line moves, and an act shows or hides only its words and its key letter (F2). The class is P4 in plain_evening.rs.",
+   "difference": {
+    "screen": "run-arrivals",
+    "view": "1200x800 Lookup open",
+    "what": "control",
+    "change": "new",
+    "name": "Button: Effect: words for this row",
+    "detail": "at 530.7 725 73.1x28"
+   }
+  },
+  {
+   "row": 6,
+   "why": "Row 6: a quiet Effect joins the run dock's second line, in the room that is spare after Absent, with its word, then its icon, then not shown; no control of the line moves, and an act shows or hides only its words and its key letter (F2). The class is P4 in plain_evening.rs.",
+   "difference": {
+    "screen": "run-arrivals",
+    "view": "1200x800 Lookup open",
+    "what": "text",
+    "change": "new",
+    "name": "Effect",
+    "detail": "at 558.7 730 37.1x18"
+   }
+  },
+  {
+   "row": 6,
+   "why": "Row 6: a quiet Effect joins the run dock's second line, in the room that is spare after Absent, with its word, then its icon, then not shown; no control of the line moves, and an act shows or hides only its words and its key letter (F2). The class is P4 in plain_evening.rs.",
+   "difference": {
+    "screen": "run-arrivals",
+    "view": "1200x800 Lookup open",
+    "what": "text",
+    "change": "new",
+    "name": "",
+    "detail": "at 538.7 730 14x18"
+   }
+  },
+  {
+   "row": 6,
+   "why": "Row 6: a quiet Effect joins the run dock's second line, in the room that is spare after Absent, with its word, then its icon, then not shown; no control of the line moves, and an act shows or hides only its words and its key letter (F2). The class is P4 in plain_evening.rs.",
+   "difference": {
+    "screen": "run-arrivals",
+    "view": "960x640 Lookup open",
+    "what": "control",
+    "change": "new",
+    "name": "Button: Effect: words for this row",
+    "detail": "at 530.7 565 28x28"
+   }
+  },
+  {
+   "row": 6,
+   "why": "Row 6: a quiet Effect joins the run dock's second line, in the room that is spare after Absent, with its word, then its icon, then not shown; no control of the line moves, and an act shows or hides only its words and its key letter (F2). The class is P4 in plain_evening.rs.",
+   "difference": {
+    "screen": "run-arrivals",
+    "view": "960x640 Lookup open",
+    "what": "text",
+    "change": "new",
+    "name": "",
+    "detail": "at 537.7 570 14x18"
+   }
+  },
+  {
+   "row": 6,
+   "why": "Row 6: a quiet Effect joins the run dock's second line, in the room that is spare after Absent, with its word, then its icon, then not shown; no control of the line moves, and an act shows or hides only its words and its key letter (F2). The class is P4 in plain_evening.rs.",
+   "difference": {
+    "screen": "act 60",
+    "view": "",
+    "what": "act",
+    "change": "changed",
+    "name": "select Brannoch",
+    "detail": "appeared + E | appeared + Effect | appeared + "
+   }
+  },
+  {
+   "row": 6,
+   "why": "Row 6: a quiet Effect joins the run dock's second line, in the room that is spare after Absent, with its word, then its icon, then not shown; no control of the line moves, and an act shows or hides only its words and its key letter (F2). The class is P4 in plain_evening.rs.",
+   "difference": {
+    "screen": "act 62",
+    "view": "",
+    "what": "act",
+    "change": "changed",
+    "name": "Ctrl+K opens Lookup",
+    "detail": "went + E"
+   }
+  },
+  {
+   "row": 6,
+   "why": "Row 6: a quiet Effect joins the run dock's second line, in the room that is spare after Absent, with its word, then its icon, then not shown; no control of the line moves, and an act shows or hides only its words and its key letter (F2). The class is P4 in plain_evening.rs.",
+   "difference": {
+    "screen": "act 63",
+    "view": "",
+    "what": "act",
+    "change": "changed",
+    "name": "Ctrl+K closes Lookup",
+    "detail": "appeared + E"
+   }
+  },
+  {
+   "row": 6,
+   "why": "Row 6: a quiet Effect joins the run dock's second line, in the room that is spare after Absent, with its word, then its icon, then not shown; no control of the line moves, and an act shows or hides only its words and its key letter (F2). The class is P4 in plain_evening.rs.",
+   "difference": {
+    "screen": "act 65",
+    "view": "",
+    "what": "act",
+    "change": "changed",
+    "name": "Ctrl+K opens Lookup",
+    "detail": "went + E"
+   }
+  },
+  {
+   "row": 6,
+   "why": "Row 6: a quiet Effect joins the run dock's second line, in the room that is spare after Absent, with its word, then its icon, then not shown; no control of the line moves, and an act shows or hides only its words and its key letter (F2). The class is P4 in plain_evening.rs.",
+   "difference": {
+    "screen": "act 66",
+    "view": "",
+    "what": "act",
+    "change": "changed",
+    "name": "Ctrl+K closes Lookup",
+    "detail": "appeared + E"
+   }
+  },
+  {
+   "row": 6,
+   "why": "Row 6: a quiet Effect joins the run dock's second line, in the room that is spare after Absent, with its word, then its icon, then not shown; no control of the line moves, and an act shows or hides only its words and its key letter (F2). The class is P4 in plain_evening.rs.",
+   "difference": {
+    "screen": "act 78",
+    "view": "",
+    "what": "act",
+    "change": "changed",
+    "name": "Next turn 12",
+    "detail": "went + E | went + Effect | went + "
+   }
+  }
+ ]
 }

@@ -487,8 +487,16 @@ mod tests {
             setup.borrow_mut().state.phase = crate::encounter_run::Phase::Setup;
             let mut harness = harness;
             harness.run_steps(2);
-            assert!(harness.query_by_label("Effect: words for this row").is_none());
-            assert_eq!(harness.get_by_label("Absent").rect(), absent, "{width} {form}");
+            assert!(
+                harness
+                    .query_by_label("Effect: words for this row")
+                    .is_none()
+            );
+            assert_eq!(
+                harness.get_by_label("Absent").rect(),
+                absent,
+                "{width} {form}"
+            );
         }
         assert_eq!(
             forms,
