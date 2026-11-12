@@ -2957,8 +2957,9 @@ pub fn keep_above_footer(ui: &Ui, response: &Response) {
     next.whole = whole_at(top);
     ctx.data_mut(|data| data.insert_temp(key, next));
     #[cfg(test)]
+    let pass = ctx.cumulative_pass_nr();
+    #[cfg(test)]
     ctx.data_mut(|data| {
-        let pass = ctx.cumulative_pass_nr();
         let seen =
             data.get_temp_mut_or_default::<(u64, Vec<NextSeen>)>(Id::new("next_actions_seen"));
         if seen.0 != pass {
