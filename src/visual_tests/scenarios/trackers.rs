@@ -284,6 +284,114 @@ pub fn run(d: &mut Driver<'_>) {
         "After a restart the result line, its Undo and the Due rows are as before",
     );
 
+    // T19.5: last week's wrong press is corrected from the house rule note's reader. Each
+    // tracker's history is folded under it there; a row with another session's stamp has
+    // Remove in its menu, with one Undo where the DM acted.
+    use crate::trackers::ledger::{self, Entry, Op};
+    let wrong = Entry {
+        id: "c-01de5ea1".into(),
+        tracker: Some("seals".into()),
+        instance: Some("Keyring".into()),
+        add: Some(1),
+        why: Some("Take seal".into()),
+        session: Some(uuid::Uuid::from_u128(7)),
+        ..Entry::default()
+    };
+    let path = root(d).join(ledger::FILE);
+    ledger::commit(&path, |_| Ok(Op::Restore(vec![(None, wrong.clone())]))).unwrap();
+    d.app_mut().trackers.read_disk();
+    d.settle();
+    d.press_ctrl(Key::T);
+    look_up(d, "Tournament");
+    d.click("SEALS HISTORY 2");
+    let keyring = "More actions for Take seal: Keyring +1";
+    d.observe(
+        "T19.5",
+        d.has_label("Start 0")
+            && d.has(keyring)
+            && d.has_containing("Take seal: Old Guard +1")
+            && !d.has("More actions for Take seal: Old Guard +1")
+            && d.has_containing("3 notices are due"),
+        "The history opens under its tracker with the start values; only another session's row has Remove",
+    );
+    d.state("tracker-history-in-the-reader", Sizes::All);
+    d.click(keyring);
+    d.click("Remove");
+    d.expect("Removed: Take seal.");
+    d.observe(
+        "T19.5",
+        !ledger(d).contains("c-01de5ea1")
+            && d.has("Undo remove")
+            && !d.has(keyring)
+            && d.has_containing("2 notices are due"),
+        "Remove takes the entry and the notice it raised out of Trackers.md; the reader's footer offers Undo remove",
+    );
+    d.state("tracker-history-removed", Sizes::Standard);
+    // An unrelated act B in the view, then Undo of the removal: the entry goes back to its
+    // place at the top, and B stays.
+    d.press_ctrl(Key::T);
+    d.click("Crowd loves it");
+    d.expect("Crowd loves it: Crowd Favor 1.");
+    d.press_ctrl(Key::T);
+    d.click("Undo remove");
+    let text = ledger(d);
+    d.observe(
+        "T19.5",
+        matches!(
+            (text.find("c-01de5ea1"), text.find("why: Cistern or Sands")),
+            (Some(wrong), Some(first)) if wrong < first
+        ) && text.contains("why: Crowd loves it")
+            && d.has(keyring),
+        "Undo remove puts the entry back where it was, after an unrelated press",
+    );
+    // A value that an edit in Obsidian forced below its min is in the note's problems list,
+    // and nothing changes it. The row that forced it is removed from the history.
+    ledger::commit(&path, |_| {
+        Ok(Op::Append(vec![Entry {
+            id: "c-0f0ced01".into(),
+            tracker: Some("favor".into()),
+            add: Some(-3),
+            session: Some(uuid::Uuid::from_u128(7)),
+            ..Entry::default()
+        }]))
+    })
+    .unwrap();
+    d.app_mut().trackers.read_disk();
+    d.settle();
+    d.click(keyring);
+    d.click("Remove");
+    d.click("CROWD FAVOR HISTORY 2");
+    let forced = "Crowd Favor is -2, below its min of 0.";
+    d.observe(
+        "T19.5",
+        d.has_containing(forced) && ledger(d).contains("add: -3"),
+        "A value below its min is named in the note's reader and changed by nothing",
+    );
+    d.click("More actions for Crowd Favor change: -3");
+    d.click("Remove");
+    d.observe(
+        "T19.5",
+        !d.has_containing(forced) && !ledger(d).contains("c-0f0ced01"),
+        "Remove of the forced row clears the problem",
+    );
+    // A ledger that cannot be read shows its name, and no history and no value.
+    let good = ledger(d);
+    fs::write(&path, "---\nchanges: [\n---\n").unwrap();
+    d.app_mut().trackers.read_disk();
+    d.settle();
+    d.observe(
+        "T19.5",
+        d.has_containing("Trackers.md cannot be read: ")
+            && !d.has_containing("SEALS HISTORY")
+            && !d.has_containing("Take seal: Old Guard +1"),
+        "An unreadable ledger shows its name and no history in the reader",
+    );
+    fs::write(&path, good).unwrap();
+    d.app_mut().trackers.read_disk();
+    d.settle();
+    d.press(Key::Escape);
+    d.press_ctrl(Key::T);
+
     // A fight starts beside the view; the run shows no tracker part, only the rail's count.
     d.click(&format!("Start fight: {SHRINE}"));
     d.expect(&format!("{RUN_HEADING}{SHRINE}"));

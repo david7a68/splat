@@ -129,11 +129,7 @@ type Placed = Vec<(Option<String>, Entry)>;
 
 /// The entries that `Remove` takes for the entry the DM clicked, as the file holds them now,
 /// with each one's place for its Undo, and the result's words.
-fn removal(
-    rules: &Rules,
-    ledger: &Ledger,
-    drawn: &Entry,
-) -> Result<(Placed, String), String> {
+fn removal(rules: &Rules, ledger: &Ledger, drawn: &Entry) -> Result<(Placed, String), String> {
     let found = ledger
         .changes
         .iter()
@@ -365,23 +361,20 @@ fn start_words(def: &super::Definition) -> String {
 }
 
 /// A row: its words, then the value it left and, for another session's entry, its menu with
-/// `Remove`, at the end of the words' last line.
+/// `Remove`, at the end of the words' last line. The menu's place is kept on every row, so the
+/// values stand in one column.
 fn history_row(ui: &mut egui::Ui, row: &Row, removable: bool, pressed: &mut Option<Entry>) {
     let value = row.value.map(|value| value.to_string());
     let gap = ui.spacing().item_spacing.x;
+    let font = Type::Numeral.font(ui);
     let value_width = value.as_ref().map_or(0.0, |value| {
         ui.painter()
-            .layout_no_wrap(value.clone(), Type::Numeral.font(ui), colors().text)
+            .layout_no_wrap(value.clone(), font.clone(), colors().text)
             .size()
             .x
-            + gap
     });
-    let menu_width = if removable {
-        Density::Read.control() + gap
-    } else {
-        0.0
-    };
-    super::view::words_ending_with(ui, &row.words, value_width + menu_width, |ui| {
+    let menu = Density::Read.control();
+    super::view::words_ending_with(ui, &row.words, value_width + gap + menu, |ui| {
         if removable {
             design::row_menu(ui, &row.words, |ui| {
                 if Action::quiet("Remove")
@@ -393,9 +386,20 @@ fn history_row(ui: &mut egui::Ui, row: &Row, removable: bool, pressed: &mut Opti
                     ui.close();
                 }
             });
+        } else {
+            ui.allocate_exact_size(egui::vec2(menu, menu), egui::Sense::hover());
         }
         if let Some(value) = &value {
-            ui.label(Type::Numeral.rich(ui, value));
+            let (rect, _) =
+                ui.allocate_exact_size(egui::vec2(value_width, menu), egui::Sense::hover());
+            design::number(
+                ui.painter(),
+                rect.right(),
+                rect.center().y,
+                value,
+                &font,
+                colors().text,
+            );
         }
     });
 }
