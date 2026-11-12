@@ -19,6 +19,7 @@ mod copy_dialog;
 mod creature_filter;
 mod credentials;
 mod design;
+mod difficulty;
 mod dndbeyond;
 mod encounter_run;
 mod encounter_settings;

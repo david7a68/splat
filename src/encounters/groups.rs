@@ -8,6 +8,7 @@ use crate::{
     campaigns::Campaigns,
     content_workspace::{CampaignDocument, Catalogue, EntryRef},
     design::{self, Action, Density, Status, Tone, Type, colors, icons},
+    difficulty::creature_xp,
     encounter_run::{FaultKind, GroupMember, MemberFault, RunGroup, change_rows},
     library::{note_path, write_note},
     persistence::{Campaign, Module},
@@ -586,12 +587,6 @@ impl GroupDraft {
     }
 }
 
-/// Explicit XP wins; a bare CR supplies its standard reward.
-fn creature_xp(entry: &Entry) -> Option<u64> {
-    crate::library::presentation::challenge_text(entry)
-        .and_then(splat::content::stat_blocks::challenge_xp)
-}
-
 /// A creature's name in an editor: the one it will have. Its changes say which entry it is.
 pub(super) fn shown_name(block: &Mapping, name: String) -> String {
     Overrides::parse(block)
@@ -864,6 +859,7 @@ fn list_row(
             summary
         ),
         false,
+        None,
         |ui| {
             super::row_menu(ui, &group.name, |ui| {
                 if super::menu_action(ui, "Remove…", blocked) {
