@@ -4767,6 +4767,42 @@ pub fn package_rename(d: &mut Driver<'_>) {
             && d.has("Update 1 link"),
         format!("The offer writes again ({again}), its Undo restores A's links and gives the offer back, and B's links stay"),
     );
+    // Round 26 re-check: in Read with an unsaved draft, the save row's footer holds the result;
+    // its Undo restores the links, keeps the draft and ends the result. The Library reads the
+    // files again once the draft ends, and then the offer shows again.
+    d.click("Update 1 link");
+    d.wait_for_text("Undo link update");
+    let updated = fs::read_to_string(&path).unwrap().contains("[[Ash Wolf]]");
+    d.click(EDIT_MARKDOWN);
+    let saved_draft = d.editor_text().unwrap();
+    d.type_into_editor("Unsaved ruling.\n");
+    d.click("Read");
+    d.click("Undo link update");
+    d.settle();
+    let links_back = fs::read_to_string(&path)
+        .unwrap()
+        .contains("[[Cinder Wolf]]");
+    let result_ended = !d.has("Undo link update");
+    d.click(EDIT_MARKDOWN);
+    let draft_kept = d
+        .editor_text()
+        .is_some_and(|text| text.contains("Unsaved ruling."));
+    // A fault that keeps the result fails the observation below; its Undo puts the links back.
+    if d.has("Undo link update") {
+        d.click("Undo link update");
+        d.settle();
+    }
+    d.replace_editor_text(&saved_draft);
+    d.click("Read");
+    d.settle();
+    let offer_back = d.has("Update 1 link");
+    d.observe(
+        "iter-26-L-undo-unsaved",
+        updated && links_back && result_ended && draft_kept && offer_back,
+        format!(
+            "With an unsaved draft in Read, Undo link update restores the links ({links_back}), ends its result ({result_ended}) and keeps the draft ({draft_kept}); the offer is back after the draft ({offer_back})"
+        ),
+    );
     // Round 26 review: the offer that Undo gives back keeps the version of Ash Wolf's file it
     // was made from. An outside edit of the body, with no reload, makes it refuse: the linking
     // file keeps its bytes. The file then gets its bytes back for the later steps.
@@ -4885,6 +4921,43 @@ pub fn package_rename(d: &mut Driver<'_>) {
     let third_offer = d.has_containing(&format!(
         "Change links from “{LAMP}” to “Veilglass Beacon”."
     ));
+    // Round 26 re-check: a new file with B's identity and its old name, made after the rename
+    // with no reload, is a conflict on disk. Only B's own file is left out of the check, so the
+    // update refuses, writes nothing and gives no result.
+    let twin = lantern_path.with_file_name("Old lamp.md");
+    let beacon = fs::read_to_string(&lantern_path).unwrap();
+    fs::write(
+        &twin,
+        crate::content_workspace::patch_fields(&beacon, &[("splat_name", Some(LAMP.into()))])
+            .unwrap()
+            .replace("# Veilglass Beacon", &format!("# {LAMP}")),
+    )
+    .unwrap();
+    let linking_before = fs::read(&wraith).unwrap();
+    let twin_pressed = d.has("Update 1 link");
+    if twin_pressed {
+        d.click("Update 1 link");
+    }
+    d.settle();
+    let twin_refused = twin_pressed
+        && fs::read(&wraith).unwrap() == linking_before
+        && d.has_containing(crate::library::LINKS_NOT_CHANGED)
+        && !d.has("Undo link update");
+    d.observe(
+        "iter-26-L-offer-identity",
+        twin_refused,
+        "A file made after the rename with B's identity and old name makes the update refuse; the linking file keeps its bytes and no result shows",
+    );
+    // A fault that writes fails the observation above; its Undo puts the links back.
+    if d.has("Undo link update") {
+        d.click("Undo link update");
+        d.settle();
+    }
+    fs::remove_file(&twin).unwrap();
+    // A fresh offer for the next case: B back to its old name, then renamed again. Each Save
+    // also ends the refusal's error.
+    rename_b(d, "Veilglass Beacon", LAMP);
+    rename_b(d, LAMP, "Veilglass Beacon");
     // Astra re-check 2: renamed outside Splat with no reload, Update reads the entry's file
     // first, writes nothing and says why.
     rename_outside("Veilglass Torch");

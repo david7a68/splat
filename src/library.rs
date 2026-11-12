@@ -1185,9 +1185,11 @@ impl Loaded {
             && !self.name_taken_on_disk(offer)
     }
 
-    /// Whether another entry on disk, in any editable root of the notes, has the offer's old or
-    /// new name or file stem. The loaded notes may be older than the disk, so the write reads
-    /// the folders again. Built-in entries do not change, so the loaded check covers them.
+    /// Whether another file on disk, in any editable root of the notes, has the offer's identity,
+    /// or its old or new name or file stem. Only the offer's own source file (its root and path)
+    /// is left out: a new file with the same identity is a conflict too. The loaded notes may be
+    /// older than the disk, so the write reads the folders again. Built-in entries do not
+    /// change, so the loaded check covers them.
     fn name_taken_on_disk(&self, offer: &LinkOffer) -> bool {
         let mut roots: Vec<&Path> = self.notes.iter().filter_map(|n| n.owner.root()).collect();
         roots.sort_unstable();
@@ -1202,9 +1204,11 @@ impl Loaded {
                 // A folder that cannot be read cannot be checked: the write waits.
                 return true;
             };
+            let source = root == offer.source.root.as_path();
             entries.iter().any(|entry| {
-                entry.id != offer.owner
-                    && (taken(&entry.name)
+                !(source && entry.path == offer.source.path)
+                    && (entry.id == offer.owner
+                        || taken(&entry.name)
                         || Path::new(&entry.path)
                             .file_stem()
                             .and_then(|stem| stem.to_str())
@@ -7745,8 +7749,8 @@ impl Library {
             page_error(&mut footer, self.error.as_deref());
             body_bottom = footer.show(ui);
             heading_pressed = reader_press.heading;
-        }
-        if choices_in_reader {
+            // Presses come only from the footer that drew the results: this one in Read. With a
+            // save row, Edit Markdown's list drew them and `pressed` already holds them.
             pressed = reader_press.results.get();
         }
         new_identity = new_identity.or(reader_press.new_identity.take());
