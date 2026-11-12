@@ -5425,6 +5425,8 @@ mod tests {
         assert_eq!(lookup.log_fields[&key].field.words, "Kept.");
         lookup.clear();
         assert_eq!(lookup.log_fields[&key].field.words, "Kept.");
+        // The app gives the reader the session being played again on each frame.
+        lookup.played = Some("[[Session 1]]".into());
         // Each field keeps its own request to select its words.
         lookup.open_log(campaign.id, oren, "Oren", "paid the toll");
         assert!(!lookup.log_fields[&key].select);
@@ -5467,9 +5469,10 @@ mod tests {
             "the copy's reader drew its header"
         );
         assert!(
-            !nodes
-                .iter()
-                .any(|(_, node)| node.value().is_some_and(|value| value.contains("Kept."))),
+            !nodes.iter().any(|(_, node)| {
+                node.label() == Some("Log line for Hob")
+                    || node.value().is_some_and(|value| value.contains("Kept."))
+            }),
             "another campaign's reader shows this campaign's typed words"
         );
         assert!(
