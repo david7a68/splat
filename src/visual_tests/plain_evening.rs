@@ -1644,3 +1644,220 @@ pub fn run(d: &mut Driver<'_>) {
         ),
     );
 }
+
+/// The classes of `allowed.json`. A row is allowed only in a named class: a list made from the
+/// differences proves nothing by itself. A text that exists today may never be gone, cut,
+/// resized or moved; the one form of "gone" a class accepts is the old form of a text that the
+/// same view shows again, at the same place and height, with only passive words at its end.
+/// A feature that adds rows adds its class here.
+#[cfg(test)]
+mod allowed_classes {
+    use super::*;
+
+    /// F1's words: the difficulty word, and the XP before it in the editor and the opened row.
+    const WORDS: [&str; 4] = ["Above High", "Moderate", "High", "Low"];
+
+    /// `x y w h` from a difference's `at …` or `was …` detail.
+    fn rect_of(detail: &str, lead: &str) -> Option<[f32; 4]> {
+        let numbers: Vec<f32> = detail
+            .strip_prefix(lead)?
+            .replace('x', " ")
+            .split_whitespace()
+            .map(|n| n.parse().ok())
+            .collect::<Option<_>>()?;
+        <[f32; 4]>::try_from(numbers).ok()
+    }
+
+    /// `6,300 of 6,400` or `11,800`: XP, and the budget when there is one.
+    fn xp_numbers(numbers: &str) -> bool {
+        numbers
+            .split(" of ")
+            .all(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit() || c == ','))
+    }
+
+    /// The words F1 may put at the end of `old` to make `new`: ` · Low`, or in the editor's
+    /// heading ` · XP 400 of 2,800 · Low`. Plan summaries join with a no-break space.
+    fn f1_suffix(old: &str, new: &str) -> bool {
+        let (old, new) = (old.replace('\u{a0}', " "), new.replace('\u{a0}', " "));
+        let Some(rest) = new.strip_prefix(&old) else {
+            return false;
+        };
+        WORDS.iter().any(|word| {
+            rest == format!(" · {word}")
+                || rest
+                    .strip_prefix(" · XP ")
+                    .and_then(|rest| rest.strip_suffix(&format!(" · {word}")))
+                    .is_some_and(xp_numbers)
+        })
+    }
+
+    /// A new text on a line that exists: `Low · XP 400 of 2,800` at the right of the narrow
+    /// editor's tab row, or ` · Low · XP 400 of 2,800` after `Read encounter`.
+    fn f1_new_text(name: &str) -> bool {
+        let name = name
+            .trim_start_matches("Label: ")
+            .trim_start_matches("TextRun: ")
+            .replace('\u{a0}', " ");
+        let name = name.strip_prefix(" · ").unwrap_or(&name);
+        WORDS.iter().any(|word| {
+            name.strip_prefix(word)
+                .and_then(|rest| rest.strip_prefix(" · XP "))
+                .is_some_and(xp_numbers)
+        })
+    }
+
+    /// Each part of an act that changed: `appeared + …`, `went - …`. Every added text is an old
+    /// text of the same kind with F1's words at its end, or a new F1 text; every removed text has
+    /// its extended form added in the same kind.
+    fn f1_act(detail: &str) -> bool {
+        let parts: Vec<(&str, &str, &str)> = detail
+            .split(" | ")
+            .filter_map(|part| {
+                let (kind, rest) = part.split_once(' ')?;
+                let (sign, words) = rest.split_once(' ')?;
+                Some((kind, sign, words))
+            })
+            .collect();
+        parts.len() == detail.split(" | ").count()
+            && parts.iter().all(|(kind, sign, words)| match *sign {
+                "+" => {
+                    f1_new_text(words)
+                        || parts
+                            .iter()
+                            .any(|(k, s, old)| k == kind && *s == "-" && f1_suffix(old, words))
+                }
+                "-" => parts
+                    .iter()
+                    .any(|(k, s, new)| k == kind && *s == "+" && f1_suffix(words, new)),
+                _ => false,
+            })
+    }
+
+    /// The class of a row, or `None`.
+    fn class(row: &AllowedRow, all: &[AllowedRow]) -> Option<&'static str> {
+        let d = &row.difference;
+        let same_view = |other: &AllowedRow| {
+            other.difference.screen == d.screen
+                && other.difference.view == d.view
+                && other.difference.what == d.what
+        };
+        // The extended form, at the same place and height, at least as wide.
+        let extended = |old: &Difference, new: &Difference| match (
+            rect_of(&old.detail, "was "),
+            rect_of(&new.detail, "at "),
+        ) {
+            (Some(was), Some(at)) => {
+                was[0] == at[0] && was[1] == at[1] && was[3] == at[3] && at[2] >= was[2]
+            }
+            _ => false,
+        };
+        match (d.what.as_str(), d.change.as_str(), row.row) {
+            ("control" | "text", "new", 1..=3) if f1_new_text(&d.name) => {
+                Some("F1: a new text that ends a line: the word and the XP")
+            }
+            ("control" | "text", "new", 1 | 3) => all
+                .iter()
+                .any(|old| {
+                    same_view(old)
+                        && old.difference.change == "gone"
+                        && f1_suffix(&old.difference.name, &d.name)
+                        && extended(&old.difference, d)
+                })
+                .then_some(
+                    "F1: the word added at the end of a text that exists, its start unchanged",
+                ),
+            ("control" | "text", "gone", 1 | 3) => all
+                .iter()
+                .any(|new| {
+                    same_view(new)
+                        && new.difference.change == "new"
+                        && f1_suffix(&d.name, &new.difference.name)
+                        && extended(d, &new.difference)
+                })
+                .then_some("F1: the old form of that text, shown again with the word at its end"),
+            ("act", "changed", 1..=3) if f1_act(&d.detail) => {
+                Some("F1: an act's words, with the word at the end of texts that exist")
+            }
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn every_allowed_row_fits_a_named_class() {
+        let allowed: Allowed = read(&folder().join("allowed.json"));
+        let mut counts = BTreeMap::<&str, usize>::new();
+        let mut faults = Vec::new();
+        for row in &allowed.rows {
+            match class(row, &allowed.rows) {
+                Some(class) => *counts.entry(class).or_default() += 1,
+                None => faults.push(format!("row {}: {}", row.row, row.difference)),
+            }
+        }
+        println!("{} rows: {counts:#?}", allowed.rows.len());
+        assert!(
+            faults.is_empty(),
+            "allowed.json rows that fit no class:\n{}",
+            faults.join("\n")
+        );
+    }
+
+    #[test]
+    fn the_classes_refuse_a_loss_a_cut_and_a_move() {
+        let row = |change: &str, name: &str, detail: &str| AllowedRow {
+            row: 1,
+            why: String::new(),
+            difference: Difference {
+                screen: "s".into(),
+                view: "v".into(),
+                what: "text".into(),
+                change: change.into(),
+                name: name.into(),
+                detail: detail.into(),
+            },
+        };
+        let gone = row("gone", "5 party · 2 × Ember Cultist", "was 10 20 140x16");
+        let new = row(
+            "new",
+            "5 party · 2 × Ember Cultist · Low",
+            "at 10 20 172x16",
+        );
+        let pair = [gone, new];
+        assert!(pair.iter().all(|r| class(r, &pair).is_some()));
+        for (bad, why) in [
+            (
+                row("gone", "5 party · 2 × Ember Cultist", "was 10 20 140x16"),
+                "a text gone alone",
+            ),
+            (
+                row("new", "5 party · 2 × Ember", "at 10 20 100x16"),
+                "a cut text",
+            ),
+            (
+                row("moved", "Read encounter", "1 2 3x4 -> 1 3 3x4"),
+                "a moved control",
+            ),
+            (row("height", "5 party", "16 -> 32"), "a row that grows"),
+        ] {
+            assert_eq!(class(&bad, std::slice::from_ref(&bad)), None, "{why}");
+        }
+        // A gone text whose new form moved or wrapped is no extension.
+        let moved = [
+            row("gone", "5 party · 2 × Ember Cultist", "was 10 20 140x16"),
+            row(
+                "new",
+                "5 party · 2 × Ember Cultist · Low",
+                "at 10 21 172x16",
+            ),
+        ];
+        assert!(moved.iter().all(|r| class(r, &moved).is_none()));
+        let wrapped = [
+            row("gone", "5 party · 2 × Ember Cultist", "was 10 20 140x16"),
+            row(
+                "new",
+                "5 party · 2 × Ember Cultist · Low",
+                "at 10 20 140x32",
+            ),
+        ];
+        assert!(wrapped.iter().all(|r| class(r, &wrapped).is_none()));
+    }
+}
