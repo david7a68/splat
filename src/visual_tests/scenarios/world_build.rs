@@ -4786,6 +4786,12 @@ pub fn package_rename(d: &mut Driver<'_>) {
         refused,
         "After an outside body edit, the offer Undo gave back writes nothing and says why",
     );
+    // A fault that writes fails the observation above; its Undo puts the links back for the
+    // later steps.
+    if d.has("Undo link update") {
+        d.click("Undo link update");
+        d.settle();
+    }
     fs::write(&wolf, &wolf_saved).unwrap();
 
     // Astra re-check: a stale offer goes. B is renamed (offer), then renamed again to a name

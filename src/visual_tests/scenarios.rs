@@ -1643,10 +1643,14 @@ pub mod library_navigation {
         let b_alone = !d.has_containing("copied to Ashen Marches");
         let b_linked = std::fs::read_to_string(&b_path).unwrap();
         open_in(d, MODULE);
-        d.wait_for_text("Captain Varra copied to Ashen Marches and linked.");
-        let a_alone = !d.has_containing("copied to Ember Reach");
-        d.click("Undo copy");
-        d.wait_for_text("Captain Varra is in this campaign only.");
+        d.settle();
+        // A fault that loses A's result fails the observation below, not these steps.
+        let a_alone = d.has_containing("Captain Varra copied to Ashen Marches and linked.")
+            && !d.has_containing("copied to Ember Reach");
+        if a_alone {
+            d.click("Undo copy");
+            d.wait_for_text("Captain Varra is in this campaign only.");
+        }
         let a_back = std::fs::read_to_string(&path).unwrap() == a_text && copies_in(&a_folder) == 0;
         let b_kept = std::fs::read_to_string(&b_path).unwrap() == b_linked
             && b_linked != b_text
