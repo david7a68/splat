@@ -195,10 +195,12 @@ impl RoadMark {
 }
 
 /// The sum of a check's words, so a mark tells a check rolled again or edited from the one the
-/// DM planned from. Two rolls with the same words are the same check.
+/// DM planned from: 64 bits of SHA-256, short enough that the mark stays one line in the note
+/// and long enough that two different words do not meet by chance. Two rolls with the same
+/// words are the same check.
 fn words_sum(words: &str) -> String {
     use sha2::{Digest, Sha256};
-    format!("{:x}", Sha256::digest(words.as_bytes()))
+    format!("{:x}", Sha256::digest(words.as_bytes()))[..16].to_owned()
 }
 
 /// Whether the journey covers a check at this offset, in hours: before its end, or the one
