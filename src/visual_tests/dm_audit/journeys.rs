@@ -100,11 +100,12 @@ fn npc(d: &mut Driver<'_>, name: &str, fields: &str, words: &str) {
     fs::write(file, text).expect("write the NPC");
 }
 
-/// The campaign's marked road table, with the result on these d20 rolls naming `[[Wolf Pack]]`.
-fn road_table(d: &mut Driver<'_>, wolves: &str) {
-    let table = ROAD_TABLE.replace(
-        "| 15-20 | Wolves pick up the trail. |",
-        &format!("| {wolves} | [[{WOLVES}]] picks up the trail. |"),
+/// The campaign's marked road table: nothing below `wolves` on the d20, and `[[Wolf Pack]]` from
+/// it up.
+fn road_table(d: &mut Driver<'_>, wolves: u32) {
+    let table = format!(
+        "# Road\n\n## On the road\n\n<!-- splat:rolls key=road dice=1d20 per=day -->\n\n| d20 | On the road |\n| --- | --- |\n| 1-{} | Nothing stirs. |\n| {wolves}-20 | [[{WOLVES}]] picks up the trail. |\n",
+        wolves - 1
     );
     fs::write(campaign_root(d).join("Road.md"), table).expect("write the road table");
 }
@@ -241,7 +242,7 @@ fn improvised_evening(a: &mut Audit<'_, '_>) {
                 WOLVES,
                 "Wolves at the edge of the firelight.",
             );
-            road_table(d, "11-20");
+            road_table(d, 11);
         },
     );
     a.setup(
@@ -336,8 +337,12 @@ fn improvised_evening(a: &mut Audit<'_, '_>) {
     a.click(Do, "Roll all 2");
     let timeline = timeline_file(a.d);
     a.fact(format!(
-        "Timeline.md holds the length and two checks: {}",
-        timeline.contains("2 days")
+        "Timeline.md holds the length: {}; the checks: {:?}",
+        timeline.contains("2 days"),
+        timeline
+            .lines()
+            .filter(|line| line.contains("check") || line.contains("Check"))
+            .collect::<Vec<_>>()
     ));
 
     a.task("The second day names the Wolf Pack: plan it and start it");
@@ -594,6 +599,12 @@ fn the_race(a: &mut Audit<'_, '_>) {
         a.click(Sub, "Plan");
     }
     a.click(Nav, &start);
+    // Lookup stays open on Trackers in the run; the DM closes it to see the fight's panel.
+    if a.d.has("Crowd loves it") {
+        a.act(Panel, "Ctrl+T, to see the fight's panel", |d| {
+            d.press_ctrl(Key::T)
+        });
+    }
 
     a.task("Roll and begin the arena fight");
     counted_roll_and_begin(a);
@@ -707,7 +718,7 @@ fn week_between(a: &mut Audit<'_, '_>) {
         )
         .expect("write the treasure table");
         npc(d, VERORI, "", "Keeper of the north gate.");
-        road_table(d, "15-20");
+        road_table(d, 15);
     });
     a.setup(
         "play last week's session, then quit and open the app",
@@ -847,8 +858,10 @@ fn week_between(a: &mut Audit<'_, '_>) {
     a.act(Find, "Edit beside Gate Watch", |d| {
         d.click_beside_exact(GATE, EDIT_ENCOUNTER);
     });
-    a.act(Find, "search: ogre", |d| d.type_into(FIND_CREATURE, "ogre"));
-    a.act(Do, "add an Ogre", |d| d.click_first(ADD));
+    a.act(Find, "search: troll", |d| {
+        d.type_into(FIND_CREATURE, "troll")
+    });
+    a.act(Do, "add a Troll", |d| d.click_first(ADD));
     a.click(Do, SAVE_ENCOUNTER);
     a.click(Nav, NAV_SESSIONS);
     a.fact(format!("the row's word after the change: {:?}", words(a.d)));
