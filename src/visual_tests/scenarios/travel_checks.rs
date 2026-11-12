@@ -276,11 +276,13 @@ pub fn run(d: &mut Driver<'_>) {
         format!("The plan line's message is on the check's line ({offer:?}, {message:?}), and moves nothing ({below:?}, {after:?})"),
     );
     d.state("travel-checks-planned", Sizes::Small);
+    // Beside Lookup the row is narrower and taller: the plan scrolls to the message.
     d.state_prepared("travel-checks-planned-lookup", Sizes::Small, |d| {
         if !d.has("Close Lookup") {
             d.click(NAV_LOOKUP);
         }
-        d.expect("Undo plan line");
+        let at = d.place_of("Encounter checks").expect("the block").center();
+        d.scroll_until(at, "Undo plan line", 8);
     });
     d.click("Close Lookup");
     let parts = [
