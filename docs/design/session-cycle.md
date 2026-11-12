@@ -447,9 +447,13 @@ notes, so a house rule's copy takes the package's place. No table is written in 
 
 **One computation** (new module `src/difficulty.rs`, one function, every screen calls it).
 
-- **The party:** the characters on the party's side in the roster; in a run, those who are not absent. A
-  roster with no character uses the campaign's party. A level comes from the saved sheet
-  (`splat_character.level` in the party copy's note). An ally on the party's side counts for neither side.
+- **The party:** the characters on the party's side in the roster; in a run, those who are not absent. Only a
+  roster with no character at all uses the campaign's party, which is every party copy of the campaign,
+  also one whose note cannot be read; a run whose characters are all absent has no party, and shows no word.
+  An ally on the party's side counts for neither side.
+- **A level:** only from the saved sheet now (`splat_character.level` in the party copy's note, by its ID). A
+  sheet that is gone, cannot be read or has no level is a level not known, and the word does not show. A
+  run's copy of a sheet from when it started says who is a character, never their level.
 - **The budget:** for each difficulty, the sum of the table's value for each character's level.
 - **The XP:** the sum for every creature that is not on the party's side (in a run, every present one), from
   the function that groups use (`creature_xp`, now in `src/difficulty.rs`). It can have no answer for a

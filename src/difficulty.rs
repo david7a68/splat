@@ -56,8 +56,9 @@ impl Budgets {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Scale {
     pub budgets: Option<Budgets>,
-    /// Each saved character of the campaign's party by the ID of its copy's entry, with its
-    /// level from that saved sheet. `None` is a level not known.
+    /// Every character of the campaign's party, by the ID of its copy's note, with its level
+    /// from that saved sheet now. `None` is a level not known: a copy that cannot be read, or
+    /// a sheet with no level. A member is never left out because its sheet cannot be read.
     pub party: BTreeMap<uuid::Uuid, Option<u64>>,
 }
 
@@ -107,11 +108,13 @@ pub struct Rating {
 }
 
 impl Scale {
-    /// A character's level from the saved sheet now, by the ID of its copy's entry. A run keeps
-    /// a copy of each sheet from when it started; the saved one wins while the campaign has it.
+    /// A run participant's level, when it is a character: only from the saved sheet now, by the
+    /// ID of its copy's note. A run keeps a copy of each sheet from when it started; that copy
+    /// says who is a character, never their level. A sheet that is gone or cannot be read is a
+    /// level not known.
     pub fn level(&self, character: &Entry) -> Option<Option<u64>> {
-        let kept = character_level(character)?;
-        Some(self.party.get(&character.id).copied().unwrap_or(kept))
+        character_level(character)?;
+        Some(self.party.get(&character.id).copied().flatten())
     }
 
     /// The one computation. `party` is the level of each character on the party's side; with

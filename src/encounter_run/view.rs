@@ -2708,13 +2708,21 @@ impl Run {
                 self.arrival_counts.1 += 1;
             }
             let (mut party, mut foes) = (Vec::new(), Vec::new());
-            for p in self.state.participants.iter().filter(|p| p.present) {
+            let mut characters = false;
+            for p in &self.state.participants {
                 if p.side.trim() == "party" {
-                    party.extend(scale.level(&p.definition));
-                } else {
+                    let level = scale.level(&p.definition);
+                    characters |= level.is_some();
+                    if p.present {
+                        party.extend(level);
+                    }
+                } else if p.present {
                     foes.push(crate::difficulty::creature_xp(&p.definition));
                 }
             }
+            // The campaign's party stands in only for a fight with no character at all. When
+            // every character is absent, there is no party to weigh against.
+            let nobody = characters && party.is_empty();
             let words = groups
                 .iter()
                 .filter_map(|group| {
@@ -2736,7 +2744,7 @@ impl Run {
                             std::iter::repeat_n(xp, member.count as usize)
                         })
                         .collect();
-                    if added.is_empty() {
+                    if added.is_empty() || nobody {
                         return None;
                     }
                     let adds = added.iter().map(|xp| xp.unwrap_or(0)).sum();

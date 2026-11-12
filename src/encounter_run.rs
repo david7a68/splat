@@ -9781,6 +9781,45 @@ mod tests {
             (rating.word, rating.xp, rating.budgets[0], adds),
             (crate::difficulty::Word::Low, 800, 1250, 200)
         );
+        // A step that marks a character or a creature absent changes the budgets and the XP.
+        let weigh = |run: &mut Run| {
+            run.revision += 1;
+            run.arrival_words().unwrap().get(&group.id).cloned()
+        };
+        run.state.participants[0].present = false;
+        let (rating, _) = weigh(&mut run).unwrap();
+        assert_eq!(
+            (rating.characters, rating.budgets, rating.xp),
+            (4, [1000, 1500, 2000], 800)
+        );
+        run.state.participants[5].present = false;
+        assert_eq!(weigh(&mut run).unwrap().0.xp, 600);
+        // Every character absent: the campaign's party does not stand in, so no word.
+        for p in &mut run.state.participants[..5] {
+            p.present = false;
+        }
+        assert_eq!(weigh(&mut run), None, "no character is present");
+        for p in &mut run.state.participants {
+            p.present = true;
+        }
+        assert!(weigh(&mut run).is_some());
+        // A saved sheet that is gone or cannot be read after the run started: the run's old
+        // copy never gives the level, so the word does not show.
+        let mut scale = (**run.scale.as_ref().unwrap()).clone();
+        scale.party.remove(&heroes[0].id);
+        run.scale = Some(Arc::new(scale.clone()));
+        assert_eq!(
+            weigh(&mut run),
+            None,
+            "a missing saved sheet hides the word"
+        );
+        scale.party.insert(heroes[0].id, None);
+        run.scale = Some(Arc::new(scale));
+        assert_eq!(
+            weigh(&mut run),
+            None,
+            "an unreadable saved sheet hides the word"
+        );
     }
     #[test]
     fn identical_rolls_once_for_a_mixed_group_with_the_first_members_bonus() {

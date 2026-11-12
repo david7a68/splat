@@ -1301,6 +1301,31 @@ fn narrow_difficulty(ui: &mut egui::Ui, rating: &crate::difficulty::Rating) {
     });
 }
 
+/// The campaign's party for F1, by the ID of each copy's note, with its level from the saved
+/// sheet now. A copy that cannot be read is still a member, with a level not known: its file is
+/// one of this campaign's notes and holds a character sheet, but Splat cannot read its level.
+fn campaign_party(
+    campaign: &Campaign,
+    catalogue: &Catalogue,
+    creatures: &[Creature],
+) -> BTreeMap<Uuid, Option<u64>> {
+    let readable = creatures.iter().filter(|c| c.party).map(|creature| {
+        let entry = &catalogue.entries[&creature.id].entry;
+        let level = crate::difficulty::character_level(entry).flatten();
+        (creature.id, level)
+    });
+    let unreadable = catalogue
+        .unreadable
+        .iter()
+        .filter(|(_, note)| !note.duplicate && note.path.starts_with(&campaign.path))
+        .filter(|(_, note)| {
+            fs::read_to_string(&note.path)
+                .is_ok_and(|text| text.contains("splat_character") && text.contains("dndbeyond"))
+        })
+        .map(|(id, _)| (*id, None));
+    readable.chain(unreadable).collect()
+}
+
 /// The roster's difficulty: each character on the party's side by level, and each creature
 /// against the party by XP. Allies on the party's side count for neither. A participant whose
 /// entry is gone counts as not known.
@@ -2029,17 +2054,7 @@ impl Snapshot {
         creatures.sort_by_key(|c| (!c.party, c.name.to_lowercase(), c.origin, c.id));
         let scale = crate::difficulty::Scale {
             budgets: crate::encounter_settings::xp_budgets(campaign, &catalogue, &document),
-            party: creatures
-                .iter()
-                .filter(|creature| creature.party)
-                .map(|creature| {
-                    let entry = &catalogue.entries[&creature.id].entry;
-                    (
-                        creature.id,
-                        crate::difficulty::character_level(entry).flatten(),
-                    )
-                })
-                .collect(),
+            party: campaign_party(campaign, &catalogue, &creatures),
         };
         let mut templates: Vec<_> = catalogue
             .entries
@@ -7104,6 +7119,47 @@ mod tests {
         assert!(snapshot.creatures.iter().any(|c| c.id == pc && c.party));
         assert!(snapshot.templates.iter().any(|t| t.path == d.path));
         assert!(dir.path().join("Campaign.md").exists());
+        // F1: a roster with no character weighs against the campaign's party: every party copy,
+        // also one whose note cannot be read. Two saved sheets at level 3 give 300 / 450 / 800.
+        let sheet = serde_json::to_string(&splat::content::character::Sheet {
+            level: 3,
+            ..Default::default()
+        })
+        .unwrap();
+        for name in ["Hero", "Other"] {
+            let id = if name == "Hero" { pc } else { Uuid::new_v4() };
+            let text = splat::content::formats::fixture(
+                &format!("{name}.md"),
+                &format!(
+                    "splat_id: {id}\nsplat_kind: creature\nsplat_name: {name}\nsplat_external: {{provider: dndbeyond, campaign_id: '123'}}\nsplat_character: {sheet}\nsplat_creature: {{}}\n"
+                ),
+                "",
+            )
+            .unwrap();
+            fs::write(dir.path().join(format!("{name}.md")), text).unwrap();
+        }
+        let weigh = || {
+            Snapshot::load(&campaign, &[])
+                .unwrap()
+                .scale
+                .weigh(&[], [Some(250)])
+        };
+        assert_eq!(weigh().rating.unwrap().budgets, [300, 450, 800]);
+        // One sheet cannot be read: the party is not one character smaller, its level is not
+        // known, so the word does not show.
+        let path = dir.path().join("Hero.md");
+        let text = fs::read_to_string(&path).unwrap();
+        fs::write(
+            &path,
+            text.replacen("splat_schema: 2", "splat_schema: [", 1),
+        )
+        .unwrap();
+        let unreadable = weigh();
+        assert_eq!(
+            (unreadable.xp, unreadable.rating.clone()),
+            (250, None),
+            "{unreadable:?}"
+        );
     }
     #[test]
     fn editing_preserves_notes_unknown_fields_and_detects_external_changes() {
