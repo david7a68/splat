@@ -328,6 +328,29 @@ fn before_the_session(a: &mut Audit<'_, '_>) {
         a.click(Find, TONIGHT);
     }
 
+    // App round 2, Sol's W1-D1: from a planned fight's word to its roster and back, by a named
+    // line of its menu. The next fight gets one more cultist; its run rolls every creature's
+    // initiative in one press, so no frozen task after this one costs more.
+    a.task("Change a planned fight's roster from the plan, and come back");
+    a.fact(format!("the plan says {:?} before", words(a.d)));
+    a.click(Find, &format!("More actions for {SECOND}"));
+    a.click(Nav, "Edit encounter");
+    a.fact(format!(
+        "the editor holds {SECOND}: {}",
+        a.d.has("Back to session") && a.d.has(&format!("Encounter name: {SECOND}"))
+    ));
+    a.act(Do, "duplicate a cultist", |d| {
+        d.click_first("More actions for Ember Cultist");
+        d.click("Duplicate");
+    });
+    a.click(Do, SAVE_ENCOUNTER);
+    a.act(Nav, "Back to session", |d| d.click("Back to session"));
+    a.fact(format!(
+        "back on {} with the plan saying {:?}",
+        a.d.current_page(),
+        words(a.d)
+    ));
+
     // F5: what last week left joins tonight's note in one act. The last act of prep: its result
     // stays under the Last time line until the note changes, and the restart that starts the
     // evening ends it, so no frozen task after it sees that line.
@@ -721,15 +744,20 @@ fn after_the_session(a: &mut Audit<'_, '_>) {
         a.d.visible_text("Kestrel ") && a.d.has("Log")
     ));
 
-    // The fight's place is typed on the Timeline page, which its row links to.
+    // W2-D3: the fight's place is typed in its opened row, which the last task opened. It is
+    // the Timeline event's own field.
     a.task("Say where the fight happened");
-    a.act(Nav, "open the fight on the Timeline", |d| {
-        d.click_link("Timeline")
-    });
     a.act(Do, "type where it happened", |d| {
         d.type_into("Where", "The ford");
     });
-    a.click(Nav, NAV_SESSIONS);
+    a.fact(format!(
+        "the Timeline's event says where: {}",
+        a.d.app()
+            .timeline
+            .events
+            .iter()
+            .any(|event| event.title == TONIGHT && event.place == "The ford")
+    ));
 
     a.task("Process the recording and read the summary");
     a.click(Sub, "Recordings, 1 recording");
@@ -820,11 +848,17 @@ fn after_the_session(a: &mut Audit<'_, '_>) {
         ));
         d.press_ctrl(Key::S);
         show_plan(d);
-        // The opened fight with its rewards does not fold this scene: an opened row folds the
-        // scenes only when it pushes the next fight out of view with scenes above it (F3).
-        d.expect(&format!("Done: {HOBB}"));
     });
     a.task("Put what an NPC said in the NPC's own note");
+    // W2-D3 (app round 2): the reviewed fight's opened row is taller by its `Where`, so it would
+    // push the improvised fight still to come out of view with this scene above it, and the
+    // scenes fold (F3, the fold's second cause). The DM closes the fight's row first: the closed
+    // rows fit, and the scene shows. Opening the folded scenes instead costs 2.
+    a.act(Find, "close the fight's row", |d| d.click(TONIGHT));
+    a.fact(format!(
+        "the done scene with {HOBB} is in view: {}",
+        a.d.in_view(&format!("Done: {HOBB}"))
+    ));
     a.click(Panel, &format!("Add to Log: {HOBB}"));
     a.act(Do, "type the line", |d| {
         d.type_text("Named the informer at the ford.")

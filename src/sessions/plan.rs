@@ -669,7 +669,8 @@ fn read_encounter(
         crate::difficulty::append(&mut job, ui, Type::Body, &format!(" · {words}"), c.muted);
         job
     };
-    // The reason whole, else without its names, which hover and the accessible name keep.
+    // The reason whole, else with the name shortened from its end, else without the name (X1);
+    // hover and the accessible name keep it whole.
     let mut whole = None;
     let job = match (&difficulty.rating, &difficulty.missing) {
         (Some(rating), _) => {
@@ -686,16 +687,16 @@ fn read_encounter(
             job
         }
         (None, Some(missing)) => {
-            let Some(words) = missing.words() else {
+            let (Some(words), Some(fitted)) = (
+                missing.words(),
+                missing.fitted(|words| crate::difficulty::width(ui, &muted(words)) <= room),
+            ) else {
                 return link;
             };
-            let job = muted(&words);
-            if crate::difficulty::width(ui, &job) <= room {
-                job
-            } else {
+            if fitted != words {
                 whole = Some(words);
-                muted(missing.short())
             }
+            muted(&fitted)
         }
         (None, None) => return link,
     };
@@ -722,6 +723,16 @@ fn read_encounter(
         }
     }
     link
+}
+
+/// A planned fight's menu line that opens its encounter in the editor, with the way back to this
+/// session (Sol's W1-D1 after app round 2). An unsaved encounter, group or creature in the editor
+/// blocks it, so the editor never loses typed words.
+fn edit_encounter_line(ui: &mut egui::Ui, plan: &Plan<'_>) -> bool {
+    Action::quiet("Edit encounter")
+        .blocked(plan.group_blocked)
+        .show(ui)
+        .clicked()
 }
 
 /// The rule below a row. Returns its height, which the scenes' fold counts with the row's.
@@ -839,6 +850,14 @@ fn event_fields(ui: &mut egui::Ui, event: &mut timeline::Event) -> bool {
     changed
 }
 
+/// A played fight's `Where`, in place under its opened row's links (W2-D3): the Timeline detail's
+/// own field on the same event, so the typed place has one owner, the Timeline, and saves as
+/// any edit of an event does. Returns whether it changed.
+fn place_field(ui: &mut egui::Ui, event: &mut timeline::Event) -> bool {
+    ui.add_space(design::XS);
+    design::text_field(ui, "Where", &mut event.place, None, None).changed()
+}
+
 /// The removal action a deletion of this run follows: the book's live removal, when its event
 /// is that same run's. A deletion in another fight or session replaces no removal.
 fn removal_replaced_by(book: &Book, deleted_run: Option<Uuid>) -> Option<u64> {
@@ -856,6 +875,8 @@ struct Scene {
     task: TaskLine,
     /// The one entry that its words link, when they link exactly one.
     entry: Option<SceneEntry>,
+    /// Its words link a name and no entry has it (X14): its second line says `Not found`.
+    not_found: bool,
     /// Whether `Add to Log` fits on the row, for the last few rooms it was measured in. The
     /// words and the done mark are this model's, so only the room can change it
     /// (`Scene::log_keeps_rows`).
@@ -978,6 +999,16 @@ fn scene_entry(index: &ContentIndex, words: &str) -> Option<SceneEntry> {
     })
 }
 
+/// Whether a scene's words link a name and no entry of the campaign has any of them: its entry
+/// is gone. With the content not yet read, this is not known, and the caller says nothing.
+fn links_no_entry(index: &ContentIndex, words: &str) -> bool {
+    let names = each_linked_name(words);
+    !names.is_empty()
+        && names
+            .iter()
+            .all(|name| !matches!(index.resolve_link(name, None), crate::world::Go::Item(..)))
+}
+
 /// A scene's words that are outside its links, as `Add to Log` starts its field with them:
 /// `[[Captain Varra]]: the ropes` gives `the ropes`.
 fn words_outside_links(words: &str) -> String {
@@ -1033,9 +1064,12 @@ impl PlanModel {
                 match task.filter(|_| !links_fight_or_group(&names, fights, groups)) {
                     Some(task) => {
                         let entry = index.and_then(|index| scene_entry(index, &task.words));
+                        let not_found =
+                            index.is_some_and(|index| links_no_entry(index, &task.words));
                         ModelLine::Scene(Scene {
                             task,
                             entry,
+                            not_found,
                             fit: std::sync::Mutex::new(Vec::new()),
                         })
                     }
@@ -1293,16 +1327,17 @@ fn scene_row(
         .and_then(|entry| entry.log.as_ref())
         .filter(|_| task.done);
     let log_name = format!("Add to Log: {plain}");
-    let log_action = || {
+    // On the row it has no icon, as the row's other actions (X29); its menu line keeps it.
+    let row_log = || {
         Action::quiet("Add to Log")
-            .icon(icons::ADD)
             .density(Density::Read)
             .name(&log_name)
     };
+    let log_action = || row_log().icon(icons::ADD);
     // On the row while it fits, else a line of the scene's own menu.
     let menu = Density::Read.control();
     let with_log = log
-        .map(|_| menu + log_action().natural_width(ui) + design::S)
+        .map(|_| menu + row_log().natural_width(ui) + design::S)
         .filter(|&with_log| scene.log_keeps_rows(ui, &plain, menu, with_log));
     let on_row = with_log.is_some();
     let action_width = with_log.unwrap_or(menu);
@@ -1323,7 +1358,7 @@ fn scene_row(
                 design::named(ui, &response, &format!("{state}: {plain}"));
                 tick = response.clicked();
             },
-            |ui| crate::markdown_view::show_row_words(ui, &task.words, task.done),
+            |ui| scene_words(ui, task, &plain),
             |ui| {
                 if let Some(detail) = scene
                     .entry
@@ -1331,6 +1366,9 @@ fn scene_row(
                     .and_then(|entry| entry.detail.as_deref())
                 {
                     wrapped_words(ui, Type::Small, detail, c.muted);
+                } else if scene.not_found {
+                    // As Lookup and World say it of a link whose entry is gone (X14).
+                    wrapped_words(ui, Type::Small, "Not found", c.result.warning);
                 }
             },
             |ui| {
@@ -1369,7 +1407,7 @@ fn scene_row(
                     }
                 });
                 if on_row {
-                    add_log = log_action().show(ui).clicked();
+                    add_log = row_log().show(ui).clicked();
                 }
             },
         );
@@ -1389,6 +1427,26 @@ fn scene_row(
         ));
     }
     ui.cursor().top() - top
+}
+
+/// A scene's words at a plan row title's size. A one-line title is centred in its link's `XL`
+/// target (`design::wrapped_link`), and a row's words start at the top of their row, so a
+/// one-line scene starts that much lower: its line is the fights' title line, and its second
+/// line keeps a fight row's pitch (app round 2, X12).
+fn scene_words(ui: &mut egui::Ui, task: &TaskLine, plain: &str) {
+    let font = Type::Body.font(ui);
+    let width = ui.available_width();
+    let (rows, row_height) = ui.fonts_mut(|fonts| {
+        let rows = fonts
+            .layout(plain.to_owned(), font.clone(), colors().text, width)
+            .rows
+            .len();
+        (rows, fonts.row_height(&font))
+    });
+    if rows == 1 {
+        ui.add_space(((design::XL - row_height) / 2.0).max(0.0));
+    }
+    crate::markdown_view::show_row_words(ui, &task.words, task.done);
 }
 
 /// A scene's box, the theme's checkbox with a 24 px target, in the leading slot that a fight's
@@ -1539,10 +1597,12 @@ pub(super) struct Travel {
 
 /// F7's action and its words.
 const ADD_REWARDS: &str = "Add rewards";
+/// The gap between the opened played row's links and their `·`, at every size (X48).
+const LINK_GAP: f32 = design::S;
 const REWARDS_BLOCKED: &str = "Splat cannot read this fight’s run, so its rewards are not known.";
 
 /// Where a played row has `Add rewards`.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum RewardsAt {
     Row,
     Link,
@@ -1671,14 +1731,14 @@ impl Rewards {
                 .collect();
             (breaks, title.size().x)
         };
-        // As `fight_block` lays out its links, beside the opened row's indent.
-        let spacing = ui.spacing().item_spacing.x;
+        // As `fight_block` lays out its links, beside the opened row's indent: four words and
+        // three `·`, with a `LINK_GAP` between each two of them.
         let links = ["Log", "Whole run", "Timeline", ADD_REWARDS]
             .map(|link| word(link, Type::Body))
             .iter()
             .sum::<f32>()
             + 3.0 * word("·", Type::Small)
-            + 7.0 * spacing;
+            + 6.0 * LINK_GAP;
         let (with, alone) = (layout(action), layout(Density::Read.control()));
         let fits = if with.0 == alone.0 && (with.1 - alone.1).abs() < 0.5 {
             RewardsAt::Row
@@ -1761,7 +1821,7 @@ fn rewards_choice(with_xp: Option<bool>, xp: u64) -> String {
             crate::encounter_run::grouped_number(xp)
         ),
         Some(false) => "No XP, as in your last rewards.".to_owned(),
-        None => "XP added. Delete that line to leave XP out from now on.".to_owned(),
+        None => "XP line added. Delete it in the note to leave XP out from now on.".to_owned(),
     }
 }
 
@@ -2581,6 +2641,7 @@ impl Sessions {
                                 if self.fight_block(ui, run, &event.id, plan, link) {
                                     rewards_act = Some(RewardsAct::Add(event.id.clone(), run));
                                 }
+                                changed |= place_field(ui, event);
                             } else {
                                 // A journey's checks come first, under its row; Title and Notes follow them.
                                 if checks::shown(event) {
@@ -2655,6 +2716,8 @@ impl Sessions {
                                         delete_run = saved.cloned(); ui.close();
                                     }
                                 }
+                                // Last, so no line of today's menu moves (W1-D1).
+                                if edit_encounter_line(ui, plan) { self.wants_edit_encounter = Some(fight.id); ui.close(); }
                             });
                             if running {
                                 // The run strip owns Back to run.
@@ -3641,7 +3704,9 @@ impl Sessions {
                     });
                 ui.horizontal(|ui| {
                     // Each word starts where the text does; a short word's target is wider
-                    // than the word, never padded with spaces.
+                    // than the word, never padded with spaces. One gap, `S`, at every size,
+                    // also where the page's columns give the plan a wider one (X48).
+                    ui.spacing_mut().item_spacing.x = LINK_GAP;
                     if word_link(ui, "Log").clicked() {
                         self.show_fight_log = !self.show_fight_log;
                     }
@@ -3787,6 +3852,7 @@ mod tests {
     fn planned_fight(name: &str, path: &str) -> PlanFight {
         PlanFight {
             saved: None,
+            id: uuid::Uuid::nil(),
             name: name.into(),
             path: path.into(),
             summary: String::new(),
@@ -4880,7 +4946,20 @@ mod tests {
                     faults.clear();
                     egui::CentralPanel::default().show(ctx, |ui| {
                         ui.set_width(330.0);
+                        // X48: beside the note the page gives the plan its column gap, `L`; the
+                        // links keep `S`, so a title with no room on its row has `Add rewards` as
+                        // the opened row's last link at the 330 px plan, not in the menu.
+                        ui.spacing_mut().item_spacing.x = design::L;
                         let mut rewards = Rewards::default();
+                        let long = "Wolves at the Ford Below the Burning Shrine Road";
+                        let place = rewards.fits(ui, long, icons::NEXT, 330.0, Action::quiet(ADD_REWARDS)
+                            .density(Density::Read)
+                            .natural_width(ui)
+                            + Density::Read.control()
+                            + design::S);
+                        if place != RewardsAt::Link {
+                            faults.push(format!("{long:?} has Add rewards at {place:?}"));
+                        }
                         let band = Action::quiet(ADD_REWARDS)
                             .density(Density::Read)
                             .natural_width(ui)
@@ -5088,7 +5167,7 @@ mod tests {
         assert_eq!(read(), with_a);
         assert!(shown(
             &harness,
-            "Rewards added under Loot and rewards. XP added. Delete that line to leave XP out from now on. XP tonight: 200 for 1 fight."
+            "Rewards added under Loot and rewards. XP line added. Delete it in the note to leave XP out from now on. XP tonight: 200 for 1 fight."
         ));
         assert!(harness.query_by_label("Add rewards: Bridge").is_none());
         assert!(shown(&harness, "In notes"));
@@ -5288,10 +5367,11 @@ mod tests {
         assert!(shown(&harness, "In notes"));
 
         // Too narrow for the link after Timeline: no line is added, and the action is the last
-        // line of the row's menu.
+        // line of the row's menu. With one `S` gap at each `·` (X48), the links fit at 330 px
+        // (`the_rewards_fit_keeps_each_title_as_it_is`), so this is a narrower window.
         fs::write(&note.path, &outside).unwrap();
         harness.state_mut().0.draft.as_mut().unwrap().follow_disk();
-        harness.set_size(egui::vec2(330.0, 800.0));
+        harness.set_size(egui::vec2(300.0, 800.0));
         harness.run_steps(2);
         assert!(harness.query_by_label(ADD_REWARDS).is_none());
         harness

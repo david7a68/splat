@@ -425,9 +425,15 @@ pub fn run(d: &mut Driver<'_>) {
                     .any(|node| node.name.ends_with(WHY) && node.fully_in_view());
                 (d.painted_in(egui::Rect::EVERYTHING), named)
             });
+            // X1: at every size, also at 1200x800 with the note beside the plan, the name
+            // shortens from its end and keeps at least its first letter.
+            let name_shown = words.contains(" · XP not known: N");
             d.observe(
                 "W1-D2-why",
-                words.contains("Read encounter") && words.contains(" · XP not known") && named,
+                words.contains("Read encounter")
+                    && words.contains(" · XP not known")
+                    && named
+                    && name_shown,
                 format!(
                     "At {size:?}, Lookup open {lookup}, the opened row says why, and whose                      {named}: {words}"
                 ),
@@ -456,5 +462,37 @@ pub fn run(d: &mut Driver<'_>) {
         "T12.1-difficulty-paused",
         !words.contains("XP 600 of 2,800") && !words.contains("Read encounter · "),
         format!("The opened paused fight's line has no difficulty: {words}"),
+    );
+    // App round 2, Sol's W1-D1: from the word on the plan to the roster and back. The last line
+    // of a planned fight's menu opens that encounter's own file in the editor, whose way back
+    // is this session; the saved roster's summary and word follow on its row.
+    let session = d
+        .app()
+        .sessions
+        .selected_path()
+        .map(std::path::Path::to_owned);
+    d.click(&format!("More actions for {LOW}"));
+    d.click("Edit encounter");
+    let opened = d.app().encounters.draft_path().map(str::to_owned);
+    d.observe(
+        "W1-D1-edit",
+        opened.as_deref() == Some(&format!("Encounters/{LOW}.md")[..])
+            && d.has(&format!("Encounter name: {LOW}"))
+            && d.has("Back to session"),
+        format!(
+            "Edit encounter opens {LOW}'s own file with the way back to the session: {opened:?}"
+        ),
+    );
+    d.click_first("More actions for Ember Cultist");
+    d.click("Duplicate");
+    d.click(SAVE_ENCOUNTER);
+    d.click("Back to session");
+    show_plan(d);
+    let line = plan_summary_line(d, "5 party · 3 × Ember Cultist");
+    d.observe(
+        "W1-D1-edit",
+        d.app().sessions.selected_path() == session.as_deref()
+            && line.as_deref() == Some("5 party · 3 × Ember Cultist · Low"),
+        format!("Back in the same session, the row reads the saved roster: {line:?}"),
     );
 }

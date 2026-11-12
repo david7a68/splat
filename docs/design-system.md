@@ -269,7 +269,8 @@ file line below its title is not a message action and keeps its place.
 A pane that can hold such an action at its text edge keeps a gutter at least `L` wide, so the target never
 reaches a column splitter. The World page's centre has an `L` left gutter for this.
 Other message actions use a secondary border. Undo messages use `undo_message`: a quiet action and undo
-icon on the message line, or below when needed. An Undo never stands alone: its result is a short message
+icon on the message line, or below only when it is wider than the room after the words (the line is measured
+as it is drawn: the inset, the words, one gap and the action). An Undo never stands alone: its result is a short message
 that it follows (`Links now say “<name>”.` with `Undo link update`, after the offer `Change links from “<old>” to
 “<new>”.` with `Update N links`, `The first heading now says <name>.` with
 `Undo heading change`, `Encounters now use the copy.` with `Undo source change`, `The stat
@@ -1760,7 +1761,7 @@ table of the latest journey with checks, else on `Choose a table`, and `Roll` wa
 A journey of more than 31 checks says `This journey has N checks. Split it into shorter journeys to roll them
 here.` Each act's message, with `Undo checks`, `Undo roll` or `Undo clear`, shows on one kept line under the table's
 line (`design::undo_line`): reserved while the block shows, so the message moves nothing; words that do not fit
-beside Undo end in `…` and keep their whole text on hover. It is kept by its journey's event: it
+beside Undo give up whole words and end in `…`, never inside a word, and keep their whole text on hover. It is kept by its journey's event: it
 lasts while that event is as the act left it, until the DM leaves the page, and an act on another journey
 leaves it. The length being typed has one owner, the Timeline book, whichever page shows the field; leaving
 the page gives it to the journey, as a loss of focus does. `Plan “<name>”` is a note act through `Draft::apply`: it writes
@@ -1784,7 +1785,9 @@ summary keeps its lines with it. The opened row's `Read encounter` line ends wit
 line has room for the whole; so a row whose summary had no room gives its word there, for 1 `Find`. The words start
 at the link's right edge, so each `·` has the same blank on each side. A fight with no word because an input is not
 known says why on that line, in `muted`: `Read encounter · XP not known: Nameless Thing`, or `Level not known:
-<name>`; with more names, the first and `and 2 more`. The names come from `Scale::weigh`'s typed answer
+<name>`; with more names, the first and `and 2 more`. Where the line has no room for the whole, the first name
+shortens from its end (`XP not known: Namel…`, `and 2 more` stays) and goes only when no letter of it fits; hover
+and the accessible name keep the whole. The names come from `Scale::weigh`'s typed answer
 (`Difficulty::missing`). Its closed row is as before. A running or played fight's row shows its status, not a word.
 
 The first upcoming fight gets primary Start fight when no run is open; later fights use secondary. Use Start
@@ -1803,7 +1806,12 @@ shows every fact, however many lines it takes. Plan and Timeline share fight sum
 without Paused; ended, named and custom results keep stored words. Played fights show result and last round
 once on line two, then final party HP in a grid of two or three first-name cells in the party bar's order
 (players the party no longer has come last), quiet Log, Whole run and
-Timeline links. Hover keeps full names and conditions; Remove stays in the name-aligned row menu.
+Timeline links, with one `S` gap on each side of each `·` at every size (the page's wider column gap beside the
+note does not reach them). Under them is `Where`, the Timeline detail's own field on the same event: typed here
+or on Timeline, it is one value, saved as any event edit is. Hover keeps full names and conditions; Remove stays
+in the name-aligned row menu. A planned fight's menu ends with `Edit encounter`, which opens that encounter, by
+its ID, in the editor, whose `Back to session` returns to this session; it is blocked while the editor holds
+unsaved words.
 
 **Rewards (F7).** A played fight that ended has `Add rewards`, an `Action::quiet` in its row's action band left of
 the menu, only while its title keeps the width and the line breaks it has beside the menu alone at the action's
@@ -1816,7 +1824,7 @@ Timeline reference, then an XP line and the loot lines: the encounter's and each
 results in its place and a roll not made as `(not rolled)`, as `Copy loot` words them. XP has no switch: the
 newest rewards block that Splat can read, in this note and then in each earlier note, newest first, says whether
 the new one has an XP line; with no block, or a note that cannot be read before one, it has one, and the result
-says how to stop it. The XP comes from `Scale::weigh`; a creature at 0 HP whose XP is not known is named on the
+says how to stop it: `XP line added. Delete it in the note to leave XP out from now on.` The XP comes from `Scale::weigh`; a creature at 0 HP whose XP is not known is named on the
 line, and its amount is left out of every sum. The result, an `undo_message` under the row, says `Rewards added
 under Loot and rewards.`, the XP choice, `XP tonight: <sum> for <n> fights.` from the note as it stands, and the
 loot rolls not made and the awards not known. `Undo rewards` takes back exactly that block while it is still the
@@ -1850,13 +1858,16 @@ note. Every plan row has one leading slot, `Type::Body` wide: a fight's caret, a
 A scene's box is the theme's checkbox with a 24 px target that ends where the words start, so it reaches 2 px
 into the margin before the rows (the plan's scroll area starts there) and the scene's words start at the
 fights' title column. Its words are drawn at a plan row title's size, `Type::Body`, at every window size, with
-the Reader's links and emphasis (`markdown_view::show_row_words`), one `XL` line each, so the second line sits
-at a fight row's pitch; a link opens its entry in Lookup. A done scene's words and links are `muted`, and a
+the Reader's links and emphasis (`markdown_view::show_row_words`), one `XL` line each. A one-line scene's words
+start as far down as a one-line fight title's glyphs, which sit centred in their link's `XL` target, so the
+scene's first line is a fight title's line and its second line sits at a fight row's pitch, measured on the
+painted words; a link opens its entry in Lookup. A done scene's words and links are `muted`, and a
 link keeps its underline. No row changes height for a state. When the words link exactly one World entry, the
 second line gives its kind, status and place
-(`NPC · alive · Ashfall Keep`) in `Type::Small` `muted`. The action place is empty until the scene is done; then,
-when its words link exactly one World entry of the campaign, it holds a quiet `Add to Log` left of the menu
-(accessible name `Add to Log: <words>`) while the words keep their lines beside it; else `Add to Log` is a
+(`NPC · alive · Ashfall Keep`) in `Type::Small` `muted`; when its words link a name that no entry has any
+more, the second line says `Not found` in `Type::Small` and the warning tone, as Lookup and World say it. The action place is empty until the scene is done; then,
+when its words link exactly one World entry of the campaign, it holds a quiet `Add to Log` left of the menu, with no icon, as the row's other actions
+(accessible name `Add to Log: <words>`; its menu line and the reader's header keep the icon) while the words keep their lines beside it; else `Add to Log` is a
 line of the scene's menu, so the row keeps its words and its height. It opens Lookup on that entry with
 the Log field open, filled with the scene's words outside its link and selected, so typing replaces them and
 Enter keeps them; a field that already holds typed words keeps them. The menu holds, for a scene that links
@@ -1870,7 +1881,8 @@ leaves out link-only plan lines, and its count line names them: `1 fight, 1 grou
 Scenes fold first, so that the next fight's row and its primary action stay in view. Each row counts as it is
 when closed: when the closed rows, with the scenes, do not fit the pane, every scene folds. An opened row
 folds the scenes only when its details would push the next fight's primary action out of view and the scenes
-sit above that fight; the Scene field, its suggestions and the plan's results never fold them, and the fold
+sit above that fight, or, in a plan with no fight still to come (an older session), when the rows with its
+details do not fit the pane; the Scene field, its suggestions and the plan's results never fold them, and the fold
 does not change while the Scene field has focus. The fold measures the room the rows have with an empty
 message footer, so a result coming or going never folds or unfolds the scenes. With the scenes folded, the Tonight line says `N scenes`, a
 link with the expanded state after the section caret of a folded section (`icons::NEXT`, `icons::DOWN` when

@@ -2390,6 +2390,12 @@ impl Splat {
             self.encounters.new_from_plan();
             self.page = Page::Encounters;
         }
+        if let Some(id) = self.sessions.wants_edit_encounter.take()
+            && let Some(campaign) = &active
+        {
+            self.encounters.edit_from_plan(id, campaign);
+            self.page = Page::Encounters;
+        }
         if std::mem::take(&mut self.sessions.wants_back_to_run)
             || std::mem::take(&mut self.timeline_page.wants_back_to_run)
         {

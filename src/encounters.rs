@@ -2558,6 +2558,8 @@ pub struct Encounters {
 /// One encounter, as a session's plan offers it.
 pub struct PlanFight {
     pub saved: Option<crate::encounter_run::SavedRunInfo>,
+    /// The encounter's ID, which `Edit encounter` opens it by.
+    pub id: uuid::Uuid,
     pub name: String,
     pub path: String,
     pub summary: String,
@@ -2904,6 +2906,7 @@ impl Encounters {
                                 && run.standing == crate::encounter_run::Standing::Unfinished
                         })
                         .cloned(),
+                    id: template.id,
                     name: template.name.clone(),
                     path: template.path.clone(),
                     summary: template.summary.clone().unwrap_or_default(),
@@ -3171,6 +3174,40 @@ impl Encounters {
             }
             Err(error) => self.error = Some(error),
         }
+    }
+
+    /// A planned fight's `Edit encounter` (W1-D1): that encounter, found by its ID in what the
+    /// campaign holds now, opens in the editor read from its file, and the editor's way back is
+    /// the session. The plan blocks the act while the editor holds unsaved words; a group left
+    /// open with nothing unsaved gives way, so the page shows this encounter. An encounter that
+    /// is gone opens nothing, and the page says why.
+    pub fn edit_from_plan(&mut self, id: Uuid, active: &Campaign) {
+        if let Some(reason) = self.plan_group_blocked() {
+            self.error = Some(reason.to_owned());
+            return;
+        }
+        let path = self.snapshot.as_ref().and_then(|snapshot| {
+            snapshot
+                .templates
+                .iter()
+                .find(|template| template.id == id)
+                .map(|template| template.path.clone())
+        });
+        let Some(path) = path else {
+            self.clear_notice();
+            self.error = Some("This encounter is no longer in the campaign.".to_owned());
+            return;
+        };
+        self.group_draft = None;
+        self.group_in_plan = false;
+        self.edit_path(&path, active);
+        self.from_session = self.draft.is_some();
+    }
+
+    /// The file the editor holds, for the visual tests.
+    #[cfg(test)]
+    pub fn draft_path(&self) -> Option<&str> {
+        self.draft.as_ref().map(|draft| draft.path.as_str())
     }
 
     pub fn run_path(&mut self, path: &str, active: &Campaign, modules: &[Module]) {

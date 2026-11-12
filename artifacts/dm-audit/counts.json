@@ -59,6 +59,13 @@
     },
     {
       "phase": "before",
+      "task": "Change a planned fight's roster from the plan, and come back",
+      "transitions": 2,
+      "interactions": 6,
+      "path": "Session > Encounters > Session"
+    },
+    {
+      "phase": "before",
       "task": "Carry over what last week left into tonight's note",
       "transitions": 0,
       "interactions": 1,
@@ -298,9 +305,9 @@
     {
       "phase": "after",
       "task": "Say where the fight happened",
-      "transitions": 2,
-      "interactions": 4,
-      "path": "Session > Timeline > Session"
+      "transitions": 0,
+      "interactions": 2,
+      "path": "Session"
     },
     {
       "phase": "after",
@@ -348,7 +355,7 @@
       "phase": "after",
       "task": "Put what an NPC said in the NPC's own note",
       "transitions": 0,
-      "interactions": 4,
+      "interactions": 5,
       "path": "Session"
     },
     {

@@ -101,7 +101,7 @@ const SCENARIO: &str = "plain-evening";
 const WIDE: (f32, f32) = (1200.0, 800.0);
 const NARROW: (f32, f32) = (960.0, 640.0);
 /// Section 2.5 numbers its rows 1 to 22.
-const CONTRACT_ROWS: std::ops::RangeInclusive<u32> = 1..=24;
+const CONTRACT_ROWS: std::ops::RangeInclusive<u32> = 1..=27;
 /// What the test folder becomes in a run's `splat_run_source_path`.
 const WORLD: &str = "<world>";
 const SAME: &str = "the same as at the start";
@@ -1914,7 +1914,300 @@ mod allowed_classes {
             name: "P4 c: an act shows or hides only `Effect`'s words",
             fits: |d, _| effect::act_words(d),
         },
+        // R3e, rows 25 to 27 (by the lead's ruling after app round 2).
+        Class {
+            row: 25,
+            name: "R3e a: the opened played row's new `Where`, its label over its field",
+            fits: r3e::where_field,
+        },
+        Class {
+            row: 25,
+            name: "R3e b: an unchanged item below `Where`, straight down by the block's one amount",
+            fits: r3e::below_where,
+        },
+        Class {
+            row: 25,
+            name: "R3e c: `Whole run`, `Timeline` and their `·` left to one `S` gap each",
+            fits: r3e::link_gaps,
+        },
+        Class {
+            row: 25,
+            name: "R3e d: an act shows or hides only `Where`",
+            fits: |d, _| r3e::act_words(d, "Where"),
+        },
+        Class {
+            row: 26,
+            name: "R3e e: a one-line scene's words straight down to a fight title's line",
+            fits: r3e::scene_line,
+        },
+        Class {
+            row: 26,
+            name: "R3e f: a done scene's `Add to Log` on its row without its icon",
+            fits: r3e::log_without_icon,
+        },
+        Class {
+            row: 27,
+            name: "R3e g: `Edit encounter`, the planned fight's menu's new last line",
+            fits: |d, rows| r3e::edit_line(d, rows),
+        },
+        Class {
+            row: 27,
+            name: "R3e h: an act shows or hides only `Edit encounter`",
+            fits: |d, _| r3e::act_words(d, "Edit encounter"),
+        },
     ];
+
+    /// R3e's classes, by the lead's ruling after app round 2. Row 25: an opened played fight's
+    /// row has `Where` (W2-D3) under links with one `S` gap each (X48). Row 26: a one-line
+    /// scene's words sit on a fight title's line (X12) and a done scene's `Add to Log` on its
+    /// row has no icon (X29). Row 27: a planned fight's menu ends with `Edit encounter` (W1-D1).
+    /// None lets an item of today go, be cut, narrow (but the one icon that X29 takes away),
+    /// move sideways (but the links that X48 brings together) or move by another amount.
+    mod r3e {
+        use super::super::{AllowedRow, Difference};
+        use super::{rect_of, rects};
+
+        /// `Where`'s label, and its field one `Small` line and `XS` under it.
+        const LABEL_TO_FIELD: f32 = 20.0;
+        /// What the block may add to the rows beyond the label and the field: the spacing
+        /// around it, at most one `XL`.
+        const BLOCK_SPACE: f32 = 24.0;
+        /// A one-line scene's words start this much lower: half of `XL` less a `Body` row.
+        const PAD: f32 = 2.9;
+        /// Each gap of the links that the page's `L` reached is `S` now.
+        const STEP: f32 = 8.0;
+        /// The icon of `Add to Log` and its gap.
+        const ICON: f32 = 20.0;
+        const ADD_ICON: &str = "\u{e3d4}";
+        /// The plain campaign's scenes, and the links in them, as R1a's classes name them.
+        const SCENE_WORDS: [&str; 6] = [
+            "Read Emberfall Rumours",
+            "Talk to Hobb the Miller about the ropes",
+            "Ask about the toll",
+            "Meet Hobb the Miller at the mill",
+            "Hobb the Miller (opens Hobb the Miller)",
+            "Emberfall Rumours (opens Emberfall Rumours)",
+        ];
+
+        fn near(a: f32, b: f32) -> bool {
+            (a - b).abs() < 0.05
+        }
+
+        fn bare(name: &str) -> &str {
+            [
+                "Button: ",
+                "CheckBox: ",
+                "Label: ",
+                "TextRun: ",
+                "Link: ",
+                "TextInput: ",
+            ]
+            .iter()
+            .find_map(|prefix| name.strip_prefix(prefix))
+            .unwrap_or(name)
+        }
+
+        fn plan_view(d: &Difference) -> bool {
+            (d.screen.starts_with("session-") || d.screen.starts_with("lookup-reader "))
+                && ["control", "text"].contains(&d.what.as_str())
+                && !d.detail.contains("seen")
+        }
+
+        fn same_view<'a>(
+            d: &'a Difference,
+            rows: &'a [AllowedRow],
+        ) -> impl Iterator<Item = &'a Difference> {
+            rows.iter()
+                .map(|row| &row.difference)
+                .filter(move |o| (&o.screen, &o.view) == (&d.screen, &d.view))
+        }
+
+        fn new_at(o: &Difference, name: &str) -> Option<[f32; 4]> {
+            (plan_view(o) && o.change == "new" && o.name == name)
+                .then(|| rect_of(&o.detail, "at "))
+                .flatten()
+        }
+
+        /// The view's `Where` block: its label's and its field's new places, the field whole,
+        /// at least `XL` tall and as wide as its label, starting at the label's left
+        /// `LABEL_TO_FIELD` under it.
+        fn block(d: &Difference, rows: &[AllowedRow]) -> Option<([f32; 4], [f32; 4])> {
+            let label = same_view(d, rows).find_map(|o| new_at(o, "Label: Where"))?;
+            let field = same_view(d, rows).find_map(|o| new_at(o, "TextInput: Where"))?;
+            (near(field[0], label[0])
+                && near(field[1], label[1] + LABEL_TO_FIELD)
+                && field[3] >= 24.0
+                && field[2] >= label[2])
+                .then_some((label, field))
+        }
+
+        /// A move straight down: the same left and size, lower.
+        fn down(d: &Difference) -> Option<(f32, [f32; 4])> {
+            let (old, new) = rects(&d.detail)?;
+            (d.change == "moved" && near(old[0], new[0]) && old[2..] == new[2..] && new[1] > old[1])
+                .then(|| (new[1] - old[1], old))
+        }
+
+        fn scene_words(d: &Difference) -> bool {
+            SCENE_WORDS.contains(&bare(&d.name))
+        }
+
+        /// The one amount by which the view's items below `Where` move: the move of every item
+        /// that is not a scene's words, when they all share it and it lies between the block's
+        /// height and that height and `BLOCK_SPACE`.
+        fn amount(d: &Difference, rows: &[AllowedRow]) -> Option<f32> {
+            let (label, field) = block(d, rows)?;
+            let height = field[1] + field[3] - label[1];
+            let moves: Vec<f32> = same_view(d, rows)
+                .filter(|o| plan_view(o) && !scene_words(o))
+                .filter_map(|o| down(o).map(|(by, _)| by))
+                .collect();
+            let first = *moves.first()?;
+            (moves.iter().all(|by| near(*by, first))
+                && first >= height - 0.05
+                && first <= height + BLOCK_SPACE)
+                .then_some(first)
+        }
+
+        /// The label, the field and the label's words, new and whole, where the block is.
+        pub(super) fn where_field(d: &Difference, rows: &[AllowedRow]) -> bool {
+            let Some((label, field)) = block(d, rows) else {
+                return false;
+            };
+            let Some(at) = (plan_view(d) && d.change == "new" && bare(&d.name) == "Where")
+                .then(|| rect_of(&d.detail, "at "))
+                .flatten()
+            else {
+                return false;
+            };
+            match d.name.as_str() {
+                "Label: Where" | "TextRun: Where" | "Where" => at == label,
+                "TextInput: Where" => at == field,
+                _ => false,
+            }
+        }
+
+        /// An item that lay at or below where `Where` now starts, straight down by the view's
+        /// one amount; a scene's words by that amount and `PAD` (row 26's line).
+        pub(super) fn below_where(d: &Difference, rows: &[AllowedRow]) -> bool {
+            let (Some((label, _)), Some((by, old)), Some(amount)) =
+                (block(d, rows), down(d), amount(d, rows))
+            else {
+                return false;
+            };
+            let expected = if scene_words(d) { amount + PAD } else { amount };
+            plan_view(d) && old[1] + 0.5 >= label[1] && near(by, expected)
+        }
+
+        /// `Whole run`, `Timeline` and a `·` of the opened played row's links: on their line,
+        /// the same size, left by `STEP` for each gap before them that the page's `L` reached.
+        pub(super) fn link_gaps(d: &Difference, rows: &[AllowedRow]) -> bool {
+            let on_line = |o: &Difference| {
+                plan_view(o)
+                    && o.change == "moved"
+                    && ["Whole run", "Timeline", "·"].contains(&bare(&o.name))
+            };
+            let Some((old, new)) = rects(&d.detail).filter(|_| on_line(d)) else {
+                return false;
+            };
+            let middle = |r: [f32; 4]| r[1] + r[3] / 2.0;
+            // The line's moved items, by their old left; each is one more gap from `Log`.
+            let mut lefts: Vec<f32> = same_view(d, rows)
+                .filter(|o| on_line(o))
+                .filter_map(|o| rects(&o.detail).map(|(a, _)| a))
+                .filter(|a| (middle(*a) - middle(old)).abs() <= 4.0)
+                .map(|a| a[0])
+                .collect();
+            lefts.sort_by(f32::total_cmp);
+            lefts.dedup_by(|a, b| near(*a, *b));
+            let Some(at) = lefts.iter().position(|left| near(*left, old[0])) else {
+                return false;
+            };
+            near(new[0], old[0] - STEP * (at + 1) as f32)
+                && near(new[1], old[1])
+                && old[2..] == new[2..]
+        }
+
+        /// A one-line scene's words, straight down by `PAD`, in a view with no `Where`.
+        pub(super) fn scene_line(d: &Difference, rows: &[AllowedRow]) -> bool {
+            plan_view(d)
+                && scene_words(d)
+                && block(d, rows).is_none()
+                && down(d).is_some_and(|(by, _)| near(by, PAD))
+        }
+
+        /// `Add to Log` on a done scene's row, narrower by its icon and that gap, its right edge
+        /// and height kept, in place or down by the view's `Where` amount; and the icon gone
+        /// from inside that button's old place.
+        pub(super) fn log_without_icon(d: &Difference, rows: &[AllowedRow]) -> bool {
+            let narrowed = |o: &Difference| -> Option<[f32; 4]> {
+                let scene = bare(&o.name).strip_prefix("Add to Log: ")?;
+                let (old, new) = rects(&o.detail)?;
+                let by = new[1] - old[1];
+                (plan_view(o)
+                    && o.change == "resized"
+                    && o.name.starts_with("Button: ")
+                    && SCENE_WORDS.contains(&scene)
+                    && near(new[2], old[2] - ICON)
+                    && near(new[0] + new[2], old[0] + old[2])
+                    && near(new[3], old[3])
+                    && (near(by, 0.0) || amount(o, rows).is_some_and(|a| near(by, a))))
+                .then_some(old)
+            };
+            if narrowed(d).is_some() {
+                return true;
+            }
+            let Some(was) =
+                (plan_view(d) && d.what == "text" && d.change == "gone" && d.name == ADD_ICON)
+                    .then(|| rect_of(&d.detail, "was "))
+                    .flatten()
+            else {
+                return false;
+            };
+            same_view(d, rows).filter_map(narrowed).any(|button| {
+                button[0] <= was[0]
+                    && was[0] + was[2] <= button[0] + button[2]
+                    && button[1] <= was[1]
+                    && was[1] + was[3] <= button[1] + button[3]
+            })
+        }
+
+        /// The planned fight's open menu: `Edit encounter`, new, a whole target at least 24 px
+        /// tall, and its words inside it.
+        pub(super) fn edit_line(d: &Difference, rows: &[AllowedRow]) -> bool {
+            const MENU: &str = "session-tonight: fight row menu";
+            let button = |o: &Difference| {
+                (o.screen == MENU && o.what == "control" && o.change == "new")
+                    .then(|| new_at(o, "Button: Edit encounter"))
+                    .flatten()
+                    .filter(|r| r[3] >= 24.0)
+            };
+            if button(d).is_some() {
+                return true;
+            }
+            let Some(at) = (d.screen == MENU && d.what == "text")
+                .then(|| new_at(d, "Edit encounter"))
+                .flatten()
+            else {
+                return false;
+            };
+            same_view(d, rows).filter_map(button).any(|r| {
+                r[0] <= at[0]
+                    && at[0] + at[2] <= r[0] + r[2]
+                    && r[1] <= at[1]
+                    && at[1] + at[3] <= r[1] + r[3]
+            })
+        }
+
+        /// Every part of the act is `words` that it shows or hides.
+        pub(super) fn act_words(d: &Difference, words: &str) -> bool {
+            d.what == "act"
+                && d.change == "changed"
+                && d.detail.split(" | ").all(|part| {
+                    part == format!("appeared + {words}") || part == format!("went + {words}")
+                })
+        }
+    }
 
     /// P4's classes: the dock's `Effect`, its icon, word and key letter, and acts that show or
     /// hide only those. Each is new; none lets an item of today go, move, narrow or be cut.
@@ -4059,6 +4352,277 @@ mod allowed_classes {
                     rows
                 },
                 "a fold link 200 px wider than its words and caret",
+            ),
+        ] {
+            assert!(
+                classes(&rows).iter().any(Option::is_none),
+                "{why} was accepted"
+            );
+        }
+    }
+
+    #[test]
+    fn the_r3e_classes_refuse_a_wrong_amount_a_move_sideways_a_cut_and_a_loss() {
+        let at = |row: u32, screen: &str, what: &str, change: &str, name: &str, detail: &str| {
+            AllowedRow {
+                row,
+                why: String::new(),
+                difference: Difference {
+                    screen: screen.into(),
+                    view: "1200x800 Lookup closed".into(),
+                    what: what.into(),
+                    change: change.into(),
+                    name: name.into(),
+                    detail: detail.into(),
+                },
+            }
+        };
+        const PLAYED: &str = "session-last: played fight open";
+        let row = |row: u32, what: &str, change: &str, name: &str, detail: &str| {
+            at(row, PLAYED, what, change, name, detail)
+        };
+        let label = row(25, "control", "new", "Label: Where", "at 394 453 34.6x16");
+        let field = row(
+            25,
+            "control",
+            "new",
+            "TextInput: Where",
+            "at 394 473 296x28.2",
+        );
+        let words = row(25, "text", "new", "Where", "at 394 453 34.6x16");
+        let menu = |detail: &str| {
+            row(
+                25,
+                "control",
+                "moved",
+                "Button: More actions for Ask about the toll",
+                detail,
+            )
+        };
+        let below = menu("662 529 28x28 -> 662 595.2 28x28");
+        let scene = |row_: u32, detail: &str| {
+            row(
+                row_,
+                "control",
+                "moved",
+                "Label: Ask about the toll",
+                detail,
+            )
+        };
+        let link = |name: &str, detail: &str| row(25, "control", "moved", name, detail);
+        let links = [
+            link("Label: ·", "431.4 422 3.9x16 -> 423.4 422 3.9x16"),
+            link("Link: Whole run", "451.3 418 63.9x24 -> 435.3 418 63.9x24"),
+            link("Label: ·", "531.3 422 3.9x16 -> 507.3 422 3.9x16"),
+            link("Link: Timeline", "551.2 418 53.7x24 -> 519.2 418 53.7x24"),
+        ];
+        let mut good = vec![
+            label.clone(),
+            field.clone(),
+            words,
+            below.clone(),
+            scene(25, "394 529 109.8x24 -> 394 598.1 109.8x24"),
+        ];
+        good.extend(links.iter().cloned());
+        // Row 26 in a view with no `Where`, and row 27.
+        let tonight = |row: u32, what: &str, change: &str, name: &str, detail: &str| {
+            at(row, "session-tonight", what, change, name, detail)
+        };
+        let log = |detail: &str| {
+            tonight(
+                26,
+                "control",
+                "resized",
+                "Button: Add to Log: Meet Hobb the Miller at the mill",
+                detail,
+            )
+        };
+        let icon = tonight(26, "text", "gone", "\u{e3d4}", "was 746.5 368 14x18");
+        good.extend([
+            tonight(
+                26,
+                "control",
+                "moved",
+                "Label: Read Emberfall Rumours",
+                "394 394 155.8x24 -> 394 396.9 155.8x24",
+            ),
+            log("738.5 363 103.5x28 -> 758.5 363 83.5x28"),
+            icon.clone(),
+        ]);
+        let edit = |screen: &str, detail: &str| {
+            at(
+                27,
+                screen,
+                "control",
+                "new",
+                "Button: Edit encounter",
+                detail,
+            )
+        };
+        good.push(edit(
+            "session-tonight: fight row menu",
+            "at 533 514 150.1x30",
+        ));
+        let act = |row: u32, detail: &str| AllowedRow {
+            row,
+            why: String::new(),
+            difference: Difference {
+                screen: "act 25".into(),
+                view: String::new(),
+                what: "act".into(),
+                change: "changed".into(),
+                name: "open the played fight".into(),
+                detail: detail.into(),
+            },
+        };
+        good.push(act(25, "appeared + Where"));
+        good.push(act(27, "went + Edit encounter"));
+        assert!(
+            classes(&good).iter().all(Option::is_some),
+            "R3e's own differences fit: {:?}",
+            classes(&good)
+        );
+        let with = |extra: AllowedRow| {
+            let mut rows = good.clone();
+            rows.push(extra);
+            rows
+        };
+        let without = |name: &str, extra: AllowedRow| {
+            let mut rows: Vec<_> = good
+                .iter()
+                .filter(|row| row.difference.name != name)
+                .cloned()
+                .collect();
+            rows.push(extra);
+            rows
+        };
+        for (rows, why) in [
+            (
+                without(
+                    "TextInput: Where",
+                    row(
+                        25,
+                        "control",
+                        "new",
+                        "TextInput: Where",
+                        "at 394 500 296x28.2",
+                    ),
+                ),
+                "a field that is not under its label",
+            ),
+            (
+                without(
+                    "TextInput: Where",
+                    row(
+                        25,
+                        "control",
+                        "new",
+                        "TextInput: Where",
+                        "at 394 473 296x16",
+                    ),
+                ),
+                "a field cut to a sliver",
+            ),
+            (
+                with(menu("662 540 28x28 -> 662 590 28x28")),
+                "an item below by another amount",
+            ),
+            (
+                with(row(
+                    25,
+                    "control",
+                    "moved",
+                    "Link: Notes",
+                    "660 600 28x28 -> 650 666.2 28x28",
+                )),
+                "an item below that also moved sideways",
+            ),
+            (
+                with(row(
+                    25,
+                    "control",
+                    "moved",
+                    "Link: Log",
+                    "394 400 22x24 -> 394 466.2 22x24",
+                )),
+                "an item above Where that moved down",
+            ),
+            (
+                with(row(
+                    25,
+                    "control",
+                    "gone",
+                    "Button: More actions for Meet Hobb the Miller at the mill",
+                    "was 662 464 28x28",
+                )),
+                "a control of today gone",
+            ),
+            (
+                without(
+                    "Link: Whole run",
+                    link("Link: Whole run", "451.3 418 63.9x24 -> 440 418 63.9x24"),
+                ),
+                "a link moved by the wrong step",
+            ),
+            (
+                without(
+                    "Link: Timeline",
+                    link("Link: Timeline", "551.2 418 53.7x24 -> 559.2 418 53.7x24"),
+                ),
+                "a link moved right",
+            ),
+            (
+                with(tonight(
+                    26,
+                    "control",
+                    "moved",
+                    "Label: Talk to Hobb the Miller about the ropes",
+                    "394 329 244.8x24 -> 394 333 244.8x24",
+                )),
+                "a scene's words down by more than the pad",
+            ),
+            (
+                with(tonight(
+                    26,
+                    "control",
+                    "moved",
+                    "Button: Start fight: Shrine of Cinders",
+                    "545 475 109x28 -> 545 477.9 109x28",
+                )),
+                "a control that is no scene's words, down by the pad",
+            ),
+            (
+                without(
+                    "Button: Add to Log: Meet Hobb the Miller at the mill",
+                    log("738.5 363 103.5x28 -> 758.5 363 73.5x28"),
+                ),
+                "Add to Log narrower than its icon takes",
+            ),
+            (
+                without(
+                    "Button: Add to Log: Meet Hobb the Miller at the mill",
+                    log("738.5 363 103.5x28 -> 738.5 363 83.5x28"),
+                ),
+                "Add to Log whose right edge moved",
+            ),
+            (vec![icon], "an icon gone with no narrowed Add to Log"),
+            (
+                vec![edit(
+                    "session-tonight: Travel row menu",
+                    "at 533 514 150.1x30",
+                )],
+                "Edit encounter in another menu",
+            ),
+            (
+                vec![edit(
+                    "session-tonight: fight row menu",
+                    "at 533 514 150.1x20",
+                )],
+                "an Edit encounter below 24 px",
+            ),
+            (
+                vec![act(25, "appeared + Where | went + Start fight")],
+                "an act that also hides another control",
             ),
         ] {
             assert!(
