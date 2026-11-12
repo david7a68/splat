@@ -14210,6 +14210,12 @@ pub mod encounter_groups {
                 "Group rows stay through a join in setup and its Undo: {setup_before:?}, added {setup_added:?}, undone {setup_undone:?}"
             ),
         );
+        // iter-26-B FJ6, review: whether the members are the saved ones is worked out after a
+        // change, never on an unchanged frame. The count is inside the comparison.
+        let compare = crate::test_support::CachedWork::start("Member comparison", d, |_| {
+            let (reached, work) = crate::encounters::member_comparisons();
+            crate::test_support::Counts { reached, work }
+        });
         d.click("Edit group");
         d.expect("Group name: Lost Patrol");
         let run_open = d.app_mut().encounters.has_run();
@@ -14228,12 +14234,27 @@ pub mod encounter_groups {
             "The group editor names a saved missing member with its line, in the one fault form",
         );
         d.state("broken-group-open-for-repair", Sizes::All);
+        let warm = compare.warm(d, d.has("Replace Unknown creature"), 1);
+        let steady = compare.steady(d, |d| {
+            d.settle();
+            d.at_size(LARGE, |_| ());
+            d.settle();
+            d.has("Replace Unknown creature")
+        });
         // Outside the rule's scope: once the members change, a line may no longer be the
         // member's, so the fault names none, as Save's check does. Discard brings the line back.
-        d.click("More actions for Unknown creature");
-        d.click("Move down");
-        d.expect("Unsaved");
-        let changed = d.has("Unknown creature: not in this campaign’s packages.");
+        let refresh = compare.refresh(d, 1, |d| {
+            d.click("More actions for Unknown creature");
+            d.click("Move down");
+            d.expect("Unsaved");
+            d.has("Unknown creature: not in this campaign’s packages.")
+        });
+        d.observe(
+            "iter-26-B-FJ6-cache",
+            warm.is_ok() && steady.is_ok() && refresh.is_ok(),
+            format!("Member comparison: warm {warm:?}, steady {steady:?}, refresh {refresh:?}"),
+        );
+        let changed = refresh.is_ok();
         d.click("Discard");
         d.observe(
             "iter-26-B-FJ6-changed",
@@ -14831,6 +14852,68 @@ pub mod encounter_owned_groups {
         });
         d.click("Undo move");
         d.expect(&format!("Group name: {NEW_NAME}"));
+        // iter-26-B, review: a member result of a group in the encounter's own frame is in the
+        // editor's footer with its Undo, which goes to that group; results show newest first,
+        // and Undo of the older one keeps the newer change. Each case ends where it started.
+        let notes = format!("Group notes for {NEW_NAME}");
+        let member_undo = d.aside(|d| {
+            d.click("More actions for Wolf");
+            d.click("Remove");
+            d.expect("Undo remove member");
+            let removed = !d.has("1. Wolf") && d.has_containing("Removed Wolf.");
+            d.type_into(&notes, "Hungry.");
+            d.click("Undo remove member");
+            d.expect("1. Wolf");
+            // The notes field is multiline: its words are read where they are painted.
+            let kept = d.visible_text("Hungry.");
+            d.clear_text_in(&notes);
+            removed && kept && !d.has("Undo remove member")
+        });
+        let footer_tops = |d: &Driver<'_>| {
+            d.place_of("Undo remove member")
+                .zip(d.place_of("Undo move"))
+                .map(|(member, moved)| (member.top(), moved.top()))
+        };
+        // The member first, then the group: the group's result leads; Undo of the member
+        // brings Wolf back and the group stays moved.
+        let member_then_group = d.aside(|d| {
+            d.click("More actions for Wolf");
+            d.click("Remove");
+            d.click_first(&format!("More actions for {GROUP_SHRINE}"));
+            d.click("Make available to any encounter");
+            d.expect("Undo move");
+            let order = footer_tops(d).is_some_and(|(member, moved)| moved < member);
+            d.click("Undo remove member");
+            d.expect("1. Wolf");
+            let kept = d.has("Undo move") && !d.has(&format!("Group name: {GROUP_SHRINE}"));
+            d.click("Undo move");
+            d.expect(&format!("Group name: {GROUP_SHRINE}"));
+            order && kept
+        });
+        // The group first, then the member: the member's result leads; Undo of the group brings
+        // it back and Wolf stays removed.
+        let group_then_member = d.aside(|d| {
+            d.click_first(&format!("More actions for {GROUP_SHRINE}"));
+            d.click("Make available to any encounter");
+            d.expect("Undo move");
+            d.click("More actions for Wolf");
+            d.click("Remove");
+            d.expect("Undo remove member");
+            let order = footer_tops(d).is_some_and(|(member, moved)| member < moved);
+            d.click("Undo move");
+            d.expect(&format!("Group name: {GROUP_SHRINE}"));
+            let kept = !d.has("1. Wolf") && d.has("Undo remove member");
+            d.click("Undo remove member");
+            d.expect("1. Wolf");
+            order && kept
+        });
+        d.observe(
+            "iter-26-B-encounter-group-results",
+            member_undo && member_then_group && group_then_member && !d.visible_text("Unsaved"),
+            format!(
+                "Member Undo keeps the notes typed after it: {member_undo}; newest first and Undo of the older keeps the newer: member then group {member_then_group}, group then member {group_then_member}"
+            ),
+        );
         d.begin_task();
         d.click("Back to encounters");
         d.expect("GROUPS");
@@ -16144,8 +16227,25 @@ pub mod session_plan_groups {
             summary_visible,
             "The compact Add creatures pane keeps a member summary",
         );
+        // iter-26-B FF2, review: from another page, the rail's `Group draft` link takes the
+        // group back to the plan that owns it, so its Save still links it there. A round trip
+        // that ends where it started is not part of the DM's task.
+        let back_in_plan = d.aside(|d| {
+            go_library(d);
+            d.click_containing("Group draft");
+            d.expect("Save group");
+            d.current_page() == "Session"
+        });
         d.click("Save group");
         d.expect("Edit group Ash Pack");
+        d.observe(
+            "iter-26-B-FF2-plan",
+            back_in_plan && d.has_containing("2 × Wolf") && d.current_page() == "Session",
+            format!(
+                "The rail link went back to the plan ({back_in_plan}); Save linked the group there, on {}",
+                d.current_page()
+            ),
+        );
         d.state("plan-group-saved", Sizes::All);
         d.goal("assemble a group in the session's plan");
         d.observe(

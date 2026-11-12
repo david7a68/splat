@@ -1835,6 +1835,14 @@ impl Sessions {
             || self.folder.as_ref().is_some_and(|folder| !folder.is_dir())
     }
 
+    /// The plan that assembles a group, on its Plan tab: where the rail's `Group draft` link
+    /// takes a group that the plan owns (FF2), so that its Save still links it there.
+    pub fn show_group_plan(&mut self) {
+        if self.group_session.is_some() {
+            self.select(self.group_session);
+            self.tab = Tab::Plan;
+        }
+    }
     pub fn select(&mut self, session: Option<Uuid>) {
         self.flush();
         self.list_only = false;

@@ -113,6 +113,8 @@ mod groups;
 mod history;
 // The one member-fault form and its row, for Arrivals in the run (Contract B, R).
 use groups::GroupDraft;
+#[cfg(test)]
+pub(crate) use groups::member_comparisons;
 pub(crate) use groups::{ENCOUNTER_DELETED, NO_MAX_HP_CAUSE, member_fault, member_fault_row};
 pub(crate) use history::{Template, template_of};
 
@@ -440,7 +442,8 @@ struct Draft {
     /// The last save wrote a group, even if it then stopped, so the campaign needs a new read.
     groups_written: bool,
     /// One group detached from this draft, until the next save.
-    removed_group: Option<(usize, GroupDraft, bool)>,
+    /// Its place, the group, whether it is deleted, and when (`result_stamp`).
+    removed_group: Option<(usize, GroupDraft, bool, u64)>,
     /// The last replacement of missing roster rows, for its result and Undo. A later edit of
     /// those rows, or a Save (a start that saves too), ends it (FC3): after a Save its Undo
     /// would make a draft that differs from the file while it looks like it.
@@ -541,10 +544,12 @@ impl Draft {
             || self.groups.iter().any(GroupDraft::dirty)
             || !self.deleted_groups.is_empty()
     }
-    /// The draft's own results in the editor's footer, each with its Undo: a group taken from
-    /// this encounter (FB7) and the roster replacement (FA2). An edit of the replaced rows ends
-    /// the replacement's result. A pressed Undo is recorded in `pressed`; `apply_undo` applies it
-    /// after the footer is drawn.
+    /// The draft's own results in the editor's footer, each with its Undo, newest first by the
+    /// time each action was made: a group taken from this encounter (FB7), the roster
+    /// replacement (FA2), and each of its groups' newest member result. An edit of the replaced
+    /// rows ends the replacement's result. A pressed Undo is recorded in `pressed` (made by
+    /// `DraftUndo::for_draft` for this draft); `apply_undo` sends it to the result's owner after
+    /// the footer is drawn.
     fn results_into<'a>(&mut self, footer: &mut design::Footer<'a>, pressed: &'a DraftUndo) {
         if self
             .replacement
@@ -553,38 +558,68 @@ impl Draft {
         {
             self.replacement = None;
         }
-        if let Some((words, undo)) = self.removed_group_result() {
-            footer.result(words.clone(), true, move |ui| {
-                if design::undo_message(ui, Tone::Info, &words, undo) {
-                    pressed.group.set(true);
-                }
-            });
+        // (when, tone, words, Undo, which)
+        let mut results: Vec<(u64, Tone, String, &'static str, DraftResult)> = Vec::new();
+        if let Some((words, undo)) = self.removed_group_result()
+            && let Some((.., stamp)) = self.removed_group
+        {
+            results.push((stamp, Tone::Info, words, undo, DraftResult::RemovedGroup));
         }
-        if let Some(words) = self.replacement.as_ref().map(|undo| undo.words.clone()) {
+        if let Some(undo) = &self.replacement {
+            results.push((
+                undo.stamp,
+                Tone::Success,
+                undo.words.clone(),
+                "Undo replacement",
+                DraftResult::Replacement,
+            ));
+        }
+        for (index, group) in self.groups.iter_mut().enumerate() {
+            if let Some((words, undo, stamp)) = group.member_result() {
+                results.push((
+                    stamp,
+                    Tone::Success,
+                    words,
+                    undo,
+                    DraftResult::Member(index),
+                ));
+            }
+        }
+        results.sort_by_key(|(stamp, ..)| std::cmp::Reverse(*stamp));
+        for (_, tone, words, undo, which) in results {
             footer.result(words.clone(), true, move |ui| {
-                // The result is a message, so its Undo keeps the undo icon as every other Undo
+                // A result is a message, so its Undo keeps the undo icon as every other Undo
                 // does.
-                if design::undo_message(ui, Tone::Success, &words, "Undo replacement") {
-                    pressed.replacement.set(true);
+                if design::undo_message(ui, tone, &words, undo) {
+                    pressed.which.set(Some(which));
                 }
             });
         }
     }
-    fn apply_undo(&mut self, pressed: &DraftUndo) {
-        if pressed.replacement.get()
-            && let Some(undo) = self.replacement.take()
-        {
-            self.setup.roster = undo.before;
+    /// Send a pressed Undo to its owner: the roster, the removed group, or the member's group.
+    /// Returns whether one was pressed.
+    fn apply_undo(&mut self, pressed: &DraftUndo) -> bool {
+        match pressed.which.get() {
+            Some(DraftResult::Replacement) => {
+                if let Some(undo) = self.replacement.take() {
+                    self.setup.roster = undo.before;
+                }
+            }
+            Some(DraftResult::RemovedGroup) => self.undo_removed_group(),
+            Some(DraftResult::Member(index)) => {
+                if let Some(group) = self.groups.get_mut(index) {
+                    group.undo_member_result();
+                }
+            }
+            None => return false,
         }
-        if pressed.group.get() {
-            self.undo_removed_group();
-        }
+        true
     }
     /// The result of a group taken from this encounter, until the next save: its words and
     /// Undo. FF7: a group removed with its draft after its file was gone says what was lost.
     /// FB7: nothing is on disk until Save, so each says so in the info tone.
     fn removed_group_result(&self) -> Option<(String, &'static str)> {
-        let (_, removed, delete) = self.removed_group.as_ref()?;
+        let (_, removed, delete, _) = self.removed_group.as_ref()?;
         Some(if removed.file_gone() {
             (disk::removed_with_draft(&removed.name()), "Undo remove")
         } else if *delete {
@@ -601,7 +636,7 @@ impl Draft {
     }
     /// Undo the group's removal: it comes back in its place, with its draft.
     fn undo_removed_group(&mut self) {
-        let Some((index, removed, delete)) = self.removed_group.take() else {
+        let Some((index, removed, delete, _)) = self.removed_group.take() else {
             return;
         };
         if delete {
@@ -1990,6 +2025,8 @@ fn choose_replacement_creature(ui: &mut egui::Ui, snapshot: &Snapshot) -> Option
 struct ReplacementUndo {
     before: Vec<Slot>,
     after: Vec<Slot>,
+    /// When the replacement was made (`result_stamp`).
+    stamp: u64,
     /// The result in words, such as `2 Cinder Wolf rows replaced with Guard.`
     words: String,
 }
@@ -2359,11 +2396,25 @@ impl Snapshot {
             .map(|template| (template.id, template.name.as_str()))
     }
 }
+/// One of a draft's own results in the editor's footer.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum DraftResult {
+    RemovedGroup,
+    Replacement,
+    /// The newest member result of the group at this index in `Draft::groups`.
+    Member(usize),
+}
+
 /// Which of a draft's own results had its Undo pressed in the editor's footer this frame.
 #[derive(Default)]
 struct DraftUndo {
-    group: std::cell::Cell<bool>,
-    replacement: std::cell::Cell<bool>,
+    which: std::cell::Cell<Option<DraftResult>>,
+}
+
+/// When a result was made: a number that only grows, so the newest result can come first.
+pub(super) fn result_stamp() -> u64 {
+    static CLOCK: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    CLOCK.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
 /// A kept result with its own Undo, on the Encounters page or in an editor's footer. Each is
@@ -5032,10 +5083,12 @@ impl Encounters {
         let draft_id = self.draft.as_ref().map(|draft| draft.id);
         let mut footer =
             design::Footer::new(("encounter_editor_footer", draft_id), ui.available_width());
-        self.kept_into_footer(&mut footer, &kinds, pressed_ref);
+        // The draft's own results are newer than a discard's: they were made on the draft that
+        // the discard left open.
         if let Some(draft) = self.draft.as_mut() {
             draft.results_into(&mut footer, draft_undo_ref);
         }
+        self.kept_into_footer(&mut footer, &kinds, pressed_ref);
         if let Some(e) = self.error.clone() {
             // A deleted entry and an unreadable file are stated in the rows' tone too.
             let tone = self.error_tone();
@@ -5060,8 +5113,11 @@ impl Encounters {
         if let Some(kind) = pressed.get() {
             self.undo_kept(kind, Some((active, campaigns.modules())));
         }
-        if let Some(draft) = self.draft.as_mut() {
-            draft.apply_undo(&draft_undo);
+        if let Some(draft) = self.draft.as_mut()
+            && draft.apply_undo(&draft_undo)
+        {
+            // An open form is keyed by place; the place may now hold another row or member.
+            self.expanded = None;
         }
         let mut body = body_above(ui, bottom);
         let ui = &mut body;
@@ -6065,6 +6121,7 @@ impl Encounters {
             draft.replacement = Some(ReplacementUndo {
                 before,
                 after: draft.setup.roster.clone(),
+                stamp: result_stamp(),
                 words: replacement_words(&old, rows, &new),
             });
         }

@@ -1120,9 +1120,16 @@ impl Splat {
             // does: each page keeps its draft open while it has changes.
             let response = design::status_link(ui, state);
             if response.clicked() {
-                self.page = page;
-                if let Some(tab) = tab {
-                    self.campaign_tab = tab;
+                if state.word == encounters::GROUP_DRAFT && self.encounters.group_open_in_plan() {
+                    // A group the plan assembles goes back to that plan, which keeps owning
+                    // it: Encounters would take it, and its Save would link nothing.
+                    self.page = Page::Sessions;
+                    self.sessions.show_group_plan();
+                } else {
+                    self.page = page;
+                    if let Some(tab) = tab {
+                        self.campaign_tab = tab;
+                    }
                 }
             }
             {

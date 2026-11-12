@@ -88,6 +88,13 @@ pub(super) struct GroupDraft {
     /// The last `Use` on a member this campaign could not find. It owns the result line until
     /// its Undo, a newer member result, or a move or removal that changes the members' places.
     replaced: Option<Replaced>,
+    /// When the newest member result was made (`result_stamp`).
+    member_stamp: u64,
+    /// Whether the members are the saved ones, worked out once after each change (FJ6); `None`
+    /// until then. Editing input (this frame or the one before, as a click's change lands late)
+    /// and the events that change the members or the saved ones clear it.
+    members_saved: Option<bool>,
+    edited_last_frame: bool,
     repair_error: Option<String>,
 }
 
@@ -129,6 +136,9 @@ impl GroupDraft {
             removed_unread: None,
             removed_member: None,
             replaced: None,
+            member_stamp: 0,
+            members_saved: None,
+            edited_last_frame: false,
             repair_error: None,
         }
     }
@@ -162,6 +172,9 @@ impl GroupDraft {
             removed_unread: None,
             removed_member: None,
             replaced: None,
+            member_stamp: 0,
+            members_saved: None,
+            edited_last_frame: false,
             repair_error: None,
             saved_name: entry.name.clone(),
             name: entry.name,
@@ -181,7 +194,7 @@ impl GroupDraft {
     /// The member result that shows now, with its Undo: the newest of a replacement, a removed
     /// member and a removed unread row owns it. A replacement's ends when its member no longer
     /// holds the chosen creature.
-    fn member_result(&mut self) -> Option<(String, &'static str)> {
+    pub(super) fn member_result(&mut self) -> Option<(String, &'static str, u64)> {
         if let Some(result) = &self.replaced {
             if self
                 .setup
@@ -189,7 +202,7 @@ impl GroupDraft {
                 .get(result.index)
                 .is_some_and(|member| member.creature == result.after)
             {
-                return Some((result.words.clone(), "Undo replacement"));
+                return Some((result.words.clone(), "Undo replacement", self.member_stamp));
             }
             self.replaced = None;
         }
@@ -197,11 +210,18 @@ impl GroupDraft {
             .as_ref()
             .map(|(_, _, name)| name)
             .or(self.removed_unread.as_ref().map(|(_, _, name)| name))
-            .map(|name| (format!("Removed {name}."), "Undo remove member"))
+            .map(|name| {
+                (
+                    format!("Removed {name}."),
+                    "Undo remove member",
+                    self.member_stamp,
+                )
+            })
     }
     /// Undo the member result that shows: the creature, the member or the unread row comes
     /// back at its place, and other draft edits stay.
-    fn undo_member_result(&mut self) {
+    pub(super) fn undo_member_result(&mut self) {
+        self.members_saved = None;
         if let Some(result) = self.replaced.take() {
             if let Some(member) = self.setup.members.get_mut(result.index) {
                 member.creature = result.before;
@@ -224,7 +244,23 @@ impl GroupDraft {
             self.reread_lines();
         }
     }
+    /// Whether no member has moved, been added, changed or removed since the note was read.
+    /// The comparison runs only after a change (`members_saved`); each frame reaches it.
+    fn members_are_saved(&mut self, ctx: &egui::Context) -> bool {
+        let edited = super::edit_input(ctx);
+        if edited || std::mem::replace(&mut self.edited_last_frame, edited) {
+            self.members_saved = None;
+        }
+        #[cfg(test)]
+        MEMBER_COMPARISONS.with(|counts| counts.set((counts.get().0 + 1, counts.get().1)));
+        *self.members_saved.get_or_insert_with(|| {
+            #[cfg(test)]
+            MEMBER_COMPARISONS.with(|counts| counts.set((counts.get().0, counts.get().1 + 1)));
+            self.setup.members == self.saved_setup.members
+        })
+    }
     fn reread_lines(&mut self) {
+        self.members_saved = None;
         self.member_lines =
             splat::content::list_formats::group_member_lines(&self.source, &self.flags);
     }
@@ -345,6 +381,7 @@ impl GroupDraft {
                 .map_or(source.len(), |at| row[0].range.start + at + 1);
             self.removed_member = None;
             self.replaced = None;
+            self.member_stamp = super::result_stamp();
             self.removed_unread = Some((
                 line,
                 source[start..end].to_owned(),
@@ -383,6 +420,7 @@ impl GroupDraft {
         Ok(())
     }
     pub(super) fn add(&mut self, id: Uuid) {
+        self.members_saved = None;
         // The same creature again is one more of it, unless that member has its own changes.
         if let Some(member) = self
             .setup
@@ -1246,7 +1284,7 @@ pub(super) fn of_encounter(
         } else {
             groups[index].setup.encounter = None;
         }
-        *removed_group = Some((index, gone, delete));
+        *removed_group = Some((index, gone, delete, super::result_stamp()));
     }
     if Action::secondary("New group for this encounter")
         .icon(icons::ADD)
@@ -2218,10 +2256,12 @@ impl Encounters {
         let footer_id = self.group_draft.as_ref().map(|draft| draft.path.clone());
         let mut footer =
             design::Footer::new(("group_editor_footer", footer_id), ui.available_width());
-        self.kept_into_footer(&mut footer, &kinds, pressed_ref);
+        // The member result is newer than the discard: it was made on the draft that the
+        // discard left open.
         if let Some(draft) = self.group_draft.as_mut() {
             member_result_into(draft, &mut footer, member_ref);
         }
+        self.kept_into_footer(&mut footer, &kinds, pressed_ref);
         if let Some(e) = self.error.clone() {
             footer.reason(e.clone(), move |ui| {
                 design::message(ui, Tone::Error, &e);
@@ -2407,7 +2447,7 @@ fn member_result_into<'a>(
     footer: &mut design::Footer<'a>,
     pressed: &'a std::cell::Cell<bool>,
 ) {
-    if let Some((words, undo)) = draft.member_result() {
+    if let Some((words, undo, _)) = draft.member_result() {
         footer.result(words.clone(), true, move |ui| {
             if design::undo_message(ui, Tone::Success, &words, undo) {
                 pressed.set(true);
@@ -2472,6 +2512,17 @@ fn choice_label(ui: &mut egui::Ui, text: &str) {
     if gap > 0.0 {
         ui.add_space(gap);
     }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// (frames that reached `members_are_saved`, comparisons it made)
+    static MEMBER_COMPARISONS: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
+}
+/// The counts of `members_are_saved`, for `CachedWork`.
+#[cfg(test)]
+pub(crate) fn member_comparisons() -> (usize, usize) {
+    MEMBER_COMPARISONS.with(std::cell::Cell::get)
 }
 
 /// What a group is, in its own editor and in the frame an encounter's editor gives it. There,
@@ -2607,7 +2658,7 @@ fn members(
     let unread = splat::content::list_formats::unread_group_members(&draft.source, &draft.flags);
     // FJ6: a fault names its line only while no member has moved, been added, changed or removed
     // since the note was read, so the line is still that member's.
-    let saved_members = draft.setup.members == draft.saved_setup.members;
+    let saved_members = draft.members_are_saved(ui.ctx());
     for index in 0..=total {
         let preceding = unread.iter().filter(|member| member.before < index).count();
         for (offset, member) in unread
@@ -2793,6 +2844,10 @@ fn members(
             design::rule(ui);
         });
     }
+    // A move, a removal or a replacement changes the members: the comparison runs again.
+    if remove.or(raise).or(lower).is_some() || replaced.is_some() {
+        draft.members_saved = None;
+    }
     // An open form is keyed by place. Left open, it would now edit another member.
     if remove.or(raise).or(lower).is_some() {
         *expanded = None;
@@ -2803,6 +2858,7 @@ fn members(
         draft.removed_member = None;
         draft.removed_unread = None;
         draft.replaced = Some(result);
+        draft.member_stamp = super::result_stamp();
     }
     if let Some(index) = remove {
         let member = draft.setup.members.remove(index);
@@ -2816,6 +2872,7 @@ fn members(
         let name = shown_name(&member.overrides, base);
         draft.removed_unread = None;
         draft.removed_member = Some((index, member, name));
+        draft.member_stamp = super::result_stamp();
     } else if let Some(index) = raise {
         draft.setup.members.swap(index, index - 1);
     } else if let Some(index) = lower {
