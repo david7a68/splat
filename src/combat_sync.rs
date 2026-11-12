@@ -1516,13 +1516,9 @@ impl CombatSync {
     pub fn show(&mut self, ui: &mut egui::Ui) {
         let was = self.enabled;
         ui.checkbox(&mut self.enabled, "Sync this sheet with D&D Beyond");
-        ui.label(
-            crate::design::Type::Small
-                .rich(
-                    ui,
-                    "During a fight, Sync party in the run turns sync on for the whole party.",
-                )
-                .color(crate::design::colors().muted),
+        crate::design::help(
+            ui,
+            "During a fight, Sync party in the run turns sync on for the whole party.",
         );
         if was && !self.enabled {
             self.stop();
@@ -1534,14 +1530,13 @@ impl CombatSync {
             if let Some(error) = &self.error {
                 ui.colored_label(crate::design::colors().result.error, error);
             }
-            ui.label(crate::design::Type::Small.rich(ui, "Enable to read the live sheet. Edits made here will then update D&D Beyond.").color(crate::design::colors().muted));
+            crate::design::help(
+                ui,
+                "Enable to read the live sheet. Edits made here will then update D&D Beyond.",
+            );
             return;
         }
-        ui.label(
-            crate::design::Type::Small
-                .rich(ui, "Splat checks the sheet every 15 seconds.")
-                .color(crate::design::colors().muted),
-        );
+        crate::design::help(ui, "Splat checks the sheet every 15 seconds.");
         if self.busy() {
             ui.horizontal(|ui| {
                 crate::design::spinner(ui);
@@ -1569,6 +1564,8 @@ impl CombatSync {
         });
         self.conflicts(ui);
         let Some(remote) = &self.remote else {
+            // Help with a link in it: the reader measure, as `design::help` keeps.
+            ui.set_max_width(ui.available_width().min(crate::design::READER_MEASURE));
             ui.horizontal_wrapped(|ui| {
                 use crate::design::{self, Type};
                 ui.spacing_mut().item_spacing.x = 0.0;
@@ -1607,21 +1604,29 @@ impl CombatSync {
                 )
             };
             ui.label(Type::Small.rich(ui, icon).color(color));
-            ui.add(egui::Label::new(Type::Small.rich(ui, words).color(colors().muted)).wrap());
+            // Round 25 review: help keeps the reader measure.
+            design::help(ui, words);
         });
+        // Round 25 review: a rest's result has a reserved place above the fields, two lines high
+        // whatever it holds, so neither the result nor its dismissal or the next read moves them.
+        // Round 25 FD3: a dismiss is the close icon at the message end, in the one Party form.
+        let mut space = design::MessageSpace::<bool>::new(
+            "combat_sync_result",
+            ui.available_width().min(design::LIST_MEASURE),
+        );
         if let Some(notice) = &self.action_notice {
             let (tone, words) = match notice {
-                ActionNotice::Taken(words) => (Tone::Success, words),
-                ActionNotice::Failed(words) => (Tone::Error, words),
+                ActionNotice::Taken(words) => (Tone::Success, words.as_str()),
+                ActionNotice::Failed(words) => (Tone::Error, words.as_str()),
             };
-            let mut close = false;
-            ui.horizontal(|ui| {
-                close = design::icon_button(ui, icons::CLOSE, "Dismiss this message").clicked();
-                design::message(ui, tone, words);
+            space = space.result(words, false, move |ui| {
+                crate::party::dismissable(ui, |ui| {
+                    design::message(ui, tone, words);
+                })
             });
-            if close {
-                self.action_notice = None;
-            }
+        }
+        if space.show(ui) == Some(true) {
+            self.action_notice = None;
         }
         let wells = self.wells(ui, max_hp);
         let before = self.desired.groups.clone();
@@ -1638,13 +1643,9 @@ impl CombatSync {
             self.desired.touch();
             self.changed = Some(Instant::now());
         }
-        ui.label(
-            Type::Small
-                .rich(
-                    ui,
-                    "Concentration, custom effects, initiative and DM notes stay in Splat. D&D Beyond has no place for them.",
-                )
-                .color(colors().muted),
+        design::help(
+            ui,
+            "Concentration, custom effects, initiative and DM notes stay in Splat. D&D Beyond has no place for them.",
         );
     }
     /// The conflict heading for a group: its name on the sheet, where it has one.
@@ -1910,7 +1911,7 @@ impl CombatSync {
                 {
                     ui.checkbox(reduce_exhaustion, "Reduce Exhaustion by one level");
                 }
-                ui.label(Type::Small.rich(ui, note).color(colors().muted));
+                design::help(ui, note);
                 let (mut take, mut cancel) = (false, false);
                 ui.horizontal(|ui| {
                     take = Action::primary(take_label)
@@ -2237,10 +2238,10 @@ fn stepper_and_note(
     range: std::ops::RangeInclusive<i64>,
     note: Option<String>,
 ) -> bool {
-    use crate::design::{self, Type, colors};
+    use crate::design;
     let changed = design::stepper(ui, name, value, range);
     if let Some(note) = note {
-        ui.label(Type::Small.rich(ui, note).color(colors().muted));
+        design::help(ui, &note);
     }
     changed
 }
@@ -3079,6 +3080,51 @@ mod tests {
         *sync.desired.write() = remote.groups.clone();
         sync.remote = Some(remote);
         let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        // Round 25 FD3: the action notice ends with its close icon, after its words.
+        const TAKEN: &str = "D&D Beyond took the long rest.";
+        // Round 25 review: the result has a reserved place, so the first editable field keeps
+        // its y before the result, while it shows, after an error result and after it ends.
+        let field_top = |sync: &mut CombatSync| {
+            let out = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(700.0, 600.0),
+                    )),
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| sync.show(ui));
+                },
+            );
+            out.platform_output.accesskit_update.and_then(|update| {
+                update.nodes.iter().find_map(|(_, node)| {
+                    (node.label() == Some("Increase Current HP"))
+                        .then(|| node.bounds().map(|bounds| bounds.y0))
+                        .flatten()
+                })
+            })
+        };
+        let mut tops = Vec::new();
+        for notice in [
+            None,
+            Some(ActionNotice::Taken(TAKEN.into())),
+            Some(ActionNotice::Failed(
+                "D&D Beyond did not take the long rest. Check the sheet in D&D Beyond, then read it again before you send another change.".into(),
+            )),
+            None,
+        ] {
+            sync.action_notice = notice;
+            // Two passes: the first lays out, the second reads the settled place.
+            field_top(&mut sync);
+            tops.push(field_top(&mut sync));
+        }
+        assert!(
+            tops[0].is_some() && tops.iter().all(|top| *top == tops[0]),
+            "Increase Current HP top with no result, a result, an error and none again: {tops:?}"
+        );
+        sync.action_notice = Some(ActionNotice::Taken(TAKEN.into()));
         let before = sync.desired.clone();
         for form in [
             None,
@@ -3105,6 +3151,29 @@ mod tests {
                 },
             );
             assert!(!out.shapes.is_empty());
+            let words = out.shapes.iter().find_map(|clipped| match &clipped.shape {
+                egui::Shape::Text(text) if text.galley.job.text == TAKEN => {
+                    Some(egui::Rect::from_min_size(text.pos, text.galley.size()))
+                }
+                _ => None,
+            });
+            let close = out
+                .platform_output
+                .accesskit_update
+                .as_ref()
+                .and_then(|update| {
+                    update.nodes.iter().find_map(|(_, node)| {
+                        (node.label() == Some("Dismiss this message")).then(|| node.bounds())
+                    })
+                })
+                .flatten();
+            assert!(
+                words
+                    .zip(close)
+                    .is_some_and(|(words, close)| close.x0 as f32 > words.right()
+                        && (close.y0 as f32) < words.top() + crate::design::L),
+                "words {words:?}, close {close:?}"
+            );
         }
         assert_eq!(*sync.desired, before);
     }
