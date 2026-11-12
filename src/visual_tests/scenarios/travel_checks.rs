@@ -562,7 +562,6 @@ pub fn run(d: &mut Driver<'_>) {
 /// check changed before the fight began, the fight follows the last event and the run says so.
 fn road_fight_keeps_its_day(d: &mut Driver<'_>, dir: &Path) {
     const PLAN_SHRINE: &str = "Plan “Shrine of Cinders”";
-    const SPAN: &str = "Day 1, 00:00 to Day 3, 00:00";
     d.click(NAV_SESSIONS);
     show_plan(d);
     if !d.has("How long") {
@@ -572,6 +571,11 @@ fn road_fight_keeps_its_day(d: &mut Driver<'_>, dir: &Path) {
     d.press(Key::Enter);
     d.type_into("Enter a roll for Day 2", "18");
     d.press(Key::Enter);
+    d.observe(
+        "W5-D1",
+        d.visible_text("Day 1, 00:00 to Day 3, 00:00"),
+        "The journey runs from Day 1 to Day 3 before the fight",
+    );
     d.click(PLAN_SHRINE);
     d.expect("“Shrine of Cinders” is in tonight’s plan.");
     let journey_before = journey(d, "Travel");
@@ -635,7 +639,7 @@ fn road_fight_keeps_its_day(d: &mut Driver<'_>, dir: &Path) {
     d.click_starting("Travel ·");
     d.observe(
         "W5-D1",
-        d.visible_text(SPAN),
+        d.visible_text("Starts: Day 1, 00:00") && d.visible_text("Ends: Day 3, 00:00"),
         "The journey still runs from Day 1 to Day 3",
     );
     d.click(BACK_TO_RUN);
