@@ -329,16 +329,27 @@ The plan also holds scenes, with a done mark. A creature's or an NPC's page star
 **Done well:** T12.0 to T12.12, T14.1 to T14.5, T14.7 and T14.8.
 
 ### W16. Close the evening and open the next
-**Trigger:** a week later, the DM prepares the next session. **Goal:** rewards, what changed in the world, the
-recap and the open threads are where the next step needs them, with nothing typed twice. **Context:** desk.
-**Frequency:** every session.
+**Trigger:** the fights are over, or the week between sessions. **Goal:** rewards, what changed in the world, the
+recap and the open threads are where the next step needs them, with nothing typed twice. **Context:** wrap-up.
+**Frequency:** every session. A played fight's row puts its link, its XP and its loot in the session note in one act,
+`Add rewards`; the newest rewards block says whether the next has XP, so a campaign with no XP deletes one line,
+once.
 
 The Last time line shows last week's words. While the new session has no event and no run, `Carry over` at the
 end of that line adds the last session's recap as a link, the plan lines that were not played and the open
 threads to the new note, in one act with its Undo. HP carries inside one session only: the new session's first
 fight starts from the sheets.
 
-**Done well:** T18.3 and T18.4.
+**Done well:** T18.1, T18.3 and T18.4.
+### W17. Run a house rule's numbers
+**Trigger:** a house rule such as a race clock, a crowd's favour or seals moves between fights. **Goal:** between
+fights, one press records a change, a due notice stays in view, and the history is a file. **Context:** table,
+between fights. **Frequency:** a campaign with house rules, many times a session. A house rule note that the DM
+puts in play shows its trackers in Trackers (Ctrl+T). A press writes one entry to `Trackers.md`; a value that passes
+a mark raises a Due row and the rail's `Due N` on every page; `Done` finishes it. Splat counts and shows; the DM
+rules. In a fight the DM opens Trackers with Ctrl+T, presses, and goes back; the run shows no other tracker part.
+
+**Done well:** T19.1 to T19.4.
 
 ## 3. Information architecture
 
@@ -383,6 +394,7 @@ simulation is an action on an encounter, because it answers a question about one
   and `Next turn`. One click returns to the run.
 - **Lookup:** one shortcut or click opens search and a reader beside the current page. It does not
   navigate and does not take away the run strip.
+- **Trackers:** Ctrl+T shows the trackers and the Due list in the Lookup panel, and goes back. (T19.1)
 - **Campaign switcher:** always visible. Blocked with a stated reason during a run or draft.
 - **Status:** connection state, and which drafts are unsaved.
 
@@ -646,6 +658,7 @@ reading the code, not from a test run.
 | T12.9 | Lookup finds words in a session note and keeps the run in view | session-plan | state, view | New |
 | T12.10 | A task line is a scene with a box. A tick changes one character. A plain list line gets no row. The empty plan is as today | session-plan-scenes | cost, state | New |
 | T12.11 | A scene's link opens its entry in Lookup in 1, and `Back` returns to an earlier entry | session-plan-scenes | cost | New |
+| T18.1 | A fight's loot reaches the note in 1, with its reference and one Undo, and the note shows the block. The row says `In notes`, also after the heading is renamed. The XP line follows the newest block, and no block that exists is changed; an unreadable note stops that search. A made-up NPC at 0 HP gives an XP line that names the award that is not known; the next block still has an XP line, and the sum leaves that award out. A title that fills the row has the action as the last link of the opened row, at the same row height. Undo of one fight's block, after another act, leaves the other act | session-plan, run-loot | cost, state | New |
 | T12.12 | A reader starts a fight in 1, and a scene row's menu in 2. An NPC with no stat block opens the made-up form with its name and focus in HP. After `Close run`, also after a restart, a second `Start fight` starts the same encounter. `Remove…` and `Undo remove encounter` remove and restore an encounter with no saved run | session-plan-scenes, npc-in-lookup, encounter-build | cost, state | New |
 | T12.0 | A creature made the campaign's own in ≤ 7, with no page change. Party compares passive scores with no sheet open. A Library save after an encounter save is not a conflict | session-plan | cost, state | New |
 | T14.2 | A wrong initiative is corrected during combat, as one step of undo, and the current turn stays | session-plan | state | New |
@@ -665,6 +678,10 @@ reading the code, not from a test run.
 | T17.8 | Continue fight is offered only for the fight that was played last. After a later fight or long rest, and while `Timeline.md` cannot be read, the ended view and History offer no Continue fight and say why in its place. When that is no longer so, the control is back | run-continue | state | New |
 | T18.3 | `Carry over` shows only while the session has no event and no run, on the Last time line's one line. It adds the recap link, the plan lines (a paused fight has `Resume`) and the threads in 1, below the DM's words. A written recap is kept. After a copied draft became the embed, `Undo carry over` gives back the draft and both properties as they were. After acts on another page and another session, `Undo carry over` puts back the note's bytes. Read draws the embed as the recap's words under `From <session>` | session-carry-over, session-plan | cost, state | New |
 | T18.4 | A note the DM did not act on does not change. A new session with no carry-over is the template, and the last session's note changes only by the DM's own acts | session-carry-over, plain-evening | state | New |
+| T19.1 | Ctrl+T opens Trackers in Lookup, and Ctrl+T again shows what Lookup showed: an entry, a found note, or nothing. `Back` returns to the entry Lookup held. Ctrl+K opens Lookup on what it showed last, also on Trackers | trackers, run-lookup, nav-state | keys, state | New |
+| T19.2 | A quick action takes 1, also on an instance's line. `Undo` steps back through the acts of the session being played, also after a restart. The opposite action corrects a value in 1. `Add to Timeline` makes a Major event with the act's label, with `Undo add` | trackers | cost, state | New |
+| T19.3 | A value that passes a mark raises a Due row above the trackers and the rail's count, on every page. The Run page shows no tracker part except the rail's count. With no house rule note in play the rail says nothing | trackers, run-lookup | state | New |
+| T19.4 | Case D, beside the Session page: three notices with four rolls and the result line are in view with no scroll | trackers | view | New |
 | G1 | Every disabled control states why, in text or a working tooltip | all | state | Fail |
 | G2 | Go through every top-level page and back: each page restores section 3 state | nav-state **new** | state | Fail |
 | G3 | No dead nav items | nav-state **new** | state | Fail |

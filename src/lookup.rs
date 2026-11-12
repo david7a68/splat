@@ -27,6 +27,8 @@ pub(crate) const RESULTS_LISTED: usize = 8;
 const PANEL_MARGIN: f32 = design::M;
 
 pub const SEARCH_NAME: &str = "Search everything";
+/// What an empty search finds, below the search field.
+pub(crate) const SEARCH_HELP: &str = "Search built-in rules, every package, this campaign’s own entries, session notes and the timeline. Press Escape to close.";
 /// How many lines of a long note show where the words were found.
 const FOUND_LINES: usize = 3;
 const FOUND_FROM_LINES: usize = 12;
@@ -208,6 +210,9 @@ pub struct ContentIndex {
     pub errors: Vec<String>,
     /// The loot editor's tables and items, read the first time a page asks.
     loot: std::sync::OnceLock<Arc<crate::loot_editor::Sources>>,
+    /// Each World note's link problems in its list row's words, found the first time a result
+    /// row asks. Any file change makes a new index, so this starts empty again (round 26 AE2).
+    link_problems: std::sync::OnceLock<HashMap<usize, String>>,
     pub broken_world: Vec<(String, String)>,
     pub duplicate_world: BTreeMap<String, Vec<String>>,
     /// World notes whose name another World note also has, found once when the index loads, so
@@ -315,6 +320,12 @@ impl Item {
     }
 
     pub(crate) fn result_detail(&self) -> String {
+        self.result_detail_marked(None)
+    }
+
+    /// The result detail with a fault mark (`⚠ Place not found`) before the optional summary,
+    /// so a cut detail keeps the fault longest.
+    pub(crate) fn result_detail_marked(&self, fault: Option<&str>) -> String {
         let source = if self.private {
             Some("Campaign")
         } else if self.builtin {
@@ -328,7 +339,10 @@ impl Item {
         } else {
             self.subtitle.clone()
         };
-        let detail = presentation::list_subtitle(&subtitle, source);
+        let mut detail = presentation::list_subtitle(&subtitle, source);
+        if let Some(fault) = fault {
+            detail = format!("{detail} · {} {fault}", design::icons::WARN);
+        }
         // A world page says what it is in its first paragraph.
         match self.summary() {
             "" => detail,
@@ -404,6 +418,13 @@ fn note_items(
     }
     items.push(main);
     items
+}
+
+impl Item {
+    /// Is this a note of the campaign's own, read from its folder, not a package's entry?
+    pub fn is_campaign_note(&self) -> bool {
+        self.private
+    }
 }
 
 impl ContentIndex {
@@ -693,6 +714,29 @@ impl ContentIndex {
     /// The campaign's roll table with this key, ready to roll, or why there can be none.
     pub fn roll_table(&self, key: &str) -> Result<crate::roll_table::TableRoll, String> {
         self.loot_sources().roll(key)
+    }
+
+    /// A World note's link problems as its list row says them (`Place not found`), or `None`.
+    /// Found for every note once per index, so a result row costs a map lookup.
+    pub(crate) fn link_problem_words(&self, at: usize) -> Option<&str> {
+        self.link_problems
+            .get_or_init(|| {
+                (0..self.items.len())
+                    .filter(|&at| self.items[at].entry.kind == "world")
+                    .filter_map(|at| {
+                        let problems = world::broken_links(&self.items[at], self);
+                        (!problems.is_empty()).then(|| (at, world::link_problem_words(&problems)))
+                    })
+                    .collect()
+            })
+            .get(&at)
+            .map(String::as_str)
+    }
+
+    /// A result row's detail: what the entry is, its link fault when it has one, then its
+    /// summary. World's list row and Lookup's result say the same fault (round 26 AE2).
+    pub(crate) fn result_detail(&self, at: usize) -> String {
+        self.items[at].result_detail_marked(self.link_problem_words(at))
     }
 
     /// What a loot list can name: each roll table in the campaign's own notes by its key, the
@@ -1548,6 +1592,12 @@ pub struct Lookup {
     pub files_changed: bool,
     checking: Option<mpsc::Receiver<u64>>,
     was_focused: bool,
+    /// The panel shows the Trackers view in place of what it held, which it keeps.
+    trackers_shown: bool,
+    /// Ctrl+T opened the panel, so Ctrl+T closes it again.
+    trackers_closes: bool,
+    /// Trackers just came into view: it shows from its top, where the Due rows are.
+    trackers_from_top: bool,
 }
 
 /// Include registered packages even when there is no active campaign.
@@ -1715,8 +1765,46 @@ impl Lookup {
     pub fn toggle(&mut self) {
         self.written_stale = true;
         self.open = !self.open;
-        self.focus_search = self.open;
+        // Lookup opens on what it showed last, also on Trackers, whose keys are its own.
+        self.focus_search = self.open && !self.trackers_shown;
+        self.trackers_closes = false;
         self.results_open = self.current.is_none() || !self.query.is_empty();
+    }
+
+    /// Ctrl+T: show Trackers, and again go back to what Lookup showed. When Lookup was closed,
+    /// the second press closes it.
+    pub fn toggle_trackers(&mut self) {
+        if self.open && self.trackers_shown {
+            self.trackers_shown = false;
+            if std::mem::take(&mut self.trackers_closes) {
+                self.open = false;
+            }
+        } else {
+            // An open Lookup keeps what it shows under Trackers, also a found note. A closed one
+            // reads the notes again as it opens.
+            self.written_stale |= !self.open;
+            self.trackers_closes = !self.open;
+            self.open = true;
+            self.trackers_shown = true;
+            self.trackers_from_top = true;
+        }
+    }
+
+    /// The rail's `Due N`: Trackers in view, whatever Lookup showed.
+    pub fn show_trackers(&mut self) {
+        if !(self.open && self.trackers_shown) {
+            self.toggle_trackers();
+        }
+    }
+
+    pub fn on_trackers(&self) -> bool {
+        self.open && self.trackers_shown
+    }
+
+    /// The DM opened something in Lookup, so the panel shows it.
+    fn leave_trackers(&mut self) {
+        self.trackers_shown = false;
+        self.trackers_closes = false;
     }
 
     pub fn close(&mut self) {
@@ -1748,6 +1836,7 @@ impl Lookup {
             }
             Go::Many(positions) => {
                 self.open = true;
+                self.leave_trackers();
                 self.query.clear();
                 self.reader.choose_link(positions, target);
             }
@@ -1759,6 +1848,7 @@ impl Lookup {
 
     pub fn open_position(&mut self, position: usize) {
         self.open = true;
+        self.leave_trackers();
         self.written_stale = true;
         self.reading_written = None;
         self.navigate(position);
@@ -1769,6 +1859,7 @@ impl Lookup {
     /// Open with this search, for a link to something that does not exist yet.
     pub fn search_for(&mut self, words: &str) {
         self.open = true;
+        self.leave_trackers();
         self.query = words.to_owned();
         self.focus_search = true;
         self.results_open = true;
@@ -1776,6 +1867,7 @@ impl Lookup {
 
     pub fn open_id(&mut self, id: Uuid) {
         self.open = true;
+        self.leave_trackers();
         self.written_stale = true;
         self.reading_written = None;
         self.results_open = false;
@@ -1837,6 +1929,13 @@ impl Lookup {
 
     /// With nothing that way, nothing changes, so a stray press keeps a written note open.
     fn step(&mut self, step: Step) {
+        // Beside Trackers, Back returns to the entry that Lookup held.
+        if self.trackers_shown {
+            if step == Step::Back && self.holds_something() {
+                self.leave_trackers();
+            }
+            return;
+        }
         if self.trail.peek(step).is_none() {
             return;
         }
@@ -1874,7 +1973,12 @@ impl Lookup {
         }
     }
 
-    pub fn show(&mut self, ctx: &egui::Context) {
+    /// An entry or a found note, which Trackers keeps while it is in view.
+    fn holds_something(&self) -> bool {
+        self.current.is_some() || self.reading_written.is_some()
+    }
+
+    pub fn show(&mut self, ctx: &egui::Context, trackers: &mut crate::trackers::Trackers) {
         let width = design::side_panel_width(ctx.content_rect().width());
         design::Column::panel("lookup", width)
             .page_keeps(design::PANEL_LEAVES_PAGE)
@@ -1884,10 +1988,10 @@ impl Lookup {
                     .stroke(egui::Stroke::new(design::HAIRLINE_WIDTH, colors().rule))
                     .inner_margin(egui::Margin::same(PANEL_MARGIN as i8)),
             )
-            .show(ctx, |ui| self.panel(ui));
+            .show(ctx, |ui| self.panel(ui, trackers));
     }
 
-    fn panel(&mut self, ui: &mut egui::Ui) {
+    fn panel(&mut self, ui: &mut egui::Ui, trackers: &mut crate::trackers::Trackers) {
         // With the margin, so a press anywhere on the panel counts as here.
         let panel = ui.max_rect().expand(PANEL_MARGIN);
         self.panel_rect = Some(panel);
@@ -1895,9 +1999,40 @@ impl Lookup {
             data.insert_temp(egui::Id::new("reader_surface"), egui::Id::new("lookup"))
         });
         let mut close = false;
-        ui.horizontal(|ui| {
-            ui.label(Type::Heading.rich(ui, "Lookup"));
-            if self.trail.peek(Step::Back).is_some()
+        if self.trackers_shown {
+            let mut back = false;
+            ui.horizontal(|ui| {
+                ui.label(Type::Heading.rich(ui, "Trackers"));
+                // The view's heading holds the Due count.
+                let due = trackers.due();
+                if due > 0 {
+                    design::status(
+                        ui,
+                        design::Status {
+                            icon: icons::BELL,
+                            word: &format!("Due {due}"),
+                            color: colors().text,
+                        },
+                    );
+                }
+                back = self.holds_something()
+                    && Action::quiet("Back")
+                        .icon(icons::BACK)
+                        .key("Alt+Left")
+                        .density(Density::Read)
+                        .show(ui)
+                        .clicked();
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    close = design::icon_button(ui, icons::CLOSE, "Close Lookup").clicked();
+                });
+            });
+            if back {
+                self.leave_trackers();
+            }
+        } else {
+            ui.horizontal(|ui| {
+                ui.label(Type::Heading.rich(ui, "Lookup"));
+                if self.trail.peek(Step::Back).is_some()
                 // The icon buttons' density, so the title line keeps one height with or without
                 // Back, and the search field below never moves.
                 && Action::quiet("Back")
@@ -1906,12 +2041,12 @@ impl Lookup {
                     .density(Density::Read)
                     .show(ui)
                     .clicked()
-            {
-                self.step(Step::Back);
-            }
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                close = design::icon_button(ui, icons::CLOSE, "Close Lookup").clicked();
-                if let Some(current) = self
+                {
+                    self.step(Step::Back);
+                }
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    close = design::icon_button(ui, icons::CLOSE, "Close Lookup").clicked();
+                    if let Some(current) = self
                     .index
                     .as_ref()
                     .and_then(|index| self.current.and_then(|at| index.items.get(at)))
@@ -1934,12 +2069,12 @@ impl Lookup {
                             )
                             .clicked()
                         },
-                    )
-                {
-                    self.open_in_library = Some(current.entry.clone());
-                }
+                    ) {
+                        self.open_in_library = Some(current.entry.clone());
+                    }
+                });
             });
-        });
+        }
         if close {
             self.close();
         }
@@ -1977,8 +2112,18 @@ impl Lookup {
         if std::mem::take(&mut self.focus_search) {
             design::focus_and_select(ui, response.id, &self.query);
         }
+        // Words typed in the search field leave Trackers for their results.
+        if self.trackers_shown && before != self.query {
+            self.leave_trackers();
+            self.results_open = true;
+        }
         if let Some(error) = &self.error {
             design::message(ui, Tone::Error, error);
+        }
+        if self.trackers_shown {
+            design::rule(ui);
+            crate::trackers::view::show(ui, trackers, std::mem::take(&mut self.trackers_from_top));
+            return;
         }
         let Some(index) = self.index.clone() else {
             ui.horizontal(|ui| {
@@ -2121,7 +2266,7 @@ impl Lookup {
                         let item = &index.items[position];
                         (
                             item.entry.name.clone(),
-                            item.result_detail(),
+                            index.result_detail(position),
                             self.reading_written.is_none() && row == self.highlight,
                         )
                     }
@@ -2350,14 +2495,8 @@ impl Lookup {
         let Some(current) = self.current.and_then(|c| index.items.get(c)) else {
             if query.is_empty() {
                 ui.add_space(design::S);
-                ui.label(
-                    Type::Body
-                        .rich(
-                            ui,
-                            "Search built-in rules, every package, this campaign’s own entries, session notes and the timeline. Press Escape to close.",
-                        )
-                        .color(colors().muted),
-                );
+                // Help keeps the reader measure, as every help line does (round 26 AB2).
+                design::help(ui, SEARCH_HELP);
             }
             return;
         };
@@ -2369,7 +2508,17 @@ impl Lookup {
         }
         self.reader.compact = true;
         let (reader, campaign) = (&mut self.reader, self.campaign.as_ref());
+        // The reader's results and their Undo sit in Lookup's footer, pinned below the reader,
+        // so a result never moves the kind line, `Add to fight` or the text (round 26 FJ3).
+        let lines = reader.footer_lines(current, &index, campaign, None);
+        let (pressed, bottom) = world::draw_footer(ui, "lookup_footer", &lines);
+        if let Some(act) = pressed
+            && let Some(campaign) = campaign
+        {
+            nav = nav.take().or(reader.footer_act(act, current, campaign));
+        }
         egui::ScrollArea::vertical()
+            .max_height((bottom - ui.cursor().top()).max(0.0))
             .id_salt(("lookup_reader", current.entry.id))
             .auto_shrink([false, false])
             .show(ui, |ui| {
@@ -3094,6 +3243,24 @@ mod tests {
         lookup.set_written(Vec::new());
         assert_eq!((lookup.current, lookup.reading_written), (Some(2), None));
         assert!(lookup.trail.peek(Step::Forward).is_some() && lookup.generated.is_some());
+        // Ctrl+T and Ctrl+T again, with Lookup open, give back the found note. The shell passes
+        // the notes in when Lookup asks for them, in the same frame.
+        let notes = || {
+            vec![Written {
+                title: "Tonight".into(),
+                detail: "Session".into(),
+                text: "The missing captain".into(),
+                place: WrittenIn::Session(Uuid::from_u128(1)),
+            }]
+        };
+        lookup.set_written(notes());
+        lookup.reading_written = Some(0);
+        lookup.toggle_trackers();
+        if lookup.wants_written() {
+            lookup.set_written(notes());
+        }
+        lookup.toggle_trackers();
+        assert_eq!((lookup.current, lookup.reading_written), (Some(2), Some(0)));
     }
 
     /// Beside the Library, Lookup takes a side button only under the pointer, and leaves

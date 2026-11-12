@@ -626,15 +626,12 @@ impl Sessions {
         plan: &Plan<'_>,
         book: &Book,
     ) {
-        self.carries.end_what_changed(session, self.draft.as_ref());
         let offer = if self.preparing(session, book) {
             self.carry_offer()
         } else {
             None
         };
-        // The result and its Undo are this note's: they show also when the last session is gone.
         let Some((_, Some(last))) = &self.last_time else {
-            self.carry_result(ui, session);
             return;
         };
         let full = format!(
@@ -709,7 +706,6 @@ impl Sessions {
         if carry {
             self.carry_over(session, id, plan, book);
         }
-        self.carry_result(ui, session);
     }
 
     /// The act. It reads the last session again at the click, and writes nothing when what the
@@ -775,15 +771,27 @@ impl Sessions {
             },
         };
         self.carries.results.insert(session, outcome);
+        self.result_orders.renew("carry");
     }
 
-    /// The result of this session's act, where the DM acted: its words and its Undo, or why it
-    /// wrote nothing. A save that failed says so, and the Undo still works.
-    fn carry_result(&mut self, ui: &mut egui::Ui, session: Uuid) {
-        let undo = match self.carries.results.get(&session) {
+    /// The result of the open session's act, in the Session page's message footer, so that the
+    /// Last time line, the tabs and the plan never move when it comes or goes: its words and
+    /// `Undo carry over`, or why it wrote nothing. It is that note's, so it shows also when the
+    /// last session can no longer be found. A save that failed says so, and the Undo still works.
+    pub(super) fn carry_in_footer<'a>(
+        &'a self,
+        undos: &mut crate::timeline::page::LiveUndos<'a>,
+        footer: &mut design::Footer<'a>,
+        act: &'a std::cell::Cell<Option<super::SessionAct>>,
+    ) {
+        let Some(session) = self.selected else {
+            return;
+        };
+        match self.carries.results.get(&session) {
             Some(Outcome::Refused { words, .. }) => {
-                design::message(ui, Tone::Warning, words);
-                false
+                footer.result(words.as_str(), false, move |ui| {
+                    design::message(ui, Tone::Warning, words);
+                });
             }
             Some(Outcome::Done { words, undo, .. }) => {
                 let (tone, words) = if undo.written() {
@@ -791,13 +799,28 @@ impl Sessions {
                 } else {
                     (Tone::Warning, crate::sessions::NOT_SAVED)
                 };
-                design::undo_message(ui, tone, words, "Undo carry over")
+                let order = self.result_orders.of("carry", session);
+                undos.push(order, words.to_owned(), move |ui| {
+                    if design::undo_message(ui, tone, words, "Undo carry over") {
+                        act.set(Some(super::SessionAct::UndoCarry(session)));
+                    }
+                });
             }
-            None => false,
-        };
-        if !undo {
-            return;
+            None => {}
         }
+    }
+
+    /// A result ends at another change of its note's text; checked once a frame, before the
+    /// footer draws it.
+    pub(super) fn end_carry_results(&mut self) {
+        if let Some(session) = self.selected {
+            self.carries.end_what_changed(session, self.draft.as_ref());
+        }
+    }
+
+    /// `Undo carry over`: the act's own Undo, on this session's note. When it cannot apply, the
+    /// footer says why.
+    pub(super) fn undo_carry(&mut self, session: Uuid) {
         let (Some(Outcome::Done { undo, .. }), Some(draft)) =
             (self.carries.results.remove(&session), self.draft.as_mut())
         else {
@@ -1162,6 +1185,7 @@ mod tests {
             group_open: false,
             group_discarded: false,
             group_discarded_name: String::new(),
+            group_discarded_order: 0,
             arrivals_open: false,
             group_editor: std::cell::RefCell::new(&mut group),
             blocked: None,
@@ -1351,8 +1375,20 @@ mod tests {
             .build_state(
                 move |ctx, (page, book): &mut (Sessions, Book)| {
                     with_plan(&fights, |plan| {
-                        egui::CentralPanel::default()
-                            .show(ctx, |ui| page.last_time_block(ui, book, plan));
+                        egui::CentralPanel::default().show(ctx, |ui| {
+                            page.last_time_block(ui, book, plan);
+                            // The page's footer, as `session_footer` draws the result.
+                            page.end_carry_results();
+                            let act = std::cell::Cell::new(None);
+                            let mut footer = design::Footer::new("carry", ui.available_width());
+                            let mut undos = crate::timeline::page::LiveUndos::new();
+                            page.carry_in_footer(&mut undos, &mut footer, &act);
+                            undos.into_footer(&mut footer);
+                            footer.show(ui);
+                            if let Some(super::super::SessionAct::UndoCarry(session)) = act.take() {
+                                page.undo_carry(session);
+                            }
+                        });
                     });
                 },
                 (page, book),
@@ -1383,11 +1419,16 @@ mod tests {
                 .query_by_label_contains("Session 1: The Road")
                 .is_some()
         );
-        assert!(playing.query_by_label("Carry over").is_none());
+        assert!(playing.query_all_by_label("Carry over").next().is_none());
 
         let mut harness = harness(dir.path(), tonight.id, played(last.id), fights());
         harness.run_steps(2);
-        assert!(harness.query_by_label("— Wolves at the ford.").is_some());
+        assert!(
+            harness
+                .query_all_by_label("— Wolves at the ford.")
+                .next()
+                .is_some()
+        );
         // The last note changes on disk after the line read it: the act writes nothing and says
         // so, and the line reads it again.
         let read_last = fs::read_to_string(&last.path).unwrap();
@@ -1404,9 +1445,10 @@ mod tests {
         assert_eq!(read(), before);
         assert!(
             harness
-                .query_by_label(
+                .query_all_by_label(
                     "Session 1’s note changed. Check what it holds, then carry over again."
                 )
+                .next()
                 .is_some()
         );
         fs::write(&last.path, &read_last).unwrap();
@@ -1425,12 +1467,13 @@ mod tests {
         assert!(carried.contains("- [ ] Who burned the ropes?"));
         assert!(
             harness
-                .query_by_label(
+                .query_all_by_label(
                     "Carried over from Session 1: the recap, 2 plan lines and 2 open threads."
                 )
+                .next()
                 .is_some()
         );
-        assert!(harness.query_by_label("Carry over").is_none());
+        assert!(harness.query_all_by_label("Carry over").next().is_none());
 
         // An act on another session, then back: the Undo is this session's, and it still works.
         let page = &mut harness.state_mut().0;
@@ -1456,13 +1499,23 @@ mod tests {
             harness.run_steps(2);
         };
         rescan(&mut harness);
-        assert!(harness.query_by_label("Undo carry over").is_some());
+        assert!(
+            harness
+                .query_all_by_label("Undo carry over")
+                .next()
+                .is_some()
+        );
         fs::write(&last.path, &last_text).unwrap();
         rescan(&mut harness);
         harness.get_by_label("Undo carry over").click();
         harness.run_steps(2);
         assert_eq!(read(), outside);
-        assert!(harness.query_by_label("Undo carry over").is_none());
+        assert!(
+            harness
+                .query_all_by_label("Undo carry over")
+                .next()
+                .is_none()
+        );
 
         // Unsaved words meet a changed file: nothing is written, and the line says why.
         let draft = harness.state_mut().0.draft.as_mut().unwrap();
@@ -1476,7 +1529,8 @@ mod tests {
         assert_eq!(read(), changed);
         assert!(
             harness
-                .query_by_label("The note changed on disk. Choose in the note first.")
+                .query_all_by_label("The note changed on disk. Choose in the note first.")
+                .next()
                 .is_some()
         );
 
@@ -1495,7 +1549,12 @@ mod tests {
         harness.run_steps(2);
         locked(0o755);
         assert_eq!(read(), changed);
-        assert!(harness.query_by_label("Notes not saved").is_some());
+        assert!(
+            harness
+                .query_all_by_label("Notes not saved")
+                .next()
+                .is_some()
+        );
         assert!(
             harness
                 .state()
@@ -1521,13 +1580,19 @@ mod tests {
         harness.state_mut().0.draft.as_mut().unwrap().save();
         harness.run_steps(2);
         assert!(read().contains("Who burned the ropes?"));
-        assert!(harness.query_by_label("Notes not saved").is_none());
+        assert!(
+            harness
+                .query_all_by_label("Notes not saved")
+                .next()
+                .is_none()
+        );
         // Act B unticked a scene of the last session, so it is still to come now.
         assert!(
             harness
-                .query_by_label(
+                .query_all_by_label(
                     "Carried over from Session 1: the recap, 3 plan lines and 2 open threads."
                 )
+                .next()
                 .is_some()
         );
         harness.get_by_label("Undo carry over").click();
@@ -1545,7 +1610,7 @@ mod tests {
         let written = read();
         let mut restarted = harness_for(dir.path(), tonight.id, fights());
         restarted.run_steps(2);
-        assert!(restarted.query_by_label("Carry over").is_none());
+        assert!(restarted.query_all_by_label("Carry over").next().is_none());
         assert_eq!(read(), written);
     }
 
@@ -1641,7 +1706,12 @@ mod tests {
         let has = |harness: &egui_kittest::Harness<'_, (Sessions, Book)>, words: &str| {
             harness.query_by_label_contains(words).is_some()
         };
-        assert!(harness.query_by_label("Session 1: The Road").is_some());
+        assert!(
+            harness
+                .query_all_by_label("Session 1: The Road")
+                .next()
+                .is_some()
+        );
         assert!(has(&harness, "Wolves at the ford."));
         // A target with its folder shows that note; a part of a path names nothing and says so;
         // a name that two notes share stays a link. Never the other session's words.
@@ -1656,7 +1726,12 @@ mod tests {
             &harness,
             "The recap’s source is gone: My missing session › What happened."
         ));
-        assert!(harness.query_by_label("Update the link").is_none());
+        assert!(
+            harness
+                .query_all_by_label("Update the link")
+                .next()
+                .is_none()
+        );
 
         // Quiet frames prepare nothing (finding 5).
         let work = crate::test_support::CachedWork::start(

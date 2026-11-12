@@ -18,6 +18,10 @@ pub struct Settings {
     /// A Connect failed. The next frame of the form scrolls its error, cookie and Connect into
     /// view together; a new request ends it.
     reveal_retry: bool,
+    /// Drawn passes left in which Connect is brought into view after a failed Connect.
+    reveal_passes: u8,
+    /// Where Connect is, for the page to bring into view (`take_reveal`).
+    reveal_rect: Option<egui::Rect>,
     pub campaign_form_open: bool,
     sign_in_again: bool,
     session: Option<Session>,
@@ -72,6 +76,8 @@ impl Default for Settings {
             focus_cookie: false,
             connecting: false,
             reveal_retry: false,
+            reveal_passes: 0,
+            reveal_rect: None,
             campaign_form_open: false,
             sign_in_again: false,
             session: None,
@@ -377,6 +383,25 @@ impl Settings {
         self.show_account(ui, true);
     }
 
+    /// Round 26 FG2: the account's error (a failed Connect), in the Settings footer. It lives
+    /// until the next Connect, Disconnect or a working sign-in, as before.
+    pub fn footer_messages<'a>(&'a self, footer: &mut design::Footer<'a>) {
+        if let Some(error) = self
+            .error
+            .as_deref()
+            .filter(|error| *error != SESSION_ENDED)
+        {
+            footer.reason(error, move |ui| {
+                design::message(ui, Tone::Error, error);
+            });
+        }
+    }
+
+    /// Where Connect is, while a failed Connect asks the page to bring it into view.
+    pub fn take_reveal(&mut self) -> Option<egui::Rect> {
+        self.reveal_rect.take()
+    }
+
     fn show_account(&mut self, ui: &mut egui::Ui, heading: bool) {
         if heading {
             ui.allocate_ui_with_layout(
@@ -411,13 +436,15 @@ impl Settings {
             }
             _ => {}
         }
-        let mut error_rect = None;
-        if let Some(error) = &self.error {
-            error_rect = Some(if error == SESSION_ENDED {
-                small(ui, error).rect
-            } else {
-                design::message(ui, Tone::Error, error).rect
-            });
+        // Round 26 FG2: a failed Connect's cause sits in the Settings footer
+        // (`footer_messages`), so the cookie field and Connect stay under the pointer. An ended
+        // session is the account's state, so its help stays here.
+        if let Some(error) = self
+            .error
+            .as_deref()
+            .filter(|error| *error == SESSION_ENDED)
+        {
+            small(ui, error);
         }
         if let Some(warning) = &self.warning {
             if account == Account::KeyringWarning {
@@ -503,12 +530,17 @@ impl Settings {
                 let clicked = ui
                     .with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let connect = action.blocked(reason).show(ui);
-                        // After a failed Connect, show the cause, the kept cookie and the
-                        // retry together, as far as the window allows.
+                        // After a failed Connect, show the kept cookie and the retry; the
+                        // cause is in the footer, always in view. The footer comes a pass after
+                        // the failure and shortens the page, so the reveal runs on the next few
+                        // drawn passes (not on one egui draws again); it scrolls only when
+                        // Connect is out of view.
                         if std::mem::take(&mut self.reveal_retry) {
-                            let rect =
-                                error_rect.map_or(connect.rect, |error| error.union(connect.rect));
-                            ui.scroll_to_rect(rect, None);
+                            self.reveal_passes = 3;
+                        }
+                        if self.reveal_passes > 0 {
+                            self.reveal_passes -= 1;
+                            self.reveal_rect = Some(connect.rect);
                         }
                         ui.spacing_mut().item_spacing.x = design::S;
                         design::blocked_reason(ui, reason);

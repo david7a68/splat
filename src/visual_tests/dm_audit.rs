@@ -36,6 +36,13 @@ use std::{
 const WRITE: &str = "SPLAT_DM_AUDIT_WRITE";
 /// The road table of the journey's encounter checks (F9).
 const ROAD_TABLE: &str = "# Road\n\n## On the road\n\n<!-- splat:rolls key=road dice=1d20 per=day -->\n\n| d20 | On the road |\n| --- | --- |\n| 1-14 | Nothing stirs. |\n| 15-20 | Wolves pick up the trail. |\n";
+/// A house rule note with one tracker and one quick action (F4).
+fn torch_rules(id: uuid::Uuid) -> String {
+    format!(
+        "---\nsplat_schema: 2\nsplat_id: {id}\nsplat_kind: rule\nsplat_name: Torch Rules\n---\n\n<!-- splat:yaml path=splat_members -->\n\n```yaml\ntrackers:\n  torches:\n    name: Torches\n    start: 6\n    min: 0\n    pin: true\n    quick:\n    - label: Burn a torch\n      add: -1\n```\n\n<!-- splat:yaml path=splat_rule -->\n\n```yaml\nmechanic: house:torches\nmode: augment\nimplementation: splat:house_rules\nparameters: {{}}\n```\n"
+    )
+}
+
 /// The one way a feature adds its tasks.
 const ADD_COMMAND: &str = "devenv shell -- audit-freeze add";
 /// How an author records counts that change on purpose.
@@ -463,7 +470,18 @@ fn during_the_session(a: &mut Audit<'_, '_>) {
     ));
 
     a.task("Ambush: read the read-aloud text and start the fight");
-    a.click(Nav, &format!("Start fight: {TONIGHT}"));
+    // Review of PR 274, item 1: after the road check, the plan's one-time reveal puts the next
+    // row clear of the footer, so `Start fight` is pressed with no scroll first.
+    let start = format!("Start fight: {TONIGHT}");
+    a.act(Nav, &start, |d| {
+        assert!(
+            d.nodes()
+                .iter()
+                .any(|node| node.name == start && node.fully_in_view()),
+            "{start} is fully in view, so no scroll comes first"
+        );
+        d.click(&start);
+    });
     a.fact(format!(
         "setup shows the read-aloud text: {}",
         a.d.visible_text("Ash falls on the crossing.")
@@ -584,6 +602,38 @@ fn during_the_session(a: &mut Audit<'_, '_>) {
     }
     a.click(Do, "Add Short rest");
 
+    // F4: a house rule's number, between fights. Trackers is a view of Lookup: Ctrl+T, one
+    // press, Ctrl+T.
+    a.setup("the campaign has a house rule note in play", |d| {
+        let campaign = d.app_mut().campaigns.active_campaign().expect("a campaign");
+        let id = splat::character::stable_id("Torch Rules.md");
+        fs::write(campaign.path.join("Torch Rules.md"), torch_rules(id))
+            .expect("write the house rule note");
+        let manifest = campaign.path.join("Campaign.md");
+        let text = fs::read_to_string(&manifest).expect("read Campaign.md");
+        let list = serde_yaml_ng::to_value(vec![serde_json::json!({ "id": id })]).unwrap();
+        let text = splat::content::formats::patch_model(&text, &[("splat_in_play", Some(list))])
+            .expect("put the note in play");
+        fs::write(manifest, text).expect("write Campaign.md");
+        d.app_mut().lookup.refresh();
+        d.settle();
+    });
+    a.task("Mark a house rule's number between fights");
+    a.act(Panel, "Ctrl+T", |d| d.press_ctrl(Key::T));
+    a.click(Do, "Burn a torch");
+    a.act(Panel, "Ctrl+T", |d| d.press_ctrl(Key::T));
+    let ledger =
+        a.d.app_mut()
+            .campaigns
+            .active_campaign()
+            .map(|campaign| campaign.path.join("Trackers.md"))
+            .and_then(|path| fs::read_to_string(path).ok())
+            .unwrap_or_default();
+    a.fact(format!(
+        "the ledger holds the press: {}",
+        ledger.contains("why: Burn a torch")
+    ));
+
     a.task("Next fight: start it, with the party as it stands");
     a.click(Nav, &format!("Start fight: {SECOND}"));
     a.fact(format!(
@@ -691,6 +741,26 @@ fn after_the_session(a: &mut Audit<'_, '_>) {
         "the note holds the fight's link: {}",
         a.d.editor_text()
             .is_some_and(|text| text.contains("[[Timeline#^") && text.contains(TONIGHT))
+    ));
+
+    // F7: the fight's link, its XP and its loot in the note, in one act from its row; the last
+    // link of the opened row when the title takes the row's width.
+    a.task("Put the fight's rewards in the note");
+    a.act(Do, "Add rewards", |d| {
+        let on_row = format!("Add rewards: {TONIGHT}");
+        d.click(if d.has(&on_row) {
+            &on_row
+        } else {
+            "Add rewards"
+        });
+    });
+    a.fact(format!(
+        "the note holds the fight's rewards block: {}",
+        a.d.editor_text().is_some_and(|text| {
+            text.split("## Loot and rewards")
+                .nth(1)
+                .is_some_and(|rest| rest.contains(&format!("|{TONIGHT}]]\n  - XP ")))
+        })
     ));
 
     a.task("Check the party's HP for next time");

@@ -384,7 +384,7 @@ today and its fit rule. No row adds a line, changes a row's height or takes widt
 | 7 | The Add strip's **More** menu | Its last line is `Scene` (F3) | `src/design/components.rs:2339`; `src/timeline/page.rs:89` | A menu line. The strip's visible actions are as today |
 | 8 | A campaign World entry's reader | `Add to Log` after `Edit` (F6) | The header: `src/world.rs:1733-1768` | Section 1.2: its word, then its icon, then not shown |
 | 9 | A campaign creature's or NPC's reader, with no run open | A quiet `Start fight` after `Add to Log` (F3) | The same header | Section 1.2: with its word, or not shown |
-| 10 | An ended fight's plan row | `Add rewards` (F7) | The action band: `plan.rs:692-694`; the opened row's links: `:1313-1321` | On the row only when the title keeps its lines beside the action's own width. Else the last link of the opened row, after `Timeline`. A fight whose reference an old note already has as a list line says `In notes` |
+| 10 | An ended fight's plan row | `Add rewards` (F7) | The action band: `plan.rs:692-694`; the opened row's links: `:1313-1321` | On the row only when the title keeps its width and its line breaks beside the action's own width. Else the last link of the opened row, after `Timeline`, while that line has room. Else the last line of the row's menu (measured in P7: the links with `Add rewards` take about 326 px, and the plan at 330 px gives them 296). A fight whose reference an old note already has as a list item says `In notes`, also in the menu |
 | 12 | A Travel row's menu | One more line, `Roll for encounters`, when the campaign has a marked table (F9) | `plan.rs:727-735`; `src/timeline/page.rs:875-877` | A menu line |
 | 13 | A **Ready to run** row's menu, for an encounter with no saved run | One more line, `Remove…` (F3) | `src/encounters/list.rs:560-565` | A menu line |
 
@@ -910,7 +910,9 @@ Seals
   action corrects the value in one press, as an erasure does on paper; the history keeps both.
 - **The result line** names the last act and has `Undo` and `Add to Timeline`. After `Add to Timeline` it says
   `Added to the Timeline.` with `Undo add`.
-- **A tracker's history,** with **Remove**, and the list of problems show in the house rule note's reader.
+- **A tracker's history,** with **Remove**, and the list of problems show in the house rule note's reader. Not built in
+  P9: the reader is `src/world.rs`, which P6 changes at the same time. P9 shows each problem in the view, at the end
+  of its scroll area, and an entry with another stamp stays until it is edited out in Obsidian.
 - **In a fight** the DM marks the paper sheet. Ctrl+T still opens the view (three acts for each press), and
   the run offers nothing more. After the fight the DM enters the fight's marks; a mark that those raise
   shows then.
@@ -929,7 +931,9 @@ in Campaign → Rules and runs.`
 | No house rule note in play; or in play with nothing due | Nothing in the rail |
 | A notice is due | Rail: bell and `Due 1`, in the text colour |
 | `Trackers.md` cannot be read | Rail: error icon and `Trackers not read`. The view names the file, says the history is safe, and offers `Try again` and `Show file`. Quick actions are blocked with that reason |
-| `Trackers.md` changed on disk | Separate changes merge with a quiet notice, as `Timeline.md` does. The same entry needs a choice |
+| A save of `Trackers.md` fails | Nothing is recorded and nothing waits (the lead's ruling after review round 2 of P9: a waiting act needed a snapshot of more and more state). The result line, at the view's bottom edge, says `Trackers.md was not saved: <reason>. Nothing was recorded.` as an error until the next act or until the ledger is read again. The DM presses the action again: one more act. A dice act rolls again; nothing was recorded, so no roll is lost from the record. A number typed for `add: ask` stays in its field |
+| `Campaign.md` or a house rule note in play cannot be read | No empty list: the view names the file, shows no value and no old one, and every act is refused with the same words. The rail says `Trackers not read`. A note that was moved or renamed outside Splat says that Splat reads the notes again when its window gets focus |
+| `Trackers.md` changed on disk | Splat reads it again within a second, and every act reads it at the press, so an edit in Obsidian counts at once and is never written over (as built in P9: no merge and no notice are needed). An Undo whose entries changed on disk writes nothing and says `The ledger changed on disk. Nothing was undone.` |
 
 **What the files store.** Definitions are in the house rule note's Splat data, as before, with one new
 optional word: `for:` on a mark's table. The ledger is one ordered list. Each act is one entry. A notice's
@@ -970,7 +974,7 @@ route, as today). A `Make house rule note` action (no band holds it today; the D
 | Primary action in view | None in the view. The page's own primary stays |
 | Components and tokens | Rail: the status slot with `status_link`; icon `icons::BELL`. View title: Lookup's title line. `DUE`, `PINNED`: `group_heading`. Quick actions and `Roll`: `Action::secondary` at Read density; `Roll` has `icons::DICE`. `Done`: `Action::quiet`. Proposed change: the theme's checkbox. Values: `Type::Numeral`, right-aligned with `number`. Result: `undo_message` with a second quiet action, above a hairline |
 | In view at 960x640 | The rail's `Due N` on every page. In the view: the Due rows first, and the result line |
-| States | Due: bell and `Due 1`. Not read: error icon and `Trackers not read`. Blocked: the reason beside the action |
+| States | Due: bell and `Due 1`. Not read: error icon and `Trackers not read`. Refused or not saved: the reason on the result line, which stays in view when the row it was pressed on goes away |
 | Keys and targets | Ctrl+T, Tab, Enter. Every action is 28 px high (Read) |
 
 ### F5. Carry-over between sessions
@@ -1014,8 +1018,12 @@ Case A, before and after
 Last time:  Session 1: The Road — Hobb the miller says the toll collectors …    Carry over
 
 Last time:  Session 1: The Road — Hobb the miller says the toll collectors …
+…
 ✓ Carried over from Session 1: the recap, 2 plan lines and 2 open threads.   ↶ Undo carry over
 ```
+
+The result sits in the Session page's message footer, as every result of that page does since that rule
+landed (P8 followed it at the merge with `main`), so the line, the tabs and the plan never move.
 
 **An embed in Read.** Read draws an embed of a session note's heading as that heading's text, under a muted
 line, `From Session 1: The Road`, which links that session. The rule is by the embed's target, not by who
@@ -1183,17 +1191,28 @@ for player characters. Editing a Log line in Splat (Edit and Obsidian do it).
 
 **The note owns the rewards.** `Add rewards` writes one block in the session note: a list line that starts
 with the fight's Timeline reference, and under it an XP line and the loot lines. The run stores nothing about
-it. **A fight has its rewards in the notes when the note has a list line that starts with its reference,
+it. **A fight has its rewards in the notes when the note has a list item that starts with its reference,
 anywhere in the note.** The heading `## Loot and rewards` is only where a new block goes; a DM who renames it
-or moves the block loses nothing.
+or moves the block loses nothing. Splat reads the note's real Markdown blocks once (`outline` in
+`src/sessions.rs`), and the insertion, `In notes`, the XP choice and Undo all ask that one reading. **Text in a
+code fence is never a heading and never a block.** **A list item inside a callout or a quote is a block**, as
+the DM sees it: the row says `In notes`, the XP search reads it, and Undo leaves it, because it is no longer
+the item that the act wrote. **The act reads its own result again before it writes:** it writes only when the
+new words hold the fight's one block, exactly as the act made it, under the heading, so `In notes` is true
+after the write. Otherwise it writes nothing and says why under the row: `A code block in the note is not
+closed, so nothing was written. Close it, then add rewards.`, or, when no reason is known, `The note would not
+show these rewards as a list, so nothing was written.`
 
 **Where it lives.** On the Session page, on the plan row of a fight that has ended. That row's action band
 holds only the menu today (`src/sessions/plan.rs:692-694`), and its title has the rest of the line.
-`Add rewards` is a quiet action in that band, left of the menu, only when the title keeps the lines that it
-has today beside the action's own width. P7 works this out when the title or the width changes, not each
+`Add rewards` is a quiet action in that band, left of the menu, only when the title keeps the width and the
+line breaks that it has today beside the action's own width; the same number of lines is not enough. P7 works this out when the title or the width changes, not each
 frame. When the title uses the width, it is the last of the opened row's links: `Log · Whole run · Timeline ·
-Add rewards` (`:4918-4926`), so no link of today moves. After the act, the same place says `In notes`: the
-status that an event's row has today (`:4392`), or muted words in the opened row.
+Add rewards` (`:4918-4926`), so no link of today moves, while that line has room for it. Measured in P7, that
+line takes about 326 px and the plan at 330 px gives it 296, so there it is the last line of the row's menu
+(rule 2: a menu that exists in that place), and the opened row gains no line. After the act, the same place says `In notes`: the
+status that an event's row has today (`:4392`), muted words in the opened row, or the same status as the
+last line of the row's menu.
 
 ```text
 Case A, the plan at 330 px
@@ -1215,8 +1234,8 @@ Case A, the plan at 330 px
   also those marked absent at 0 HP, and each character's share. F1's function gives the numbers. The line
   names what it counted and what still stood, so the DM can change it. With nobody at 0 HP it says `XP 0 for 0
   at 0 HP`. When a creature at 0 HP has no XP that Splat knows (a made-up creature, an NPC with no stat
-  block), the line says so: `XP 450 for 3 at 0 HP. XP not known for Captain Varra: enter an award here.` It
-  is still an XP line, and the link and the loot are written. An amount that is not known is left out of
+  block), the line says so: `XP 450 for 3 at 0 HP. XP not known for Captain Varra: enter an award here.` The
+  count is of the creatures whose XP is summed. It is still an XP line, and the link and the loot are written. An amount that is not known is left out of
   every sum and is never counted as zero. This is the rule (section 7).
 - **Loot,** as lines under it: the encounter's loot and the loot of each creature at 0 HP. A roll that was
   made has its result. A roll that was not made is written with `(not rolled)`, as `Copy loot` writes it
@@ -1226,7 +1245,9 @@ Case A, the plan at 330 px
 newest rewards block: in this note first (the last block in its text), then in the note of each earlier
 session, newest first. A note
 with no block is passed. A note that cannot be read stops the search; P7 reads the notes in order and keeps
-an unreadable one in its place.
+an unreadable one in its place. A file that claims a session but whose properties cannot be read has no known
+place, so it stops the search right after this note. Splat finds these files with the same scan of the folder
+and its subfolders that finds the readable notes (built in P7: `earlier_notes`, `rewards_with_xp`).
 
 | The search finds | `Add rewards` writes | The result says |
 |---|---|---|
@@ -1284,8 +1305,17 @@ not made.`; with an award that is not known, `1 award is not known.` `Undo rewar
 The last line of the first block is one that the DM typed. An XP line is a line under a fight's line that
 starts with `XP`; the sum reads its first number, so `(XP 200)` is not counted.
 
-**Undo.** `Undo rewards` removes the block that the act added, when it still stands as Splat left it (section
-4.1). **Keyboard.** Tab reaches `Add rewards` in the row or among the opened row's links, and the result's
+**Undo.** `Undo rewards` acts only while the block is still the complete, unchanged list item that the act
+wrote: an item that the DM typed under it, also after a blank line, is part of it, as CommonMark reads it. The
+bytes from the start of the block's first line to the end of its last line must be exactly the bytes that the
+act wrote, so a quote mark, an indent or any other change refuses it.
+Then it removes that item, and the heading only when the act added the heading and nothing else is under it.
+When the block changed, Undo writes nothing: the result and its Undo end, and a press that meets the change
+on disk says `That line changed on disk.` under the row, the words of the other note acts. By the lead's
+ruling for P7 it is kept by the note's ID and the fight, not by the note's whole text: another act, an edit
+elsewhere in the note, another session or another page leaves it. When act A added the heading and act B
+wrote under it, Undo of A keeps the heading for B, and Undo of B keeps it too: only A's Undo knew that the
+heading was the act's, and its bytes are the same as a template's heading. **Keyboard.** Tab reaches `Add rewards` in the row or among the opened row's links, and the result's
 action after its words.
 
 **What stays with the DM.** Who earned XP, whether a creature that fled counts, how loot is shared, and when
@@ -1499,7 +1529,7 @@ new, and one save is new; the table says which.
 | **Session note** | A plan act changes the draft (`insert_in_plan`, `src/sessions.rs:1071`); the save comes 2 seconds later (`SAVE_AFTER`, `:26`). `Draft::save` writes only when the file is as Splat last read it (`:1282`). `follow_disk` takes the file's text when Splat holds no unsaved words, on a poll each second (`:1423`) | **New in P1c: one function, `Draft::apply`.** It follows the disk, patches one fragment, saves now through `Draft::save`, and keeps the Undo. It reports a patch or a save that failed, checks that the note is still the one it read, and tells a missing file from an outside edit, before a feature says that its act is done. Every note act of this design calls it. Today's two plan acts (`add_to_plan`, `src/sessions/page.rs:3942`; the removal, `src/sessions/plan.rs:926`) keep today's behaviour under it, also with unsaved words and a changed file | The note holds what the act wrote. The DM removes it as any words | `Notes not saved`, as today. The fragment waits in the draft |
 | **World note** | A change reads the note, changes it and writes it with `write_note`, which writes only when the file still holds the text that was read (`src/world.rs:1033`) | The same call. An edit form with changes for the same entry blocks the act | The same | An error that names the file |
 | **`Timeline.md`** | `Book::save` writes the file atomically, checks for an outside change, and merges by event (`src/timeline.rs:924`, `:774`) | The act changes the lines of one event. Separate events merge with a quiet notice; the same event needs a choice, as today | The lines are in the file | `Timeline not saved`, as today |
-| **`Trackers.md`** | No code today | **New in P9: the ledger's save.** It shares `Book`'s atomic write and outside-change check, which P9 moves to a shared place, and it merges by entry ID with its own code, because the Timeline's merge is written for events | The entries, and so their Undo, are in the file | `Trackers not saved`. The entry waits |
+| **`Trackers.md`** | No code today | **Built in P9: the ledger's save** (`src/trackers/ledger.rs`). An act reads the file as it is on disk at the press, builds its entries from it, and writes with the shared atomic write and its outside-change check (`file_batch::apply`, which already served several files, so `Book` keeps its own). So nothing needs a merge: an outside edit stays. An act also reads the house rule notes in play at the press, and a definition that changed writes nothing | The entries, and so their Undo, are in the file | `Trackers.md was not saved: <reason>. Nothing was recorded.` on the result line. Nothing waits; the DM presses again (the lead's ruling after review round 2) |
 | **Run file** | The run saves after each step and has its own choices when the file changed | As today | The step and its Undo are in the file (F8) | The run's footer, as today |
 
 **What `Draft::apply` does with an outside edit.** It calls `follow_disk` first, so an edit made in Obsidian a
