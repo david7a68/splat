@@ -103,7 +103,7 @@
       "phase": "during",
       "task": "Ambush: read the read-aloud text and start the fight",
       "transitions": 1,
-      "interactions": 12,
+      "interactions": 13,
       "path": "Session > Run"
     },
     {
