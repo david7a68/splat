@@ -320,4 +320,18 @@ pub fn run(d: &mut Driver<'_>) {
         );
     }
     d.state("plan-opened", Sizes::All);
+    // A paused fight's row shows its run, not a word, also when it is opened: its roster may
+    // have changed in the run. The fixture's Bridge Ambush is paused, with XP 600 of 2,800.
+    d.click(HIGH);
+    d.click("Add a fight");
+    d.click(&format!("Plan {RUN}"));
+    d.expect(&format!("Resume: {RUN}"));
+    d.click(RUN);
+    d.expect("Read encounter");
+    let words = d.painted_in(egui::Rect::EVERYTHING);
+    d.observe(
+        "T12.1-difficulty-paused",
+        !words.contains("XP 600 of 2,800") && !words.contains("Read encounter · "),
+        format!("The opened paused fight's line has no difficulty: {words}"),
+    );
 }
