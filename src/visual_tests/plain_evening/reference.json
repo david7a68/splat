@@ -1,6 +1,6 @@
 {
 "about": "G7 reads this with SPLAT_FROZEN=1. `devenv shell -- audit-freeze reference` writes it on the commit of main in frozen_at; a feature adds its views with `devenv shell -- audit-freeze add`.",
-"frozen_at": "9c0e7ce85ffa4e558a7f7d72de688721172388d8",
+"frozen_at": "993aa81ffc8124e1fe9d4fe42ab90365c989527f",
 "views": [
 {"screen": "start", "view": "1200x800",
 "controls": [
@@ -1516,7 +1516,8 @@
 ["TextRun: - [[Shrine of Cinders]]\n",[727.0,435.0,153.1,24.0]],
 ["TextRun: ## What happened\n",[727.0,483.0,140.6,23.0]],
 ["TextRun: ## Open threads\n",[727.0,530.0,122.3,23.0]],
-["Button: Remove this event",[669.0,299.0,67.8,30.0]]
+["Button: Roll for encounters",[669.0,299.0,137.9,30.0]],
+["Button: Remove this event",[669.0,335.0,137.9,30.0]]
 ],
 "texts": [
 ["Splat",[8.0,8.0,44.7,27.0]],
@@ -1616,7 +1617,8 @@
 ["Start fight",[577.0,334.0,65.0,18.0]],
 ["5 party · 2 × Ember Cultist",[394.0,357.0,140.2,16.0]],
 ["\n# Session 8: The Crossing\n\n## Recap of last time\n\n## Plan for tonight\n\n- [ ] Talk to [[Hobb the Miller]] about the ropes\n- [x] Read [[Emberfall Rumours]]\n- [[Shrine of Cinders]]\n\n## What happened\n\n## Open threads\n\n",[727.0,219.0,327.9,382.0]],
-["Remove",[677.0,305.0,51.8,18.0]]
+["Roll for encounters",[677.0,305.0,121.9,18.0]],
+["Remove",[677.0,341.0,51.8,18.0]]
 ]},
 {"screen": "session-tonight: Travel row menu", "view": "960x640",
 "controls": [
@@ -1692,7 +1694,8 @@
 ["Button: Start fight: Shrine of Cinders",[733.0,330.0,109.0,28.0]],
 ["Label: 5 party · 2 × Ember Cultist",[394.0,358.0,140.2,16.0]],
 ["TextRun: 5 party · 2 × Ember Cultist",[394.0,358.0,140.2,16.0]],
-["Button: Remove this event",[857.0,300.0,67.8,30.0]]
+["Button: Roll for encounters",[733.0,300.0,137.9,30.0]],
+["Button: Remove this event",[733.0,336.0,137.9,30.0]]
 ],
 "texts": [
 ["Splat",[8.0,8.0,44.7,27.0]],
@@ -1785,7 +1788,8 @@
 ["",[745.0,335.0,14.0,18.0]],
 ["Start fight",[765.0,335.0,65.0,18.0]],
 ["5 party · 2 × Ember Cultist",[394.0,358.0,140.2,16.0]],
-["Remove",[865.0,306.0,51.8,18.0]]
+["Roll for encounters",[741.0,306.0,121.9,18.0]],
+["Remove",[741.0,342.0,51.8,18.0]]
 ]},
 {"screen": "session-tonight: fight row menu", "view": "1200x800",
 "controls": [
@@ -30348,10 +30352,10 @@
 {"act":"close More Add actions at 1200x800","appeared":[],"gone":["Day","Major event","Short rest","Travel","","","",""],"files":[]},
 {"act":"open More Add actions at 960x640","appeared":["Day","Major event","Short rest","Travel","","","",""],"gone":[],"files":[]},
 {"act":"close More Add actions at 960x640","appeared":[],"gone":["Day","Major event","Short rest","Travel","","","",""],"files":[]},
-{"act":"open More actions for Road to the ford at 1200x800","appeared":["Remove"],"gone":[],"files":[]},
-{"act":"close More actions for Road to the ford at 1200x800","appeared":[],"gone":["Remove"],"files":[]},
-{"act":"open More actions for Road to the ford at 960x640","appeared":["Remove"],"gone":[],"files":[]},
-{"act":"close More actions for Road to the ford at 960x640","appeared":[],"gone":["Remove"],"files":[]},
+{"act":"open More actions for Road to the ford at 1200x800","appeared":["Remove","Roll for encounters"],"gone":[],"files":[]},
+{"act":"close More actions for Road to the ford at 1200x800","appeared":[],"gone":["Remove","Roll for encounters"],"files":[]},
+{"act":"open More actions for Road to the ford at 960x640","appeared":["Remove","Roll for encounters"],"gone":[],"files":[]},
+{"act":"close More actions for Road to the ford at 960x640","appeared":[],"gone":["Remove","Roll for encounters"],"files":[]},
 {"act":"open More actions for Shrine of Cinders at 1200x800","appeared":["Remove from tonight"],"gone":[],"files":[]},
 {"act":"close More actions for Shrine of Cinders at 1200x800","appeared":[],"gone":["Remove from tonight"],"files":[]},
 {"act":"open More actions for Shrine of Cinders at 960x640","appeared":["Remove from tonight"],"gone":[],"files":[]},

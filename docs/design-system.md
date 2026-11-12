@@ -182,7 +182,7 @@ eye during long sessions.
 | Group heading | `group_heading` | `Label` capitals and muted, nonzero count; no rule; serif headings belong to readers and stat blocks |
 | Submenu | `menu_submenu` | Match quiet Read actions: `S` horizontal padding, Strong type and Read height. Opens right of its menu when it fits inside the opening pane with `S` to spare, else left, else as far right as fits; never over a splitter or scroll bar |
 | Row menu | `row_menu` | Quiet `⋯` at the right, named `More actions for <name>`; holds Remove and Delete. Opens under the `⋯`, and ends at its right edge when it would cross the pane's splitter or scroll bar |
-| Add strip | `hanging_add_strip` | `Add` in its own Label column; one line of quiet icon-and-word buttons. Show all seven actions when they fit. Otherwise keep Fight, Group (plan only) and Long rest visible; put Day, Short rest, Travel and Major event in one compact `⋯⌄` menu named `More Add actions`; hover text names its actions. Keep the strip on one line |
+| Add strip | `hanging_add_strip` | `Add` in its own Label column; one line of quiet icon-and-word buttons. Show all seven actions when they fit. Otherwise keep Fight, Group (plan only) and Long rest visible; put Day, Short rest, Travel and Major event in one compact `⋯⌄` menu named `More Add actions`; hover text names its actions. A line of More alone (the plan's `Scene`) comes last there and takes no part in the fit, so no action moves for it, and a strip with no More has none. Keep the strip on one line |
 | Message | `message`, `small_message`, `message_with_action`, `Tone` | Inline icon and bar; `message`, `message_with_action` and `undo_message` start the words `XS` after the icon whatever the caller's spacing; `message`'s words end at their last painted word, not at the space a wrapped row broke at; cap the notice at `LIST_MEASURE`; actions follow text after an `L` gap or wrap below, aligned with the text; measure the whole action with padding; move it below and align it with the text if it cannot fit; actions without icons use a secondary border. `message_with_actions` puts several choices below the words: the first starts at the text edge, wrapped lines start there too, and a red or dismissing choice keeps exactly `L` from the one before it (subtract the row's item spacing) |
 | Message space | `MessageSpace`, `fixed_part` | The one space below a save row, `MESSAGE_SPACE_LINES` (two) body lines high whatever it holds. It holds Save's reason and the latest result in one part: a result whose Undo is live comes first, then the reason; otherwise the reason comes first. The result says whether its Undo is live (`has_undo`); the space chooses the order. Longer words wrap and scroll inside the part (`fixed_part`): one focusable group named with every message in that order, a lane kept for its scroll bar, arrows and Page Up or Page Down scroll it while it has focus |
 | Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup, Notes and the run; separate participant and fight tabs |
@@ -875,7 +875,15 @@ future path below the name. A compact NPC reader puts Fights as and In on one re
 Lookup. A missing link there reads as its other values: the muted label, then `⚠ <name> · Not found` in the warning
 tone (`In` `⚠ Watch House · Not found`).
 
-A campaign world entry has a quiet Edit action, with a pencil icon and the word Edit, on its title line in Lookup and World. Its icon sits one `L` after the measured title at every title width, so a kind line wider than a short title does not push it away; a title with art keeps Edit after the art. Edit replaces the rows and
+A campaign world entry has a quiet Edit action, with a pencil icon and the word Edit, on its title line in Lookup and World. Its icon sits one `L` after the measured title at every title width, so a kind line wider than a short title does not push it away; a title with art keeps Edit after the art. With no run open, a creature's or an NPC's reader (a campaign
+entry, or a package creature, whose header has no Edit) has a quiet `Start fight` with the run icon after Edit,
+`XS` apart (after the measured title, one `L` on, when there is no Edit), named `Start a fight with <name>` and
+blocked as the encounter editor's `Start fight` is. `Add to Log` will come first, next to Edit. It takes only the
+room after the title on the title's line: the title keeps its width and the row gains no line and no menu, so
+when the room does not hold the word, `Start fight` does not show. Beside a portrait there is no such room. It
+saves `Fight with <name>` with the party and the creature and starts its run; an encounter of that name (or of
+that name with a number) that was never run and holds the same roster starts instead. An NPC with no stat block
+opens the run's made-up form in Arrivals, with the name filled in and the keyboard in HP. Edit replaces the rows and
 the text with one form. Read and Edit show Stat block, In, Part of, then Status, so a value keeps its place when the DM
 presses Edit; conflict lines after Overwrite use the same order. Text follows in the reader's prose type,
 without the title line. The Text field ends at the same `FORM_WIDTH` edge as Status. One frame holds
@@ -992,6 +1000,12 @@ run icon, also when its first part is a warning (`▷ ⚠ Changed on disk · …
 name; full hover and accessible text includes name and state. It resumes in one click. With several, Paused
 runs and `2 fights` open Encounters. An open run keeps Run and its round or Setup. Rail details never end on a
 separator; a short rail shows Ended or Paused with full state on hover.
+
+A Ready row's menu has `Remove…` after Edit encounter, only for an encounter with no saved run (unfinished,
+ended, or unreadable but named), so it is never blocked. It removes the encounter's file and says `Removed
+encounter <name>.` with `Undo remove encounter`, as a saved group's `Remove…` does; the Undo writes the file
+back only where no file has its path. A plan line that linked it gets no row, and its link in the note has the
+hover `Not found in this campaign`.
 
 History opens read-only final state and log in place, outside the live-run slot. Final state has one name column, as
 wide as the longest name up to half the room, so every HP starts at one x. Rows put outcome before ended
@@ -1571,6 +1585,31 @@ Undo lasts while that note's words are the words it left, with no time limit. Th
 renamed, never a copy. A fragment that waits in the draft, unsaved, is taken back from the draft alone. A new act saves at once; with unsaved typed words and a changed file it writes nothing, and its place says
 `The note changed on disk. Choose in the note first.` Today's plan acts, a planned fight's line and Remove from
 tonight, join the draft as typed words do and save with them after the pause.
+
+A task line under `## Plan for tonight` that links no encounter and no group is a **scene**: a plan row in the
+note's order among the fights still to come, also a line that the DM typed before scenes existed. A nested or
+plain list line gets no row. A scene's row starts with the theme's checkbox, 24 px, where a fight has its caret;
+its accessible name is `Open: <words>` or `Done: <words>`, and a click or Space ticks it, one character of the
+note. Its words are the Reader's inline text, and a link opens its entry in Lookup; a done scene's words are
+`muted`. When the words link exactly one World entry, the second line gives its kind, status and place
+(`NPC · alive · Ashfall Keep`) in `Type::Small` `muted`. The action place stays empty. The menu holds Remove
+from tonight, with `Removed “<words>” from tonight.` and Undo remove in the scene's place, and for a scene that
+links exactly one NPC or creature, while no run is open, `Start fight` (accessible name `Start a fight with
+<name>`), blocked as the editor's is. A done scene does not count in Tonight. Read leaves scenes out as it
+leaves out link-only plan lines, and its count line names them: `1 fight, 1 group and 2 scenes, in the plan`.
+Scenes fold first: when the plan's rows, with the scenes, do not fit its pane, every scene folds, and the Tonight
+line says `N scenes`, a link with the expanded state, `L` after its count. It takes no line of its own, so no other row moves or narrows because scenes exist, and the next fight's
+`Start fight` stays whole and in view. `N scenes` opens them in place and closes them again; the choice holds
+for the session. A scene act's words show under its row, or under the Scene field, or below the Add strip when the
+scenes are folded.
+`Scene` (`icons::CHECK_SQUARE`) is a line of the Add strip's More menu only: the fit of the strip is measured
+without it, so no visible action moves, and a strip with no More has no `Scene`. It opens one `add_field` at
+the end of the plan, `Plan a scene: words, a person or a place`, with at most four World entries as
+suggestions. Enter adds `- [ ] <words>` at the end of the plan (a note with no plan gets the heading at its
+end), keeps the field open, and shows `Scene added to tonight.` with Undo scene below the Add strip; Escape
+clears and closes it. Every scene act goes through `Draft::apply` with `Apply::Now`, on the one line its row was drawn
+from (its place and its whole text): what it cannot do shows, in a warning, where the DM acted, until the note's
+words change or, for `Notes not saved`, until the note saves. An act whose save failed keeps its Undo.
 
 Remove from tonight removes one fight or group link, retaining surrounding words, with Undo remove below that
 row after `S`. Removed groups leave message and Undo in their old place, keeping other rows still, until the
