@@ -537,6 +537,56 @@ pub(super) fn in_progress_list(
     ui.add_space(design::L);
 }
 
+impl Encounters {
+    /// `Remove…` on a Ready to run row: its result, with the words and the pattern of a saved
+    /// group's removal.
+    pub(super) fn encounter_remove_undo(
+        &mut self,
+        ui: &mut egui::Ui,
+        active: &Campaign,
+        modules: &[Module],
+    ) {
+        let Some(removed) = &self.removed_encounter else {
+            return;
+        };
+        if design::undo_message(
+            ui,
+            Tone::Info,
+            &format!("Removed encounter {}.", removed.name),
+            "Undo remove encounter",
+        ) {
+            match removed.restore() {
+                Ok(()) => {
+                    self.removed_encounter = None;
+                    self.reload_snapshot(active, modules);
+                    self.saved = true;
+                }
+                Err(error) => {
+                    self.error = Some(format!("The encounter did not come back: {error}"));
+                }
+            }
+        }
+    }
+}
+
+/// Whether a run of this encounter is saved: unfinished, ended, or in a file that cannot be read
+/// but names it. Only an encounter with none can be removed.
+fn has_saved_run(page: &history::Arranged<'_>, row: &history::ReadyRow<'_>) -> bool {
+    let template = row.template;
+    row.unfinished_run
+        || page
+            .history
+            .iter()
+            .flat_map(|session| &session.runs)
+            .any(|past| {
+                past.template
+                    .is_some_and(|other| other.path == template.path)
+            })
+        || page.unreadable.iter().any(|run| {
+            run.source == Some(template.id) || run.encounter.eq_ignore_ascii_case(&template.name)
+        })
+}
+
 pub(super) fn ready_list(
     ui: &mut egui::Ui,
     page: &history::Arranged<'_>,
@@ -590,6 +640,9 @@ pub(super) fn ready_list(
                 row_menu(ui, &template.name, |ui| {
                     if menu_action(ui, "Edit encounter", None) {
                         *action = Some(ListAction::Edit(template.path.clone()));
+                    }
+                    if !has_saved_run(page, row) && menu_action(ui, "Remove…", None) {
+                        *action = Some(ListAction::RemoveEncounter(template.path.clone()));
                     }
                 });
                 if Action::quiet("Edit")
@@ -886,6 +939,46 @@ mod iter_2_c_tests {
         // A pane too narrow for either: still end at the button, never beside it.
         let narrow = egui::Rect::from_min_max(pos2(150.0, 90.0), pos2(330.0, 632.0));
         assert_eq!(menu_aligns(near_left, menu, narrow), end);
+    }
+
+    /// T12.12: Remove… is offered only for an encounter with no saved run: none unfinished,
+    /// none ended, and no unreadable run that names it.
+    #[test]
+    fn remove_is_offered_only_for_an_encounter_with_no_saved_run() {
+        use crate::encounter_run::Standing;
+        let template = |name: &str| Template {
+            path: format!("Encounters/{name}.md"),
+            id: Uuid::new_v4(),
+            name: name.into(),
+            summary: Some("1 × Wolf".into()),
+            repeatable: true,
+        };
+        let templates = ["Fresh", "Paused", "Ended", "Unreadable"].map(template);
+        let run = |at: usize, standing| SavedRunInfo {
+            path: PathBuf::from(format!("run-{at}.json")),
+            id: Some(Uuid::new_v4()),
+            source: Some(templates[at].id),
+            encounter: templates[at].name.clone(),
+            label: String::new(),
+            standing,
+            saved_at: None,
+            unsent: vec![],
+        };
+        let mut unreadable = run(3, Standing::Unreadable);
+        unreadable.source = None;
+        let runs = [
+            run(1, Standing::Unfinished),
+            run(2, Standing::Ended),
+            unreadable,
+        ];
+        let page = history::arrange(&templates, &runs, None, &[], &[]);
+        let offered: Vec<_> = page
+            .ready
+            .iter()
+            .filter(|row| !has_saved_run(&page, row))
+            .map(|row| row.template.name.as_str())
+            .collect();
+        assert_eq!(offered, ["Fresh"]);
     }
 
     #[test]
