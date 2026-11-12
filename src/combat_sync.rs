@@ -1421,19 +1421,16 @@ impl CombatSync {
         use crate::design::{self, Action, Density, Type, colors};
         for (key, message) in self.blocked.clone() {
             let c = colors();
-            ui.label(
-                Type::Heading
-                    .rich(
-                        ui,
-                        format!(
-                            "{}{} {} conflict",
-                            name.map_or_else(String::new, |n| format!("{n} · ")),
-                            design::icons::WARN,
-                            self.group_name(&key)
-                        ),
-                    )
-                    .color(c.sync.conflict),
-            );
+            let status = format!("{} {} conflict", design::icons::WARN, self.group_name(&key));
+            match name {
+                // FK3: the ended view's one heading form, the name in the text colour.
+                Some(name) => {
+                    sync_heading(ui, name, &status, c.sync.conflict);
+                }
+                None => {
+                    ui.label(Type::Heading.rich(ui, status).color(c.sync.conflict));
+                }
+            }
             if explanation {
                 ui.add(
                     egui::Label::new(Type::Small.rich(ui, message.as_str()).color(c.text)).wrap(),
@@ -2374,6 +2371,36 @@ fn group_label(key: &str) -> &str {
         key if key.starts_with("creature/") => "Companion HP",
         _ => "Limited-use resource",
     }
+}
+
+/// A character's sync block heading in the ended view, one form for every state (FK3): the
+/// name in `Heading` and the text colour, ` · `, then the status's icon and word in its colour.
+/// A status is an icon, a word and a colour; the name never takes the status colour.
+pub(crate) fn sync_heading(
+    ui: &mut egui::Ui,
+    name: &str,
+    status: &str,
+    color: egui::Color32,
+) -> egui::Response {
+    use crate::design::{Type, colors};
+    let font = Type::Heading.font(ui);
+    let mut job = egui::text::LayoutJob::default();
+    for (text, color) in [
+        (name, colors().text),
+        (" · ", colors().muted),
+        (status, color),
+    ] {
+        job.append(
+            text,
+            0.0,
+            egui::text::TextFormat {
+                font_id: font.clone(),
+                color,
+                ..Default::default()
+            },
+        );
+    }
+    ui.add(egui::Label::new(job).wrap())
 }
 
 #[cfg(test)]

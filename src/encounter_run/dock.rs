@@ -103,20 +103,46 @@ impl Run {
                         .natural_width(ui)
                     + gap;
                 let height = Density::Read.control();
-                // Left to right: the name, then exactly `L`, then its controls. The controls'
-                // width only limits how long a name may be.
+                // SL1: in a narrow dock the dice total has a reserved place at the line's end,
+                // under the dice and Roll, so it never joins the selected name.
+                let result_slot = if narrow {
+                    design::number_width(
+                        ui,
+                        &format!("{} 888", icons::DICE),
+                        &Type::Strong.font(ui),
+                    ) + gap
+                } else {
+                    0.0
+                };
+                // FK1: the name slot has one width for the whole fight: the widest roster name
+                // in `Heading`, at most `12 × L`, so Conditions, Conc and Absent keep one x
+                // whichever row is selected. Measured as the roster measures its names, each
+                // frame through the galley cache; nothing is kept.
+                let heading = Type::Heading.font(ui);
+                let widest = self
+                    .state
+                    .participants
+                    .iter()
+                    .map(|p| design::number_width(ui, &p.name, &heading))
+                    .fold(0.0_f32, f32::max);
+                // Left to right: the name slot, then exactly `L`, then its controls. The
+                // controls' width only limits how wide the slot may be.
                 ui.horizontal(|ui| {
                     ui.set_min_height(height);
-                    if narrow && let Some((total, line)) = self.dock_roll() {
-                        ui.label(Type::Strong.rich(ui, format!("= {total}")))
-                            .on_hover_text(line);
-                    }
-                    let room = ui.available_width() - controls - design::L;
-                    let (role, shown) = dock_name_shown(ui, &p.name, room);
-                    let response = ui
-                        .label(role.rich(ui, shown).color(c.text))
-                        .on_hover_text(&p.name);
-                    design::named(ui, &response, &format!("Selected: {}", p.name));
+                    let room = ui.available_width() - controls - design::L - result_slot;
+                    let slot = widest.min(12.0 * design::L).min(room).max(0.0);
+                    let (role, shown) = dock_name_shown(ui, &p.name, slot);
+                    ui.allocate_ui_with_layout(
+                        vec2(slot, height),
+                        Layout::left_to_right(Align::Center),
+                        |ui| {
+                            ui.set_width(slot);
+                            let response = ui
+                                .label(role.rich(ui, shown).color(c.text))
+                                .on_hover_text(&p.name);
+                            design::named(ui, &response, &format!("Selected: {}", p.name));
+                        },
+                    );
                     ui.add_space(design::L - gap);
                     if Action::quiet("Conditions")
                         .density(Density::Read)
@@ -163,6 +189,20 @@ impl Run {
                     {
                         command = Some(Command::Presence(index, !p.present));
                     }
+                    if narrow {
+                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                            if let Some((total, line)) = self.dock_roll() {
+                                let response = ui
+                                    .label(
+                                        Type::Strong
+                                            .rich(ui, format!("{} {total}", icons::DICE))
+                                            .color(c.text),
+                                    )
+                                    .on_hover_text(&line);
+                                design::named(ui, &response, &format!("Rolled {total}"));
+                            }
+                        });
+                    }
                 });
             });
         });
@@ -186,24 +226,15 @@ impl Run {
         }
     }
 
-    /// In place of the one row's actions: how many take this amount, and how to give half. The
-    /// choice is on each row, so that any number of targets stays in view.
+    /// In place of the one row's actions: how to give half. The choice is on each row, so that
+    /// any number of targets stays in view. FK5: the words show the mark that the rows paint
+    /// (`icons::OK`), and leave the count to the panel's hint, so it shows once.
     fn target_words(&self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             ui.set_min_height(28.0);
             ui.add(
-                egui::Label::new(
-                    Type::Small
-                        .rich(
-                            ui,
-                            format!(
-                                "{} targets. Press a row’s mark for half, rounded down.",
-                                self.targets().len()
-                            ),
-                        )
-                        .color(colors().muted),
-                )
-                .truncate(),
+                egui::Label::new(Type::Small.rich(ui, target_hint()).color(colors().muted))
+                    .truncate(),
             );
         });
     }
@@ -296,4 +327,12 @@ impl Run {
             response.request_focus();
         }
     }
+}
+
+/// The dock's words while several rows are targets: the mark the rows paint, and what it does.
+pub(super) fn target_hint() -> String {
+    format!(
+        "Press a target’s {} to give it half, rounded down.",
+        icons::OK
+    )
 }

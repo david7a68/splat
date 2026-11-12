@@ -336,6 +336,18 @@ impl RunGroup {
         }
     }
 
+    /// False when the summary leads with `Will add:` and that lead and its first member do not
+    /// fit one line `width` wide (FI8): then the summary needs a line of its own, or `Will add:`
+    /// would stand alone.
+    pub(crate) fn lead_fits(&self, ui: &egui::Ui, font: &egui::FontId, width: f32) -> bool {
+        let summary = self.member_summary();
+        let Some(members) = summary.strip_prefix("Will add: ") else {
+            return true;
+        };
+        let first = members.split(", ").next().unwrap_or(members);
+        crate::design::number_width(ui, &format!("Will add: {first}"), font) <= width
+    }
+
     /// Every creature the note names, whether or not it can be found now.
     pub(crate) fn creature_count(&self) -> u64 {
         self.members
@@ -689,7 +701,9 @@ pub(crate) struct Run {
     /// The encounter this run came from. Saves from before this was kept have none.
     source: Option<Uuid>,
     /// Recheck only this encounter when its file metadata changes. Never rebuild the catalogue per frame.
-    roster_source: Option<PathBuf>,
+    /// The campaign root and the file's path in it, which the setup file line shows as the
+    /// editor does (`Encounters/Shrine of Cinders.md`, FA11).
+    roster_source: Option<(PathBuf, String)>,
     roster_stamp: Option<(Option<std::time::SystemTime>, u64)>,
     roster_faults: Vec<crate::encounters::RosterFault>,
     /// The roster slot of each unread row, by its participant key, with the row's line, so a
@@ -3886,7 +3900,7 @@ impl Run {
             && let Ok((entries, _)) = splat::content::read_directory(root)
             && let Some(entry) = entries.iter().find(|entry| entry.id == source)
         {
-            self.roster_source = Some(root.join(&entry.path));
+            self.roster_source = Some((root.to_owned(), entry.path.clone()));
             for participant in &self.state.participants {
                 self.roster_names.insert(
                     participant.definition.id.to_string(),
@@ -3911,9 +3925,14 @@ impl Run {
         }
     }
     fn refresh_roster_faults(&mut self) {
-        let Some(path) = &self.roster_source else {
+        let Some(path) = self
+            .roster_source
+            .as_ref()
+            .map(|(root, path)| root.join(path))
+        else {
             return;
         };
+        let path = &path;
         // A moved or deleted encounter file can no longer be repaired here; its old faults
         // must not block Begin. The run's own participants are complete.
         let Ok(metadata) = fs::metadata(path) else {

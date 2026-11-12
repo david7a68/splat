@@ -759,7 +759,7 @@ pub fn run(d: &mut Driver<'_>) {
                         d,
                         "Ember Cultist · line 20: the change “HP lots”",
                         &roster_path,
-                        "Shrine of Cinders.md",
+                        "Encounters/Shrine of Cinders.md",
                     )
                 }
                 (Some(warning), Some(file)) if size != SMALL => (file.left()
@@ -830,6 +830,13 @@ pub fn run(d: &mut Driver<'_>) {
             && d.visible_text("Line\u{a0}20\u{a0}not\u{a0}read"),
         format!("Rows from line 20 say so, others do not: {marked:?} of {rows:?}"),
     );
+    // iter-26-R FA11: the setup file line names the file by its path in the campaign, as the
+    // encounter editor does.
+    d.observe_both(
+        "iter-26-R-FA11",
+        "The setup file line says Encounters/Shrine of Cinders.md",
+        |d| d.visible_text("Encounters/Shrine of Cinders.md"),
+    );
     d.state("unread-roster-kept-in-setup", Sizes::All);
     assert_eq!(fs::read_to_string(&roster_path).unwrap(), flagged_roster);
     // Two unread rows name one file: its name and actions show once.
@@ -898,7 +905,7 @@ pub fn run(d: &mut Driver<'_>) {
                     d,
                     &last.name,
                     &roster_path,
-                    "Shrine of Cinders.md",
+                    "Encounters/Shrine of Cinders.md",
                 )
             } else if size != SMALL
                 && file.left() >= last.rect.right()
