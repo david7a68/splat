@@ -100,14 +100,31 @@ fn npc(d: &mut Driver<'_>, name: &str, fields: &str, words: &str) {
     fs::write(file, text).expect("write the NPC");
 }
 
-/// The campaign's marked road table: nothing below `wolves` on the d20, and `[[Wolf Pack]]` from
-/// it up.
+/// The campaign's marked road table: `[[Wolf Pack]]` on a d20 of `wolves` or less, and nothing
+/// above it. The journey's dice come from its scenario's name, so its rolls are the same on
+/// every run.
 fn road_table(d: &mut Driver<'_>, wolves: u32) {
     let table = format!(
-        "# Road\n\n## On the road\n\n<!-- splat:rolls key=road dice=1d20 per=day -->\n\n| d20 | On the road |\n| --- | --- |\n| 1-{} | Nothing stirs. |\n| {wolves}-20 | [[{WOLVES}]] picks up the trail. |\n",
-        wolves - 1
+        "# Road\n\n## On the road\n\n<!-- splat:rolls key=road dice=1d20 per=day -->\n\n| d20 | On the road |\n| --- | --- |\n| 1-{wolves} | [[{WOLVES}]] picks up the trail. |\n| {}-20 | Nothing stirs. |\n",
+        wolves + 1
     );
     fs::write(campaign_root(d).join("Road.md"), table).expect("write the road table");
+}
+
+/// When the plan's rows do not fit, the scenes fold to `N scenes`; the DM opens the fold to
+/// reach this scene's row.
+fn unfold_scenes(a: &mut Audit<'_, '_>, scene: &str) {
+    if a.d.has(scene) {
+        return;
+    }
+    let fold = a.d.nodes().into_iter().find(|node| {
+        node.name.split_once(' ').is_some_and(|(n, word)| {
+            n.parse::<usize>().is_ok() && ["scene", "scenes"].contains(&word)
+        })
+    });
+    if let Some(fold) = fold {
+        a.click(Find, &fold.name);
+    }
 }
 
 /// Tonight's note, as the DM wrote it in prep: these lines under `## Plan for tonight`.
@@ -242,7 +259,7 @@ fn improvised_evening(a: &mut Audit<'_, '_>) {
                 WOLVES,
                 "Wolves at the edge of the firelight.",
             );
-            road_table(d, 11);
+            road_table(d, 9);
         },
     );
     a.setup(
@@ -365,6 +382,7 @@ fn improvised_evening(a: &mut Audit<'_, '_>) {
     add_rewards(a, WOLVES);
 
     a.task("Mark the talk with Warden Ostrel done, and log what happened");
+    unfold_scenes(a, &format!("Open: {OSTREL}"));
     a.click(Do, &format!("Open: {OSTREL}"));
     a.click(Panel, &format!("Add to Log: {OSTREL}"));
     a.act(Do, "type the line", |d| {
@@ -718,7 +736,7 @@ fn week_between(a: &mut Audit<'_, '_>) {
         )
         .expect("write the treasure table");
         npc(d, VERORI, "", "Keeper of the north gate.");
-        road_table(d, 15);
+        road_table(d, 9);
     });
     a.setup(
         "play last week's session, then quit and open the app",
@@ -858,13 +876,19 @@ fn week_between(a: &mut Audit<'_, '_>) {
     a.act(Find, "Edit beside Gate Watch", |d| {
         d.click_beside_exact(GATE, EDIT_ENCOUNTER);
     });
-    a.act(Find, "search: troll", |d| {
-        d.type_into(FIND_CREATURE, "troll")
-    });
-    a.act(Do, "add a Troll", |d| d.click_first(ADD));
+    a.act(Find, "search: oni", |d| d.type_into(FIND_CREATURE, "oni"));
+    a.act(Do, "add an Oni", |d| d.click_first(ADD));
     a.click(Do, SAVE_ENCOUNTER);
     a.click(Nav, NAV_SESSIONS);
-    a.fact(format!("the row's word after the change: {:?}", words(a.d)));
+    let summary =
+        a.d.nodes()
+            .into_iter()
+            .find(|node| node.name.starts_with(&format!("{GATE} · ")))
+            .map(|node| node.name);
+    a.fact(format!(
+        "the rows' words after the change: {:?}; the Gate Watch row: {summary:?}",
+        words(a.d)
+    ));
 
     a.task("Prepare the road: a Travel row with its checks");
     if !a.d.has("Add Travel") {
