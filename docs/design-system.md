@@ -1502,7 +1502,7 @@ as a `menu_button` with `· 1d20 each day` (or `each watch`, `every 4 hours`) af
 Timeline's own field above serves there), and one line for each check. Focus goes to **How long** when the
 journey has no length, and the event takes the length on Enter or when the field loses focus, not on each key;
 the lines follow the words as typed. One check at each whole interval from the start, and none at the end; an
-empty or unread length gives one line, `This journey`. A line is its clock name (`Day 3`, or `Day 3, 08:00` for
+empty or unread length gives one line, `This journey`; a length of zero gives none. A line is its clock name (`Day 3`, or `Day 3, 08:00` for
 a watch or hours), then a secondary `Roll` with the dice icon and an `Enter a roll` number field; `Roll all N`
 follows when two or more wait. A result shows its number and words, a quiet `Clear` at the line's end, and,
 for each encounter or group it links (at most three), a quiet `Plan “<name>”` with `line_start`, or the status
@@ -1511,10 +1511,13 @@ the muted `Outside this journey now` until cleared. The table menu lists the tab
 which waits with `Clear the results first.` while a result stands. With several tables the block starts on the
 table of the latest journey with checks, else on `Choose a table`, and `Roll` waits with `Choose a table first.`.
 A journey of more than 31 checks says `This journey has N checks. Split it into shorter journeys to roll them
-here.` Each act's message, with `Undo checks`, `Undo roll` or `Undo clear`, lasts while that event is as the act
-left it, until the DM leaves the page. `Plan “<name>”` is a note act through `Draft::apply`: it writes
+here.` Each act's message, with `Undo checks`, `Undo roll` or `Undo clear`, is kept by its journey's event: it
+lasts while that event is as the act left it, until the DM leaves the page, and an act on another journey
+leaves it. The length being typed has one owner, the Timeline book, whichever page shows the field; leaving
+the page gives it to the journey, as a loss of focus does. `Plan “<name>”` is a note act through `Draft::apply`: it writes
 `- [[<name>]]` before the first plan line still to come, says `“<name>” is in tonight’s plan.` and offers `Undo
-plan line`. Splat rolls and offers; it never plans or starts a fight by itself. The Add strip stays directly below Tonight (or This session), above
+plan line`, which is the note's: it lasts while the note's words are what the act left, also through a page
+change, and ends when they change or another session is selected. Splat rolls and offers; it never plans or starts a fight by itself. The Add strip stays directly below Tonight (or This session), above
 messages and scrolling rows. Fight, Group and Long rest stay visible. If all seven actions do not fit on one line,
 a compact `⋯⌄` button, named `More Add actions`, holds Day, Short rest, Travel and Major event. Its hover text names those actions. Keep the strip on one line at all three supported window sizes. Long rest stays one click away (T11.2). Timeline uses the same width rule.
 It stays in place when messages or rows change. Empty plans use empty_state
