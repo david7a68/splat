@@ -970,6 +970,12 @@ pub fn run(d: &mut Driver<'_>) {
             .run_mut()
             .expect("an open run")
             .simulate_rows(12);
+        // Review round 2: a condition on every row, so a hidden row has condition links too.
+        d.app_mut()
+            .encounters
+            .run_mut()
+            .expect("an open run")
+            .simulate_condition("Prone");
         d.app_mut().encounters.simulate_run_error("");
         d.settle();
         let last = d
@@ -1024,6 +1030,41 @@ pub fn run(d: &mut Driver<'_>) {
                 "Rows keep their places ({}); hidden rows {:?}; live targets of hidden rows {live:?}",
                 before == after,
                 hidden.iter().map(|row| (&row.name, row.rect)).collect::<Vec<_>>()
+            ),
+        );
+        // Review round 2: a hidden row's condition links follow the row. They take no target,
+        // no Tab stop, no hover and no click, also on the strip the list's edge leaves.
+        let rules: Vec<_> = nodes
+            .iter()
+            .filter(|link| link.name == "Rule: Prone")
+            .filter(|link| hidden.iter().any(|row| row.rect.contains(link.rect.center())))
+            .collect();
+        let live_rules: Vec<_> = rules.iter().filter(|link| !link.disabled).collect();
+        let ids: Vec<_> = rules.iter().map(|link| link.id).collect();
+        let strip = rules
+            .iter()
+            .map(|link| egui::pos2(link.rect.center().x, link.rect.top() + 2.0))
+            .next();
+        let tabbed = d.tab_reaches(&ids, 80);
+        let tip = strip.is_some_and(|at| d.hover_shows(at, "Read the rule for Prone"));
+        let lookup = strip.is_some_and(|at| {
+            d.click_rect(
+                egui::Rect::from_center_size(at, egui::vec2(2.0, 2.0)),
+                "the strip of a hidden row's condition",
+            );
+            d.has(SEARCH_LOOKUP)
+        });
+        if lookup {
+            d.press_ctrl(Key::K);
+        }
+        d.observe(
+            "r3f-X39-hidden-condition-no-target",
+            !rules.is_empty() && live_rules.is_empty() && tabbed.is_empty() && !tip && !lookup,
+            format!(
+                "Hidden-row condition links {}: live {:?}; reached by Tab {tabbed:?}; tip on \
+                 hover {tip}; a click opens Lookup {lookup}",
+                rules.len(),
+                live_rules.iter().map(|link| link.rect).collect::<Vec<_>>()
             ),
         );
         // A click where a hidden row's initiative number would be.

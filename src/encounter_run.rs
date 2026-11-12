@@ -5074,6 +5074,13 @@ impl Run {
             self.state.order.push(at);
         }
     }
+    /// Every participant has this condition, by its word.
+    #[cfg(test)]
+    pub fn simulate_condition(&mut self, word: &str) {
+        for p in &mut self.state.participants {
+            p.conditions = vec![Condition::Label(word.into())];
+        }
+    }
     /// The named participant takes the turn and is selected, with no scroll to it.
     #[cfg(test)]
     pub fn simulate_current(&mut self, name: &str) {

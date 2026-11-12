@@ -2764,7 +2764,7 @@ impl<'a> Footer<'a> {
             return pane.bottom();
         }
         let lost = FooterRooms::lost(ui, self.id, rect.top() - S - pane.top());
-        FooterRooms::record(ui, pane, rect, lost);
+        FooterRooms::record(ui, self.id, pane, rect, lost);
         // egui's `set_max_height` also moves the cursor back to the top of `ui`, so it goes
         // back to where the body starts.
         let top = ui.cursor().top();
@@ -2789,6 +2789,9 @@ struct FooterRoom {
     band: Rect,
     footer: Rect,
     lost: f32,
+    /// The footer's own ID (its page and campaign), and the `Ui` its pane's scroll area is made in.
+    id: Id,
+    pane: Id,
 }
 
 impl FooterRooms {
@@ -2805,7 +2808,7 @@ impl FooterRooms {
         })
     }
 
-    fn record(ui: &Ui, pane: Rect, footer: Rect, lost: f32) {
+    fn record(ui: &Ui, id: Id, pane: Rect, footer: Rect, lost: f32) {
         let ctx = ui.ctx();
         let pass = ctx.cumulative_pass_nr();
         let band = Rect::from_min_max(pos2(pane.left(), footer.top() - S), pane.right_bottom());
@@ -2817,7 +2820,13 @@ impl FooterRooms {
                     rooms: Vec::new(),
                 };
             }
-            rooms.rooms.push(FooterRoom { band, footer, lost });
+            rooms.rooms.push(FooterRoom {
+                band,
+                footer,
+                lost,
+                id,
+                pane: ui.id(),
+            });
         });
     }
 
@@ -2850,12 +2859,16 @@ struct NextAction {
     owed: f32,
     /// Where the pointer rested when the room was lost.
     pointer: Option<egui::Pos2>,
-    /// A footer took room while it was whole, and no reveal or scroll of the DM's came since.
+    /// A footer took room while it was whole, and the row has not been seen whole since (and no
+    /// scroll of the DM's came).
     promised: bool,
     /// The last reveal stopped at the room lost, short of what the row needed.
     capped: bool,
-    /// For checks: the room lost, what the row needed and the scroll, at the last reveal.
-    last: (f32, f32, f32),
+    /// The last pass it was drawn in, its footer and the scroll area that owns it: a waiting
+    /// reveal ends when any of them changes.
+    pass: u64,
+    footer: Option<Id>,
+    area: Option<Id>,
 }
 
 /// A next action as the reveal saw it in the last finished pass, for checks.
@@ -2864,15 +2877,14 @@ struct NextAction {
 pub(crate) struct NextSeen {
     pub rect: Rect,
     pub whole: bool,
-    /// A footer took room while it was whole, and no reveal or scroll of the DM's came since.
+    /// A footer took room while it was whole, and the row has not been seen whole since (and no
+    /// scroll of the DM's came).
     pub promised: bool,
     /// The last reveal stopped at the room lost: the row needed more (it moved, as when a
     /// narrower window puts it in one column).
     pub capped: bool,
     /// What holds the reveal back: `pointer` or `field`.
     pub held: Option<&'static str>,
-    /// The room lost, what the row needed and the scroll, at the last reveal.
-    pub last: (f32, f32, f32),
 }
 
 #[cfg(test)]
@@ -2926,20 +2938,35 @@ pub fn keep_above_footer(ui: &Ui, response: &Response) {
             input.pointer.any_down() || input.pointer.any_pressed() || input.pointer.any_released();
         (pointer, over && acts, pressing)
     });
-    // The DM's own scroll or press in the pane ends what a footer owed the row.
-    if scrolled {
+    // The scroll area that lost the room: the pane's own, made in the footer's pane. An action
+    // inside a scroll area nested in it is not revealed.
+    let area = ui
+        .stack()
+        .iter()
+        .find(|frame| frame.kind() == Some(egui::UiKind::ScrollArea))
+        .filter(|frame| {
+            let parent = frame.parent.as_ref().map(|parent| parent.id);
+            room.is_some_and(|room| parent == Some(room.pane))
+        })
+        .map(|frame| frame.id);
+    // A waiting reveal belongs to this action in this area under this footer: it ends in the
+    // first pass the action is not drawn there, or the footer (its page, its campaign) changes.
+    let pass = ctx.cumulative_pass_nr();
+    let footer = room.map(|room| room.id);
+    if next.pass + 1 < pass || next.area != area || next.footer != footer {
+        next.owed = 0.0;
+        next.promised = false;
+    }
+    (next.pass, next.area, next.footer) = (pass, area, footer);
+    // The DM's own scroll or press in the pane ends what a footer owed the row; a row seen whole
+    // has had what it was owed.
+    if scrolled || whole_at(rect.top()) {
         next.promised = false;
         next.owed = 0.0;
     }
-    if whole_at(rect.top()) {
-        next.owed = 0.0;
-    }
-    // Only a scroll area can bring the row back; elsewhere its delta would scroll another one.
-    let in_scroll = ui
-        .stack()
-        .iter()
-        .any(|frame| frame.kind() == Some(egui::UiKind::ScrollArea));
-    let lost = room.filter(|_| in_scroll).map_or(0.0, |room| room.lost);
+    let lost = room
+        .filter(|_| area.is_some())
+        .map_or(0.0, |room| room.lost);
     if lost > 0.0 && (next.whole || next.owed > 0.0) && !whole_at(rect.top()) {
         if next.owed == 0.0 {
             next.pointer = pointer;
@@ -2970,19 +2997,20 @@ pub fn keep_above_footer(ui: &Ui, response: &Response) {
     } else if field(by) {
         Some("field")
     } else {
-        ui.scroll_with_delta_animation(vec2(0.0, -by), egui::style::ScrollAnimation::none());
+        // A target, not a delta: a scroll area nested in the pane saves a target made before it
+        // and hands it back, so only the pane's own area takes it. egui moves the content by the
+        // target's end less the content clip's bottom, plus its item spacing.
+        let end = clip.bottom() - ui.spacing().item_spacing.y + by;
+        let target = Rect::from_x_y_ranges(rect.x_range(), (end - 1.0)..=end);
+        ui.scroll_to_rect_animation(target, None, egui::style::ScrollAnimation::none());
         ctx.request_discard("a next action came back into view above its footer");
         top -= by;
         next.capped = by < need;
-        next.last = (next.owed, need, by);
-        next.promised = false;
         next.owed = 0.0;
         None
     };
     next.whole = whole_at(top);
     ctx.data_mut(|data| data.insert_temp(key, next));
-    #[cfg(test)]
-    let pass = ctx.cumulative_pass_nr();
     #[cfg(test)]
     ctx.data_mut(|data| {
         let seen =
@@ -2990,13 +3018,13 @@ pub fn keep_above_footer(ui: &Ui, response: &Response) {
         if seen.0 != pass {
             *seen = (pass, Vec::new());
         }
+        // The rect as drawn in this pass: the checks measure the painted row, never a prediction.
         seen.1.push(NextSeen {
-            rect: rect.translate(vec2(0.0, top - rect.top())),
-            whole: next.whole,
+            rect,
+            whole: whole_at(rect.top()),
             promised: next.promised,
             capped: next.capped,
             held,
-            last: next.last,
         });
     });
 }
@@ -5273,6 +5301,154 @@ mod tests {
             clicked.get(),
             "Save",
             "Save moved under the pointer that rested on Cancel, and the click invoked Save: pointer={pointer:?}, before={before:?}, after={after:?}"
+        );
+    }
+
+    // Review round 2 of pull request 289: the reviewer's probes of the reveal's owner area and of
+    // a waiting reveal that outlives its action, kept as they were written.
+    #[test]
+    fn review_r2_nested_scroll_goes_to_its_owner() {
+        use std::{cell::Cell, rc::Rc};
+        let count = Rc::new(Cell::new(0));
+        let messages = count.clone();
+        let mut h = egui_kittest::Harness::builder()
+            .with_size(vec2(960.0, 640.0))
+            .build_ui(move |ui| {
+                let mut footer = Footer::new("r2-nested-footer", ui.available_width());
+                for i in 0..messages.get() {
+                    footer.notice(format!("Notice {i}"), move |ui| {
+                        message(ui, Tone::Warning, &format!("Notice {i}"));
+                    });
+                }
+                let bottom = footer.show(ui);
+                let outer = egui::ScrollArea::vertical()
+                    .id_salt("r2-outer")
+                    .max_height(bottom - ui.cursor().top())
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        ui.add_space(550.0);
+                        let r = Action::primary("Save").show(ui);
+                        ui.ctx().data_mut(|d| {
+                            d.insert_temp(Id::new("r2-action"), (r.rect, ui.clip_rect()))
+                        });
+                        let inner = egui::ScrollArea::vertical()
+                            .id_salt("r2-inner")
+                            .max_height(40.0)
+                            .auto_shrink([false, false])
+                            .show(ui, |ui| {
+                                ui.add_space(150.0);
+                                ui.label("Nested content");
+                            });
+                        ui.ctx().data_mut(|d| {
+                            d.insert_temp(Id::new("r2-inner-offset"), inner.state.offset.y)
+                        });
+                    });
+                ui.ctx()
+                    .data_mut(|d| d.insert_temp(Id::new("r2-outer-offset"), outer.state.offset.y));
+            });
+        super::super::theme::install(&h.ctx);
+        h.run_steps(6);
+        let before = h
+            .ctx
+            .data(|d| d.get_temp::<(Rect, Rect)>(Id::new("r2-action")))
+            .unwrap();
+        assert!(before.1.contains_rect(before.0));
+        count.set(3);
+        h.run_steps(8);
+        let after = h
+            .ctx
+            .data(|d| d.get_temp::<(Rect, Rect)>(Id::new("r2-action")))
+            .unwrap();
+        let inner = h
+            .ctx
+            .data(|d| d.get_temp::<f32>(Id::new("r2-inner-offset")))
+            .unwrap();
+        let outer = h
+            .ctx
+            .data(|d| d.get_temp::<f32>(Id::new("r2-outer-offset")))
+            .unwrap();
+        let seen = next_actions(&h.ctx);
+        eprintln!(
+            "NESTED before={before:?} after={after:?} inner={inner} outer={outer} record={seen:?}"
+        );
+        assert!(
+            after.1.contains_rect(after.0),
+            "reveal did not move its action; inner={inner} outer={outer}; generic check passes={}",
+            seen.iter()
+                .all(|n| !n.promised || n.whole || n.capped || n.held.is_some())
+        );
+    }
+
+    #[test]
+    fn review_r2_reveal_does_not_follow_a_replaced_page() {
+        use std::{cell::Cell, rc::Rc};
+        let stage = Rc::new(Cell::new(0));
+        let mode = stage.clone();
+        let mut h = egui_kittest::Harness::builder()
+            .with_size(vec2(960.0, 640.0))
+            .build_ui(move |ui| {
+                let mut footer = Footer::new("r2-owner-footer", ui.available_width());
+                if mode.get() > 0 {
+                    for i in 0..3 {
+                        footer.notice(format!("Notice {i}"), move |ui| {
+                            message(ui, Tone::Warning, &format!("Notice {i}"));
+                        });
+                    }
+                }
+                let bottom = footer.show(ui);
+                let scroll = egui::ScrollArea::vertical()
+                    .id_salt("r2-owner-body")
+                    .max_height(bottom - ui.cursor().top())
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        if mode.get() != 2 {
+                            ui.add_space(if mode.get() < 3 { 550.0 } else { 610.0 });
+                            let r = Action::primary(if mode.get() < 3 {
+                                "Old save"
+                            } else {
+                                "New save"
+                            })
+                            .show(ui);
+                            ui.ctx()
+                                .data_mut(|d| d.insert_temp(Id::new("r2-owner-rect"), r.rect));
+                        }
+                        ui.add_space(180.0);
+                    });
+                ui.ctx()
+                    .data_mut(|d| d.insert_temp(Id::new("r2-owner-offset"), scroll.state.offset.y));
+            });
+        super::super::theme::install(&h.ctx);
+        h.run_steps(6);
+        h.input_mut()
+            .events
+            .push(egui::Event::PointerMoved(pos2(100.0, 100.0)));
+        h.run_steps(2);
+        stage.set(1);
+        h.run_steps(6);
+        assert!(
+            next_actions(&h.ctx)
+                .iter()
+                .any(|n| n.promised && n.held == Some("pointer"))
+        );
+        stage.set(2);
+        h.run_steps(6);
+        stage.set(3);
+        h.run_steps(6);
+        h.input_mut()
+            .events
+            .push(egui::Event::PointerMoved(pos2(200.0, 100.0)));
+        h.run_steps(6);
+        let offset = h
+            .ctx
+            .data(|d| d.get_temp::<f32>(Id::new("r2-owner-offset")))
+            .unwrap();
+        eprintln!(
+            "STALE new page offset={offset}, record={:?}",
+            next_actions(&h.ctx)
+        );
+        assert_eq!(
+            offset, 0.0,
+            "the old page's owed reveal scrolled the replacement page without new lost room"
         );
     }
 

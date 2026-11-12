@@ -2759,40 +2759,81 @@ impl<'a> Driver<'a> {
             state,
             &window,
         ));
-        // R3f: a pane's content ends above its message footer. Each next action the reveal saw
+        // R3f: a pane's content ends above its message footer. Each next action the reveal knows
         // (every primary, and each action marked with `keep_above_footer`), also one wholly
-        // hidden, that a footer took room from while it was whole has had its reveal: none is
-        // still cut with its reveal owed and no guard holding it back.
-        // Each state with a footer names its words.
+        // hidden, that a footer took room from while it was whole is measured where it is
+        // painted after the frame: it fails when that row is cut, unless a guard holds the reveal
+        // back or the row needed more than the room lost. Each state with a footer names its words.
         let bands = self.footer_bands();
         if !bands.is_empty() {
-            let footers: Vec<String> = self
-                .nodes()
-                .into_iter()
+            let nodes = self.nodes();
+            let footers: Vec<String> = nodes
+                .iter()
                 .filter(|node| {
                     node.role == Role::GenericContainer
                         && bands.iter().any(|band| band.contains_rect(node.rect))
                 })
                 .map(|node| node.name.chars().take(80).collect())
                 .collect();
+            let scale = self.harness.ctx.pixels_per_point();
             let seen = crate::design::next_actions(&self.harness.ctx);
-            let owed: Vec<_> = seen
+            let cut: Vec<_> = seen
                 .iter()
-                .filter(|next| next.promised && !next.whole && !next.capped && next.held.is_none())
+                .filter(|next| next.promised && !next.capped && next.held.is_none())
+                .filter(|next| {
+                    let at = (next.rect * scale).center();
+                    !nodes.iter().any(|node| {
+                        node.rect.center().distance(at) < 1.0
+                            && node.fully_in_view()
+                            && bands.iter().all(|band| {
+                                !band.x_range().intersects(node.rect.x_range())
+                                    || node.rect.bottom() <= band.top() + 0.5
+                            })
+                    })
+                })
                 .collect();
             let held: Vec<_> = seen.iter().filter(|next| next.held.is_some()).collect();
             self.observe(
                 &format!("r3f-footer-room {state}"),
-                owed.is_empty(),
+                cut.is_empty(),
                 format!(
-                    "{window}: footers {footers:?}; {} next actions; cut after a footer took their \
-                     room: {owed:?}; held by a guard: {held:?}; last reveals (room lost, needed, \
-                     scrolled): {:?}",
-                    seen.len(),
-                    seen.iter().map(|next| next.last).collect::<Vec<_>>()
+                    "{window}: footers {footers:?}; {} next actions; painted cut after a footer \
+                     took their room: {cut:?}; held by a guard: {held:?}",
+                    seen.len()
                 ),
             );
         }
+    }
+
+    /// The AccessKit IDs among `ids` that Tab reaches in `presses` presses.
+    pub(super) fn tab_reaches(&mut self, ids: &[accesskit::NodeId], presses: usize) -> Vec<u64> {
+        let mut hit = Vec::new();
+        for _ in 0..presses {
+            self.harness.key_press(egui::Key::Tab);
+            self.harness.run_steps(4);
+            let focus = self
+                .harness
+                .root()
+                .children_recursive()
+                .find(|node| node.accesskit_node().is_focused())
+                .map(|node| node.accesskit_node().id());
+            if let Some(id) = focus.filter(|id| ids.contains(id)) {
+                hit.push(id.0);
+            }
+        }
+        self.harness.key_press(egui::Key::Escape);
+        self.settle();
+        hit
+    }
+
+    /// Rest the pointer at `at` long enough for a tooltip, and say whether `words` show.
+    pub(super) fn hover_shows(&mut self, at: egui::Pos2, words: &str) -> bool {
+        self.harness.hover_at(at);
+        self.harness.run_steps(100);
+        let shown = self.has(words);
+        self.harness.remove_cursor();
+        self.settle();
+        shown
     }
 
     /// The next action the reveal saw at this rect (AccessKit's pixels) in the last pass.

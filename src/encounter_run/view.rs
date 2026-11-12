@@ -1564,6 +1564,19 @@ impl Run {
                         response.on_hover_text(side)
                     };
                     ui.set_clip_rect(original_clip);
+                    // Every other control of a hidden row (initiative, conditions, effects, the
+                    // half-damage mark) is built in one part that is not shown, takes no press or
+                    // hover, and is no Tab stop: one decision for the whole row.
+                    let mut hidden_part = hidden.then(|| {
+                        let mut part = ui
+                            .new_child(egui::UiBuilder::new().max_rect(ui.max_rect()).invisible());
+                        part.set_clip_rect(Rect::NOTHING);
+                        part
+                    });
+                    let ui = match hidden_part.as_mut() {
+                        Some(part) => part,
+                        None => &mut *ui,
+                    };
                     spans.push((rect.top() - origin, rect.bottom() - origin, index));
                     if response.clicked() {
                         clicked = Some((index, ui.input(|i| i.modifiers.command)));
@@ -1572,9 +1585,8 @@ impl Run {
                     if let Some(choice) = self.row_menu(&response, index) {
                         row_choice = Some((index, choice));
                     }
-                    if !hidden
-                        && let (Some(span), Some(galley)) =
-                            (&layout.initiative_span, &layout.second_line)
+                    if let (Some(span), Some(galley)) =
+                        (&layout.initiative_span, &layout.second_line)
                     {
                         let start = galley.pos_from_cursor(egui::text::CCursor::new(span.start));
                         let end = galley.pos_from_cursor(egui::text::CCursor::new(span.end));
@@ -1618,8 +1630,7 @@ impl Run {
                     }
                     // In combat the number itself opens a field to change it.
                     // With several targets, this place holds the half-damage mark.
-                    if !hidden
-                        && self.state.phase == Phase::Running
+                    if self.state.phase == Phase::Running
                         && self.live_initiative != Some(index)
                         && (!selected || self.also.is_empty())
                     {
@@ -1662,7 +1673,7 @@ impl Run {
                             design::focus_ring(ui, target);
                         }
                     }
-                    if !hidden && self.live_initiative == Some(index) {
+                    if self.live_initiative == Some(index) {
                         let field = Rect::from_min_size(
                             pos2(
                                 rect.left() + design::S,
@@ -1709,8 +1720,7 @@ impl Run {
                     }
                     // An ended run shows its effects as words: nothing counts, and a click
                     // does nothing.
-                    if !hidden
-                        && self.state.phase == Phase::Running
+                    if self.state.phase == Phase::Running
                         && let Some((act, _)) = effect_links(ui, rect, p, layout, scale)
                     {
                         clicked = Some((index, false));
@@ -1723,7 +1733,7 @@ impl Run {
                     }
                     // More than a fill says a row is one of several targets, and the mark
                     // says whether it took half for a save.
-                    if !hidden && selected && !self.also.is_empty() {
+                    if selected && !self.also.is_empty() {
                         let half = self.halved.contains(&index);
                         let target = Rect::from_center_size(
                             pos2(rect.left() + design::L, rect.center().y),
