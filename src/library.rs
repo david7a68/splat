@@ -414,6 +414,17 @@ impl HeadingChoice {
 
 /// The duplicate-identity warning and its repair choices. The reader draws them inside its
 /// scroll area, so the title and body scroll into view; source mode draws them above the editor.
+/// The page's last error, as a reason in the pane's message footer. Its words can hold code in
+/// backticks.
+fn page_error<'a>(footer: &mut design::Footer<'a>, error: Option<&'a str>) {
+    if let Some(error) = error {
+        let words = format!("Error: {error}");
+        footer.reason(words.clone(), move |ui| {
+            design::message_with_code(ui, Tone::Error, &words);
+        });
+    }
+}
+
 /// What the DM pressed in the reader's messages in the pane's message footer.
 #[derive(Default)]
 struct ReaderPress {
@@ -3242,7 +3253,6 @@ pub struct Library {
     package_folder_changed: bool,
     pub use_entry: Option<(Uuid, Uuid)>,
     source: bool,
-    message: Option<String>,
     reselect: Option<(Option<Uuid>, String)>,
     pub copy: Option<crate::content_workspace::CopySource>,
     pub copy_to_package: Option<Uuid>,
@@ -3718,7 +3728,6 @@ impl Library {
         self.matches = None;
         self.source = false;
         self.error = None;
-        self.message = None;
     }
 
     /// The open draft's entry name and owner, if it has changes.
@@ -3969,7 +3978,6 @@ impl Library {
             .as_ref()
             .and_then(|l| self.selected.and_then(|i| l.notes.get(i)))
             .map(|n| (n.owner.id(), n.path.clone()));
-        self.message = None;
         self.load_key = Some(load_key(campaigns));
         let modules = campaigns.modules().to_vec();
         let campaign = campaigns.active_campaign();
@@ -4354,12 +4362,8 @@ impl Library {
         }
         ui.add_space(design::XS);
         self.unregister_dialog(ui.ctx(), campaigns);
-        if let Some(e) = &self.error {
-            design::message_with_code(ui, Tone::Error, &format!("Error: {e}"));
-        }
-        if let Some(message) = &self.message {
-            design::message(ui, Tone::Success, message);
-        }
+        // Round 26: the page's error is a reason in the pane's message footer, so it never moves
+        // the list or the reader. It ends on the events that clear `error`.
         // The page's results sit in the pane's message footer (below the reader, the editor, the
         // empty reader or a form), so they never move the columns, the tabs, the file line, the
         // title or the body. Their presses are applied after the reader is drawn.
@@ -4416,6 +4420,10 @@ impl Library {
         }
 
         let Some(loaded) = &self.loaded else {
+            // Nothing loaded: there is no pane, so a failed load says so here.
+            if let Some(error) = &self.error {
+                design::message_with_code(ui, Tone::Error, &format!("Error: {error}"));
+            }
             return;
         };
         // Each scope has its own counts. Search and sections stay within the scope.
@@ -5021,6 +5029,7 @@ impl Library {
                             *pressed = show_results(ui, results);
                         });
                     }
+                    page_error(&mut footer, self.error.as_deref());
                     footer.show(ui);
                     self.page_pressed = pressed.page;
                 }
@@ -6050,7 +6059,6 @@ impl Library {
         self.matches = None;
         self.source = false;
         self.error = None;
-        self.message = None;
     }
 
     /// Keep the reader at the pane's left edge, with its scroll bar beside its measure.
@@ -6331,6 +6339,7 @@ impl Library {
                     *pressed = show_results(ui, results);
                 });
             }
+            page_error(&mut footer, self.error.as_deref());
             footer.show(ui);
             self.apply_package_results(&pressed);
         }
@@ -6437,9 +6446,7 @@ impl Library {
                 .and_then(|_| presentation::class_level(parsed.as_ref().ok()?)),
         );
         let dirty = self.draft != note.text;
-        if dirty {
-            self.message = None;
-        }
+        if dirty {}
         let editable = note.owner.editable();
         // A file the system will not read has no text to edit: the reader names its fault.
         let fault = note.fault.clone();
@@ -7052,6 +7059,10 @@ impl Library {
         // they stay above the editor, with the warnings.
         let mut pressed = ResultPress::default();
         if !choices_in_reader && !slot_row {
+            // A file changed on disk: the comparison owns the pane, and its messages stay above it.
+            if let Some(error) = &self.error {
+                design::message_with_code(ui, Tone::Error, &format!("Error: {error}"));
+            }
             pressed = show_results(ui, &results);
         }
         let mut repair_pressed = false;
@@ -7325,6 +7336,7 @@ impl Library {
                 dependency_result.as_deref(),
                 &mut reader_press,
             );
+            page_error(&mut footer, self.error.as_deref());
             body_bottom = footer.show(ui);
             if broken_taken && let Some((_, _, _, warnings)) = &mut self.broken_lines {
                 *warnings = broken_cache;
@@ -7399,6 +7411,7 @@ impl Library {
                 dependency_result.as_deref(),
                 &mut reader_press,
             );
+            page_error(&mut footer, self.error.as_deref());
             body_bottom = footer.show(ui);
             heading_pressed = reader_press.heading;
         }

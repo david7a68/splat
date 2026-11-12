@@ -3493,6 +3493,17 @@ pub(super) fn space_reaches(
     reached
 }
 
+/// Round 26 FD2: the y of the wolf's kind line, the first line of its stat block, in the
+/// Library reader at 960, 1200 and 1920.
+fn kind_line_tops(d: &mut Driver<'_>) -> [Option<f32>; 3] {
+    [SMALL, DEFAULT, LARGE].map(|size| {
+        d.at_size(size, |d| {
+            d.painted_rect_in("Medium · Beast · Unaligned", egui::Rect::EVERYTHING)
+                .map(|rect| rect.top())
+        })
+    })
+}
+
 /// Round 24 FC4: the y of the Read tab, `Show file` on the file line and the reader's title, at
 /// 960, 1200 and 1920. A result in the reader's result place moves none of them.
 pub(super) fn reader_frame(d: &mut Driver<'_>, title: &str) -> Vec<Option<(f32, f32, f32)>> {
@@ -4408,6 +4419,8 @@ pub fn package_rename(d: &mut Driver<'_>) {
 
     search_library(d, "Cinder Wolf");
     d.click_starting("Cinder Wolf · ");
+    // Round 26 FD2: the stat block's kind line with no message in the reader.
+    let clean_body = kind_line_tops(d);
     d.click(EDIT_MARKDOWN);
     let draft = d.editor_text().unwrap();
     // Round 25 AC3, FC1, SC2: the editor's place with nothing in the message space.
@@ -4522,6 +4535,7 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.state("renamed-creature-offers-link-update", Sizes::All);
     // Round 24 FC4: the offer and its result sit in the reader's result place, below the title.
     let with_offer = reader_frame(d, "Ash Wolf");
+    let body_with_offer = kind_line_tops(d);
     // Round 23 AE2: the offer names the old and the new name, so the DM can check the words
     // before the write.
     let offer = d.painted_word_rect(
@@ -4561,6 +4575,7 @@ pub fn package_rename(d: &mut Driver<'_>) {
     );
     d.state("renamed-creature-links-updated", Sizes::All);
     let with_result = reader_frame(d, "Ash Wolf");
+    let body_with_result = kind_line_tops(d);
 
     // B (Veilglass Lantern), linked from another file (Ash Wraith), is renamed while A's result
     // waits. A's result is hidden in B's reader, not ended; B's offer and result are B's.
@@ -4710,6 +4725,20 @@ pub fn package_rename(d: &mut Driver<'_>) {
         "After Undo link update, the rename's offer comes back",
     );
     let without = reader_frame(d, "Ash Wolf");
+    // Round 26 FD2: the offer and its result sit in the reader's message footer, so the stat
+    // block keeps the place it has with no message: with the offer, with the result, and after
+    // Undo (the offer again).
+    let body_after_undo = kind_line_tops(d);
+    d.observe(
+        "iter-26-L-FD2",
+        clean_body.iter().all(Option::is_some)
+            && [body_with_offer, body_with_result, body_after_undo]
+                .iter()
+                .all(|tops| *tops == clean_body),
+        format!(
+            "The kind line is at {clean_body:?} with no message, {body_with_offer:?} with the offer, {body_with_result:?} with the result and {body_after_undo:?} after Undo"
+        ),
+    );
     d.observe(
         "iter-24-L-FC4-links",
         without.iter().all(Option::is_some) && with_offer == without && with_result == without,
@@ -4833,6 +4862,19 @@ pub fn package_rename(d: &mut Driver<'_>) {
     // Astra re-check 2: renamed outside Splat with no reload, Update reads the entry's file
     // first, writes nothing and says why.
     rename_outside("Veilglass Torch");
+    // Round 26: the page's error is a reason in the pane's message footer. Save and the editor
+    // keep their places when it comes, at 960, 1200 and 1920.
+    let save_and_editor = |d: &mut Driver<'_>| {
+        [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                Some((
+                    d.place_of("Save")?.top(),
+                    d.input_frame("Markdown editor")?.0.top(),
+                ))
+            })
+        })
+    };
+    let before_error = save_and_editor(d);
     let pressed = d.has("Update 1 link");
     if pressed {
         d.click("Update 1 link");
@@ -4841,6 +4883,21 @@ pub fn package_rename(d: &mut Driver<'_>) {
     let no_reload_kept = pressed
         && fs::read(&wraith).unwrap() == linking
         && d.has_containing(crate::library::LINKS_NOT_CHANGED);
+    let with_error = save_and_editor(d);
+    let error_below = d
+        .input_frame("Markdown editor")
+        .zip(d.painted_rect_in("No links were changed.", egui::Rect::EVERYTHING))
+        .is_some_and(|((editor, _), error)| error.top() > editor.bottom());
+    d.observe(
+        "iter-26-L-error-footer",
+        no_reload_kept
+            && error_below
+            && before_error.iter().all(Option::is_some)
+            && before_error == with_error,
+        format!(
+            "The error sits below the editor ({error_below}); Save and the editor stay at {before_error:?} → {with_error:?}"
+        ),
+    );
     d.click("Packages");
     d.click("Reload from disk");
     d.settle();
