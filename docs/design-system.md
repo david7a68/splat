@@ -1549,9 +1549,8 @@ links exactly one NPC or creature, while no run is open, `Start fight` (accessib
 <name>`), blocked as the editor's is. A done scene does not count in Tonight. Read leaves scenes out as it
 leaves out link-only plan lines, and its count line names them: `1 fight, 1 group and 2 scenes, in the plan`.
 Scenes fold first: when the plan's rows, with the scenes, do not fit its pane, every scene folds, and the Tonight
-line says `› N scenes` (a link with the expanded state, `Type::Small` caret in `muted`) after its count, `L` after
-it. It takes no line of its own, so no other row moves or narrows because scenes exist, and the next fight's
-`Start fight` stays whole and in view. `N scenes` opens them in place (`⌄`) and closes them again; the choice holds
+line says `N scenes`, a link with the expanded state, `L` after its count. It takes no line of its own, so no other row moves or narrows because scenes exist, and the next fight's
+`Start fight` stays whole and in view. `N scenes` opens them in place and closes them again; the choice holds
 for the session. A scene act's words show under its row, or under the Scene field, or below the Add strip when the
 scenes are folded.
 `Scene` (`icons::CHECK_SQUARE`) is a line of the Add strip's More menu only: the fit of the strip is measured

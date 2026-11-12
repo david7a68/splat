@@ -1486,8 +1486,8 @@ impl Sessions {
         }
     }
 
-    /// `N scenes` on the heading's line, in room that is spare there, so it moves no row: it
-    /// opens the folded scenes in place, and closes them again.
+    /// `N scenes` on the heading's line, in room that is spare there, so it moves no row: a link
+    /// with the expanded state, which opens the folded scenes in place and closes them again.
     fn fold_line(&mut self, ui: &mut egui::Ui, heading: egui::Rect, count: usize, folded: bool) {
         let rect = egui::Rect::from_min_max(
             egui::pos2(
@@ -1501,9 +1501,6 @@ impl Sessions {
                 .max_rect(rect)
                 .layout(egui::Layout::left_to_right(egui::Align::Center)),
         );
-        line.spacing_mut().item_spacing.x = design::XS;
-        let caret = if folded { icons::NEXT } else { icons::DOWN };
-        line.label(Type::Small.rich(&line, caret).color(colors().muted));
         let words = design::count(count, "scene", "scenes");
         if plan_link(&mut line, &words, !folded).clicked() {
             self.scenes.fold.open = Some(folded);
