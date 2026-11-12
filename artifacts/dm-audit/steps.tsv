@@ -104,6 +104,10 @@ during	A wolf frightens Oren: mark the condition	Sub	Conditions for this partici
 during	A wolf frightens Oren: mark the condition	Do	Frightened	1	Run		false
 during	What does Frightened do?	Panel	open the rule from the row	1	Run		false
 during	What does Frightened do?	Panel	close Lookup	1	Run		false
+during	A wolf frightens Oren for 10 rounds: give the condition its count	Find	select Oren	1	Run		false
+during	A wolf frightens Oren for 10 rounds: give the condition its count	Do	Effect with E	1	Run		false
+during	A wolf frightens Oren for 10 rounds: give the condition its count	Do	type the effect	1	Run		false
+during	A wolf frightens Oren for 10 rounds: give the condition its count	Do	add with Enter	1	Run		false
 during	Iselle starts concentrating: mark it	Find	select Iselle	1	Run		false
 during	Iselle starts concentrating: mark it	Do	Concentrating	1	Run		false
 during	Combat: round 2	Find	select the target	1	Run		false
