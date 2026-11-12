@@ -1286,8 +1286,8 @@ Long local effects show four words and more; Undo keeps four when they fit. Narr
 remove, two effect words and target. Concentration Undo says start concentration or stop concentration before
 the target. Exhaustion Undo keeps both levels, such as `exhaustion 2 → 3 on Oren`. Exhaustion level uses the shared `stepper` at Scan height. One drag on the level is one Undo step, from the level where the drag started, committed when the drag ends; each − or + press is one step. At a limit the button says `Exhaustion stops at 6.` or `Exhaustion is already 0.` Hover and accessibility keep full text.
 
-The dock has a fixed place above the footer: Amount, Damage, Heal, Temp HP, selected name, Effect, Conditions,
-Conc, Absent. Off toggles use text colour; disabled controls stay muted. Enter applies damage. The dock's and footer's
+The dock has a fixed place above the footer: Amount, Damage, Heal, Temp HP, selected name, Conditions, Conc,
+Absent, Effect. Off toggles use text colour; disabled controls stay muted. Enter applies damage. The dock's and footer's
 background uses roster width; panels never cover them. The dock's controls are one block at the left, no wider than
 `LIST_MEASURE`: the dice end at the block's edge, and Conditions, Conc and Absent follow the selected name after an `L`
 gap, not at the roster's far edge. The selected name keeps `Heading`; it uses `Small` only when that shows the name
@@ -1298,9 +1298,9 @@ full names.
 ### Effects and turn reminders
 
 An effect is words that the DM pins to one row, with or without a time. The dock's second line has a quiet
-`Effect` (`Action::quiet`, key `E`, icon `PIN`) left of Conditions. It shows with its word while the selected
-name keeps its size and its words; with its icon while the name keeps both beside the icon; and not at all
-otherwise. `Death saves` and a roll's total keep their places first. With several rows selected it is absent.
+`Effect` (`Action::quiet`, key `E`, icon `PIN`) `L` after Absent, in the room that is spare there, so no
+control of the line moves. It shows with its word while that room holds it and the selected name keeps its
+size and its words; else with its icon; and not at all otherwise. With several rows selected it is absent.
 `Effect` makes line two one `add_field`, `Effect on <name>, such as Bless 10 rounds`, that belongs to its row:
 Enter adds and Escape clears, and both put focus in Amount; another selection or Next turn closes it, and its
 words wait for that row. `E` opens that field, or the Conditions tab's `Other effect…` field with focus when
