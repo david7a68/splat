@@ -325,6 +325,30 @@ fn walk<'t>(
     }
 }
 
+/// A `Label` node's words: egui puts them in its value.
+pub fn label_words(node: &AccessKitNode<'_>) -> Option<String> {
+    (node.role() == Role::Label)
+        .then(|| node.value().or_else(|| node.label()))
+        .flatten()
+}
+
+/// The words of every `Label` node with no control around it, for `wide_help`. A label inside
+/// a control (a list row's second line) is that control's content, not help.
+pub fn label_texts(harness: &Harness<'_, Splat>) -> Vec<String> {
+    let mut found = Vec::new();
+    visit_nodes(harness, |node, _| {
+        let mut parent = node.parent();
+        while let Some(ancestor) = parent {
+            if control_role(ancestor.accesskit_node().role()) {
+                return;
+            }
+            parent = ancestor.parent();
+        }
+        found.extend(label_words(&node.accesskit_node()));
+    });
+    found
+}
+
 /// Every node with the scroll area clip around it.
 pub fn visit_nodes<'t>(
     harness: &'t Harness<'_, Splat>,
@@ -707,12 +731,16 @@ pub fn missing_glyphs(
         .collect()
 }
 
-/// Every painted text that is all muted `Small` words and wider than `READER_MEASURE`: help that
-/// does not wrap at the reader's measure (`design::help`). A text with any other size, family
-/// or colour in it (a status word, a link, a value) is not help.
+/// Every painted label (its words are those of a `Label` node in `labels`, one with no control
+/// around it) that is all muted
+/// `Small` words, may wrap, and is wider than `READER_MEASURE`: help that does not wrap at the
+/// reader's measure (`design::help`). A text with any other size, family or colour in it (a
+/// status word, a link, a value) is not help, nor is a one-line detail that its row cuts or fits
+/// (`truncate` or `extend`), nor words a row paints as its own second line.
 pub fn wide_help(
     ctx: &egui::Context,
     shapes: &[egui::epaint::ClippedShape],
+    labels: &HashSet<&str>,
     scenario: &str,
     state: &str,
     window: &str,
@@ -722,7 +750,11 @@ pub fn wide_help(
     let muted = colors().muted;
     let help = |text: &egui::epaint::TextShape| {
         let sections = &text.galley.job.sections;
-        !sections.is_empty()
+        let wrap = &text.galley.job.wrap;
+        wrap.max_width.is_finite()
+            && wrap.max_rows > 1
+            && labels.contains(text.galley.job.text.as_str())
+            && !sections.is_empty()
             && sections.iter().all(|section| {
                 let color = if section.format.color == egui::Color32::PLACEHOLDER {
                     text.fallback_color
@@ -1440,7 +1472,8 @@ mod tests {
     }
 
     /// A muted `Small` label 560 px wide fails; the same words through `design::help` wrap at
-    /// the reader measure and pass; muted `Body` words and a `Small` status colour are not help.
+    /// the reader measure and pass; muted `Body` words, a `Small` status colour, words a row
+    /// paints itself and a one-line detail cut to fit its row are not help.
     #[test]
     fn help_measure_fails_on_a_wide_muted_small_label() {
         use crate::design::{Type, colors};
@@ -1463,12 +1496,39 @@ mod tests {
                 ui.add(egui::Label::new(
                     Type::Small.rich(ui, &words).color(colors().result.warning),
                 ));
+                // Words a row paints itself, not a label, are not help.
+                let galley = ui.painter().layout(
+                    format!("A row paints this. {words}"),
+                    Type::Small.font(ui),
+                    colors().muted,
+                    700.0,
+                );
+                ui.painter().galley(ui.cursor().min, galley, colors().muted);
+                ui.add_space(Type::Small.line() * 2.0);
+                // A row's one-line detail, fitted by its row, is not help.
+                ui.add(
+                    egui::Label::new(Type::Small.rich(ui, &words).color(colors().muted)).extend(),
+                );
+                // A row's one-line detail, cut to fit its row, is not help.
+                ui.scope(|ui| {
+                    ui.set_max_width(700.0);
+                    ui.add(
+                        egui::Label::new(Type::Small.rich(ui, &words).color(colors().muted))
+                            .truncate(),
+                    );
+                });
             });
         crate::design::theme::install(&harness.ctx);
         harness.run_steps(2);
+        let names: Vec<String> = harness
+            .query_all_by_role(Role::Label)
+            .filter_map(|node| label_words(&node.accesskit_node()))
+            .collect();
+        let labels = names.iter().map(String::as_str).collect();
         let found = wide_help(
             &harness.ctx,
             &harness.output().shapes,
+            &labels,
             "seeded",
             "state",
             "1200x600",

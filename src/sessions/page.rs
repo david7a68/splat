@@ -5818,7 +5818,6 @@ impl Sessions {
     }
 
     fn templates_view(&mut self, ui: &mut egui::Ui) {
-        let c = colors();
         if self.template.is_none()
             && let Some(first) = self.templates.first().map(|t| t.name.clone())
         {
@@ -5859,17 +5858,12 @@ impl Sessions {
                 ..Default::default()
             }))
             .show_inside(ui, |ui| {
-                if self.new_template.is_none() { ui.add(
-                    egui::Label::new(
-                        Type::Small
-                            .rich(
-                                ui,
-                                "Splat fills {{number}}, {{title}}, {{date}} and {{campaign}}. Obsidian’s core Templates plugin also fills {{date}} and {{title}}.",
-                            )
-                            .color(c.muted),
-                    )
-                    .wrap(),
-                ); }
+                if self.new_template.is_none() {
+                    design::help(
+                        ui,
+                        "Splat fills {{number}}, {{title}}, {{date}} and {{campaign}}. Obsidian’s core Templates plugin also fills {{date}} and {{title}}.",
+                    );
+                }
                 if let Some(error) = &self.template_error {
                     design::message(ui, Tone::Error, error);
                 }
@@ -6164,7 +6158,10 @@ impl Sessions {
                 response
             })
             .inner;
-        ui.label(Type::Small.rich(ui, "Inside the campaign folder, unless the path is absolute. A name such as 30 Sessions is fine.").color(c.muted));
+        design::help(
+            ui,
+            "Inside the campaign folder, unless the path is absolute. A name such as 30 Sessions is fine.",
+        );
         if let Some(error) = &self.folder_error {
             design::message(ui, Tone::Error, error);
         }
