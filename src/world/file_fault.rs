@@ -132,7 +132,7 @@ impl FileFault {
     /// The short cause on a list row.
     pub fn cause(&self) -> &'static str {
         match self.kind {
-            Kind::NotText => "Text format cannot be read",
+            Kind::NotText => "Not a text file",
             Kind::ReadDenied => "No permission to read",
             Kind::WriteDenied => "No permission to save",
             Kind::Gone => "File not found",
@@ -184,7 +184,7 @@ mod tests {
             "Splat cannot read this note as text.",
             "iter-24-FG6-pane-headline"
         );
-        assert_eq!(fault.cause(), "Text format cannot be read", "AD2-cause");
+        assert_eq!(fault.cause(), "Not a text file", "AD2-cause");
         assert!(fault.system.contains("UTF-8"), "AD2-system-kept");
         for words in [fault.message(), fault.cause().to_owned()] {
             assert!(

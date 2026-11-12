@@ -305,6 +305,9 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool, short_links
                     }
                     // A reader may give its tables the pane beyond the prose measure.
                     let room = table_room(ui).filter(|width| *width > ui.available_width());
+                    // The reader's own id: the table's roll state and its field belong to this
+                    // reader, so the same table in World and in Lookup never shares them.
+                    let reader = ui.id();
                     let draw_table = |ui: &mut egui::Ui| {
                         let mut widths = column_widths(ui, &rows, &columns, &display);
                         // A rollable table keeps a slot for the roll mark before every row's
@@ -337,9 +340,9 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool, short_links
                                 widths[0] = widths[0].max(width);
                             }
                         }
-                        let matched = rolls
-                            .as_ref()
-                            .and_then(|marker| crate::roll_table::matched_row(ui, marker, &rows));
+                        let matched = rolls.as_ref().and_then(|marker| {
+                            crate::roll_table::matched_row(ui, reader, marker, &rows)
+                        });
                         reader_table(ui, &rows, &columns, &widths, &display, matched, mark);
                     };
                     match room {
@@ -363,7 +366,7 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool, short_links
                         None => draw_table(ui),
                     }
                     if let Some(marker) = rolls.take() {
-                        crate::roll_table::roll_control(ui, &marker, &rows);
+                        crate::roll_table::roll_control(ui, reader, &marker, &rows);
                     }
                     ui.add_space(design::S);
                 }

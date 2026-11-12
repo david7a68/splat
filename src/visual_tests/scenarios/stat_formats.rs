@@ -51,7 +51,24 @@ pub fn run(d: &mut Driver<'_>) {
         !d.visible_text("| Hit Points | about twenty |"),
         "Rejected HP uses the reader's vital row, without raw table text",
     );
-    d.state("flagged-hp-cell", Sizes::All);
+    d.state_prepared("flagged-hp-cell", Sizes::All, |d| {
+        // Round 26 FG3: the line warning wraps at the reader measure, where the stat block
+        // ends, as World's does. Must stay true: its words start just after its icon, at the
+        // title's left edge plus the message's bar and icon.
+        let warning = d.painted_rect_in("Line 19: Hit Points", egui::Rect::EVERYTHING);
+        let title = d.painted_rect_in("Flagged Wolf", egui::Rect::EVERYTHING);
+        d.observe(
+            "iter-26-L-FG3",
+            warning.zip(title).is_some_and(|(warning, title)| {
+                warning.right() <= title.left() + crate::design::READER_MEASURE + 0.5
+                    && warning.left() > title.left()
+                    && warning.left() - title.left() <= crate::design::XXL
+            }),
+            format!(
+                "The line warning {warning:?} ends inside the reader measure from the title {title:?}"
+            ),
+        );
+    });
 
     search_library(d, "Flagged Spark");
     d.expect("1 value not read");
