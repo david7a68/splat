@@ -6340,11 +6340,18 @@ fn even_height(heights: &[f32], room: f32, cap: f32) -> f32 {
 /// The fixed columns of a run row, and its second line, which grows rather than cuts.
 const PICTURE_GAP: f32 = 6.0;
 
+/// Each row's choice of effects and save DC, by what it depends on: `RowLayout::fitted`.
+#[derive(Clone, Default)]
+struct FitCache(std::collections::HashMap<u64, (EffectPart, Option<u32>)>);
+
 /// What a row's second line holds beyond today's words: its effects and a save's DC.
 #[derive(Default)]
 struct Extra {
     effects: EffectPart,
     conc_dc: Option<u32>,
+    /// An official condition with a time shows as the plain condition: the row as it was
+    /// before the DM gave it the time.
+    official_as_plain: bool,
 }
 
 /// The effects a row shows: the first ones with their words, each with its count, then the
@@ -6528,8 +6535,13 @@ impl RowLayout {
         fit: RowFit,
         longest_name: f32,
     ) -> Self {
-        let plain = p.conditions.iter().filter(|c| !c.is_effect()).count();
         let measure = |extra: &Extra| {
+            let official = |c: &super::Condition| super::recognized_condition(c.name()).is_some();
+            let plain = p
+                .conditions
+                .iter()
+                .filter(|c| !c.is_effect() || (extra.official_as_plain && official(c)))
+                .count();
             Self::measured(
                 ui,
                 width,
@@ -6540,7 +6552,12 @@ impl RowLayout {
                 longest_name,
             )
         };
-        let base = measure(&Extra::default());
+        // The row as it is with no new words: an official condition that gained a time shows
+        // as the condition it was. Its lines, its height and the conditions it shows stay.
+        let base = measure(&Extra {
+            official_as_plain: true,
+            ..Extra::default()
+        });
         let effects: Vec<(usize, &str)> = p
             .conditions
             .iter()
@@ -6551,7 +6568,89 @@ impl RowLayout {
         if effects.is_empty() && conc_dc.is_none() {
             return base;
         }
-        let keeps = |layout: &Self| layout.keeps_place_of(&base, scale);
+        // The choice depends only on the row's words and state and on the room, so it is made
+        // once for them and kept: a frame lays out the row with no new words, and its choice.
+        let key = {
+            use std::hash::{Hash, Hasher};
+            let mut hash = std::collections::hash_map::DefaultHasher::new();
+            let text = base.second_line.as_ref().map(|line| line.text().to_owned());
+            let words: Vec<_> = p
+                .conditions
+                .iter()
+                .map(|c| (c.words(), c.is_effect()))
+                .collect();
+            let scale_bits = [
+                scale.row,
+                scale.name,
+                scale.condition,
+                scale.mark,
+                scale.stat,
+            ];
+            (&p.name, text, words, format!("{sync:?} {fit:?}"), conc_dc).hash(&mut hash);
+            for value in [width, longest_name, base.height(scale)]
+                .iter()
+                .chain(&scale_bits)
+            {
+                value.to_bits().hash(&mut hash);
+            }
+            hash.finish()
+        };
+        let cache = egui::Id::new("run_row_effects_fit");
+        let chosen = ui.data_mut(|data| {
+            data.get_temp_mut_or_default::<FitCache>(cache)
+                .0
+                .get(&key)
+                .cloned()
+        });
+        let (effects, dc) = chosen.unwrap_or_else(|| {
+            let chosen = Self::choose(ui, &base, &effects, conc_dc, scale, measure);
+            ui.data_mut(|data| {
+                let fits = &mut data.get_temp_mut_or_default::<FitCache>(cache).0;
+                if fits.len() > 512 {
+                    fits.clear();
+                }
+                fits.insert(key, chosen.clone());
+            });
+            chosen
+        });
+        if effects.shown.is_empty() && effects.rest == 0 && dc.is_none() {
+            return base;
+        }
+        let layout = measure(&Extra {
+            effects,
+            conc_dc: dc,
+            official_as_plain: false,
+        });
+        Self {
+            without_effects: Some(Box::new(base)),
+            ..layout
+        }
+    }
+
+    /// The row's rule of section 1.4, as a choice: the effects to show and whether the save's
+    /// DC shows. Each form must keep the lines, the height and every condition that `base`
+    /// shows. The first that does wins; with none, the row is `base`.
+    fn choose(
+        ui: &egui::Ui,
+        base: &Self,
+        effects: &[(usize, &str)],
+        conc_dc: Option<u32>,
+        scale: RunScale,
+        measure: impl Fn(&Extra) -> Self,
+    ) -> (EffectPart, Option<u32>) {
+        let names = |layout: &Self| -> Vec<String> {
+            layout
+                .condition_spans
+                .iter()
+                .map(|(name, _)| name.clone())
+                .filter(|name| !["Run conditions", "Run changes"].contains(&name.as_str()))
+                .collect()
+        };
+        let shown = names(base);
+        let keeps = |layout: &Self| {
+            let now = names(layout);
+            layout.keeps_place_of(base, scale) && shown.iter().all(|name| now.contains(name))
+        };
         let mut forms: Vec<EffectPart> = (0..=effects.len())
             .rev()
             .map(|whole| EffectPart {
@@ -6569,7 +6668,7 @@ impl RowLayout {
                     shown: vec![(at, String::new())],
                     rest: effects.len() - 1,
                 },
-                conc_dc: None,
+                ..Extra::default()
             });
             if let Some(line) = bare.second_line.as_ref().filter(|_| keeps(&bare)) {
                 let font = line.job.sections[0].format.font_id.clone();
@@ -6587,44 +6686,38 @@ impl RowLayout {
             }
         }
         // The count of them all is the last form. With no effect, the one form is no part.
-        let found = forms.into_iter().find_map(|part| {
-            let layout = measure(&Extra {
+        let Some(effects) = forms.into_iter().find(|part| {
+            keeps(&measure(&Extra {
                 effects: part.clone(),
-                conc_dc: None,
-            });
-            keeps(&layout).then_some((part, layout))
-        });
-        let Some((effects, layout)) = found else {
-            return base;
+                ..Extra::default()
+            }))
+        }) else {
+            return (EffectPart::default(), None);
         };
-        let with_dc = conc_dc.map(|dc| {
-            measure(&Extra {
-                effects: effects.clone(),
-                conc_dc: Some(dc),
-            })
-        });
-        // The DC folds nothing that shows: the line without it is the start of the line with
-        // it. Else it is in the hover and the accessible name only.
-        let shown = |layout: &Self| {
+        let line = |layout: &Self| {
             layout
                 .second_line
                 .as_ref()
                 .map(|line| line.text().to_owned())
         };
-        let layout = with_dc
-            .filter(|with| {
-                keeps(with)
-                    && shown(with)
-                        .zip(shown(&layout))
-                        .is_some_and(|(with, without)| {
-                            without.is_empty() || with.starts_with(&without)
-                        })
-            })
-            .unwrap_or(layout);
-        Self {
-            without_effects: Some(Box::new(base)),
-            ..layout
-        }
+        let without = line(&measure(&Extra {
+            effects: effects.clone(),
+            ..Extra::default()
+        }));
+        // The DC folds nothing that shows: the line without it is the start of the line with
+        // it. Else it is in the hover and the accessible name only.
+        let dc = conc_dc.filter(|dc| {
+            let with = measure(&Extra {
+                effects: effects.clone(),
+                conc_dc: Some(*dc),
+                official_as_plain: false,
+            });
+            keeps(&with)
+                && line(&with)
+                    .zip(without.clone())
+                    .is_some_and(|(with, without)| without.is_empty() || with.starts_with(&without))
+        });
+        (effects, dc)
     }
 
     /// This row has the lines and the height of `base`, the same row with no effect: nothing
@@ -6775,9 +6868,19 @@ impl RowLayout {
                 let text: String = parts.iter().map(|(text, _)| text.as_str()).collect();
                 design::number_width(ui, &text, &font)
             };
+            // The slot holds the widest form, and a whole target (`XL`) after the gap in each
+            // form, so the count's target never reaches over its neighbours.
             let widest = forms
                 .iter()
-                .map(|form| design::number_width(ui, form, &font))
+                .map(|form| {
+                    let gap = if form.starts_with(" ·") {
+                        " ·\u{a0}"
+                    } else {
+                        " "
+                    };
+                    design::number_width(ui, form, &font)
+                        .max(design::number_width(ui, gap, &font) + design::XL)
+                })
                 .fold(0.0, f32::max);
             let mut parts = vec![(words.as_str(), c.participant.condition)];
             parts.extend(slot.iter().map(|(text, color)| (text.as_str(), *color)));
@@ -6809,8 +6912,12 @@ impl RowLayout {
             let span = add_parts(&[(&*words, c.participant.condition)], 0.0);
             effect_spans.push((EffectAct::Open, usize::MAX, span));
         }
-        let plain: Vec<&super::Condition> =
-            p.conditions.iter().filter(|c| !c.is_effect()).collect();
+        let official = |c: &super::Condition| super::recognized_condition(c.name()).is_some();
+        let plain: Vec<&super::Condition> = p
+            .conditions
+            .iter()
+            .filter(|c| !c.is_effect() || (extra.official_as_plain && official(c)))
+            .collect();
         for condition in plain.iter().take(condition_count) {
             let condition = condition.name();
             let shown = if condition.split_whitespace().count() > 4 {
@@ -7258,6 +7365,29 @@ fn last_letter_right(galley: &Galley, end: usize) -> Option<f32> {
     None
 }
 
+/// An effect target's words and its target: from the words' first letter, at least `XL`
+/// wide, into the room that the count's slot keeps after them. It never starts before the
+/// words, so the condition's name before a count keeps its own target.
+fn effect_target(
+    galley: &Galley,
+    span: &std::ops::Range<usize>,
+    origin: egui::Pos2,
+    rect: Rect,
+) -> Option<(Rect, Rect)> {
+    let start = galley.pos_from_cursor(egui::text::CCursor::new(span.start));
+    // The words end at their last letter, before the room that keeps a count's slot.
+    let right = last_letter_right(galley, span.end)?;
+    let word =
+        Rect::from_min_max(start.min, pos2(right, start.bottom())).translate(origin.to_vec2());
+    let bottom = (word.center().y + design::XL / 2.0).min(rect.bottom());
+    let width = word.width().max(design::XL);
+    let target = Rect::from_min_max(
+        pos2(word.left(), bottom - design::XL),
+        pos2(word.left() + width, bottom),
+    );
+    Some((word, target))
+}
+
 /// Each target of a row's effects: a count, words shown on each turn, or the count of the
 /// rest. Each is its own target, at least `XL` wide, so the name beside it keeps its act.
 /// Returns the act the DM asked for, and the effect's place.
@@ -7310,20 +7440,9 @@ fn effect_links(
                 format!("{words}. Remove it in Conditions")
             }
         };
-        let start = galley.pos_from_cursor(egui::text::CCursor::new(span.start));
-        // The words end at their last letter, before the room that keeps a count's slot.
-        let Some(right) = last_letter_right(galley, span.end) else {
+        let Some((word, target)) = effect_target(galley, span, origin, rect) else {
             continue;
         };
-        let word =
-            Rect::from_min_max(start.min, pos2(right, start.bottom())).translate(origin.to_vec2());
-        let bottom = (word.center().y + design::XL / 2.0).min(rect.bottom());
-        let width = word.width().max(design::XL);
-        let left = (word.center().x - width / 2.0)
-            .max(rect.left())
-            .min(rect.right() - width);
-        let target =
-            Rect::from_min_max(pos2(left, bottom - design::XL), pos2(left + width, bottom));
         let response = ui
             .interact(
                 target,
@@ -8302,6 +8421,96 @@ mod tests {
                 // Whole pixels: a form measured alone and the same form in the line can round
                 // apart by one pixel. No word moves more, or to another line.
                 assert!(at.iter().all(|x| (x - at[0]).abs() <= 1.0), "{at:?}");
+                // Review of PR 276, round 1. A count's target starts after its condition's
+                // name, so the name keeps its own target.
+                let mut prone = p.clone();
+                prone.initiative = Some(10);
+                prone.conditions = vec![Condition::read("Prone 2 rounds")];
+                for scale in [design::RUN_REGULAR, design::RUN_COMPACT] {
+                    let layout =
+                        RowLayout::new(ui, 900.0, &prone, None, scale, RowFit::Natural, 0.0);
+                    let line = layout.second_line.as_ref().unwrap();
+                    let (_, name) = layout.condition_spans.first().expect("Prone's name");
+                    let (_, _, count) = layout.effect_spans.first().expect("its count");
+                    let name_end = last_letter_right(line, name.end).unwrap();
+                    let rect = Rect::from_min_size(pos2(0.0, 0.0), vec2(900.0, 60.0));
+                    let (_, target) = effect_target(line, count, pos2(0.0, 0.0), rect).unwrap();
+                    assert!(
+                        target.left() >= name_end,
+                        "{name_end} {target:?}: {}",
+                        line.text()
+                    );
+                    assert!(target.width() >= design::XL);
+                }
+                // A time on a condition that shows keeps the row's height and its words.
+                let mut poisoned = p.clone();
+                poisoned.name = "Guard".into();
+                poisoned.initiative = Some(10);
+                poisoned.hp = poisoned.max_hp;
+                poisoned.temporary_hp = 0;
+                poisoned.conditions = vec![Condition::from("Poisoned")];
+                let mut timed = poisoned.clone();
+                timed.conditions = vec![Condition::read("Poisoned 10 rounds")];
+                for width in [442.0, 596.0] {
+                    for fit in [RowFit::Natural, RowFit::Compressed, RowFit::Summary] {
+                        let scale = design::RUN_COMPACT;
+                        let before = RowLayout::new(ui, width, &poisoned, None, scale, fit, 0.0);
+                        let after = RowLayout::new(ui, width, &timed, None, scale, fit, 0.0);
+                        let words =
+                            |l: &RowLayout| l.second_line.as_ref().map(|g| g.text().to_owned());
+                        assert_eq!(before.height(scale), after.height(scale), "{width} {fit:?}");
+                        assert!(
+                            words(&after).is_some_and(|w| w.contains("Poisoned")),
+                            "{width} {fit:?}: {:?} then {:?}",
+                            words(&before),
+                            words(&after)
+                        );
+                    }
+                }
+                // Through `2`, `last round` and `time is up`, the same words show at every width
+                // and the word after the slot keeps its place.
+                for width in (400..1000).step_by(6) {
+                    for scale in [design::RUN_REGULAR, design::RUN_COMPACT] {
+                        let mut seen = Vec::new();
+                        for left in [2, 1, 0] {
+                            let mut row = prone.clone();
+                            row.conditions = vec![
+                                Condition::Effect(super::super::effect::Effect {
+                                    name: "Bless".into(),
+                                    time: Time::Rounds { rounds: 2, left },
+                                }),
+                                Condition::from("Prone"),
+                            ];
+                            let layout = RowLayout::new(
+                                ui,
+                                width as f32,
+                                &row,
+                                None,
+                                scale,
+                                RowFit::Natural,
+                                0.0,
+                            );
+                            let line = layout.second_line.unwrap();
+                            let text = line.text().to_owned();
+                            let at = text.find("Prone").map(|byte| {
+                                line.pos_from_cursor(egui::text::CCursor::new(
+                                    text[..byte].chars().count(),
+                                ))
+                                .min
+                            });
+                            seen.push((text.starts_with("Bless"), at));
+                        }
+                        for next in &seen[1..] {
+                            assert_eq!(seen[0].0, next.0, "{width}: {seen:?}");
+                            if let (Some(a), Some(b)) = (seen[0].1, next.1) {
+                                assert!(
+                                    (a.x - b.x).abs() <= 1.0 && a.y == b.y,
+                                    "{width}: {seen:?}"
+                                );
+                            }
+                        }
+                    }
+                }
                 // T17.6: a save's DC ends the line where it has room, and is never what makes
                 // the row grow; with no room it is in the hover and the name only.
                 let mut conc = plain.clone();
