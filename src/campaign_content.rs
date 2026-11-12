@@ -543,6 +543,14 @@ impl CampaignContent {
         self.pending.is_some()
     }
 
+    /// Whether the package selection differs from the saved one, for tests.
+    #[cfg(test)]
+    pub fn selections_changed(&self) -> bool {
+        self.snapshot
+            .as_ref()
+            .is_some_and(|s| s.document.selections != self.saved_selections)
+    }
+
     pub fn dirty(&self) -> bool {
         self.repairs.iter().any(Repair::dirty)
             || self
@@ -1020,16 +1028,7 @@ impl CampaignContent {
                         .package_warnings(ui, campaigns, active, warnings.unavailable);
                 });
             }
-            // The footer is drawn on a layer above the page. The package columns inside the
-            // page are egui panels, whose widgets are hit-tested by the panel's own clip, so the
-            // entry list's drag area reaches under the footer and would take presses meant for
-            // the footer's first row (review round 26, two discards).
-            let layer = egui::LayerId::new(
-                egui::Order::Middle,
-                egui::Id::new(("campaign_page_footer_layer", active.id)),
-            );
-            ui.scope_builder(egui::UiBuilder::new().layer_id(layer), |ui| footer.show(ui))
-                .inner
+            footer.show(ui)
         };
         let this = me.into_inner();
         this.press_result(press.take());
@@ -2119,6 +2118,10 @@ impl CampaignContent {
     }
 
     fn packages_content(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
+        // Review round 26: egui panels set their own clip to the panel's rect, so their rows would
+        // paint and take clicks below the page's viewport, under the footer. Each column clips
+        // to the page's viewport again, so the page's body ends where `Footer::show` says.
+        let viewport = ui.clip_rect();
         let snapshot = self.snapshot.as_mut().unwrap();
         let catalogue = &snapshot.catalogue;
         let document = &mut snapshot.document;
@@ -2328,6 +2331,7 @@ impl CampaignContent {
                 bottom: 0,
             }))
             .show_inside(ui, |ui| {
+                ui.set_clip_rect(ui.clip_rect().intersect(viewport));
                 egui::ScrollArea::vertical()
                     .id_salt("package_list")
                     .auto_shrink([false, false])
@@ -2511,6 +2515,7 @@ impl CampaignContent {
                 bottom: 0,
             }))
             .show_inside(ui, |ui| {
+                ui.set_clip_rect(ui.clip_rect().intersect(viewport));
                 if self.dependencies {
                     ui.horizontal(|ui| {
                         ui.set_min_height(Density::Read.control());

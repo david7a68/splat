@@ -313,6 +313,22 @@ fn creation_row(
     }
 }
 
+/// Click the control whose name starts with `name`. When it is not wholly in view, Tab brings it
+/// into view first, as the page's focus scroll does for a keyboard or a screen reader: AccessKit's
+/// scroll-into-view stops at a list's own scroll area inside a scrolled page.
+fn click_by_focus(d: &mut Driver<'_>, name: &str) {
+    let full = d
+        .nodes()
+        .into_iter()
+        .find(|node| node.name.starts_with(name))
+        .unwrap_or_else(|| panic!("{name:?} is drawn"));
+    if !full.fully_in_view() {
+        d.tab_to(&full.name);
+        d.harness_focus_nothing();
+    }
+    d.click(&full.name);
+}
+
 /// Round 26: the pane footer whose words hold `words`: the smallest named group that holds them.
 fn footer_with(d: &Driver<'_>, words: &str) -> Option<egui::Rect> {
     d.nodes()
@@ -3141,19 +3157,61 @@ pub mod campaign_content {
         const UNDO_A: &str = "Undo discard of Broken.md";
         const UNDO_B: &str = "Undo discard of Cracked.md";
         const UNDO_P: &str = "Undo discard of Campaign packages";
-        // At 1920, so the package rows are in view above the footer: at 960 the driver's click
-        // on a row under the footer would reach the footer's Undo instead.
         let base = d.window_size();
-        d.set_base(LARGE);
         let a_draft = draft(d, A_PATH);
         let before = b_top(d);
         d.click_below(A_MESSAGE, "Discard");
         let a_discarded = a_draft.is_some() && draft(d, A_PATH) != a_draft;
         let after_a = b_top(d);
+        // Review round 26: the page's body ends where the footer starts. With A's result in the
+        // footer, at 960, 1200 and 1920: Tab and screen-reader focus bring the Ash Wraith row
+        // into view above the footer; a click on it changes only the package selection, never
+        // A's result; and the packages' own Undo restores only its own state.
+        let selections = |d: &mut Driver<'_>| d.app_mut().campaign_content.selections_changed();
+        let row_name = format!("Use {UNSELECTED_ENTRY}");
+        let a_discarded_draft = draft(d, A_PATH);
+        // Rows below the page's viewport come into view by focus, as Tab or a screen reader
+        // brings them: AccessKit's scroll-into-view stops at the package list's own scroll
+        // area, so the driver's reveal cannot reach them.
+        click_by_focus(d, MODULE_ROW);
+        for size in [SMALL, DEFAULT, LARGE] {
+            d.set_base(size);
+            let above_footer = |d: &Driver<'_>| {
+                let row = d.nodes().into_iter().find(|node| node.name == row_name)?;
+                let footer = footer_with(d, A_DISCARDED)?;
+                Some(row.fully_in_view() && row.rect.bottom() <= footer.top())
+            };
+            let tabbed = d.tab_to(&row_name) && above_footer(d) == Some(true);
+            d.harness_focus_nothing();
+            let read = d.reader_focus(&row_name) && above_footer(d) == Some(true);
+            d.harness_focus_nothing();
+            let before = selections(d);
+            click_by_focus(d, &row_name);
+            let only_selection = selections(d) != before
+                && draft(d, A_PATH) == a_discarded_draft
+                && listed(d, A_DISCARDED);
+            d.click_below(SAVE_SELECTIONS, DISCARD_SELECTION);
+            let discarded = !selections(d);
+            d.click(UNDO_P);
+            let own_undo = selections(d)
+                && draft(d, A_PATH) == a_discarded_draft
+                && listed(d, A_DISCARDED);
+            d.click_below(SAVE_SELECTIONS, DISCARD_SELECTION);
+            d.observe(
+                "iter-26-C-rows-above-footer",
+                tabbed && read && only_selection && discarded && own_undo,
+                format!(
+                    "At {size:?}: Tab reaches the row above the footer {tabbed}; screen-reader \
+                     focus {read}; a click changes only the selection {only_selection}; Discard \
+                     {discarded}; the packages' Undo restores only its own state {own_undo}"
+                ),
+            );
+        }
+        d.set_base(base);
         // Review round 26: a package-selection Discard between the two repairs' Discards. All
         // live Undos share one order, newest first.
-        d.click_starting(MODULE_ROW);
-        d.click(&format!("Use {UNSELECTED_ENTRY}"));
+        click_by_focus(d, MODULE_ROW);
+        click_by_focus(d, &format!("Use {UNSELECTED_ENTRY}"));
         d.click_below(SAVE_SELECTIONS, DISCARD_SELECTION);
         let b_draft = draft(d, B_PATH);
         d.click_below(B_MESSAGE, "Discard");
@@ -3213,8 +3271,8 @@ pub mod campaign_content {
             format!("Three Undos before the round trip {live_before}; all ended after it {ended}"),
         );
         // The steps after these start, as before, with a live package-selection discard.
-        d.click_starting(MODULE_ROW);
-        d.click(&format!("Use {UNSELECTED_ENTRY}"));
+        click_by_focus(d, MODULE_ROW);
+        click_by_focus(d, &format!("Use {UNSELECTED_ENTRY}"));
         d.click_below(SAVE_SELECTIONS, DISCARD_SELECTION);
         d.set_base(base);
         let _ = std::fs::remove_file(d.root.join(SECOND));
