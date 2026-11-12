@@ -2243,7 +2243,7 @@ mod allowed_classes {
         use std::collections::BTreeMap;
 
         /// Rectangles `x y w h` of the items of one name.
-        type Places = Vec<[f32; 4]>;
+        pub(super) type Places = Vec<[f32; 4]>;
 
         /// The acts that open, show or close a run in History.
         const ACTS: [&str; 5] = [
@@ -2795,7 +2795,7 @@ mod allowed_classes {
     /// the rows of its view, as R1c's do, because G7 pairs the items of one name by their order.
     mod kept {
         use super::super::{AllowedRow, Difference, Reference, View};
-        use super::history::{places, scroll, shown_after};
+        use super::history::{Places, places, scroll, shown_after};
         use std::collections::BTreeMap;
 
         /// X66: `COMBAT LOG` is `M` below the last Final state row, where it was the rows' own
@@ -2883,7 +2883,7 @@ mod allowed_classes {
                 .filter_map(|o| shown_after(o))
                 .map(|b| b[1] + b[3])
                 .fold(f32::NEG_INFINITY, f32::max);
-            let mut names: BTreeMap<&str, (Vec<[f32; 4]>, Vec<[f32; 4]>)> = BTreeMap::new();
+            let mut names: BTreeMap<&str, (Places, Places)> = BTreeMap::new();
             for o in &view {
                 if !cut_at_edges(o, top, edge) {
                     return false;
