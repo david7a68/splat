@@ -10647,6 +10647,18 @@ pub mod session_notes {
                 d.click("Add a fight");
             }
             d.wait_for_text("Bridge Ambush");
+            // Round 26 FL4: the menu has one left edge: each name starts at the x of the word
+            // after `+`, and `+` keeps its own slot before it.
+            let word = d.painted_left("New encounter");
+            let name = d.painted_left("Bridge Ambush");
+            let plus = d.place_of("New encounter").map(|rect| rect.left());
+            d.observe(
+                "iter-26-S-FL4",
+                word.zip(name).zip(plus).is_some_and(|((word, name), plus)| {
+                    (word - name).abs() < 1.0 && plus < word
+                }),
+                format!("Names start at New encounter's word: word {word:?}, name {name:?}, target {plus:?}"),
+            );
             // FT3: with temporary HP and a Bloodied player, AC stays at 1200 and names stay at
             // every size. Portraits give way before AC.
             let (items, painted) = session_recording::party_bar_items(d);
@@ -10695,6 +10707,11 @@ pub mod session_notes {
             d.expect(ADD_LONG_REST);
         });
         d.press(Key::Escape);
+        // Round 26 FL1: the plan's Add result sits in its message footer, so neither the Add
+        // strip nor the rows move when it comes or goes.
+        let strip_top = |d: &Driver<'_>| d.place_of(ADD_LONG_REST).map(|rect| rect.top());
+        let rest_top = |d: &Driver<'_>| d.place_of("Long rest").map(|rect| rect.top());
+        let strip_before = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, strip_top));
         d.begin_task();
         assert!(
             d.nodes()
@@ -10705,6 +10722,18 @@ pub mod session_notes {
         d.wait_for_text("Long rest added to Session 1. Everyone starts the next fight at full.");
         d.goal_within("T11.2", "put a long rest on the timeline", 2);
         d.expect("Long rest added to Session 1. Everyone starts the next fight at full.");
+        let with_result = [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                let result = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| {
+                        node.name.starts_with("Long rest added to Session 1.") && node.in_view()
+                    })
+                    .map(|node| node.rect);
+                (strip_top(d), rest_top(d), result)
+            })
+        });
         d.state("session-event-added", Sizes::Default);
         d.click_add_event(ADD_SHORT_REST);
         d.observe(
@@ -10761,6 +10790,23 @@ pub mod session_notes {
             "T11.2",
             !d.has("Undo"),
             "Undo goes at the next thing the DM does, so it cannot undo the wrong event",
+        );
+        let without_result = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, rest_top));
+        d.observe(
+            "iter-26-S-FL1",
+            with_result.iter().zip(&strip_before).zip(&without_result).all(
+                |(((strip, rest, result), before), after)| {
+                    // The result is below the rows, and the strip and the row keep their y.
+                    strip.is_some()
+                        && strip == before
+                        && rest.is_some()
+                        && rest == after
+                        && result.zip(*rest).is_some_and(|(result, rest)| result.top() > rest)
+                },
+            ),
+            format!(
+                "Strip {strip_before:?}; with the result (strip, row, result) {with_result:?}; without it {without_result:?}"
+            ),
         );
         d.state_prepared("session-event-in-notes", Sizes::Default, |d| {
             write_note(d);
@@ -11008,6 +11054,83 @@ pub mod session_notes {
         d.click("Undo remove");
         d.expect("Rest at the mill");
 
+        // Round 26 FG4, FD7: a length the clock cannot count is a warning with its icon, in the
+        // Timeline row, in the open form's Ends line and on the plan row; `half a day` counts.
+        d.aside(|d| {
+            let not_counted = |d: &Driver<'_>| {
+                let mut colours = Vec::new();
+                d.each_painted_text(|text, clip| {
+                    let job = &text.galley.job;
+                    if clip.intersects(text.visual_bounding_rect()) {
+                        for section in &job.sections {
+                            let words = &job.text[section.byte_range.clone()];
+                            if words.contains("Not") && words.contains("counted") {
+                                colours.push((words.to_owned(), section.format.color));
+                            }
+                        }
+                    }
+                });
+                colours
+            };
+            let warned = |colours: &[(String, egui::Color32)]| {
+                !colours.is_empty()
+                    && colours.iter().all(|(words, colour)| {
+                        words.starts_with(crate::design::icons::WARN)
+                            && *colour == crate::design::colors().result.warning
+                    })
+            };
+            d.click_containing("Travel ·");
+            d.replace_text_in("How long", "a few hours");
+            d.press(Key::Enter);
+            d.settle();
+            let timeline = not_counted(d);
+            let where_warned = d.place_of("Where").map(|rect| rect.top());
+            d.observe(
+                "iter-26-S-FG4",
+                timeline.len() >= 2 && warned(&timeline),
+                format!("The row and the form's Ends line warn in the warning colour: {timeline:?}"),
+            );
+            d.state("timeline-time-not-counted", Sizes::All);
+            d.click(NAV_SESSIONS);
+            // In a narrow page the note has its own tab; the plan's rows are on Plan.
+            let narrow = !d.has("Plan and notes") && d.has("Plan");
+            if narrow {
+                d.click("Plan");
+            }
+            d.expect("Travel");
+            let plan = not_counted(d);
+            if narrow {
+                d.click("Note");
+            }
+            d.observe(
+                "iter-26-S-FG4-plan",
+                warned(&plan),
+                format!("The plan row warns in the warning colour: {plan:?}"),
+            );
+            d.click(NAV_TIMELINE);
+            d.click_containing("Travel ·");
+            d.replace_text_in("How long", "half a day");
+            d.press(Key::Enter);
+            d.settle();
+            let read = not_counted(d);
+            let where_read = d.place_of("Where").map(|rect| rect.top());
+            d.observe(
+                "iter-26-S-FD7",
+                read.is_empty() && d.has_containing("Travel · half a day"),
+                format!("`half a day` is a length the clock counts: {read:?}"),
+            );
+            // The warning takes Ends' place, so the fields below How long keep their y.
+            d.observe(
+                "iter-26-S-FG4-still",
+                where_warned.is_some() && where_warned == where_read,
+                format!("Where keeps its y with and without the warning: {where_warned:?}, {where_read:?}"),
+            );
+            d.clear_text_in("How long");
+            d.press(Key::Enter);
+            d.press_ctrl(Key::S);
+            d.settle();
+        });
+
         // Back to the note from the event, and the file is readable outside Splat.
         d.click_starting("Rest at the mill ·");
         d.click("Open this session");
@@ -11160,7 +11283,17 @@ pub mod session_notes {
 
         d.click("Templates");
         d.expect("Standard session");
-        d.state("templates-built-in", Sizes::All);
+        d.state_prepared("templates-built-in", Sizes::All, |d| {
+            // Round 26 AN1, FN4, SN2, AL1: the template help wraps at the reader measure.
+            let help = d.place_of(
+                "Splat fills {{number}}, {{title}}, {{date}} and {{campaign}}. Obsidian’s core Templates plugin also fills {{date}} and {{title}}.",
+            );
+            d.observe(
+                "iter-26-S-AN1",
+                help.is_some_and(|help| help.width() <= crate::design::READER_MEASURE + 1.0),
+                format!("The template help keeps the reader measure: {help:?}"),
+            );
+        });
         d.click("Customize this template");
         d.expect("Campaign");
         d.state("templates-own", Sizes::Default);
@@ -11193,6 +11326,18 @@ pub mod session_notes {
         );
         d.expect("Not connected · showing the name saved on this computer");
         d.state("session-folder-in-campaign", Sizes::All);
+        // Round 26 FN2, FN5: the form's warning and its result sit in the pane's message footer,
+        // so the save row keeps its y when the first letter brings the warning, and after a move.
+        let save_row = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .find(|node| {
+                    (node.name.ends_with("No changes") || node.name.ends_with("Unsaved"))
+                        && node.in_view()
+                })
+                .map(|node| node.rect.top())
+        };
+        let row_clean = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, save_row));
         d.app_mut().timeline.save();
         d.replace_text_in("Folder", "30 Sessions");
         d.expect("Move files and save");
@@ -11203,8 +11348,37 @@ pub mod session_notes {
             d.field_text("Folder").as_deref() == Some("Sessions"),
             "Discard restores the saved session folder",
         );
+        const KEEPS: &str = "If you save without moving, Splat no longer shows these files.";
+        let row_typed = d.aside(|d| {
+            d.replace_text_in("Folder", "3");
+            d.expect("Save without moving");
+            [SMALL, DEFAULT, LARGE].map(|size| {
+                d.at_size(size, |d| {
+                    let warning = d
+                        .nodes()
+                        .into_iter()
+                        .find(|node| node.name.contains(KEEPS) && node.in_view())
+                        .map(|node| node.rect.top());
+                    (save_row(d), warning)
+                })
+            })
+        });
         d.replace_text_in("Folder", "30 Sessions");
         d.expect("Save without moving");
+        // Review of PR 274, item 3: the footer and the form share one scan of the current folder,
+        // so an unchanged frame lists its files at most once, as before the footer. The count is
+        // kept inside `storage_files`.
+        let scans = || crate::sessions::storage_scans();
+        let (passes, before) = (d.passes(), scans());
+        for size in [SMALL, DEFAULT, LARGE] {
+            d.at_size(size, |_| ());
+        }
+        let (frames, done) = (d.passes() - passes, scans() - before);
+        d.observe(
+            "review-274-3",
+            frames > 0 && done > 0 && done <= frames,
+            format!("{frames} unchanged frames scanned the session folder {done} times"),
+        );
         // FT4 (round 16): with no run and no other form, moving the files is the one primary,
         // as Move runs and save is on Rules and runs.
         d.state_prepared("session-folder-move-offered", Sizes::All, |d| {
@@ -11253,6 +11427,31 @@ pub mod session_notes {
         d.expect("Move files and save");
         d.click("Move files and save");
         d.expect("Moved 1 note, 4 events, 2 templates and 1 recording to 30 Sessions.");
+        let row_moved = [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                let result = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| node.name.starts_with("Moved 1 note") && node.in_view())
+                    .map(|node| node.rect.top());
+                (save_row(d), result)
+            })
+        });
+        d.observe(
+            "iter-26-S-FN2",
+            row_clean.iter().zip(&row_typed).zip(&row_moved).all(
+                |((clean, (typed, warning)), (moved, result))| {
+                    clean.is_some()
+                        && clean == typed
+                        && clean == moved
+                        && warning.zip(*clean).is_some_and(|(warning, row)| warning > row)
+                        && result.zip(*clean).is_some_and(|(result, row)| result > row)
+                },
+            ),
+            format!(
+                "Save row clean {row_clean:?}; first letter (row, warning) {row_typed:?}; moved (row, result) {row_moved:?}"
+            ),
+        );
         d.observe_both(
             "iter-1-C-FT15-18",
             "The session folder uses one label and one right edge",
@@ -12261,6 +12460,18 @@ pub mod session_recording {
         );
     }
 
+    /// The top of the session's Recordings tab at 960, 1200 and 1920.
+    fn recording_tabs(d: &mut Driver<'_>) -> [Option<f32>; 3] {
+        [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                d.nodes()
+                    .into_iter()
+                    .find(|node| node.name.starts_with("Recordings") && node.in_view())
+                    .map(|node| node.rect.top())
+            })
+        })
+    }
+
     pub fn banner_priority(d: &mut Driver<'_>) {
         d.click(NAV_SESSIONS);
         new_session(d, "Failed processing");
@@ -12351,6 +12562,7 @@ pub mod session_recording {
             check_one_primary(d, "Record again", "iter-9-C2-ST1-two-alerts");
             check_processing_action(d, "Process:", false);
         });
+        let tabs_stopped = recording_tabs(d);
         assert!(d.in_view("Record again"));
         d.click("Record again");
         d.expect("Stop recording");
@@ -12418,6 +12630,7 @@ pub mod session_recording {
                 .name;
             check_one_primary(d, &process, "iter-9-C-ST1-blocked-banner");
         });
+        let tabs_saved = recording_tabs(d);
         std::fs::write(&failed, audio).unwrap();
         d.settle();
         assert!(d.in_view("Continue processing"));
@@ -12476,6 +12689,19 @@ pub mod session_recording {
             );
             check_one_primary(d, "Record again", "iter-8-C-banner-stalled-primary");
         });
+        let tabs_elsewhere = recording_tabs(d);
+        // Round 26 FD3: Session 2's tabs keep one y with its own stopped recording, with
+        // `Recording saved: …`, and with Session 1's stalled recording; each line that comes is
+        // in the message footer.
+        d.observe(
+            "iter-26-S-FD3",
+            tabs_stopped.iter().all(Option::is_some)
+                && tabs_stopped == tabs_saved
+                && tabs_saved == tabs_elsewhere,
+            format!(
+                "Session 2's tabs at 960, 1200 and 1920: stopped {tabs_stopped:?}, saved {tabs_saved:?}, stalled elsewhere {tabs_elsewhere:?}"
+            ),
+        );
         assert!(d.in_view("Record again"));
         d.click("Record again");
         d.expect("Stop recording");
@@ -13019,7 +13245,7 @@ pub mod session_recording {
             .simulate_recorder_health(Health::Silent);
         d.settle();
         assert_eq!(tabs_top(d), Some(hearing_top));
-        d.expect("Silent for over a minute · 0:00 recorded");
+        d.expect("0:00 recorded · Silent for over a minute");
         d.app_mut()
             .sessions
             .simulate_recorder_health(Health::Hearing);
@@ -13058,7 +13284,7 @@ pub mod session_recording {
         d.expect("Silent for over a minute");
         d.expect("Check the input in Settings");
         d.state_prepared("recording-silent", Sizes::All, |d| {
-            let detail = "Silent for over a minute · 0:00 recorded";
+            let detail = "0:00 recorded · Silent for over a minute";
             assert!(d.visible_text(detail) && d.in_view("Stop recording"));
             d.observe(
                 "iter-9-C-FT13",
@@ -13072,16 +13298,30 @@ pub mod session_recording {
             "iter-12-R2",
             "The silent row owns its detail and stop action",
             |d| {
-                d.visible_text("Silent for over a minute · 0:00 recorded")
+                d.visible_text("0:00 recorded · Silent for over a minute")
                     && d.in_view("Stop recording")
                     && d.in_view("Check the input in Settings")
             },
         );
+        // Round 26 FM2: a stall comes by itself, so it must not move Stop recording. The silent
+        // row has Stop and Check the input; the stalled row adds Record again after Stop.
+        let stop_left = |d: &Driver<'_>| d.place_of("Stop recording").map(|rect| rect.left());
+        let silent_stop = stop_left(d).expect("Stop recording is on the silent row");
         d.app_mut()
             .sessions
             .simulate_recorder_health(Health::Stalled);
         d.settle();
         d.expect("Stopped saving after");
+        let stalled_stop = stop_left(d).expect("Stop recording is on the stalled row");
+        let again_left = d
+            .place_of("Record again")
+            .map(|rect| rect.left())
+            .expect("Record again is on the stalled row");
+        d.observe(
+            "iter-26-S-FM2",
+            stalled_stop == silent_stop && again_left > stalled_stop,
+            "A stall keeps Stop recording in the first slot; Record again comes after it",
+        );
         d.state("recording-stalled", Sizes::All);
         d.observe(
             "T11.5",
@@ -13132,8 +13372,39 @@ pub mod session_recording {
         );
         d.click_containing("Recording 0:");
         d.expect("Stop recording");
+        // Round 26 FM4: `Recording saved: …` sits in the page's message footer, so the tabs and
+        // the recording row, whose Process is the DM's next act, keep their place.
+        let tab_top = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .find(|node| node.name.starts_with("Recordings") && node.in_view())
+                .map(|node| node.rect.top())
+        };
+        let tabs_live = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, tab_top));
         d.click("Stop recording");
         d.expect("saved: 2026-01-01 19:00");
+        let tabs_saved = [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                let saved = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| node.name.contains("saved: 2026-01-01 19:00") && node.in_view())
+                    .map(|node| node.rect.top());
+                (tab_top(d), saved)
+            })
+        });
+        d.observe(
+            "iter-26-S-FM4",
+            tabs_live
+                .iter()
+                .zip(&tabs_saved)
+                .all(|(live, (saved_tab, result))| {
+                    live.is_some()
+                        && live == saved_tab
+                        && result.zip(*live).is_some_and(|(result, tab)| result > tab)
+                }),
+            format!("Tabs while live {tabs_live:?}; after the save (tabs, result) {tabs_saved:?}"),
+        );
 
         d.expect(RECORDING);
         d.observe(
@@ -13429,7 +13700,27 @@ pub mod session_recording {
 
         // The open recording row owns the retry and clears the old failure.
         d.click_containing("Continue processing:");
-        d.expect("is processed");
+        // Round 26 FM7: on the session's own Recordings tab the row says Processed, so the
+        // `is processed` banner does not come, and leaving the tab does not bring it back.
+        d.expect("EVENTS MARKED IN THIS RECORDING 2");
+        let banner_here = d.has_containing("is processed.");
+        let mut banner_after = true;
+        d.aside(|d| {
+            d.click(if d.has("Plan and notes") {
+                "Plan and notes"
+            } else {
+                "Plan"
+            });
+            banner_after = d.has_containing("is processed.");
+            d.click_starting("Recordings");
+        });
+        d.observe(
+            "iter-26-S-FM7",
+            !banner_here && !banner_after && d.rail_words().contains("Processed"),
+            format!(
+                "The processed row's own tab counts as reading the notice: banner on the tab {banner_here}, after leaving it {banner_after}"
+            ),
+        );
         d.observe(
             "T11.6",
             !d.has_containing("Processing failed") && !d.has_containing("your limit is reached"),
@@ -13891,6 +14182,30 @@ pub mod session_recording {
             Some(DISCARD),
             &[SMALL, DEFAULT, LARGE],
         );
+        // Round 26 FM5: one fault, one tone. The moved note's banner is a warning, so the header
+        // and the rail say `Notes not saved` with the warning icon and colour too.
+        let mut tones = Vec::new();
+        d.each_painted_text(|text, clip| {
+            let words = &text.galley.job.text;
+            if clip.intersects(text.visual_bounding_rect()) && words.ends_with(" Notes not saved") {
+                let colour = text
+                    .galley
+                    .job
+                    .sections
+                    .first()
+                    .map(|part| part.format.color);
+                tones.push((words.clone(), colour));
+            }
+        });
+        let warn = format!("{} Notes not saved", crate::design::icons::WARN);
+        d.observe(
+            "iter-26-S-FM5",
+            tones.len() >= 2
+                && tones.iter().all(|(words, colour)| {
+                    *words == warn && *colour == Some(crate::design::colors().document.external)
+                }),
+            format!("The header and the rail match the moved note's warning: {tones:?}"),
+        );
         d.state("note-file-gone", Sizes::All);
         // FT4: Discard has one name. Its notice and Undo say discard, not drop or reload. These
         // steps prove the words and come back to the same choices, so they are not task cost.
@@ -14045,6 +14360,44 @@ pub mod session_recording {
                     reason.top() >= address.bottom() && reason.bottom() <= model.top()
                 }),
             format!("`Enter the address.` is in view below Address: {address:?}, {reason:?}"),
+        );
+        // Round 26 FM6: each missing value says why in one form, the plain `Small` line
+        // directly below its field. Model's reason comes before its help, as Address's comes
+        // before the next field.
+        let reasons = [
+            "Enter the address.",
+            "Enter the model’s name.",
+            "Paste a key first.",
+        ];
+        let forms: Vec<_> = reasons
+            .iter()
+            .map(|words| {
+                let place = d.place_of(words);
+                (
+                    *words,
+                    place.is_some(),
+                    d.painted_color(words),
+                    place.and_then(|place| d.painted_size(place, words)),
+                )
+            })
+            .collect();
+        let model_reason = d.place_of("Enter the model’s name.");
+        let model_help = d.place_of("The name your service gives it. For OpenAI, gpt-transcribe.");
+        d.observe(
+            "iter-26-S-FM6",
+            forms.iter().all(|(_, shown, colour, size)| {
+                *shown
+                    && *colour == Some(crate::design::colors().muted)
+                    && *size == Some(crate::design::Type::Small.size())
+            }) && model
+                .zip(model_reason)
+                .zip(model_help)
+                .is_some_and(|((model, reason), help)| {
+                    reason.top() >= model.bottom() && reason.bottom() <= help.top()
+                }),
+            format!(
+                "Missing values share one reason form below their field: {forms:?}; Model {model:?}, reason {model_reason:?}, help {model_help:?}"
+            ),
         );
         d.expect("The saved key is for OpenAI, so Splat will not send it to this service. Save a key for it.");
         d.state("processing-custom-speech-service", Sizes::All);
@@ -17241,6 +17594,38 @@ pub mod session_plan_groups {
             d.has_containing("Session 1: The Crossing"),
             "Assembling a group stays on the session's page",
         );
+        // Review of PR 274: every result takes its order when it is made, also a repeat. Discard
+        // Ash Pack, add a scene, Undo the discard, discard Ash Pack again: the newer discard is
+        // now above the scene. Then both are undone, so the group is as it was.
+        d.aside(|d| {
+            const UNDO_DISCARD: &str = "Undo discard of Ash Pack";
+            let top = |d: &Driver<'_>, name: &str| d.place_of(name).map(|rect| rect.top());
+            d.click("Discard");
+            d.expect(UNDO_DISCARD);
+            d.click("More Add actions");
+            d.click("Add Scene");
+            d.type_text("Watch the ford");
+            d.press(Key::Enter);
+            d.expect("Scene added to tonight.");
+            d.press(Key::Escape);
+            let first = (top(d, "Undo scene"), top(d, UNDO_DISCARD));
+            d.click(UNDO_DISCARD);
+            d.expect("Back to the plan");
+            d.click("Discard");
+            d.expect(UNDO_DISCARD);
+            let second = (top(d, "Undo scene"), top(d, UNDO_DISCARD));
+            d.observe(
+                "review-274-order-repeat",
+                first.0.zip(first.1).is_some_and(|(scene, discard)| scene < discard)
+                    && second.0.zip(second.1).is_some_and(|(scene, discard)| discard < scene),
+                format!(
+                    "(scene, discard) Undo tops: first discard {first:?}; after the second discard {second:?}"
+                ),
+            );
+            d.click("Undo scene");
+            d.click(UNDO_DISCARD);
+            d.expect("Back to the plan");
+        });
         // AK1: the empty group's reason has a reserved place, so adding the first creature moves
         // no field. AH1: Save refuses an empty group, so it says Invalid.
         let sizes = [SMALL, DEFAULT, LARGE];
@@ -17412,6 +17797,27 @@ pub mod session_plan_groups {
             d.place_of(&format!("Removed “{GROUP_RIVALS}” from tonight."))
                 .is_some_and(|words| d.has_tone_bar(words, crate::design::colors().result.success)),
             "Removing a group from the plan uses the tone a removed fight uses",
+        );
+        // Lead ruling, round 26 (one pane, one footer): the group's removal result is in the
+        // plan's message footer, below the rows, not in the removed row's place.
+        let removed = format!("Removed “{GROUP_RIVALS}” from tonight.");
+        let footer = d
+            .nodes()
+            .into_iter()
+            .find(|node| {
+                node.role == egui::accesskit::Role::GenericContainer && node.name.contains(&removed)
+            })
+            .map(|node| node.rect);
+        let rows_end = d
+            .nodes()
+            .into_iter()
+            .filter(|node| node.name.starts_with("More actions for ") && node.in_view())
+            .map(|node| node.rect.bottom())
+            .fold(f32::MIN, f32::max);
+        d.observe(
+            "iter-26-S-group-removed-footer",
+            footer.is_some_and(|footer| footer.top() > rows_end),
+            format!("The removal result is in the plan's footer {footer:?}, below the rows ending at {rows_end}"),
         );
         d.observe(
             "P17",
