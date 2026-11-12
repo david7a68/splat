@@ -1616,9 +1616,11 @@ fn content_fingerprint(modules: &[Module], campaign: Option<&Campaign>) -> u64 {
 }
 
 impl Lookup {
+    /// The check that starts when the window gets focus decides whether every page reloads
+    /// from disk, so it counts until its answer is in.
     #[cfg(test)]
     pub fn busy(&self) -> bool {
-        self.pending.is_some()
+        self.pending.is_some() || self.checking.is_some()
     }
 
     pub fn index(&self) -> Option<Arc<ContentIndex>> {
