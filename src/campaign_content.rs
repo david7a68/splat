@@ -540,7 +540,7 @@ impl CampaignContent {
     }
     #[cfg(test)]
     pub fn busy(&self) -> bool {
-        self.pending.is_some()
+        self.pending.is_some() || self.reconcile.pending.is_some()
     }
 
     /// Whether the package selection differs from the saved one, for tests.

@@ -1,4 +1,1241 @@
 {
   "about": "G7's allowed differences from reference.json. Each row names its row of docs/design/session-cycle.md section 2.5 and one difference, whole, as the G7 failure prints it. A row that matches nothing fails. Add rows only for a change that section 2.5 lists.",
-  "rows": []
+  "rows": [
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "session-last",
+        "view": "1200x800",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: The Toll Bridge Brawl",
+        "detail": "at 557.1 290 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "session-last",
+        "view": "1200x800",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 565.1 295 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "session-last",
+        "view": "960x640",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: The Toll Bridge Brawl",
+        "detail": "at 745.1 309 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "session-last",
+        "view": "960x640",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: Wolves at the Ford Below the Burning Shrine Road",
+        "detail": "at 745.1 374 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "session-last",
+        "view": "960x640",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 753.1 314 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "session-last",
+        "view": "960x640",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 753.1 379 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "session-last: played fight open",
+        "view": "1200x800 Lookup closed",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: The Toll Bridge Brawl",
+        "detail": "at 557.1 290 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "session-last: played fight open",
+        "view": "1200x800 Lookup closed",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 565.1 295 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "session-last: played fight open",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: The Toll Bridge Brawl",
+        "detail": "at 745.1 309 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "session-last: played fight open",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: Wolves at the Ford Below the Burning Shrine Road",
+        "detail": "at 745.1 374 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "session-last: played fight open",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 753.1 314 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "session-last: played fight open",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 753.1 379 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "session-last: played fight open",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: The Toll Bridge Brawl",
+        "detail": "at 521.1 343 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "session-last: played fight open",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: Wolves at the Ford Below the Burning Shrine Road",
+        "detail": "at 521.1 408 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "session-last: played fight open",
+        "view": "1200x800 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 529.1 348 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "session-last: played fight open",
+        "view": "1200x800 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 529.1 413 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "session-last: played fight open",
+        "view": "960x640 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "Label: ·",
+        "detail": "at 356.8 518 3.9x16"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "session-last: played fight open",
+        "view": "960x640 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: ·",
+        "detail": "at 356.8 518 3.9x16"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "session-last: played fight open",
+        "view": "960x640 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: The Toll Bridge Brawl",
+        "detail": "at 469.5 356 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "session-last: played fight open",
+        "view": "960x640 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "Link: Add rewards",
+        "detail": "at 368.8 514 78.8x24"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "session-last: played fight open",
+        "view": "960x640 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "·",
+        "detail": "at 356.8 518 3.9x16"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "session-last: played fight open",
+        "view": "960x640 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 477.5 361 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "session-last: played fight open",
+        "view": "960x640 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 368.8 517 78.8x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "session-last: played fight open: played fight hover",
+        "view": "1200x800",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: The Toll Bridge Brawl",
+        "detail": "at 557.1 290 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "session-last: played fight open: played fight hover",
+        "view": "1200x800",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 565.1 295 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "session-last: played fight open: played fight hover",
+        "view": "960x640",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: The Toll Bridge Brawl",
+        "detail": "at 745.1 309 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "session-last: played fight open: played fight hover",
+        "view": "960x640",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: Wolves at the Ford Below the Burning Shrine Road",
+        "detail": "at 745.1 374 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "session-last: played fight open: played fight hover",
+        "view": "960x640",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 753.1 314 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "session-last: played fight open: played fight hover",
+        "view": "960x640",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 753.1 379 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "session-last: older fight open",
+        "view": "1200x800",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: The Toll Bridge Brawl",
+        "detail": "at 557.1 290 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "session-last: older fight open",
+        "view": "1200x800",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 565.1 295 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "session-last: older fight open",
+        "view": "960x640",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: The Toll Bridge Brawl",
+        "detail": "at 745.1 309 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "session-last: older fight open",
+        "view": "960x640",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: Wolves at the Ford Below the Burning Shrine Road",
+        "detail": "at 745.1 448 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "session-last: older fight open",
+        "view": "960x640",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 753.1 314 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "session-last: older fight open",
+        "view": "960x640",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 753.1 453 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "session-last: again",
+        "view": "1200x800",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: The Toll Bridge Brawl",
+        "detail": "at 557.1 290 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "session-last: again",
+        "view": "1200x800",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 565.1 295 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "session-last: again",
+        "view": "960x640",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: The Toll Bridge Brawl",
+        "detail": "at 745.1 309 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "session-last: again",
+        "view": "960x640",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: Wolves at the Ford Below the Burning Shrine Road",
+        "detail": "at 745.1 448 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "session-last: again",
+        "view": "960x640",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 753.1 314 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "session-last: again",
+        "view": "960x640",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 753.1 453 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Captain Varra, npc",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: The Toll Bridge Brawl",
+        "detail": "at 521.1 343 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Captain Varra, npc",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: Wolves at the Ford Below the Burning Shrine Road",
+        "detail": "at 521.1 482 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Captain Varra, npc",
+        "view": "1200x800 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 529.1 348 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Captain Varra, npc",
+        "view": "1200x800 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 529.1 487 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Captain Varra, npc",
+        "view": "960x640 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: The Toll Bridge Brawl",
+        "detail": "at 469.5 356 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Captain Varra, npc",
+        "view": "960x640 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 477.5 361 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Captain Varra, creature",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: The Toll Bridge Brawl",
+        "detail": "at 521.1 343 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Captain Varra, creature",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: Wolves at the Ford Below the Burning Shrine Road",
+        "detail": "at 521.1 482 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Captain Varra, creature",
+        "view": "1200x800 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 529.1 348 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Captain Varra, creature",
+        "view": "1200x800 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 529.1 487 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Captain Varra, creature",
+        "view": "960x640 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: The Toll Bridge Brawl",
+        "detail": "at 469.5 356 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Captain Varra, creature",
+        "view": "960x640 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 477.5 361 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Oren Thistlewick, npc",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: The Toll Bridge Brawl",
+        "detail": "at 521.1 343 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Oren Thistlewick, npc",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: Wolves at the Ford Below the Burning Shrine Road",
+        "detail": "at 521.1 482 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Oren Thistlewick, npc",
+        "view": "1200x800 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 529.1 348 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Oren Thistlewick, npc",
+        "view": "1200x800 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 529.1 487 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Oren Thistlewick, npc",
+        "view": "960x640 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: The Toll Bridge Brawl",
+        "detail": "at 469.5 356 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Oren Thistlewick, npc",
+        "view": "960x640 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 477.5 361 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Oren Thistlewick, creature",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: The Toll Bridge Brawl",
+        "detail": "at 521.1 343 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Oren Thistlewick, creature",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: Wolves at the Ford Below the Burning Shrine Road",
+        "detail": "at 521.1 482 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Oren Thistlewick, creature",
+        "view": "1200x800 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 529.1 348 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Oren Thistlewick, creature",
+        "view": "1200x800 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 529.1 487 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Oren Thistlewick, creature",
+        "view": "960x640 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: The Toll Bridge Brawl",
+        "detail": "at 469.5 356 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Oren Thistlewick, creature",
+        "view": "960x640 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 477.5 361 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Captain Varra Black, npc",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: The Toll Bridge Brawl",
+        "detail": "at 521.1 343 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Captain Varra Black, npc",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: Wolves at the Ford Below the Burning Shrine Road",
+        "detail": "at 521.1 482 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Captain Varra Black, npc",
+        "view": "1200x800 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 529.1 348 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Captain Varra Black, npc",
+        "view": "1200x800 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 529.1 487 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Captain Varra Black, npc",
+        "view": "960x640 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: The Toll Bridge Brawl",
+        "detail": "at 469.5 356 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Captain Varra Black, npc",
+        "view": "960x640 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 477.5 361 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Captain Varra Black, creature",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: The Toll Bridge Brawl",
+        "detail": "at 521.1 343 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Captain Varra Black, creature",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: Wolves at the Ford Below the Burning Shrine Road",
+        "detail": "at 521.1 482 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Captain Varra Black, creature",
+        "view": "1200x800 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 529.1 348 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Captain Varra Black, creature",
+        "view": "1200x800 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 529.1 487 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Captain Varra Black, creature",
+        "view": "960x640 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: The Toll Bridge Brawl",
+        "detail": "at 469.5 356 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Captain Varra Black, creature",
+        "view": "960x640 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 477.5 361 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Road Encounters",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: The Toll Bridge Brawl",
+        "detail": "at 521.1 343 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Road Encounters",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: Wolves at the Ford Below the Burning Shrine Road",
+        "detail": "at 521.1 482 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Road Encounters",
+        "view": "1200x800 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 529.1 348 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Road Encounters",
+        "view": "1200x800 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 529.1 487 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Road Encounters",
+        "view": "960x640 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: The Toll Bridge Brawl",
+        "detail": "at 469.5 356 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Road Encounters",
+        "view": "960x640 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 477.5 361 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Cinder Wolf",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: The Toll Bridge Brawl",
+        "detail": "at 521.1 343 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Cinder Wolf",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: Wolves at the Ford Below the Burning Shrine Road",
+        "detail": "at 521.1 482 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Cinder Wolf",
+        "view": "1200x800 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 529.1 348 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Cinder Wolf",
+        "view": "1200x800 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 529.1 487 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Cinder Wolf",
+        "view": "960x640 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: The Toll Bridge Brawl",
+        "detail": "at 469.5 356 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Cinder Wolf",
+        "view": "960x640 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 477.5 361 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Cinder Wolf: art hover",
+        "view": "1200x800",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: The Toll Bridge Brawl",
+        "detail": "at 521.1 343 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Cinder Wolf: art hover",
+        "view": "1200x800",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: Wolves at the Ford Below the Burning Shrine Road",
+        "detail": "at 521.1 482 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Cinder Wolf: art hover",
+        "view": "1200x800",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 529.1 348 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Cinder Wolf: art hover",
+        "view": "1200x800",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 529.1 487 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Cinder Wolf: art hover",
+        "view": "960x640",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Add rewards: The Toll Bridge Brawl",
+        "detail": "at 469.5 356 96.9x28"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "lookup-reader Cinder Wolf: art hover",
+        "view": "960x640",
+        "what": "text",
+        "change": "new",
+        "name": "Add rewards",
+        "detail": "at 477.5 361 80.9x18"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "act 24",
+        "view": "",
+        "what": "act",
+        "change": "changed",
+        "name": "open last session",
+        "detail": "appeared + Add rewards"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "act 28",
+        "view": "",
+        "what": "act",
+        "change": "changed",
+        "name": "Whole run",
+        "detail": "went + Add rewards"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "act 32",
+        "view": "",
+        "what": "act",
+        "change": "changed",
+        "name": "Session",
+        "detail": "appeared + Add rewards"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "act 34",
+        "view": "",
+        "what": "act",
+        "change": "changed",
+        "name": "Whole run",
+        "detail": "went + Add rewards"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "act 85",
+        "view": "",
+        "what": "act",
+        "change": "changed",
+        "name": "Session",
+        "detail": "appeared + Add rewards"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "act 102",
+        "view": "",
+        "what": "act",
+        "change": "changed",
+        "name": "World",
+        "detail": "went + Add rewards"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "act 106",
+        "view": "",
+        "what": "act",
+        "change": "changed",
+        "name": "Session",
+        "detail": "appeared + Add rewards"
+      }
+    },
+    {
+      "row": 10,
+      "why": "Row 10: Add rewards joins an ended fight's plan row, or the opened row's links when the title fills the row",
+      "difference": {
+        "screen": "act 107",
+        "view": "",
+        "what": "act",
+        "change": "changed",
+        "name": "New session",
+        "detail": "went + Add rewards"
+      }
+    }
+  ]
 }
