@@ -2852,6 +2852,8 @@ struct NextAction {
     pointer: Option<egui::Pos2>,
     /// A footer took room while it was whole, and no scroll of the DM's came since.
     promised: bool,
+    /// The last reveal stopped at the room lost, short of what the row needed.
+    capped: bool,
 }
 
 /// A next action as the reveal saw it in the last finished pass, for checks.
@@ -2862,6 +2864,9 @@ pub(crate) struct NextSeen {
     pub whole: bool,
     /// A footer took room while it was whole, and no scroll of the DM's came since.
     pub promised: bool,
+    /// The last reveal stopped at the room lost: the row needed more (it moved, as when a
+    /// narrower window puts it in one column).
+    pub capped: bool,
     /// What holds the reveal back: `pointer` or `field`.
     pub held: Option<&'static str>,
 }
@@ -2923,7 +2928,12 @@ pub fn keep_above_footer(ui: &Ui, response: &Response) {
     if whole_at(rect.top()) {
         next.owed = 0.0;
     }
-    let lost = room.map_or(0.0, |room| room.lost);
+    // Only a scroll area can bring the row back; elsewhere its delta would scroll another one.
+    let in_scroll = ui
+        .stack()
+        .iter()
+        .any(|frame| frame.kind() == Some(egui::UiKind::ScrollArea));
+    let lost = room.filter(|_| in_scroll).map_or(0.0, |room| room.lost);
     if lost > 0.0 && (next.whole || next.owed > 0.0) && !whole_at(rect.top()) {
         if next.owed == 0.0 {
             next.pointer = pointer;
@@ -2951,6 +2961,7 @@ pub fn keep_above_footer(ui: &Ui, response: &Response) {
         ui.scroll_with_delta_animation(vec2(0.0, -by), egui::style::ScrollAnimation::none());
         ctx.request_discard("a next action came back into view above its footer");
         top -= by;
+        next.capped = by < rect.bottom() - view.bottom() - 0.5;
         next.owed = 0.0;
         None
     };
@@ -2969,6 +2980,7 @@ pub fn keep_above_footer(ui: &Ui, response: &Response) {
             rect: rect.translate(vec2(0.0, top - rect.top())),
             whole: next.whole,
             promised: next.promised,
+            capped: next.capped,
             held,
         });
     });

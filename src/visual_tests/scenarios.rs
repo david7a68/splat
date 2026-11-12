@@ -4790,25 +4790,43 @@ pub mod settings {
         // accent fill and Connect is secondary. Where the retry was whole before the window got
         // smaller, it is whole again above the failure's footer after it, and it can be pressed.
         d.aside(|d| {
-            let whole_before = d.act_at_size(DEFAULT, |d| {
+            // A window only taller than 960x640, so the page keeps its one column and Connect
+            // its place in the content: only the room changes.
+            let whole_before = d.act_at_size((960.0, 800.0), |d| {
                 d.click(EDIT_DETAILS);
                 d.expect(EDIT_FORM);
+                let connect = |d: &Driver<'_>| {
+                    d.nodes()
+                        .iter()
+                        .any(|node| node.name == CONNECT && node.fully_in_view())
+                };
+                for _ in 0..20 {
+                    if connect(d) {
+                        break;
+                    }
+                    d.scroll_at(pos2(400.0, 400.0), 1);
+                }
                 d.click(CONNECT);
                 d.expect(OFFLINE_ERROR);
-                d.nodes()
-                    .iter()
-                    .any(|node| node.name == CONNECT && node.fully_in_view())
+                d.pointer_away();
+                connect(d)
             });
+            let held = d
+                .nodes()
+                .iter()
+                .find(|node| node.name == CONNECT)
+                .and_then(|node| d.next_action_at(node.rect))
+                .and_then(|seen| seen.held);
             let secondary = d.control_frame(CONNECT).is_some_and(|frame| {
                 let colors = crate::design::colors();
                 frame.fill != colors.accent_fill && frame.fill != colors.accent_hover
             });
             d.observe(
                 "r3f-X41-secondary-connect-set-up",
-                whole_before && secondary && !d.is_disabled(CONNECT),
+                whole_before && secondary && !d.is_disabled(CONNECT) && held.is_none(),
                 format!(
-                    "With a campaign form open, Connect is secondary ({secondary}), enabled, and \
-                     was whole at 1200x800 ({whole_before})"
+                    "With a campaign form open, Connect is secondary ({secondary}), enabled, was \
+                     whole at 960x800 ({whole_before}), and no guard holds its reveal ({held:?})"
                 ),
             );
             super::session_recording::check_row_clear_of_footer(
@@ -11660,7 +11678,24 @@ pub mod session_notes {
                 .map(|band| band.height())
                 .fold(0.0, f32::max)
         };
+        // The save row whole in view before a letter brings the warning, as the DM sees it with
+        // a short folder path. A long path (a deep checkout) puts it lower; the reveal never pulls
+        // back a row that was already cut, so the scenario scrolls it whole first.
+        let save_row_whole = |d: &mut Driver<'_>| {
+            for _ in 0..10 {
+                let whole = d.nodes().iter().any(|node| {
+                    (node.name.ends_with("No changes") || node.name.ends_with("Unsaved"))
+                        && node.fully_in_view()
+                });
+                if whole {
+                    break;
+                }
+                d.scroll_points_at(pos2(600.0, 300.0), 40.0);
+            }
+            d.pointer_away();
+        };
         d.app_mut().timeline.save();
+        save_row_whole(d);
         d.replace_text_in("Folder", "30 Sessions");
         d.expect("Move files and save");
         d.expect("Unsaved");
@@ -11672,6 +11707,7 @@ pub mod session_notes {
         );
         const KEEPS: &str = "If you save without moving, Splat no longer shows these files.";
         let row_typed = d.aside(|d| {
+            save_row_whole(d);
             d.replace_text_in("Folder", "3");
             d.expect("Save without moving");
             [SMALL, DEFAULT, LARGE].map(|size| {
@@ -11685,6 +11721,7 @@ pub mod session_notes {
                 })
             })
         });
+        save_row_whole(d);
         d.replace_text_in("Folder", "30 Sessions");
         d.expect("Save without moving");
         // Review of PR 274, item 3: the footer and the form share one scan of the current folder,
@@ -12872,7 +12909,9 @@ pub mod session_recording {
         let whole = target.fully_in_view()
             && clear(target)
             && row.iter().all(|node| node.fully_in_view() && clear(node));
-        let owed = came || seen.promised;
+        // Where the scenario knows a footer came, the row needed no more than the room lost, so
+        // a capped reveal fails too.
+        let owed = came || (seen.promised && !seen.capped);
         d.observe(
             id,
             seen.held.is_some() || !owed || whole,
