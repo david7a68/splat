@@ -2759,6 +2759,43 @@ impl<'a> Driver<'a> {
             state,
             &window,
         ));
+        // R3f: a pane's content ends above its message footer, so no primary action shows in
+        // part where a footer takes its room.
+        let under = self.primaries_under_footers();
+        if !under.is_empty() {
+            self.observe(
+                &format!("r3f-primary-under-footer {state}"),
+                false,
+                format!("{window}: a primary action shows in part in a footer's room: {under:?}"),
+            );
+        }
+    }
+
+    /// Each accent-filled (primary) control in view that lies in part in the room a message
+    /// footer takes from its pane, with its rect.
+    fn primaries_under_footers(&self) -> Vec<(String, egui::Rect)> {
+        let accent = [
+            crate::design::colors().accent_fill,
+            crate::design::colors().accent_hover,
+        ];
+        let bands = self.footer_bands();
+        self.nodes()
+            .into_iter()
+            .filter(|node| node.in_view() && node.role == Role::Button)
+            .filter(|node| {
+                bands.iter().any(|band| {
+                    band.x_range().intersects(node.rect.x_range())
+                        && node.rect.bottom() > band.top() + 0.5
+                        && node.rect.top() < band.bottom()
+                        && !band.contains_rect(node.rect)
+                })
+            })
+            .filter(|node| {
+                self.control_frame_at(node.rect)
+                    .is_some_and(|frame| accent.contains(&frame.fill))
+            })
+            .map(|node| (node.name, node.rect))
+            .collect()
     }
 
     fn capture(
