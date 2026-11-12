@@ -353,7 +353,8 @@ row shows no time.
   naming a notice that is gone. When a later change crosses a mark only because of the entry's value, Remove
   writes nothing and names that notice's entry, to remove first. It names the entry it was drawn from, its ID and
   its content as read, and writes nothing when that entry changed or is gone on disk. Its Undo puts each entry back
-  after the entry it followed, so acts made since keep their places; it is held in memory, as the Timeline's, and
+  after the entry it followed, so acts made since keep their places, and writes nothing when a notice raised
+  since then crosses its mark only while the entries are out; it is held in memory, as the Timeline's, and
   does not outlive a restart. The rows are worked out when the ledger or a definition changes, and a folded
   history does no work.
 - **The `U` key.** A tracker action is never a step of a run's Undo. An earlier version put a step on the run's

@@ -627,8 +627,8 @@ Old Guard 4 · Takes a seal.`), the value it left as a right-aligned `Numeral` (
 (`row_menu`) with a quiet `Remove` only on an entry with another session's stamp; every row keeps the menu's place,
 so the values stand in one column. `Remove` takes the entry, the others of its press, and the entries of the notices
 it raised, and the reader's footer says `Removed: <label>.` (with `With it: …` for what went with it) and offers
-`Undo remove`, one step, as the Timeline's removal. A refusal (the entry changed or is gone on disk, or a later
-notice depends on it) and a failed save are the footer's reason line. When `Trackers.md` cannot be read the
+`Undo remove`, one step, as the Timeline's removal; it shows only while the note is in play. A refusal (the entry
+changed or is gone on disk, or a notice depends on it) and a failed save are the footer's reason line. When `Trackers.md` cannot be read the
 reader names it and shows no history and no value; when `Campaign.md` or a note in play cannot be read it says
 so. A note not in play, and a campaign with none, show nothing here. The rows are worked out when the ledger or a
 definition changes, and a collapsed section draws nothing.
