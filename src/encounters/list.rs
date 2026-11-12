@@ -218,7 +218,7 @@ pub(super) fn list_row(
     actions: impl FnOnce(&mut egui::Ui),
 ) {
     ui.push_id(id, |ui| {
-        ui.allocate_ui_with_layout(
+        let row = ui.allocate_ui_with_layout(
             egui::vec2(ui.available_width(), Density::Scan.row() + design::S),
             egui::Layout::right_to_left(egui::Align::Center),
             |ui| {
@@ -308,6 +308,7 @@ pub(super) fn list_row(
                         let Some(rating) = rating else {
                             let response =
                                 ui.add(egui::Label::new(job).extend()).on_hover_text(detail);
+                            design::row_detail(ui, &response);
                             design::named(ui, &response, &format!("{name} · {detail}"));
                             return;
                         };
@@ -315,12 +316,15 @@ pub(super) fn list_row(
                         crate::difficulty::append(&mut job, ui, Type::Small, " · ", colors().muted);
                         crate::difficulty::append(&mut job, ui, Type::Small, word, colors().text);
                         let response = ui.add(egui::Label::new(job).extend());
+                        design::row_detail(ui, &response);
                         design::named(ui, &response, &format!("{name} · {detail} · {word}"));
                         crate::difficulty::describe(ui, response, rating);
                     },
                 );
             },
         );
+        // The row registers its rect, so its second line is known as a row detail, not help.
+        design::register_row(ui, row.response.rect);
     });
 }
 

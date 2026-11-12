@@ -166,7 +166,7 @@ eye during long sessions.
 | Buttons | `Action::primary / secondary / quiet / destructive` | `.blocked(reason)` disables and adds a hover reason and accessible description. For one blocked control, show `blocked_reason` beside it in `Small` text, then an `L` gap before the next action. `.key("N")` shows the key beside the word |
 | Split button | `split_action` | Default `Action`, then a caret menu for other actions |
 | Field | `field`, `small_field` | Sentence-case muted `Small` label, control, help and error; accessible name. The help is `help` |
-| Help | `help` | Help under a field or a section: `Small` muted words that wrap at `READER_MEASURE`, whatever the pane's width |
+| Help | `help` | Help under a field or a section: `Small` muted words that wrap at `READER_MEASURE`, whatever the pane's width. Every help line uses it: the gate's `help-measure` check fails on any muted `Small` label wider than `READER_MEASURE`, whether it wraps, is cut or keeps one line. A row's own detail line is not help: it is inside its row's control, or it is marked with `row_detail` and lies inside a row that the row component gave `register_row` (`row` and the Encounters list row do). A mark outside every registered row changes nothing |
 | Text fields | `text_field`, `text_input`, `number_field`, `search_field`, `named` | Accessible name and a 26 px target; left-aligned numbers keep the caret off digits; placeholders use faint `Body` text |
 | Editable numbers | `stepper` | A value the DM can change: − and + beside the number in a bordered well. A value without a stepper is read only, so the two never look alike. The D&D Beyond sheet panel uses it for every value Splat can send; in each of its blocks the labels share one column (the widest label plus `S`) and every well has the widest value's width, so each − and each + share an x. At a limit, − or + is disabled; when the caller gives the limit's reason, that button says it on hover and in its accessible description. An enclosing lock's reason comes first |
 | Dialog | `dialog`, `dialog_actions` | `egui::Modal`, for the brief's modal tasks only; one action line, red at the left, keep and commit at the right, commit last |
@@ -175,7 +175,7 @@ eye during long sessions.
 | Rail toggle | `nav_toggle` | Lookup and panels; its own `Open` word distinguishes it from the current page |
 | Segmented | `segmented` | Words with an underline, no pill |
 | List row | `row`, `two_line_row` | Fixed height for `show_rows`; paints hover in the current frame |
-| Status | `status`, `status_link`, `Status`, `rail_status_detail` | Icon, word and colour; `status_link` opens where the DM can act. A two-line rail status paints its icon and its word where a one-line status paints them; its second line starts at the word |
+| Status | `status`, `wrapped_status`, `status_link`, `Status`, `rail_status_detail` | Icon, word and colour; `status_link` opens where the DM can act. A status that wraps (`wrapped_status`, `status_link`, `rail_status_detail`) paints its icon and its word where a one-line status paints them; every line after the first starts at the word, never under the icon |
 | Stat tile | `stat_tile` | Sentence-case muted `Small` label over a large value, no box |
 | HP | `hp_bar`, `hp_readout`, `hp_state` | Fixed slots; separate temporary HP |
 | Empty state | `empty_state` | Icon, serif title with no full stop (`Nothing planned yet`), purpose and one next step at the top of an empty pane or page, with normal padding |
@@ -184,7 +184,8 @@ eye during long sessions.
 | Row menu | `row_menu` | Quiet `⋯` at the right, named `More actions for <name>`; holds Remove and Delete. Opens under the `⋯`, and ends at its right edge when it would cross the pane's splitter or scroll bar |
 | Add strip | `hanging_add_strip` | `Add` in its own Label column; one line of quiet icon-and-word buttons. Show all seven actions when they fit. Otherwise keep Fight, Group (plan only) and Long rest visible; put Day, Short rest, Travel and Major event in one compact `⋯⌄` menu named `More Add actions`; hover text names its actions. A line of More alone (the plan's `Scene`) comes last there and takes no part in the fit, so no action moves for it, and a strip with no More has none. Keep the strip on one line |
 | Message | `message`, `small_message`, `message_with_action`, `Tone` | Inline icon and bar; `message`, `message_with_action` and `undo_message` start the words `XS` after the icon whatever the caller's spacing; `message`'s words end at their last painted word, not at the space a wrapped row broke at; cap the notice at `LIST_MEASURE`; actions follow text after an `L` gap or wrap below, aligned with the text; measure the whole action with padding; move it below and align it with the text if it cannot fit; actions without icons use a secondary border. `message_with_actions` puts several choices below the words: the first starts at the text edge, wrapped lines start there too, and a red or dismissing choice keeps exactly `L` from the one before it (subtract the row's item spacing) |
-| Message space | `MessageSpace`, `fixed_part` | The one space below a save row, `MESSAGE_SPACE_LINES` (two) body lines high whatever it holds. It holds Save's reason and the latest result in one part: a result whose Undo is live comes first, then the reason; otherwise the reason comes first. The result says whether its Undo is live (`has_undo`); the space chooses the order. Longer words wrap and scroll inside the part (`fixed_part`): one focusable group named with every message in that order, a lane kept for its scroll bar, arrows and Page Up or Page Down scroll it while it has focus |
+| Message footer | `Footer` (`new`, `result`, `reason`, `notice`, `show`) | One per pane. Results, reasons and notices that come and go, in a pane with a scroll area or an editor, sit in a footer pinned at the bottom of the pane, below its scroll area. The content above never moves: its top stays, and only its visible height shrinks. The footer is absent when it holds nothing, as tall as what it holds up to one third of the pane, and `S` below the content. Beyond a third its words scroll inside it, beside a lane kept for its scroll bar: it is one focusable group named with every message in its order. Tab reaches each control in it, scrolled into view, and then the group; arrows and Page Up or Page Down scroll it while it has focus, and the wheel scrolls it. Its words sit `PART_INSET` (the ring's width and a hairline) inside its edge, so the focus ring never crosses a letter. Each result is its own message with its own Undo. Its order: results with a live Undo first, newest first; then reasons (Save's reason, a parse error, a disk failure); then other notices, and results with no Undo. The result says whether its Undo is live (`has_undo`); the footer chooses the order. A state word stays on the save row; a fault that belongs to one row stays on the row |
+| Message space (being replaced) | `MessageSpace`, `fixed_part` | The two-line space below a save row, for callers not yet moved to `Footer`; removed when none use it. Its part keeps its words `PART_INSET` inside its edge, as the footer does |
 | Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup, Notes and the run; separate participant and fight tabs |
 | Column | `Column::left / right / panel` | Rail, page lists and panels; inner-edge drag handle; natural width until dragged or moved with keys, then saved width across restarts; preserve page room and `RUN_LIST_KEEPS`; adjacent content reaches the column edge, with text measured inside it |
 | Link | `link` | Real `Link` role, at least 24 px high. A word narrower than 24 px reserves 24 px of layout width from the link's own minimum size, never from spaces in the text: the word starts at the text edge, the underline covers only the word, and the next item starts after the whole target, so two short links side by side never share a press area. An icon before the words is not part of the underline: draw it as its own glyph, as `status_link` does |
@@ -619,16 +620,13 @@ the same place. Every Library result takes it too: package use, a manifest write
 separate entry.`, a folder's separate entries, a discarded draft, the offer to change links after a rename and its
 result, and a copied package's registration with `Use the copy in encounters`. One result place per reader: in Read
 they sit after the title's kind line, so the columns, the tabs, the file line and the title never move. Edit
-Markdown keeps one message space below the save row, directly above the editor, two text lines high whatever it
-holds. Longer words wrap and scroll inside it, beside a lane kept for its scroll bar, so no text is cut. It is one
-focusable group named with its whole message: Tab reaches it, a screen reader reads all of it, and while it has focus
-the up and down arrows scroll it by a line and Page Up and Page Down by the space; the wheel scrolls it too. Its order:
-a result that carries a live Undo comes first (Discard's, the heading and stat fixes', a write's), because a broken
-file's reason never clears after Discard or Reload; then Save's reason (a repair draft's parse error, a refusal before
-the write, the disk's failure); then the link Campaign sent the DM to fix. With no reason, the warnings follow (each
-broken link, the first heading, a stat line) and results with no Undo. A reason hides those; they come back when it
-clears, while their owner lives. With none of these, the space says why other actions wait for the draft. So no
-result, reason, warning, Discard or Undo moves the editor. With no entry
+Markdown keeps its messages in the pane's message footer (`Footer`), pinned below the editor; the editor starts
+directly below the save row. Its order: a result that carries a live Undo comes first (Discard's, the heading and stat
+fixes', a write's), because a broken file's reason never clears after Discard or Reload; then Save's reason (a repair
+draft's parse error with a broken manifest's recovery, a refusal before the write, the disk's failure); then the
+notices: results with no Undo, the link Campaign sent the DM to fix, each broken link, the first heading, a stat line.
+With none of these, the footer says why other actions wait for the draft. So no result, reason, warning, Discard or
+Undo moves the editor's top. With no entry
 open, they sit above the empty reader, and above a form that takes the reader's place. The link offer after a
 rename and its result belong to the renamed entry: they show only in its reader, stay hidden while another entry is
 open, and end on its next link update or saved edit (a saved edit ends the earlier offer whatever it offers), on
@@ -1989,8 +1987,9 @@ tooltips.
 - `visual_tests::ergonomics` checks target size, accessible names, visibility, overlap, clipping, keyboard
   reach and workflow goals. Overlap includes labels except those fully inside their interactive ancestor.
   Clipping includes ellipses and text past pane edges, read from painted shapes. Missing-glyph checks fail for
-  characters absent from the chosen font and fallbacks. All checks except workflow goals have seeded unit
-  failures, including an unassigned glyph. Workflow goals were verified by deliberately breaking the app.
+  characters absent from the chosen font and fallbacks. `help-measure` fails on a muted `Small` label wider than
+  `READER_MEASURE`, in any wrap mode: help that skipped `help`. Row details marked with `row_detail` pass only inside a row given to `register_row`. All checks except workflow goals have seeded unit
+  failures, including an unassigned glyph and a 560 px help label. Workflow goals were verified by deliberately breaking the app.
 - An overlap of an app control or text with a scroll bar or a column splitter is an app fault
   (`no-overlap/app-vs-chrome`), because egui can give the press to the bar or splitter. No baseline may
   allow it. A menu item over its own popup background stays egui chrome: egui's hit test gives the item every
