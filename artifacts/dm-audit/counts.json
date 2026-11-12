@@ -248,6 +248,13 @@
     },
     {
       "phase": "during",
+      "task": "Correct a wrong press of last session from the house rule note",
+      "transitions": 0,
+      "interactions": 6,
+      "path": "Session"
+    },
+    {
+      "phase": "during",
       "task": "Next fight: start it, with the party as it stands",
       "transitions": 1,
       "interactions": 1,
@@ -357,6 +364,13 @@
       "transitions": 1,
       "interactions": 5,
       "path": "Session > Timeline"
+    },
+    {
+      "phase": "after",
+      "task": "The table settles an open question: tick it",
+      "transitions": 1,
+      "interactions": 3,
+      "path": "Timeline > World"
     }
   ]
 }

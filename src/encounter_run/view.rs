@@ -46,6 +46,10 @@ const TIGHT_ROW: f32 = 25.0;
 const NAME_ROOM: f32 = 8.0;
 /// A long name wraps to at most this many lines; the last one ends in `…`.
 const NAME_LINES: usize = 3;
+/// X8: the Conditions field's words while the dock has no room for `Effect`.
+const OTHER_EFFECT_TIMED: &str = "Other effect, such as Bless 10 rounds";
+/// X7: what the Conditions tab records, and what Splat does with a time the DM types.
+const CONDITIONS_HELP: &str = "No HP, AC or roll changes by itself. A time you type counts down on that creature’s turns. Other effects stay local and do not sync.";
 /// A creature's effects beyond the official conditions, in the run's Conditions tab and in a
 /// change form alike: the `Other effects` label, then each in Body text with its row menu.
 /// Returns the position in `effects` of the one the DM removed. `field` is the width of the
@@ -95,11 +99,11 @@ fn other_effect_add() -> Action<'static> {
 pub(crate) fn other_effect_field(
     ui: &mut egui::Ui,
     text: &mut String,
-    width: f32,
+    (width, placeholder): (f32, &str),
     focus: bool,
 ) -> (bool, egui::Response) {
     ui.horizontal(|ui| {
-        let response = design::text_input(ui, "Other effect", text, "Other effect…", width);
+        let response = design::text_input(ui, "Other effect", text, placeholder, width);
         if focus {
             response.request_focus();
         }
@@ -240,12 +244,35 @@ pub(crate) fn conditions_grid(
     salt: &str,
     on: impl Fn(&str) -> bool,
 ) -> Option<&'static str> {
+    conditions_grid_counted(ui, salt, &|name| on(name).then(|| name.to_owned())).0
+}
+
+/// The grid of `conditions_grid`, where `label` gives an on condition's words. X11: a
+/// condition with a time shows its count on its tick, `✓ Frightened 10`, while every column
+/// still fits the room; its column grows by the count. Else each tick shows its name only.
+/// Returns the pressed condition, and whether the counts show.
+fn conditions_grid_counted(
+    ui: &mut egui::Ui,
+    salt: &str,
+    label: &dyn Fn(&str) -> Option<String>,
+) -> (Option<&'static str>, bool) {
     let columns = if ui.available_width() >= design::CONDITION_THREE_COLUMNS_FROM {
         3
     } else {
         2
     };
-    let widths = condition_column_widths(ui, columns);
+    let mut widths = condition_column_widths(ui, columns);
+    let mut counted = widths.clone();
+    for (at, (_, name)) in crate::combat_sync::CONDITIONS.iter().enumerate() {
+        if let Some(words) = label(name).filter(|words| words != name) {
+            counted[at % columns] = counted[at % columns].max(toggle_width(ui, &words, icons::OK));
+        }
+    }
+    let gaps = design::S * (columns - 1) as f32;
+    let counts = counted.iter().sum::<f32>() + gaps <= ui.available_width();
+    if counts {
+        widths = counted;
+    }
     let height = Density::Read.control();
     let mut pressed = None;
     ui.push_id(salt, |ui| {
@@ -257,9 +284,12 @@ pub(crate) fn conditions_grid(
                     let size = vec2(*width, height);
                     ui.allocate_ui_with_layout(size, Layout::left_to_right(Align::Center), |ui| {
                         ui.set_min_size(size);
-                        let selected = on(name);
+                        let words = label(name);
+                        let selected = words.is_some();
                         let icon = if selected { icons::OK } else { icons::ADD };
-                        if toggle(ui, name, icon, selected, name, Density::Read).clicked() {
+                        let shown = words.filter(|_| counts);
+                        let shown = shown.as_deref().unwrap_or(name);
+                        if toggle(ui, shown, icon, selected, name, Density::Read).clicked() {
                             pressed = Some(*name);
                         }
                     });
@@ -267,7 +297,7 @@ pub(crate) fn conditions_grid(
             });
         }
     });
-    pressed
+    (pressed, counts)
 }
 
 /// Blank means roll; invalid text must never silently request a roll.
@@ -838,6 +868,10 @@ impl Run {
         let back_words = back
             .as_ref()
             .map(|(from, _)| format!("Party HP carries over from {from}."));
+        let recharged = self
+            .recharge_result()
+            .filter(|_| !setup)
+            .map(|recharged| recharged.words.clone());
         // After the words its messages borrow, so it is dropped first.
         let mut footer = design::Footer::new(("run_messages", self.id), rect.width());
         if used {
@@ -846,6 +880,12 @@ impl Run {
                 if design::undo_message(ui, Tone::Success, SAVED_HP_USED, "Undo use saved HP") {
                     undo_saved.set(true);
                 }
+            });
+        }
+        // X4: a recharge roll's result, until the next act. Its Undo is the header's.
+        if let Some(words) = recharged.as_deref() {
+            footer.result(words, false, |ui| {
+                design::message(ui, Tone::Info, words);
             });
         }
         if disk {
@@ -1306,12 +1346,17 @@ impl Run {
         let longest = self.state.participants.iter().fold(0.0_f32, |longest, p| {
             longest.max(design::number_width(ui, &p.name, &font) + 1.0)
         });
+        let current = self.current();
         self.state
             .order
             .iter()
             .map(|&index| {
                 let p = &self.state.participants[index];
-                let row = (self.row_sync_word(index), self.conc_save_dc(index));
+                let row = (
+                    self.row_sync_word(index),
+                    self.conc_save_dc(index),
+                    current == Some(index),
+                );
                 RowLayout::fitted(ui, width, p, row, scale, fit, longest)
                     .with_art(self.row_art(ui.ctx(), p))
                     .with_badge(ui, self.row_badge(index).as_deref())
@@ -1983,7 +2028,15 @@ impl Run {
                     })
                 };
                 // Fixed columns, `S` apart: never spread across the form, never moved by a toggle.
-                if let Some(name) = conditions_grid(ui, "official_conditions", |name| found(name).is_some()) {
+                // X11: a condition with a count shows it on its tick, `✓ Frightened 10`.
+                let label = |name: &str| {
+                    found(name).map(|at| {
+                        let c = &p.conditions[at];
+                        c.count().map_or_else(|| name.to_owned(), |_| c.words())
+                    })
+                };
+                let (pressed, counts) = conditions_grid_counted(ui, "official_conditions", &label);
+                if let Some(name) = pressed {
                     command = Some(found(name).map_or_else(
                         || Command::Condition(index, name.to_owned()),
                         |i| Command::RemoveCondition(index, i),
@@ -2040,10 +2093,11 @@ impl Run {
                     }
                 }
                 ui.add_space(design::S);
-                // Each effect with its whole words: an official condition's count is here too,
-                // where the DM removes it.
+                // Each other effect with its whole words. An official condition's count is on
+                // its tick; it is here only when the tick cannot show it.
                 let listed = |c: &super::Condition| {
-                    c.is_effect() || super::recognized_condition(c.name()).is_none()
+                    super::recognized_condition(c.name()).is_none()
+                        || (c.is_effect() && !(counts && c.count().is_some()))
                 };
                 let custom: Vec<_> = p
                     .conditions
@@ -2053,17 +2107,23 @@ impl Run {
                     .map(|(at, c)| (at, c.words()))
                     .collect();
                 let width = (ui.available_width() - 80.0).max(100.0);
-                if let Some(at) = other_effects_list(
-                    ui,
-                    custom.iter().map(|(_, words)| words.as_str()),
-                    width,
-                ) {
+                if let Some(at) =
+                    other_effects_list(ui, custom.iter().map(|(_, words)| words.as_str()), width)
+                {
                     command = Some(Command::RemoveCondition(index, custom[at].0));
                 }
                 let focus = std::mem::take(&mut self.focus_other_effect);
                 // The participant's one draft: the dock's field shows the same words.
                 let draft = self.effect_fields.entry(p.key.clone()).or_default();
-                let (add, field) = other_effect_field(ui, &mut draft.words, width, focus);
+                // X8: where the dock has no room for `Effect`, this field is the way, and its
+                // words say that a time counts.
+                let placeholder = if self.state.phase == Phase::Running && !self.effect_in_dock {
+                    OTHER_EFFECT_TIMED
+                } else {
+                    "Other effect…"
+                };
+                let (add, field) =
+                    other_effect_field(ui, &mut draft.words, (width, placeholder), focus);
                 // Escape clears the participant's draft, as in the dock's field.
                 if field.lost_focus() && ui.input(|i| i.key_pressed(Key::Escape)) {
                     draft.words.clear();
@@ -2080,10 +2140,7 @@ impl Run {
                     });
                     added = true;
                 }
-                design::help(
-                    ui,
-                    "These record your ruling. No number changes by itself. Other effects stay local and do not sync.",
-                );
+                design::help(ui, CONDITIONS_HELP);
             });
         if let Some(command) = command {
             self.run_command(command);
@@ -6646,19 +6703,51 @@ fn name_lines(ui: &egui::Ui, name: &str, font: &egui::FontId, width: f32) -> (Ar
 }
 
 /// The dock's selected name and its type. FJ5: it keeps `Heading`, as every other name there
-/// does, and gives up whole words by `dock_name`. `Small` only when that shows the name whole,
-/// so a smaller name never also loses letters.
+/// does, and gives up whole words by `dock_name`, keeping a telling last word first (X53).
+/// `Small` only when that shows the name whole, so a smaller name never also loses letters.
 pub(super) fn dock_name_shown(ui: &egui::Ui, name: &str, room: f32) -> (Type, String) {
     if design::number_width(ui, name, &Type::Heading.font(ui)) <= room {
         (Type::Heading, name.to_owned())
     } else if design::number_width(ui, name, &Type::Small.font(ui)) <= room {
         (Type::Small, name.to_owned())
     } else {
-        (
-            Type::Heading,
-            dock_name(ui, name, &Type::Heading.font(ui), room),
-        )
+        let font = Type::Heading.font(ui);
+        // While the first word, `…` and the last word fit, the last word stays: a copy number
+        // or letter by `dock_name`'s rule, other words by the telling-end rule. Else the first
+        // word's start (review of PR 292).
+        let mut words = name.split_whitespace();
+        let first = words
+            .next()
+            .unwrap_or(name)
+            .trim_end_matches([',', ';', ':']);
+        let last = words.last().unwrap_or(first);
+        let numbered = last.chars().all(|c| c.is_ascii_digit()) || last.chars().count() == 1;
+        let ends = design::number_width(ui, &format!("{first}… {last}"), &font) <= room;
+        let shown = match (ends, numbered) {
+            (true, true) => Some(dock_name(ui, name, &font, room)),
+            (true, false) => with_telling_end(ui, name, &font, room),
+            (false, _) => None,
+        }
+        .unwrap_or_else(|| first_word_start(ui, name, &font, room));
+        (Type::Heading, shown)
     }
+}
+
+/// The dock's name where its slot cannot hold the first word, `…` and the last word: its
+/// first word's start and `…`, as many letters as the slot holds (review of PR 292, X53). The
+/// hover and the accessible name hold it whole.
+fn first_word_start(ui: &egui::Ui, name: &str, font: &egui::FontId, room: f32) -> String {
+    let first: Vec<char> = name
+        .split_whitespace()
+        .next()
+        .unwrap_or(name)
+        .chars()
+        .collect();
+    (1..=first.len())
+        .rev()
+        .map(|letters| format!("{}…", first[..letters].iter().collect::<String>()))
+        .find(|shown| design::number_width(ui, shown, font) <= room)
+        .unwrap_or_else(|| "…".to_owned())
 }
 
 pub(super) fn dock_name(ui: &egui::Ui, name: &str, font: &egui::FontId, width: f32) -> String {
@@ -6692,6 +6781,24 @@ pub(super) fn dock_name(ui: &egui::Ui, name: &str, font: &egui::FontId, width: f
     } else {
         format!("… {last}")
     }
+}
+
+/// X53: the dock's name, when it loses words, keeps its last one, which tells it apart, after
+/// its first whole words: `Seraphina Thornwood-Ashgrave… Bell`. None when the last word is a
+/// number or a letter (`dock_name` keeps those its own way), or no first word fits before it.
+fn with_telling_end(ui: &egui::Ui, name: &str, font: &egui::FontId, width: f32) -> Option<String> {
+    let (first, last) = name.trim().rsplit_once(char::is_whitespace)?;
+    if last.chars().all(|c| c.is_ascii_digit()) || last.chars().count() == 1 {
+        return None;
+    }
+    let end = format!("… {last}");
+    let room = width - design::number_width(ui, &end, font);
+    let prefix = design::words_that_fit(ui, first, font, room);
+    let prefix = prefix
+        .trim_end_matches('…')
+        .trim_end_matches([',', ';', ':']);
+    let shown = format!("{prefix}{end}");
+    (!prefix.is_empty() && design::number_width(ui, &shown, font) <= width).then_some(shown)
 }
 
 pub(super) fn presence_action(present: bool) -> (&'static str, &'static str) {
@@ -6762,6 +6869,15 @@ pub(super) fn log_link(ui: &mut egui::Ui) -> egui::Response {
         }
     }
     response.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
+/// Concentration, as a run row marks it and History's Final state repeats it: its icon and
+/// `Conc`, in its own colour.
+pub(crate) fn concentration_mark() -> (String, egui::Color32) {
+    (
+        format!("{} Conc", icons::CONCENTRATING),
+        colors().participant.concentrating,
+    )
 }
 
 fn row_name(p: &Participant, turn: TurnMark, sync: Option<SyncState>) -> String {
@@ -6904,6 +7020,8 @@ struct RowInput {
     words: RowWords,
     sync: Option<SyncState>,
     conc_dc: Option<u32>,
+    /// The row has the turn: an effect due on it comes first (W1-D1).
+    turn: bool,
     scale: RunScale,
     fit: RowFit,
     width: f32,
@@ -6917,6 +7035,7 @@ impl std::hash::Hash for RowInput {
             words,
             sync,
             conc_dc,
+            turn,
             scale,
             fit,
             width,
@@ -6936,6 +7055,7 @@ impl std::hash::Hash for RowInput {
         words.hash(hash);
         sync.hash(hash);
         conc_dc.hash(hash);
+        turn.hash(hash);
         fit.hash(hash);
         for value in [
             width,
@@ -6960,12 +7080,9 @@ impl std::hash::Hash for RowInput {
 struct Extra {
     effects: EffectPart,
     conc_dc: Option<u32>,
-    /// An official condition with a time shows as the plain condition: the row as it was
-    /// before the DM gave it the time.
-    official_as_plain: bool,
-    /// Plain conditions shown before `N more`: all of them, or at fewest one, as the row's
-    /// folding of section 1.4 can leave them.
-    fewest_plain: bool,
+    /// Each effect shows as its plain words: the row with each time taken away (X5, the
+    /// ruling on PR 276), whose lines and height the row keeps.
+    as_plain: bool,
 }
 
 /// The effects a row shows: the first ones with their words, each with its count, then the
@@ -6975,6 +7092,10 @@ struct EffectPart {
     /// Each shown effect's place in the row's conditions, and the words of its name.
     shown: Vec<(usize, String)>,
     rest: usize,
+    /// The most plain conditions shown before `N more`, when the effects' words need their
+    /// room. None: all of them, or at fewest one, as the row's folding of section 1.4 can
+    /// leave them.
+    plain_at_most: Option<usize>,
 }
 
 /// What a click on an effect's target does.
@@ -7132,22 +7253,24 @@ impl RowLayout {
         fit: RowFit,
         longest_name: f32,
     ) -> Self {
-        Self::fitted(ui, width, p, (sync, None), scale, fit, longest_name)
+        Self::fitted(ui, width, p, (sync, None, false), scale, fit, longest_name)
     }
 
     /// The row's rule of section 1.4, as one rule: the row's height and lines are those of
-    /// the same row with each time taken away (an official condition with a time is that
-    /// condition). The effects then take only the room that is spare there, in the first of
-    /// these forms that keeps both: each effect whole; the first ones whole and a count of the
+    /// the same row with each time taken away (each effect is its plain words, and an official
+    /// condition with a time is that condition). The effects then take only the room that is
+    /// spare there, in the first of these forms that keeps both and shows by its words each
+    /// effect that row shows: each effect whole; the first ones whole and a count of the
     /// rest; the first one's words shortened from their end and a count; the count of them
-    /// all. Else the row shows none, and its hover has them. The save DC then takes the room
-    /// that the effects leave. A finished layout is kept by its whole input, so a frame that
-    /// changes nothing in a row lays it out no more.
+    /// all. Else the row is that row: its effects show as their words without their times,
+    /// and its hover has them whole. On the row that has the turn, an effect due on it comes
+    /// first. The save DC then takes the room that the effects leave. A finished layout is
+    /// kept by its whole input, so a frame that changes nothing in a row lays it out no more.
     fn fitted(
         ui: &egui::Ui,
         width: f32,
         p: &Participant,
-        (sync, conc_dc): (Option<SyncState>, Option<u32>),
+        (sync, conc_dc, turn): (Option<SyncState>, Option<u32>, bool),
         scale: RunScale,
         fit: RowFit,
         longest_name: f32,
@@ -7158,6 +7281,7 @@ impl RowLayout {
             words: RowWords::of(p),
             sync,
             conc_dc,
+            turn,
             scale,
             fit,
             width,
@@ -7192,36 +7316,39 @@ impl RowLayout {
 
     /// `fitted`'s work, for its input.
     fn laid_out(ui: &egui::Ui, input: &RowInput) -> Self {
-        let (scale, conc_dc, conditions) = (input.scale, input.conc_dc, &input.words.conditions);
+        let (conc_dc, conditions) = (input.conc_dc, &input.words.conditions);
         let measure = |extra: &Extra| {
-            let official = |c: &super::Condition| super::recognized_condition(c.name()).is_some();
             let plain = conditions
                 .iter()
-                .filter(|c| !c.is_effect() || (extra.official_as_plain && official(c)))
+                .filter(|c| !c.is_effect() || extra.as_plain)
                 .count();
-            let plain = if extra.fewest_plain {
-                plain.min(1)
-            } else {
-                plain
-            };
+            let plain = extra
+                .effects
+                .plain_at_most
+                .map_or(plain, |most| plain.min(most));
             Self::measured(ui, input, (plain, BonusFit::All, extra))
         };
-        // The row with each time taken away: an official condition that gained a time shows
-        // as the condition it is. Its lines, its height and the conditions it shows stay.
+        // X5, the ruling on PR 276: the row with each time taken away. Each effect shows as
+        // its plain words, and an official condition as the condition it is. Its lines, its
+        // height and the effects it shows by their words stay.
         let base = measure(&Extra {
-            official_as_plain: true,
+            as_plain: true,
             ..Extra::default()
         });
-        let effects: Vec<(usize, &str)> = conditions
+        let mut effects: Vec<(usize, &str)> = conditions
             .iter()
             .enumerate()
             .filter(|(_, c)| c.is_effect())
             .map(|(at, c)| (at, c.name()))
             .collect();
+        // W1-D1: on the row that has the turn, an effect due on it comes first.
+        if input.turn {
+            effects.sort_by_key(|(at, _)| !conditions[*at].due());
+        }
         if effects.is_empty() && conc_dc.is_none() {
             return base;
         }
-        let (effects, dc) = Self::choose(ui, &base, &effects, conc_dc, scale, measure);
+        let (effects, dc) = Self::choose(ui, &base, &effects, input, measure);
         if effects.shown.is_empty() && effects.rest == 0 && dc.is_none() {
             return base;
         }
@@ -7239,13 +7366,12 @@ impl RowLayout {
     /// The row's rule of section 1.4, as a choice: the effects to show and whether the save's
     /// DC shows. Each form must keep the lines and the height of `base`, and show each official
     /// condition with a time that `base` shows. The first that does wins; with none, the row
-    /// is `base`.
+    /// is `base`, which shows the effects as their words without their times.
     fn choose(
         ui: &egui::Ui,
         base: &Self,
         effects: &[(usize, &str)],
-        conc_dc: Option<u32>,
-        scale: RunScale,
+        input: &RowInput,
         measure: impl Fn(&Extra) -> Self,
     ) -> (EffectPart, Option<u32>) {
         let names = |layout: &Self| -> Vec<String> {
@@ -7256,15 +7382,17 @@ impl RowLayout {
                 .filter(|name| !["Run conditions", "Run changes"].contains(&name.as_str()))
                 .collect()
         };
-        // An official condition that gained a time stays in view: as its words with the
-        // count, or as the plain condition it was. Other plain conditions fold as today.
+        // An official condition that the row without times shows stays in view: as its words
+        // with the count, or as the plain condition it was. Other words show in a form by
+        // their words or in its count. Plain conditions fold as today.
         let shown: Vec<String> = names(base)
             .into_iter()
+            .filter(|name| super::recognized_condition(name).is_some())
             .filter(|name| effects.iter().any(|(_, effect)| effect == name))
             .collect();
         let keeps = |layout: &Self| {
             let now = names(layout);
-            layout.keeps_place_of(base, scale) && shown.iter().all(|name| now.contains(name))
+            layout.keeps_place_of(base, input.scale) && shown.iter().all(|name| now.contains(name))
         };
         let mut forms: Vec<EffectPart> = (0..=effects.len())
             .rev()
@@ -7274,34 +7402,47 @@ impl RowLayout {
                     .map(|(at, name)| (*at, (*name).to_owned()))
                     .collect(),
                 rest: effects.len() - whole,
+                plain_at_most: None,
             })
             .collect();
-        // The first effect alone, shortened to the room that the line leaves it.
-        if let Some(&(at, name)) = effects.first() {
-            // Its room is what the line leaves with the plain conditions folded as far as the
-            // row folds them, since the effects come first.
-            let bare = measure(&Extra {
-                effects: EffectPart {
-                    shown: vec![(at, String::new())],
-                    rest: effects.len() - 1,
-                },
-                fewest_plain: true,
+        // The first effect alone, shortened to the room that the line leaves it with the plain
+        // conditions folded to `most`, since the effects come first.
+        let shortened = |most: usize| {
+            let &(at, name) = effects.first()?;
+            let rest = effects.len() - 1;
+            let bare = EffectPart {
+                shown: vec![(at, String::new())],
+                rest,
+                plain_at_most: Some(most),
+            };
+            let measured = measure(&Extra {
+                effects: bare.clone(),
                 ..Extra::default()
             });
-            if let Some(line) = bare.second_line.as_ref().filter(|_| keeps(&bare)) {
-                let font = line.job.sections[0].format.font_id.clone();
-                let room = line.job.wrap.max_width - line.size().x;
-                let cut = design::words_that_fit(ui, name, &font, room);
-                if cut != name && cut != "…" && design::number_width(ui, &cut, &font) <= room {
-                    forms.insert(
-                        forms.len() - 1,
-                        EffectPart {
-                            shown: vec![(at, cut)],
-                            rest: effects.len() - 1,
-                        },
-                    );
-                }
-            }
+            let line = measured.second_line.as_ref().filter(|_| keeps(&measured))?;
+            let font = line.job.sections[0].format.font_id.clone();
+            let room = line.job.wrap.max_width - line.size().x;
+            let cut = design::words_that_fit(ui, name, &font, room);
+            (cut != name && cut != "…" && design::number_width(ui, &cut, &font) <= room).then(
+                || EffectPart {
+                    shown: vec![(at, cut)],
+                    ..bare
+                },
+            )
+        };
+        // At fewest one plain condition shows, as the row's folding leaves them.
+        if let Some(mut part) = shortened(1) {
+            part.plain_at_most = None;
+            forms.insert(forms.len() - 1, part);
+        }
+        // W1-D1: an effect due on this turn keeps its first words before the last plain
+        // condition folds into `N more`.
+        let due = input.turn
+            && effects
+                .first()
+                .is_some_and(|(at, _)| input.words.conditions[*at].due());
+        if due && let Some(part) = shortened(0) {
+            forms.insert(forms.len() - 1, part);
         }
         // The count of them all is the last form. With no effect, the one form is no part.
         let Some(effects) = forms.into_iter().find(|part| {
@@ -7324,7 +7465,7 @@ impl RowLayout {
         }));
         // The DC folds nothing that shows: the line without it is the start of the line with
         // it. Else it is in the hover and the accessible name only.
-        let dc = conc_dc.filter(|dc| {
+        let dc = input.conc_dc.filter(|dc| {
             let with = measure(&Extra {
                 effects: effects.clone(),
                 conc_dc: Some(*dc),
@@ -7433,12 +7574,14 @@ impl RowLayout {
         let role = if narrow { Type::Body } else { Type::Strong };
         let font = role.sized(ui, scale.condition);
         let mut first = true;
+        // X10: the count of the rest ends the effects' slot after a space, with no dot.
+        let dot = std::cell::Cell::new(true);
         // One part of the line: its words after ` · `, in one or more colours, and the room
         // after them that keeps a count's slot as wide as its widest form.
         let mut add_parts = |parts: &[(&str, egui::Color32)], pad: f32| {
             if !first {
                 job.append(
-                    " ·\u{a0}",
+                    if dot.replace(true) { " ·\u{a0}" } else { " " },
                     0.0,
                     egui::TextFormat {
                         font_id: font.clone(),
@@ -7475,13 +7618,8 @@ impl RowLayout {
         let initiative_span =
             (w.present && !w.initiative).then(|| add_parts(&[("No initiative", c.accent)], 0.0));
         if w.concentration {
-            add_parts(
-                &[(
-                    &*format!("{} Conc", icons::CONCENTRATING),
-                    c.participant.concentrating,
-                )],
-                0.0,
-            );
+            let (words, color) = concentration_mark();
+            add_parts(&[(&*words, color)], 0.0);
         }
         // Effects take the conditions' place, before the plain conditions (section 1.4). Each
         // count has a slot as wide as its widest form, so that a change of count moves no word.
@@ -7533,16 +7671,16 @@ impl RowLayout {
             let words = if extra.effects.shown.is_empty() {
                 format!("{}\u{a0}{}", icons::PIN, extra.effects.rest)
             } else {
+                dot.set(false);
                 format!("{}\u{a0}+{}", icons::PIN, extra.effects.rest)
             };
             let span = add_parts(&[(&*words, c.participant.condition)], 0.0);
             effect_spans.push((EffectAct::Open, usize::MAX, span));
         }
-        let official = |c: &super::Condition| super::recognized_condition(c.name()).is_some();
         let plain: Vec<&super::Condition> = w
             .conditions
             .iter()
-            .filter(|c| !c.is_effect() || (extra.official_as_plain && official(c)))
+            .filter(|c| !c.is_effect() || extra.as_plain)
             .collect();
         for condition in plain.iter().take(condition_count) {
             let condition = condition.name();
@@ -9464,51 +9602,97 @@ mod tests {
                     );
                 }
                 // F2, section 1.4: effects take the conditions' place, before the plain ones,
-                // and a row keeps the lines and the height it has with no effect. What does
-                // not fit is a count; with no room for that, the row shows none.
+                // and a row keeps the lines and the height of the same row with each time taken
+                // away (X5: each effect as its plain words). What does not fit is a count.
                 use super::super::Condition;
                 let mut q = p.clone();
                 q.conditions = vec![
                     Condition::from("Poisoned"),
-                    Condition::read("Wis save DC 15 (Hold Person) on its turn"),
                     Condition::read("Bless 10 rounds"),
+                    Condition::read("Wis save DC 15 (Hold Person) on its turn"),
                     Condition::read("Frightened 10 rounds"),
                 ];
                 let mut plain = q.clone();
                 plain.conditions.retain(|c| !c.is_effect());
+                let mut labels = q.clone();
+                labels.conditions = q
+                    .conditions
+                    .iter()
+                    .map(|c| Condition::from(c.name()))
+                    .collect();
                 let mut counted = 0;
+                let row = |width, q, scale, fit, turn| {
+                    RowLayout::fitted(ui, width, q, (None, None, turn), scale, fit, 0.0)
+                };
                 for (width, scale) in [
                     (442.0, design::RUN_REGULAR),
                     (596.0, design::RUN_REGULAR),
                     (442.0, design::RUN_COMPACT),
                     (1040.0, design::RUN_LARGE),
                 ] {
-                    for fit in [RowFit::Natural, RowFit::Compressed, RowFit::Summary] {
-                        let base = RowLayout::new(ui, width, &plain, None, scale, fit, 0.0);
-                        let layout = RowLayout::new(ui, width, &q, None, scale, fit, 0.0);
+                    for (fit, turn) in [RowFit::Natural, RowFit::Compressed, RowFit::Summary]
+                        .into_iter()
+                        .flat_map(|fit| [(fit, false), (fit, true)])
+                    {
+                        let base = RowLayout::new(ui, width, &labels, None, scale, fit, 0.0);
+                        let layout = row(width, &q, scale, fit, turn);
                         assert_eq!(layout.height(scale), base.height(scale), "{width} {fit:?}");
                         let rows =
                             |l: &RowLayout| l.second_line.as_ref().map_or(0, |g| g.rows.len());
                         assert!(rows(&layout) <= rows(&base).max(1), "{width} {fit:?}");
-                        let Some(line) = &layout.second_line else {
-                            continue;
+                        let text = layout.second_line.as_ref().unwrap().text();
+                        // The first effect leads, before the plain condition. W1-D1: on the
+                        // row that has the turn, the effect due on it leads.
+                        let (lead, other) = if turn {
+                            ("Wis", "Bless")
+                        } else {
+                            ("Bless", "Wis")
                         };
-                        let text = line.text();
-                        // The first effect leads, before the plain condition.
+                        if let Some(at) = text.find(other) {
+                            assert!(text.find(lead).is_some_and(|lead| lead < at), "{text}");
+                        }
                         if let (Some(effect), Some(poisoned)) =
-                            (text.find("Wis save"), text.find("Poisoned"))
+                            (text.find(lead), text.find("Poisoned"))
                         {
                             assert!(effect < poisoned, "{text}");
                         }
                         if text.contains(icons::PIN) {
                             counted += 1;
                             assert!(!text.contains("Frightened 10"), "{text}");
-                        } else if base.tight {
-                            assert!(!text.contains("Wis"), "a tight row shows none: {text}");
+                            // X10: a count of the rest follows its effects' slot after a
+                            // space, with no dot that reads as a mark of the column above.
+                            assert!(
+                                !text.contains(&format!("·\u{a0}{}\u{a0}+", icons::PIN)),
+                                "{width} {fit:?}: {text}"
+                            );
                         }
                     }
                 }
                 assert!(counted > 0, "some width counts the effects that do not fit");
+                // W1-D1: the effect due on the turn keeps its first words before the last plain
+                // condition folds into `1 more`, at some width; a row without the turn never
+                // folds its one plain condition for an effect.
+                let mut folded = 0;
+                for width in 300..700 {
+                    for scale in [design::RUN_COMPACT, design::RUN_REGULAR] {
+                        let line = |turn| {
+                            let layout = row(width as f32, &q, scale, RowFit::Natural, turn);
+                            layout.second_line.unwrap().text().to_owned()
+                        };
+                        let (turn, other) = (line(true), line(false));
+                        assert!(other.contains("Poisoned"), "{width}: {other}");
+                        let due = turn.find("Wis");
+                        if due.is_some_and(|due| {
+                            turn.find("1\u{a0}more").is_some_and(|more| due < more)
+                        }) {
+                            folded += 1;
+                        }
+                    }
+                }
+                assert!(
+                    folded > 0,
+                    "W1-D1: the due effect's words outrank a plain condition"
+                );
                 // A count's slot is as wide as its widest form: `2`, `last round` and `time is
                 // up` move no word after it.
                 let mut timed = p.clone();
@@ -9545,9 +9729,11 @@ mod tests {
                 // apart by one pixel. No word moves more, or to another line.
                 assert!(at.iter().all(|x| (x - at[0]).abs() <= 1.0), "{at:?}");
                 // Rule P, as one rule (reviews of PR 276): a row's height and lines are those of
-                // the same row with each time taken away, where an official condition with a time
-                // is that condition. So no change of a time moves a row: none to a timed effect,
-                // a plain condition given a time, a count down, `time is up`, a time removed.
+                // the same row with each time taken away: each effect is its plain words, and an
+                // official condition with a time is that condition. So no change of a time moves
+                // a row: none to a timed effect, a plain condition given a time, a count down,
+                // `time is up`, a time removed. X5: so an effect shows wherever its plain words
+                // show, also beside a name of three lines.
                 let mut guard = p.clone();
                 guard.name = "Guard".into();
                 guard.initiative = Some(10);
@@ -9582,16 +9768,17 @@ mod tests {
                 ];
                 let official =
                     |c: &Condition| super::super::recognized_condition(c.name()).is_some();
-                for state in &states {
+                let long = "Seraphina Thornwood-Ashgrave of the Ninth Bell";
+                for (state, name) in states
+                    .iter()
+                    .flat_map(|state| [(state, "Guard"), (state, long)])
+                {
                     let mut timed = guard.clone();
+                    timed.name = name.into();
                     timed.conditions = state.clone();
-                    let mut untimed = guard.clone();
-                    untimed.conditions = state
-                        .iter()
-                        .filter(|c| !c.is_effect() || official(c))
-                        .map(|c| Condition::from(c.name()))
-                        .collect();
-                    for width in [300.0, 442.0, 596.0, 900.0] {
+                    let mut untimed = timed.clone();
+                    untimed.conditions = state.iter().map(|c| Condition::from(c.name())).collect();
+                    for width in [300.0, 442.0, 596.0, 900.0, 1040.0] {
                         for scale in [design::RUN_COMPACT, design::RUN_REGULAR] {
                             for fit in [RowFit::Natural, RowFit::Compressed, RowFit::Summary] {
                                 let with = RowLayout::new(ui, width, &timed, None, scale, fit, 0.0);
@@ -9612,13 +9799,21 @@ mod tests {
                                     words(&with)
                                 );
                                 assert!(rows(&with) <= rows(&without).max(1));
-                                // An official condition that shows without its time still shows.
-                                for name in state.iter().filter(|c| official(c)).map(|c| c.name()) {
-                                    if words(&without).is_some_and(|w| w.contains(name)) {
+                                // An effect that shows without its time still shows: an official
+                                // condition by its whole name, other words by their first word
+                                // or in the row's count of effects. Never nothing.
+                                for c in state.iter().filter(|c| c.is_effect()) {
+                                    let first = c.name().split(' ').next().unwrap();
+                                    if words(&without).is_some_and(|w| w.contains(first)) {
+                                        let with = words(&with).unwrap_or_default();
                                         assert!(
-                                            words(&with).is_some_and(|w| w.contains(name)),
-                                            "{width} {fit:?}: {name} in {:?}",
-                                            words(&with)
+                                            if official(c) {
+                                                with.contains(c.name())
+                                            } else {
+                                                with.contains(first) || with.contains(icons::PIN)
+                                            },
+                                            "{name} {width} {fit:?}: {} in {with:?}",
+                                            c.name()
                                         );
                                     }
                                 }
@@ -9703,7 +9898,7 @@ mod tests {
                         ui,
                         width,
                         &conc,
-                        (None, Some(12)),
+                        (None, Some(12), false),
                         scale,
                         RowFit::Natural,
                         0.0,
@@ -9725,7 +9920,7 @@ mod tests {
                             ui,
                             width,
                             &crowded,
-                            (None, dc),
+                            (None, dc, false),
                             scale,
                             RowFit::Natural,
                             0.0,
@@ -12205,8 +12400,44 @@ mod tests {
                 assert_eq!(notice(named_width), named);
                 assert!(design::number_width(ui, &notice(named_width - 1.0), &font) <= named_width - 1.0);
                 let (role, shown) = at(small - 1.0);
-                assert!(role == Type::Heading && shown.ends_with('…'), "{shown}");
+                // X53: a cut name keeps its telling last word.
+                assert!(role == Type::Heading && shown.ends_with("… Bell"), "{shown}");
                 assert!(design::number_width(ui, &shown, &heading) <= small - 1.0);
+                // X53, review of PR 292: at every room the dock's name keeps to its slot, and
+                // keeps its last word wherever the first word, `…` and the last word fit. Else
+                // it is its first word's start and `…`.
+                for name in [
+                    long,
+                    "Ashfang, Eldest Wolf of the Southern Ridge",
+                    "Vault Guard",
+                    "Ember Cultist of the Southern Watch 12",
+                ] {
+                    let first = name.split(' ').next().unwrap().trim_end_matches(',');
+                    let last = name.rsplit(' ').next().unwrap();
+                    let telling = design::number_width(ui, &format!("{first}… {last}"), &heading);
+                    for room in 20..=320 {
+                        let room = room as f32;
+                        let (role, shown) = dock_name_shown(ui, name, room);
+                        let font = if role == Type::Heading { &heading } else { &font };
+                        assert!(
+                            design::number_width(ui, &shown, font) <= room,
+                            "{room}: {shown}"
+                        );
+                        if shown == name {
+                            continue;
+                        }
+                        if telling <= room {
+                            assert!(shown.ends_with(&format!("… {last}")), "{room}: {shown}");
+                        } else {
+                            let start = shown.trim_end_matches('…');
+                            let written = name.split(' ').next().unwrap();
+                            assert!(
+                                shown.ends_with('…') && written.starts_with(start),
+                                "{room}: {shown}"
+                            );
+                        }
+                    }
+                }
             });
         });
         harness.run_steps(2);

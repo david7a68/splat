@@ -92,11 +92,24 @@ pub fn run(d: &mut Driver<'_>) {
             undo_paints_a_form(d, "Undo: effect Wis save", first, copy)
         });
     }
+    // W1-D1: on its turn the row leads with the effect due on it, though the DM added it
+    // after Bless. X10: a count of the rest ends the effects' slot with no dot before it.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let words = d.at_size(size, |d| d.row_words(&current));
+        let (hold, bless) = (words.find("Wis save"), words.find("Bless"));
+        d.observe(
+            "W1-D1",
+            hold.is_some_and(|hold| bless.is_none_or(|bless| hold < bless))
+                && !words.contains("· ⚑"),
+            format!("At {size:?} the current row paints: {words}"),
+        );
+    }
     d.state("effects-on-its-turn", Sizes::All);
 
     // A label with no time is as today: it shows on no notice and does not count.
     d.click_row(WOLF);
     by_key(d, "Hexed until the hag dies");
+    let recharged = format!(" for {CULTIST}: Fire Breath ");
     // T20.5: a use is spent in 1, on the row; a spent recharge rolls in 1.
     by_key(d, "Legendary actions 3 uses");
     d.click_row(CULTIST);
@@ -118,7 +131,43 @@ pub fn run(d: &mut Driver<'_>) {
         d.name_starting("Undo") == format!("Undo: recharge roll for {CULTIST}"),
         format!("The roll is one named step: {}", d.name_starting("Undo")),
     );
+    // X4: the roll shows its die in the dice total's slot, and one line in the run's footer
+    // names the participant, the effect and the result.
+    let result = d
+        .nodes()
+        .into_iter()
+        .map(|node| node.name)
+        .find(|name| name.starts_with("Rolled ") && name.contains(&recharged));
+    let die = result
+        .as_deref()
+        .and_then(|words| words.split_whitespace().nth(1))
+        .map(|die| format!("Rolled {die} for {CULTIST}: Fire Breath"));
+    // Review of PR 292: the dock's total is named by its participant and effect.
+    d.observe(
+        "X4",
+        die.as_deref().is_some_and(|die| d.has(die)),
+        format!("The footer says {result:?}, and the dock shows {die:?}"),
+    );
     d.state("effects-on-rows", Sizes::Default);
+    // X4: Undo of the roll takes its die and its line away with it; the roll again brings both.
+    d.click_containing("Undo: recharge roll");
+    d.observe(
+        "X4",
+        !d.has_containing(&recharged) && die.as_deref().is_none_or(|die| !d.has(die)),
+        "Undo of the roll ends its result",
+    );
+    d.click("Roll 1d6. 5–6 makes it ready");
+    let die = d
+        .nodes()
+        .into_iter()
+        .map(|node| node.name)
+        .find(|name| name.starts_with("Rolled ") && name.contains(&recharged))
+        .and_then(|words| {
+            words
+                .split_whitespace()
+                .nth(1)
+                .map(|die| format!("Rolled {die} for {CULTIST}: Fire Breath"))
+        });
 
     // T20.3: the count goes down when its participant's turn ends.
     d.click_row(&current);
@@ -127,6 +176,13 @@ pub fn run(d: &mut Driver<'_>) {
         "T20.3",
         row_name(d, &current).contains("Bless 9") && reminders(d, &current).is_none(),
         format!("After its turn: {}", row_name(d, &current)),
+    );
+    d.observe(
+        "X4",
+        die.is_some()
+            && !d.has_containing(&recharged)
+            && die.as_deref().is_none_or(|die| !d.has(die)),
+        format!("The recharge's result line and its die {die:?} go at the next act"),
     );
     // A crash is not a turn: the saved count shows again, and Undo of Next turn gives it back.
     d.restart();
@@ -170,13 +226,26 @@ pub fn run(d: &mut Driver<'_>) {
     d.press_ctrl(Key::K);
     d.observe("T20.1", d.has(SEARCH_LOOKUP), "Ctrl+K shows Lookup again");
     d.state("effects-beside-lookup", Sizes::Default);
-    // T20.4: no row changed its height for its effects.
+    // T20.4: no row changed its height for a time: each row has the height of the same row
+    // with each time taken away, where each effect is its plain words (rule P, as the ruling on
+    // PR 276 states it; X5). A plain label can grow a row as it always could.
     d.press_ctrl(Key::K);
     let after = heights(d, &rows);
+    let untimed = d.aside(|d| {
+        let timed = d.app_mut().encounters.simulate_untimed();
+        d.settle();
+        let untimed = heights(d, &rows);
+        d.app_mut().encounters.simulate_conditions(timed);
+        d.settle();
+        untimed
+    });
     d.observe(
         "T20.4",
-        after == before,
-        format!("Rows keep their heights: {before:?} then {after:?}"),
+        after == untimed && heights(d, &rows) == after,
+        format!(
+            "Rows keep the heights they have with no time: {untimed:?} then {after:?}; before \
+             any effect {before:?}"
+        ),
     );
     // T20.5: an official condition's name opens its rule beside the run; its count is a
     // second target, which opens Conditions.
@@ -188,6 +257,26 @@ pub fn run(d: &mut Driver<'_>) {
         "F2",
         d.in_view("Other effect"),
         "The count opens Conditions, which lists each effect",
+    );
+    // X11: a ticked condition shows its count on its tick, and Other effects holds other
+    // words only. X7: the help says what Splat does with a time. X8: the dock has no room for
+    // `Effect` here, so the field's words give an example with a time.
+    let tick = format!("{} Frightened 10", crate::design::icons::OK);
+    d.observe(
+        "X11",
+        d.visible_text(&tick) && !d.has("More actions for Frightened 10"),
+        format!("The tick says {tick:?}, and Other effects does not list it again"),
+    );
+    d.observe(
+        "X7",
+        d.has_containing("A time you type counts down on that creature’s turns.")
+            && !d.has_containing("No number changes by itself."),
+        "The Conditions help says what is true now",
+    );
+    d.observe(
+        "X8",
+        !d.has(EFFECT) && d.visible_text("Other effect, such as Bless 10 rounds"),
+        "Where the dock has no room for Effect, the field says how to give a time",
     );
     d.state("effects-in-conditions", Sizes::Default);
 
