@@ -4222,7 +4222,9 @@ impl Encounters {
                 .max(Density::Scan.control())
             }
             // The field's margins are outside its desired width.
-            .min((roster_right - ui.cursor().left() - 2.0 * design::S).max(Density::Scan.control()));
+            .min(
+                (roster_right - ui.cursor().left() - 2.0 * design::S).max(Density::Scan.control()),
+            );
             let response = ui.add(
                 egui::TextEdit::singleline(&mut draft_ref.name)
                     .id(design::focus_id(NAME_FIELD))
@@ -4250,15 +4252,19 @@ impl Encounters {
                 egui::vec2(action_width, Density::Scan.control()),
                 egui::Layout::right_to_left(egui::Align::Center),
                 |ui| {
-                    let start_blocked = roster_reason.as_deref().or(empty_group.as_deref()).or(has_run
-                        .then_some(BLOCKED_BY_RUN)
-                        .or(creature_dirty.then_some(BLOCKED_BY_CREATURE))
-                        .or(loading.then_some("Still reading this campaign."))
-                        .or(draft_ref
-                            .setup
-                            .roster
-                            .is_empty()
-                            .then_some("Add participants first")));
+                    let start_blocked =
+                        roster_reason
+                            .as_deref()
+                            .or(empty_group.as_deref())
+                            .or(has_run
+                                .then_some(BLOCKED_BY_RUN)
+                                .or(creature_dirty.then_some(BLOCKED_BY_CREATURE))
+                                .or(loading.then_some("Still reading this campaign."))
+                                .or(draft_ref
+                                    .setup
+                                    .roster
+                                    .is_empty()
+                                    .then_some("Add participants first")));
                     if unfinished.is_some() {
                         row_menu(ui, &draft_ref.name, |ui| {
                             start_another = menu_action(ui, "Start another fight", start_blocked);
@@ -4544,14 +4550,16 @@ impl Encounters {
                 .show_inside(ui, |ui| {
                     // The header's actions end here (FA9).
                     let right = ui.max_rect().right();
-                    ui.ctx()
-                        .data_mut(|data| data.insert_temp(pane_right_id(draft.id, ADD_PANE), right));
+                    ui.ctx().data_mut(|data| {
+                        data.insert_temp(pane_right_id(draft.id, ADD_PANE), right)
+                    });
                     match creature {
-                    Some(editor) => creature_step = Self::creature_pane(ui, editor),
-                    None => {
-                        Self::add_pane(ui, draft, snapshot, search, focus_search, peek, compact)
+                        Some(editor) => creature_step = Self::creature_pane(ui, editor),
+                        None => {
+                            Self::add_pane(ui, draft, snapshot, search, focus_search, peek, compact)
+                        }
                     }
-                }});
+                });
                 // A panel clips to its own rect. It starts `S` before the roster's text edge, so
                 // a line-start quiet action there keeps its whole press area.
                 let rest = ui.available_rect_before_wrap();

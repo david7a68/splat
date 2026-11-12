@@ -141,13 +141,16 @@ fn without_loose_separators(
 ) -> String {
     let mut text = text;
     for _ in 0..text.matches(FACT_SEPARATOR).count() {
-        let galley = ui.fonts_mut(|fonts| {
-            fonts.layout(text.clone(), font.clone(), colors().muted, width)
-        });
+        let galley =
+            ui.fonts_mut(|fonts| fonts.layout(text.clone(), font.clone(), colors().muted, width));
         let mut start = 0;
         let mut dot = None;
         for (index, row) in galley.rows.iter().enumerate() {
-            let lead = row.glyphs.iter().take_while(|glyph| glyph.chr == ' ').count();
+            let lead = row
+                .glyphs
+                .iter()
+                .take_while(|glyph| glyph.chr == ' ')
+                .count();
             if index > 0 && row.glyphs.get(lead).is_some_and(|glyph| glyph.chr == '·') {
                 dot = Some(start + lead);
                 break;
@@ -161,7 +164,12 @@ fn without_loose_separators(
         let Some(from) = text[..byte].strip_suffix(' ').map(str::len) else {
             break;
         };
-        let to = byte + '·'.len_utf8() + text[byte + '·'.len_utf8()..].chars().next().map_or(0, char::len_utf8);
+        let to = byte
+            + '·'.len_utf8()
+            + text[byte + '·'.len_utf8()..]
+                .chars()
+                .next()
+                .map_or(0, char::len_utf8);
         text.replace_range(from..to, "\n");
     }
     text
@@ -186,7 +194,8 @@ fn plan_fight_summary(ui: &mut egui::Ui, summary: &str) {
         .join(FACT_SEPARATOR);
     let font = Type::Small.font(ui);
     let text = without_loose_separators(ui, text, &font, ui.available_width());
-    let response = ui.add(egui::Label::new(Type::Small.rich(ui, text).color(colors().muted)).wrap());
+    let response =
+        ui.add(egui::Label::new(Type::Small.rich(ui, text).color(colors().muted)).wrap());
     // The breaks only steer the wrap; the name keeps the summary's words.
     design::named(ui, &response, summary);
 }
@@ -1433,7 +1442,9 @@ mod tests {
                         .join(FACT_SEPARATOR);
                     let kept = without_loose_separators(ui, text.clone(), &font, width);
                     cuts += usize::from(kept != text);
-                    let galley = ui.painter().layout(kept, font.clone(), colors().muted, width);
+                    let galley = ui
+                        .painter()
+                        .layout(kept, font.clone(), colors().muted, width);
                     let rows: Vec<String> = galley
                         .rows
                         .iter()
@@ -1443,7 +1454,10 @@ mod tests {
                         assert!(!row.trim().starts_with('·'), "{width}: {rows:?}");
                         assert!(!row.trim_end().ends_with('·'), "{width}: {rows:?}");
                     }
-                    for member in ["2\u{a0}×\u{a0}Cinder\u{a0}Wolf", "1\u{a0}×\u{a0}Ember\u{a0}Cultist"] {
+                    for member in [
+                        "2\u{a0}×\u{a0}Cinder\u{a0}Wolf",
+                        "1\u{a0}×\u{a0}Ember\u{a0}Cultist",
+                    ] {
                         assert!(
                             width < 120.0 || rows.iter().any(|row| row.contains(member)),
                             "{width}: {member} is split in {rows:?}"

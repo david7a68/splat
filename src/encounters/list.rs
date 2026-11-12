@@ -833,7 +833,7 @@ fn history_summary(
         let temp_width = summary
             .rows
             .iter()
-            .filter_map(|row| temp_words(row))
+            .filter_map(&temp_words)
             .map(|words| design::number_width(ui, &words, &small))
             .fold(0.0, f32::max);
         // A fixed cell: its words at the cell's left, the cell as wide as its column.

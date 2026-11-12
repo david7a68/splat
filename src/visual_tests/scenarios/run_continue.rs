@@ -590,7 +590,12 @@ pub fn run(d: &mut Driver<'_>) {
                     return;
                 };
                 let baseline = text.pos.y + row.pos.y + glyph.pos.y;
-                let size = text.galley.job.sections.first().map(|s| s.format.font_id.size);
+                let size = text
+                    .galley
+                    .job
+                    .sections
+                    .first()
+                    .map(|s| s.format.font_id.size);
                 texts.push((words.clone(), text.pos.x, baseline, size));
                 if words.starts_with("HP ") && words.contains('/') {
                     xs.push(text.pos.x);
@@ -600,7 +605,9 @@ pub fn run(d: &mut Driver<'_>) {
             });
             // A condition on a Final state row: on an HP's line, after it (the log has the words too).
             for (words, x, base, _) in &texts {
-                if ["Prone", "Poisoned"].iter().any(|word| words.contains(word))
+                if ["Prone", "Poisoned"]
+                    .iter()
+                    .any(|word| words.contains(word))
                     && texts.iter().any(|(hp, hx, hbase, _)| {
                         hp.starts_with("HP ") && hx < x && (hbase - base).abs() < 6.0
                     })
@@ -636,8 +643,12 @@ pub fn run(d: &mut Driver<'_>) {
             "iter-26-B-SI1",
             !temps.is_empty()
                 && !conditions.is_empty()
-                && conditions.iter().all(|x| (x - conditions[0]).abs() <= 0.5 && *x > temp_end),
-            format!("At {size:?}, temporary HP ends at {temps:?}; conditions start at {conditions:?}"),
+                && conditions
+                    .iter()
+                    .all(|x| (x - conditions[0]).abs() <= 0.5 && *x > temp_end),
+            format!(
+                "At {size:?}, temporary HP ends at {temps:?}; conditions start at {conditions:?}"
+            ),
         );
         d.observe(
             "iter-26-B-FI6",

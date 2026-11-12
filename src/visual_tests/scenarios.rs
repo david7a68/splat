@@ -6532,7 +6532,10 @@ pub mod library_to_encounter {
         d.observe(
             "iter-26-B-FF2",
             link && d.current_page() == "Encounters",
-            format!("The rail's Encounter draft is a link ({link}) to the draft, on {}", d.current_page()),
+            format!(
+                "The rail's Encounter draft is a link ({link}) to the draft, on {}",
+                d.current_page()
+            ),
         );
         d.begin_task();
 
@@ -6654,7 +6657,12 @@ pub mod run_folder_defect {
             let (widths, menu, folder) = d.at_size(size, |d| {
                 let mut widths = Vec::new();
                 d.each_painted_text(|text, _| {
-                    if text.galley.job.text.starts_with("Run setup starts with this choice") {
+                    if text
+                        .galley
+                        .job
+                        .text
+                        .starts_with("Run setup starts with this choice")
+                    {
                         widths.push(text.galley.size().x);
                     }
                 });
@@ -6668,18 +6676,25 @@ pub mod run_folder_defect {
                 let folder = d
                     .nodes()
                     .into_iter()
-                    .find(|node| node.name.starts_with("Run folder") && node.role == egui::accesskit::Role::TextInput)
+                    .find(|node| {
+                        node.name.starts_with("Run folder")
+                            && node.role == egui::accesskit::Role::TextInput
+                    })
                     .map(|node| node.rect.right());
                 (widths, menu, folder)
             });
             d.observe(
                 "iter-26-B-help",
                 !widths.is_empty()
-                    && widths.iter().all(|width| *width <= crate::design::READER_MEASURE + 0.5)
+                    && widths
+                        .iter()
+                        .all(|width| *width <= crate::design::READER_MEASURE + 0.5)
                     && menu
                         .zip(folder)
                         .is_some_and(|(menu, folder)| (menu - folder).abs() <= 1.0),
-                format!("At {size:?}: help widths {widths:?}; menu ends {menu:?}, Run folder {folder:?}"),
+                format!(
+                    "At {size:?}: help widths {widths:?}; menu ends {menu:?}, Run folder {folder:?}"
+                ),
             );
         }
         d.state("run-folder-edited", Sizes::All);
@@ -13334,7 +13349,9 @@ pub mod encounter_groups {
         d.expect("Unknown creature");
         let (found, invalid) = d.at_size(SMALL, |d| {
             (
-                d.in_view_containing("Unknown creature · line\u{a0}13: not in this campaign’s packages."),
+                d.in_view_containing(
+                    "Unknown creature · line\u{a0}13: not in this campaign’s packages.",
+                ),
                 d.in_view_containing("would become −28"),
             )
         });
@@ -13345,7 +13362,10 @@ pub mod encounter_groups {
         );
         let tones = (
             tones_beside(d, "would become −28"),
-            tones_beside(d, "Unknown creature · line\u{a0}13: not in this campaign’s packages."),
+            tones_beside(
+                d,
+                "Unknown creature · line\u{a0}13: not in this campaign’s packages.",
+            ),
         );
         // FA1 (Astra review of PR 259): the editor names the missing member in the one form,
         // and its help follows on a line of its own. iter-26-B FJ6: the saved member's form
@@ -18133,16 +18153,23 @@ pub mod session_plan {
                     .into_iter()
                     .find(|node| node.name.starts_with("Encounter name: "))
                     .map(|node| node.rect);
-                let rule = d.place_of("More actions for Werewolf copy").and_then(|menu| {
-                    d.hairlines_in(egui::Rect::from_min_max(
-                        egui::pos2(0.0, menu.bottom()),
-                        egui::pos2(menu.right() + 60.0, menu.bottom() + 24.0),
-                    ))
-                    .into_iter()
-                    .map(|line| line.right())
-                    .reduce(f32::max)
-                });
-                (name, rule, d.place_of("Start fight"), d.place_of("Save creature"))
+                let rule = d
+                    .place_of("More actions for Werewolf copy")
+                    .and_then(|menu| {
+                        d.hairlines_in(egui::Rect::from_min_max(
+                            egui::pos2(0.0, menu.bottom()),
+                            egui::pos2(menu.right() + 60.0, menu.bottom() + 24.0),
+                        ))
+                        .into_iter()
+                        .map(|line| line.right())
+                        .reduce(f32::max)
+                    });
+                (
+                    name,
+                    rule,
+                    d.place_of("Start fight"),
+                    d.place_of("Save creature"),
+                )
             });
             d.observe(
                 "iter-26-B-FA9",
