@@ -1004,6 +1004,32 @@ impl<'a> Driver<'a> {
         self.film_result("Scroll into view");
     }
 
+    /// Screen-reader focus: the AccessKit Focus action on the node named exactly `name`, as a
+    /// screen reader sends it. True when that node then has keyboard focus.
+    pub fn reader_focus(&mut self, name: &str) -> bool {
+        let Some(id) = self
+            .nodes()
+            .into_iter()
+            .find(|node| node.name == name)
+            .map(|node| node.id)
+        else {
+            return false;
+        };
+        self.harness.event(egui::Event::AccessKitActionRequest(
+            accesskit::ActionRequest {
+                target: id,
+                action: accesskit::Action::Focus,
+                data: None,
+            },
+        ));
+        self.interactions += 1;
+        self.harness.step();
+        self.settle();
+        self.film_result("Screen-reader focus");
+        self.focus_id()
+            .is_some_and(|focused| accesskit::NodeId(focused.value()) == id)
+    }
+
     /// Does any node carry exactly this name? Text in a label counts.
     pub fn has(&self, name: &str) -> bool {
         self.nodes().iter().any(|node| node.name == name)

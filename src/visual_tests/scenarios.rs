@@ -282,6 +282,86 @@ fn is_icon(text: &str) -> bool {
 /// Where a control's words start: the leftmost text painted inside its press area. An icon
 /// before the words does not count: `line_start` hangs it in the gutter, so the words start at
 /// the text edge.
+/// Round 26 FB6: an inline creation row. The action is on its field's line (centres within
+/// 1 px), after the field; the reason is on a line below, under the field (after a quiet
+/// Cancel or Clear that starts that line). The rects when it holds.
+fn creation_row(
+    d: &Driver<'_>,
+    field: &str,
+    action: &str,
+    reason: &str,
+) -> Result<(egui::Rect, egui::Rect, egui::Rect), String> {
+    let field = d
+        .nodes()
+        .into_iter()
+        .find(|node| node.name == field && node.role == egui::accesskit::Role::TextInput)
+        .ok_or(format!("no text field {field:?}"))?
+        .rect;
+    let action = d.place_of(action).ok_or(format!("no {action:?}"))?;
+    let reason = d
+        .painted_rect_in(reason, egui::Rect::EVERYTHING)
+        .ok_or(format!("no reason {reason:?}"))?;
+    if (action.center().y - field.center().y).abs() <= 1.0
+        && action.left() > field.right()
+        && reason.left() >= field.left() - 1.0
+        && reason.right() <= action.left()
+        && reason.top() >= field.bottom() - 0.5
+    {
+        Ok((field, action, reason))
+    } else {
+        Err(format!(
+            "field {field:?}, action {action:?}, reason {reason:?}"
+        ))
+    }
+}
+
+/// Round 26 review: words of the page that show inside the footer's area. A footer's own words
+/// are clipped to the footer; a page's words are clipped above it, so a clip that starts above
+/// the footer and a visible part inside it mean the page reaches under the footer.
+fn body_under_footer(d: &Driver<'_>, words: &str) -> Vec<String> {
+    let Some(footer) = footer_with(d, words) else {
+        return vec!["no footer".to_owned()];
+    };
+    let mut leaks = Vec::new();
+    d.each_painted_text(|text, clip| {
+        let shown = egui::Rect::from_min_size(text.pos, text.galley.size()).intersect(clip);
+        if clip.top() < footer.top() - 1.0
+            && shown.is_positive()
+            && shown.intersects(footer.shrink(1.0))
+        {
+            leaks.push(text.galley.job.text.clone());
+        }
+    });
+    leaks
+}
+
+/// Click the control whose name starts with `name`. When it is not wholly in view, Tab brings it
+/// into view first, as the page's focus scroll does for a keyboard or a screen reader: AccessKit's
+/// scroll-into-view stops at a list's own scroll area inside a scrolled page.
+fn click_by_focus(d: &mut Driver<'_>, name: &str) {
+    let full = d
+        .nodes()
+        .into_iter()
+        .find(|node| node.name.starts_with(name))
+        .unwrap_or_else(|| panic!("{name:?} is drawn"));
+    if !full.fully_in_view() {
+        d.tab_to(&full.name);
+        d.harness_focus_nothing();
+    }
+    d.click(&full.name);
+}
+
+/// Round 26: the pane footer whose words hold `words`: the smallest named group that holds them.
+fn footer_with(d: &Driver<'_>, words: &str) -> Option<egui::Rect> {
+    d.nodes()
+        .into_iter()
+        .filter(|node| {
+            node.role == egui::accesskit::Role::GenericContainer && node.name.contains(words)
+        })
+        .map(|node| node.rect)
+        .min_by(|a, b| a.area().total_cmp(&b.area()))
+}
+
 fn words_left_in(d: &Driver<'_>, area: egui::Rect) -> Option<f32> {
     let mut left = None::<f32>;
     d.each_painted_text(|text, _| {
@@ -1361,6 +1441,22 @@ pub mod library_author {
         d.state("package-actions", Sizes::Default);
         d.click(MANAGE_PACKAGES);
         d.expect(MANAGE_TITLE);
+        // Review round 26 FB6: each creation action follows its last field on that field's
+        // line (centres within 1 px), and the reason sits on the line below at the field's edge.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let rows = d.at_size(size, |d| {
+                [
+                    ("Package folder", "Add folder", "Choose a folder first."),
+                    ("Folder", "Create package", "Type a name first."),
+                ]
+                .map(|(field, action, reason)| creation_row(d, field, action, reason))
+            });
+            d.observe(
+                "iter-26-C-FB6-library",
+                rows.iter().all(Result::is_ok),
+                format!("At {size:?}, Add folder and Create package on their field's line, reasons below: {rows:?}"),
+            );
+        }
         d.state("manage-packages", Sizes::All);
         escape_closes(d, "manage packages form", MANAGE_TITLE, CLOSE_WINDOW);
         d.goal("open and close the package form");
@@ -1383,6 +1479,16 @@ pub mod library_author {
                 "iter-7-D-SD1",
                 labels,
                 format!("Peer field labels use sentence-case Small at {size:?}"),
+            );
+        }
+        for size in [SMALL, DEFAULT, LARGE] {
+            let row = d.at_size(size, |d| {
+                creation_row(d, "Folder", CREATE_ENTRY, "Type a name first.")
+            });
+            d.observe(
+                "iter-26-C-FB6-entry",
+                row.is_ok(),
+                format!("At {size:?}, Create entry on the Folder field's line, its reason below: {row:?}"),
             );
         }
         d.state("new-entry-form", Sizes::All);
@@ -1877,8 +1983,8 @@ pub mod campaign_content {
     const MODULE_ROW: &str = "Ashen Marches · ";
     // Round 25 FA2: `chosen` counts the DM's own choices; the entry the other choices need is
     // counted once, as needed.
-    const PARTIAL: &str = "4 of 6 chosen · 1 needed";
-    const CHANGED: &str = "5 of 6 chosen · 1 needed";
+    const PARTIAL: &str = "4 of 6 chosen · 1 still needed";
+    const CHANGED: &str = "5 of 6 chosen · 1 still needed";
     const UNSELECTED_ENTRY: &str = "Ash Wraith";
     const DISCARD_SELECTION: &str = "Discard";
     const CAMPAIGN_ENTRY: &str = "Captain Varra";
@@ -1896,7 +2002,7 @@ pub mod campaign_content {
     pub fn run(d: &mut Driver<'_>) {
         go_campaign(d);
         d.expect(PAGE_TITLE);
-        d.expect("2,069 entries chosen · 1 needed");
+        d.expect("2,069 entries chosen · 1 still needed");
         d.click_starting("D&D 2024 · SRD");
         d.expect("Whole package, with future additions");
         d.state("packages-tab", Sizes::Default);
@@ -1921,12 +2027,45 @@ pub mod campaign_content {
             "Package mode comes before the selection actions",
             |d| {
                 d.place_of("Chosen entries only")
-                    .zip(d.place_of("Use all"))
+                    .zip(d.place_of("Choose all"))
                     .is_some_and(|(mode, action)| {
                         mode.left() < action.left() && mode.center().y < action.bottom()
                     })
             },
         );
+        // Round 26 FA8: the package's heading sits on the line of its mode and its actions.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let centres = d.at_size(size, |d| {
+                // The ink of the first letter, not the galley: a wrapping row pads a text's
+                // first line to the row height, so the galley's centre is right even when the
+                // words sit at its bottom.
+                let ink = |words: &str| {
+                    let mut found = None;
+                    d.each_painted_text(|text, _| {
+                        if text.galley.job.text.starts_with(words)
+                            && let Some(row) = text.galley.rows.first()
+                            && let Some(glyph) = row.glyphs.first()
+                        {
+                            found = Some(text.pos.y + row.pos.y + glyph.logical_rect().center().y);
+                        }
+                    });
+                    found
+                };
+                let none = d.painted_rect_in("Choose none", egui::Rect::EVERYTHING)?;
+                Some((
+                    ink("ASHEN MARCHES")?,
+                    ink("Chosen entries only")?,
+                    none.center().y,
+                ))
+            });
+            d.observe(
+                "iter-26-C-FA8",
+                centres.is_some_and(|(heading, mode, none)| {
+                    (heading - mode).abs() <= 1.0 && (heading - none).abs() <= 1.0
+                }),
+                format!("At {size:?}, heading, mode and Choose none centres: {centres:?}"),
+            );
+        }
         d.state("packages-partial-selection", Sizes::All);
         d.goal("see a partial package selection");
 
@@ -1957,7 +2096,7 @@ pub mod campaign_content {
             "A needed entry is not counted as chosen as well",
         );
         d.expect("Include future additions");
-        d.expect("2,070 entries chosen · 1 needed");
+        d.expect("2,070 entries chosen · 1 still needed");
         d.observe_both(
             "iter-18-A-lock",
             "A package draft states the campaign switch lock",
@@ -2137,17 +2276,16 @@ pub mod campaign_content {
             },
         );
         // FD2: one rule separates the open repair from the package list, an `L` gap below the
-        // repair. Round 25 FD1: the repair ends with its message space below Save repaired note,
-        // so the gap is below that space. The rule must sit above the first thing drawn after
-        // the repair.
+        // repair. Round 26: the repair's messages are in the page's footer, so the repair ends
+        // with its save row. The rule must sit above the first thing drawn after the repair.
         d.observe_both(
             "iter-14-E-FD2",
-            "One rule, an L gap below the repair's message space, separates the repair from the list",
+            "One rule, an L gap below the repair's save row, separates the repair from the list",
             |d| {
                 let Some(save) = d.place_of("Save repaired note") else {
                     return false;
                 };
-                let end = save.bottom() + crate::design::message_space_height();
+                let end = save.bottom();
                 let Some(next) = d
                     .nodes()
                     .into_iter()
@@ -2347,7 +2485,9 @@ pub mod campaign_content {
         set_read_only(true);
         d.click("Save repaired note");
         d.settle();
-        const READ_ONLY: &str = "Not saved. This file is read only.";
+        // Round 26 FA3: the state slot says `Not saved`; the cause is a reason in the page's
+        // footer, where a parse cause also sits, and it names its repair's file.
+        const READ_ONLY: &str = "Broken.md is not saved. This file is read only.";
         const NOT_SAVED_TWICE: &str = "The repair has not been saved";
         let unchanged = std::fs::read(&file).unwrap() == on_disk;
         d.observe(
@@ -2359,9 +2499,42 @@ pub mod campaign_content {
                 d.visible_text("Unsaved")
             ),
         );
+        for size in REPAIR_SIZES {
+            let placed = d.at_size(size, |d| {
+                let save = d.place_of("Save repaired note")?;
+                // The save row's state: the painted text on Save's line that says Not saved.
+                let mut slot = None;
+                d.each_painted_text(|text, _| {
+                    let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                    if text.galley.job.text.contains("Not saved")
+                        && (rect.center().y - save.center().y).abs() <= crate::design::S
+                    {
+                        slot = Some(text.galley.job.text.clone());
+                    }
+                });
+                let footer = footer_with(d, READ_ONLY)?;
+                let cause = d.painted_rect_in(READ_ONLY, egui::Rect::EVERYTHING)?;
+                Some((slot?, footer, cause, save, d.window_size().1))
+            });
+            d.observe(
+                "iter-26-C-FA3",
+                placed
+                    .as_ref()
+                    .is_some_and(|(slot, footer, cause, save, height)| {
+                        slot.trim_start_matches(|c: char| !c.is_alphabetic()) == "Not saved"
+                            && footer.contains(cause.center())
+                            && footer.top() > save.bottom()
+                            && footer.bottom() >= *height - crate::design::XXL
+                    }),
+                format!(
+                    "At {size:?}: the slot says only Not saved, and the cause is in the footer at \
+                     the pane's bottom (slot, footer, cause, Save, window height): {placed:?}"
+                ),
+            );
+        }
         // Round 24 FD1, AD3, SD1: the failed Save stays open for a retry, but does not own the
-        // primary. FD9: the failure shows once, in the state slot; the message above stops at
-        // the way to fix the file.
+        // primary. FD9: the failure shows once, in the footer; the message above stops at the
+        // way to fix the file.
         d.observe_both(
             "iter-24-C-FD1",
             "After a read-only Save, Save repaired note is open, secondary and the failure shows once",
@@ -2392,34 +2565,26 @@ pub mod campaign_content {
         );
         set_read_only(false);
         d.click("Discard");
-        // Round 25 FD1: the discard result sits in the message space below the save row. Its
-        // Undo is live, so it comes first, on the space's first line, and the invalid file's
-        // reason follows it in the same part. The editor keeps its top through the result, Undo
-        // discard, an invalid draft and a valid one, at every size.
+        // Round 25 FD1, round 26: the discard result sits in the page's footer. Its Undo is live,
+        // so it comes first, and the invalid file's reason follows it. The editor keeps its top
+        // through the result, Undo discard, an invalid draft and a valid one, at every size.
         const DISCARDED: &str = "Broken.md draft discarded.";
         const UNDO_DISCARD: &str = "Undo discard of Broken.md";
         let discarded_tops = editor_tops(d);
         let first_line = REPAIR_SIZES.map(|size| {
             d.at_size(size, |d| {
-                let save = d
-                    .nodes()
-                    .into_iter()
-                    .filter(|node| node.name == "Save repaired note")
-                    .map(|node| node.rect)
-                    .next();
+                let footer = footer_with(d, DISCARDED);
                 let undo = d.place_of(UNDO_DISCARD);
                 let reason = d.painted_rect_in("Line 3 opens a list", egui::Rect::EVERYTHING);
-                // The space starts below the save row; its first line is one Body line deep.
-                save.zip(undo)
-                    .zip(reason)
-                    .is_some_and(|((save, undo), reason)| {
-                        undo.top() >= save.bottom()
-                            && undo.center().y
-                                < save.bottom()
-                                    + crate::design::Type::Body.line()
-                                    + crate::design::S
+                let editor = d.place_of("Note text: Notes/Broken.md");
+                footer.zip(undo).zip(reason).zip(editor).is_some_and(
+                    |(((footer, undo), reason), editor)| {
+                        footer.contains_rect(undo)
+                            && footer.contains(reason.center())
                             && reason.top() > undo.center().y
-                    })
+                            && footer.top() > editor.top()
+                    },
+                )
             })
         });
         d.observe(
@@ -2430,7 +2595,7 @@ pub mod campaign_content {
                 && d.visible_text(DISCARDED)
                 && d.visible_text("Invalid"),
             format!(
-                "Editor tops: clean {clean_tops:?}, after Discard {discarded_tops:?}; Undo on the first line, reason after it, at 960/1200/1920: {first_line:?}"
+                "Editor tops: clean {clean_tops:?}, after Discard {discarded_tops:?}; Undo first in the footer, the reason after it, at 960/1200/1920: {first_line:?}"
             ),
         );
         d.click(UNDO_DISCARD);
@@ -2548,10 +2713,11 @@ pub mod campaign_content {
         assert!(manifest.exists());
     }
 
-    /// Round 25 review: a repair whose discard result and cause need more than the message
-    /// space's two lines. The part stays two lines high; its words scroll inside it by keyboard
-    /// and wheel; Tab reaches it by its whole message, and its focus ring stays clear of its
-    /// scroll bar. At 960, 1200 and 1920. Starts and ends with only Broken.md's repair.
+    /// Round 25 review, round 26: a repair whose discard result and cause are long. They sit in
+    /// the page's footer, which is as tall as its words up to a third of the pane; Tab reaches it
+    /// by its whole message and its focus ring stays clear of its scroll bar. When the words need
+    /// more than that third, they scroll inside by keyboard and wheel; otherwise every word is in
+    /// view. At 960, 1200 and 1920. Starts and ends with only Broken.md's repair.
     fn message_space_overflows_and_scrolls(d: &mut Driver<'_>) {
         const NAME: &str = "The ledger of the toll keeper at the old Ashford bridge and every name he wrote down.md";
         let path = format!("Notes/{NAME}");
@@ -2565,10 +2731,10 @@ pub mod campaign_content {
         let editor = crate::world::repair::editor_name(&path);
         d.replace_text_in(&editor, &format!("{broken}extra\n"));
         d.click_below(&message, "Discard");
-        let words =
-            format!("{NAME} draft discarded. Line 3 opens a list with [ that never closes.");
+        let result = format!("{NAME} draft discarded.");
+        let cause = format!("{NAME}: Line 3 opens a list with [ that never closes.");
         let base = d.window_size();
-        // The part's own scroll bar lane, as `design::fixed_part` keeps it.
+        // The footer's own scroll bar lane.
         let lane = {
             let style = d.app_style();
             style.spacing.scroll.bar_width + style.spacing.scroll.bar_outer_margin
@@ -2576,85 +2742,76 @@ pub mod campaign_content {
         let mut results = Vec::new();
         for size in [SMALL, DEFAULT, LARGE] {
             d.set_base(size);
-            // Tab first: focus scrolls the page to the part. Then back to the part's start.
-            let focused = d.tab_to(&words);
-            for _ in 0..4 {
+            let footer = |d: &Driver<'_>| {
+                d.nodes().into_iter().find(|node| {
+                    node.role == egui::accesskit::Role::GenericContainer
+                        && node.name.contains(&result)
+                        && node.name.contains(&cause)
+                })
+            };
+            let Some(name) = footer(d).map(|node| node.name) else {
+                results.push((size, false, false, None, false));
+                continue;
+            };
+            let focused = d.tab_to(&name);
+            for _ in 0..8 {
                 d.press(Key::ArrowUp);
             }
-            // The part's texts, by their clip inside it: the result's top and the content's
-            // bottom, measured from the part's top.
+            let part = footer(d).map(|node| node.rect).unwrap();
+            // The footer's texts, by their clip inside it: the result's top and the content's
+            // bottom, measured from the footer's top.
             let inside = |d: &Driver<'_>| {
-                let part = d.nodes().into_iter().find(|node| node.name == words)?.rect;
-                let (mut result, mut bottom) = (None, f32::MIN);
+                let (mut top, mut bottom) = (None, f32::MIN);
                 d.each_painted_text(|text, clip| {
-                    // The part's scroll area clips its texts to the part's lines (its clip is
-                    // wider than the part).
-                    if (clip.top() - part.top()).abs() <= 4.0
-                        && (clip.bottom() - part.bottom()).abs() <= 4.0
-                        && part.x_range().contains(text.pos.x)
-                    {
+                    if part.contains(clip.center()) && part.x_range().contains(text.pos.x) {
                         let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
                         bottom = bottom.max(rect.bottom() - part.top());
                         if text.galley.job.text.contains("draft discarded.") {
-                            result = Some(rect.top() - part.top());
+                            top = Some(rect.top() - part.top());
                         }
                     }
                 });
-                Some((part, result, bottom))
+                (top, bottom)
             };
-            // Where the result's first line sits in the part: `Some(None)` once it has scrolled
-            // out of the part's view (a line out of view is not painted); `None` without a part.
-            let top = |d: &Driver<'_>| inside(d).map(|(_, top, _)| top);
-            let Some((part, Some(before), bottom)) = inside(d) else {
-                results.push((size, false, focused, None, None, None, None, None));
-                continue;
-            };
-            // The words need more than two lines: they end below the part's end.
-            let overflows = (part.height() - crate::design::message_space_height()).abs() < 1.0
-                && bottom > part.height() + 1.0;
+            let (before, bottom) = inside(d);
+            let overflows = bottom > part.height() + 1.0;
             let ring = d
                 .focus_rings()
                 .into_iter()
                 .find(|(ring, _)| part.expand(2.0).contains_rect(*ring))
-                .map(|(ring, _)| ring);
-            let ring_clear = ring.is_some_and(|ring| ring.right() <= part.right() - lane + 1.0);
-            d.press(Key::ArrowDown);
-            let keyboard = top(d);
-            for _ in 0..4 {
-                d.press(Key::ArrowUp);
-            }
-            d.press(Key::Escape);
-            let wheel_start = top(d);
-            d.scroll_at(part.center(), 1);
-            let wheel = top(d);
-            results.push((
-                size,
-                overflows,
-                focused,
-                ring.filter(|_| ring_clear),
-                Some(Some(before)),
-                keyboard,
-                wheel_start,
-                wheel,
-            ));
+                .map(|(ring, _)| ring)
+                .filter(|ring| ring.right() <= part.right() - lane + 1.0);
+            let readable = if overflows {
+                d.press(Key::ArrowDown);
+                let keyboard = inside(d).0;
+                for _ in 0..8 {
+                    d.press(Key::ArrowUp);
+                }
+                d.press(Key::Escape);
+                let start = inside(d).0;
+                d.scroll_at(part.center(), 1);
+                let wheel = inside(d).0;
+                let moved = |from: Option<f32>, to: Option<f32>| match (from, to) {
+                    (Some(from), Some(to)) => to < from,
+                    (Some(_), None) => true,
+                    _ => false,
+                };
+                moved(before, keyboard) && moved(start, wheel)
+            } else {
+                d.press(Key::Escape);
+                d.visible_text(&result) && d.visible_text(&cause)
+            };
+            results.push((size, overflows, focused, ring, readable));
         }
         d.set_base(base);
-        // Moved up inside the part, or out of its view; the part itself is still there.
-        let moved = |from: Option<Option<f32>>, to: Option<Option<f32>>| match (from, to) {
-            (Some(Some(from)), Some(Some(to))) => to < from,
-            (Some(Some(_)), Some(None)) => true,
-            _ => false,
-        };
         d.observe(
             "iter-25-C-space-overflow",
-            results.iter().all(|(_, overflows, focused, ring, before, keyboard, start, wheel)| {
-                *overflows
-                    && *focused
-                    && ring.is_some()
-                    && moved(*before, *keyboard)
-                    && moved(*start, *wheel)
-            }),
-            format!("Per size (overflows, Tab, ring clear of the bar, result top before, after ArrowDown, before wheel, after wheel): {results:?}"),
+            results
+                .iter()
+                .all(|(_, _, focused, ring, readable)| *focused && ring.is_some() && *readable),
+            format!(
+                "Per size (overflows, Tab, ring clear of the bar, every word readable): {results:?}"
+            ),
         );
         std::fs::remove_file(&file).unwrap();
         d.click(RELOAD);
@@ -2930,9 +3087,10 @@ pub mod campaign_content {
         );
 
         // Round 23 review: a failed Save belongs to its own repair. A's cause stays through B's
-        // edit, B's Save and B's own failed Save; B's state is its own.
-        const READ_ONLY: &str = "Not saved. This file is read only.";
-        const CHANGED_ON_DISK: &str = "Not saved. This entry changed on disk.";
+        // edit, B's Save and B's own failed Save; B's state is its own. Round 26 FA3: each
+        // repair's slot says `Not saved`; each cause is in the page's footer and names its file.
+        const READ_ONLY: &str = "Broken.md is not saved. This file is read only.";
+        const CHANGED_ON_DISK: &str = "Cracked.md is not saved. This entry changed on disk.";
         const B_MESSAGE: &str = "Notes/Cracked.md cannot be read";
         let top_of = |d: &Driver<'_>, words: &str| {
             d.nodes()
@@ -2943,11 +3101,17 @@ pub mod campaign_content {
                 .map(|node| node.rect.top())
                 .collect::<Vec<_>>()
         };
-        // A's cause sits above B's message; B's state sits below it.
+        // A's state sits above B's message and A's cause is in the footer, once; B's state sits
+        // below B's message.
         let a_owns = |d: &Driver<'_>| {
             let message = top_of(d, B_MESSAGE);
-            let cause = top_of(d, READ_ONLY);
-            message.len() == 1 && cause.len() == 1 && cause[0] < message[0]
+            let state = top_of(d, "Not saved");
+            message.len() == 1
+                && state.iter().any(|top| *top < message[0])
+                && d.painted_in(egui::Rect::EVERYTHING)
+                    .matches(READ_ONLY)
+                    .count()
+                    == 1
         };
         let b_state = |d: &Driver<'_>, word: &str| {
             let message = top_of(d, B_MESSAGE);
@@ -3007,16 +3171,176 @@ pub mod campaign_content {
         d.settle();
         d.observe(
             "iter-23-C-own-failure-fail",
-            a_owns(d) && b_state(d, CHANGED_ON_DISK) && !b_file.exists(),
+            a_owns(d)
+                && b_state(d, "Not saved")
+                && d.visible_text(CHANGED_ON_DISK)
+                && !b_file.exists(),
             format!(
-                "After B's Save fails: A's cause {}, B's own cause {}",
+                "After B's Save fails: A's cause {}, B's own state {} and cause {}",
                 a_owns(d),
-                b_state(d, CHANGED_ON_DISK)
+                b_state(d, "Not saved"),
+                d.visible_text(CHANGED_ON_DISK)
             ),
         );
         set_read_only(&a_file, false);
-        d.click("Discard");
-        d.click("Discard");
+        // Round 26, brief revision 18: two results of one kind. A's Discard, then B's Discard:
+        // both results are listed in the footer, each with its Undo. Undo A brings back A's
+        // draft; B's result and B's discarded state stay. Neither result moves B's editor.
+        const A_DISCARDED: &str = "Broken.md draft discarded.";
+        const B_DISCARDED: &str = "Cracked.md draft discarded.";
+        const A_MESSAGE: &str = "Notes/Broken.md cannot be read";
+        const A_PATH: &str = "Notes/Broken.md";
+        const B_PATH: &str = "Notes/Cracked.md";
+        let draft = |d: &mut Driver<'_>, path: &str| {
+            d.app_mut()
+                .campaign_content
+                .repair_draft(path)
+                .map(str::to_owned)
+        };
+        // The package list against B's save row, the last repair's: a message in the page's
+        // flow (as the old message space below each save row was) would move it; the page's
+        // scroll and A's editor height do not.
+        let b_top = |d: &Driver<'_>| {
+            let save = d
+                .nodes()
+                .into_iter()
+                .filter(|node| node.name == "Save repaired note")
+                .map(|node| node.rect.bottom())
+                .reduce(f32::max)?;
+            let list = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name.starts_with("D&D 2024"))?
+                .rect
+                .top();
+            Some(list - save)
+        };
+        let listed = |d: &Driver<'_>, words: &str| footer_with(d, words).is_some();
+        let undo_top = |d: &Driver<'_>, name: &str| d.place_of(name).map(|rect| rect.top());
+        const P_DISCARDED: &str = "Campaign packages draft discarded.";
+        const UNDO_A: &str = "Undo discard of Broken.md";
+        const UNDO_B: &str = "Undo discard of Cracked.md";
+        const UNDO_P: &str = "Undo discard of Campaign packages";
+        let base = d.window_size();
+        let a_draft = draft(d, A_PATH);
+        let before = b_top(d);
+        d.click_below(A_MESSAGE, "Discard");
+        let a_discarded = a_draft.is_some() && draft(d, A_PATH) != a_draft;
+        let after_a = b_top(d);
+        // Review round 26: the page's body ends where the footer starts. With A's result in the
+        // footer, at 960, 1200 and 1920: Tab and screen-reader focus bring the Ash Wraith row
+        // into view above the footer; a click on it changes only the package selection, never
+        // A's result; and the packages' own Undo restores only its own state.
+        let selections = |d: &mut Driver<'_>| d.app_mut().campaign_content.selections_changed();
+        let row_name = format!("Use {UNSELECTED_ENTRY}");
+        let a_discarded_draft = draft(d, A_PATH);
+        // Rows below the page's viewport come into view by focus, as Tab or a screen reader
+        // brings them: AccessKit's scroll-into-view stops at the package list's own scroll
+        // area, so the driver's reveal cannot reach them.
+        click_by_focus(d, MODULE_ROW);
+        for size in [SMALL, DEFAULT, LARGE] {
+            d.set_base(size);
+            let above_footer = |d: &Driver<'_>| {
+                let row = d.nodes().into_iter().find(|node| node.name == row_name)?;
+                let footer = footer_with(d, A_DISCARDED)?;
+                Some(row.fully_in_view() && row.rect.bottom() <= footer.top())
+            };
+            // Nothing of the page shows under the footer: the body ends where the footer starts.
+            let leaks = body_under_footer(d, A_DISCARDED);
+            let tabbed = d.tab_to(&row_name) && above_footer(d) == Some(true);
+            d.harness_focus_nothing();
+            let read = d.reader_focus(&row_name) && above_footer(d) == Some(true);
+            d.harness_focus_nothing();
+            let before = selections(d);
+            click_by_focus(d, &row_name);
+            let only_selection = selections(d) != before
+                && draft(d, A_PATH) == a_discarded_draft
+                && listed(d, A_DISCARDED);
+            d.click_below(SAVE_SELECTIONS, DISCARD_SELECTION);
+            let discarded = !selections(d);
+            d.click(UNDO_P);
+            let own_undo =
+                selections(d) && draft(d, A_PATH) == a_discarded_draft && listed(d, A_DISCARDED);
+            d.click_below(SAVE_SELECTIONS, DISCARD_SELECTION);
+            d.observe(
+                "iter-26-C-rows-above-footer",
+                leaks.is_empty() && tabbed && read && only_selection && discarded && own_undo,
+                format!(
+                    "At {size:?}: page words under the footer {leaks:?}; Tab reaches the row above the footer {tabbed}; screen-reader \
+                     focus {read}; a click changes only the selection {only_selection}; Discard \
+                     {discarded}; the packages' Undo restores only its own state {own_undo}"
+                ),
+            );
+        }
+        d.set_base(base);
+        // Review round 26: a package-selection Discard between the two repairs' Discards. All
+        // live Undos share one order, newest first.
+        click_by_focus(d, MODULE_ROW);
+        click_by_focus(d, &format!("Use {UNSELECTED_ENTRY}"));
+        d.click_below(SAVE_SELECTIONS, DISCARD_SELECTION);
+        let b_draft = draft(d, B_PATH);
+        d.click_below(B_MESSAGE, "Discard");
+        let b_baseline = draft(d, B_PATH);
+        let both = listed(d, A_DISCARDED)
+            && listed(d, B_DISCARDED)
+            && listed(d, P_DISCARDED)
+            && b_baseline != b_draft;
+        let order = [UNDO_B, UNDO_P, UNDO_A].map(|name| undo_top(d, name));
+        let newest_first =
+            order.iter().all(Option::is_some) && order.windows(2).all(|pair| pair[0] < pair[1]);
+        let after_b = b_top(d);
+        d.click(UNDO_A);
+        let a_back = draft(d, A_PATH) == a_draft;
+        let b_kept = listed(d, B_DISCARDED)
+            && listed(d, P_DISCARDED)
+            && !listed(d, A_DISCARDED)
+            && draft(d, B_PATH) == b_baseline;
+        let after_undo = b_top(d);
+        d.observe(
+            "iter-26-C-two-discards",
+            a_discarded && both && a_back && b_kept,
+            format!(
+                "A discarded {a_discarded}; A, the packages and B listed and B discarded {both}; \
+                 Undo A restores A {a_back}; the newer results and B's state kept {b_kept}"
+            ),
+        );
+        d.observe(
+            "iter-26-C-undo-order",
+            newest_first,
+            format!("Undo tops, newest first (B, packages, A): {order:?}"),
+        );
+        d.observe(
+            "iter-26-C-two-discards-still",
+            before.is_some()
+                && [after_a, after_b, after_undo]
+                    .iter()
+                    .all(|top| *top == before),
+            format!(
+                "Package list below B's save row: before {before:?}, after A's discard \
+                 {after_a:?}, after B's {after_b:?}, after Undo A {after_undo:?}"
+            ),
+        );
+        // Review round 26: a campaign change ends this campaign's Undos at the change, also
+        // while the page is hidden (A → B → A from Settings).
+        d.click_below(A_MESSAGE, "Discard");
+        let live_before =
+            listed(d, A_DISCARDED) && listed(d, B_DISCARDED) && listed(d, P_DISCARDED);
+        go_settings(d);
+        d.click("Make Quiet Harbor the active campaign");
+        d.click("Make The Emberfall Marches the active campaign");
+        go_campaign(d);
+        d.settle();
+        let ended = !d.has(UNDO_A) && !d.has(UNDO_B) && !d.has(UNDO_P);
+        d.observe(
+            "iter-26-C-switch-ends-undo",
+            live_before && ended,
+            format!("Three Undos before the round trip {live_before}; all ended after it {ended}"),
+        );
+        // The steps after these start, as before, with a live package-selection discard.
+        click_by_focus(d, MODULE_ROW);
+        click_by_focus(d, &format!("Use {UNSELECTED_ENTRY}"));
+        d.click_below(SAVE_SELECTIONS, DISCARD_SELECTION);
+        d.set_base(base);
         let _ = std::fs::remove_file(d.root.join(SECOND));
         d.click(RELOAD);
         d.settle();
@@ -4284,6 +4608,16 @@ pub mod settings {
                 .is_some_and(|(button, field)| (button.right() - field.right()).abs() < 1.0)
         });
         d.state("cookie-entered", Sizes::Default);
+        // Round 26 FG2: the failure's cause is in the footer, so the cookie field and Connect
+        // keep their place, under the pointer, where the window had room for the footer.
+        let places = |d: &mut Driver<'_>| {
+            [DEFAULT, LARGE].map(|size| {
+                d.at_size(size, |d| {
+                    Some((d.place_of(COOKIE_FIELD)?.top(), d.place_of(CONNECT)?.top()))
+                })
+            })
+        };
+        let entered = places(d);
         d.click(CONNECT);
         d.expect(OFFLINE_ERROR);
         // Round 23 SF1: the failure scrolls the form so its cause, the kept cookie and the retry
@@ -4307,6 +4641,18 @@ pub mod settings {
                 fully(d, OFFLINE_ERROR, false),
                 fully(d, COOKIE_FIELD, true),
                 fully(d, CONNECT, true)
+            ),
+        );
+        // Measured after the 960 check above: a resize ends that scroll.
+        let failed = places(d);
+        d.observe(
+            "iter-26-C-FG2",
+            entered.iter().all(Option::is_some)
+                && entered == failed
+                && footer_with(d, OFFLINE_ERROR).is_some(),
+            format!(
+                "Cookie field and Connect tops at 1200 and 1920 before {entered:?} and after \
+                 {failed:?} a failed Connect; the cause is in the footer"
             ),
         );
         // Round 23 FM4: the trust text uses the DM's words, not the code's.
@@ -4467,6 +4813,57 @@ pub mod settings {
         d.expect_same(
             "The rail's status slot gains Sync stopped; Lookup, Notes, Settings and the account line stay where they were.",
         );
+        // Round 26 AG1: the actions follow the widest name and link block after an `L` gap,
+        // in one column for every row, and the account column starts `XL` after the list.
+        for size in [DEFAULT, (1920.0, 1080.0)] {
+            let placed = d.at_size(size, |d| {
+                let nodes = d.nodes();
+                let block_right = nodes
+                    .iter()
+                    .filter(|node| {
+                        node.name.contains("Linked to ") || node.name.ends_with("Not linked")
+                    })
+                    .map(|node| node.rect.right())
+                    .reduce(f32::max)?;
+                let opens: Vec<f32> = nodes
+                    .iter()
+                    .filter(|node| {
+                        node.name.starts_with("Make ")
+                            && node.name.ends_with(" the active campaign")
+                    })
+                    .map(|node| node.rect.left())
+                    .collect();
+                let edits: Vec<f32> = nodes
+                    .iter()
+                    .filter(|node| node.name == EDIT_DETAILS && node.rect.left() < 1200.0)
+                    .map(|node| node.rect.left())
+                    .collect();
+                let reload = nodes
+                    .iter()
+                    .find(|node| node.name.contains("Reload from disk"))?
+                    .rect;
+                let account = d.painted_rect_in("D&D BEYOND ACCOUNT", egui::Rect::EVERYTHING)?;
+                Some((block_right, opens, edits, reload.right(), account.left()))
+            });
+            d.observe(
+                "iter-26-C-AG1",
+                placed
+                    .as_ref()
+                    .is_some_and(|(block, opens, edits, reload, account)| {
+                        opens.len() >= 2
+                            && edits.len() >= 3
+                            && opens
+                                .iter()
+                                .all(|open| (open - block - crate::design::L).abs() <= 1.5)
+                            && edits.iter().all(|edit| (edit - edits[0]).abs() <= 0.5)
+                            && (account - reload - crate::design::XL).abs() <= 1.5
+                    }),
+                format!(
+                    "At {size:?}: widest block right, Open lefts, Edit details lefts, list right, \
+                     account left: {placed:?}"
+                ),
+            );
+        }
         d.state("campaign-list", Sizes::All);
         d.goal("find campaign management");
 
@@ -4569,10 +4966,12 @@ pub mod settings {
             d.wait_for_text("Campaign name");
             assert_eq!(d.field_text("Campaign name").as_deref(), Some("Salt Road"));
             for _ in 0..4 {
-                if d.nodes()
-                    .iter()
-                    .any(|node| node.name == "Add campaign" && node.fully_in_view())
-                {
+                let nodes = d.nodes();
+                if ["Add campaign", "Cancel"].iter().all(|name| {
+                    nodes
+                        .iter()
+                        .any(|node| node.name == *name && node.fully_in_view())
+                }) {
                     break;
                 }
                 let folder = d.row_of("Folder");
@@ -4584,8 +4983,10 @@ pub mod settings {
                 .iter()
                 .find(|node| node.name == "Add campaign")
                 .unwrap();
-            assert!(cancel.rect.right() < add.rect.left());
-            assert!((cancel.rect.center().y - add.rect.center().y).abs() <= 1.0);
+            // Round 26 FB6: Add campaign is on the Folder field's line; quiet Cancel starts the
+            // line below, with the reason.
+            assert!(cancel.rect.top() >= add.rect.bottom() - 1.0);
+            assert!(cancel.rect.center().x < add.rect.left());
             assert!(cancel.fully_in_view() && add.fully_in_view());
         });
         d.click(CANCEL);
@@ -4618,14 +5019,34 @@ pub mod settings {
                     .max_by(|a, b| a.rect.left().total_cmp(&b.rect.left())).unwrap().rect;
                 let notice = d.place_of("Combat sync stopped when the connection to D&D Beyond ended. Changes not yet sent did not reach D&D Beyond. Connect in Settings, and sync starts again.").unwrap();
                 let dismiss = d.place_of("Dismiss this message").unwrap();
-                notice.left() < header.left() + crate::design::L * 3.0
-                    && dismiss.left() > notice.left()
-                    && dismiss.top() < notice.top() + crate::design::L
+                // Round 26 AE3: an `L` gap ends the notice, as it ends every Party notice,
+                // before the list and the sheet.
+                let next = d
+                    .nodes()
+                    .iter()
+                    .filter(|node| node.rect.top() > notice.bottom() - 0.5 && node.in_view())
+                    .map(|node| node.rect.top())
+                    .reduce(f32::min);
+                let gap = next.map(|next| next - notice.bottom());
+                (
+                    notice.left() < header.left() + crate::design::L * 3.0
+                        && dismiss.left() > notice.left()
+                        && dismiss.top() < notice.top() + crate::design::L,
+                    gap,
+                )
             });
             d.observe(
                 "iter6-B-FD9",
-                aligned,
+                aligned.0,
                 format!("Party notice starts at the page edge with a trailing dismiss at {size:?}"),
+            );
+            d.observe(
+                "iter-26-C-AE3",
+                aligned.1.is_some_and(|gap| gap >= crate::design::L - 0.5),
+                format!(
+                    "At {size:?}, the stopped-sync notice's words end {:?} px above what follows",
+                    aligned.1
+                ),
             );
         }
         d.state("sync-stopped-recovery", Sizes::All);
@@ -4844,10 +5265,68 @@ pub mod empty {
         go_settings(d);
         d.expect(ADD_CAMPAIGN);
         d.state("settings-no-campaigns", Sizes::All);
+        // Round 26 FB6: an inline creation form puts Create on its last field's line, after
+        // the field, and its reason on a line below, at the field's left edge, that stays when
+        // the reason goes.
+        const ADD_REASON: &str = "Enter a campaign name and a folder first.";
+        for size in [SMALL, DEFAULT, LARGE] {
+            let placed = d.at_size(size, |d| {
+                let field = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| {
+                        node.name == FOLDER_FIELD && node.role == egui::accesskit::Role::TextInput
+                    })?
+                    .rect;
+                Some((field, d.place_of(ADD_CAMPAIGN)?, d.place_of(ADD_REASON)?))
+            });
+            d.observe(
+                "iter-26-C-FB6",
+                placed.is_some_and(|(field, add, reason)| {
+                    (add.center().y - field.center().y).abs() <= 1.0
+                        && add.left() > field.right()
+                        && (reason.left() - field.left()).abs() <= 1.0
+                        && reason.top() >= field.bottom() - 0.5
+                }),
+                format!(
+                    "At {size:?}, Add campaign is on the Folder field's line, after it, and its \
+                     reason is on the line below at the field's edge (field, Add, reason): \
+                     {placed:?}"
+                ),
+            );
+        }
+        // Must stay true: what follows the form keeps its y when the reason goes away. At 960
+        // the account section is below the form.
+        let below = |d: &Driver<'_>| {
+            let add = d.place_of(ADD_CAMPAIGN).expect("Add campaign is on screen");
+            let mut tops: Vec<(String, i32)> = d
+                .nodes()
+                .iter()
+                .filter(|node| node.rect.top() > add.bottom() + crate::design::L)
+                // Cancel comes on the reason's line once there is something to cancel.
+                .filter(|node| {
+                    !node.name.is_empty() && node.name != ADD_REASON && node.name != "Cancel"
+                })
+                .map(|node| (node.name.clone(), node.rect.top().round() as i32))
+                .collect();
+            tops.sort();
+            (add.top().round() as i32, tops)
+        };
+        let reason_shown = d.at_size(SMALL, below);
         let folder = d.root.join(NEW_FOLDER);
         std::fs::create_dir_all(&folder).expect("create campaign folder");
         d.type_into(NAME_FIELD, NEW_CAMPAIGN);
         d.type_into(FOLDER_FIELD, &folder.display().to_string());
+        assert!(!d.has(ADD_REASON), "A filled form has no reason");
+        let reason_gone = d.at_size(SMALL, below);
+        d.observe(
+            "iter-26-C-FB6-steady",
+            !reason_shown.1.is_empty() && reason_shown == reason_gone,
+            format!(
+                "At 960, the form's reason going away moves nothing below Add campaign: \
+                 {reason_shown:?} then {reason_gone:?}"
+            ),
+        );
         d.click_below(FOLDER_FIELD, OPEN_CAMPAIGN);
         d.expect(NEW_CAMPAIGN);
         d.state_prepared("campaign-added", Sizes::Default, |d| {
@@ -8871,7 +9350,7 @@ pub mod signed_in {
         );
         d.click("Add Salt Road from D&D Beyond");
         // Round 23 AM2/FM7: quiet Cancel starts the form's last row at the labels' text edge.
-        let (cancel, labels) = d.at_size(DEFAULT, |d| {
+        let (add, labels) = d.at_size(DEFAULT, |d| {
             (
                 d.place_of("Cancel")
                     .and_then(|cancel| words_left_in(d, cancel)),
@@ -8880,12 +9359,12 @@ pub mod signed_in {
         });
         d.observe(
             "iter-23-C-AM2",
-            cancel.is_some_and(|cancel| {
+            add.is_some_and(|add| {
                 labels
                     .iter()
-                    .all(|label| label.is_some_and(|label| (cancel - label).abs() <= 1.0))
+                    .all(|label| label.is_some_and(|label| (add - label).abs() <= 1.0))
             }),
-            format!("Cancel’s words start at {cancel:?}; the field labels at {labels:?}"),
+            format!("Cancel’s words start at {add:?}; the field labels at {labels:?}"),
         );
         d.state("import-remote-campaign", Sizes::Default);
         d.observe(
@@ -9027,6 +9506,8 @@ pub mod signed_in {
             let widths = [
                 "are editable. Splat sends a change",
                 "Concentration, custom effects",
+                // Round 26 AM2: the rest help too.
+                "A rest goes to D&D Beyond once",
             ]
             .map(|words| {
                 d.scroll_up_at(sheet_at, 30);
@@ -9317,6 +9798,19 @@ pub mod signed_in {
                 && d.is_disabled(EDIT_DETAILS)
                 && d.is_disabled("Folder"),
             "With a run open, the link tab states why it is locked, and its controls are",
+        );
+        // Round 26 FN6: the locked picker keeps the form's width, so it ends with the session
+        // folder field, as it does unlocked.
+        let edges = d.place_of("D&D Beyond campaign link").zip(
+            d.nodes()
+                .iter()
+                .find(|node| node.name == "Folder" && node.role == egui::accesskit::Role::TextInput)
+                .map(|node| node.rect),
+        );
+        d.observe(
+            "iter-26-C-FN6",
+            edges.is_some_and(|(picker, folder)| (picker.right() - folder.right()).abs() <= 1.0),
+            format!("Locked picker and session folder field: {edges:?}"),
         );
         d.state("link-tab-during-run", Sizes::Default);
         d.begin_task();
