@@ -2992,13 +2992,18 @@ pub fn focus_and_select(ui: &Ui, id: Id, text: &str) {
 
 /// Keep frequent Add actions visible. Other actions share More when space is short.
 /// `always_visible` names the actions that stay beside the caller's frequent actions.
-/// Returns the chosen action's original index, whether inline or in the menu.
+/// `menu_only` are lines of More alone, after the others: they take no part in the fit, so no
+/// action moves for them, and a strip with no More has none of them.
+/// Returns the chosen action's original index, whether inline or in the menu. A `menu_only`
+/// line's index follows the last of `actions`.
 pub fn hanging_add_strip(
     ui: &mut Ui,
     first: impl FnOnce(&mut Ui),
     actions: Vec<Action<'_>>,
     always_visible: &[usize],
+    menu_only: Vec<Action<'_>>,
 ) -> Option<usize> {
+    let after = actions.len();
     let mut chosen = None;
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = XS;
@@ -3028,6 +3033,7 @@ pub fn hanging_add_strip(
                         overflow.push((index, action));
                     }
                 }
+                overflow.extend((after..).zip(menu_only));
                 let hint = overflow
                     .iter()
                     .map(|(_, action)| action.label)

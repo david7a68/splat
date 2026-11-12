@@ -34,6 +34,8 @@ use std::{
 /// `all` writes the frozen files from this run; `add` writes rows for new tasks only. Either
 /// takes the place of the G6 check.
 const WRITE: &str = "SPLAT_DM_AUDIT_WRITE";
+/// The road table of the journey's encounter checks (F9).
+const ROAD_TABLE: &str = "# Road\n\n## On the road\n\n<!-- splat:rolls key=road dice=1d20 per=day -->\n\n| d20 | On the road |\n| --- | --- |\n| 1-14 | Nothing stirs. |\n| 15-20 | Wolves pick up the trail. |\n";
 /// The one way a feature adds its tasks.
 const ADD_COMMAND: &str = "devenv shell -- audit-freeze add";
 /// How an author records counts that change on purpose.
@@ -382,6 +384,22 @@ fn during_the_session(a: &mut Audit<'_, '_>) {
     }
     a.click(Do, "Add Travel");
 
+    // F9: one roll on the campaign's road table for the journey, in the Travel row.
+    a.setup("the campaign has a marked road table", |d| {
+        let campaign = d.app_mut().campaigns.active_campaign().expect("a campaign");
+        fs::write(campaign.path.join("Road.md"), ROAD_TABLE).expect("write the road table");
+        d.app_mut().lookup.refresh();
+        d.settle();
+    });
+    a.task("Check the road for encounters");
+    a.click(Find, "More actions for Travel");
+    a.click(Do, "Roll for encounters");
+    a.click(Do, "Roll for This journey");
+    a.fact(format!(
+        "the journey holds one check: {}",
+        a.d.has_containing("Clear the check for This journey")
+    ));
+
     a.task("Ambush: read the read-aloud text and start the fight");
     a.click(Nav, &format!("Start fight: {TONIGHT}"));
     a.fact(format!(
@@ -533,6 +551,20 @@ fn during_the_session(a: &mut Audit<'_, '_>) {
         a.d.current_page()
     ));
     a.act(Nav, "close the run again", close_run);
+    a.fact(format!("closing it comes back to: {}", a.d.current_page()));
+
+    // F3 of the session-cycle design: the same fight from the book's Bandit in Lookup.
+    a.task("A fight that nobody planned, with a Bandit from the book, then talk");
+    a.act(Panel, "open Lookup", |d| d.press_ctrl(Key::K));
+    a.act(Find, "search: bandit", |d| d.type_text("bandit"));
+    a.act(Find, "open the Bandit", |d| d.click_starting("Bandit · "));
+    a.click(Nav, "Start a fight with Bandit");
+    a.fact(format!(
+        "the run of Fight with Bandit is open: {}",
+        a.d.has_containing("Fight with Bandit")
+    ));
+    a.act(Nav, "close the run again", close_run);
+    a.act(Panel, "close Lookup", |d| d.press(Key::Escape));
     a.fact(format!("closing it comes back to: {}", a.d.current_page()));
 
     a.task("Stop recording");

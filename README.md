@@ -195,7 +195,12 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
 
 Session Read and Write views keep the same left-aligned prose width of at most 75 characters per line.
 The Write frame is no wider than the reader measure plus its padding and stays at the left edge. Read and Write sit at its top right edge.
-Spare width stays outside it; stored line breaks stay unchanged. Read omits plan links already shown beside the note, including group links.
+Spare width stays outside it; stored line breaks stay unchanged. Read omits plan links already shown beside the note, including group links and scenes.
+A task line under the plan heading is a scene: a row with a done box, whose tick writes the note at once.
+When the plan's rows do not fit, the scenes fold to `N scenes` on the Tonight line, so the next fight stays in view.
+`Scene`, the last line of the Add strip's More menu, adds one. With no run open, a creature's or an NPC's
+reader, and a scene that links one, has `Start fight`, which saves and starts `Fight with <name>`. A Ready to
+run encounter with no saved run has `Remove…` in its menu, with `Undo remove encounter`.
 A group editor stays beside the note when both fit at their width limits. Smaller pages use the Note tab.
 A paused fight on the plan offers Resume even when it came from a timeline event.
 The Add strip stays directly below Tonight, above messages and plan rows. Fight,
@@ -208,6 +213,10 @@ The reader keeps ordinary bold and bold italic as emphasis. A bold phrase opens 
 only when it resolves to an entry. Explicit Markdown and wiki links still work. Tab reaches each
 link in a paragraph in turn, and Enter or Space follows it. Each link, even a two-letter name, has its
 own press target at least 24 px square.
+
+A Travel row's menu has `Roll for encounters` while the campaign has a marked table. It adds encounter checks
+to that journey only: one roll a day (or as the table's `per` word says) on the chosen table, each result a
+quoted `Check at <hours>h` line of the event in `Timeline.md`. A result that links an encounter offers to plan it.
 
 Timeline files use `Fight`, `Travel`, `Short rest`, `Long rest` and `Major event`.
 The reader also accepts `Encounter` and `Event`, in any case, with or without a colon.
