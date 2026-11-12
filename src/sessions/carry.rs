@@ -1360,6 +1360,25 @@ mod tests {
         let mut harness = harness(dir.path(), tonight.id, played(last.id), fights());
         harness.run_steps(2);
         assert!(harness.query_by_label("— Wolves at the ford.").is_some());
+        // The last note changes on disk after the line read it: the act writes nothing and says
+        // so, and the line reads it again.
+        let read_last = fs::read_to_string(&last.path).unwrap();
+        fs::write(
+            &last.path,
+            read_last.replace("The ferry is gone.\n", "The ferry is gone.\nThe bridge burned.\n"),
+        )
+        .unwrap();
+        harness.get_by_label("Carry over").click();
+        harness.run_steps(2);
+        assert_eq!(read(), before);
+        assert!(
+            harness
+                .query_by_label("Session 1’s note changed. Check what it holds, then carry over again.")
+                .is_some()
+        );
+        fs::write(&last.path, &read_last).unwrap();
+        harness.state_mut().0.last_time = None;
+        harness.run_steps(2);
         // An edit on disk a moment before is in the words the act changes.
         let outside = before.replace(
             "## What happened\n\n",
