@@ -847,6 +847,17 @@ mod tests {
         settle_length(&mut book, None);
         assert_eq!(book.length, LengthDraft::default());
         assert!(book.conflict && book.events[0].duration == "2 days");
+        // With its form open, a journey that shows its checks holds the typed length. One whose
+        // checks went (an edit in Obsidian) holds none: its field changes the event as typed.
+        let typed = LengthDraft(Some((id.clone(), "4 days".into(), "2 days".into())));
+        book.events[0].checks_table = Some("road".into());
+        book.length = typed.clone();
+        settle_length(&mut book, Some(&id));
+        assert_eq!(book.length, typed);
+        book.events[0].checks_table = None;
+        settle_length(&mut book, Some(&id));
+        assert_eq!(book.length, LengthDraft::default());
+        assert_eq!(book.events[0].duration, "4 days");
     }
 
     /// V4, V22: the label is above the table menu; the dice words share the menu's line after
