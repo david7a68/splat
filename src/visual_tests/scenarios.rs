@@ -6648,6 +6648,38 @@ pub mod run_folder_defect {
                         .is_some_and(|frame| frame.stroke.width == 0.0)
             },
         );
+        // iter-26-B AC2, FN3, SN1 (help): the initiative help wraps at the reader measure, at
+        // every size; the menu above it ends at the form's edge, where Run folder ends (FA10).
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (widths, menu, folder) = d.at_size(size, |d| {
+                let mut widths = Vec::new();
+                d.each_painted_text(|text, _| {
+                    if text.galley.job.text.starts_with("Run setup starts with this choice") {
+                        widths.push(text.galley.size().x);
+                    }
+                });
+                let menu = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| node.name.starts_with("Roll NPC initiative"))
+                    .map(|node| node.rect.right());
+                let folder = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| node.name.starts_with("Run folder") && node.role == egui::accesskit::Role::TextInput)
+                    .map(|node| node.rect.right());
+                (widths, menu, folder)
+            });
+            d.observe(
+                "iter-26-B-help",
+                !widths.is_empty()
+                    && widths.iter().all(|width| *width <= crate::design::READER_MEASURE + 0.5)
+                    && menu
+                        .zip(folder)
+                        .is_some_and(|(menu, folder)| (menu - folder).abs() <= 1.0),
+                format!("At {size:?}: help widths {widths:?}; menu ends {menu:?}, Run folder {folder:?}"),
+            );
+        }
         d.state("run-folder-edited", Sizes::All);
         d.goal("edit the run folder with no draft");
         // A panic ends this app, so the video stops first and nothing follows.

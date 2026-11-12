@@ -836,13 +836,6 @@ fn history_summary(
             .filter_map(|row| temp_words(row))
             .map(|words| design::number_width(ui, &words, &small))
             .fold(0.0, f32::max);
-        let baseline = |ui: &mut egui::Ui, font: &egui::FontId| {
-            ui.fonts_mut(|fonts| {
-                let galley = fonts.layout_no_wrap("H".to_owned(), font.clone(), colors().text);
-                galley.rows[0].pos.y + galley.rows[0].glyphs[0].pos.y
-            })
-        };
-        let drop = (baseline(ui, &strong) - baseline(ui, &small)).max(0.0);
         // A fixed cell: its words at the cell's left, the cell as wide as its column.
         let cell = |ui: &mut egui::Ui, width: f32, words: Option<egui::RichText>| {
             ui.allocate_ui_with_layout(
@@ -870,8 +863,9 @@ fn history_summary(
                     },
                 );
                 ui.add_space(design::M - gap);
+                // The values are one line of cells, each a top-down block, so they share the
+                // name's first line (a wrapping flow put them 4 px below it).
                 ui.vertical(|ui| {
-                    ui.add_space(drop);
                     ui.horizontal_top(|ui| {
                         let hp = Type::Small.rich(ui, hp_words(row)).color(colors().text);
                         cell(ui, hp_width, Some(hp));
