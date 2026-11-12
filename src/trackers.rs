@@ -2161,6 +2161,52 @@ mod tests {
         let rows: Vec<_> = t.state.due.iter().map(|n| n.id.clone()).collect();
         assert_eq!(rows[0], day("month_end", 62), "{rows:?}");
 
+        // Remove in a day mark's history, from the note's reader. The change that a Done applied
+        // takes its Done with it, so the day is due again; Undo remove puts both back.
+        let note = t.rules.day_marks[0].note;
+        let applied = t.history["favor"].last().unwrap().entry.clone();
+        assert!(t.history["month_end"].iter().any(|row| row.entry.done
+            && row.entry.press.is_some()
+            && row.entry.press == applied.press));
+        race.trackers.remove(note, &applied);
+        let t = &race.trackers;
+        assert_eq!(
+            t.removed.as_ref().map(|r| r.words.as_str()),
+            Some("Removed: End of month, Day 32 done.")
+        );
+        assert_eq!(
+            t.state
+                .due
+                .iter()
+                .find(|n| n.key == "month_end")
+                .map(|n| n.days.clone()),
+            Some(vec![32, 62])
+        );
+        assert_eq!(value(&race, "favor", None), 0);
+        race.trackers.undo_remove();
+        assert_eq!(value(&race, "favor", None), 1);
+        assert_eq!(race.trackers.state.due[0].id, day("month_end", 62));
+        // A day notice comes from the day count, so no entry raises it: the wagon's Done goes
+        // with the seal it applied and the seal's notice, and Day 3 is due again.
+        let t = &race.trackers;
+        let wagon = t.history["wagon"]
+            .iter()
+            .find(|row| row.entry.done)
+            .unwrap()
+            .entry
+            .clone();
+        race.trackers.remove(note, &wagon);
+        let t = &race.trackers;
+        assert_eq!(t.history_reason, None);
+        assert_eq!(value(&race, "seals", Some("Party")), 0);
+        assert!(t.state.due.iter().any(|n| n.id == day("wagon", 3)));
+        assert!(!t.state.due.iter().any(|n| n.key == "seals"));
+        race.trackers.undo_remove();
+        assert_eq!(value(&race, "seals", Some("Party")), 1);
+        let t = &race.trackers;
+        let rows: Vec<_> = t.state.due.iter().map(|n| n.id.clone()).collect();
+        assert_eq!(rows[0], day("month_end", 62), "{rows:?}");
+
         // The clock goes back by the Timeline's Undo: a day no longer reached goes away, and a
         // Done stays in the ledger. Forward again, a done day stays done.
         race.timeline.undo_add(&travel);
@@ -2680,6 +2726,33 @@ mod tests {
         fs::write(&path, &text).unwrap();
         race.trackers.read_disk();
         assert_eq!(value(&race, "favor", None), 1);
+        // An Undo whose place changed on disk: the entry before the removed one was edited in
+        // Obsidian. It puts nothing back, says so, and ends.
+        let t = &mut race.trackers;
+        let clock = t.history["race_clock"][0].entry.clone();
+        t.remove(note, &clock);
+        assert!(t.removed.is_some());
+        let edited = fs::read_to_string(&path)
+            .unwrap()
+            .replace("row: A healing potion.", "row: A healing potion, edited.");
+        fs::write(&path, &edited).unwrap();
+        t.read_disk();
+        t.undo_remove();
+        assert_eq!(
+            t.history_reason,
+            Some((
+                note,
+                Unrecorded::Refused(
+                    "The entry before it changed on disk. Nothing was put back.".into()
+                )
+            ))
+        );
+        assert_eq!(
+            (t.removed.is_none(), fs::read_to_string(&path).unwrap()),
+            (true, edited)
+        );
+        fs::write(&path, &text).unwrap();
+        race.trackers.read_disk();
 
         // A failed save writes nothing and keeps nothing: the file stays byte for byte, and the
         // value and the result line stay as the file gives them. The result line says why.
@@ -2860,6 +2933,90 @@ mod tests {
     }
 
     #[test]
+    fn an_open_history_prepares_its_rows_once_and_draws_only_those_in_view() {
+        use crate::test_support::{CachedWork, Counts};
+        use egui_kittest::{Harness, kittest::Queryable};
+        let mut race = race();
+        let note = race
+            .index
+            .items
+            .iter()
+            .find(|item| item.entry.name == "Tournament")
+            .unwrap()
+            .entry
+            .clone();
+        let mut t = std::mem::take(&mut race.trackers);
+        t.ledger.changes = (0..5000)
+            .map(|n| Entry {
+                id: format!("c-{n:08x}"),
+                tracker: Some("favor".into()),
+                add: Some(1),
+                why: Some("Crowd loves it".into()),
+                ..Entry::default()
+            })
+            .collect();
+        t.settle();
+        let mut h = Harness::builder()
+            .with_size(eframe::egui::vec2(346.0, 640.0))
+            .build_ui_state(
+                move |ui, t: &mut Trackers| {
+                    eframe::egui::ScrollArea::vertical().show(ui, |ui| history::show(ui, t, &note));
+                },
+                t,
+            );
+        crate::design::theme::install(&h.ctx);
+        let counts = |_: &mut Harness<'_, Trackers>| {
+            let (reached, _) = history::DRAWN.with(std::cell::Cell::get);
+            Counts {
+                reached,
+                work: history::PREPARED.with(std::cell::Cell::get),
+            }
+        };
+        let drawn = || history::DRAWN.with(std::cell::Cell::get).1;
+        // Folded, the section draws no row.
+        h.run_steps(3);
+        let folded = drawn();
+        h.run_steps(3);
+        assert_eq!(drawn(), folded, "a folded history draws no row");
+        let work = CachedWork::start("Open history rows", &mut h, counts);
+        h.get_by_label("CROWD FAVOR HISTORY 5,000").click();
+        h.run_steps(3);
+        let shown = h.query_all_by_label("Crowd loves it: +1").next().is_some();
+        work.warm(&mut h, shown, 0)
+            .expect("the open history shows its rows");
+        // Unchanged frames and a resize prepare no row again, and each frame draws only the
+        // rows in view: at 640 px, some 20 rows of 5,000.
+        let before = drawn();
+        work.steady(&mut h, |h| {
+            h.run_steps(3);
+            h.set_size(eframe::egui::vec2(400.0, 640.0));
+            h.run_steps(2);
+            h.query_all_by_label("Crowd loves it: +1").next().is_some()
+        })
+        .expect("unchanged frames prepare no row");
+        let per_frame = (drawn() - before) / 5;
+        assert!(
+            (1..=30).contains(&per_frame),
+            "an open history of 5,000 rows drew {per_frame} rows a frame"
+        );
+        // A change of the ledger prepares the rows again, once.
+        work.refresh(&mut h, 5001, |h| {
+            let t = h.state_mut();
+            t.ledger.changes.push(Entry {
+                id: "c-ffffffff".into(),
+                tracker: Some("favor".into()),
+                add: Some(1),
+                why: Some("Crowd loves it".into()),
+                ..Entry::default()
+            });
+            t.settle();
+            h.run_steps(2);
+            h.query_by_label("CROWD FAVOR HISTORY 5,001").is_some()
+        })
+        .expect("a changed ledger prepares its rows again");
+    }
+
+    #[test]
     fn no_note_in_play_reads_no_ledger_and_shows_nothing() {
         let mut race = race();
         // A Remove's result and its Undo are in the note's reader while the note is in play.
@@ -2872,6 +3029,39 @@ mod tests {
         let older = t.history["favor"][0].entry.clone();
         t.remove(note, &older);
         assert_eq!(history::footer_lines(t, note).len(), 1);
+        // The note is renamed outside Splat before the next click. The note is still in play, so
+        // its reader keeps the click's refusal and says what became of the note.
+        t.played = None;
+        t.press("favor", None, "Crowd loves it", None);
+        t.played = Some(TONIGHT);
+        t.settle();
+        let other = t.history["favor"][0].entry.clone();
+        let (file_now, renamed) = (
+            race.campaign.path.join("Tournament.md"),
+            race.campaign.path.join("Renamed.md"),
+        );
+        let ledger_before = fs::read(ledger::path(&race.campaign.path)).unwrap();
+        fs::rename(&file_now, &renamed).unwrap();
+        let t = &mut race.trackers;
+        t.remove(note, &other);
+        assert_eq!(
+            fs::read(ledger::path(&race.campaign.path)).unwrap(),
+            ledger_before
+        );
+        let words: Vec<String> = history::footer_lines(t, note)
+            .into_iter()
+            .map(|line| line.words)
+            .collect();
+        assert!(
+            words.contains(&"A house rule note changed on disk. Nothing was recorded.".to_owned()),
+            "{words:?}"
+        );
+        assert!(t.problems.contains(&(
+            Some(note),
+            "Tournament is not where it was. Splat reads the notes again when its window gets focus."
+                .into()
+        )));
+        fs::rename(&renamed, &file_now).unwrap();
         // A note in play that was deleted keeps its row in Campaign → Rules and runs, so that the
         // DM can switch it off.
         fs::remove_file(race.campaign.path.join("Tournament.md")).unwrap();
