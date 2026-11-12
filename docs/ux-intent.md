@@ -333,7 +333,7 @@ The plan also holds scenes, with a done mark. A creature's or an NPC's page star
 recap and the open threads are where the next step needs them, with nothing typed twice. **Context:** wrap-up.
 **Frequency:** every session. A played fight's row puts its link, its XP and its loot in the session note in one act,
 `Add rewards`; the newest rewards block says whether the next has XP, so a campaign with no XP deletes one line,
-once. The opened played fight also says where it happened, with no trip to Timeline.
+once.
 
 **Done well:** T18.1.
 

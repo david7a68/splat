@@ -16784,13 +16784,19 @@ pub mod session_plan {
                 let (fits, detail) = d.at_size(size, |d| {
                     let (title, add, menu) =
                         (d.place_of(FIRST), d.place_of(&action), d.place_of(&menu));
-                    let fits = title.zip(add).zip(menu).is_some_and(|((title, add), menu)| {
-                        title.right() < add.left()
-                            && add.right() <= menu.left()
-                            && (add.center().y - menu.center().y).abs() <= 0.5
-                            && title.height() <= crate::design::XL + 0.5
-                    });
-                    (fits, format!("title {title:?}, Add rewards {add:?}, menu {menu:?}"))
+                    let fits = title
+                        .zip(add)
+                        .zip(menu)
+                        .is_some_and(|((title, add), menu)| {
+                            title.right() < add.left()
+                                && add.right() <= menu.left()
+                                && (add.center().y - menu.center().y).abs() <= 0.5
+                                && title.height() <= crate::design::XL + 0.5
+                        });
+                    (
+                        fits,
+                        format!("title {title:?}, Add rewards {add:?}, menu {menu:?}"),
+                    )
                 });
                 d.observe(
                     "T18.1",

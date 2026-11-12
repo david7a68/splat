@@ -1599,13 +1599,12 @@ without Paused; ended, named and custom results keep stored words. Played fights
 once on line two, then final party HP in a grid of two or three first-name cells in the party bar's order
 (players the party no longer has come last), quiet Log, Whole run and
 Timeline links. Hover keeps full names and conditions; Remove stays in the name-aligned row menu.
-An opened played fight that ended has the Timeline detail's `Where` under its links: the same event's field,
-saved by the Timeline's own write, so the DM says where it happened without leaving the plan.
 
 **Rewards (F7).** A played fight that ended has `Add rewards`, an `Action::quiet` in its row's action band left of
 the menu, only while its title keeps the lines it has beside the menu alone at the action's own width; the fit is
-worked out when the title or the width changes, not each frame. Else it is the last link of the opened row:
-`Log · Whole run · Timeline · Add rewards`, so no link of today moves. It writes one block at the end of
+worked out when the title or the width changes, not each frame. Else it is the last link of the opened row,
+`Log · Whole run · Timeline · Add rewards`, while that line has room for it; else the last line of the row's
+menu. No line is added, and no link or menu line of today moves. It writes one block at the end of
 `## Loot and rewards` (the heading goes at the end of a note that has none): a list line with the fight's
 Timeline reference, then an XP line and the loot lines: the encounter's and each downed creature's, a roll's
 results in its place and a roll not made as `(not rolled)`, as `Copy loot` words them. XP has no switch: the

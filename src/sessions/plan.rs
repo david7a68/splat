@@ -1016,6 +1016,14 @@ pub(super) struct Travel {
 const ADD_REWARDS: &str = "Add rewards";
 const REWARDS_BLOCKED: &str = "Splat cannot read this fight’s run, so its rewards are not known.";
 
+/// Where a played row has `Add rewards`.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum RewardsAt {
+    Row,
+    Link,
+    Menu,
+}
+
 /// What the DM pressed for a played fight: `Add rewards`, or `Undo rewards`, by its event.
 enum RewardsAct {
     Add(String, Uuid),
@@ -1053,7 +1061,7 @@ pub(super) struct Rewards {
     seen: Option<RewardsSeen>,
     /// Whether `Add rewards` fits on a played row: by the title, its lead icon, the row's width
     /// and the action's. Worked out when one of them changes, not each frame.
-    fit: BTreeMap<(String, &'static str, i64, i64), bool>,
+    fit: BTreeMap<(String, &'static str, i64, i64), RewardsAt>,
 }
 
 impl Rewards {
@@ -1088,8 +1096,10 @@ impl Rewards {
             .is_some_and(|seen| seen.listed.contains(event))
     }
 
-    /// Whether a played row's title keeps its lines beside `Add rewards`, at the action's own
-    /// width, as it has them beside the menu alone. `row` is the row's width with its icon.
+    /// Where a played row has `Add rewards` (rule 2, the fit rule): in its action band while the
+    /// title keeps the lines it has beside the menu alone, at the action's own width; else as the
+    /// last link of the opened row while that line has room for it; else as a line of the row's
+    /// menu. No line is added. `row` is the row's width with its icon.
     fn fits(
         &mut self,
         ui: &egui::Ui,
@@ -1097,7 +1107,7 @@ impl Rewards {
         icon: &'static str,
         row: f32,
         action: f32,
-    ) -> bool {
+    ) -> RewardsAt {
         let key = (
             title.to_owned(),
             icon,
@@ -1107,6 +1117,12 @@ impl Rewards {
         if let Some(fits) = self.fit.get(&key) {
             return *fits;
         }
+        let word = |words: &str, kind: Type| {
+            ui.painter()
+                .layout_no_wrap(words.to_owned(), kind.font(ui), colors().text)
+                .size()
+                .x
+        };
         let galley = |text: egui::RichText, room: f32| {
             egui::WidgetText::from(text).into_galley(
                 ui,
@@ -1125,7 +1141,21 @@ impl Rewards {
             .rows
             .len()
         };
-        let fits = lines(action) == lines(Density::Read.control());
+        // As `fight_block` lays out its links, beside the opened row's indent.
+        let spacing = ui.spacing().item_spacing.x;
+        let links = ["Log", "Whole run", "Timeline", ADD_REWARDS]
+            .map(|link| word(link, Type::Body))
+            .iter()
+            .sum::<f32>()
+            + 3.0 * word("·", Type::Small)
+            + 7.0 * spacing;
+        let fits = if lines(action) == lines(Density::Read.control()) {
+            RewardsAt::Row
+        } else if links <= row - Type::Body.size() - design::S {
+            RewardsAt::Link
+        } else {
+            RewardsAt::Menu
+        };
         if self.fit.len() > 256 {
             self.fit.clear();
         }
@@ -1767,7 +1797,8 @@ impl Sessions {
                         let ended = event.run.filter(|_| !running && saved.is_none());
                         let lead = if is_open { icons::DOWN } else { icons::NEXT };
                         let listed = self.rewards.listed(&event.id);
-                        let on_row = ended.is_some() && self.rewards.fits(ui, &label, lead, ui.available_width(), rewards_width);
+                        let place = self.rewards.fits(ui, &label, lead, ui.available_width(), rewards_width);
+                        let on_row = ended.is_some() && place == RewardsAt::Row;
                         let row_widths = if on_row {
                             [width - rewards_width - design::S, rewards_width]
                         } else if event.run.is_some() && (running || saved.is_none()) {
@@ -1816,6 +1847,11 @@ impl Sessions {
                                         remove = Some(event.id.clone()); ui.close();
                                     }
                                     if running { wrapped_words(ui, Type::Small, "This run is open. Close it first.", c.muted); }
+                                    // Last, so no line of today's menu moves.
+                                    if let Some(run) = ended.filter(|_| place == RewardsAt::Menu && !listed)
+                                        && Action::quiet(ADD_REWARDS).show(ui).clicked() {
+                                        rewards_act = Some(RewardsAct::Add(event.id.clone(), run)); ui.close();
+                                    }
                                 });
                                 if let Some(run) = ended.filter(|_| on_row) {
                                     if listed {
@@ -1843,7 +1879,7 @@ impl Sessions {
                                 self.fight = None;
                                 wrapped_words(ui, Type::Small, "This fight is running. Its final HP shows here when it ends.", c.muted);
                             } else if let Some(run) = event.run {
-                                let link = ended.filter(|_| !on_row).map(|_| listed);
+                                let link = ended.filter(|_| place == RewardsAt::Link).map(|_| listed);
                                 if self.fight_block(ui, run, &event.id, plan, link) {
                                     rewards_act = Some(RewardsAct::Add(event.id.clone(), run));
                                 }
@@ -3946,6 +3982,21 @@ mod tests {
         harness.run_steps(2);
         assert!(read().contains(&format!("- [[Timeline#^{a}|{long}]]\n  - XP 200")));
         assert!(shown(&harness, "In notes"));
+
+        // Too narrow for the link after Timeline: no line is added, and the action is the last
+        // line of the row's menu.
+        fs::write(&note.path, &outside).unwrap();
+        harness.state_mut().0.draft.as_mut().unwrap().follow_disk();
+        harness.set_size(egui::vec2(330.0, 800.0));
+        harness.run_steps(2);
+        assert!(harness.query_by_label(ADD_REWARDS).is_none());
+        harness
+            .get_by_label(&format!("More actions for {long}"))
+            .click();
+        harness.run_steps(2);
+        harness.get_by_label(ADD_REWARDS).click();
+        harness.run_steps(2);
+        assert!(read().contains(&format!("- [[Timeline#^{a}|{long}]]\n  - XP 200")));
     }
 
     #[test]

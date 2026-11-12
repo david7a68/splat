@@ -668,7 +668,11 @@ fn after_the_session(a: &mut Audit<'_, '_>) {
     a.task("Put the fight's rewards in the note");
     a.act(Do, "Add rewards", |d| {
         let on_row = format!("Add rewards: {TONIGHT}");
-        d.click(if d.has(&on_row) { &on_row } else { "Add rewards" });
+        d.click(if d.has(&on_row) {
+            &on_row
+        } else {
+            "Add rewards"
+        });
     });
     a.fact(format!(
         "the note holds the fight's rewards block: {}",

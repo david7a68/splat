@@ -384,7 +384,7 @@ today and its fit rule. No row adds a line, changes a row's height or takes widt
 | 7 | The Add strip's **More** menu | Its last line is `Scene` (F3) | `src/design/components.rs:2339`; `src/timeline/page.rs:89` | A menu line. The strip's visible actions are as today |
 | 8 | A campaign World entry's reader | `Add to Log` after `Edit` (F6) | The header: `src/world.rs:1733-1768` | Section 1.2: its word, then its icon, then not shown |
 | 9 | A campaign creature's or NPC's reader, with no run open | A quiet `Start fight` after `Add to Log` (F3) | The same header | Section 1.2: with its word, or not shown |
-| 10 | An ended fight's plan row | `Add rewards` (F7) | The action band: `plan.rs:692-694`; the opened row's links: `:1313-1321` | On the row only when the title keeps its lines beside the action's own width. Else the last link of the opened row, after `Timeline`. A fight whose reference an old note already has as a list line says `In notes` |
+| 10 | An ended fight's plan row | `Add rewards` (F7) | The action band: `plan.rs:692-694`; the opened row's links: `:1313-1321` | On the row only when the title keeps its lines beside the action's own width. Else the last link of the opened row, after `Timeline`, while that line has room. Else the last line of the row's menu (measured in P7: the links with `Add rewards` take about 326 px, and the plan at 330 px gives them 296). A fight whose reference an old note already has as a list line says `In notes` |
 | 12 | A Travel row's menu | One more line, `Roll for encounters`, when the campaign has a marked table (F9) | `plan.rs:727-735`; `src/timeline/page.rs:875-877` | A menu line |
 | 13 | A **Ready to run** row's menu, for an encounter with no saved run | One more line, `Remove…` (F3) | `src/encounters/list.rs:560-565` | A menu line |
 
@@ -402,7 +402,6 @@ that G7 allows.
 | 19 | A **Change** of status, place or group | It writes its Log line when a session is being played by W14's test. Today the test is "dated today" (`page.rs:1929-1937`). So a change during a fight or a recording on a note with another date, and a change in prep for a session dated later, now write a line | Rule M: one definition of the session being played |
 | 20 | The run's notice line, when a conflict's name is wider than the line beside the bare `Undo` | The name shortens as the dock's name does. Today nothing gives | Rule K |
 | 21 | A package creature's reader, with no run open | A quiet `Start fight` in a header that holds no action today (F3) | Rule Q |
-| 22 | An opened played fight that ended | The Timeline detail's `Where` field under the row's links: the same event's field, saved by the Timeline's write, so the DM types the place without two page transitions (repair W2-D3, P7) | By the lead's ruling after app round 1 |
 
 Nothing else differs. A free-words effect from an encounter or an older run gives no reminder. A Travel row
 shows no checks and no new field until the DM asks. The rail says nothing about trackers unless a notice is
@@ -1189,7 +1188,9 @@ holds only the menu today (`src/sessions/plan.rs:692-694`), and its title has th
 `Add rewards` is a quiet action in that band, left of the menu, only when the title keeps the lines that it
 has today beside the action's own width. P7 works this out when the title or the width changes, not each
 frame. When the title uses the width, it is the last of the opened row's links: `Log · Whole run · Timeline ·
-Add rewards` (`:4918-4926`), so no link of today moves. After the act, the same place says `In notes`: the
+Add rewards` (`:4918-4926`), so no link of today moves, while that line has room for it. Measured in P7, that
+line takes about 326 px and the plan at 330 px gives it 296, so there it is the last line of the row's menu
+(rule 2: a menu that exists in that place), and the opened row gains no line. After the act, the same place says `In notes`: the
 status that an event's row has today (`:4392`), or muted words in the opened row.
 
 ```text
