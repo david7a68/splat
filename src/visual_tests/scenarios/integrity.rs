@@ -65,6 +65,34 @@ pub fn run(d: &mut Driver<'_>) {
     d.expect("Undo separate session");
     d.expect("Session 0.md is now a separate session.");
     d.state("session-copy-repaired", Sizes::All);
+    // iter-25-S AB2 caller: at 1920 the open-session warning and its action stay inside the
+    // list measure, and the action starts at the warning's words.
+    let capped = d.at_size((1920.0, 1080.0), |d| {
+        let nodes = d.nodes();
+        let words = nodes
+            .iter()
+            .find(|node| node.name.contains("is not the session being played") && node.in_view())
+            .map(|node| node.rect);
+        let action = nodes
+            .iter()
+            .find(|node| {
+                node.in_view()
+                    && (node.name == "Return to the session being played"
+                        || node.name.starts_with("Open "))
+                    && words.is_some_and(|words| node.rect.top() >= words.bottom() - 1.0)
+            })
+            .map(|node| node.rect);
+        (words, action)
+    });
+    d.observe(
+        "iter-25-S-AB2",
+        capped.0.zip(capped.1).is_some_and(|(words, action)| {
+            words.width() <= crate::design::LIST_MEASURE + 1.0
+                && (action.left() - words.left()).abs() < 1.0
+                && action.right() <= words.left() + crate::design::LIST_MEASURE + 1.0
+        }),
+        format!("The open-session warning and its action at 1920: {capped:?}"),
+    );
     d.observe(
         "D9",
         crate::sessions::list_notes(&folder).len() == 2,
@@ -76,6 +104,7 @@ pub fn run(d: &mut Driver<'_>) {
         crate::sessions::list_notes(&folder)[0].path == note.path,
         "Undo keeps the original as the known session",
     );
+    crowded_banner(d, &folder, &note.path);
     fs::remove_file(copy).unwrap();
     d.app_mut().sessions.refresh();
     recording_without_audio(d, &folder, note.id);
@@ -296,4 +325,67 @@ fn missing_folders(
         },
     );
     d.state("session-folder-gone", Sizes::All);
+}
+
+/// Review of PR 255, item 3: a recording alert and many session notices at once at 960x640.
+/// The banner stays within a third of the window, the alert stays at its top, and the last
+/// recovery choice is reached by the wheel and by the keyboard.
+fn crowded_banner(d: &mut Driver<'_>, folder: &std::path::Path, note: &std::path::Path) {
+    const ALERT: &str = "Processing “crowded” failed. What is done is kept.";
+    const RELOAD: &str = "Reload and lose my draft";
+    let base = d.window_size();
+    d.set_base(SMALL);
+    let copies = ["Session 00.md", "Session 000.md"].map(|name| folder.join(name));
+    for copy in &copies {
+        fs::copy(note, copy).unwrap();
+    }
+    fs::write(
+        folder.join("Broken.md"),
+        "---\nsession_id: not an id\n---\n",
+    )
+    .unwrap();
+    d.app_mut().sessions.refresh();
+    d.app_mut().sessions.simulate_alert(ALERT);
+    d.app_mut().sessions.simulate_conflict();
+    d.settle();
+    d.expect(RELOAD);
+    let (_, height) = d.window_size();
+    let alert = d.place_of(ALERT);
+    let reload_before = d.place_of(RELOAD);
+    d.observe(
+        "iter-25-S-banner-crowded",
+        alert.is_some_and(|alert| alert.top() >= height * 2.0 / 3.0 - crate::design::M)
+            && !d.in_view(RELOAD)
+            && d.has_containing("claim to be the same session")
+            && d.has_containing("cannot read the properties"),
+        format!("At 960x640 the crowded banner holds the alert at its top {alert:?}, and Reload is below its edge {reload_before:?}"),
+    );
+    let at = alert.map_or(pos2(400.0, height - 40.0), |alert| alert.center());
+    d.scroll_at(at, 10);
+    let reload_after = d.place_of(RELOAD);
+    d.observe(
+        "iter-25-S-banner-wheel",
+        d.in_view(RELOAD)
+            && reload_before
+                .zip(reload_after)
+                .is_some_and(|(before, after)| after.top() < before.top() - 1.0),
+        format!("The wheel moves the banner: Reload {reload_before:?} then {reload_after:?}"),
+    );
+    d.scroll_up_at(at, 10);
+    assert!(d.in_view(ALERT) && !d.in_view(RELOAD));
+    let reached = d.tab_to(RELOAD);
+    d.observe(
+        "iter-25-S-banner-keyboard",
+        reached && d.in_view(RELOAD),
+        "Tab reaches Reload and lose my draft, and it scrolls into view",
+    );
+    d.click("Overwrite with my draft");
+    d.click("Dismiss this error");
+    for copy in &copies {
+        fs::remove_file(copy).unwrap();
+    }
+    fs::remove_file(folder.join("Broken.md")).unwrap();
+    d.app_mut().sessions.refresh();
+    d.settle();
+    d.set_base(base);
 }

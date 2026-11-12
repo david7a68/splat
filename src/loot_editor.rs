@@ -246,7 +246,8 @@ pub fn show(
     }
     if let Some((at, line)) = state.removed.clone() {
         let words = format!("Removed {}.", plain(&line));
-        if design::undo_message(ui, Tone::Info, &words, "Undo remove loot") {
+        // A removal is a finished change: the success tone, as every finished change has.
+        if design::undo_message(ui, Tone::Success, &words, "Undo remove loot") {
             lines.insert(at.min(lines.len()), line);
             state.removed = None;
         }

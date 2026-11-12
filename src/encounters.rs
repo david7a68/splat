@@ -111,7 +111,9 @@ fn named_note_path(root: &std::path::Path, folder: &str, name: &str) -> Result<S
 mod disk;
 mod groups;
 mod history;
+// The one member-fault form and its row, for Arrivals in the run (Contract B, R).
 use groups::GroupDraft;
+pub(crate) use groups::{NO_MAX_HP_CAUSE, member_fault, member_fault_row};
 pub(crate) use history::{Template, template_of};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -3717,6 +3719,7 @@ impl Encounters {
             return;
         };
         let words = deleted.message();
+        // A finished change has the success tone, as on the Session plan.
         if design::undo_message(
             ui,
             if deleted.unsent.is_empty() {

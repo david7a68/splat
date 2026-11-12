@@ -1454,6 +1454,34 @@ impl<'a> Driver<'a> {
         rules
     }
 
+    /// The pictures painted inside `area`: textured rects (portraits and art) and filled
+    /// circles (a portrait's initial). AccessKit pixels, like `place_of`.
+    pub fn pictures_in(&self, area: egui::Rect) -> Vec<egui::Rect> {
+        let scale = self.harness.ctx.pixels_per_point();
+        fn walk(shape: &egui::Shape, out: &mut Vec<egui::Rect>) {
+            match shape {
+                egui::Shape::Vec(shapes) => shapes.iter().for_each(|shape| walk(shape, out)),
+                egui::Shape::Rect(rect) if rect.brush.is_some() => out.push(rect.rect),
+                egui::Shape::Circle(circle) if circle.fill != egui::Color32::TRANSPARENT => {
+                    out.push(egui::Rect::from_center_size(
+                        circle.center,
+                        egui::Vec2::splat(circle.radius * 2.0),
+                    ));
+                }
+                _ => {}
+            }
+        }
+        let mut found = Vec::new();
+        for clipped in &self.harness.output().shapes {
+            walk(&clipped.shape, &mut found);
+        }
+        found
+            .into_iter()
+            .map(|rect| rect * scale)
+            .filter(|rect| area.contains(rect.center()))
+            .collect()
+    }
+
     /// The surfaces that scroll sideways now, as the ergonomics check finds them.
     pub fn horizontal_scroll_regions(&self) -> Vec<egui::Rect> {
         let scale = 1.0 / self.harness.ctx.pixels_per_point();
@@ -2119,6 +2147,11 @@ impl<'a> Driver<'a> {
     }
 
     /// Return to the start of a reader after editing its source.
+    /// Scroll down by `points`, as a touchpad does, in place of a whole wheel notch.
+    pub fn scroll_points_at(&mut self, pos: egui::Pos2, points: f32) {
+        self.scroll_by(pos, 1, egui::vec2(0.0, -points));
+    }
+
     pub fn scroll_up_at(&mut self, pos: egui::Pos2, notches: u32) {
         self.scroll_by(pos, notches, egui::vec2(0.0, 100.0));
     }
@@ -2331,6 +2364,14 @@ impl<'a> Driver<'a> {
     pub fn at_size<T>(&mut self, size: (f32, f32), look: impl FnOnce(&Self) -> T) -> T {
         self.resize(size, 1.0);
         let result = look(self);
+        self.resize(self.base, 1.0);
+        result
+    }
+
+    /// `at_size` for a step that acts (keys, wheel), then back to the base size.
+    pub fn act_at_size<T>(&mut self, size: (f32, f32), act: impl FnOnce(&mut Self) -> T) -> T {
+        self.resize(size, 1.0);
+        let result = act(self);
         self.resize(self.base, 1.0);
         result
     }
@@ -2836,6 +2877,24 @@ impl<'a> Driver<'a> {
             passed,
             detail,
         );
+    }
+
+    /// The widget id that has keyboard focus, if any.
+    pub fn focus_id(&self) -> Option<egui::Id> {
+        self.harness.ctx.memory(|memory| memory.focused())
+    }
+
+    /// Give keyboard focus back to exactly this widget id, or to none, with no click.
+    pub fn restore_focus(&mut self, id: Option<egui::Id>) {
+        self.harness.ctx.memory_mut(|memory| match id {
+            Some(id) => memory.request_focus(id),
+            None => {
+                if let Some(id) = memory.focused() {
+                    memory.surrender_focus(id);
+                }
+            }
+        });
+        self.settle();
     }
 
     fn clear_focus(&mut self) {

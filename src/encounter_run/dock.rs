@@ -3,7 +3,8 @@
 use super::{
     Command, Run,
     view::{
-        AMOUNT, DOCK_ALL_WORDS_FROM, DOCK_HEIGHT, dock_name, presence_action, toggle, toggle_width,
+        AMOUNT, DOCK_ALL_WORDS_FROM, DOCK_HEIGHT, dock_name_shown, presence_action, toggle,
+        toggle_width,
     },
 };
 use crate::design::{self, Action, Density, Type, colors, icons};
@@ -83,10 +84,10 @@ impl Run {
                 // The selected name, `L`, then its controls: one block after the creature.
                 let (presence, hint) = presence_action(p.present);
                 let gap = ui.spacing().item_spacing.x;
-                let controls = toggle_width(ui, presence, icons::ABSENT, !p.present)
+                let controls = toggle_width(ui, presence, icons::ABSENT)
                     + gap
                     + design::S
-                    + toggle_width(ui, "Conc", icons::CONCENTRATING, p.concentration)
+                    + toggle_width(ui, "Conc", icons::CONCENTRATING)
                     + gap
                     + if death_saves {
                         Action::quiet("Death saves")
@@ -111,14 +112,7 @@ impl Run {
                             .on_hover_text(line);
                     }
                     let room = ui.available_width() - controls - design::L;
-                    // Beside the actions at the minimum window it gives up size, not letters.
-                    let role = if design::number_width(ui, &p.name, &Type::Heading.font(ui)) < room
-                    {
-                        Type::Heading
-                    } else {
-                        Type::Small
-                    };
-                    let shown = dock_name(ui, &p.name, &role.font(ui), room);
+                    let (role, shown) = dock_name_shown(ui, &p.name, room);
                     let response = ui
                         .label(role.rich(ui, shown).color(c.text))
                         .on_hover_text(&p.name);
