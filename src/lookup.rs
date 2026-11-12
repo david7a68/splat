@@ -2539,7 +2539,9 @@ impl Lookup {
     /// With no entry on show, the words of a Log line whose entry is gone still sit in
     /// Lookup's footer, with `Copy text`, until the DM copies or dismisses them.
     fn gone_log_footer(&mut self, ui: &mut egui::Ui) {
-        let lines = self.reader.gone_log_notices();
+        let lines = self
+            .reader
+            .gone_log_notices(self.campaign.as_ref().map(|campaign| campaign.id));
         if lines.is_empty() {
             return;
         }

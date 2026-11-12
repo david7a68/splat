@@ -272,6 +272,20 @@ mod tests {
         assert_eq!(tick_file(&file, at, &line, false), None);
         let reworded = file.replace("Who rules it now?", "Who rules it?");
         assert_eq!(tick_file(&reworded, at, &line, true), None);
+        // The question as read is the whole question: a changed continuation line is not it
+        // (review round 1 of PR 287).
+        let body = "- [ ] Who pays Rook\n  to open the gate?\n";
+        let (at, question) = super::super::lines::lines(body, "Rook")
+            .into_iter()
+            .find_map(|line| line.open_box)
+            .unwrap();
+        assert_eq!(question, "- [ ] Who pays Rook\n  to open the gate?");
+        assert_eq!(
+            tick_file(body, at, &question, true).as_deref(),
+            Some("- [x] Who pays Rook\n  to open the gate?\n")
+        );
+        let changed = body.replace("open the gate", "kill the king");
+        assert_eq!(tick_file(&changed, at, &question, true), None);
         // Kaun has no page, and two lines want it.
         assert_eq!(checks.wanted.len(), 1);
         assert_eq!(

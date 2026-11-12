@@ -33,8 +33,9 @@ pub struct Line {
     pub bare: bool,
     /// A task line: `Some(true)` when it is ticked.
     pub task: Option<bool>,
-    /// An unticked task line's box: the number of the body's line that holds it, and that line
-    /// as read, so a tick finds exactly this line.
+    /// An unticked task line's box: the number of the body's line that holds it, and the whole
+    /// question as read, that line and its continuation lines joined by `\n`, so a tick finds
+    /// exactly this question.
     pub open_box: Option<(usize, String)>,
     /// Under the Log heading, or under a heading inside the Log.
     log: bool,
@@ -457,9 +458,14 @@ pub fn lines(body: &str, title: &str) -> Vec<Line> {
             continue;
         }
         match &mut open {
-            Some((_, raw, _)) => {
+            Some((_, raw, first)) => {
                 raw.push(' ');
                 raw.push_str(text);
+                // The question as read holds its continuation lines too.
+                if let Some((_, question)) = first {
+                    question.push('\n');
+                    question.push_str(source);
+                }
             }
             None => open = Some((Kind::Paragraph, text.to_owned(), None)),
         }

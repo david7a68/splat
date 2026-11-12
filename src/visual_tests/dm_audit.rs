@@ -912,17 +912,27 @@ fn settle_a_question(a: &mut Audit<'_, '_>) {
         d.app_mut().lookup.refresh();
         d.settle();
     });
+    let asked = fs::read_to_string(note(a.d)).expect("Hobb's note");
     a.task("The table settles an open question: tick it");
     a.click(Nav, NAV_WORLD);
     a.act(Sub, "Open questions", |d| {
         d.click_containing("Open questions · ")
     });
-    a.click(Do, &format!("Open: {QUESTION}"));
-    let path = note(a.d);
-    a.fact(format!(
-        "Hobb's note holds the tick: {}",
-        fs::read_to_string(path).is_ok_and(|text| text.contains(&format!("- [x] {QUESTION}\n")))
-    ));
+    // The act is done when the note holds the tick on that line and nothing else changed: a
+    // box that writes nothing blocks the act, and G6 fails (review round 1 of PR 287).
+    a.act(Do, &format!("Open: {QUESTION}"), |d| {
+        d.click(&format!("Open: {QUESTION}"));
+        let saved = fs::read_to_string(note(d)).expect("Hobb's note");
+        let ticked = asked.replacen(
+            &format!("- [ ] {QUESTION}\n"),
+            &format!("- [x] {QUESTION}\n"),
+            1,
+        );
+        assert!(
+            ticked != asked && saved == ticked,
+            "the tick did not write that line alone: {saved:?}"
+        );
+    });
 }
 
 /// The World NPC of F6's task, whom a done scene links.

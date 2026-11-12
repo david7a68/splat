@@ -712,25 +712,29 @@ impl Reader {
                 // Each lost draft keeps its own notice, also a second one from the same entry.
                 self.gone_log_lines.push(super::GoneLog {
                     id: super::next_order(),
+                    campaign: key.0,
                     name: open.name,
-                    words: open.field.words.trim().to_owned(),
+                    words: open.field.words,
                 });
             }
         }
     }
 
-    /// The words of Log lines whose entry is gone, as footer notices. Each shows, whatever the
-    /// reader shows, until the DM copies or dismisses it (`FooterAct::GoneLog`).
-    pub(crate) fn gone_log_notices(&self) -> Vec<super::FooterLine> {
+    /// The words of Log lines whose entry is gone, as footer notices, for the campaign that is
+    /// open. Each shows, whatever the reader shows, until the DM copies or dismisses it
+    /// (`FooterAct::GoneLog`); another campaign's notice waits, unseen, for its campaign.
+    pub(crate) fn gone_log_notices(&self, campaign: Option<Uuid>) -> Vec<super::FooterLine> {
         self.gone_log_lines
             .iter()
+            .filter(|gone| Some(gone.campaign) == campaign)
             .map(|gone| {
                 super::FooterLine::new(
                     super::FooterRank::Notice,
                     Tone::Warning,
                     &format!(
                         "\u{201c}{}\u{201d} was deleted. The Log line was not added: \u{201c}{}\u{201d}",
-                        gone.name, gone.words
+                        gone.name,
+                        gone.words.trim()
                     ),
                     super::FooterKind::GoneLog(gone.clone()),
                 )

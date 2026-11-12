@@ -1990,7 +1990,10 @@ pub(crate) type LogKey = (Uuid, Uuid);
 pub(crate) struct GoneLog {
     /// This notice's own number, so two drafts lost from one entry stay two notices.
     id: u64,
+    /// The campaign of the entry: the notice shows only there.
+    campaign: Uuid,
     name: String,
+    /// The words as the DM typed them, byte for byte, for `Copy text`.
     words: String,
 }
 
@@ -3667,7 +3670,7 @@ impl Reader {
         self.prepare(item);
         let id = item.entry.id;
         let editing = campaign.is_some_and(|campaign| self.editing(id, campaign));
-        let mut lines = self.gone_log_notices();
+        let mut lines = self.gone_log_notices(campaign.map(|campaign| campaign.id));
         let has_unread = self
             .group_fault
             .as_ref()
@@ -5790,18 +5793,33 @@ mod tests {
         let again = ContentIndex::load(&[], Some(&campaign)).unwrap();
         lookup.forget_gone_log_lines(&again);
         lookup.open_log(campaign.id, hob, "Hob", "");
-        lookup.log_fields.get_mut(&key).unwrap().field.words = "Again.".into();
+        // The words keep every byte the DM typed, for Copy text (review round 1 of PR 287).
+        let again = "  \"Again.\"\nsecond line\n  ";
+        lookup.log_fields.get_mut(&key).unwrap().field.words = again.into();
         fs::remove_file(&path).unwrap();
         lookup.forget_gone_log_lines(&ContentIndex::load(&[], Some(&campaign)).unwrap());
         assert_eq!(notices(&mut lookup), 2);
-        let first = lookup
+        let gone: Vec<_> = lookup
             .footer_lines(item, &index, Some(&campaign), None)
             .into_iter()
-            .find_map(|line| match line.kind {
-                FooterKind::GoneLog(gone) if gone.words == "Kept." => Some(gone.id),
+            .filter_map(|line| match line.kind {
+                FooterKind::GoneLog(gone) => Some(gone),
                 _ => None,
             })
-            .unwrap();
+            .collect();
+        assert!(gone.iter().any(|gone| gone.words == again), "{gone:?}");
+        // A notice belongs to its campaign: another campaign's footer does not show it.
+        let other = Campaign {
+            id: Uuid::new_v4(),
+            ..campaign.clone()
+        };
+        assert!(
+            lookup
+                .footer_lines(item, &index, Some(&other), None)
+                .iter()
+                .all(|line| !matches!(line.kind, FooterKind::GoneLog(_)))
+        );
+        let first = gone.iter().find(|gone| gone.words == "Kept.").unwrap().id;
         lookup.footer_act(FooterAct::GoneLog(first), item, &campaign);
         assert_eq!(notices(&mut lookup), 1);
     }

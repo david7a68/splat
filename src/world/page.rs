@@ -710,7 +710,7 @@ impl WorldPage {
                     let mut lines: Vec<_> =
                         self.result(None).iter().map(|(r, _)| r.line()).collect();
                     // A Log line whose entry is gone says its words here too.
-                    lines.extend(self.reader.gone_log_notices());
+                    lines.extend(self.reader.gone_log_notices(Some(campaign.id)));
                     match super::draw_footer(ui, "world_footer", &lines).0 {
                         Some(super::FooterAct::GoneLog(id)) => self.reader.end_gone_log(id),
                         Some(_) => self.undo_discard(),
@@ -1549,12 +1549,19 @@ fn question_row(
     .inner
 }
 
-/// The note's text with the box of an open question set: `line` is the question's line as read
-/// (unticked) and `at` its line in the note's body. `None` unless that place holds the line in
-/// the other state: the act never looks for another line that reads the same.
-pub(super) fn tick_file(text: &str, at: usize, line: &str, done: bool) -> Option<String> {
+/// The note's text with the box of an open question set: `question` is the question as read
+/// (unticked), its first line and continuation lines joined by `\n`, and `at` its first line in
+/// the note's body. `None` unless that place holds the whole question, its box in the other
+/// state: the act never looks for another line that reads the same.
+pub(super) fn tick_file(text: &str, at: usize, question: &str, done: bool) -> Option<String> {
     let front =
         crate::sessions::split_note(text).map_or(0, |(front, _)| front.matches('\n').count());
+    let mut lines = question.split('\n');
+    let line = lines.next()?;
+    let mut held = text.split('\n').skip(front + at + 1);
+    if !lines.all(|wanted| held.next().map(|at| at.trim_end_matches('\r')) == Some(wanted)) {
+        return None;
+    }
     let ticked = crate::sessions::ticked(line, true);
     let (from, to) = if done {
         (line, ticked.as_str())
