@@ -199,8 +199,11 @@ impl ResultOrder {
 
 /// A footer's results with a live Undo, gathered with their order and added newest first.
 pub(crate) struct LiveUndos<'a> {
-    items: Vec<(u64, String, Box<dyn FnOnce(&mut egui::Ui) + 'a>)>,
+    items: Vec<LiveUndo<'a>>,
 }
+
+/// One result with a live Undo: its order, its words and how to draw it.
+type LiveUndo<'a> = (u64, String, Box<dyn FnOnce(&mut egui::Ui) + 'a>);
 
 impl<'a> LiveUndos<'a> {
     pub(crate) fn new() -> Self {
@@ -218,7 +221,7 @@ impl<'a> LiveUndos<'a> {
 
     /// Add them to `footer`, newest first.
     pub(crate) fn into_footer(mut self, footer: &mut design::Footer<'a>) {
-        self.items.sort_by(|a, b| b.0.cmp(&a.0));
+        self.items.sort_by_key(|item| std::cmp::Reverse(item.0));
         for (_, words, draw) in self.items {
             footer.result(words, true, draw);
         }
