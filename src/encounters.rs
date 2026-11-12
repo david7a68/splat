@@ -2603,11 +2603,8 @@ pub struct Encounters {
     save_refused: bool,
     /// History is a read-only snapshot and never owns the open-run slot.
     history_read: Option<(std::path::PathBuf, crate::encounter_run::FightSummary)>,
-    /// A run just opened in History: the list scrolls to it, so its Final state is in view.
+    /// A run just opened in History: the list scrolls once, so its Final state is in view.
     history_reveal: bool,
-    /// The list's offset that keeps the run opened in History at the list's top, while the DM
-    /// has not scrolled the list since it opened. `None` after the DM scrolls (X36).
-    history_kept: Option<f32>,
     /// Why the fight read in History cannot go on (`continue_blocked`), when it cannot.
     history_blocked: Option<&'static str>,
     /// What the rule's answers were worked out from: the Timeline's count of changes, the
@@ -3024,38 +3021,29 @@ impl Encounters {
             .is_some()
             .then_some("Still reading this campaign."))
     }
-    /// X36, X37: the run opened in History stays at the list's top, so its row, outcome and
-    /// Final state are in view, until the DM scrolls the list. When the list's visible height
-    /// or the content above the row changes (a smaller window, a run opened beside it), the
-    /// list follows the row. `list.inner` is the row's clean top edge on screen.
-    fn keep_history_run(
+    /// X36, X37: when a run opens in History, the list scrolls once so that the run's row is at
+    /// its top, at a clean edge. `list.inner` is the top of the row's gap on screen. The list
+    /// keeps room below its end while the run is open, so the row stays at the top when the
+    /// list's visible height changes, until the DM scrolls it.
+    fn reveal_history_run(
         &mut self,
         ui: &egui::Ui,
         list: &egui::scroll_area::ScrollAreaOutput<Option<f32>>,
     ) {
-        let offset = list.state.offset.y;
-        let most = (list.content_size.y - list.inner_rect.height()).max(0.0);
-        // The DM scrolled when the offset is not the one the list was left at, unless egui only
-        // held it inside the content that is left.
-        let kept = self.history_kept.filter(|kept| {
-            (offset - kept).abs() <= 0.5 || (*kept > most && (offset - most).abs() <= 0.5)
-        });
-        let follow = std::mem::take(&mut self.history_reveal) || kept.is_some();
-        self.history_kept = None;
-        let Some(top) = list.inner.filter(|_| follow) else {
+        if !std::mem::take(&mut self.history_reveal) {
+            return;
+        }
+        let Some(top) = list.inner else {
             return;
         };
         // The list paints `clip_rect_margin` above its top; the row's gap starts there, so no
         // letter of the line above shows cut (X37).
         let margin = ui.visuals().clip_rect_margin;
-        let want = (top + margin - list.inner_rect.top() + offset).clamp(0.0, most);
-        if (want - offset).abs() > 0.5 {
-            let mut state = list.state;
-            state.offset.y = want;
-            state.store(ui.ctx(), list.id);
-            ui.ctx().request_repaint();
-        }
-        self.history_kept = Some(want);
+        let most = (list.content_size.y - list.inner_rect.height()).max(0.0);
+        let mut state = list.state;
+        state.offset.y = (top + margin - list.inner_rect.top() + state.offset.y).clamp(0.0, most);
+        state.store(ui.ctx(), list.id);
+        ui.ctx().request_repaint();
     }
     /// Reopen a saved run, to read it or go on with it.
     pub fn open_saved_run(&mut self, path: &std::path::Path, active: &Campaign) {
@@ -4787,7 +4775,7 @@ impl Encounters {
                     &mut action,
                 )
             });
-        self.keep_history_run(ui, &list);
+        self.reveal_history_run(ui, &list);
         let Some(action) = action else {
             return;
         };

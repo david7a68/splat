@@ -1123,10 +1123,9 @@ hover `Not found in this campaign`.
 History opens read-only final state and log in place, outside the live-run slot. When a run opens there, by `Open`
 or by `Whole run` from the plan, the list scrolls at that act so the run's row is at its top and the outcome,
 the line under Read-only and the whole Final state are in view below it; the log follows. The top is a clean edge: the
-row's top less its own gap, so no letters of the line above show cut; while the run is open, the list keeps room
-below its end, so the row reaches the top also when little follows it. Until the DM scrolls the list, it keeps the run
-there when its visible height or the content above the row changes (a smaller window, a run opened beside it); after
-the DM scrolls, the DM's scroll wins. `COMBAT LOG` is `M` below the last Final state row, as `FINAL STATE` is below the
+row's top less its own gap, so no letters of the line above show cut. While the run is open, the list keeps room
+below its end, so the row reaches the top also when little follows it, and stays there when the list's visible height
+changes (a smaller window, a run opened beside it). After the DM scrolls, the DM's scroll wins. `COMBAT LOG` is `M` below the last Final state row, as `FINAL STATE` is below the
 line above it. Final state has one name column, as
 wide as the longest name up to half the room, so every HP starts at one x. HP and temporary HP follow in columns of
 their own, each as wide as its widest value, kept where a row has none; Absent, a saved concentration (its icon and
