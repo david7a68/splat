@@ -206,7 +206,9 @@ state. An on toggle uses `selected`, its word and an icon or check, without acce
 action that loses something. Keep Delete and Remove in row menus.
 
 A save row keeps its state and quiet `Discard` at the left and `Save` at the right. A draft that Save's own check
-refuses says `Invalid`, changed or not: validity comes before whether the text changed. Other clean rows say `No
+refuses says `Invalid`, changed or not: validity comes before whether the text changed. An encounter draft is
+the exception: it says `Invalid` only while it has changes, because a clean one has nothing for Save to refuse, and
+its rows' warnings name the faults. Other clean rows say `No
 changes`, unless Save is enabled to repair something the file holds: then the state names the write with the warning
 icon (`Save replaces the unread choice on line 23 with these settings`), and `Ctrl+S` saves exactly when the button
 can. `No changes to save.` belongs only to blocked Save's hover text and accessible description. A save row
@@ -989,6 +991,15 @@ want; hover keeps the marker key.
 
 ## The encounter ledger and editor
 
+The Encounters page, the encounter editor, the group editor, the creature pane and Rules and runs each have one message
+footer (`Footer`). The page's footer holds its kept results with their Undo (a discarded draft, a deleted run, a removed
+group or encounter), newest first, then its errors, then the run folder's warning. The editor's footer holds the
+discard's result, a group taken from the encounter, the roster replacement's result, then Save's reason (the last
+refusal, an empty group, the unread rows' warning). The group editor's footer holds the discard's result and the
+newest member result, then Save's reason, then the file's warnings. Rules and runs draws its footer below the form, at
+the tab's bottom: the discard's result, the reasons (an error, the unread choice's warning with its file line), then
+the folder move's warning. Faults that belong to one row, member or field stay there.
+
 Encounters uses one column, at most `LIST_MEASURE` (880 px), with IN PROGRESS, READY TO RUN, GROUPS and
 HISTORY in that order. Groups and History start closed when they have rows. The list keeps the scroll bar's lane
 whether or not the bar shows, so opening Groups moves no row action; the creature results and the encounter
@@ -1009,7 +1020,10 @@ run icon, also when its first part is a warning (`▷ ⚠ Changed on disk · …
 2, with only saved time on line two. One paused run uses Paused run in the rail, then the fitted encounter
 name; full hover and accessible text includes name and state. It resumes in one click. With several, Paused
 runs and `2 fights` open Encounters. An open run keeps Run and its round or Setup. Rail details never end on a
-separator; a short rail shows Ended or Paused with full state on hover.
+separator; a short rail shows Ended or Paused with full state on hover. Every unsaved-draft status in the rail
+(`Encounter draft`, `Group draft`, `Creature draft`, `Run settings draft`, `Library draft`, `World draft`, `World repair
+draft`, `Campaign draft`) is a `status_link`, as `Unsaved NPC` is: it opens the page, and the Campaign tab, that holds the
+draft.
 
 **Encounter difficulty** (F1) is passive words at the end of a line that exists: `Low`, `Moderate`, `High` or
 `Above High`, from `difficulty::Scale::weigh`, the one computation. It compares the XP of every creature against
@@ -1031,7 +1045,9 @@ back only where no file has its path. A plan line that linked it gets no row, an
 hover `Not found in this campaign`.
 
 History opens read-only final state and log in place, outside the live-run slot. Final state has one name column, as
-wide as the longest name up to half the room, so every HP starts at one x. Rows put outcome before ended
+wide as the longest name up to half the room, so every HP starts at one x. HP and temporary HP follow in columns of
+their own, each as wide as its widest value, kept where a row has none; Absent and the conditions start after them and
+wrap inside the last column. Each row's values sit on its name's baseline. Rows put outcome before ended
 state and retain outcome and round. The detail header shows only Read-only and end reason. History rows keep
 Open or Close and their menu; Start and Edit stay in that menu.
 
@@ -1058,7 +1074,7 @@ check that finds the fault records its kind, and the message takes its tone from
 words. A roster fault names the row as the DM sees it, `Row 2 (Cinder Wolf): …`, never its stored key or a
 stored field name. Replace… uses the shared creature row with CR, HP, AC and Use. Replace all matching rows defaults to
 on and retains names and starting values, with one Undo. In a group's editor, Use says `Replaced Unknown creature
-with Ember Cultist.` with `Undo replacement` on the member result line that Remove uses; the newest member result owns
+with Ember Cultist.` with `Undo replacement` in the editor's footer, where Remove's result goes; the newest member result owns
 that line. Undo puts back only the creature, so later edits stay; a move or a removal ends it.
 
 Roster rows have name and detail, quiet Edit and a row menu. Sides sit on the second line and change in Edit.
@@ -1074,7 +1090,7 @@ the full change link, removing source before base creature. Remove a source whol
 hover keeps the full detail. The ` · ` before the link has the same blank on each side as the separators between
 the stats: no item spacing is added around it.
 
-An unread roster row stays visible by participant name and line, with its file line (path, Edit in Obsidian and Show file). The roster also shows that row in its place among the rows that read: its name with no number (the run will not add it) and `⚠ Line 20 not read` in the warning tone, so two rows of one name stay apart. The warning sits below the editor header and its save row, so a fault does not move the name field, Save encounter or Start fight. The last warning ends with what to do, and its file line starts at its words. Start fight is blocked until the DM repairs or explicitly removes that row. Plan starts use the same check. A resumed setup keeps the warning and blocks Begin combat while its source has unread rows. Saved run participants stay intact.
+An unread roster row stays visible by participant name and line, with its file line (path, Edit in Obsidian and Show file). The roster also shows that row in its place among the rows that read: its name with no number (the run will not add it) and `⚠ Line 20 not read` in the warning tone, so two rows of one name stay apart. The warning is a reason in the editor's footer, so a fault that comes or goes moves no roster row, field, Save encounter or Start fight. The last warning ends with what to do, and its file line starts at its words. Start fight is blocked until the DM repairs or explicitly removes that row. Plan starts use the same check. A resumed setup keeps the warning and blocks Begin combat while its source has unread rows. Saved run participants stay intact.
 
 The encounter editor keeps roster rows, loot and notes within `LIST_MEASURE`, including the scroll content
 and row actions. Add participants sits directly beside that column; extra space stays at the far right.
@@ -1086,7 +1102,9 @@ the start of one row with `Save run settings` at its end; without room, the stat
 
 The editor header keeps Save and Start on line one; the name field gives up width. While Save would refuse a
 changed draft (a roster row with no creature, or the refusal of the last Save while it still holds), the save row
-says `Invalid` and Save and Ctrl+S are blocked with the cause; otherwise a changed draft says `Unsaved`. Save encounter
+says `Invalid` and Save and Ctrl+S are blocked with the cause; otherwise a changed draft says `Unsaved`. A draft whose
+rows match the file again, as after `Undo replacement`, says `No changes`. A Save, also the one a start makes, ends the
+replacement's result and its Undo. Save encounter
 also gives the open fight from that encounter its new read-aloud text and notes for Prep; its roster and combat
 state stay, and other changes wait for the next fight. An unfinished encounter
 offers Resume, moves Start another fight into its menu and keeps run state in the save row. Blocked Start
@@ -1108,7 +1126,7 @@ edge: the name on line one, then the save row with the state and Discard at its 
 column's edge. A reason without room on the save row takes its own line below it. The group name field and Belongs to end at one edge: the column's edge, or
 `FORM_WIDTH` when that comes first by at least `XL`. So the edges are the same or clearly apart. In an
 encounter's group frame, the name starts at the frame's left edge and ends at `FORM_WIDTH` or before its
-actions. Removing any member shows `Removed <name>.` and `Undo remove member` on a result line. Undo restores the full member at its place and keeps other draft edits.
+actions. Removing any member shows `Removed <name>.` and `Undo remove member` in the editor's footer. Undo restores the full member at its place and keeps other draft edits.
 
 A plan group editor stays beside the note when `LIST_MEASURE`, an `L` gap and `READER_MEASURE` fit.
 Bound the editor at `LIST_MEASURE`, anchored left. Below that width, the note stays behind its tab. Plan summaries start directly
@@ -1129,7 +1147,7 @@ Add, and the Loot field end at one x. `Roll on a table` follows the Loot field.
 Groups has one level of headings: For any encounter, each encounter, then Encounter deleted. Rows keep Edit
 and a Remove menu action with Undo. Planned groups use Remove from tonight and Undo remove. Remove isolated
 plan links; retain words inside sentences. Moving an encounter group to any encounter says `<name> moves to
-any encounter when you save.`, with Undo move until save. Move to… lists named encounters only. Make available
+any encounter when you save.`, with Undo move until save, in the info tone in the editor's footer: nothing is written until Save. Move to… lists named encounters only. Make available
 to any encounter is the direct way to remove ownership; keep it distinct from Delete group, with Undo before
 saving.
 
@@ -1240,7 +1258,7 @@ still work inside shared rolls.
 
 Setup has a `Label` column heading INITIATIVE above empty, labelled number fields.
 
-An off Absent toggle in setup uses muted text and no fill. Setup rows stay in place. Once all present rows
+An off Absent toggle in setup uses muted text and no fill, and keeps the frame's padding, so its icon and word keep one x on and off. Setup rows stay in place. Once all present rows
 have initiative, a muted ordinal follows each field, also while the last field has focus. It updates with
 totals or tie rulings, and the ready line
 names who goes first. Setup names its Undo action. Unread-row warnings sit below the setup header, in the notice place.
@@ -1267,7 +1285,8 @@ remainder less `L`. Undo always keeps the word `Undo`: shorten the target first,
 one fits, such as `Undo: 3 damage to Brannoch…`: a sheet's step drops `D&D Beyond` before its name
 (`Undo: HP for Brannoch…`), then Undo drops its `U` key letter. A sheet-change notice that leaves no room
 for that target goes below the roster. When no shortened target fits, Undo shows its step without the target:
-`Undo: 8 damage to 3` for a step on several rows (its count stays, `participants` and the half count go),
+`Undo: 8 damage × 3` for a step on several rows (its count stays after `×`, so it is never read as a copy
+number; `participants` and the half count go),
 `Undo: exhaustion 0 → 3` or `Undo: initiative` for one row. Undo shows `Undo` alone only when not even that fits. A name
 is never cut to only `…` and its copy number; retain copy numbers, action words, amounts and condition
 directions. Hover and accessibility keep the full action. Empty history says Nothing to undo, to the left of
@@ -1289,19 +1308,23 @@ text-colour words. A result below the roster (`Brannoch Vale joined at 20 · act
 `small_message` in the success tone, with the past tense Arrivals uses (`joined at`, `moved to`). Centre compact notices with their Log and Dismiss controls, in the header and below
 the roster. Wrapped notices keep top alignment. Keep an `XS` gap after the icon and an `S` gap before
 the bar. Include those gaps in the header measure. Stat-block errors use `small_message` in the error tone: the fault in
-text colour, fitted to one line, with the full error on hover, then the link `Campaign → Packages` as its action
-after an `L` gap.
+text colour, fitted to one line, with the full error on hover, then `Campaign → Packages` as its action after an `L`
+gap: a bordered secondary button, as Arrivals offers it. The words, the button and the close icon share one centre.
 
-Long local effects show four words and more; Undo keeps four when they fit. Narrow Undo keeps Undo add or Undo
+Long local effects show four words and `…` (`Hexed until the hag…`), the last shown word a link to the whole effect;
+a hidden count keeps its number (`2 more`, never a bare `more`); Undo keeps four when they fit. Narrow Undo keeps Undo add or Undo
 remove, two effect words and target. Concentration Undo says start concentration or stop concentration before
 the target. Exhaustion Undo keeps both levels, such as `exhaustion 2 → 3 on Oren`. Exhaustion level uses the shared `stepper` at Scan height. One drag on the level is one Undo step, from the level where the drag started, committed when the drag ends; each − or + press is one step. At a limit the button says `Exhaustion stops at 6.` or `Exhaustion is already 0.` Hover and accessibility keep full text.
 
 The dock has a fixed place above the footer: Amount, Damage, Heal, Temp HP, selected name, Conditions, Conc,
 Absent. Off toggles use text colour; disabled controls stay muted. Enter applies damage. The dock's and footer's
 background uses roster width; panels never cover them. The dock's controls are one block at the left, no wider than
-`LIST_MEASURE`: the dice end at the block's edge, and Conditions, Conc and Absent follow the selected name after an `L`
-gap, not at the roster's far edge. The selected name keeps `Heading`; it uses `Small` only when that shows the name
-whole. Fit whole words, retain a distinguishing last word or copy number or
+`LIST_MEASURE`: the dice end at the block's edge, and Conditions, Conc and Absent follow the selected name's slot after
+an `L` gap, not at the roster's far edge. The slot has one width for the whole fight (the widest roster name in
+`Heading`, at most `12 × L`), so the toggles keep one x whichever row is selected. The selected name keeps `Heading`; it
+uses `Small` only when that shows the name whole. The selected name starts the line. In a dock too narrow for the dice
+total beside the dice, the total (the dice icon and the number, named `Rolled 4`) has a reserved place at the end of the name's line, under
+the dice, never before the name. Fit whole words, retain a distinguishing last word or copy number or
 letter, end shortened names with an ellipsis and drop trailing joining words. Hover and accessibility keep
 full names.
 
@@ -1362,7 +1385,8 @@ attacks as tiles, with the reach or range its sheet gives (`Reach 5 ft`, `Range 
 In a run a tile arms its action: its frame turns accent on the selected fill and its icon becomes a crosshair, and
 the panel stays on the actor. Under the tiles, a crosshair and the next step in Small (`Click a target to roll against
 it. Enter applies the damage. Escape stops.`), the crosshair centred on the first line when the words wrap, led by the way the d20 rolls when it is not plain (`With advantage.
-Click a target…`). Then quiet actions on their own line, the first of each line with `line_start`, so its words start
+Click a target…`). The hint keeps the lines that the longest hint (`With disadvantage.` and the longest next step)
+takes at the panel's width, so `Stop` keeps its y in every roll mode and action. Then quiet actions on their own line, the first of each line with `line_start`, so its words start
 at the tiles' edge: `Stop`, and for a save `Roll damage` and `Half for those at or above DC`, or for a player's attack
 `Roll for them`. Each other row shows its roll words in accent Small in one place, at every size: the line under its
 name, after its conditions (and after its state word where the row has no state column), never in the state column.
@@ -1423,19 +1447,29 @@ in the heading and stay there with it; it never widens the group block or adds a
 accessible description says `Adds 400 XP; the fight becomes Moderate`, and its hover adds the budget line.
 Dragging outlines the roster in accent. Added groups retain Add and name their joining round. Setup additions
 say Added in setup. A status that cannot fit the member slot whole takes a full-width line above the members
-and controls, and wraps there at its spaces, never inside a word. Names include count when adding more than one creature. No confirmation is needed;
+and controls, and wraps there at its spaces, never inside a word. Every row keeps the shape of the widest join status
+it can show (`Added in round NN`, or its own longer status), so a join puts `Added in round N` on the members' line and
+moves no row. When `Will add:` and its first member do not fit beside Initiative and Add, the summary takes a
+full-width line above them, so `Will add:` never ends a line. The list keeps the scroll bar's lane whether or not the
+bar shows. Names include count when adding more than one creature. No confirmation is needed;
 Undo names the addition with the same count, `Undo: add 2 × Wolf`. The result names who joined, in one form for a
 group and a creature added by hand: `Lost Patrol joined at 9.`, `Ghost of the Mill joined at 9. Tied with Ember
 Cultist at 9, placed after.`, `Wolf 1 and Wolf 2 joined at 14.` Every result is a success message, tied or not; the
 `Move … before …` button below a tied one shows that a choice is open. The result and that button sit in a footer pinned to the panel's bottom, below the scrolling list, so a result that comes, grows with a tie or goes moves no group row. That button, the moved result and its Undo
 name the arrival as its message does (`Move Lost Patrol before Ember Cultist`). When the roster has two groups of
-one name, the arrival adds its first member: `Rival Team (Rival Captain 2) moved before Rival Team`. The Log keeps
-`Added by hand` and `entered by the DM`.
+one name, the arrival adds its first member: `Rival Team (Rival Captain 2) moved before Rival Team`. When the Move
+button cannot show those words whole, it gives up the whole parenthesis, never only the member's name
+(`Move Shrine Reserve before Brannoch Vale`): it sits under the message that names the arrival whole and moves only
+that arrival. Undo is not beside that message, so a shortened move Undo keeps the copy number and gives up the
+member's name (`Undo: move Rival… (… 2) before Rival…`). Hover and the accessible name keep the whole words. The
+result and its Move button stay while their step is the newest, also while the DM types search words; only a new
+step or Undo ends them. The Log keeps `Added by hand` and `entered by the DM`.
 
 Exclude missing, unread and invalid members. Say `1 of 3 can join`, `Will add: 1 × Goblin Warrior` and
 `Add 1` using only joining members. Keep excluded members under Cannot join with reason and Edit group repair.
-Only zero valid members blocks Initiative and Add. Invalid Initiative retains text, says `Enter a whole number, or clear
-the field to roll.` as a warning `small_message` (amber icon and bar, text-colour words), and blocks Add and drop. Campaign → Packages opens repair.
+Only zero valid members blocks Initiative and Add. Invalid Initiative retains text, blocks Add and drop, and says why
+in the footer below the list, named by its group (`Rival Team: Enter a whole number, or clear the field to roll.`), as
+a warning `small_message` (amber icon and bar, text-colour words) after the newest result, so no group row moves. Campaign → Packages opens repair.
 In the group editor, an unread Changes cell (`Changes “HP lots” not read. …`) is a warning `small_message`, as
 every unread value is, and its example line starts at the message words. `No members can join.` in the Encounters
 list is a warning `message`, in the same form as the member faults above it.
@@ -1464,7 +1498,9 @@ A disconnected run has Connect to sync on its header only; blocked footer Sync p
 End encounter… shortens to End… before it moves into a menu. Keep End… visible while it fits, including on recovery copies. Hover and accessibility keep End encounter…. Keys keeps its word beside Lookup, Notes and a wide panel. Saved and Undo
 align with the roster's right edge. The footer uses error status when saving stops. Ended runs put short
 conflict and pending-change counts below blocked Close after sync at the panel's right edge, with an `L` gap
-between character sync blocks. Below the sync blocks, the closed `Prep` and `Combat log` sections share one left
+between character sync blocks. Each block's heading has one form whatever its state: the name in `Heading` and the text
+colour, ` · `, then the status icon and word in the status colour (`Brannoch Vale · ⚠ HP conflict`, `Kestrel Dunmoor ·
+⟳ Sync pending`). Below the sync blocks, the closed `Prep` and `Combat log` sections share one left
 edge. Signed-out conflicts offer Connect to refresh before Show file. Ended sign-in
 uses muted recovery text; failed Connect retains error state. Sync stopped links to Party and states recovery.
 
@@ -1485,8 +1521,14 @@ line. In History it is the line under Read-only. Neither is modal, and Undo name
 footer's End step starts its outcome field with the outcome of the ending that went. Whenever that field opens
 with text, the text is selected, so that Enter keeps it and typing replaces it.
 
-A run whose saved Undo steps cannot be read says so once, as a warning `message` in the error line's place with a
-Dismiss button. It wraps beside Lookup and pushes the roster down by its lines. The Log keeps the line.
+The run has one message footer, pinned below the roster in the live, setup and ended views (`design::Footer`). The
+notices that come by themselves sit in it: the changed-on-disk choices, an error, and the warning that the saved Undo
+steps cannot be read; in setup also the carry-over warning and the long-rest offer, whose result (`Party HP set to the
+saved values.` with `Undo use saved HP`) leads the footer while its step is the newest. The roster sizes its rows from
+its whole room, so the footer moves no row when it comes or goes: it only covers the bottom of the list, and the
+overflow line counts the rows behind it, which scroll into view. A stat-block error keeps its one-line band below the
+roster. A run whose saved Undo steps cannot be read says so once, as a warning `message` with a Dismiss button. The
+Log keeps the line.
 
 Footer and strip Close run close at once only when saved with nothing unsent; otherwise ask for a choice. List
 lost changes on separate lines, up to three, then the remaining count. Deleted runs with unsent changes use
@@ -1496,8 +1538,8 @@ conflict dialog offers to `close and choose next time` only when Close now works
 confirmed, it says `Choose which HP to keep before you close.`, and the cause shows once in muted `Small` text
 above the actions, which all wait for it, in the ended view's exact form: `Settle 1 conflict first.` A close keeps the
 run's Undo steps, so no close words say that Undo ends.
-The app-close and run-close dialogs draw their recovery actions through one shared function: quiet, on one line,
-Connect to sync before Review conflict, and the first one starts at the dialog text. Stop and
+The app-close and run-close dialogs draw their recovery actions through one shared function: bordered secondary
+buttons on one line, Connect to sync before Review conflict, and the first one's border starts at the dialog text. Stop and
 close is secondary when saved work remains.
 
 Incoming sheet changes remove only that character's Undo steps. Remaining snapshots keep current sheet values.
