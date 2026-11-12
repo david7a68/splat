@@ -15867,9 +15867,23 @@ pub mod encounter_history {
                 format!("{what}, opened at {size:?}: the row and Final state in view: {shown:?}"),
             );
         }
-        // X36: opened at 1200x800, then seen at 960x640: the list follows the run when its
-        // visible height changes, so the party's final HP is still in view.
-        let smaller = d.at_size(SMALL, opened_run_in_view);
+        // X36: opened at 1200x800, then seen at 960x640: the run's row is still at the list's
+        // top, so the party's final HP is still in view.
+        let smaller = d.at_size(SMALL, |d| {
+            opened_run_in_view(d)?;
+            // The row's name, at most the row's own gap and padding below the list's top.
+            let mut below = None;
+            d.each_painted_text(|text, clip| {
+                if text.galley.job.text == "Old Mill Raid"
+                    && clip.intersects(text.visual_bounding_rect())
+                {
+                    below = Some(text.pos.y - clip.top());
+                }
+            });
+            below
+                .filter(|below| (0.0..=crate::design::L).contains(below))
+                .ok_or_else(|| vec![format!("Old Mill Raid's top below the list's: {below:?}")])
+        });
         d.observe(
             "X36-history-follows-resize",
             smaller.is_ok(),
@@ -15982,10 +15996,8 @@ pub mod encounter_history {
             "Reading History changes no story and leaves the live-run slot free",
         );
         d.state("ended-run-open", Sizes::All);
-        // The opened run stays at the list's top; the DM scrolls up to In progress.
-        if let Some(at) = d.place_of(&d.name_starting("Close the run of ")) {
-            d.scroll_up_at(at.center(), 10);
-        }
+        // The opened run stays at the list's top; the DM closes it to reach In progress.
+        d.click_starting(OPEN_OLD.replace("Open", "Close").as_str());
         resume_run(d, RUN);
         let live = d
             .app_mut()
@@ -15996,7 +16008,6 @@ pub mod encounter_history {
             .unwrap()
             .id;
         go_encounters(d);
-        d.click_starting(OPEN_OLD.replace("Open", "Close").as_str());
         d.click_starting(OPEN_OLD);
         d.expect("Read-only");
         let still_open = d
