@@ -6380,7 +6380,9 @@ impl Encounters {
                 design::message(ui, Tone::Info, words);
             });
         }
-        footer.show(ui);
+        // The form above is drawn already and ends above the footer's room, so no body is
+        // bounded by its top.
+        let _ = footer.show(ui);
         if undo_discard.get()
             && let Some(options) = self.discarded_options.take()
             && let Some(snapshot) = self.snapshot.as_mut()
@@ -8098,11 +8100,12 @@ mod tests {
                     let pressed = std::cell::Cell::new(None);
                     let mut footer = design::Footer::new("test_footer", ui.available_width());
                     editor.kept_into_footer(&mut footer, &kinds, &pressed);
-                    footer.show(ui);
+                    let bottom = footer.show(ui);
                     if let Some(kind) = pressed.get() {
                         editor.undo_kept(kind, None);
                     }
-                    if !editor.encounter_disk_view(ui, &campaign, &[]) {}
+                    let mut body = body_above(ui, bottom);
+                    if !editor.encounter_disk_view(&mut body, &campaign, &[]) {}
                 });
             },
             editor,

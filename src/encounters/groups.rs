@@ -3101,12 +3101,13 @@ mod tests {
         let pressed = std::cell::Cell::new(false);
         let mut footer = design::Footer::new("members_test_footer", ui.available_width());
         member_result_into(&mut state.0, &mut footer, &pressed);
-        footer.show(ui);
+        let bottom = footer.show(ui);
         if pressed.get() {
             state.0.undo_member_result();
             state.1 = None;
         }
-        members(ui, &mut state.0, snapshot, &mut state.1);
+        let mut body = super::super::body_above(ui, bottom);
+        members(&mut body, &mut state.0, snapshot, &mut state.1);
     }
 
     #[test]
@@ -4227,9 +4228,10 @@ mod tests {
                             let mut footer =
                                 design::Footer::new("group_test_footer", ui.available_width());
                             draft.results_into(&mut footer, &pressed);
-                            footer.show(ui);
+                            let bottom = footer.show(ui);
                             draft.apply_undo(&pressed);
-                            of_encounter(ui, draft, snapshot, &mut false, &mut None);
+                            let mut body = super::super::body_above(ui, bottom);
+                            of_encounter(&mut body, draft, snapshot, &mut false, &mut None);
                         }
                     }
                 });
