@@ -1628,7 +1628,8 @@ note. Its words are the Reader's inline text, and a link opens its entry in Look
 `muted`. When the words link exactly one World entry, the second line gives its kind, status and place
 (`NPC · alive · Ashfall Keep`) in `Type::Small` `muted`. The action place is empty until the scene is done; then,
 when its words link exactly one World entry of the campaign, it holds a quiet `Add to Log` left of the menu
-(accessible name `Add to Log: <words>`), and the words wrap in the room left. It opens Lookup on that entry with
+(accessible name `Add to Log: <words>`) while the words keep their lines beside it; else `Add to Log` is the
+last line of the scene's menu, so the row keeps its words and its height. It opens Lookup on that entry with
 the Log field open, filled with the scene's words outside its link and selected, so typing replaces them and
 Enter keeps them; a field that already holds typed words keeps them. The menu holds Remove
 from tonight, with `Removed “<words>” from tonight.` and Undo remove in the scene's place, and for a scene that

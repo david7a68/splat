@@ -269,25 +269,31 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     // still to come has none.
     let add = format!("Add to Log: {VARRA_BLACK}: {WORDS}");
     for size in [SMALL, DEFAULT, LARGE] {
-        let (shown, detail) = d.at_size(size, |d| {
+        let (placed, detail) = d.at_size(size, |d| {
             let action = d.place_of(&add);
             let menu = d.place_of(&format!("More actions for {VARRA_BLACK}: {WORDS}"));
+            let others = d
+                .nodes()
+                .iter()
+                .filter(|node| node.name.starts_with("Add to Log: ") && node.name != add)
+                .count();
             (
-                action.zip(menu).is_some_and(|(action, menu)| {
-                    action.right() <= menu.left() && (action.top() - menu.top()).abs() <= 0.5
-                }),
-                format!("Add to Log {action:?}, menu {menu:?}"),
+                others == 0
+                    && (size != DEFAULT || action.is_some())
+                    && action.is_none_or(|action| {
+                        menu.is_some_and(|menu| {
+                            action.right() <= menu.left() && (action.top() - menu.top()).abs() <= 0.5
+                        })
+                    }),
+                format!("Add to Log {action:?}, menu {menu:?}, on other rows {others}"),
             )
         });
         d.observe(
             "T18.2",
-            shown
-                && d.nodes()
-                    .iter()
-                    .filter(|node| node.name.starts_with("Add to Log: "))
-                    .count()
-                    == 1,
-            format!("At {size:?}, only the done scene has Add to Log, left of its menu: {detail}"),
+            placed,
+            format!(
+                "At {size:?}, only the done scene has Add to Log, left of its menu, and at 1200x800 on its row: {detail}"
+            ),
         );
     }
     d.state("done-scene-add-to-log", Sizes::All);

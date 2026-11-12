@@ -888,8 +888,25 @@ fn scene_row(
             .density(Density::Read)
             .name(&log_name)
     };
-    let action_width =
-        Density::Read.control() + log.map_or(0.0, |_| log_action().natural_width(ui) + design::S);
+    // The fit rule: on the row only while the words keep their lines beside it, as a plan row's
+    // title does beside `Add rewards`. Else it is a line of the scene's own menu.
+    let menu = Density::Read.control();
+    let with_log = menu + log_action().natural_width(ui) + design::S;
+    let on_row = log.is_some() && {
+        // The words' room beside the action place, as `plan_row_with` gives it after the box.
+        let room = ui.available_width() - design::XL - 2.0 * design::S;
+        let font = Type::Body.font(ui);
+        let rows = |action: f32| {
+            ui.fonts_mut(|fonts| {
+                fonts
+                    .layout(plain.clone(), font.clone(), c.text, room - action)
+                    .rows
+                    .len()
+            })
+        };
+        rows(with_log) == rows(menu)
+    };
+    let action_width = if on_row { with_log } else { menu };
     let widths = [width - action_width - design::S, action_width];
     let mut tick = false;
     let mut remove = false;
@@ -949,8 +966,12 @@ fn scene_row(
                             wrapped_words(ui, Type::Small, reason, c.muted);
                         }
                     }
+                    if log.is_some() && !on_row && log_action().show(ui).clicked() {
+                        add_log = true;
+                        ui.close();
+                    }
                 });
-                if log.is_some() {
+                if on_row {
                     add_log = log_action().show(ui).clicked();
                 }
             },
