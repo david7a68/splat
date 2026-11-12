@@ -271,11 +271,12 @@ offers another action stays, and its Undo is blocked with the reason. The change
 result's words keep the text colour: only Undo greys, on the message line, and the reason follows in `Small`
 muted words at the message words (`library::kept_undo_message`). An Undo that waits for an open draft keeps its
 words in the text colour too; the draft's reason is the save row's. Discard recovery is an Undo message too: info icon, bar,
-`Body` text that names the draft, and quiet `Undo discard`, whose accessible name also names the draft. Inline creation uses a Label title, fields, then the named Create
-action at the form's left edge right after the fields, an `L` gap and quiet Cancel on its line, and its `Small`
-blocked reason on its own line below (`campaigns::creation_reason`). That line stays when the reason is empty, so
-typing moves nothing. Settings' Add campaign, Manage packages and New entry have this one order; save rows keep
-their commit at the right edge. Creation and copy fields share one right edge.
+`Body` text that names the draft, and quiet `Undo discard`, whose accessible name also names the draft. Inline creation uses a Label title and fields; the
+named Create action follows the last field on that field's line (after its Browse…), centred on it. Choices
+(`Choose for this campaign`) come before that last field. Below the field is one line, as tall as a control and
+kept when empty, so typing moves nothing: quiet Cancel or Clear at its start when there is something to cancel,
+then the `Small` blocked reason. Settings' Add campaign, Manage packages (Add folder, Create package) and New entry
+have this one order; save rows keep their commit at the right edge. Creation and copy fields share one right edge.
 
 Several safe choices after a message share one line when they fit. Put a destructive choice at the end
 after an `L` gap, or on its own line below after an `M` gap.
@@ -654,7 +655,10 @@ newest first, then the reasons (each repair's failed Save or refusal, named by i
 Save's or a load's, the change check's), then the latest plain result (`Campaign selections saved.`, applied
 changes) and the package warnings (a faulty manifest, a chosen package that is not available, with their
 actions). Each Undo stays with its own object and action until it is used or its object ends it; a failed Undo
-keeps it, and a second repair's Discard keeps the first one's Undo. A plain result gives way to any newer result.
+keeps it. Every live Undo, the page's and the repairs', shares one order, newest first, so a second repair's
+Discard keeps the first one's Undo below its own. A campaign change ends the open campaign's Undos at the change,
+also while the page is hidden. A plain result gives way to any newer result. The footer is drawn above the page,
+so the package columns under it never take its presses.
 So no result, error or package warning moves the save rows, the repairs or the package list.
 The save row, package list and entry search stop at LIST_MEASURE from the tab’s left edge.
 An open repair keeps the same right edge as the save row. Its save row lays out `Save repaired note` first at that edge; a long
@@ -1919,12 +1923,13 @@ remembered on two lines with full hover and accessible text. Settings states rec
 The campaign list is as wide as its widest name and link block, an `L` gap and one action column that every row
 shares, and never narrower than `FORM_WIDTH`; the account column starts an `XL` gap after it.
 Campaign add forms close on success; messages follow campaign rows below their heading. The add form is an inline
-creation form: Add campaign at its left edge, quiet Cancel after it, the reason below. The edit form is a save
+creation form: Add campaign on the Folder line after Browse…, quiet Cancel and the reason on the line below. The edit form is a save
 row, with Cancel or Discard at the left and the commit at the right. An unchanged form blocks Save details with No changes to save.
 Details hides Edit details, uses a plain Details heading, and puts state and Discard at the left, Save details
 at the right. Discard restores saved details with Undo discard; clean forms use Cancel. The tab's messages sit in
 its one footer: the discard result with its live Undo first (while the form is open), then a registered copy
-with `Undo register campaign`, then the error (a failed Connect, Save's error with its own recovery, the D&D
+with `Undo register campaign` (disabled with the reason while a run, a recording or an unsaved draft blocks a
+campaign change, as the list is), then the error (a failed Connect, Save's error with its own recovery, the D&D
 Beyond list's error), then the add result with `Build an encounter`. So none of them moves the form, Connect or
 the campaign rows. Campaign → Link and folder has the same footer for the details form and the link's result. Import opens below its
 chosen row with a new sibling folder filled in. Keep campaign name in its field; omit remote ID, repeated
