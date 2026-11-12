@@ -1901,7 +1901,8 @@ impl ReaderResults {
     }
 }
 
-/// The age of each kept result by its words: the clock when it was first seen. Results no longer
+/// The age of each kept result by its words: the clock when it was first seen. Results first seen
+/// together take the next ticks in the order given. Results no longer
 /// shown leave, so a result that comes back is new again.
 fn result_ages<'a>(
     ages: &mut std::collections::HashMap<String, u64>,
@@ -7016,8 +7017,9 @@ impl Library {
             let (mut heading_fix, mut vital_use) = (false, None);
             // Each kept result is its own footer message, with its own Undo: Discard's, the
             // heading and stat fixes', and each of the reader's results. Results with a live Undo
-            // are listed newest first, by when this pane first saw each one; two that came in
-            // one frame keep Read's order.
+            // are listed newest first, by when this pane first saw each one. Results first seen in
+            // one frame take the next ticks in the order they are listed here (Discard, the fixes,
+            // then Read's order), so among them the last listed shows first.
             #[derive(Clone, Copy)]
             enum Kept {
                 Discard,
