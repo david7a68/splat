@@ -83,6 +83,15 @@ pub fn run(d: &mut Driver<'_>) {
         d.place_of("Next turn") == next_turn,
         "Next turn keeps its place beside the reminders",
     );
+    // X6: the added effect's Undo has one form, `Undo: effect <words>`; a shortened target
+    // keeps the copy number that tells Cinder Wolf 2 from Cinder Wolf 1, or goes.
+    let first = current.split(' ').next().unwrap_or_default();
+    let copy = current.rsplit(' ').next().unwrap_or_default();
+    for size in [SMALL, DEFAULT] {
+        d.at_size_mut(size, |d| {
+            undo_paints_a_form(d, "Undo: effect Wis save", first, copy)
+        });
+    }
     // W1-D1: on its turn the row leads with the effect due on it, though the DM added it
     // after Bless. X10: a count of the rest ends the effects' slot with no dot before it.
     for size in [SMALL, DEFAULT, LARGE] {

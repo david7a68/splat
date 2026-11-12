@@ -26390,6 +26390,1590 @@
       }
     },
     {
+      "row": 31,
+      "why": "Row 31 (by the lead's ruling after app round 2, X54): an action tile's key hint says Ctrl+<digit> in place of the bare digit, on its line, with its right edge",
+      "difference": {
+        "screen": "act 53",
+        "view": "",
+        "what": "act",
+        "change": "changed",
+        "name": "resume the 12-person fight",
+        "detail": "appeared + Ctrl+1 | appeared - 1"
+      }
+    },
+    {
+      "row": 31,
+      "why": "Row 31 (by the lead's ruling after app round 2, X54): an action tile's key hint says Ctrl+<digit> in place of the bare digit, on its line, with its right edge",
+      "difference": {
+        "screen": "act 54",
+        "view": "",
+        "what": "act",
+        "change": "changed",
+        "name": "Ctrl+K opens Lookup",
+        "detail": "went + Ctrl+1 | went - 1"
+      }
+    },
+    {
+      "row": 31,
+      "why": "Row 31 (by the lead's ruling after app round 2, X54): an action tile's key hint says Ctrl+<digit> in place of the bare digit, on its line, with its right edge",
+      "difference": {
+        "screen": "act 55",
+        "view": "",
+        "what": "act",
+        "change": "changed",
+        "name": "Ctrl+K closes Lookup",
+        "detail": "appeared + Ctrl+1 | appeared - 1"
+      }
+    },
+    {
+      "row": 31,
+      "why": "Row 31 (by the lead's ruling after app round 2, X54): an action tile's key hint says Ctrl+<digit> in place of the bare digit, on its line, with its right edge",
+      "difference": {
+        "screen": "act 56",
+        "view": "",
+        "what": "act",
+        "change": "changed",
+        "name": "open Keys",
+        "detail": "went + Ctrl+1 | went - 1"
+      }
+    },
+    {
+      "row": 31,
+      "why": "Row 31 (by the lead's ruling after app round 2, X54): an action tile's key hint says Ctrl+<digit> in place of the bare digit, on its line, with its right edge",
+      "difference": {
+        "screen": "act 59",
+        "view": "",
+        "what": "act",
+        "change": "changed",
+        "name": "close Keys",
+        "detail": "appeared + Ctrl+1 | appeared - 1"
+      }
+    },
+    {
+      "row": 31,
+      "why": "Row 31 (by the lead's ruling after app round 2, X54): an action tile's key hint says Ctrl+<digit> in place of the bare digit, on its line, with its right edge",
+      "difference": {
+        "screen": "act 60",
+        "view": "",
+        "what": "act",
+        "change": "changed",
+        "name": "select Brannoch",
+        "detail": "went + Ctrl+1 | went - 1"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-arrivals",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: Ashfang,…",
+        "detail": "was 241 15 83.8x22"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-arrivals",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "moved",
+        "name": "Button: Add to fight",
+        "detail": "383.4 8 69.3x36 -> 399.9 8 69.3x36"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-arrivals",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: Ashfang, Eldest…",
+        "detail": "at 241 15 137.8x22"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-arrivals",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "resized",
+        "name": "Button: Next turn",
+        "detail": "468.7 8 121.7x36 -> 485.2 8 105.2x36"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-arrivals",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "width",
+        "name": "Label: Ashfang, Eldest Wolf of the Southern Ridge’s turn",
+        "detail": "241 15 83.8x22 -> 241 15 137.8x22"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-arrivals",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "gone",
+        "name": "Ashfang,…",
+        "detail": "was 241 15 83.8x22"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-arrivals",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "gone",
+        "name": "N",
+        "detail": "was 569.9 18 8.5x16"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-arrivals",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "moved",
+        "name": "Add",
+        "detail": "415.4 17 25.3x18 -> 431.9 17 25.3x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-arrivals",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "moved",
+        "name": "Next turn",
+        "detail": "500.7 17 61.2x18 -> 517.2 17 61.2x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-arrivals",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "moved",
+        "name": "",
+        "detail": "480.7 17 14x18 -> 497.2 17 14x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-arrivals",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "moved",
+        "name": "",
+        "detail": "395.4 17 14x18 -> 411.9 17 14x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-arrivals",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "new",
+        "name": "Ashfang, Eldest…",
+        "detail": "at 241 15 137.8x22"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-conditions",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: Ashfang,…",
+        "detail": "was 241 15 83.8x22"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-conditions",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "moved",
+        "name": "Button: Add to fight",
+        "detail": "383.4 8 69.3x36 -> 399.9 8 69.3x36"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-conditions",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: Ashfang, Eldest…",
+        "detail": "at 241 15 137.8x22"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-conditions",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "resized",
+        "name": "Button: Next turn",
+        "detail": "468.7 8 121.7x36 -> 485.2 8 105.2x36"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-conditions",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "width",
+        "name": "Label: Ashfang, Eldest Wolf of the Southern Ridge’s turn",
+        "detail": "241 15 83.8x22 -> 241 15 137.8x22"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-conditions",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "gone",
+        "name": "Ashfang,…",
+        "detail": "was 241 15 83.8x22"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-conditions",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "gone",
+        "name": "N",
+        "detail": "was 569.9 18 8.5x16"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-conditions",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "moved",
+        "name": "Add",
+        "detail": "415.4 17 25.3x18 -> 431.9 17 25.3x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-conditions",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "moved",
+        "name": "Next turn",
+        "detail": "500.7 17 61.2x18 -> 517.2 17 61.2x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-conditions",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "moved",
+        "name": "",
+        "detail": "480.7 17 14x18 -> 497.2 17 14x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-conditions",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "moved",
+        "name": "",
+        "detail": "395.4 17 14x18 -> 411.9 17 14x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-conditions",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "new",
+        "name": "Ashfang, Eldest…",
+        "detail": "at 241 15 137.8x22"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-conditions: Conditions hover",
+        "view": "960x640",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: Ashfang,…",
+        "detail": "was 241 15 83.8x22"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-conditions: Conditions hover",
+        "view": "960x640",
+        "what": "control",
+        "change": "moved",
+        "name": "Button: Add to fight",
+        "detail": "383.4 8 69.3x36 -> 399.9 8 69.3x36"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-conditions: Conditions hover",
+        "view": "960x640",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: Ashfang, Eldest…",
+        "detail": "at 241 15 137.8x22"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-conditions: Conditions hover",
+        "view": "960x640",
+        "what": "control",
+        "change": "resized",
+        "name": "Button: Next turn",
+        "detail": "468.7 8 121.7x36 -> 485.2 8 105.2x36"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-conditions: Conditions hover",
+        "view": "960x640",
+        "what": "control",
+        "change": "width",
+        "name": "Label: Ashfang, Eldest Wolf of the Southern Ridge’s turn",
+        "detail": "241 15 83.8x22 -> 241 15 137.8x22"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-conditions: Conditions hover",
+        "view": "960x640",
+        "what": "text",
+        "change": "gone",
+        "name": "Ashfang,…",
+        "detail": "was 241 15 83.8x22"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-conditions: Conditions hover",
+        "view": "960x640",
+        "what": "text",
+        "change": "gone",
+        "name": "N",
+        "detail": "was 569.9 18 8.5x16"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-conditions: Conditions hover",
+        "view": "960x640",
+        "what": "text",
+        "change": "moved",
+        "name": "Add",
+        "detail": "415.4 17 25.3x18 -> 431.9 17 25.3x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-conditions: Conditions hover",
+        "view": "960x640",
+        "what": "text",
+        "change": "moved",
+        "name": "Next turn",
+        "detail": "500.7 17 61.2x18 -> 517.2 17 61.2x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-conditions: Conditions hover",
+        "view": "960x640",
+        "what": "text",
+        "change": "moved",
+        "name": "",
+        "detail": "480.7 17 14x18 -> 497.2 17 14x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-conditions: Conditions hover",
+        "view": "960x640",
+        "what": "text",
+        "change": "moved",
+        "name": "",
+        "detail": "395.4 17 14x18 -> 411.9 17 14x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-conditions: Conditions hover",
+        "view": "960x640",
+        "what": "text",
+        "change": "new",
+        "name": "Ashfang, Eldest…",
+        "detail": "at 241 15 137.8x22"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-keys",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: Ashfang,…",
+        "detail": "was 156 570 69.2x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-keys",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "moved",
+        "name": "Button: Add to fight",
+        "detail": "383.4 8 69.3x36 -> 399.9 8 69.3x36"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-keys",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: Ashfang, Eldest…",
+        "detail": "at 241 15 137.8x22"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-keys",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "resized",
+        "name": "Button: Next turn",
+        "detail": "468.7 8 121.7x36 -> 485.2 8 105.2x36"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-keys",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "resized",
+        "name": "TextRun: Ashfang,…",
+        "detail": "241 15 83.8x22 -> 156 570 69.2x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-keys",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "width",
+        "name": "Label: Ashfang, Eldest Wolf of the Southern Ridge’s turn",
+        "detail": "241 15 83.8x22 -> 241 15 137.8x22"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-keys",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "gone",
+        "name": "Ashfang,…",
+        "detail": "was 156 570 69.2x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-keys",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "gone",
+        "name": "N",
+        "detail": "was 569.9 18 8.5x16"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-keys",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "moved",
+        "name": "Add",
+        "detail": "415.4 17 25.3x18 -> 431.9 17 25.3x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-keys",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "moved",
+        "name": "Next turn",
+        "detail": "500.7 17 61.2x18 -> 517.2 17 61.2x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-keys",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "moved",
+        "name": "",
+        "detail": "480.7 17 14x18 -> 497.2 17 14x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-keys",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "moved",
+        "name": "",
+        "detail": "395.4 17 14x18 -> 411.9 17 14x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-keys",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "new",
+        "name": "Ashfang, Eldest…",
+        "detail": "at 241 15 137.8x22"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-keys",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "resized",
+        "name": "Ashfang,…",
+        "detail": "241 15 83.8x22 -> 156 570 69.2x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-next-round",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: Ashfang,…",
+        "detail": "was 156 570 69.2x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-next-round",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "moved",
+        "name": "Button: Add to fight",
+        "detail": "383.4 8 69.3x36 -> 399.9 8 69.3x36"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-next-round",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: Ashfang, Eldest…",
+        "detail": "at 241 15 137.8x22"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-next-round",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "resized",
+        "name": "Button: Next turn",
+        "detail": "468.7 8 121.7x36 -> 485.2 8 105.2x36"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-next-round",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "resized",
+        "name": "TextRun: Ashfang,…",
+        "detail": "241 15 83.8x22 -> 156 570 69.2x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-next-round",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "width",
+        "name": "Label: Ashfang, Eldest Wolf of the Southern Ridge’s turn",
+        "detail": "241 15 83.8x22 -> 241 15 137.8x22"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-next-round",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "gone",
+        "name": "Ashfang,…",
+        "detail": "was 156 570 69.2x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-next-round",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "gone",
+        "name": "N",
+        "detail": "was 569.9 18 8.5x16"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-next-round",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "moved",
+        "name": "Add",
+        "detail": "415.4 17 25.3x18 -> 431.9 17 25.3x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-next-round",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "moved",
+        "name": "Next turn",
+        "detail": "500.7 17 61.2x18 -> 517.2 17 61.2x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-next-round",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "moved",
+        "name": "",
+        "detail": "480.7 17 14x18 -> 497.2 17 14x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-next-round",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "moved",
+        "name": "",
+        "detail": "395.4 17 14x18 -> 411.9 17 14x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-next-round",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "new",
+        "name": "Ashfang, Eldest…",
+        "detail": "at 241 15 137.8x22"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-next-round",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "resized",
+        "name": "Ashfang,…",
+        "detail": "241 15 83.8x22 -> 156 570 69.2x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-next-round: Undo hover",
+        "view": "960x640",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: Ashfang,…",
+        "detail": "was 156 570 69.2x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-next-round: Undo hover",
+        "view": "960x640",
+        "what": "control",
+        "change": "moved",
+        "name": "Button: Add to fight",
+        "detail": "383.4 8 69.3x36 -> 399.9 8 69.3x36"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-next-round: Undo hover",
+        "view": "960x640",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: Ashfang, Eldest…",
+        "detail": "at 241 15 137.8x22"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-next-round: Undo hover",
+        "view": "960x640",
+        "what": "control",
+        "change": "resized",
+        "name": "Button: Next turn",
+        "detail": "468.7 8 121.7x36 -> 485.2 8 105.2x36"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-next-round: Undo hover",
+        "view": "960x640",
+        "what": "control",
+        "change": "resized",
+        "name": "TextRun: Ashfang,…",
+        "detail": "241 15 83.8x22 -> 156 570 69.2x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-next-round: Undo hover",
+        "view": "960x640",
+        "what": "control",
+        "change": "width",
+        "name": "Label: Ashfang, Eldest Wolf of the Southern Ridge’s turn",
+        "detail": "241 15 83.8x22 -> 241 15 137.8x22"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-next-round: Undo hover",
+        "view": "960x640",
+        "what": "text",
+        "change": "gone",
+        "name": "Ashfang,…",
+        "detail": "was 156 570 69.2x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-next-round: Undo hover",
+        "view": "960x640",
+        "what": "text",
+        "change": "gone",
+        "name": "N",
+        "detail": "was 569.9 18 8.5x16"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-next-round: Undo hover",
+        "view": "960x640",
+        "what": "text",
+        "change": "moved",
+        "name": "Add",
+        "detail": "415.4 17 25.3x18 -> 431.9 17 25.3x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-next-round: Undo hover",
+        "view": "960x640",
+        "what": "text",
+        "change": "moved",
+        "name": "Next turn",
+        "detail": "500.7 17 61.2x18 -> 517.2 17 61.2x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-next-round: Undo hover",
+        "view": "960x640",
+        "what": "text",
+        "change": "moved",
+        "name": "",
+        "detail": "480.7 17 14x18 -> 497.2 17 14x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-next-round: Undo hover",
+        "view": "960x640",
+        "what": "text",
+        "change": "moved",
+        "name": "",
+        "detail": "395.4 17 14x18 -> 411.9 17 14x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-next-round: Undo hover",
+        "view": "960x640",
+        "what": "text",
+        "change": "new",
+        "name": "Ashfang, Eldest…",
+        "detail": "at 241 15 137.8x22"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-next-round: Undo hover",
+        "view": "960x640",
+        "what": "text",
+        "change": "resized",
+        "name": "Ashfang,…",
+        "detail": "241 15 83.8x22 -> 156 570 69.2x18"
+      }
+    },
+    {
+      "row": 31,
+      "why": "Row 31 (by the lead's ruling after app round 2, X54): an action tile's key hint says Ctrl+<digit> in place of the bare digit, on its line, with its right edge",
+      "difference": {
+        "screen": "run-twelve",
+        "view": "1200x800 Lookup closed",
+        "what": "text",
+        "change": "gone",
+        "name": "1",
+        "detail": "was 1172.8 491 7.2x16"
+      }
+    },
+    {
+      "row": 31,
+      "why": "Row 31 (by the lead's ruling after app round 2, X54): an action tile's key hint says Ctrl+<digit> in place of the bare digit, on its line, with its right edge",
+      "difference": {
+        "screen": "run-twelve",
+        "view": "1200x800 Lookup closed",
+        "what": "text",
+        "change": "new",
+        "name": "Ctrl+1",
+        "detail": "at 1146.8 491 33.2x16"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-twelve",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: Ashfang,…",
+        "detail": "was 156 570 69.2x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-twelve",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "moved",
+        "name": "Button: Add to fight",
+        "detail": "383.4 8 69.3x36 -> 399.9 8 69.3x36"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-twelve",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: Ashfang, Eldest…",
+        "detail": "at 241 15 137.8x22"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-twelve",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "resized",
+        "name": "Button: Next turn",
+        "detail": "468.7 8 121.7x36 -> 485.2 8 105.2x36"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-twelve",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "resized",
+        "name": "TextRun: Ashfang,…",
+        "detail": "241 15 83.8x22 -> 156 570 69.2x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-twelve",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "width",
+        "name": "Label: Ashfang, Eldest Wolf of the Southern Ridge’s turn",
+        "detail": "241 15 83.8x22 -> 241 15 137.8x22"
+      }
+    },
+    {
+      "row": 31,
+      "why": "Row 31 (by the lead's ruling after app round 2, X54): an action tile's key hint says Ctrl+<digit> in place of the bare digit, on its line, with its right edge",
+      "difference": {
+        "screen": "run-twelve",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "gone",
+        "name": "1",
+        "detail": "was 920.8 507 7.2x16"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-twelve",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "gone",
+        "name": "Ashfang,…",
+        "detail": "was 156 570 69.2x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-twelve",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "gone",
+        "name": "N",
+        "detail": "was 569.9 18 8.5x16"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-twelve",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "moved",
+        "name": "Add",
+        "detail": "415.4 17 25.3x18 -> 431.9 17 25.3x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-twelve",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "moved",
+        "name": "Next turn",
+        "detail": "500.7 17 61.2x18 -> 517.2 17 61.2x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-twelve",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "moved",
+        "name": "",
+        "detail": "480.7 17 14x18 -> 497.2 17 14x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-twelve",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "moved",
+        "name": "",
+        "detail": "395.4 17 14x18 -> 411.9 17 14x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-twelve",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "new",
+        "name": "Ashfang, Eldest…",
+        "detail": "at 241 15 137.8x22"
+      }
+    },
+    {
+      "row": 31,
+      "why": "Row 31 (by the lead's ruling after app round 2, X54): an action tile's key hint says Ctrl+<digit> in place of the bare digit, on its line, with its right edge",
+      "difference": {
+        "screen": "run-twelve",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "new",
+        "name": "Ctrl+1",
+        "detail": "at 894.8 507 33.2x16"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-twelve",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "resized",
+        "name": "Ashfang,…",
+        "detail": "241 15 83.8x22 -> 156 570 69.2x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-twelve: Brannoch selected",
+        "view": "960x640",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: Ashfang,…",
+        "detail": "was 241 15 83.8x22"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-twelve: Brannoch selected",
+        "view": "960x640",
+        "what": "control",
+        "change": "moved",
+        "name": "Button: Add to fight",
+        "detail": "383.4 8 69.3x36 -> 399.9 8 69.3x36"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-twelve: Brannoch selected",
+        "view": "960x640",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: Ashfang, Eldest…",
+        "detail": "at 241 15 137.8x22"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-twelve: Brannoch selected",
+        "view": "960x640",
+        "what": "control",
+        "change": "resized",
+        "name": "Button: Next turn",
+        "detail": "468.7 8 121.7x36 -> 485.2 8 105.2x36"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-twelve: Brannoch selected",
+        "view": "960x640",
+        "what": "control",
+        "change": "width",
+        "name": "Label: Ashfang, Eldest Wolf of the Southern Ridge’s turn",
+        "detail": "241 15 83.8x22 -> 241 15 137.8x22"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-twelve: Brannoch selected",
+        "view": "960x640",
+        "what": "text",
+        "change": "gone",
+        "name": "Ashfang,…",
+        "detail": "was 241 15 83.8x22"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-twelve: Brannoch selected",
+        "view": "960x640",
+        "what": "text",
+        "change": "gone",
+        "name": "N",
+        "detail": "was 569.9 18 8.5x16"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-twelve: Brannoch selected",
+        "view": "960x640",
+        "what": "text",
+        "change": "moved",
+        "name": "Add",
+        "detail": "415.4 17 25.3x18 -> 431.9 17 25.3x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-twelve: Brannoch selected",
+        "view": "960x640",
+        "what": "text",
+        "change": "moved",
+        "name": "Next turn",
+        "detail": "500.7 17 61.2x18 -> 517.2 17 61.2x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-twelve: Brannoch selected",
+        "view": "960x640",
+        "what": "text",
+        "change": "moved",
+        "name": "",
+        "detail": "480.7 17 14x18 -> 497.2 17 14x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-twelve: Brannoch selected",
+        "view": "960x640",
+        "what": "text",
+        "change": "moved",
+        "name": "",
+        "detail": "395.4 17 14x18 -> 411.9 17 14x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-twelve: Brannoch selected",
+        "view": "960x640",
+        "what": "text",
+        "change": "new",
+        "name": "Ashfang, Eldest…",
+        "detail": "at 241 15 137.8x22"
+      }
+    },
+    {
+      "row": 31,
+      "why": "Row 31 (by the lead's ruling after app round 2, X54): an action tile's key hint says Ctrl+<digit> in place of the bare digit, on its line, with its right edge",
+      "difference": {
+        "screen": "run-twelve: row hover",
+        "view": "1200x800",
+        "what": "text",
+        "change": "gone",
+        "name": "1",
+        "detail": "was 1172.8 491 7.2x16"
+      }
+    },
+    {
+      "row": 31,
+      "why": "Row 31 (by the lead's ruling after app round 2, X54): an action tile's key hint says Ctrl+<digit> in place of the bare digit, on its line, with its right edge",
+      "difference": {
+        "screen": "run-twelve: row hover",
+        "view": "1200x800",
+        "what": "text",
+        "change": "new",
+        "name": "Ctrl+1",
+        "detail": "at 1146.8 491 33.2x16"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-twelve: row hover",
+        "view": "960x640",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: Ashfang,…",
+        "detail": "was 156 570 69.2x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-twelve: row hover",
+        "view": "960x640",
+        "what": "control",
+        "change": "moved",
+        "name": "Button: Add to fight",
+        "detail": "383.4 8 69.3x36 -> 399.9 8 69.3x36"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-twelve: row hover",
+        "view": "960x640",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: Ashfang, Eldest…",
+        "detail": "at 241 15 137.8x22"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-twelve: row hover",
+        "view": "960x640",
+        "what": "control",
+        "change": "resized",
+        "name": "Button: Next turn",
+        "detail": "468.7 8 121.7x36 -> 485.2 8 105.2x36"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-twelve: row hover",
+        "view": "960x640",
+        "what": "control",
+        "change": "resized",
+        "name": "TextRun: Ashfang,…",
+        "detail": "241 15 83.8x22 -> 156 570 69.2x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-twelve: row hover",
+        "view": "960x640",
+        "what": "control",
+        "change": "width",
+        "name": "Label: Ashfang, Eldest Wolf of the Southern Ridge’s turn",
+        "detail": "241 15 83.8x22 -> 241 15 137.8x22"
+      }
+    },
+    {
+      "row": 31,
+      "why": "Row 31 (by the lead's ruling after app round 2, X54): an action tile's key hint says Ctrl+<digit> in place of the bare digit, on its line, with its right edge",
+      "difference": {
+        "screen": "run-twelve: row hover",
+        "view": "960x640",
+        "what": "text",
+        "change": "gone",
+        "name": "1",
+        "detail": "was 920.8 507 7.2x16"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-twelve: row hover",
+        "view": "960x640",
+        "what": "text",
+        "change": "gone",
+        "name": "Ashfang,…",
+        "detail": "was 156 570 69.2x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-twelve: row hover",
+        "view": "960x640",
+        "what": "text",
+        "change": "gone",
+        "name": "N",
+        "detail": "was 569.9 18 8.5x16"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-twelve: row hover",
+        "view": "960x640",
+        "what": "text",
+        "change": "moved",
+        "name": "Add",
+        "detail": "415.4 17 25.3x18 -> 431.9 17 25.3x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-twelve: row hover",
+        "view": "960x640",
+        "what": "text",
+        "change": "moved",
+        "name": "Next turn",
+        "detail": "500.7 17 61.2x18 -> 517.2 17 61.2x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-twelve: row hover",
+        "view": "960x640",
+        "what": "text",
+        "change": "moved",
+        "name": "",
+        "detail": "480.7 17 14x18 -> 497.2 17 14x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-twelve: row hover",
+        "view": "960x640",
+        "what": "text",
+        "change": "moved",
+        "name": "",
+        "detail": "395.4 17 14x18 -> 411.9 17 14x18"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-twelve: row hover",
+        "view": "960x640",
+        "what": "text",
+        "change": "new",
+        "name": "Ashfang, Eldest…",
+        "detail": "at 241 15 137.8x22"
+      }
+    },
+    {
+      "row": 31,
+      "why": "Row 31 (by the lead's ruling after app round 2, X54): an action tile's key hint says Ctrl+<digit> in place of the bare digit, on its line, with its right edge",
+      "difference": {
+        "screen": "run-twelve: row hover",
+        "view": "960x640",
+        "what": "text",
+        "change": "new",
+        "name": "Ctrl+1",
+        "detail": "at 894.8 507 33.2x16"
+      }
+    },
+    {
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "difference": {
+        "screen": "run-twelve: row hover",
+        "view": "960x640",
+        "what": "text",
+        "change": "resized",
+        "name": "Ashfang,…",
+        "detail": "241 15 83.8x22 -> 156 570 69.2x18"
+      }
+    },
+    {
       "row": 36,
       "why": "Row 36 (by the lead's ruling after app round 2): a one-line scene's words sit on a fight title's line, and a done scene's `Add to Log` on its row has no icon",
       "difference": {
