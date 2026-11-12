@@ -780,7 +780,7 @@ impl<'a> Action<'a> {
             Kind::Destructive => (plain_fill, Stroke::new(HAIRLINE_WIDTH, c.destructive)),
         };
         ui.painter().rect(
-            rect,
+            response.rect,
             corner(RADIUS_CONTROL),
             fill,
             stroke,
