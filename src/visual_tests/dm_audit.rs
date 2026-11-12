@@ -549,14 +549,13 @@ fn during_the_session(a: &mut Audit<'_, '_>) {
     a.act(Panel, "Ctrl+T", |d| d.press_ctrl(Key::T));
     a.click(Do, "Burn a torch");
     a.act(Panel, "Ctrl+T", |d| d.press_ctrl(Key::T));
-    let ledger = a
-        .d
-        .app_mut()
-        .campaigns
-        .active_campaign()
-        .map(|campaign| campaign.path.join("Trackers.md"))
-        .and_then(|path| fs::read_to_string(path).ok())
-        .unwrap_or_default();
+    let ledger =
+        a.d.app_mut()
+            .campaigns
+            .active_campaign()
+            .map(|campaign| campaign.path.join("Trackers.md"))
+            .and_then(|path| fs::read_to_string(path).ok())
+            .unwrap_or_default();
     a.fact(format!(
         "the ledger holds the press: {}",
         ledger.contains("why: Burn a torch")
