@@ -8509,6 +8509,10 @@ mod tests {
             "2 loot rolls on treasure-from-the-ancient-dragon-vault-and-the-forgotten-kings-tomb";
         run.history_labels.push(target.into());
         run.history_from_sheet.push(false);
+        // The step's target, as `describe_named` records it for one loot table.
+        run.history_targets.push(Some(
+            "treasure-from-the-ancient-dragon-vault-and-the-forgotten-kings-tomb".into(),
+        ));
         run.lookup_open = true;
         run.hide_panel = true;
         let full = format!("Undo: {target}");
@@ -8565,6 +8569,7 @@ mod tests {
         setup.state.participants[0].name = name.into();
         setup.history.push(setup.state.clone());
         setup.history_labels.push(format!("initiative for {name}"));
+        setup.history_targets.push(Some(name.into()));
         setup.history_from_sheet.push(false);
         setup.lookup_open = true;
         setup.hide_panel = true;
