@@ -4222,6 +4222,13 @@ mod tests {
                             draft, snapshot, ..
                         } = editor;
                         if let (Some(draft), Some(snapshot)) = (draft.as_mut(), snapshot.as_ref()) {
+                            // The draft's results in a footer, as the editor draws them.
+                            let pressed = super::super::DraftUndo::default();
+                            let mut footer =
+                                design::Footer::new("group_test_footer", ui.available_width());
+                            draft.results_into(&mut footer, &pressed);
+                            footer.show(ui);
+                            draft.apply_undo(&pressed);
                             of_encounter(ui, draft, snapshot, &mut false, &mut None);
                         }
                     }
@@ -4235,7 +4242,13 @@ mod tests {
         let draft = harness.state().draft.as_ref().unwrap();
         assert!(draft.groups.is_empty(), "the gone group left the draft");
         assert!(harness.state().error.is_none());
-        harness.get_by_label("Changed removed. Its draft was discarded.");
+        // The footer's group is named with its words too.
+        assert!(
+            harness
+                .query_all_by_label("Changed removed. Its draft was discarded.")
+                .next()
+                .is_some()
+        );
         harness.state_mut().draft.as_mut().unwrap().name = "Renamed again".into();
         harness.run_steps(2);
         harness.get_by_label("Undo remove").click();

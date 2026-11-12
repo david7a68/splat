@@ -541,6 +541,45 @@ impl Draft {
             || self.groups.iter().any(GroupDraft::dirty)
             || !self.deleted_groups.is_empty()
     }
+    /// The draft's own results in the editor's footer, each with its Undo: a group taken from
+    /// this encounter (FB7) and the roster replacement (FA2). An edit of the replaced rows ends
+    /// the replacement's result. A pressed Undo is recorded in `pressed`; `apply_undo` applies it
+    /// after the footer is drawn.
+    fn results_into<'a>(&mut self, footer: &mut design::Footer<'a>, pressed: &'a DraftUndo) {
+        if self
+            .replacement
+            .as_ref()
+            .is_some_and(|undo| undo.after != self.setup.roster)
+        {
+            self.replacement = None;
+        }
+        if let Some((words, undo)) = self.removed_group_result() {
+            footer.result(words.clone(), true, move |ui| {
+                if design::undo_message(ui, Tone::Info, &words, undo) {
+                    pressed.group.set(true);
+                }
+            });
+        }
+        if let Some(words) = self.replacement.as_ref().map(|undo| undo.words.clone()) {
+            footer.result(words.clone(), true, move |ui| {
+                // The result is a message, so its Undo keeps the undo icon as every other Undo
+                // does.
+                if design::undo_message(ui, Tone::Success, &words, "Undo replacement") {
+                    pressed.replacement.set(true);
+                }
+            });
+        }
+    }
+    fn apply_undo(&mut self, pressed: &DraftUndo) {
+        if pressed.replacement.get()
+            && let Some(undo) = self.replacement.take()
+        {
+            self.setup.roster = undo.before;
+        }
+        if pressed.group.get() {
+            self.undo_removed_group();
+        }
+    }
     /// The result of a group taken from this encounter, until the next save: its words and
     /// Undo. FF7: a group removed with its draft after its file was gone says what was lost.
     /// FB7: nothing is on disk until Save, so each says so in the info tone.
@@ -2320,6 +2359,13 @@ impl Snapshot {
             .map(|template| (template.id, template.name.as_str()))
     }
 }
+/// Which of a draft's own results had its Undo pressed in the editor's footer this frame.
+#[derive(Default)]
+struct DraftUndo {
+    group: std::cell::Cell<bool>,
+    replacement: std::cell::Cell<bool>,
+}
+
 /// A kept result with its own Undo, on the Encounters page or in an editor's footer. Each is
 /// owned by the state that holds its data (`discarded`, `discarded_group`, `deleted_run`,
 /// `removed_saved_group`, `removed_encounter`) and ends with it (FI1, FJ4).
@@ -4959,39 +5005,14 @@ impl Encounters {
         // search. Results with a live Undo come first, then reasons.
         let kinds = self.kept_results(false);
         let pressed = std::cell::Cell::new(None);
-        let undo_replacement = std::cell::Cell::new(false);
-        let undo_group = std::cell::Cell::new(false);
-        let (pressed_ref, replacement_ref, group_ref) = (&pressed, &undo_replacement, &undo_group);
+        let draft_undo = DraftUndo::default();
+        let (pressed_ref, draft_undo_ref) = (&pressed, &draft_undo);
         let draft_id = self.draft.as_ref().map(|draft| draft.id);
         let mut footer =
             design::Footer::new(("encounter_editor_footer", draft_id), ui.available_width());
         self.kept_into_footer(&mut footer, &kinds, pressed_ref);
         if let Some(draft) = self.draft.as_mut() {
-            // An edit of the replaced rows ends the result and its Undo.
-            if draft
-                .replacement
-                .as_ref()
-                .is_some_and(|undo| undo.after != draft.setup.roster)
-            {
-                draft.replacement = None;
-            }
-            // FB7: a group taken from this encounter, until the next save.
-            if let Some((words, undo)) = draft.removed_group_result() {
-                footer.result(words.clone(), true, move |ui| {
-                    if design::undo_message(ui, Tone::Info, &words, undo) {
-                        group_ref.set(true);
-                    }
-                });
-            }
-            if let Some(words) = draft.replacement.as_ref().map(|undo| undo.words.clone()) {
-                footer.result(words.clone(), true, move |ui| {
-                    // The result is a message, so its Undo keeps the undo icon as every other
-                    // Undo does.
-                    if design::undo_message(ui, Tone::Success, &words, "Undo replacement") {
-                        replacement_ref.set(true);
-                    }
-                });
-            }
+            draft.results_into(&mut footer, draft_undo_ref);
         }
         if let Some(e) = self.error.clone() {
             // A deleted entry and an unreadable file are stated in the rows' tone too.
@@ -5017,16 +5038,8 @@ impl Encounters {
         if let Some(kind) = pressed.get() {
             self.undo_kept(kind, Some((active, campaigns.modules())));
         }
-        if undo_replacement.get()
-            && let Some(draft) = self.draft.as_mut()
-            && let Some(undo) = draft.replacement.take()
-        {
-            draft.setup.roster = undo.before;
-        }
-        if undo_group.get()
-            && let Some(draft) = self.draft.as_mut()
-        {
-            draft.undo_removed_group();
+        if let Some(draft) = self.draft.as_mut() {
+            draft.apply_undo(&draft_undo);
         }
         let mut body = body_above(ui, bottom);
         let ui = &mut body;
@@ -8076,7 +8089,13 @@ mod tests {
             .click();
         harness.run_steps(2);
         assert!(harness.state().draft.is_none());
-        harness.get_by_label(&format!("{name} removed. Its draft was discarded."));
+        // The footer's group is named with its words too.
+        assert!(
+            harness
+                .query_all_by_label(&format!("{name} removed. Its draft was discarded."))
+                .next()
+                .is_some()
+        );
         harness.get_by_label("Undo remove").click();
         harness.run_steps(2);
         let back = harness
