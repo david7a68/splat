@@ -7212,7 +7212,10 @@ pub mod column_resize {
         let run_edge = right_of(d, NEXT_TURN) + crate::design::M;
         d.drag_column_edge(run_edge, FAR_RIGHT);
         d.state("run-panel-narrow", Sizes::All);
-        // AD1: at 1920 the dock's controls are one block after the selected name, `L` from it.
+        // AD1: at 1920 the dock's controls are one block after the selected name. iter-26-R FK1:
+        // they follow the name's slot (the widest roster name, at most `12 × L`) after `L`, so
+        // they start right of the name and no further than that slot and its gap; FK1's own
+        // check (run-long-names) holds their x for every selection.
         let (name, conditions) = d.at_size(LARGE, |d| {
             (
                 d.nodes()
@@ -7225,8 +7228,8 @@ pub mod column_resize {
         d.observe(
             "iter-24-R-AD1",
             name.zip(conditions).is_some_and(|(name, conditions)| {
-                let gap = conditions.left() - name.right();
-                (0.0..=crate::design::L + 1.0).contains(&gap)
+                conditions.left() >= name.right()
+                    && conditions.left() - name.left() <= 13.0 * crate::design::L + 1.0
             }),
             format!("At 1920 Conditions follows the selected name: {name:?} then {conditions:?}"),
         );
