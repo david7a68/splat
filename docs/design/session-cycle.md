@@ -180,6 +180,12 @@ run's header; `notice.rs:232-246`). Part 3 is measured after them:
 2. Else it is its count.
 3. Else it does not show. The current row has the reminders.
 
+**Measured in P4.** Beside a state notice, `Undo` keeps a target only while its names stay whole, so a long
+step shows the bare `Undo` and leaves room: at case D, with `⚠ Sync conflict: Oren Thistlewick  Review` and
+three reminders, the count `⚑ 3` shows between `Review` and `Undo` (`run-sync-conflict`). With the panel at
+960x640 and `Sync off for the party`, part 3 has no room, and the row has the reminders. The tests of F2 are
+T20.1 to T20.6 in `docs/ux-intent.md`, because F8 has T17.
+
 So no feature makes `Undo` shorter, and no state notice loses a word. One repair comes from rule K: when a
 conflict's name is wider than the line beside the bare `Undo`, the name shortens as the dock's name does
 (`dock_name`, `src/encounter_run/view.rs:5791`); the icon, `Conflict` and `Review` stay (section 2.5, row 20).
@@ -387,7 +393,7 @@ today and its fit rule. No row adds a line, changes a row's height or takes widt
 | 3 | The encounter editor | `· XP 550 of 2,500 · Low` (F1) at the end of the `Roster` heading, or of the tab row below 760 px | `src/encounters.rs:4381`; `:3932-3955` | One line. The numbers go first, then the word |
 | 4 | Arrivals | A group's XP is followed by `→ Moderate` (F1) | `src/encounter_run/view.rs:3468-3520` | Only where the totals and the status words are in the heading today (`:3479-3492`) and stay there |
 | 5 | A row marked `Conc` that takes damage | The row's second line ends with `Conc save DC 10` until the next step (F2) | `view.rs:6476-6486` | Only when the line keeps its lines and folds nothing that shows today. Else in the hover and accessible name only |
-| 6 | Run dock, line two | A quiet `Effect`, left of **Conditions** (F2) | `dock.rs:80-172` | F2: the word, then the icon, then not shown, before the name loses a word or its size |
+| 6 | Run dock, line two | A quiet `Effect`, `L` after **Absent** (F2). P4 measured that the line is laid out from the left, so a control left of **Conditions** moved **Conditions**, **Conc** and **Absent** in every view; the spare room is after **Absent** | `dock.rs:80-172` | F2: the word, then the icon, then not shown, before the name loses a word or its size |
 | 7 | The Add strip's **More** menu | Its last line is `Scene` (F3) | `src/design/components.rs:2339`; `src/timeline/page.rs:89` | A menu line. The strip's visible actions are as today |
 | 8 | A campaign World entry's reader | `Add to Log` after `Edit`, and after `Start fight` where it shows (F6) | The header: `src/world.rs:1733-1768` | Section 1.2: its word, then its icon, then not shown |
 | 9 | A campaign creature's or NPC's reader, with no run open | A quiet `Start fight` after `Edit` (F3) | The same header | Section 1.2: with its word, or not shown |
@@ -560,9 +566,10 @@ the DM gave the effect a time: a count of rounds, or `on its turn`.** Words with
 
 - **The Conditions tab** has the field today (`Other effect…`, `src/encounter_run/view.rs:2421-2445`). It
   stays, with its label and its place. It now reads a time when the DM types one.
-- **The dock** gets the quick way, `Effect` (key `E`): a quiet action on the dock's second line, left of
-  **Conditions**. That line is laid out from the right (Absent, Conc, Conditions), and the name takes the rest
-  (`dock.rs:80-172`). **The fit rule for `Effect`, stated once:** it shows with its word while the selected
+- **The dock** gets the quick way, `Effect` (key `E`): a quiet action on the dock's second line, `L` after
+  **Absent**. That line is laid out from the left (the name, `L`, Conditions, Conc, Absent), so the spare room
+  is after Absent, and there `Effect` moves no control (measured in P4; an earlier draft put it left of
+  Conditions, which moved the three controls after it). **The fit rule for `Effect`, stated once:** it shows with its word while the selected
   name keeps its size and its words; with its icon only while the name keeps both beside the icon; and not at
   all otherwise. `Death saves` and a roll's total, which that line holds at times (`dock.rs:109-143`), keep
   their places first. With several rows selected, the line is one sentence today (`target_words`, `dock.rs:197-213`) and has no
@@ -581,7 +588,7 @@ Round 3   Oren Thistlewick’s turn                    [+ Add to fight]  [> Next
  TURN  Frightened 9 · ⚑ +1
 …
 [Amount] [Damage  Enter]  Heal  🛡 Temp HP                      [1d20] [Roll]
-Oren Thistlewick                  ⚑ Effect E   Conditions C   ✧ Conc   Absent
+Oren Thistlewick   Conditions C   ✧ Conc   Absent   ⚑ Effect E
 ```
 
 **The dock while the DM adds an effect.** Line one does not change. Line two becomes one field.
@@ -599,7 +606,7 @@ wireframe of section 1.4. The dock:
 ```text
 Dagger +6   Fire Bolt +7                       ← the tile line of today
 [Amount] [Damage] Heal 🛡Temp HP        [1d20] [Roll]
-Cinder Wolf 2             ⚑  Conditions  ✧ Conc  Absent
+Cinder Wolf 2   Conditions  ✧ Conc  Absent  ⚑
 ```
 
 With Lookup or Notes open, `E` is text, as every letter is, and `Effect` takes a click. Case B is case D with

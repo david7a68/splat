@@ -1,6 +1,7 @@
 //! Manual DM controls. These record rulings; they do not execute creature rules.
 mod ad_hoc;
 mod dock;
+pub(crate) mod effect;
 mod loot;
 mod notice;
 mod rolling;
@@ -8,6 +9,7 @@ mod undo;
 pub(crate) mod view;
 use crate::encounter_settings::{Grouping, Initiative};
 pub(crate) use ad_hoc::RunCreature;
+pub(crate) use effect::Condition;
 use eframe::egui;
 pub(crate) use loot::rewards;
 use serde::{Deserialize, Serialize};
@@ -63,7 +65,7 @@ pub(crate) struct Participant {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shared_roll: Option<String>,
     pub present: bool,
-    pub conditions: Vec<String>,
+    pub conditions: Vec<Condition>,
     pub concentration: bool,
     pub successes: u8,
     pub failures: u8,
@@ -523,6 +525,8 @@ impl Participant {
                 conditions.push(condition.clone());
             }
         }
+        // Free words from an encounter stay labels: nothing typed in prep starts to count.
+        let conditions: Vec<Condition> = conditions.into_iter().map(Condition::Label).collect();
         let counter = |name: &str| {
             initial
                 .get("death_saves")
@@ -676,6 +680,10 @@ struct State {
     /// belongs to the step, so Undo takes it back with the HP. Not saved.
     #[serde(skip)]
     roll_results: BTreeMap<usize, String>,
+    /// The damage the step dealt each row, before temporary HP or 0 HP took any of it: a
+    /// concentrating row's save DC comes from it. It belongs to the step. Not saved.
+    #[serde(skip)]
+    damage: BTreeMap<usize, i64>,
     /// The save as it stood before the next step applied its damage, so Undo of that step
     /// arms the save again with its results. Only the state before a save's damage step has
     /// one. Not saved.
@@ -814,7 +822,6 @@ pub(crate) struct Run {
     dock_roll: Option<crate::rolls::Rolled>,
     /// Digits typed so far. Empty after each use, so a wrong number cannot repeat.
     amount: String,
-    condition: String,
     note: String,
     dice: String,
     outcome: String,
@@ -827,6 +834,15 @@ pub(crate) struct Run {
     closing: bool,
     ending: bool,
     focus_amount: bool,
+    /// The row whose effect the dock's field is open for, by key.
+    effect_open: Option<String>,
+    /// Words typed in the dock's effect field, by the key of the row they are for. They wait
+    /// for that row when the field closes without Enter.
+    effect_fields: BTreeMap<String, crate::design::AddField>,
+    /// The dock had room for `Effect` beside the selected name, so `E` opens its field.
+    effect_in_dock: bool,
+    /// The Conditions tab's `Other effect…` field takes focus on its next frame.
+    focus_other_effect: bool,
     roster_height: f32,
     sync_to_restore: Vec<String>,
     /// Sync starts by itself for each linked player, and again after a connection comes back.
@@ -1100,8 +1116,13 @@ enum Command {
     RollInitiative(usize),
     Bonus(usize, Option<i64>),
     Presence(usize, bool),
+    /// Words the DM typed for a condition or an effect, read with their time.
     Condition(usize, String),
     RemoveCondition(usize, usize),
+    /// Spend one use of the effect at this place, or give all back when none are left.
+    Spend(usize, usize),
+    /// Mark the recharge effect at this place spent, or roll to make it ready again.
+    Recharge(usize, usize),
     Concentration(usize, bool),
     DeathSaves(usize, u8, u8),
     Note(usize, String),
@@ -1249,6 +1270,7 @@ impl Run {
                 last_change: None,
                 loot: BTreeMap::new(),
                 roll_results: BTreeMap::new(),
+                damage: BTreeMap::new(),
                 cast: None,
                 random: Random::seeded(seed),
             },
@@ -1280,7 +1302,6 @@ impl Run {
             saves: BTreeMap::new(),
             dock_roll: None,
             amount: String::new(),
-            condition: String::new(),
             note: String::new(),
             dice: String::new(),
             outcome: String::new(),
@@ -1293,6 +1314,10 @@ impl Run {
             closing: false,
             ending: false,
             focus_amount: false,
+            effect_open: None,
+            effect_fields: BTreeMap::new(),
+            effect_in_dock: false,
+            focus_other_effect: false,
             roster_height: 0.0,
             sync_to_restore: Vec::new(),
             keep_party_synced: false,
@@ -2120,6 +2145,7 @@ impl Run {
         let undo_label = self.describe(&command);
         // A save's damage names each target's own result once it is applied.
         let roll_results = self.save_results(&command);
+        let damage: BTreeMap<usize, i64> = rolling::damage_shares(&command).into_iter().collect();
         let cast = self.finished_cast(&roll_results);
         // Work on a copy so failed commands cannot partly change the run or dice stream.
         let began = matches!(command, Command::Begin);
@@ -2221,6 +2247,9 @@ impl Run {
                 if !next.participants.iter().any(|p| p.present) {
                     return Err(NOBODY_PRESENT.into());
                 }
+                let ending = next.order[next.cursor];
+                next.log
+                    .extend(effect::count_down(&mut next.participants[ending]));
                 Self::end_turn(&mut next, self.initiative.roster_ties)?;
                 format!(
                     "Round {}: {}{TURN}",
@@ -2361,6 +2390,7 @@ impl Run {
                 last
             }
             Command::TableRoll(roll) => roll.resolve(&mut next.random)?,
+            Command::Recharge(index, at) => effect::recharge(&mut next, index, at)?,
             Command::Loot(rolls) => {
                 let mut lines = loot::roll(&mut next, rolls)?;
                 let last = lines.pop().ok_or("Choose a loot roll first.")?;
@@ -2375,6 +2405,7 @@ impl Run {
             next.roll_results.clear();
         }
         next.roll_results.extend(roll_results);
+        next.damage = damage;
         next.cast = None;
         next.last_change = Some(Self::change_with_result(&next, &undo_label));
         self.notice = None;
@@ -2420,6 +2451,8 @@ impl Run {
         // Found before the change, which can make a neighbour of the current row look out of
         // place.
         let waiting = Self::moves_after_turn(state);
+        // The Log's word for an entry: an effect has a time, uses or a recharge.
+        let kind = |c: &Condition| if c.is_effect() { "Effect" } else { "Condition" };
         let index = match &command {
             Command::Npc(i, ..)
             | Command::RollMode(i, ..)
@@ -2433,6 +2466,7 @@ impl Run {
             | Command::Presence(i, ..)
             | Command::Condition(i, ..)
             | Command::RemoveCondition(i, ..)
+            | Command::Spend(i, ..)
             | Command::Concentration(i, ..)
             | Command::DeathSaves(i, ..)
             | Command::Note(i, ..) => *i,
@@ -2554,25 +2588,61 @@ impl Run {
                     "Marked absent; retains initiative and state.".into()
                 }
             }
-            Command::Condition(_, condition) => {
-                let condition = condition.trim();
-                if condition.is_empty() {
+            Command::Condition(_, typed) => {
+                let condition = Condition::read(&typed);
+                if condition.name().is_empty() {
                     return Err("Enter a condition name.".into());
                 }
-                if p.conditions
-                    .iter()
-                    .any(|c| c.eq_ignore_ascii_case(condition))
-                {
-                    return Err("That condition is already recorded.".into());
+                match p.conditions.iter().position(|c| c.same(condition.name())) {
+                    // Words already on the row change their time and add nothing. Exhaustion
+                    // at another level is the same entry: its level changes, and its time
+                    // stays unless the words give one.
+                    Some(at) => {
+                        let old = p.conditions[at].clone();
+                        let level = old.name() != condition.name()
+                            && old.name().to_lowercase().starts_with("exhaustion");
+                        let name = if level { condition.name() } else { old.name() }.to_owned();
+                        let timed = condition.is_effect();
+                        let changed = if timed {
+                            condition.renamed(name)
+                        } else if level {
+                            old.clone().renamed(name)
+                        } else {
+                            return Err("That condition is already recorded.".into());
+                        };
+                        let line = if timed {
+                            format!("Effect changed: {}.", changed.words())
+                        } else {
+                            format!("Condition changed: {} → {}.", old.words(), changed.words())
+                        };
+                        p.conditions[at] = changed;
+                        line
+                    }
+                    None => {
+                        let line = format!("{} added: {}.", kind(&condition), condition.words());
+                        p.conditions.push(condition);
+                        line
+                    }
                 }
-                p.conditions.push(condition.into());
-                format!("Condition added: {condition}.")
             }
             Command::RemoveCondition(_, i) => {
                 if i >= p.conditions.len() {
                     return Err("Condition is missing.".into());
                 }
-                format!("Condition removed: {}.", p.conditions.remove(i))
+                let removed = p.conditions.remove(i);
+                format!("{} removed: {}.", kind(&removed), removed.words())
+            }
+            Command::Spend(_, at) => {
+                let Some(Condition::Effect(effect::Effect {
+                    name,
+                    time: effect::Time::Uses { uses, left },
+                })) = p.conditions.get_mut(at)
+                else {
+                    return Err("That effect has no uses.".into());
+                };
+                // At none left, the same target gives them all back.
+                *left = if *left == 0 { *uses } else { *left - 1 };
+                format!("{name}: {left} of {uses} left.")
             }
             Command::Concentration(_, value) => {
                 p.concentration = value;
@@ -2661,6 +2731,22 @@ impl Run {
     /// Undo can take away an encounter group, and these all hold a participant's place.
     fn forget_removed_participants(&mut self) {
         let count = self.state.participants.len();
+        // A draft belongs to its participant: one that left the run takes its words along.
+        let keys: BTreeSet<&str> = self
+            .state
+            .participants
+            .iter()
+            .map(|p| p.key.as_str())
+            .collect();
+        self.effect_fields
+            .retain(|key, _| keys.contains(key.as_str()));
+        if self
+            .effect_open
+            .as_deref()
+            .is_some_and(|key| !keys.contains(key))
+        {
+            self.effect_open = None;
+        }
         if self.selected >= count {
             self.selected = self.current().unwrap_or(0);
         }
@@ -2697,6 +2783,12 @@ impl Run {
                 .get(*index)
                 .map_or("a participant", |p| p.name.as_str())
         };
+        let condition = |index: &usize, at: &usize| {
+            self.state
+                .participants
+                .get(*index)
+                .and_then(|p| p.conditions.get(*at))
+        };
         match command {
             Command::RollNpcs(_) => "NPC initiative roll".into(),
             Command::Npc(i, _) => format!("NPC control on {}", name(i)),
@@ -2726,27 +2818,62 @@ impl Run {
                 name(i),
                 if *present { "present" } else { "absent" }
             ),
-            Command::Condition(i, condition) => format!("{} on {}", condition.trim(), name(i)),
-            Command::RemoveCondition(i, at)
-                if self
+            Command::Condition(i, typed) => {
+                let read = Condition::read(typed);
+                let old = self
                     .state
                     .participants
                     .get(*i)
-                    .and_then(|p| p.conditions.get(*at))
-                    .is_some_and(|condition| condition.starts_with("Exhaustion")) =>
-            {
-                let old = view::exhaustion_level(&self.state.participants[*i].conditions[*at]);
-                format!("exhaustion {old} → 0 on {}", name(i))
+                    .and_then(|p| p.conditions.iter().find(|c| c.same(read.name())));
+                match (read, old) {
+                    (Condition::Label(words), Some(old))
+                        if old.name() != words && words.starts_with("Exhaustion") =>
+                    {
+                        format!(
+                            "exhaustion {} → {} on {}",
+                            view::exhaustion_level(old.name()),
+                            view::exhaustion_level(&words),
+                            name(i)
+                        )
+                    }
+                    (Condition::Effect(effect), _) => {
+                        format!("effect {} on {}", effect.name, name(i))
+                    }
+                    (Condition::Label(words), _) => format!("{words} on {}", name(i)),
+                }
             }
-            Command::RemoveCondition(i, at) => format!(
-                "{} off {}",
-                self.state
-                    .participants
-                    .get(*i)
-                    .and_then(|p| p.conditions.get(*at))
-                    .map_or("an effect", String::as_str),
-                name(i)
-            ),
+            Command::RemoveCondition(i, at) => match condition(i, at) {
+                Some(old) if old.name().starts_with("Exhaustion") => format!(
+                    "exhaustion {} → 0 on {}",
+                    view::exhaustion_level(old.name()),
+                    name(i)
+                ),
+                Some(old) if old.is_effect() => format!("remove {} from {}", old.name(), name(i)),
+                old => format!(
+                    "{} off {}",
+                    old.map_or("an effect", Condition::name),
+                    name(i)
+                ),
+            },
+            Command::Spend(i, at) => match condition(i, at).and_then(Condition::time) {
+                Some(effect::Time::Uses { left: 0, .. }) => format!(
+                    "{} back on {}",
+                    condition(i, at).map_or("uses", Condition::name),
+                    name(i)
+                ),
+                _ => format!(
+                    "spend {} on {}",
+                    condition(i, at).map_or("a use", Condition::name),
+                    name(i)
+                ),
+            },
+            Command::Recharge(i, at) => match condition(i, at).and_then(Condition::time) {
+                Some(effect::Time::Recharge { spent: false, .. }) => format!(
+                    "{} spent",
+                    condition(i, at).map_or("an effect", Condition::name)
+                ),
+                _ => format!("recharge roll for {}", name(i)),
+            },
             Command::Concentration(i, value) => format!(
                 "{} concentration for {}",
                 if *value { "start" } else { "stop" },
@@ -2773,8 +2900,8 @@ impl Run {
                             .participants
                             .get(*i)
                             .and_then(|p| p.conditions.get(*at));
-                        if let Some(old) = old.filter(|old| old.starts_with("Exhaustion")) {
-                            let old = view::exhaustion_level(old);
+                        if let Some(old) = old.filter(|old| old.name().starts_with("Exhaustion")) {
+                            let old = view::exhaustion_level(old.name());
                             let new = commands
                                 .iter()
                                 .find_map(|command| match command {
@@ -3053,7 +3180,7 @@ struct SheetShadow {
     temp: i64,
     successes: u8,
     failures: u8,
-    conditions: Vec<String>,
+    conditions: Vec<Condition>,
 }
 impl SheetShadow {
     fn of(p: &Participant) -> Self {
@@ -3117,13 +3244,31 @@ fn apply_sheet_values(
         .get(SheetGroup::Conditions.key())
         .and_then(serde_json::Value::as_object)
     {
-        p.conditions.retain(|c| recognized_condition(c).is_none());
+        // One entry holds a condition and its count: an official condition the sheet still
+        // has keeps its count, one it removed goes with its count, and one it adds starts
+        // with none.
+        let mut official = Vec::new();
+        p.conditions.retain(|c| {
+            let known = recognized_condition(c.name()).is_some();
+            if known {
+                official.push(c.clone());
+            }
+            !known
+        });
         for (id, name) in crate::combat_sync::CONDITIONS {
             if let Some(level) = conditions.get(&id.to_string()) {
-                p.conditions.push(if id == 4 {
+                let words = if id == 4 {
                     format!("Exhaustion ({})", level.as_u64().unwrap_or(1))
                 } else {
                     name.into()
+                };
+                // By what it is, whatever its level: Exhaustion at a new level keeps its time.
+                let kept = official
+                    .iter()
+                    .position(|c| recognized_condition(c.name()).map(|(id, _)| id) == Some(id));
+                p.conditions.push(match kept {
+                    Some(at) => official.remove(at).renamed(words),
+                    None => Condition::Label(words),
                 });
             }
         }
@@ -3168,21 +3313,24 @@ fn change_line(
             before.successes, before.failures, after.successes, after.failures
         ));
     }
-    let official = |shadow: &SheetShadow| -> Vec<String> {
+    let official = |shadow: &SheetShadow| -> Vec<Condition> {
         shadow
             .conditions
             .iter()
-            .filter(|c| recognized_condition(c).is_some())
+            .filter(|c| recognized_condition(c.name()).is_some())
             .cloned()
             .collect()
     };
-    let same = |a: &str, b: &str| recognized_condition(a) == recognized_condition(b);
+    let same = |a: &Condition, b: &Condition| {
+        recognized_condition(a.name()) == recognized_condition(b.name())
+    };
     let (old, new) = (official(before), official(after));
+    // A condition with a count says what went with it: `Frightened, 7 rounds left removed`.
     for gone in old.iter().filter(|c| !new.iter().any(|n| same(c, n))) {
-        parts.push(format!("{gone} removed"));
+        parts.push(format!("{} removed", gone.what_went()));
     }
     for added in new.iter().filter(|c| !old.iter().any(|o| same(c, o))) {
-        parts.push(format!("{added} added"));
+        parts.push(format!("{} added", added.name()));
     }
     format!("{name} {}", parts.join(", "))
 }
@@ -3190,10 +3338,10 @@ fn change_line(
 /// Which groups hold different values in these two. Only conditions the sheet knows count, by
 /// what they are: `poisoned` and `Poisoned` are one condition.
 fn shadow_differences(now: &SheetShadow, then: &SheetShadow) -> Vec<SheetGroup> {
-    let sorted = |conditions: &[String]| {
+    let sorted = |conditions: &[Condition]| {
         let mut conditions: Vec<String> = conditions
             .iter()
-            .filter_map(|c| recognized_condition(c))
+            .filter_map(|c| recognized_condition(c.name()))
             .map(|(id, level)| format!("{id}:{level}"))
             .collect();
         conditions.sort();
@@ -3235,7 +3383,7 @@ fn local_group(
                 values.remove(&id.to_string());
             }
             for condition in &p.conditions {
-                if let Some((id, level)) = recognized_condition(condition) {
+                if let Some((id, level)) = recognized_condition(condition.name()) {
                     values.insert(id.to_string(), level);
                 }
             }
@@ -3398,8 +3546,9 @@ impl Run {
                 if before.successes != shadow.successes || before.failures != shadow.failures {
                     sync.set_group(SheetGroup::Death.key(),serde_json::json!({"successCount":before.successes,"failCount":before.failures}));
                 }
+                // Only what the sheet knows: an effect's words and a count stay in the run.
                 let group = SheetGroup::Conditions;
-                if before.conditions != shadow.conditions
+                if shadow_differences(&before, shadow).contains(&group)
                     && let Some(conditions) = sync
                         .values()
                         .get(group.key())
@@ -3900,7 +4049,8 @@ impl Run {
     #[cfg(test)]
     pub(crate) fn combat_state_for_test(&self, index: usize) -> (Option<i64>, Vec<String>) {
         let participant = &self.state.participants[index];
-        (participant.hp, participant.conditions.clone())
+        let words = participant.conditions.iter().map(Condition::words);
+        (participant.hp, words.collect())
     }
     /// The encounter this run came from, if it says.
     pub(crate) fn source(&self) -> Option<Uuid> {
@@ -4304,7 +4454,6 @@ impl Run {
             saves: BTreeMap::new(),
             dock_roll: None,
             amount: String::new(),
-            condition: String::new(),
             note: String::new(),
             dice: String::new(),
             outcome: String::new(),
@@ -4316,6 +4465,10 @@ impl Run {
             closing: false,
             ending: false,
             focus_amount: true,
+            effect_open: None,
+            effect_fields: BTreeMap::new(),
+            effect_in_dock: false,
+            focus_other_effect: false,
             roster_height: 0.0,
             sync_to_restore: Vec::new(),
             keep_party_synced: saved.keep_party_synced,
@@ -4675,7 +4828,7 @@ pub struct FightRow {
     pub hp: Option<i64>,
     pub max_hp: Option<i64>,
     pub temporary_hp: i64,
-    pub conditions: Vec<String>,
+    pub conditions: Vec<Condition>,
     pub present: bool,
 }
 
@@ -4992,7 +5145,36 @@ pub(crate) fn write_in_progress_run_with(
     write_in_progress_run_marked(campaign, directory, name, participants, details, &[])
 }
 
-/// As `write_in_progress_run_with`, with words the DM typed as conditions, by roster index.
+impl Run {
+    /// Typed words as a run saved before effects kept them: a label, whatever its end says,
+    /// with that version's Log line and Undo step. A fixture of an older run file.
+    #[cfg(test)]
+    pub(crate) fn label_as_older_run(&mut self, index: usize, words: &str) -> Result<(), String> {
+        let mut next = self.state.clone();
+        let p = next
+            .participants
+            .get_mut(index)
+            .ok_or("Participant is missing.")?;
+        p.conditions.push(Condition::Label(words.to_owned()));
+        let undo_label = format!("{words} on {}", p.name);
+        let line = format!("{}: Condition added: {words}.", p.name);
+        next.log.push(line);
+        next.cast = None;
+        next.last_change = Some(Self::change_with_result(&next, &undo_label));
+        self.notice = None;
+        let before = std::mem::replace(&mut self.state, next);
+        self.keep_own_step(before, undo_label, false);
+        self.notice_summary = None;
+        self.last_initiative = None;
+        self.dirty = true;
+        self.error = None;
+        self.reroll = None;
+        Ok(())
+    }
+}
+
+/// As `write_in_progress_run_with`, with words an older run kept as conditions, by roster
+/// index.
 #[cfg(test)]
 pub(crate) fn write_in_progress_run_marked(
     campaign: Uuid,
@@ -5013,7 +5195,7 @@ pub(crate) fn write_in_progress_run_marked(
     }
     run.apply(Command::Begin)?;
     for (index, words) in marks {
-        run.apply(Command::Condition(*index, (*words).to_owned()))?;
+        run.label_as_older_run(*index, words)?;
     }
     let first = run.state.order[0];
     run.apply(Command::Note(first, "Holding the bridge.".into()))?;
@@ -5487,6 +5669,147 @@ mod tests {
         run.undo();
         assert_eq!(run.state.phase, Phase::Running);
         run.apply(Command::Next).unwrap();
+
+        // F2: words with a time at their end are one entry with its count; an official
+        // condition already on the row changes its time and adds nothing.
+        let dir = tempfile::tempdir().unwrap();
+        let mut run = super::tests::run();
+        begin(&mut run);
+        let campaign = stored(&mut run, dir.path());
+        let names: Vec<String> = run
+            .state
+            .participants
+            .iter()
+            .map(|p| p.name.clone())
+            .collect();
+        run.apply(Command::Condition(0, "poisoned 2 rounds".into()))
+            .unwrap();
+        assert_eq!(
+            run.undo_label(),
+            format!("Undo: effect Poisoned on {}", names[0])
+        );
+        assert_eq!(run.state.participants[0].conditions, vec!["Poisoned 2"]);
+        for words in [
+            "Wis save DC 15 (Hold Person) on its turn",
+            "Fire Breath recharge 5-6",
+        ] {
+            run.apply(Command::Condition(1, words.into())).unwrap();
+        }
+        run.apply(Command::Condition(2, "Legendary actions 3 uses".into()))
+            .unwrap();
+        let reminders = |run: &Run| run.turn_reminders().map(|(whole, ..)| whole);
+        assert_eq!(reminders(&run).as_deref(), Some("Poisoned 2"));
+        // The count goes down when its participant's turn ends, in the step of Next turn, and
+        // Undo of that step gives it back, also after a restart.
+        run.apply(Command::Next).unwrap();
+        assert_eq!(
+            run.state.participants[0].conditions,
+            vec!["Poisoned · last round"]
+        );
+        // A recharge and uses give no reminder.
+        assert_eq!(
+            reminders(&run).as_deref(),
+            Some("Wis save DC 15 (Hold Person)")
+        );
+        let mut run = close_and_reopen(&mut run, campaign);
+        run.undo();
+        assert_eq!(run.state.participants[0].conditions, vec!["Poisoned 2"]);
+        run.apply(Command::Next).unwrap();
+        // An absent participant's count does not go down: its turn does not come.
+        run.apply(Command::Presence(0, false)).unwrap();
+        for _ in 0..2 {
+            run.apply(Command::Next).unwrap();
+        }
+        assert_eq!(run.current(), Some(1));
+        assert_eq!(
+            run.state.participants[0].conditions,
+            vec!["Poisoned · last round"]
+        );
+        run.apply(Command::Presence(0, true)).unwrap();
+        for _ in 0..3 {
+            run.apply(Command::Next).unwrap();
+        }
+        // At 0 it says so, in the row and the Log, and Splat removes nothing.
+        assert_eq!(
+            run.state.participants[0].conditions,
+            vec!["Poisoned · time is up"]
+        );
+        let up = format!("{}: Poisoned · time is up.", names[0]);
+        assert_eq!(run.state.log.iter().filter(|line| **line == up).count(), 1);
+        // A use is spent in one step; at none left the same act gives all back.
+        for (left, label) in [
+            ("2 of 3", "spend Legendary actions on"),
+            ("1 of 3", "spend Legendary actions on"),
+            ("0 of 3", "spend Legendary actions on"),
+            ("3 of 3", "Legendary actions back on"),
+        ] {
+            run.apply(Command::Spend(2, 1)).unwrap();
+            assert_eq!(
+                run.state.participants[2].conditions,
+                vec!["Poisoned".to_owned(), format!("Legendary actions {left}")]
+            );
+            assert_eq!(run.undo_label(), format!("Undo: {label} {}", names[2]));
+        }
+        // A ready recharge is marked spent; a spent one rolls on the run's dice.
+        run.apply(Command::Recharge(1, 2)).unwrap();
+        assert_eq!(run.undo_label(), "Undo: Fire Breath spent");
+        assert_eq!(run.state.participants[1].conditions[2], "Fire Breath spent");
+        run.apply(Command::Recharge(1, 2)).unwrap();
+        assert_eq!(
+            run.undo_label(),
+            format!("Undo: recharge roll for {}", names[1])
+        );
+        assert!(
+            run.state
+                .log
+                .last()
+                .unwrap()
+                .contains(": Fire Breath: Rolled ")
+        );
+        assert!(
+            run.apply(Command::Spend(1, 2)).is_err(),
+            "a recharge has no uses"
+        );
+        // Act A, an unrelated act B, then Undo of both: A's effect goes with its own step.
+        run.apply(Command::RemoveCondition(0, 0)).unwrap();
+        assert_eq!(
+            run.undo_label(),
+            format!("Undo: remove Poisoned from {}", names[0])
+        );
+        run.apply(Command::Damage(2, 1)).unwrap();
+        run.undo();
+        assert!(run.state.participants[0].conditions.is_empty());
+        run.undo();
+        assert_eq!(
+            run.state.participants[0].conditions,
+            vec!["Poisoned · time is up"]
+        );
+        assert_eq!(
+            run.undo_label(),
+            format!("Undo: recharge roll for {}", names[1])
+        );
+        // T17.6: damage to a row marked Conc gives its save's DC, read from the newest step:
+        // 10, or half the damage if that is more, and at most 30, until the next step.
+        run.apply(Command::Concentration(2, true)).unwrap();
+        assert_eq!(run.conc_save_dc(2), None);
+        run.apply(Command::TempHp(2, 100)).unwrap();
+        for (damage, dc) in [(5, 10), (30, 15), (80, 30)] {
+            run.apply(Command::Damage(2, damage)).unwrap();
+            assert_eq!(run.conc_save_dc(2), Some(dc), "{damage}");
+            assert_eq!(run.conc_save_dc(1), None, "only the row that took it");
+        }
+        run.apply(Command::Note(1, "Next step".into())).unwrap();
+        assert_eq!(run.conc_save_dc(2), None, "until the next step");
+        // The damage dealt, not the HP it could take: 40 against 17 HP and 3 temporary HP is
+        // DC 20. A correction is not damage, whatever the row's name says (review of PR 276).
+        run.apply(Command::Concentration(1, true)).unwrap();
+        run.apply(Command::Damage(1, 40)).unwrap();
+        assert_eq!(run.conc_save_dc(1), Some(20));
+        run.state.participants[0].name = "Guard damage bearer".into();
+        run.apply(Command::Concentration(0, true)).unwrap();
+        let max = run.state.participants[0].max_hp;
+        run.apply(Command::Health(0, Some(5), max)).unwrap();
+        assert_eq!(run.conc_save_dc(0), None);
     }
 
     #[test]
@@ -5886,7 +6209,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mut run = self::run();
         begin(&mut run);
-        run.state.participants[0].conditions = vec![String::new(); 40_000];
+        run.state.participants[0].conditions = vec![Condition::Label(String::new()); 40_000];
         for _ in 0..12 {
             run.apply(Command::Next).unwrap();
         }
@@ -6002,10 +6325,81 @@ mod tests {
         assert!(Run::open(&path, campaign).is_err());
         assert!(fight_summary(&path, campaign).is_err());
     }
+    /// F2: a real run file that a version before effects saved, with its Undo steps: the
+    /// plain campaign's run, as G7 keeps it. It opens with its steps, and its words stay
+    /// labels: nothing counts and nothing reminds.
+    #[test]
+    fn a_run_file_saved_before_effects_opens_with_its_steps_and_keeps_its_words() {
+        let folder = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("src/visual_tests/plain_evening/files/emberfall/Encounter Runs");
+        let source = fs::read_dir(&folder)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .find(|path| {
+                fs::read_to_string(path)
+                    .unwrap()
+                    .contains("Bless 10 rounds")
+            })
+            .expect("the plain campaign's run file");
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(source.file_name().unwrap());
+        fs::copy(&source, &path).unwrap();
+        let saved: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        let campaign: Uuid = saved["campaign"].as_str().unwrap().parse().unwrap();
+        let steps = saved["undo"]["steps"].as_array().unwrap().len();
+        let mut run = Run::open(&path, campaign).unwrap();
+        assert!(!run.undo_unread);
+        assert_eq!(run.history.len(), steps.min(undo::LIMIT));
+        let row = |run: &Run, name: &str| {
+            run.state
+                .participants
+                .iter()
+                .position(|p| p.name == name)
+                .unwrap()
+        };
+        let bless = row(&run, "Brannoch Vale");
+        assert_eq!(
+            run.state.participants[bless].conditions,
+            vec![Condition::Label("Bless 10 rounds".into())]
+        );
+        // Each turn, the old words stay as they are, and no turn has a reminder.
+        let before: Vec<_> = run
+            .state
+            .participants
+            .iter()
+            .map(|p| p.conditions.clone())
+            .collect();
+        for _ in 0..run.state.participants.len() {
+            assert!(run.turn_reminders().is_none());
+            run.apply(Command::Next).unwrap();
+        }
+        let after: Vec<_> = run
+            .state
+            .participants
+            .iter()
+            .map(|p| p.conditions.clone())
+            .collect();
+        assert_eq!(after, before);
+        // The file's own steps undo, and a save keeps an old label a string.
+        while run.history.len() > steps.min(undo::LIMIT) - 3 {
+            run.undo();
+        }
+        run.dirty = true;
+        run.save().unwrap();
+        let text = fs::read_to_string(&path).unwrap();
+        assert!(
+            text.contains("\"Bless 10 rounds\""),
+            "a label stays a string"
+        );
+        assert!(
+            !text.contains("\"rounds\":"),
+            "no old words started to count"
+        );
+    }
     #[test]
     fn undo_steps_this_version_cannot_read_are_dropped_and_the_run_says_so_once() {
         type Break = fn(&mut serde_json::Value);
-        let breaks: [(&str, Break); 7] = [
+        let breaks: [(&str, Break); 8] = [
             ("another version", |saved| {
                 saved["undo"]["version"] = 2.into()
             }),
@@ -6032,6 +6426,13 @@ mod tests {
                     oldest["order"] = serde_json::json!([0, 1]);
                 },
             ),
+            // F2: a condition entry that this version does not know is not read as another.
+            ("a condition this version cannot read", |saved| {
+                let steps = saved["undo"]["steps"].as_array_mut().unwrap();
+                let damage = steps.last_mut().unwrap();
+                damage["rows"]["0"]["conditions"] =
+                    serde_json::json!(["Poisoned", {"name": "Bless", "hours": 8}]);
+            }),
             // A step changes a row, and never gives its place to another participant.
             ("a step for a participant the run does not have", |saved| {
                 let steps = saved["undo"]["steps"].as_array_mut().unwrap();
@@ -6541,6 +6942,18 @@ mod tests {
         run.syncs.get_mut(&0).unwrap().start();
         assert!(!run.syncs[&0].session_lost());
         assert!(!run.strip().sync_stopped);
+    }
+    /// A run whose first row is in a sync conflict: the DM's damage while sync was stopped
+    /// meets the sheet's own value.
+    pub(super) fn conflicted() -> Run {
+        let (mut run, _, max) = matched_with_sheet(5);
+        offline_tick(&mut run);
+        run.apply(Command::Damage(0, 4)).unwrap();
+        offline_tick(&mut run);
+        reconnect(&mut run);
+        read_sheet(&mut run, max, 5);
+        assert_eq!(run.sync_word(0), Some(SyncState::Conflict));
+        run
     }
     /// A linked participant with sync on, showing a sheet with this much damage taken. Its
     /// maximum is the test creature's.
@@ -7196,6 +7609,38 @@ mod tests {
                 .log
                 .iter()
                 .any(|line| line.contains("Prone added"))
+        );
+        // F2: one entry holds a condition and its count. A sheet that keeps the condition
+        // keeps its count; one that adds a condition starts it with none; one that removes it
+        // removes both, and says what went.
+        run.apply(Command::Condition(0, "Prone 7 rounds".into()))
+            .unwrap();
+        let mut update = sheet(5, &[12, 5]);
+        update["temporaryHitPoints"] = 4.into();
+        read_full_sheet(&mut run, max, &update);
+        assert_eq!(
+            run.state.participants[0].conditions,
+            vec!["Frightened", "Prone 7"]
+        );
+        let mut update = sheet(5, &[5]);
+        update["temporaryHitPoints"] = 4.into();
+        read_full_sheet(&mut run, max, &update);
+        assert_eq!(run.state.participants[0].conditions, vec!["Frightened"]);
+        let notice = run.notice.clone().unwrap();
+        assert!(notice.contains("Prone, 7 rounds left removed"), "{notice}");
+        assert!(
+            run.state
+                .log
+                .iter()
+                .any(|line| line.contains("Prone, 7 rounds left removed"))
+        );
+        // A sheet that changes Exhaustion's level keeps its one entry and its time.
+        run.state.participants[0].conditions = vec![Condition::read("Exhaustion (2) 10 rounds")];
+        let values = BTreeMap::from([("conditions".into(), serde_json::json!({"4": 3}))]);
+        apply_sheet_values(&mut run.state.participants[0], &values, None);
+        assert_eq!(
+            run.state.participants[0].conditions,
+            vec!["Exhaustion (3) 10"]
         );
     }
     #[test]
@@ -8021,7 +8466,7 @@ mod tests {
             run.state.round,
             run.state.phase.clone(),
         );
-        assert!(state.0.is_some() && state.1.contains(&"Prone".to_owned()));
+        assert!(state.0.is_some() && state.1.contains(&Condition::from("Prone")));
         run.dirty = false;
         assert!(!run.follow_prep(Uuid::new_v4(), "Other words."));
         assert_eq!(run.prep().0, "Ash falls.");

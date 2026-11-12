@@ -354,6 +354,18 @@ participants retain their HP, resources, inventory, and ongoing effects.
 One playthrough or simulation of an encounter, with its own participants,
 current HP, spent resources, and active effects.
 
+**Effect**:
+Words that the DM pins to one participant of a run. It can have a time (a count
+of rounds, or on its turn), a count of uses, or a recharge. It stays in that run,
+in the participant's one condition entry: an official condition with a time is
+that condition with its count. Splat counts it and shows it, and never removes it.
+_Avoid_: Custom condition, timer
+
+**Reminder**:
+The words of an effect that has a time, on the run's notice line during its
+participant's turn. Words with no time, and the words of an encounter or an older
+run, do not remind.
+
 **Retired encounter**:
 An encounter template with an ended run, unless it is marked repeatable. It is not a state in its
 note. It leaves the ready list and stays reachable from its ended runs in History.

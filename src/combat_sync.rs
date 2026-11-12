@@ -766,7 +766,7 @@ struct Pending {
     action: Option<&'static str>,
 }
 /// The sync states the brief names. Each has a word and an icon on the participant row.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum SyncState {
     Off,
     FirstRead,
