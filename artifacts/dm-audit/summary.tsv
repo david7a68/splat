@@ -1,22 +1,23 @@
 Phase totals
 phase	tasks	transitions	interactions	nav	sub	panel	find	do
-before	8	5	36	5	0	1	9	21
-during	30	9	192	9	2	13	46	122
+before	9	5	35	5	0	1	7	22
+during	30	9	190	9	2	13	44	122
 after	7	5	21	5	4	0	1	11
-total	45	19	249	19	6	14	56	154
+total	46	19	246	19	6	14	52	155
 
 Tasks
 phase	task	transitions	interactions	overhead	path
 before	Start tonight's session note	1	4	1	Encounters > Session
-before	Recall what happened last session, and where the story stands	0	2	2	Session
+before	Recall what happened last session, and where the story stands	0	0	0	Session
 before	Compare the party's passive Perception, to plan an ambush	1	1	1	Session > Party
 before	Build tonight's encounter	2	16	9	Party > Session > Encounters
 before	Make the boss your own: copy it, change it, and swap it in	0	5	0	Encounters
 before	Write the read-aloud text and tactics for the encounter	0	4	0	Encounters
 before	Back to the session plan, with tonight's encounter in it	1	4	2	Encounters > Session
 before	Is each planned fight right for this party?	0	0	0	Session
+before	Carry over what last week left into tonight's note	0	1	0	Session
 during	Start recording	0	2	0	Session
-during	Read last session's recap aloud	0	2	2	Session
+during	Read last session's recap aloud	0	0	0	Session
 during	A player asks who Captain Varra is	0	3	3	Session
 during	Note what the party decides	0	2	1	Session
 during	The party travels for half a day: record it	0	2	1	Session
@@ -66,14 +67,15 @@ after	the recording service has its keys
 Blocked
 
 Facts
-before / Recall what happened last session, and where the story stands: the Last time line shows last week's words with no act: false
+before / Recall what happened last session, and where the story stands: the Last time line shows last week's words with no act: true
 before / Recall what happened last session, and where the story stands: last week's words are in view: true
 before / Compare the party's passive Perception, to plan an ambush: Party compares without opening a sheet: true
 before / Make the boss your own: copy it, change it, and swap it in: the roster has a row for the copy: true
 before / Back to the session plan, with tonight's encounter in it: the plan offers tonight's fight: true
 before / Is each planned fight right for this party?: the planned fights' rows say ["Low", "Low"]
+before / Carry over what last week left into tonight's note: tonight's note holds last week's open thread: true
 during / Open the app at the table: the app reopened on Session
-during / Read last session's recap aloud: the Last time line shows last week's words with no act: false
+during / Read last session's recap aloud: the Last time line shows last week's words with no act: true
 during / Read last session's recap aloud: last week's words are in view: true
 during / Note what the party decides: the words reached the note: true
 during / Check the road for encounters: the journey holds one check: true

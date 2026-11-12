@@ -5,8 +5,6 @@ before	Start tonight's session note	Nav	Session	1	Encounters	Session	false
 before	Start tonight's session note	Do	New session	1	Session		false
 before	Start tonight's session note	Do	type the title	1	Session		false
 before	Start tonight's session note	Do	Create session	1	Session		false
-before	Recall what happened last session, and where the story stands	Find	open last session from Last time	1	Session		false
-before	Recall what happened last session, and where the story stands	Find	back to tonight's session	1	Session		false
 before	Compare the party's passive Perception, to plan an ambush	Nav	Party	1	Session	Party	false
 before	Build tonight's encounter	Nav	Session	1	Party	Session	false
 before	Build tonight's encounter	Find	Add a fight	1	Session		false
@@ -30,13 +28,12 @@ before	Write the read-aloud text and tactics for the encounter	Do	save	1	Encount
 before	Back to the session plan, with tonight's encounter in it	Nav	Back to session	1	Encounters	Session	false
 before	Back to the session plan, with tonight's encounter in it	Find	Add a fight	1	Session		false
 before	Back to the session plan, with tonight's encounter in it	Do	plan the second fight	2	Session		false
+before	Carry over what last week left into tonight's note	Do	Carry over	1	Session		false
 during	Set-up	Setup	save, quit and open the app at the table	0	Session		false
 during	Set-up	Setup	a microphone is there	0	Session		false
 during	Start recording	Do	Record this session	1	Session		false
 during	Start recording	Do	Start recording	1	Session		false
 during	Set-up	Setup	the recorder hears the table	0	Session		false
-during	Read last session's recap aloud	Find	open last session from Last time	1	Session		false
-during	Read last session's recap aloud	Find	back to tonight's session	1	Session		false
 during	A player asks who Captain Varra is	Panel	open Lookup	1	Session		false
 during	A player asks who Captain Varra is	Find	search: varra	1	Session		false
 during	A player asks who Captain Varra is	Panel	close Lookup	1	Session		false
