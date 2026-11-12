@@ -2403,12 +2403,14 @@ impl Lookup {
         // The reader's results and their Undo sit in Lookup's footer, pinned below the reader,
         // so a result never moves the kind line, `Add to fight` or the text (round 26 FJ3).
         let lines = reader.footer_lines(current, &index, campaign, None);
-        if let Some(act) = world::draw_footer(ui, "lookup_footer", &lines)
+        let (pressed, bottom) = world::draw_footer(ui, "lookup_footer", &lines);
+        if let Some(act) = pressed
             && let Some(campaign) = campaign
         {
             nav = nav.take().or(reader.footer_act(act, current, campaign));
         }
         egui::ScrollArea::vertical()
+            .max_height((bottom - ui.cursor().top()).max(0.0))
             .id_salt(("lookup_reader", current.entry.id))
             .auto_shrink([false, false])
             .show(ui, |ui| {

@@ -252,12 +252,13 @@ pub fn broken(d: &mut Driver<'_>) {
             && d.is_disabled("Save repaired note"),
         "After Discard the unchanged unreadable draft says Invalid, and Save is blocked",
     );
-    // Round 25 FD1, lead's ruling: a result with a live Undo comes first in the one message
-    // space, so after Discard of a broken repair `Undo discard` is on its first line and Save's
-    // reason follows it, at every size.
+    // Round 25 FD1, lead's ruling: a result with a live Undo comes first, so after Discard of a
+    // broken repair `Undo discard` leads and Save's reason follows it, at every size. Round 26
+    // FA1: both are in the pane's footer, below Save, and the reason shows whole (it was cut at
+    // half height in the two-line space).
     let undo_first = |d: &mut Driver<'_>, undo_name: &str| {
         for size in [SMALL, DEFAULT, LARGE] {
-            let (undo, reason, save) = d.at_size(size, |d| {
+            let (undo, reason, save, whole) = d.at_size(size, |d| {
                 (
                     d.place_of(undo_name),
                     d.nodes()
@@ -265,14 +266,19 @@ pub fn broken(d: &mut Driver<'_>) {
                         .find(|node| node.role == Role::Label && node.name == combined)
                         .map(|node| node.rect),
                     d.place_of("Save repaired note"),
+                    // The reason shows whole in the footer, not cut by it.
+                    d.nodes().iter().any(|node| {
+                        node.role == Role::Label && node.name == combined && node.fully_in_view()
+                    }),
                 )
             });
             d.observe(
                 "iter-25-D-FD1-undo-first",
                 undo.zip(reason).zip(save).is_some_and(|((undo, reason), save)| {
                     undo.top() >= save.bottom()
-                        && undo.top() - save.bottom() < design::Type::Body.line()
                         && reason.top() >= undo.center().y
+                        && reason.bottom() <= size.1
+                        && whole
                 }),
                 format!("At {size:?}, {undo_name} {undo:?} leads, then the reason {reason:?}, below Save {save:?}"),
             );
@@ -288,8 +294,22 @@ pub fn broken(d: &mut Driver<'_>) {
         // Re-check 1: the gestures themselves run at each size, with the window at that size.
         for size in [SMALL, DEFAULT, LARGE] {
             d.set_base(size);
-            let (tabbed, keyed, wheeled, ring) = fixed_part_scrolls(d, message);
+            // Round 26: the footer is as tall as what it holds, so the message is reached,
+            // with its Undo, whether or not it needs to scroll.
+            let (tabbed, _, _, ring) = fixed_part_scrolls(d, message);
             let owner = d.focused_name();
+            // The discard's Undo is named for its draft.
+            let undo = if state == "Undo discard" {
+                "Undo discard of Broken.md"
+            } else {
+                state
+            };
+            // Each message is reached on its own: the reason's words, with the result's Undo.
+            let reached = space_reaches(d, &combined, Some(undo));
+            let (keyed, wheeled) = (
+                reached.iter().all(|(keyboard, _)| *keyboard),
+                reached.iter().all(|(_, pointer)| *pointer),
+            );
             d.observe(
                 "iter-25-D-FD1-part-focus",
                 tabbed && owner.as_deref() == Some(message),
@@ -301,7 +321,7 @@ pub fn broken(d: &mut Driver<'_>) {
                 "iter-25-D-FD1-part-scroll",
                 keyed && wheeled,
                 format!(
-                    "{state} at {size:?}: the part scrolls by key {keyed} and by wheel {wheeled}"
+                    "{state} at {size:?}: the keys reach the part {keyed}, the wheel reaches it {wheeled}"
                 ),
             );
             d.observe(
@@ -1211,16 +1231,22 @@ pub fn broken(d: &mut Driver<'_>) {
     let stat_back = fs::read_to_string(&lamp).unwrap() == lamp_renamed;
     d.click("Undo name change");
     d.settle();
+    let restored = fs::read_to_string(&lamp).unwrap() == lamp_original;
+    let undo_left = d.has("Undo name change");
+    let refusal_left = d.has_containing("changed on disk");
     d.observe(
         "iter-26-D-two-results",
         listed
-            && lamp_both.contains("Guard")
+            && lamp_both != lamp_renamed
             && refused
             && stat_back
             && fs::read_to_string(&lamp).unwrap() == lamp_original
             && !d.has("Undo name change")
             && !d.has_containing("changed on disk"),
-        format!("Both listed {listed}; older refused {refused}; newer undone {stat_back}"),
+        format!(
+            "Both listed {listed}; older refused {refused}; newer undone {stat_back}; restored \
+             {restored}, Undo name change left {undo_left}, refusal left {refusal_left}"
+        ),
     );
     d.click("Rename the note to Lamp");
     d.wait_for_text("Undo name change");
@@ -2913,7 +2939,8 @@ pub fn generator(d: &mut Driver<'_>) {
     // Round 26 FF1: with no note open, the discard result and its Undo sit in the pane's
     // footer, as below a note, not under the empty state's advice.
     let empty = tops_at_sizes(d, "No note open");
-    body_kept(d, "iter-26-D-FF1", "No note open", &empty, Some("Undo discard"));
+    let undo = d.name_starting("Undo discard of ");
+    body_kept(d, "iter-26-D-FF1", "No note open", &empty, Some(&undo));
     look_up(d, "Tally");
     d.click("Clear");
     d.click("Generate NPC");
@@ -9465,8 +9492,8 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
                 && d.has_containing("Added Guild")
         },
     );
-    // FD1: `Your changes are already in the note.` is a page result too, below the file line
-    // and above the value rows, at every captured size.
+    // FD1, round 26: `Your changes are already in the note.` is a World result too, in the
+    // pane's footer below the value rows, at every captured size.
     for size in [SMALL, DEFAULT, LARGE] {
         let (placed, detail) = d.at_size(size, |d| {
             d.expect("Change Part of");
@@ -9482,14 +9509,14 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
                 below
                     && message
                         .zip(row)
-                        .is_some_and(|(message, row)| message.bottom() <= row.top()),
-                format!("{detail}; first row at {row:?}"),
+                        .is_some_and(|(message, row)| message.top() >= row.bottom()),
+                format!("{detail}; the Part of row at {row:?}"),
             )
         });
         d.observe(
             "iter-17-D-FD1-kept",
             placed,
-            format!("At {size:?}, the kept-changes message sits above the value rows: {detail}"),
+            format!("At {size:?}, the kept-changes message sits in the footer below the rows: {detail}"),
         );
     }
     // Round 24 FG5: with Part of on two lines, Change keeps the column at the widest drawn line

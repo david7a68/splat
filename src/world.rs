@@ -2031,25 +2031,32 @@ impl FooterLine {
     }
 }
 
-/// Draw a pane's footer lines, pinned below what the pane draws next, in the footer's order:
-/// results with a live Undo, then reasons, then notices. `id` is the pane instance's own.
-/// Returns the action pressed.
+/// Draw a pane's footer lines in its message footer (`design::Footer`), pinned at the bottom of
+/// what is left of `ui`, in the footer's order: results with a live Undo, then reasons, then
+/// notices. `id` is the pane instance's own. Returns the action pressed and the y where the body
+/// drawn next ends.
 pub(crate) fn draw_footer(
     ui: &mut egui::Ui,
     id: impl std::hash::Hash,
     lines: &[FooterLine],
-) -> Option<FooterAct> {
-    let mut lines: Vec<_> = lines.iter().collect();
-    lines.sort_by_key(|line| line.rank);
+) -> (Option<FooterAct>, f32) {
     let pressed = std::cell::Cell::new(None);
-    // Until the shared footer lands, the lines draw in place, in order.
-    let _ = id;
+    let mut footer = design::Footer::new(id, ui.available_width());
     for line in lines {
-        if let Some(act) = line.draw(ui) {
-            pressed.set(Some(act));
-        }
+        let pressed = &pressed;
+        let draw = move |ui: &mut egui::Ui| {
+            if let Some(act) = line.draw(ui) {
+                pressed.set(Some(act));
+            }
+        };
+        match line.rank {
+            FooterRank::Undo => footer.result(line.words.as_str(), true, draw),
+            FooterRank::Reason => footer.reason(line.words.as_str(), draw),
+            FooterRank::Notice => footer.notice(line.words.as_str(), draw),
+        };
     }
-    pressed.get()
+    let bottom = footer.show(ui);
+    (pressed.get(), bottom)
 }
 
 impl Reader {

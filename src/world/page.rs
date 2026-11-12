@@ -661,7 +661,7 @@ impl WorldPage {
                     // The result sits in the pane's footer, as it does below a note (round 26
                     // FF1), so the empty state's advice keeps its place.
                     let lines: Vec<_> = self.result(None).iter().map(|r| r.line()).collect();
-                    if super::draw_footer(ui, "world_footer", &lines).is_some() {
+                    if super::draw_footer(ui, "world_footer", &lines).0.is_some() {
                         self.undo_discard();
                     }
                     design::empty_state(
@@ -683,7 +683,8 @@ impl WorldPage {
                 // pinned below the reader, so none of them moves the note (round 26).
                 let page = self.result(Some(item.entry.id));
                 let lines = self.reader.footer_lines(item, index, Some(campaign), page.as_ref());
-                match super::draw_footer(ui, "world_footer", &lines) {
+                let (pressed, bottom) = super::draw_footer(ui, "world_footer", &lines);
+                match pressed {
                     Some(super::FooterAct::Page) => self.undo_discard(),
                     Some(act) => nav = self.reader.footer_act(act, item, campaign),
                     None => {}
@@ -692,6 +693,8 @@ impl WorldPage {
                 crate::markdown_view::with_wide_tables(ui, |ui| {
                     egui::ScrollArea::vertical()
                         .id_salt(("world_reader", item.entry.id))
+                        // The reader ends `S` above the footer, so the footer never covers it.
+                        .max_height((bottom - ui.cursor().top()).max(0.0))
                         .auto_shrink([false, false])
                         .show(ui, |ui| {
                             let read = self.reader.read(ui, item, index, Some(campaign));
