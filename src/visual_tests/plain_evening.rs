@@ -1778,7 +1778,164 @@ mod allowed_classes {
             name: "P3 t: an act's words of these classes",
             fits: |d, _| scenes::act_words(d),
         },
+        // P8, F5.
+        Class {
+            row: 16,
+            name: "P8 a: the Last time preview reads What happened, in place, one to one",
+            fits: carry::preview,
+        },
+        Class {
+            row: 16,
+            name: "P8 a: an act shows or hides only the preview's words",
+            fits: |d, _| carry::preview_act(d),
+        },
+        Class {
+            row: 11,
+            name: "P8 b: `Carry over` ends the new session's Last time line",
+            fits: |d, _| carry::carry_over(d),
+        },
+        Class {
+            row: 11,
+            name: "P8 c: an act shows `Carry over` and nothing else",
+            fits: |d, _| carry::act(d),
+        },
     ];
+
+    /// P8's classes. Row 16: the Last time preview's words go from the last note's recap to its
+    /// `What happened`, at the same place and height, each old form with its own new form. Row
+    /// 11: `Carry over` is new at the end of the new session's Last time line, at the line's
+    /// top and height and inside the window. No class lets another text or control change.
+    mod carry {
+        use super::super::{AllowedRow, Difference};
+
+        /// The plain campaign's Session 7, as its note holds them.
+        const RECAP: &str = "The party left Emberfall at dawn with the miller's warning.";
+        const WHAT_HAPPENED: &str =
+            "Wolves at the ford. Hobb said the toll collectors were not paid.";
+        /// The Last time link's hover begins with these words.
+        const HOVER: &str = "Last time: Session 7: The Road to Emberfall — ";
+        /// The Last time line's top, with Lookup closed and open (the reference).
+        const LINE_TOPS: [f32; 2] = [140.0, 174.0];
+
+        fn bare(name: &str) -> &str {
+            name.strip_prefix("Label: ")
+                .or_else(|| name.strip_prefix("TextRun: "))
+                .unwrap_or(name)
+        }
+
+        /// `at x y wxh` or `was x y wxh`.
+        fn rect(detail: &str) -> Option<[f32; 4]> {
+            let mut words = detail
+                .strip_prefix("at ")
+                .or_else(|| detail.strip_prefix("was "))?
+                .split_whitespace();
+            let x = words.next()?.parse().ok()?;
+            let y = words.next()?.parse().ok()?;
+            let (w, h) = words.next()?.split_once('x')?;
+            Some([x, y, w.parse().ok()?, h.parse().ok()?])
+        }
+
+        /// The preview or the hover, with `full`'s words, whole or cut to an ellipsis.
+        fn words_of(name: &str, full: &str) -> bool {
+            let name = bare(name);
+            name.strip_prefix("— ")
+                .or_else(|| name.strip_prefix(HOVER))
+                .is_some_and(|words| {
+                    words == full
+                        || words
+                            .strip_suffix('…')
+                            .is_some_and(|cut| !cut.is_empty() && full.starts_with(cut))
+                })
+        }
+
+        /// The kind of node: `Label: `, `TextRun: ` or a painted text.
+        fn kind(name: &str) -> &str {
+            &name[..name.len() - bare(name).len()]
+        }
+
+        pub(super) fn preview(d: &Difference, rows: &[AllowedRow]) -> bool {
+            if !d.screen.starts_with("session-tonight")
+                || !["control", "text"].contains(&d.what.as_str())
+            {
+                return false;
+            }
+            let (own, other, partner) = match d.change.as_str() {
+                "gone" => (RECAP, WHAT_HAPPENED, "new"),
+                "new" => (WHAT_HAPPENED, RECAP, "gone"),
+                _ => return false,
+            };
+            let Some(at) = rect(&d.detail) else {
+                return false;
+            };
+            if !words_of(&d.name, own) {
+                return false;
+            }
+            // At the same place and height, each form pairs with one of the other.
+            let here = |o: &Difference, change: &str, words: &str| {
+                (&o.screen, &o.view, &o.what) == (&d.screen, &d.view, &d.what)
+                    && o.change == change
+                    && kind(&o.name) == kind(&d.name)
+                    && words_of(&o.name, words)
+                    && rect(&o.detail)
+                        .is_some_and(|r| r[0] == at[0] && r[1] == at[1] && r[3] == at[3])
+            };
+            let mine = rows
+                .iter()
+                .filter(|row| here(&row.difference, &d.change, own))
+                .count();
+            let theirs = rows
+                .iter()
+                .filter(|row| here(&row.difference, partner, other))
+                .count();
+            mine == theirs && mine > 0
+        }
+
+        /// An act's parts are only the preview: its new words in this record (`+`), and its old
+        /// words in the reference's (`-`).
+        pub(super) fn preview_act(d: &Difference) -> bool {
+            d.what == "act"
+                && d.change == "changed"
+                && d.detail.split(" | ").all(|part| {
+                    ["appeared ", "went "]
+                        .iter()
+                        .find_map(|lead| part.strip_prefix(lead))
+                        .is_some_and(|part| {
+                            part.strip_prefix("+ ")
+                                .is_some_and(|words| words_of(words, WHAT_HAPPENED))
+                                || part
+                                    .strip_prefix("- ")
+                                    .is_some_and(|words| words_of(words, RECAP))
+                        })
+                })
+        }
+
+        pub(super) fn carry_over(d: &Difference) -> bool {
+            let width: f32 = d
+                .view
+                .split('x')
+                .next()
+                .and_then(|w| w.parse().ok())
+                .unwrap_or(0.0);
+            let Some([x, y, w, h]) = rect(&d.detail) else {
+                return false;
+            };
+            let (top, height) = match (d.what.as_str(), d.name.as_str()) {
+                ("control", "Button: Carry over") => (y, h),
+                // The words sit inside the button, 3 px down at 18 px.
+                ("text", "Carry over") => (y - 3.0, h + 6.0),
+                _ => return false,
+            };
+            d.screen.starts_with("session-new")
+                && d.change == "new"
+                && LINE_TOPS.contains(&top)
+                && (height - crate::design::XL).abs() < 0.05
+                && x + w <= width
+        }
+
+        pub(super) fn act(d: &Difference) -> bool {
+            d.what == "act" && d.change == "changed" && d.detail == "appeared + Carry over"
+        }
+    }
 
     /// P3's classes. Each proves itself from the difference's geometry and words: no class lets
     /// an item of today go, be cut, be resized or narrow, apart from the count (n) and Read's
@@ -2354,6 +2511,99 @@ mod allowed_classes {
                 "a class allows {fault}"
             );
         }
+        // P8's classes refuse a preview that moved, wrapped or went alone, two old forms for one
+        // new form, `Carry over` taller than the line or on a line of its own, and another word.
+        let old = Difference {
+            screen: "session-tonight".into(),
+            view: "1200x800 Lookup closed".into(),
+            what: "text".into(),
+            change: "gone".into(),
+            name: "— The party left Emberfall at dawn with the miller's warning.".into(),
+            detail: "was 647.3 144 322.3x16".into(),
+        };
+        let new = Difference {
+            change: "new".into(),
+            name: "— Wolves at the ford. Hobb said the toll collectors were not paid.".into(),
+            detail: "at 647.3 144 346.3x16".into(),
+            ..old.clone()
+        };
+        let row16 = |d: &Difference| AllowedRow {
+            row: 16,
+            why: String::new(),
+            difference: d.clone(),
+        };
+        assert!(carry::preview(&old, &[row16(&old), row16(&new)]));
+        let moved = Difference {
+            detail: "at 647.3 164 346.3x16".into(),
+            ..new.clone()
+        };
+        let wrapped = Difference {
+            detail: "at 647.3 144 346.3x32".into(),
+            ..new.clone()
+        };
+        for (rows, why) in [
+            (vec![row16(&old)], "an old form gone alone"),
+            (vec![row16(&old), row16(&moved)], "a new form one line down"),
+            (vec![row16(&old), row16(&wrapped)], "a new form that wraps"),
+            (
+                vec![row16(&old), row16(&old), row16(&new)],
+                "two old forms for one",
+            ),
+        ] {
+            assert!(
+                !carry::preview(&rows[0].difference, &rows),
+                "{why} was accepted"
+            );
+        }
+        let carry = Difference {
+            screen: "session-new".into(),
+            view: "1200x800 Lookup closed".into(),
+            what: "control".into(),
+            change: "new".into(),
+            name: "Button: Carry over".into(),
+            detail: "at 1106.6 140 81.4x24".into(),
+        };
+        assert!(carry::carry_over(&carry));
+        for fault in [
+            Difference {
+                detail: "at 1106.6 138 81.4x28".into(),
+                ..carry.clone()
+            },
+            Difference {
+                detail: "at 372 164 81.4x24".into(),
+                ..carry.clone()
+            },
+            Difference {
+                detail: "at 1150 140 81.4x24".into(),
+                ..carry.clone()
+            },
+            Difference {
+                screen: "session-tonight".into(),
+                ..carry.clone()
+            },
+            Difference {
+                change: "moved".into(),
+                ..carry.clone()
+            },
+        ] {
+            assert!(!carry::carry_over(&fault), "a class allows {fault}");
+        }
+        assert!(!carry::preview_act(&Difference {
+            screen: "act 3".into(),
+            view: String::new(),
+            what: "act".into(),
+            change: "changed".into(),
+            name: "Session".into(),
+            detail: "appeared + — Wolves at the ford. | appeared - — The party left Emberfall at dawn with the miller's warning.".into(),
+        }));
+        assert!(!carry::act(&Difference {
+            screen: "act 109".into(),
+            view: String::new(),
+            what: "act".into(),
+            change: "changed".into(),
+            name: "Create session".into(),
+            detail: "appeared + Carry over | went - Last time:".into(),
+        }));
         // P3's classes refuse the faults of the review of PR 261: the next fight gone, cut,
         // narrowed, or moved in another direction; and an item of today gone outside Read.
         let fight = Difference {

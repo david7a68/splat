@@ -1365,7 +1365,10 @@ mod tests {
         let read_last = fs::read_to_string(&last.path).unwrap();
         fs::write(
             &last.path,
-            read_last.replace("The ferry is gone.\n", "The ferry is gone.\nThe bridge burned.\n"),
+            read_last.replace(
+                "The ferry is gone.\n",
+                "The ferry is gone.\nThe bridge burned.\n",
+            ),
         )
         .unwrap();
         harness.get_by_label("Carry over").click();
@@ -1373,7 +1376,9 @@ mod tests {
         assert_eq!(read(), before);
         assert!(
             harness
-                .query_by_label("Session 1’s note changed. Check what it holds, then carry over again.")
+                .query_by_label(
+                    "Session 1’s note changed. Check what it holds, then carry over again."
+                )
                 .is_some()
         );
         fs::write(&last.path, &read_last).unwrap();

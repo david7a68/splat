@@ -1,4 +1,2129 @@
 {
   "about": "G7's allowed differences from reference.json. Each row names its row of docs/design/session-cycle.md section 2.5 and one difference, whole, as the G7 failure prints it. A row that matches nothing fails. Add rows only for a change that section 2.5 lists.",
-  "rows": []
+  "rows": [
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight",
+        "view": "1200x800 Lookup closed",
+        "what": "control",
+        "change": "gone",
+        "name": "Label: — The party left Emberfall at dawn with the miller's warning.",
+        "detail": "was 647.3 144 322.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight",
+        "view": "1200x800 Lookup closed",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: — The party left Emberfall at dawn with the miller's warning.",
+        "detail": "was 647.3 144 322.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight",
+        "view": "1200x800 Lookup closed",
+        "what": "control",
+        "change": "new",
+        "name": "Label: — Wolves at the ford. Hobb said the toll collectors were not paid.",
+        "detail": "at 647.3 144 346.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight",
+        "view": "1200x800 Lookup closed",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: — Wolves at the ford. Hobb said the toll collectors were not paid.",
+        "detail": "at 647.3 144 346.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight",
+        "view": "1200x800 Lookup closed",
+        "what": "text",
+        "change": "gone",
+        "name": "— The party left Emberfall at dawn with the miller's warning.",
+        "detail": "was 647.3 144 322.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight",
+        "view": "1200x800 Lookup closed",
+        "what": "text",
+        "change": "new",
+        "name": "— Wolves at the ford. Hobb said the toll collectors were not paid.",
+        "detail": "at 647.3 144 346.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "gone",
+        "name": "Label: — The party left Emberfall at dawn with the miller's…",
+        "detail": "was 647.3 144 283.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: — The party left Emberfall at dawn with the miller's…",
+        "detail": "was 647.3 144 283.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "new",
+        "name": "Label: — Wolves at the ford. Hobb said the toll collectors…",
+        "detail": "at 647.3 144 275.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: — Wolves at the ford. Hobb said the toll collectors…",
+        "detail": "at 647.3 144 275.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "gone",
+        "name": "— The party left Emberfall at dawn with the miller's…",
+        "detail": "was 647.3 144 283.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "new",
+        "name": "— Wolves at the ford. Hobb said the toll collectors…",
+        "detail": "at 647.3 144 275.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "gone",
+        "name": "Label: — The party left Emberfall at dawn with the miller's warning.",
+        "detail": "was 423.3 178 322.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: — The party left Emberfall at dawn with the miller's warning.",
+        "detail": "was 423.3 178 322.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "Label: — Wolves at the ford. Hobb said the toll collectors were not…",
+        "detail": "at 423.3 178 326.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: — Wolves at the ford. Hobb said the toll collectors were not…",
+        "detail": "at 423.3 178 326.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight",
+        "view": "1200x800 Lookup open",
+        "what": "text",
+        "change": "gone",
+        "name": "— The party left Emberfall at dawn with the miller's warning.",
+        "detail": "was 423.3 178 322.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight",
+        "view": "1200x800 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "— Wolves at the ford. Hobb said the toll collectors were not…",
+        "detail": "at 423.3 178 326.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight",
+        "view": "960x640 Lookup open",
+        "what": "control",
+        "change": "gone",
+        "name": "Label: — The party left Emberfall at…",
+        "detail": "was 423.3 178 161.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight",
+        "view": "960x640 Lookup open",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: — The party left Emberfall at…",
+        "detail": "was 423.3 178 161.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight",
+        "view": "960x640 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "Label: — Wolves at the ford. Hobb…",
+        "detail": "at 423.3 178 154.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight",
+        "view": "960x640 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: — Wolves at the ford. Hobb…",
+        "detail": "at 423.3 178 154.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight",
+        "view": "960x640 Lookup open",
+        "what": "text",
+        "change": "gone",
+        "name": "— The party left Emberfall at…",
+        "detail": "was 423.3 178 161.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight",
+        "view": "960x640 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "— Wolves at the ford. Hobb…",
+        "detail": "at 423.3 178 154.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: More open",
+        "view": "1200x800",
+        "what": "control",
+        "change": "gone",
+        "name": "Label: — The party left Emberfall at dawn with the miller's warning.",
+        "detail": "was 647.3 144 322.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: More open",
+        "view": "1200x800",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: — The party left Emberfall at dawn with the miller's warning.",
+        "detail": "was 647.3 144 322.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: More open",
+        "view": "1200x800",
+        "what": "control",
+        "change": "new",
+        "name": "Label: — Wolves at the ford. Hobb said the toll collectors were not paid.",
+        "detail": "at 647.3 144 346.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: More open",
+        "view": "1200x800",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: — Wolves at the ford. Hobb said the toll collectors were not paid.",
+        "detail": "at 647.3 144 346.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: More open",
+        "view": "1200x800",
+        "what": "text",
+        "change": "gone",
+        "name": "— The party left Emberfall at dawn with the miller's warning.",
+        "detail": "was 647.3 144 322.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: More open",
+        "view": "1200x800",
+        "what": "text",
+        "change": "new",
+        "name": "— Wolves at the ford. Hobb said the toll collectors were not paid.",
+        "detail": "at 647.3 144 346.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: More open",
+        "view": "960x640",
+        "what": "control",
+        "change": "gone",
+        "name": "Label: — The party left Emberfall at dawn with the miller's…",
+        "detail": "was 647.3 144 283.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: More open",
+        "view": "960x640",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: — The party left Emberfall at dawn with the miller's…",
+        "detail": "was 647.3 144 283.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: More open",
+        "view": "960x640",
+        "what": "control",
+        "change": "new",
+        "name": "Label: — Wolves at the ford. Hobb said the toll collectors…",
+        "detail": "at 647.3 144 275.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: More open",
+        "view": "960x640",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: — Wolves at the ford. Hobb said the toll collectors…",
+        "detail": "at 647.3 144 275.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: More open",
+        "view": "960x640",
+        "what": "text",
+        "change": "gone",
+        "name": "— The party left Emberfall at dawn with the miller's…",
+        "detail": "was 647.3 144 283.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: More open",
+        "view": "960x640",
+        "what": "text",
+        "change": "new",
+        "name": "— Wolves at the ford. Hobb said the toll collectors…",
+        "detail": "at 647.3 144 275.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row menu",
+        "view": "1200x800",
+        "what": "control",
+        "change": "gone",
+        "name": "Label: — The party left Emberfall at dawn with the miller's warning.",
+        "detail": "was 647.3 144 322.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row menu",
+        "view": "1200x800",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: — The party left Emberfall at dawn with the miller's warning.",
+        "detail": "was 647.3 144 322.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row menu",
+        "view": "1200x800",
+        "what": "control",
+        "change": "new",
+        "name": "Label: — Wolves at the ford. Hobb said the toll collectors were not paid.",
+        "detail": "at 647.3 144 346.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row menu",
+        "view": "1200x800",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: — Wolves at the ford. Hobb said the toll collectors were not paid.",
+        "detail": "at 647.3 144 346.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row menu",
+        "view": "1200x800",
+        "what": "text",
+        "change": "gone",
+        "name": "— The party left Emberfall at dawn with the miller's warning.",
+        "detail": "was 647.3 144 322.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row menu",
+        "view": "1200x800",
+        "what": "text",
+        "change": "new",
+        "name": "— Wolves at the ford. Hobb said the toll collectors were not paid.",
+        "detail": "at 647.3 144 346.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row menu",
+        "view": "960x640",
+        "what": "control",
+        "change": "gone",
+        "name": "Label: — The party left Emberfall at dawn with the miller's…",
+        "detail": "was 647.3 144 283.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row menu",
+        "view": "960x640",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: — The party left Emberfall at dawn with the miller's…",
+        "detail": "was 647.3 144 283.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row menu",
+        "view": "960x640",
+        "what": "control",
+        "change": "new",
+        "name": "Label: — Wolves at the ford. Hobb said the toll collectors…",
+        "detail": "at 647.3 144 275.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row menu",
+        "view": "960x640",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: — Wolves at the ford. Hobb said the toll collectors…",
+        "detail": "at 647.3 144 275.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row menu",
+        "view": "960x640",
+        "what": "text",
+        "change": "gone",
+        "name": "— The party left Emberfall at dawn with the miller's…",
+        "detail": "was 647.3 144 283.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row menu",
+        "view": "960x640",
+        "what": "text",
+        "change": "new",
+        "name": "— Wolves at the ford. Hobb said the toll collectors…",
+        "detail": "at 647.3 144 275.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: fight row menu",
+        "view": "1200x800",
+        "what": "control",
+        "change": "gone",
+        "name": "Label: — The party left Emberfall at dawn with the miller's warning.",
+        "detail": "was 647.3 144 322.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: fight row menu",
+        "view": "1200x800",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: — The party left Emberfall at dawn with the miller's warning.",
+        "detail": "was 647.3 144 322.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: fight row menu",
+        "view": "1200x800",
+        "what": "control",
+        "change": "new",
+        "name": "Label: — Wolves at the ford. Hobb said the toll collectors were not paid.",
+        "detail": "at 647.3 144 346.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: fight row menu",
+        "view": "1200x800",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: — Wolves at the ford. Hobb said the toll collectors were not paid.",
+        "detail": "at 647.3 144 346.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: fight row menu",
+        "view": "1200x800",
+        "what": "text",
+        "change": "gone",
+        "name": "— The party left Emberfall at dawn with the miller's warning.",
+        "detail": "was 647.3 144 322.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: fight row menu",
+        "view": "1200x800",
+        "what": "text",
+        "change": "new",
+        "name": "— Wolves at the ford. Hobb said the toll collectors were not paid.",
+        "detail": "at 647.3 144 346.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: fight row menu",
+        "view": "960x640",
+        "what": "control",
+        "change": "gone",
+        "name": "Label: — The party left Emberfall at dawn with the miller's…",
+        "detail": "was 647.3 144 283.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: fight row menu",
+        "view": "960x640",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: — The party left Emberfall at dawn with the miller's…",
+        "detail": "was 647.3 144 283.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: fight row menu",
+        "view": "960x640",
+        "what": "control",
+        "change": "new",
+        "name": "Label: — Wolves at the ford. Hobb said the toll collectors…",
+        "detail": "at 647.3 144 275.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: fight row menu",
+        "view": "960x640",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: — Wolves at the ford. Hobb said the toll collectors…",
+        "detail": "at 647.3 144 275.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: fight row menu",
+        "view": "960x640",
+        "what": "text",
+        "change": "gone",
+        "name": "— The party left Emberfall at dawn with the miller's…",
+        "detail": "was 647.3 144 283.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: fight row menu",
+        "view": "960x640",
+        "what": "text",
+        "change": "new",
+        "name": "— Wolves at the ford. Hobb said the toll collectors…",
+        "detail": "at 647.3 144 275.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Last time hover",
+        "view": "1200x800",
+        "what": "control",
+        "change": "gone",
+        "name": "Label: Last time: Session 7: The Road to Emberfall — The party left Emberfall at dawn with the miller's warning.",
+        "detail": "was 440 175 317.3x54"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Last time hover",
+        "view": "1200x800",
+        "what": "control",
+        "change": "gone",
+        "name": "Label: — The party left Emberfall at dawn with the miller's warning.",
+        "detail": "was 647.3 144 322.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Last time hover",
+        "view": "1200x800",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: — The party left Emberfall at dawn with the miller's warning.",
+        "detail": "was 647.3 144 322.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Last time hover",
+        "view": "1200x800",
+        "what": "control",
+        "change": "new",
+        "name": "Label: Last time: Session 7: The Road to Emberfall — Wolves at the ford. Hobb said the toll collectors were not paid.",
+        "detail": "at 440 175 300.3x54"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Last time hover",
+        "view": "1200x800",
+        "what": "control",
+        "change": "new",
+        "name": "Label: — Wolves at the ford. Hobb said the toll collectors were not paid.",
+        "detail": "at 647.3 144 346.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Last time hover",
+        "view": "1200x800",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: — Wolves at the ford. Hobb said the toll collectors were not paid.",
+        "detail": "at 647.3 144 346.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Last time hover",
+        "view": "1200x800",
+        "what": "text",
+        "change": "gone",
+        "name": "Last time: Session 7: The Road to Emberfall — The party left Emberfall at dawn with the miller's warning.",
+        "detail": "was 440 175 317.3x54"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Last time hover",
+        "view": "1200x800",
+        "what": "text",
+        "change": "gone",
+        "name": "— The party left Emberfall at dawn with the miller's warning.",
+        "detail": "was 647.3 144 322.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Last time hover",
+        "view": "1200x800",
+        "what": "text",
+        "change": "new",
+        "name": "Last time: Session 7: The Road to Emberfall — Wolves at the ford. Hobb said the toll collectors were not paid.",
+        "detail": "at 440 175 300.3x54"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Last time hover",
+        "view": "1200x800",
+        "what": "text",
+        "change": "new",
+        "name": "— Wolves at the ford. Hobb said the toll collectors were not paid.",
+        "detail": "at 647.3 144 346.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Last time hover",
+        "view": "960x640",
+        "what": "control",
+        "change": "gone",
+        "name": "Label: Last time: Session 7: The Road to Emberfall — The party left Emberfall at dawn with the miller's warning.",
+        "detail": "was 440 175 317.3x54"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Last time hover",
+        "view": "960x640",
+        "what": "control",
+        "change": "gone",
+        "name": "Label: — The party left Emberfall at dawn with the miller's…",
+        "detail": "was 647.3 144 283.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Last time hover",
+        "view": "960x640",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: — The party left Emberfall at dawn with the miller's…",
+        "detail": "was 647.3 144 283.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Last time hover",
+        "view": "960x640",
+        "what": "control",
+        "change": "new",
+        "name": "Label: Last time: Session 7: The Road to Emberfall — Wolves at the ford. Hobb said the toll collectors were not paid.",
+        "detail": "at 440 175 300.3x54"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Last time hover",
+        "view": "960x640",
+        "what": "control",
+        "change": "new",
+        "name": "Label: — Wolves at the ford. Hobb said the toll collectors…",
+        "detail": "at 647.3 144 275.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Last time hover",
+        "view": "960x640",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: — Wolves at the ford. Hobb said the toll collectors…",
+        "detail": "at 647.3 144 275.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Last time hover",
+        "view": "960x640",
+        "what": "text",
+        "change": "gone",
+        "name": "Last time: Session 7: The Road to Emberfall — The party left Emberfall at dawn with the miller's warning.",
+        "detail": "was 440 175 317.3x54"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Last time hover",
+        "view": "960x640",
+        "what": "text",
+        "change": "gone",
+        "name": "— The party left Emberfall at dawn with the miller's…",
+        "detail": "was 647.3 144 283.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Last time hover",
+        "view": "960x640",
+        "what": "text",
+        "change": "new",
+        "name": "Last time: Session 7: The Road to Emberfall — Wolves at the ford. Hobb said the toll collectors were not paid.",
+        "detail": "at 440 175 300.3x54"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Last time hover",
+        "view": "960x640",
+        "what": "text",
+        "change": "new",
+        "name": "— Wolves at the ford. Hobb said the toll collectors…",
+        "detail": "at 647.3 144 275.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: planned fight hover",
+        "view": "1200x800",
+        "what": "control",
+        "change": "gone",
+        "name": "Label: — The party left Emberfall at dawn with the miller's warning.",
+        "detail": "was 647.3 144 322.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: planned fight hover",
+        "view": "1200x800",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: — The party left Emberfall at dawn with the miller's warning.",
+        "detail": "was 647.3 144 322.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: planned fight hover",
+        "view": "1200x800",
+        "what": "control",
+        "change": "new",
+        "name": "Label: — Wolves at the ford. Hobb said the toll collectors were not paid.",
+        "detail": "at 647.3 144 346.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: planned fight hover",
+        "view": "1200x800",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: — Wolves at the ford. Hobb said the toll collectors were not paid.",
+        "detail": "at 647.3 144 346.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: planned fight hover",
+        "view": "1200x800",
+        "what": "text",
+        "change": "gone",
+        "name": "— The party left Emberfall at dawn with the miller's warning.",
+        "detail": "was 647.3 144 322.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: planned fight hover",
+        "view": "1200x800",
+        "what": "text",
+        "change": "new",
+        "name": "— Wolves at the ford. Hobb said the toll collectors were not paid.",
+        "detail": "at 647.3 144 346.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: planned fight hover",
+        "view": "960x640",
+        "what": "control",
+        "change": "gone",
+        "name": "Label: — The party left Emberfall at dawn with the miller's…",
+        "detail": "was 647.3 144 283.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: planned fight hover",
+        "view": "960x640",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: — The party left Emberfall at dawn with the miller's…",
+        "detail": "was 647.3 144 283.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: planned fight hover",
+        "view": "960x640",
+        "what": "control",
+        "change": "new",
+        "name": "Label: — Wolves at the ford. Hobb said the toll collectors…",
+        "detail": "at 647.3 144 275.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: planned fight hover",
+        "view": "960x640",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: — Wolves at the ford. Hobb said the toll collectors…",
+        "detail": "at 647.3 144 275.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: planned fight hover",
+        "view": "960x640",
+        "what": "text",
+        "change": "gone",
+        "name": "— The party left Emberfall at dawn with the miller's…",
+        "detail": "was 647.3 144 283.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: planned fight hover",
+        "view": "960x640",
+        "what": "text",
+        "change": "new",
+        "name": "— Wolves at the ford. Hobb said the toll collectors…",
+        "detail": "at 647.3 144 275.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row menu button hover",
+        "view": "1200x800",
+        "what": "control",
+        "change": "gone",
+        "name": "Label: — The party left Emberfall at dawn with the miller's warning.",
+        "detail": "was 647.3 144 322.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row menu button hover",
+        "view": "1200x800",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: — The party left Emberfall at dawn with the miller's warning.",
+        "detail": "was 647.3 144 322.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row menu button hover",
+        "view": "1200x800",
+        "what": "control",
+        "change": "new",
+        "name": "Label: — Wolves at the ford. Hobb said the toll collectors were not paid.",
+        "detail": "at 647.3 144 346.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row menu button hover",
+        "view": "1200x800",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: — Wolves at the ford. Hobb said the toll collectors were not paid.",
+        "detail": "at 647.3 144 346.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row menu button hover",
+        "view": "1200x800",
+        "what": "text",
+        "change": "gone",
+        "name": "— The party left Emberfall at dawn with the miller's warning.",
+        "detail": "was 647.3 144 322.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row menu button hover",
+        "view": "1200x800",
+        "what": "text",
+        "change": "new",
+        "name": "— Wolves at the ford. Hobb said the toll collectors were not paid.",
+        "detail": "at 647.3 144 346.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row menu button hover",
+        "view": "960x640",
+        "what": "control",
+        "change": "gone",
+        "name": "Label: — The party left Emberfall at dawn with the miller's…",
+        "detail": "was 647.3 144 283.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row menu button hover",
+        "view": "960x640",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: — The party left Emberfall at dawn with the miller's…",
+        "detail": "was 647.3 144 283.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row menu button hover",
+        "view": "960x640",
+        "what": "control",
+        "change": "new",
+        "name": "Label: — Wolves at the ford. Hobb said the toll collectors…",
+        "detail": "at 647.3 144 275.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row menu button hover",
+        "view": "960x640",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: — Wolves at the ford. Hobb said the toll collectors…",
+        "detail": "at 647.3 144 275.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row menu button hover",
+        "view": "960x640",
+        "what": "text",
+        "change": "gone",
+        "name": "— The party left Emberfall at dawn with the miller's…",
+        "detail": "was 647.3 144 283.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row menu button hover",
+        "view": "960x640",
+        "what": "text",
+        "change": "new",
+        "name": "— Wolves at the ford. Hobb said the toll collectors…",
+        "detail": "at 647.3 144 275.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row open",
+        "view": "1200x800 Lookup closed",
+        "what": "control",
+        "change": "gone",
+        "name": "Label: — The party left Emberfall at dawn with the miller's warning.",
+        "detail": "was 647.3 144 322.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row open",
+        "view": "1200x800 Lookup closed",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: — The party left Emberfall at dawn with the miller's warning.",
+        "detail": "was 647.3 144 322.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row open",
+        "view": "1200x800 Lookup closed",
+        "what": "control",
+        "change": "new",
+        "name": "Label: — Wolves at the ford. Hobb said the toll collectors were not paid.",
+        "detail": "at 647.3 144 346.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row open",
+        "view": "1200x800 Lookup closed",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: — Wolves at the ford. Hobb said the toll collectors were not paid.",
+        "detail": "at 647.3 144 346.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row open",
+        "view": "1200x800 Lookup closed",
+        "what": "text",
+        "change": "gone",
+        "name": "— The party left Emberfall at dawn with the miller's warning.",
+        "detail": "was 647.3 144 322.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row open",
+        "view": "1200x800 Lookup closed",
+        "what": "text",
+        "change": "new",
+        "name": "— Wolves at the ford. Hobb said the toll collectors were not paid.",
+        "detail": "at 647.3 144 346.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row open",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "gone",
+        "name": "Label: — The party left Emberfall at dawn with the miller's…",
+        "detail": "was 647.3 144 283.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row open",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: — The party left Emberfall at dawn with the miller's…",
+        "detail": "was 647.3 144 283.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row open",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "new",
+        "name": "Label: — Wolves at the ford. Hobb said the toll collectors…",
+        "detail": "at 647.3 144 275.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row open",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: — Wolves at the ford. Hobb said the toll collectors…",
+        "detail": "at 647.3 144 275.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row open",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "gone",
+        "name": "— The party left Emberfall at dawn with the miller's…",
+        "detail": "was 647.3 144 283.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row open",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "new",
+        "name": "— Wolves at the ford. Hobb said the toll collectors…",
+        "detail": "at 647.3 144 275.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row open",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "gone",
+        "name": "Label: — The party left Emberfall at dawn with the miller's warning.",
+        "detail": "was 423.3 178 322.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row open",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: — The party left Emberfall at dawn with the miller's warning.",
+        "detail": "was 423.3 178 322.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row open",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "Label: — Wolves at the ford. Hobb said the toll collectors were not…",
+        "detail": "at 423.3 178 326.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row open",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: — Wolves at the ford. Hobb said the toll collectors were not…",
+        "detail": "at 423.3 178 326.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row open",
+        "view": "1200x800 Lookup open",
+        "what": "text",
+        "change": "gone",
+        "name": "— The party left Emberfall at dawn with the miller's warning.",
+        "detail": "was 423.3 178 322.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row open",
+        "view": "1200x800 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "— Wolves at the ford. Hobb said the toll collectors were not…",
+        "detail": "at 423.3 178 326.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row open",
+        "view": "960x640 Lookup open",
+        "what": "control",
+        "change": "gone",
+        "name": "Label: — The party left Emberfall at…",
+        "detail": "was 423.3 178 161.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row open",
+        "view": "960x640 Lookup open",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: — The party left Emberfall at…",
+        "detail": "was 423.3 178 161.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row open",
+        "view": "960x640 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "Label: — Wolves at the ford. Hobb…",
+        "detail": "at 423.3 178 154.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row open",
+        "view": "960x640 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: — Wolves at the ford. Hobb…",
+        "detail": "at 423.3 178 154.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row open",
+        "view": "960x640 Lookup open",
+        "what": "text",
+        "change": "gone",
+        "name": "— The party left Emberfall at…",
+        "detail": "was 423.3 178 161.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: Travel row open",
+        "view": "960x640 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "— Wolves at the ford. Hobb…",
+        "detail": "at 423.3 178 154.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: planned fight open",
+        "view": "1200x800 Lookup closed",
+        "what": "control",
+        "change": "gone",
+        "name": "Label: — The party left Emberfall at dawn with the miller's warning.",
+        "detail": "was 647.3 144 322.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: planned fight open",
+        "view": "1200x800 Lookup closed",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: — The party left Emberfall at dawn with the miller's warning.",
+        "detail": "was 647.3 144 322.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: planned fight open",
+        "view": "1200x800 Lookup closed",
+        "what": "control",
+        "change": "new",
+        "name": "Label: — Wolves at the ford. Hobb said the toll collectors were not paid.",
+        "detail": "at 647.3 144 346.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: planned fight open",
+        "view": "1200x800 Lookup closed",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: — Wolves at the ford. Hobb said the toll collectors were not paid.",
+        "detail": "at 647.3 144 346.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: planned fight open",
+        "view": "1200x800 Lookup closed",
+        "what": "text",
+        "change": "gone",
+        "name": "— The party left Emberfall at dawn with the miller's warning.",
+        "detail": "was 647.3 144 322.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: planned fight open",
+        "view": "1200x800 Lookup closed",
+        "what": "text",
+        "change": "new",
+        "name": "— Wolves at the ford. Hobb said the toll collectors were not paid.",
+        "detail": "at 647.3 144 346.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: planned fight open",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "gone",
+        "name": "Label: — The party left Emberfall at dawn with the miller's…",
+        "detail": "was 647.3 144 283.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: planned fight open",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: — The party left Emberfall at dawn with the miller's…",
+        "detail": "was 647.3 144 283.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: planned fight open",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "new",
+        "name": "Label: — Wolves at the ford. Hobb said the toll collectors…",
+        "detail": "at 647.3 144 275.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: planned fight open",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: — Wolves at the ford. Hobb said the toll collectors…",
+        "detail": "at 647.3 144 275.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: planned fight open",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "gone",
+        "name": "— The party left Emberfall at dawn with the miller's…",
+        "detail": "was 647.3 144 283.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: planned fight open",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "new",
+        "name": "— Wolves at the ford. Hobb said the toll collectors…",
+        "detail": "at 647.3 144 275.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: planned fight open",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "gone",
+        "name": "Label: — The party left Emberfall at dawn with the miller's warning.",
+        "detail": "was 423.3 178 322.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: planned fight open",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: — The party left Emberfall at dawn with the miller's warning.",
+        "detail": "was 423.3 178 322.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: planned fight open",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "Label: — Wolves at the ford. Hobb said the toll collectors were not…",
+        "detail": "at 423.3 178 326.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: planned fight open",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: — Wolves at the ford. Hobb said the toll collectors were not…",
+        "detail": "at 423.3 178 326.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: planned fight open",
+        "view": "1200x800 Lookup open",
+        "what": "text",
+        "change": "gone",
+        "name": "— The party left Emberfall at dawn with the miller's warning.",
+        "detail": "was 423.3 178 322.3x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: planned fight open",
+        "view": "1200x800 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "— Wolves at the ford. Hobb said the toll collectors were not…",
+        "detail": "at 423.3 178 326.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: planned fight open",
+        "view": "960x640 Lookup open",
+        "what": "control",
+        "change": "gone",
+        "name": "Label: — The party left Emberfall at…",
+        "detail": "was 423.3 178 161.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: planned fight open",
+        "view": "960x640 Lookup open",
+        "what": "control",
+        "change": "gone",
+        "name": "TextRun: — The party left Emberfall at…",
+        "detail": "was 423.3 178 161.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: planned fight open",
+        "view": "960x640 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "Label: — Wolves at the ford. Hobb…",
+        "detail": "at 423.3 178 154.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: planned fight open",
+        "view": "960x640 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "TextRun: — Wolves at the ford. Hobb…",
+        "detail": "at 423.3 178 154.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: planned fight open",
+        "view": "960x640 Lookup open",
+        "what": "text",
+        "change": "gone",
+        "name": "— The party left Emberfall at…",
+        "detail": "was 423.3 178 161.6x16"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "session-tonight: planned fight open",
+        "view": "960x640 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "— Wolves at the ford. Hobb…",
+        "detail": "at 423.3 178 154.6x16"
+      }
+    },
+    {
+      "row": 11,
+      "why": "Row 11: a new session with no event and no run offers a quiet Carry over at the end of the Last time line, at the line's height; nothing on the line moves or wraps (F5).",
+      "difference": {
+        "screen": "session-new",
+        "view": "1200x800 Lookup closed",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Carry over",
+        "detail": "at 1106.6 140 81.4x24"
+      }
+    },
+    {
+      "row": 11,
+      "why": "Row 11: a new session with no event and no run offers a quiet Carry over at the end of the Last time line, at the line's height; nothing on the line moves or wraps (F5).",
+      "difference": {
+        "screen": "session-new",
+        "view": "1200x800 Lookup closed",
+        "what": "text",
+        "change": "new",
+        "name": "Carry over",
+        "detail": "at 1114.6 143 65.4x18"
+      }
+    },
+    {
+      "row": 11,
+      "why": "Row 11: a new session with no event and no run offers a quiet Carry over at the end of the Last time line, at the line's height; nothing on the line moves or wraps (F5).",
+      "difference": {
+        "screen": "session-new",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Carry over",
+        "detail": "at 866.6 140 81.4x24"
+      }
+    },
+    {
+      "row": 11,
+      "why": "Row 11: a new session with no event and no run offers a quiet Carry over at the end of the Last time line, at the line's height; nothing on the line moves or wraps (F5).",
+      "difference": {
+        "screen": "session-new",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "new",
+        "name": "Carry over",
+        "detail": "at 874.6 143 65.4x18"
+      }
+    },
+    {
+      "row": 11,
+      "why": "Row 11: a new session with no event and no run offers a quiet Carry over at the end of the Last time line, at the line's height; nothing on the line moves or wraps (F5).",
+      "difference": {
+        "screen": "session-new",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Carry over",
+        "detail": "at 674.6 174 81.4x24"
+      }
+    },
+    {
+      "row": 11,
+      "why": "Row 11: a new session with no event and no run offers a quiet Carry over at the end of the Last time line, at the line's height; nothing on the line moves or wraps (F5).",
+      "difference": {
+        "screen": "session-new",
+        "view": "1200x800 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "Carry over",
+        "detail": "at 682.6 177 65.4x18"
+      }
+    },
+    {
+      "row": 11,
+      "why": "Row 11: a new session with no event and no run offers a quiet Carry over at the end of the Last time line, at the line's height; nothing on the line moves or wraps (F5).",
+      "difference": {
+        "screen": "session-new",
+        "view": "960x640 Lookup open",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Carry over",
+        "detail": "at 521 174 81.4x24"
+      }
+    },
+    {
+      "row": 11,
+      "why": "Row 11: a new session with no event and no run offers a quiet Carry over at the end of the Last time line, at the line's height; nothing on the line moves or wraps (F5).",
+      "difference": {
+        "screen": "session-new",
+        "view": "960x640 Lookup open",
+        "what": "text",
+        "change": "new",
+        "name": "Carry over",
+        "detail": "at 529 177 65.4x18"
+      }
+    },
+    {
+      "row": 11,
+      "why": "Row 11: a new session with no event and no run offers a quiet Carry over at the end of the Last time line, at the line's height; nothing on the line moves or wraps (F5).",
+      "difference": {
+        "screen": "session-new: note written",
+        "view": "1200x800",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Carry over",
+        "detail": "at 1106.6 140 81.4x24"
+      }
+    },
+    {
+      "row": 11,
+      "why": "Row 11: a new session with no event and no run offers a quiet Carry over at the end of the Last time line, at the line's height; nothing on the line moves or wraps (F5).",
+      "difference": {
+        "screen": "session-new: note written",
+        "view": "1200x800",
+        "what": "text",
+        "change": "new",
+        "name": "Carry over",
+        "detail": "at 1114.6 143 65.4x18"
+      }
+    },
+    {
+      "row": 11,
+      "why": "Row 11: a new session with no event and no run offers a quiet Carry over at the end of the Last time line, at the line's height; nothing on the line moves or wraps (F5).",
+      "difference": {
+        "screen": "session-new: note written",
+        "view": "960x640",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Carry over",
+        "detail": "at 866.6 140 81.4x24"
+      }
+    },
+    {
+      "row": 11,
+      "why": "Row 11: a new session with no event and no run offers a quiet Carry over at the end of the Last time line, at the line's height; nothing on the line moves or wraps (F5).",
+      "difference": {
+        "screen": "session-new: note written",
+        "view": "960x640",
+        "what": "text",
+        "change": "new",
+        "name": "Carry over",
+        "detail": "at 874.6 143 65.4x18"
+      }
+    },
+    {
+      "row": 11,
+      "why": "Row 11: a new session with no event and no run offers a quiet Carry over at the end of the Last time line, at the line's height; nothing on the line moves or wraps (F5).",
+      "difference": {
+        "screen": "session-new: note saved",
+        "view": "1200x800",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Carry over",
+        "detail": "at 1106.6 140 81.4x24"
+      }
+    },
+    {
+      "row": 11,
+      "why": "Row 11: a new session with no event and no run offers a quiet Carry over at the end of the Last time line, at the line's height; nothing on the line moves or wraps (F5).",
+      "difference": {
+        "screen": "session-new: note saved",
+        "view": "1200x800",
+        "what": "text",
+        "change": "new",
+        "name": "Carry over",
+        "detail": "at 1114.6 143 65.4x18"
+      }
+    },
+    {
+      "row": 11,
+      "why": "Row 11: a new session with no event and no run offers a quiet Carry over at the end of the Last time line, at the line's height; nothing on the line moves or wraps (F5).",
+      "difference": {
+        "screen": "session-new: note saved",
+        "view": "960x640",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Carry over",
+        "detail": "at 866.6 140 81.4x24"
+      }
+    },
+    {
+      "row": 11,
+      "why": "Row 11: a new session with no event and no run offers a quiet Carry over at the end of the Last time line, at the line's height; nothing on the line moves or wraps (F5).",
+      "difference": {
+        "screen": "session-new: note saved",
+        "view": "960x640",
+        "what": "text",
+        "change": "new",
+        "name": "Carry over",
+        "detail": "at 874.6 143 65.4x18"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "act 3",
+        "view": "",
+        "what": "act",
+        "change": "changed",
+        "name": "Session",
+        "detail": "appeared + — Wolves at the ford. Hobb said the toll collectors were not paid. | appeared - — The party left Emberfall at dawn with the miller's warning."
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "act 4",
+        "view": "",
+        "what": "act",
+        "change": "changed",
+        "name": "Ctrl+K opens Lookup",
+        "detail": "appeared + — Wolves at the ford. Hobb said the toll collectors were not… | went + — Wolves at the ford. Hobb said the toll collectors were not paid."
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "act 5",
+        "view": "",
+        "what": "act",
+        "change": "changed",
+        "name": "Ctrl+K closes Lookup",
+        "detail": "appeared + — Wolves at the ford. Hobb said the toll collectors were not paid. | went + — Wolves at the ford. Hobb said the toll collectors were not…"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "act 19",
+        "view": "",
+        "what": "act",
+        "change": "changed",
+        "name": "Ctrl+K opens Lookup",
+        "detail": "appeared + — Wolves at the ford. Hobb said the toll collectors were not… | went + — Wolves at the ford. Hobb said the toll collectors were not paid."
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "act 20",
+        "view": "",
+        "what": "act",
+        "change": "changed",
+        "name": "Ctrl+K closes Lookup",
+        "detail": "appeared + — Wolves at the ford. Hobb said the toll collectors were not paid. | went + — Wolves at the ford. Hobb said the toll collectors were not…"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "act 22",
+        "view": "",
+        "what": "act",
+        "change": "changed",
+        "name": "Ctrl+K opens Lookup",
+        "detail": "appeared + — Wolves at the ford. Hobb said the toll collectors were not… | went + — Wolves at the ford. Hobb said the toll collectors were not paid."
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "act 23",
+        "view": "",
+        "what": "act",
+        "change": "changed",
+        "name": "Ctrl+K closes Lookup",
+        "detail": "appeared + — Wolves at the ford. Hobb said the toll collectors were not paid. | went + — Wolves at the ford. Hobb said the toll collectors were not…"
+      }
+    },
+    {
+      "row": 16,
+      "why": "Row 16: the Last time line's preview reads the last session's What happened, the one source that carry-over reads too, where it read that note's own recap first; the line keeps its place and height (F5).",
+      "difference": {
+        "screen": "act 24",
+        "view": "",
+        "what": "act",
+        "change": "changed",
+        "name": "open last session",
+        "detail": "went + — Wolves at the ford. Hobb said the toll collectors were not paid. | went - — The party left Emberfall at dawn with the miller's warning."
+      }
+    },
+    {
+      "row": 11,
+      "why": "Row 11: a new session with no event and no run offers a quiet Carry over at the end of the Last time line, at the line's height; nothing on the line moves or wraps (F5).",
+      "difference": {
+        "screen": "act 109",
+        "view": "",
+        "what": "act",
+        "change": "changed",
+        "name": "Create session",
+        "detail": "appeared + Carry over"
+      }
+    }
+  ]
 }

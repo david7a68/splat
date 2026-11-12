@@ -67,7 +67,10 @@ pub fn run(d: &mut Driver<'_>) {
                     "## Plan for tonight\n\n- [[{RUN}]]\n- [ ] {SCENE}\n- [x] Read the rumours\n"
                 ),
             )
-            .replace("## What happened\n", &format!("## What happened\n\n{RECAP}\n"))
+            .replace(
+                "## What happened\n",
+                &format!("## What happened\n\n{RECAP}\n"),
+            )
             .replace(
                 "## Open threads\n",
                 &format!("## Open threads\n\n- [ ] {THREAD}\n- [x] Who paid the toll?\n"),
