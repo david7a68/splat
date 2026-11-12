@@ -1,0 +1,38 @@
+Phase totals
+phase	tasks	transitions	interactions	nav	sub	panel	find	do
+during	10	4	50	4	0	4	3	39
+after	2	0	8	0	0	2	1	5
+total	12	4	58	4	0	6	4	44
+
+Tasks
+phase	task	transitions	interactions	overhead	nav	sub	panel	find	do	path
+during	Play the planned NPC: read Warden Ostrel	0	1	1	0	0	1	0	0	Session
+during	The party attacks Warden Ostrel: start the fight	1	2	2	1	0	1	0	0	Session > Run
+during	Roll and begin the fight with Warden Ostrel	0	11	0	0	0	0	0	11	Run
+during	Warden Ostrel gives up: end the fight	0	3	0	0	0	0	0	3	Run
+during	He gave up, and the party holds him: a line in his Log	0	5	2	0	0	2	0	3	Run
+during	Close the fight, keep the rewards, and add loot nobody planned	1	5	2	1	0	0	1	3	Run > Session
+during	Two days overland: roll for encounters on the road	0	7	2	0	0	0	2	5	Session
+during	The second day names the Wolf Pack: plan it and start it	1	2	1	1	0	0	0	1	Session > Run
+during	Roll and begin the Wolf Pack fight	0	11	0	0	0	0	0	11	Run
+during	End the Wolf Pack fight	1	3	1	1	0	0	0	2	Run > Session
+after	Put the Wolf Pack fight's rewards in the note	0	1	0	0	0	0	0	1	Session
+after	Mark the talk with Warden Ostrel done, and log what happened	0	7	3	0	0	2	1	4	Session
+
+Set-up, not counted
+before	prep: Warden Ostrel, the Wolf Pack encounter and the road table
+before	play last week's session, then quit and open the app
+before	work at 1200x800
+before	prep: tonight's plan holds a fight and a talk with Ostrel
+before	save, quit and open the app at the table
+
+Blocked
+
+Facts
+during / Play the planned NPC: read Warden Ostrel: the planned fight stays on the plan, skipped: true
+during / The party attacks Warden Ostrel: start the fight: the run of Fight with Warden Ostrel is open: true
+during / He gave up, and the party holds him: a line in his Log: his note holds the line: true
+during / Close the fight, keep the rewards, and add loot nobody planned: the ring is under the fight's block: true
+during / Two days overland: roll for encounters on the road: after Roll for encounters, the focus is in None
+during / Two days overland: roll for encounters on the road: Timeline.md holds the length: true; the checks: ["  - Checks table: road", "  - Check at 0h: \"14 · Nothing stirs.\"", "  - Check at 24h: \"6 · [[Wolf Pack]] picks up the trail.\""]
+during / The second day names the Wolf Pack: plan it and start it: the note plans the Wolf Pack above the skipped fight: true

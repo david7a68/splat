@@ -1,0 +1,89 @@
+{
+  "about": "G6 reads this in every gate. `devenv shell -- audit-freeze journeys` writes it; a feature adds its new tasks with `devenv shell -- audit-freeze add`, which leaves every row here as it is.",
+  "tasks": [
+    {
+      "phase": "after the last fight",
+      "task": "The party searches the last fight",
+      "transitions": 0,
+      "interactions": 1,
+      "path": "Run"
+    },
+    {
+      "phase": "after the last fight",
+      "task": "Verori died here",
+      "transitions": 0,
+      "interactions": 7,
+      "path": "Run"
+    },
+    {
+      "phase": "after the last fight",
+      "task": "He gave the gate key away first",
+      "transitions": 0,
+      "interactions": 4,
+      "path": "Run"
+    },
+    {
+      "phase": "after the last fight",
+      "task": "Back to the evening",
+      "transitions": 1,
+      "interactions": 1,
+      "path": "Run > Session"
+    },
+    {
+      "phase": "after the last fight",
+      "task": "Rewards for each of the three fights",
+      "transitions": 0,
+      "interactions": 3,
+      "path": "Session"
+    },
+    {
+      "phase": "a week later",
+      "task": "Start the new session",
+      "transitions": 0,
+      "interactions": 3,
+      "path": "Session"
+    },
+    {
+      "phase": "a week later",
+      "task": "Carry over what the last session left",
+      "transitions": 0,
+      "interactions": 1,
+      "path": "Session"
+    },
+    {
+      "phase": "a week later",
+      "task": "Plan three scenes",
+      "transitions": 0,
+      "interactions": 4,
+      "path": "Session"
+    },
+    {
+      "phase": "a week later",
+      "task": "Is each fight right for this party?",
+      "transitions": 0,
+      "interactions": 0,
+      "path": "Session"
+    },
+    {
+      "phase": "a week later",
+      "task": "The Gate Watch is too easy: add a creature in the encounter editor",
+      "transitions": 2,
+      "interactions": 7,
+      "path": "Session > Encounters > Session"
+    },
+    {
+      "phase": "a week later",
+      "task": "Prepare the road: a Travel row with its checks",
+      "transitions": 0,
+      "interactions": 7,
+      "path": "Session"
+    },
+    {
+      "phase": "a week later",
+      "task": "Start the first fight",
+      "transitions": 1,
+      "interactions": 1,
+      "path": "Session > Run"
+    }
+  ]
+}

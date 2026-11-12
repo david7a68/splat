@@ -1,0 +1,40 @@
+Phase totals
+phase	tasks	transitions	interactions	nav	sub	panel	find	do
+after the last fight	5	1	16	1	0	2	1	12
+a week later	7	3	23	3	0	0	5	15
+total	12	4	39	4	0	2	6	27
+
+Tasks
+phase	task	transitions	interactions	overhead	nav	sub	panel	find	do	path
+after the last fight	The party searches the last fight	0	1	0	0	0	0	0	1	Run
+after the last fight	Verori died here	0	7	2	0	0	1	1	5	Run
+after the last fight	He gave the gate key away first	0	4	1	0	0	1	0	3	Run
+after the last fight	Back to the evening	1	1	1	1	0	0	0	0	Run > Session
+after the last fight	Rewards for each of the three fights	0	3	0	0	0	0	0	3	Session
+a week later	Start the new session	0	3	0	0	0	0	0	3	Session
+a week later	Carry over what the last session left	0	1	0	0	0	0	0	1	Session
+a week later	Plan three scenes	0	4	0	0	0	0	0	4	Session
+a week later	Is each fight right for this party?	0	0	0	0	0	0	0	0	Session
+a week later	The Gate Watch is too easy: add a creature in the encounter editor	2	7	5	2	0	0	3	2	Session > Encounters > Session
+a week later	Prepare the road: a Travel row with its checks	0	7	2	0	0	0	2	5	Session
+a week later	Start the first fight	1	1	1	1	0	0	0	0	Session > Run
+
+Set-up, not counted
+before	prep: the encounters, the treasure table and Verori
+before	play last week's session, then quit and open the app
+before	work at 1200x800
+before	prep: the session's plan holds five fights
+before	save, quit and open the app at the table
+before	play two fights, and the third to its end
+after the last fight	a week passes: save, quit and open the app
+
+Blocked
+
+Facts
+after the last fight / Verori died here: his note holds the status: true, and a Log line for it: true
+after the last fight / Rewards for each of the three fights: the note holds three blocks, each with its XP line: 3
+a week later / Carry over what the last session left: the new note holds the recap, the unplayed fights and carried_from: true
+a week later / Plan three scenes: the plan shows the three scenes: true
+a week later / Is each fight right for this party?: the planned fights' rows say ["Low", "Low"]
+a week later / The Gate Watch is too easy: add a creature in the encounter editor: the planned fights' rows say after the change: ["Moderate", "Low"]
+a week later / Prepare the road: a Travel row with its checks: after Roll for encounters, the focus is in None

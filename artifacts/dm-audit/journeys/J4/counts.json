@@ -1,0 +1,138 @@
+{
+  "about": "G6 reads this in every gate. `devenv shell -- audit-freeze journeys` writes it; a feature adds its new tasks with `devenv shell -- audit-freeze add`, which leaves every row here as it is.",
+  "tasks": [
+    {
+      "phase": "between fights",
+      "task": "Open the numbers",
+      "transitions": 0,
+      "interactions": 1,
+      "path": "Session"
+    },
+    {
+      "phase": "between fights",
+      "task": "The party enters a room: the clock reaches 40, and a bell is due",
+      "transitions": 0,
+      "interactions": 1,
+      "path": "Session"
+    },
+    {
+      "phase": "between fights",
+      "task": "The bell: roll each rival and the wandering table",
+      "transitions": 0,
+      "interactions": 4,
+      "path": "Session"
+    },
+    {
+      "phase": "between fights",
+      "task": "The Old Guard takes its first seal",
+      "transitions": 0,
+      "interactions": 1,
+      "path": "Session"
+    },
+    {
+      "phase": "between fights",
+      "task": "Put the seal on the Timeline",
+      "transitions": 0,
+      "interactions": 1,
+      "path": "Session"
+    },
+    {
+      "phase": "between fights",
+      "task": "Finish the bell",
+      "transitions": 0,
+      "interactions": 1,
+      "path": "Session"
+    },
+    {
+      "phase": "between fights",
+      "task": "Keep the seal's notice in mind for the next fight",
+      "transitions": 0,
+      "interactions": 0,
+      "path": "Session"
+    },
+    {
+      "phase": "between fights",
+      "task": "The party enters the arena",
+      "transitions": 0,
+      "interactions": 1,
+      "path": "Session"
+    },
+    {
+      "phase": "the fight",
+      "task": "Start the arena fight",
+      "transitions": 1,
+      "interactions": 2,
+      "path": "Session > Run"
+    },
+    {
+      "phase": "the fight",
+      "task": "Roll and begin the arena fight",
+      "transitions": 0,
+      "interactions": 11,
+      "path": "Run"
+    },
+    {
+      "phase": "the fight",
+      "task": "The crowd loves a move in the fight: mark Crowd Favor",
+      "transitions": 0,
+      "interactions": 3,
+      "path": "Run"
+    },
+    {
+      "phase": "the fight",
+      "task": "End the arena fight",
+      "transitions": 1,
+      "interactions": 3,
+      "path": "Run > Session"
+    },
+    {
+      "phase": "after the fight",
+      "task": "Three minutes passed in the fight",
+      "transitions": 0,
+      "interactions": 4,
+      "path": "Session"
+    },
+    {
+      "phase": "after the fight",
+      "task": "The rivals came: finish the seal's notice",
+      "transitions": 0,
+      "interactions": 1,
+      "path": "Session"
+    },
+    {
+      "phase": "after the fight",
+      "task": "The crowd loved a move, then threw a gift",
+      "transitions": 0,
+      "interactions": 2,
+      "path": "Session"
+    },
+    {
+      "phase": "after the fight",
+      "task": "A wrong press on Throw a gift, seen after the next right press",
+      "transitions": 0,
+      "interactions": 3,
+      "path": "Session"
+    },
+    {
+      "phase": "after the fight",
+      "task": "A soul is collected: the clock passes 60",
+      "transitions": 0,
+      "interactions": 1,
+      "path": "Session"
+    },
+    {
+      "phase": "after the fight",
+      "task": "The second bell",
+      "transitions": 0,
+      "interactions": 5,
+      "path": "Session"
+    },
+    {
+      "phase": "between sessions",
+      "task": "A new day between sessions: the prize day comes due",
+      "transitions": 1,
+      "interactions": 5,
+      "path": "Session > Timeline"
+    }
+  ]
+}

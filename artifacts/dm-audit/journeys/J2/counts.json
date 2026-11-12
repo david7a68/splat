@@ -1,0 +1,89 @@
+{
+  "about": "G6 reads this in every gate. `devenv shell -- audit-freeze journeys` writes it; a feature adds its new tasks with `devenv shell -- audit-freeze add`, which leaves every row here as it is.",
+  "tasks": [
+    {
+      "phase": "during",
+      "task": "Play the planned NPC: read Warden Ostrel",
+      "transitions": 0,
+      "interactions": 1,
+      "path": "Session"
+    },
+    {
+      "phase": "during",
+      "task": "The party attacks Warden Ostrel: start the fight",
+      "transitions": 1,
+      "interactions": 2,
+      "path": "Session > Run"
+    },
+    {
+      "phase": "during",
+      "task": "Roll and begin the fight with Warden Ostrel",
+      "transitions": 0,
+      "interactions": 11,
+      "path": "Run"
+    },
+    {
+      "phase": "during",
+      "task": "Warden Ostrel gives up: end the fight",
+      "transitions": 0,
+      "interactions": 3,
+      "path": "Run"
+    },
+    {
+      "phase": "during",
+      "task": "He gave up, and the party holds him: a line in his Log",
+      "transitions": 0,
+      "interactions": 5,
+      "path": "Run"
+    },
+    {
+      "phase": "during",
+      "task": "Close the fight, keep the rewards, and add loot nobody planned",
+      "transitions": 1,
+      "interactions": 5,
+      "path": "Run > Session"
+    },
+    {
+      "phase": "during",
+      "task": "Two days overland: roll for encounters on the road",
+      "transitions": 0,
+      "interactions": 7,
+      "path": "Session"
+    },
+    {
+      "phase": "during",
+      "task": "The second day names the Wolf Pack: plan it and start it",
+      "transitions": 1,
+      "interactions": 2,
+      "path": "Session > Run"
+    },
+    {
+      "phase": "during",
+      "task": "Roll and begin the Wolf Pack fight",
+      "transitions": 0,
+      "interactions": 11,
+      "path": "Run"
+    },
+    {
+      "phase": "during",
+      "task": "End the Wolf Pack fight",
+      "transitions": 1,
+      "interactions": 3,
+      "path": "Run > Session"
+    },
+    {
+      "phase": "after",
+      "task": "Put the Wolf Pack fight's rewards in the note",
+      "transitions": 0,
+      "interactions": 1,
+      "path": "Session"
+    },
+    {
+      "phase": "after",
+      "task": "Mark the talk with Warden Ostrel done, and log what happened",
+      "transitions": 0,
+      "interactions": 7,
+      "path": "Session"
+    }
+  ]
+}

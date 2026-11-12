@@ -1,0 +1,58 @@
+phase	task	kind	what	interactions	from	pages	blocked
+before	Set-up	Setup	the Tournament's note is in play	0	Encounters		false
+before	Set-up	Setup	open the app on it	0	Encounters		false
+before	Set-up	Setup	prep: tonight's plan holds the arena fight	9	Encounters	Session	false
+before	Set-up	Setup	save, quit and open the app at the table	0	Session		false
+before	Set-up	Setup	the race so far: the clock at 30, Favor 2, no seals	7	Session		false
+between fights	Open the numbers	Panel	Ctrl+T	1	Session		false
+between fights	The party enters a room: the clock reaches 40, and a bell is due	Do	Enter room	1	Session		false
+between fights	The bell: roll each rival and the wandering table	Do	Roll Rival Track	1	Session		false
+between fights	The bell: roll each rival and the wandering table	Do	Roll Rival Track	1	Session		false
+between fights	The bell: roll each rival and the wandering table	Do	Roll Rival Track	1	Session		false
+between fights	The bell: roll each rival and the wandering table	Do	Roll Wandering, 0:40 to 1:19	1	Session		false
+between fights	The Old Guard takes its first seal	Do	Take seal: Old Guard	1	Session		false
+between fights	Put the seal on the Timeline	Do	Add to Timeline	1	Session		false
+between fights	Finish the bell	Do	Done: Bell	1	Session		false
+between fights	The party enters the arena	Do	Enter room	1	Session		false
+the fight	Start the arena fight	Nav	Start fight: Shrine of Cinders	1	Session	Run	false
+the fight	Start the arena fight	Panel	Ctrl+T, to see the fight's panel	1	Run		false
+the fight	Roll and begin the arena fight	Do	Roll NPC initiative	1	Run		false
+the fight	Roll and begin the arena fight	Do	type Brannoch Vale's initiative	1	Run		false
+the fight	Roll and begin the arena fight	Do	next field with Enter	1	Run		false
+the fight	Roll and begin the arena fight	Do	type Iselle Marrowind's initiative	1	Run		false
+the fight	Roll and begin the arena fight	Do	next field with Enter	1	Run		false
+the fight	Roll and begin the arena fight	Do	type Kestrel Dunmoor's initiative	1	Run		false
+the fight	Roll and begin the arena fight	Do	next field with Enter	1	Run		false
+the fight	Roll and begin the arena fight	Do	type Oren Thistlewick's initiative	1	Run		false
+the fight	Roll and begin the arena fight	Do	next field with Enter	1	Run		false
+the fight	Roll and begin the arena fight	Do	type Sable Harrowgate's initiative	1	Run		false
+the fight	Roll and begin the arena fight	Do	Begin combat	1	Run		false
+the fight	The crowd loves a move in the fight: mark Crowd Favor	Panel	Ctrl+T	1	Run		false
+the fight	The crowd loves a move in the fight: mark Crowd Favor	Do	Crowd loves it	1	Run		false
+the fight	The crowd loves a move in the fight: mark Crowd Favor	Panel	Ctrl+T	1	Run		false
+the fight	End the arena fight	Do	End encounter…	1	Run		false
+the fight	End the arena fight	Do	End encounter	1	Run		false
+the fight	End the arena fight	Nav	Close run	1	Run	Session	false
+after the fight	Three minutes passed in the fight	Panel	Ctrl+T	1	Session		false
+after the fight	Three minutes passed in the fight	Do	Fight minute	1	Session		false
+after the fight	Three minutes passed in the fight	Do	Fight minute	1	Session		false
+after the fight	Three minutes passed in the fight	Do	Fight minute	1	Session		false
+after the fight	The rivals came: finish the seal's notice	Do	Done: First seal for Old Guard	1	Session		false
+after the fight	The crowd loved a move, then threw a gift	Do	Crowd loves it	1	Session		false
+after the fight	The crowd loved a move, then threw a gift	Do	Throw a gift	1	Session		false
+after the fight	A wrong press on Throw a gift, seen after the next right press	Do	Throw a gift	1	Session		false
+after the fight	A wrong press on Throw a gift, seen after the next right press	Do	Crowd loves it	1	Session		false
+after the fight	A wrong press on Throw a gift, seen after the next right press	Do	Crowd loves it	1	Session		false
+after the fight	A soul is collected: the clock passes 60	Do	Collect soul	1	Session		false
+after the fight	The second bell	Do	Roll Rival Track	1	Session		false
+after the fight	The second bell	Do	Roll Rival Track	1	Session		false
+after the fight	The second bell	Do	Roll Rival Track	1	Session		false
+after the fight	The second bell	Do	Roll Wandering, 0:40 to 1:19	1	Session		false
+after the fight	The second bell	Do	Done: Bell	1	Session		false
+after the fight	Set-up	Setup	the Tournament's note has a day mark on the next day	0	Session		false
+after the fight	Set-up	Setup	save, quit and open the app after the session	0	Session		false
+between sessions	A new day between sessions: the prize day comes due	Nav	Timeline	1	Session	Timeline	false
+between sessions	A new day between sessions: the prize day comes due	Do	Add Day	1	Timeline		false
+between sessions	A new day between sessions: the prize day comes due	Panel	Ctrl+T	1	Timeline		false
+between sessions	A new day between sessions: the prize day comes due	Do	Done: Prize day, Day 1	1	Timeline		false
+between sessions	A new day between sessions: the prize day comes due	Panel	Ctrl+T	1	Timeline		false
