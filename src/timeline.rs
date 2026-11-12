@@ -2205,6 +2205,8 @@ mod tests {
         assert!(!event(Kind::Travel, "half a day").time_not_read());
         assert_eq!(event(Kind::Travel, "half a day").time_warning(), None);
         assert!(!event(Kind::Travel, "3 days").time_not_read());
+        // A day has no length, so words there are no warning.
+        assert_eq!(event(Kind::Day, "a few hours").time_warning(), None);
         assert!(!event(Kind::Travel, "").time_not_read());
         assert_eq!(
             clock_now(&[event(Kind::Day, ""), event(Kind::Travel, "soon")]),

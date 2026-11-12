@@ -6254,10 +6254,10 @@ impl Sessions {
             }
             return;
         }
-        if let Some(draft) = &mut self.template_draft {
-            if ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)) {
-                draft.save();
-            }
+        if let Some(draft) = &mut self.template_draft
+            && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S))
+        {
+            draft.save();
         }
         let mut pressed_link = None;
         egui::ScrollArea::vertical()
