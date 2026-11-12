@@ -2,7 +2,7 @@
   "violations": {
     "accessible-name/egui-chrome": {
       "book-to-package": 18,
-      "campaign-content": 22,
+      "campaign-content": 20,
       "campaign-copy-registered": 2,
       "column-resize": 31,
       "creature-filter": 5,
@@ -40,7 +40,7 @@
       "prep-to-table": 3,
       "reader-tables": 17,
       "recording-banner-priority": 2,
-      "remove-package-in-use": 16,
+      "remove-package-in-use": 17,
       "roll-table-author": 11,
       "run-absent-player": 7,
       "run-add-creature": 7,
@@ -98,7 +98,7 @@
     },
     "target-size/egui-chrome": {
       "book-to-package": 50,
-      "campaign-content": 93,
+      "campaign-content": 91,
       "campaign-copy-registered": 8,
       "column-resize": 130,
       "creature-filter": 15,
@@ -140,7 +140,7 @@
       "prep-to-table": 42,
       "reader-tables": 44,
       "recording-banner-priority": 32,
-      "remove-package-in-use": 58,
+      "remove-package-in-use": 59,
       "roll-table-author": 32,
       "run-absent-player": 31,
       "run-add-creature": 41,
