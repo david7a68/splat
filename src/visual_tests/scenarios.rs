@@ -282,6 +282,30 @@ fn is_icon(text: &str) -> bool {
 /// Where a control's words start: the leftmost text painted inside its press area. An icon
 /// before the words does not count: `line_start` hangs it in the gutter, so the words start at
 /// the text edge.
+/// Round 26 FB6: an inline creation row. The action is on its field's line (centres within
+/// 1 px), after the field; the reason is on a line below, under the field (after a quiet
+/// Cancel or Clear that starts that line). The rects when it holds.
+fn creation_row(
+    d: &Driver<'_>,
+    field: &str,
+    action: &str,
+    reason: &str,
+) -> Option<(egui::Rect, egui::Rect, egui::Rect)> {
+    let field = d
+        .nodes()
+        .into_iter()
+        .find(|node| node.name == field && node.role == egui::accesskit::Role::TextInput)?
+        .rect;
+    let action = d.place_of(action)?;
+    let reason = d.painted_rect_in(reason, egui::Rect::EVERYTHING)?;
+    ((action.center().y - field.center().y).abs() <= 1.0
+        && action.left() > field.right()
+        && reason.left() >= field.left() - 1.0
+        && reason.right() <= action.left()
+        && reason.top() >= field.bottom() - 0.5)
+        .then_some((field, action, reason))
+}
+
 /// Round 26: the pane footer whose words hold `words`: the smallest named group that holds them.
 fn footer_with(d: &Driver<'_>, words: &str) -> Option<egui::Rect> {
     d.nodes()
@@ -1330,6 +1354,22 @@ pub mod library_author {
         d.state("package-actions", Sizes::Default);
         d.click(MANAGE_PACKAGES);
         d.expect(MANAGE_TITLE);
+        // Review round 26 FB6: each creation action follows its last field on that field's
+        // line (centres within 1 px), and the reason sits on the line below at the field's edge.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let rows = d.at_size(size, |d| {
+                [
+                    ("Package folder", "Add folder", "Choose a folder first."),
+                    ("Folder", "Create package", "Type a name first."),
+                ]
+                .map(|(field, action, reason)| creation_row(d, field, action, reason))
+            });
+            d.observe(
+                "iter-26-C-FB6-library",
+                rows.iter().all(Option::is_some),
+                format!("At {size:?}, Add folder and Create package on their field's line, reasons below: {rows:?}"),
+            );
+        }
         d.state("manage-packages", Sizes::All);
         escape_closes(d, "manage packages form", MANAGE_TITLE, CLOSE_WINDOW);
         d.goal("open and close the package form");
@@ -1352,6 +1392,16 @@ pub mod library_author {
                 "iter-7-D-SD1",
                 labels,
                 format!("Peer field labels use sentence-case Small at {size:?}"),
+            );
+        }
+        for size in [SMALL, DEFAULT, LARGE] {
+            let row = d.at_size(size, |d| {
+                creation_row(d, "Folder", CREATE_ENTRY, "Type a name first.")
+            });
+            d.observe(
+                "iter-26-C-FB6-entry",
+                row.is_some(),
+                format!("At {size:?}, Create entry on the Folder field's line, its reason below: {row:?}"),
             );
         }
         d.state("new-entry-form", Sizes::All);
@@ -2925,28 +2975,51 @@ pub mod campaign_content {
             Some(list - save)
         };
         let listed = |d: &Driver<'_>, words: &str| footer_with(d, words).is_some();
+        let undo_top = |d: &Driver<'_>, name: &str| d.place_of(name).map(|rect| rect.top());
+        const P_DISCARDED: &str = "Campaign packages draft discarded.";
+        const UNDO_A: &str = "Undo discard of Broken.md";
+        const UNDO_B: &str = "Undo discard of Cracked.md";
+        const UNDO_P: &str = "Undo discard of Campaign packages";
         let a_draft = draft(d, A_PATH);
         let before = b_top(d);
         d.click_below(A_MESSAGE, "Discard");
         let a_discarded = a_draft.is_some() && draft(d, A_PATH) != a_draft;
         let after_a = b_top(d);
+        // Review round 26: a package-selection Discard between the two repairs' Discards. All
+        // live Undos share one order, newest first.
+        d.click_starting(MODULE_ROW);
+        d.click(&format!("Use {UNSELECTED_ENTRY}"));
+        d.click_below(SAVE_SELECTIONS, DISCARD_SELECTION);
         let b_draft = draft(d, B_PATH);
         d.click_below(B_MESSAGE, "Discard");
         let b_baseline = draft(d, B_PATH);
-        let both = listed(d, A_DISCARDED) && listed(d, B_DISCARDED) && b_baseline != b_draft;
+        let both = listed(d, A_DISCARDED)
+            && listed(d, B_DISCARDED)
+            && listed(d, P_DISCARDED)
+            && b_baseline != b_draft;
+        let order = [UNDO_B, UNDO_P, UNDO_A].map(|name| undo_top(d, name));
+        let newest_first = order.iter().all(Option::is_some)
+            && order.windows(2).all(|pair| pair[0] < pair[1]);
         let after_b = b_top(d);
-        d.click("Undo discard of Broken.md");
+        d.click(UNDO_A);
         let a_back = draft(d, A_PATH) == a_draft;
-        let b_kept =
-            listed(d, B_DISCARDED) && !listed(d, A_DISCARDED) && draft(d, B_PATH) == b_baseline;
+        let b_kept = listed(d, B_DISCARDED)
+            && listed(d, P_DISCARDED)
+            && !listed(d, A_DISCARDED)
+            && draft(d, B_PATH) == b_baseline;
         let after_undo = b_top(d);
         d.observe(
             "iter-26-C-two-discards",
             a_discarded && both && a_back && b_kept,
             format!(
-                "A discarded {a_discarded}; both results listed and B discarded {both}; Undo A \
-                 restores A {a_back}; B's result and discarded state kept {b_kept}"
+                "A discarded {a_discarded}; A, the packages and B listed and B discarded {both}; \
+                 Undo A restores A {a_back}; the newer results and B's state kept {b_kept}"
             ),
+        );
+        d.observe(
+            "iter-26-C-undo-order",
+            newest_first,
+            format!("Undo tops, newest first (B, packages, A): {order:?}"),
         );
         d.observe(
             "iter-26-C-two-discards-still",
@@ -2959,7 +3032,21 @@ pub mod campaign_content {
                  {after_a:?}, after B's {after_b:?}, after Undo A {after_undo:?}"
             ),
         );
+        // Review round 26: a campaign change ends this campaign's Undos at the change, also
+        // while the page is hidden (A → B → A from Settings).
         d.click_below(A_MESSAGE, "Discard");
+        let live_before = listed(d, A_DISCARDED) && listed(d, B_DISCARDED) && listed(d, P_DISCARDED);
+        go_settings(d);
+        d.click("Make Quiet Harbor the active campaign");
+        d.click("Make The Emberfall Marches the active campaign");
+        go_campaign(d);
+        d.settle();
+        let ended = !d.has(UNDO_A) && !d.has(UNDO_B) && !d.has(UNDO_P);
+        d.observe(
+            "iter-26-C-switch-ends-undo",
+            live_before && ended,
+            format!("Three Undos before the round trip {live_before}; all ended after it {ended}"),
+        );
         let _ = std::fs::remove_file(d.root.join(SECOND));
         d.click(RELOAD);
         d.settle();
@@ -4579,10 +4666,10 @@ pub mod settings {
                 .iter()
                 .find(|node| node.name == "Add campaign")
                 .unwrap();
-            // Round 26 FB6: a creation form commits first, at its left edge, then quiet Cancel
-            // an `L` gap after it.
-            assert!((cancel.rect.left() - add.rect.right() - crate::design::L).abs() <= 1.0);
-            assert!((cancel.rect.center().y - add.rect.center().y).abs() <= 1.0);
+            // Round 26 FB6: Add campaign is on the Folder field's line; quiet Cancel starts the
+            // line below, with the reason.
+            assert!(cancel.rect.top() >= add.rect.bottom() - 1.0);
+            assert!(cancel.rect.center().x < add.rect.left());
             assert!(cancel.fully_in_view() && add.fully_in_view());
         });
         d.click(CANCEL);
@@ -4861,33 +4948,33 @@ pub mod empty {
         go_settings(d);
         d.expect(ADD_CAMPAIGN);
         d.state("settings-no-campaigns", Sizes::All);
-        // Round 26 FB6: an inline creation form commits at its left edge, right after its
-        // fields, and its reason sits on a line below that stays when the reason goes.
+        // Round 26 FB6: an inline creation form puts Create on its last field's line, after
+        // the field, and its reason on a line below, at the field's left edge, that stays when
+        // the reason goes.
         const ADD_REASON: &str = "Enter a campaign name and a folder first.";
-        let field_left = |d: &Driver<'_>| {
-            d.nodes()
-                .iter()
-                .find(|node| {
-                    node.name == NAME_FIELD && node.role == egui::accesskit::Role::TextInput
-                })
-                .map(|node| node.rect.left())
-        };
         for size in [SMALL, DEFAULT, LARGE] {
             let placed = d.at_size(size, |d| {
-                let add = d.place_of(ADD_CAMPAIGN)?;
-                let reason = d.place_of(ADD_REASON)?;
-                Some((field_left(d)?, add, reason))
+                let field = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| {
+                        node.name == FOLDER_FIELD && node.role == egui::accesskit::Role::TextInput
+                    })?
+                    .rect;
+                Some((field, d.place_of(ADD_CAMPAIGN)?, d.place_of(ADD_REASON)?))
             });
             d.observe(
                 "iter-26-C-FB6",
                 placed.is_some_and(|(field, add, reason)| {
-                    (add.left() - field).abs() <= 1.0
-                        && (reason.left() - field).abs() <= 1.0
-                        && reason.top() >= add.bottom() - 0.5
+                    (add.center().y - field.center().y).abs() <= 1.0
+                        && add.left() > field.right()
+                        && (reason.left() - field.left()).abs() <= 1.0
+                        && reason.top() >= field.bottom() - 0.5
                 }),
                 format!(
-                    "At {size:?}, Add campaign starts at the field's left edge and its reason is \
-                     on the line below it: {placed:?}"
+                    "At {size:?}, Add campaign is on the Folder field's line, after it, and its \
+                     reason is on the line below at the field's edge (field, Add, reason): \
+                     {placed:?}"
                 ),
             );
         }
@@ -4899,7 +4986,10 @@ pub mod empty {
                 .nodes()
                 .iter()
                 .filter(|node| node.rect.top() > add.bottom() + crate::design::L)
-                .filter(|node| !node.name.is_empty() && node.name != ADD_REASON)
+                // Cancel comes on the reason's line once there is something to cancel.
+                .filter(|node| {
+                    !node.name.is_empty() && node.name != ADD_REASON && node.name != "Cancel"
+                })
                 .map(|node| (node.name.clone(), node.rect.top().round() as i32))
                 .collect();
             tops.sort();
@@ -8647,12 +8737,11 @@ pub mod signed_in {
             "An added remote campaign has a status; an available campaign has an Add action",
         );
         d.click("Add Salt Road from D&D Beyond");
-        // Round 23 AM2/FM7: the form's last row starts at the labels' text edge. Round 26 FB6:
-        // that row is a creation form's, so bordered Add campaign starts it and quiet Cancel
-        // follows.
+        // Round 23 AM2/FM7: quiet Cancel starts the form's last row at the labels' text edge.
         let (add, labels) = d.at_size(DEFAULT, |d| {
             (
-                d.place_of("Add campaign").map(|add| add.left()),
+                d.place_of("Cancel")
+                    .and_then(|cancel| words_left_in(d, cancel)),
                 [d.painted_left("Campaign name"), d.painted_left("Folder")],
             )
         });
@@ -8663,7 +8752,7 @@ pub mod signed_in {
                     .iter()
                     .all(|label| label.is_some_and(|label| (add - label).abs() <= 1.0))
             }),
-            format!("Add campaign starts at {add:?}; the field labels at {labels:?}"),
+            format!("Cancel’s words start at {add:?}; the field labels at {labels:?}"),
         );
         d.state("import-remote-campaign", Sizes::Default);
         d.observe(

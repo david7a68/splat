@@ -10241,7 +10241,48 @@ pub fn campaign_copy_registered(d: &mut Driver<'_>) {
     );
     // The return shows the same result and Undo as before Build an encounter.
     d.assert_state_matches("copy-registered-after-build", "copy-registered");
-    d.click("Undo register campaign");
+    // Review round 26: Undo register campaign changes the registration and can change the active
+    // campaign, so it waits for an unsaved campaign draft and for a run, with the reason; the
+    // copy's bytes and the registration stay.
+    const UNDO: &str = "Undo register campaign";
+    let registered = |d: &mut Driver<'_>| {
+        (
+            d.app_mut().campaigns.all().len(),
+            fs::read(copy.join("Campaign.md")).unwrap(),
+        )
+    };
+    let start = registered(d);
+    go_campaign(d);
+    d.click_starting("Ashen Marches · ");
+    d.click("Use Ash Wraith");
+    go_settings(d);
+    d.wait_for_text(&result);
+    let draft_locked = d.is_disabled(UNDO);
+    let draft_kept = registered(d) == start;
+    go_campaign(d);
+    d.click_below("Save selections", "Discard");
+    go_settings(d);
+    d.wait_for_text(&result);
+    let free_again = !d.is_disabled(UNDO);
+    d.click("Make The Emberfall Marches the active campaign");
+    go_encounters(d);
+    resume_run_from_cold_start(d);
+    go_settings(d);
+    d.wait_for_text(&result);
+    let run_locked = d.is_disabled(UNDO) && d.visible_text("Close the run to change campaigns.");
+    let run_kept = registered(d) == start;
+    d.click("Back to run");
+    close_run(d);
+    go_settings(d);
+    d.observe(
+        "iter-26-C-undo-register-locked",
+        draft_locked && draft_kept && free_again && run_locked && run_kept,
+        format!(
+            "Undo locked by a draft {draft_locked} (kept {draft_kept}), free after Discard \
+             {free_again}, locked by a run {run_locked} (kept {run_kept})"
+        ),
+    );
+    d.click(UNDO);
     d.settle();
     let active = d.app_mut().campaigns.active_campaign().map(|c| c.id);
     d.observe(

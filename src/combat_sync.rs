@@ -3076,47 +3076,86 @@ mod tests {
         ctx.enable_accesskit();
         // Round 25 FD3: the action notice ends with its close icon, after its words.
         const TAKEN: &str = "D&D Beyond took the long rest.";
-        // Round 25 review: the result has a reserved place, so the first editable field keeps
-        // its y before the result, while it shows, after an error result and after it ends.
-        let field_top = |sync: &mut CombatSync| {
+        // Round 25 review, round 26: the result sits in the sheet's footer, drawn as Party draws
+        // it (the footer, then the sheet's scroll area sized to the footer's top), so the first
+        // editable field keeps its y before the result, while it shows, after an error result
+        // and after it ends, at 960, 1200 and 1920. The result must be in view while it lives.
+        let field_top = |sync: &mut CombatSync, size: egui::Vec2| {
             let out = ctx.run(
                 egui::RawInput {
-                    screen_rect: Some(egui::Rect::from_min_size(
-                        egui::Pos2::ZERO,
-                        egui::vec2(700.0, 600.0),
-                    )),
+                    screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
                     ..Default::default()
                 },
                 |ctx| {
-                    egui::CentralPanel::default().show(ctx, |ui| sync.show(ui));
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        let rest = ui.available_rect_before_wrap();
+                        ui.scope_builder(egui::UiBuilder::new().max_rect(rest), |ui| {
+                            let width = ui.available_width().min(crate::design::LIST_MEASURE);
+                            let mut footer = crate::design::Footer::new("sync_test_sheet", width);
+                            sync.footer_messages(&mut footer);
+                            let bottom = footer.show(ui);
+                            egui::ScrollArea::vertical()
+                                .id_salt("sync_test_sheet_body")
+                                .max_height((bottom - ui.cursor().top()).max(0.0))
+                                .auto_shrink([false, false])
+                                .show(ui, |ui| sync.show(ui));
+                        });
+                    });
                 },
             );
-            out.platform_output.accesskit_update.and_then(|update| {
+            let notice = out.shapes.iter().find_map(|clipped| match &clipped.shape {
+                egui::Shape::Text(text)
+                    if text.galley.job.text.starts_with("D&D Beyond")
+                        && clipped
+                            .clip_rect
+                            .contains_rect(egui::Rect::from_min_size(text.pos, text.galley.size())) =>
+                {
+                    Some(text.pos.y)
+                }
+                _ => None,
+            });
+            let top = out.platform_output.accesskit_update.and_then(|update| {
                 update.nodes.iter().find_map(|(_, node)| {
                     (node.label() == Some("Increase Current HP"))
                         .then(|| node.bounds().map(|bounds| bounds.y0))
                         .flatten()
                 })
-            })
+            });
+            (top, notice)
         };
-        let mut tops = Vec::new();
-        for notice in [
-            None,
-            Some(ActionNotice::Taken(TAKEN.into())),
-            Some(ActionNotice::Failed(
-                "D&D Beyond did not take the long rest. Check the sheet in D&D Beyond, then read it again before you send another change.".into(),
-            )),
-            None,
+        for size in [
+            egui::vec2(960.0, 640.0),
+            egui::vec2(1200.0, 800.0),
+            egui::vec2(1920.0, 1080.0),
         ] {
-            sync.action_notice = notice;
-            // Two passes: the first lays out, the second reads the settled place.
-            field_top(&mut sync);
-            tops.push(field_top(&mut sync));
+            let mut tops = Vec::new();
+            let mut shown = Vec::new();
+            for notice in [
+                None,
+                Some(ActionNotice::Taken(TAKEN.into())),
+                Some(ActionNotice::Failed(
+                    "D&D Beyond did not take the long rest. Check the sheet in D&D Beyond, then read it again before you send another change.".into(),
+                )),
+                None,
+            ] {
+                let expected = notice.is_some();
+                sync.action_notice = notice;
+                // Two passes: the first lays out, the second reads the settled place.
+                field_top(&mut sync, size);
+                let (top, notice) = field_top(&mut sync, size);
+                tops.push(top);
+                shown.push(notice.is_some() == expected);
+            }
+            assert!(
+                tops[0].is_some() && tops.iter().all(|top| *top == tops[0]),
+                "At {size:?}, Increase Current HP top with no result, a result, an error and none \
+                 again: {tops:?}"
+            );
+            assert!(
+                shown.iter().all(|shown| *shown),
+                "At {size:?}, the result is in view exactly while it lives: {shown:?}"
+            );
         }
-        assert!(
-            tops[0].is_some() && tops.iter().all(|top| *top == tops[0]),
-            "Increase Current HP top with no result, a result, an error and none again: {tops:?}"
-        );
         sync.action_notice = Some(ActionNotice::Taken(TAKEN.into()));
         let before = sync.desired.clone();
         for form in [

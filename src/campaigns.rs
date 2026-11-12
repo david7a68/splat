@@ -1080,19 +1080,24 @@ impl Campaigns {
     /// it ends with an edit, Save, Cancel or the next Discard), then a registered copy with
     /// `Undo register campaign`; then the error and its own recovery; then the plain add result.
     /// `list` is true in Settings, where the add results belong.
+    /// `blocked` is the page's lock (a run, a recording, an unsaved draft): the footer is outside
+    /// the list's lock, so an action here that changes the campaigns takes it too.
     pub fn footer_messages<'a>(
         me: &'a std::cell::RefCell<&mut Campaigns>,
         footer: &mut design::Footer<'a>,
         list: bool,
+        blocked: Option<&'a str>,
     ) {
         const DISCARDED: &str = "Campaign details draft discarded.";
-        let (discarded, added, copy, error) = {
+        let (discarded, added, copy, error, locked) = {
             let this = me.borrow();
+            let locked = blocked.or((!this.writable).then_some("Reload valid campaign settings first."));
             (
                 this.editing.is_some() && this.discarded_details.is_some(),
                 this.added.clone().filter(|_| list),
                 this.campaign_copy.is_some(),
                 this.error.clone(),
+                locked,
             )
         };
         if discarded {
@@ -1110,7 +1115,16 @@ impl Campaigns {
             footer.result(added.clone(), true, move |ui| {
                 // The registration result and its Undo are one message. Build an encounter is
                 // another choice: it starts below, at the message words. Only Undo is quiet.
-                if design::undo_message(ui, Tone::Success, &added, "Undo register campaign") {
+                // Review round 26: Undo changes the registration and can change the active
+                // campaign, so it waits for what blocks a campaign change, with the reason.
+                if crate::library::kept_undo_message(
+                    ui,
+                    Tone::Success,
+                    &added,
+                    "Undo register campaign",
+                    locked,
+                    true,
+                ) {
                     let mut this = me.borrow_mut();
                     if let Err(error) = this.undo_campaign_copy() {
                         this.error = Some(error);
@@ -1128,7 +1142,7 @@ impl Campaigns {
             });
         }
         if let Some(error) = error {
-            footer.reason(error.clone(), move |ui| Self::draw_error(me, ui, &error));
+            footer.reason(error.clone(), move |ui| Self::draw_error(me, ui, &error, locked));
         }
         if let Some(added) = added.filter(|_| !copy) {
             footer.result(added.clone(), false, move |ui| {
@@ -1140,15 +1154,20 @@ impl Campaigns {
     }
 
     /// An error, and its own recovery after it.
-    fn draw_error(me: &std::cell::RefCell<&mut Campaigns>, ui: &mut egui::Ui, error: &str) {
+    fn draw_error(
+        me: &std::cell::RefCell<&mut Campaigns>,
+        ui: &mut egui::Ui,
+        error: &str,
+        locked: Option<&str>,
+    ) {
         design::message(ui, Tone::Error, error);
         if error.contains("registered at another folder") {
-            let reason = me
+            let reason = locked.or(me
                 .borrow()
                 .name
                 .trim()
                 .is_empty()
-                .then_some("Type a name first.");
+                .then_some("Type a name first."));
             if Action::secondary("Register as a new campaign")
                 .blocked(reason)
                 .show(ui)
@@ -1169,7 +1188,7 @@ impl Campaigns {
         let error = self.error.clone();
         let cell = std::cell::RefCell::new(self);
         if let Some(error) = error {
-            Self::draw_error(&cell, ui, &error);
+            Self::draw_error(&cell, ui, &error, None);
         }
     }
 
@@ -1223,29 +1242,6 @@ impl Campaigns {
                 if std::mem::take(&mut self.focus_name) {
                     name.request_focus();
                 }
-                // The button sits on the field's line, and ends where the fields above end.
-                let room = ui.available_width();
-                let field = ui
-                    .vertical(|ui| {
-                        ui.set_max_width((room - BROWSE_WIDTH - design::S).max(120.0));
-                        design::small_text_field(ui, "Folder", &mut self.path, None, None)
-                    })
-                    .inner;
-                let browse = egui::Rect::from_min_size(
-                    egui::pos2(field.rect.right() + design::S, field.rect.top()),
-                    egui::vec2(BROWSE_WIDTH, field.rect.height()),
-                );
-                ui.scope_builder(egui::UiBuilder::new().max_rect(browse).layout(egui::Layout::right_to_left(egui::Align::Center)), |ui| {
-                    if Action::secondary("Browse…")
-                        .density(Density::Read)
-                        .show(ui)
-                        .clicked()
-                        && let Some(path) = crate::hermetic::pick_folder()
-                    {
-                        self.path = path.to_string_lossy().into_owned();
-                    }
-                });
-                design::help(ui, "Splat keeps this campaign’s notes, encounters and runs here. A folder in your Obsidian vault works.");
                 let submit = if editing {
                     "Save details"
                 } else {
@@ -1278,7 +1274,58 @@ impl Campaigns {
                         Action::secondary(submit)
                     }
                 };
+                // The buttons sit on the field's line, and end where the fields above end. Round 26
+                // FB6: in the add form, Add campaign follows the last field on its line.
+                let create_width = if editing {
+                    0.0
+                } else {
+                    action().natural_width(ui) + design::S
+                };
+                let room = ui.available_width();
+                let field = ui
+                    .vertical(|ui| {
+                        ui.set_max_width((room - BROWSE_WIDTH - design::S - create_width).max(120.0));
+                        design::small_text_field(ui, "Folder", &mut self.path, None, None)
+                    })
+                    .inner;
+                let browse = egui::Rect::from_min_size(
+                    egui::pos2(field.rect.right() + design::S, field.rect.top()),
+                    egui::vec2(BROWSE_WIDTH, field.rect.height()),
+                );
+                ui.scope_builder(egui::UiBuilder::new().max_rect(browse).layout(egui::Layout::right_to_left(egui::Align::Center)), |ui| {
+                    if Action::secondary("Browse…")
+                        .density(Density::Read)
+                        .show(ui)
+                        .clicked()
+                        && let Some(path) = crate::hermetic::pick_folder()
+                    {
+                        self.path = path.to_string_lossy().into_owned();
+                    }
+                });
                 let mut commit = false;
+                if !editing {
+                    let create = egui::Rect::from_min_size(
+                        egui::pos2(browse.right() + design::S, field.rect.top()),
+                        egui::vec2(create_width - design::S, field.rect.height()),
+                    );
+                    ui.scope_builder(egui::UiBuilder::new().max_rect(create).layout(egui::Layout::left_to_right(egui::Align::Center)), |ui| {
+                        commit = action().blocked(reason).density(Density::Read).show(ui).clicked();
+                    });
+                    // The reason sits on its own line below, which stays when empty, so typing
+                    // moves nothing; quiet Cancel starts that line when there is something to
+                    // cancel.
+                    ui.horizontal(|ui| {
+                        ui.set_min_height(Type::Small.line());
+                        if !missing || self.remote.is_some() {
+                            if Action::quiet("Cancel").line_start().show(ui).clicked() {
+                                self.clear_form();
+                            }
+                            ui.add_space(design::L - ui.spacing().item_spacing.x);
+                        }
+                        design::blocked_reason(ui, reason);
+                    });
+                }
+                design::help(ui, "Splat keeps this campaign’s notes, encounters and runs here. A folder in your Obsidian vault works.");
                 if editing {
                     // A save row: state and Discard at the left, Save details at the right edge.
                     ui.horizontal(|ui| {
@@ -1318,21 +1365,6 @@ impl Campaigns {
                             design::blocked_reason(ui, reason.filter(|_| !unchanged));
                         });
                     });
-                } else {
-                    // Round 26 FB6: an inline creation form, as Manage packages and New entry
-                    // are: the Create action follows the fields at the form's left edge, quiet
-                    // Cancel an `L` gap after it, and the blocked reason on its own line below,
-                    // which stays when empty, so typing a name moves nothing.
-                    ui.horizontal(|ui| {
-                        commit = action().blocked(reason).show(ui).clicked();
-                        if !missing || self.remote.is_some() {
-                            ui.add_space(design::L - ui.spacing().item_spacing.x);
-                            if Action::quiet("Cancel").show(ui).clicked() {
-                                self.clear_form();
-                            }
-                        }
-                    });
-                    creation_reason(ui, reason);
                 }
                 if commit {
                     match self.save_form() {

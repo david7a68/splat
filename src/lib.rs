@@ -1658,7 +1658,12 @@ impl Splat {
                         let width = ui.available_width().min(design::LIST_MEASURE);
                         let campaigns = std::cell::RefCell::new(&mut self.campaigns);
                         let mut footer = design::Footer::new("settings_footer", width);
-                        campaigns::Campaigns::footer_messages(&campaigns, &mut footer, true);
+                        campaigns::Campaigns::footer_messages(
+                            &campaigns,
+                            &mut footer,
+                            true,
+                            blocked,
+                        );
                         self.settings.footer_messages(&mut footer);
                         self.dndbeyond.footer_messages(&mut footer, false);
                         footer.show(ui)
@@ -1935,6 +1940,7 @@ impl Splat {
                                     &campaigns,
                                     &mut footer,
                                     false,
+                                    blocked,
                                 );
                                 self.dndbeyond.footer_messages(&mut footer, true);
                                 footer.show(ui)

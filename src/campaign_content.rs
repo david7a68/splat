@@ -134,6 +134,9 @@ enum PageResult {
     /// A package manifest written again, by the package.
     ManifestWrite(Uuid),
     Removed,
+    /// A repair's discarded draft, by the stamp its Discard took (round 26: one order for every
+    /// live Undo on the page, repairs' and the page's alike).
+    RepairDiscard(u64),
     Saved,
     Applied,
 }
@@ -208,7 +211,9 @@ pub struct CampaignContent {
     discarded_selections: Option<(Vec<PackageSelection>, Option<String>)>,
     /// Each repair's discarded draft (its path and words), newest first. Round 26: one per
     /// repair, so a second repair's Discard keeps the first one's Undo.
-    discarded_repairs: Vec<(String, String)>,
+    discarded_repairs: Vec<(String, String, u64)>,
+    /// The next stamp for a repair's Discard.
+    repair_stamp: u64,
     /// The repair the DM edited or focused last. It owns the primary Save while it is open and
     /// changed; other changed repairs keep their drafts with a secondary Save.
     active_repair: Option<String>,
@@ -582,10 +587,21 @@ impl CampaignContent {
     /// Runs on every frame, on any page, so the sidebar can say when the DM has moves to review.
     pub fn tick(&mut self, ctx: &egui::Context, campaigns: &Campaigns) {
         self.finish_check();
+        // Round 26: a campaign change ends the Undos of the campaign that was open, at the
+        // change, even while this page is hidden; a page reload is not the only end.
+        let active = campaigns.active_campaign();
+        if let Some(active) = &active {
+            self.forget_discards_of_other_campaigns(active);
+        } else if self.active.is_some() {
+            self.discarded_selections = None;
+            self.discarded_repairs.clear();
+            self.removed_package = None;
+            self.campaign_write = None;
+        }
         if cfg!(test) {
             return;
         }
-        let Some(active) = campaigns.active_campaign() else {
+        let Some(active) = active else {
             return;
         };
         let due = self.reconcile.campaign != Some(active.id)
@@ -779,7 +795,7 @@ impl CampaignContent {
                     // deleted. It lives through a reload that finds the repair again.
                     let repairs = &self.repairs;
                     self.discarded_repairs
-                        .retain(|(path, _)| repairs.iter().any(|repair| &repair.path == path));
+                        .retain(|(path, ..)| repairs.iter().any(|repair| &repair.path == path));
                     self.forget_discard_of_changed_file(result.as_ref().map(|s| &s.document));
                     match result {
                         Ok(snapshot) => {
@@ -934,11 +950,6 @@ impl CampaignContent {
         let reason = self.reason_words(campaigns, active);
         let warnings = self.package_warnings_of(campaigns);
         let warning_words = warnings.words();
-        let discarded: Vec<String> = self
-            .discarded_repairs
-            .iter()
-            .map(|(path, _)| path.clone())
-            .collect();
         // What each repair says, by its file.
         let repair_messages: Vec<(String, String, Option<String>, Option<String>)> = self
             .repairs
@@ -960,7 +971,6 @@ impl CampaignContent {
             .collect();
         let press = Cell::new(None);
         let write = Cell::new(false);
-        let undo_repair = Cell::new(None);
         let me = RefCell::new(&mut *self);
         let bottom = {
             let mut footer = design::Footer::new(("campaign_page_footer", active.id), width);
@@ -970,17 +980,6 @@ impl CampaignContent {
                 footer.result(words, true, move |ui| {
                     if let Some(pressed) = me.borrow().draw_one(ui, kind, locked) {
                         press.set(Some((kind, pressed)));
-                    }
-                });
-            }
-            for path in &discarded {
-                let Some((_, name, _, _)) = repair_messages.iter().find(|(p, ..)| p == path) else {
-                    continue;
-                };
-                let undo_repair = &undo_repair;
-                footer.result(format!("{name} draft discarded."), true, move |ui| {
-                    if design::draft_discarded(ui, name) {
-                        undo_repair.set(Some(path.clone()));
                     }
                 });
             }
@@ -1027,14 +1026,6 @@ impl CampaignContent {
         this.press_result(press.take());
         if write.get() {
             this.write_campaign(campaigns, active);
-        }
-        if let Some(path) = undo_repair.take()
-            && let Some(at) = this.discarded_repairs.iter().position(|(p, _)| *p == path)
-            && let (_, text) = this.discarded_repairs.remove(at)
-            && let Some(repair) = this.repairs.iter_mut().find(|repair| repair.path == path)
-        {
-            repair.draft = text;
-            repair.draft_changed(active, &mut this.repair_checks);
         }
         bottom
     }
@@ -1094,6 +1085,9 @@ impl CampaignContent {
                 .removed_package
                 .as_ref()
                 .is_some_and(|removed| removed.campaign == active.id),
+            PageResult::RepairDiscard(stamp) => {
+                self.discarded_repairs.iter().any(|(.., s)| s == stamp)
+            }
             PageResult::Saved => self.message.is_some(),
             PageResult::Applied => self.reconcile.message.is_some(),
         };
@@ -1110,11 +1104,24 @@ impl CampaignContent {
                     .iter()
                     .map(|(id, _, _)| PageResult::ManifestWrite(*id)),
             )
+            .chain(
+                self.discarded_repairs
+                    .iter()
+                    .map(|(.., stamp)| PageResult::RepairDiscard(*stamp)),
+            )
             .chain([PageResult::Removed, PageResult::Saved, PageResult::Applied]);
         results.extend(every.filter(|kind| live(kind) && !self.result_order.contains(kind)));
         // Stable: the order within each group stays newest first.
         results.sort_by_key(|kind| !kind.has_undo());
         results
+    }
+
+    /// The file name of a repair's discarded draft, by its stamp.
+    fn discarded_repair(&self, stamp: u64) -> Option<&str> {
+        self.discarded_repairs
+            .iter()
+            .find(|(.., s)| *s == stamp)
+            .map(|(path, ..)| path.rsplit('/').next().unwrap_or(path))
     }
 
     /// One live result's words.
@@ -1130,6 +1137,10 @@ impl CampaignContent {
                 })
                 .unwrap_or_default(),
             PageResult::Discarded => "Campaign packages draft discarded.".into(),
+            PageResult::RepairDiscard(stamp) => self
+                .discarded_repair(stamp)
+                .map(|name| format!("{name} draft discarded."))
+                .unwrap_or_default(),
             PageResult::ManifestWrite(package) => self
                 .manifest_writes
                 .iter()
@@ -1169,6 +1180,9 @@ impl CampaignContent {
                 "Undo folder recovery",
             )),
             PageResult::Discarded => undo(design::draft_discarded(ui, "Campaign packages")),
+            PageResult::RepairDiscard(stamp) => self
+                .discarded_repair(stamp)
+                .and_then(|name| undo(design::draft_discarded(ui, name))),
             PageResult::ManifestWrite(package) => self
                 .manifest_writes
                 .iter()
@@ -1250,6 +1264,17 @@ impl CampaignContent {
                         self.found_package = Some(previous);
                     } else {
                         self.forget_package = Some(module.id);
+                    }
+                }
+            }
+            PageResult::RepairDiscard(stamp) => {
+                if let Some(at) = self.discarded_repairs.iter().position(|(.., s)| *s == stamp) {
+                    let (path, text, _) = self.discarded_repairs.remove(at);
+                    if let Some(repair) = self.repairs.iter_mut().find(|r| r.path == path)
+                        && let Some(active) = self.active.clone()
+                    {
+                        repair.draft = text;
+                        repair.draft_changed(&active, &mut self.repair_checks);
                     }
                 }
             }
@@ -1589,15 +1614,18 @@ impl CampaignContent {
                                             .show(ui)
                                             .clicked()
                                     {
-                                        self.discarded_repairs.retain(|(p, _)| p != path);
+                                        self.discarded_repairs.retain(|(p, ..)| p != path);
+                                        let stamp = self.repair_stamp;
+                                        self.repair_stamp += 1;
                                         self.discarded_repairs
-                                            .insert(0, (path.clone(), repair.draft.clone()));
+                                            .insert(0, (path.clone(), repair.draft.clone(), stamp));
+                                        new_result!(self, PageResult::RepairDiscard(stamp));
                                         repair.draft = repair.baseline.clone();
                                         repair.draft_changed(active, checks);
                                     }
                                     // This repair's next edit ends its own result only.
                                     if repair.dirty() {
-                                        self.discarded_repairs.retain(|(p, _)| p != path);
+                                        self.discarded_repairs.retain(|(p, ..)| p != path);
                                     }
                                     if repair.dirty() {
                                         // Save refuses the draft: Discard is the one way to switch.
@@ -3123,8 +3151,8 @@ mod tests {
             discarded_selections: Some((Vec::new(), None)),
             // Round 26: two repairs' discards, each with its own Undo.
             discarded_repairs: vec![
-                ("note.md".into(), "words".into()),
-                ("other.md".into(), "more".into()),
+                ("note.md".into(), "words".into(), 0),
+                ("other.md".into(), "more".into(), 1),
             ],
             ..Default::default()
         };
