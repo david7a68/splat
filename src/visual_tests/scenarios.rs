@@ -10564,6 +10564,7 @@ pub mod world {
         d.settle();
         d.expect("Add to fight");
         d.expect("NPC · alive · Campaign");
+        d.expect("Change Status");
         d.state("world-new-npc", Sizes::Default);
         d.click("Add to fight");
         d.type_into("Stat block", "Guard");

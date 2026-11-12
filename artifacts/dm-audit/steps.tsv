@@ -265,3 +265,7 @@ after	A new day starts: take the supply wagon's torches	Do	Add Day	1	Timeline		f
 after	A new day starts: take the supply wagon's torches	Panel	Ctrl+T	1	Timeline		false
 after	A new day starts: take the supply wagon's torches	Do	Done: Supply wagon, Day 2	1	Timeline		false
 after	A new day starts: take the supply wagon's torches	Panel	Ctrl+T	1	Timeline		false
+after	Set-up	Setup	Hobb's note holds an open question	0	Timeline		false
+after	The table settles an open question: tick it	Nav	World	1	Timeline	World	false
+after	The table settles an open question: tick it	Sub	Open questions	1	World		false
+after	The table settles an open question: tick it	Do	Open: Who paid the toll collectors?	1	World		false

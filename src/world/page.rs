@@ -124,6 +124,25 @@ type Held = (
     Vec<String>,
 );
 
+/// A question that the DM ticked in Open questions, kept for its `Undo tick` by the note's ID
+/// and the line that holds its box.
+struct Tick {
+    campaign: Uuid,
+    note: Uuid,
+    /// The body line that holds the box, and that line before the tick.
+    at: usize,
+    line: String,
+    /// The result's words: the question and its note.
+    words: String,
+}
+
+/// What the DM did in a checks view: open a page at a heading, or tick the question at this
+/// place in `Checks::questions`.
+enum CheckAct {
+    Open(usize, Option<String>),
+    Tick(usize),
+}
+
 /// What the page's larger part shows.
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
 enum View {
@@ -169,6 +188,10 @@ pub struct WorldPage {
     checks: Option<(u64, super::checks::Checks)>,
     /// Repair causes are read and parsed only when the index generation changes.
     broken_details: std::collections::BTreeMap<String, BrokenDetail>,
+    /// Ticked questions with a live `Undo tick`, oldest first.
+    ticks: Vec<Tick>,
+    /// Why the last tick, or its Undo, wrote nothing.
+    tick_error: Option<String>,
 }
 
 /// One unreadable note's row words.
@@ -211,6 +234,14 @@ impl WorldPage {
             return;
         }
         self.checks = Some((index.generation(), super::checks::run(index)));
+        // A tick's Undo lives while its note holds the ticked line where the tick wrote it.
+        self.ticks.retain(|tick| {
+            index
+                .position(tick.note)
+                .and_then(|at| read(&index.items[at].entry.path))
+                .and_then(Result::ok)
+                .is_some_and(|text| tick_file(&text, tick.at, &tick.line, false).is_some())
+        });
         self.broken_details = index
             .broken_world
             .iter()
@@ -260,6 +291,8 @@ impl WorldPage {
             self.generated = None;
             self.generated_shown = false;
             self.discarded_npc = None;
+            self.ticks.clear();
+            self.tick_error = None;
         }
     }
 
@@ -644,16 +677,26 @@ impl WorldPage {
                     return;
                 }
                 if self.view != View::Reader {
-                    let opened = egui::ScrollArea::vertical()
+                    let bottom = if self.view == View::Questions {
+                        self.questions_footer(ui, index, campaign)
+                    } else {
+                        ui.max_rect().bottom()
+                    };
+                    let act = egui::ScrollArea::vertical()
                         .id_salt(("world_checks", self.view == View::Questions))
+                        .max_height((bottom - ui.cursor().top()).max(0.0))
                         .auto_shrink([false, false])
                         .show(ui, |ui| {
                             design::reader::measure(ui, |ui| self.checks_view(ui, index))
                         })
                         .inner;
-                    if let Some((page, heading)) = opened {
-                        self.open_note(index.items[page].entry.id);
-                        self.reader.show_heading(heading);
+                    match act {
+                        Some(CheckAct::Open(page, heading)) => {
+                            self.open_note(index.items[page].entry.id);
+                            self.reader.show_heading(heading);
+                        }
+                        Some(CheckAct::Tick(at)) => self.tick_question(index, campaign, at),
+                        None => {}
                     }
                     return;
                 }
@@ -668,9 +711,11 @@ impl WorldPage {
                     let mut lines: Vec<_> =
                         self.result(None).iter().map(|(r, _)| r.line()).collect();
                     // A Log line whose entry is gone says its words here too.
-                    lines.extend(self.reader.gone_log_notices());
-                    if super::draw_footer(ui, "world_footer", &lines).0.is_some() {
-                        self.undo_discard();
+                    lines.extend(self.reader.gone_log_notices(Some(campaign.id)));
+                    match super::draw_footer(ui, "world_footer", &lines).0 {
+                        Some(super::FooterAct::GoneLog(id)) => self.reader.end_gone_log(id),
+                        Some(_) => self.undo_discard(),
+                        None => {}
                     }
                     design::empty_state(
                         ui,
@@ -1069,13 +1114,10 @@ impl WorldPage {
 
     /// The open questions, or the problems. Returns the page a press asks for, with the
     /// heading to show.
-    fn checks_view(
-        &mut self,
-        ui: &mut egui::Ui,
-        index: &ContentIndex,
-    ) -> Option<(usize, Option<String>)> {
+    fn checks_view(&mut self, ui: &mut egui::Ui, index: &ContentIndex) -> Option<CheckAct> {
         let (_, checks) = self.checks.as_ref()?;
         let mut open = None;
+        let mut tick = None;
         let note = |ui: &mut egui::Ui, words: &str| {
             ui.add(egui::Label::new(Type::Small.rich(ui, words).color(colors().muted)).wrap());
         };
@@ -1086,21 +1128,36 @@ impl WorldPage {
         };
         // One page's lines, then its name. The page answers "which questions are open?", so
         // each line is `Body` first and opens the note at its heading; the note that holds them
-        // follows in `Small` (round 26 FE4).
+        // follows in `Small` (round 26 FE4). An open question has its box before its words.
+        let questions = self.view == View::Questions;
         let mut by_page = |ui: &mut egui::Ui, found: &[super::checks::Found]| {
+            let mut place = 0;
             for group in found.chunk_by(|a, b| a.page == b.page).take(CHECK_ROWS) {
                 ui.push_id(group[0].page, |ui| {
                     for line in group {
-                        if design::wrapped_link(ui, &line.words).clicked() {
-                            open = Some((line.page, line.heading.clone()));
+                        let clicked = if questions {
+                            let (ticked, clicked) = question_row(ui, index, line);
+                            if ticked {
+                                tick = Some(place);
+                            }
+                            clicked
+                        } else {
+                            design::wrapped_link(ui, &line.words).clicked()
+                        };
+                        if clicked {
+                            open = Some(CheckAct::Open(line.page, line.heading.clone()));
                         }
+                        place += 1;
                     }
                     ui.horizontal_wrapped(|ui| {
+                        if questions {
+                            ui.add_space(QUESTION_BOX);
+                        }
                         ui.spacing_mut().item_spacing.x = 0.0;
                         note(ui, "In ");
                         if design::small_link(ui, &index.items[group[0].page].entry.name).clicked()
                         {
-                            open = Some((group[0].page, None));
+                            open = Some(CheckAct::Open(group[0].page, None));
                         }
                     });
                     ui.add_space(design::S);
@@ -1112,11 +1169,11 @@ impl WorldPage {
             design::reader::title(ui, "Open questions");
             design::reader::subtitle(
                 ui,
-                "Each unticked task line in the world’s notes. Tick it in the note when you decide.",
+                "Each unticked task line in the world’s notes. Tick a question when you decide.",
             );
             ui.add_space(design::S);
             by_page(ui, &checks.questions);
-            return open;
+            return tick.map(CheckAct::Tick).or(open);
         }
         design::reader::title(ui, PROBLEMS_TITLE);
         design::reader::subtitle(ui, PROBLEMS_INTRO);
@@ -1131,7 +1188,7 @@ impl WorldPage {
         let mut pages = |ui: &mut egui::Ui, pages: &[usize]| {
             for &page in pages {
                 if design::link(ui, &index.items[page].entry.name).clicked() {
-                    open = Some((page, None));
+                    open = Some(CheckAct::Open(page, None));
                 }
             }
         };
@@ -1197,6 +1254,133 @@ impl WorldPage {
             }
         }
         open
+    }
+
+    /// Tick the question at this place in Open questions: one character of its note, at the
+    /// line its box was drawn from, as read. A changed line, or an open edit form of the note,
+    /// writes nothing and says why in the pane's footer.
+    fn tick_question(&mut self, index: &ContentIndex, campaign: &Campaign, place: usize) {
+        let Some(found) = self
+            .checks
+            .as_ref()
+            .and_then(|(_, checks)| checks.questions.get(place))
+        else {
+            return;
+        };
+        let Some((at, line)) = found.open_box.clone() else {
+            return;
+        };
+        let item = &index.items[found.page];
+        let (note, name) = (item.entry.id, item.entry.name.clone());
+        let words = format!("\u{201c}{}\u{201d} ticked in {name}.", found.words);
+        let result = self.write_tick(campaign, item, at, &line, true);
+        self.tick_error = result.err();
+        if self.tick_error.is_none() {
+            self.ticks
+                .retain(|tick| !(tick.note == note && tick.at == at));
+            self.ticks.push(Tick {
+                campaign: campaign.id,
+                note,
+                at,
+                line,
+                words,
+            });
+            self.reload = true;
+        }
+    }
+
+    /// `Undo tick`: the box of that question, in that note at that line, is open again while
+    /// the line holds the tick.
+    fn untick(&mut self, index: &ContentIndex, campaign: &Campaign, note: Uuid, at: usize) {
+        let Some(place) = self
+            .ticks
+            .iter()
+            .position(|tick| tick.note == note && tick.at == at)
+        else {
+            return;
+        };
+        let tick = &self.ticks[place];
+        let result = if tick.campaign != campaign.id {
+            Err("This tick belongs to another campaign. Nothing was changed.".to_owned())
+        } else {
+            match index.position(note) {
+                Some(position) => {
+                    self.write_tick(campaign, &index.items[position], at, &tick.line, false)
+                }
+                None => Err("The note of this question is gone. Nothing was changed.".to_owned()),
+            }
+        };
+        self.tick_error = result.err();
+        if self.tick_error.is_none() {
+            self.ticks.remove(place);
+            self.reload = true;
+        }
+    }
+
+    /// Set one question's box in its note through the World's one write path, which writes
+    /// only when the file still holds what this act read.
+    fn write_tick(
+        &self,
+        campaign: &Campaign,
+        item: &crate::lookup::Item,
+        at: usize,
+        line: &str,
+        done: bool,
+    ) -> Result<(), String> {
+        let name = &item.entry.name;
+        if self.reader.editing(item.entry.id, campaign)
+            || self.reader.edited_elsewhere.contains(&item.entry.id)
+        {
+            return Err(format!("Save or discard your edit of {name} first."));
+        }
+        let before = super::file_fault::read_note(&campaign.path, &item.entry.path)?;
+        // Another note that took this file's place outside Splat is not this question's note.
+        if splat::content::note_id(&before) != Some(item.entry.id) {
+            return Err(format!("{name} changed on disk. Nothing was written."));
+        }
+        let after = tick_file(&before, at, line, done)
+            .ok_or_else(|| format!("This question changed in {name}. Nothing was written."))?;
+        crate::library::write_note(&campaign.path, &item.entry.path, Some(&before), &after)
+            .map(|_| ())
+    }
+
+    /// Open questions' footer: each tick's result with its `Undo tick`, newest first, then why
+    /// the last tick wrote nothing. Returns where the questions end.
+    fn questions_footer(
+        &mut self,
+        ui: &mut egui::Ui,
+        index: &ContentIndex,
+        campaign: &Campaign,
+    ) -> f32 {
+        let mut lines: Vec<_> = self
+            .ticks
+            .iter()
+            .rev()
+            .map(|tick| {
+                super::FooterLine::new(
+                    super::FooterRank::Undo,
+                    super::CHANGED,
+                    &tick.words,
+                    super::FooterKind::Undo {
+                        label: "Undo tick",
+                        act: super::FooterAct::Untick(tick.note, tick.at),
+                    },
+                )
+            })
+            .collect();
+        lines.extend(self.tick_error.as_ref().map(|error| {
+            super::FooterLine::new(
+                super::FooterRank::Reason,
+                design::Tone::Error,
+                error,
+                super::FooterKind::Error { editor: None },
+            )
+        }));
+        let (pressed, bottom) = super::draw_footer(ui, "world_footer", &lines);
+        if let Some(super::FooterAct::Untick(note, at)) = pressed {
+            self.untick(index, campaign, note, at);
+        }
+        bottom
     }
 
     fn list(&mut self, ui: &mut egui::Ui, index: &ContentIndex, groups: &WorldGroups) {
@@ -1335,6 +1519,67 @@ fn new_menu(ui: &mut egui::Ui) -> Option<&'static str> {
         }
     });
     choice
+}
+
+/// The room before a question's words: its box's 24 px target and an `S` gap.
+const QUESTION_BOX: f32 = design::XL + design::S;
+
+/// One open question: its box, when Splat can write its note, then its words as a link that
+/// opens the note at its heading. A note that Splat does not write keeps the box's room, so the
+/// words keep one column. Returns whether the box and the words were clicked.
+fn question_row(
+    ui: &mut egui::Ui,
+    index: &ContentIndex,
+    found: &super::checks::Found,
+) -> (bool, bool) {
+    ui.horizontal_top(|ui| {
+        ui.spacing_mut().item_spacing.x = 0.0;
+        let (slot, _) =
+            ui.allocate_exact_size(egui::vec2(QUESTION_BOX, design::XL), egui::Sense::hover());
+        let mut ticked = false;
+        if found.open_box.is_some() && super::edit::editable(&index.items[found.page], index) {
+            let mut cell = ui.new_child(
+                egui::UiBuilder::new()
+                    .max_rect(egui::Rect::from_min_size(
+                        slot.min,
+                        egui::vec2(design::XL, design::XL),
+                    ))
+                    .layout(egui::Layout::left_to_right(egui::Align::Center)),
+            );
+            cell.spacing_mut().interact_size.y = design::XL;
+            let mut done = false;
+            let response = cell.add(egui::Checkbox::without_text(&mut done));
+            design::named(ui, &response, &format!("Open: {}", found.words));
+            ticked = response.clicked();
+        }
+        let clicked = ui
+            .vertical(|ui| design::wrapped_link(ui, &found.words).clicked())
+            .inner;
+        (ticked, clicked)
+    })
+    .inner
+}
+
+/// The note's text with the box of an open question set: `question` is the question as read
+/// (unticked), its first line and continuation lines joined by `\n`, and `at` its first line in
+/// the note's body. `None` unless that place holds the whole question, its box in the other
+/// state: the act never looks for another line that reads the same.
+pub(super) fn tick_file(text: &str, at: usize, question: &str, done: bool) -> Option<String> {
+    let front =
+        crate::sessions::split_note(text).map_or(0, |(front, _)| front.matches('\n').count());
+    let mut lines = question.split('\n');
+    let line = lines.next()?;
+    let mut held = text.split('\n').skip(front + at + 1);
+    if !lines.all(|wanted| held.next().map(|at| at.trim_end_matches('\r')) == Some(wanted)) {
+        return None;
+    }
+    let ticked = crate::sessions::ticked(line, true);
+    let (from, to) = if done {
+        (line, ticked.as_str())
+    } else {
+        (ticked.as_str(), line)
+    };
+    crate::sessions::change_line(text, front + at, from, Some(to))
 }
 
 #[cfg(test)]

@@ -12,6 +12,8 @@ pub struct Found {
     pub page: usize,
     pub heading: Option<String>,
     pub words: String,
+    /// An open question's box: its line in the page's body and that line as read.
+    pub open_box: Option<(usize, String)>,
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -69,9 +71,13 @@ pub fn run(index: &ContentIndex) -> Checks {
                 page,
                 heading: line.heading.clone(),
                 words,
+                open_box: None,
             };
             if line.task == Some(false) {
-                checks.questions.push(found(line.words()));
+                checks.questions.push(Found {
+                    open_box: line.open_box.clone(),
+                    ..found(line.words())
+                });
             }
             for target in line.link_targets() {
                 // A file that is not a note, such as a PDF, is not a page to write.
@@ -247,6 +253,39 @@ mod tests {
                 ("Setting", "One treaty or several?")
             ]
         );
+        // X45 of app round 2: a question knows the line of its note that holds its box, and a
+        // tick sets that box only while the line is as read.
+        let tick_file = super::super::page::tick_file;
+        let (at, line) = checks.questions[0].open_box.clone().unwrap();
+        let file = std::fs::read_to_string(dir.path().join("Places/Kabrigar.md")).unwrap();
+        let ticked = tick_file(&file, at, &line, true).unwrap();
+        assert_eq!(
+            ticked,
+            file.replacen("- [ ] Who rules it now?", "- [x] Who rules it now?", 1)
+        );
+        // An unrelated edit of the note after the tick stays when Undo opens the box again.
+        let edited = format!("{ticked}- More words.\n");
+        assert_eq!(
+            tick_file(&edited, at, &line, false).unwrap(),
+            format!("{file}- More words.\n")
+        );
+        assert_eq!(tick_file(&file, at, &line, false), None);
+        let reworded = file.replace("Who rules it now?", "Who rules it?");
+        assert_eq!(tick_file(&reworded, at, &line, true), None);
+        // The question as read is the whole question: a changed continuation line is not it
+        // (review round 1 of PR 287).
+        let body = "- [ ] Who pays Rook\n  to open the gate?\n";
+        let (at, question) = super::super::lines::lines(body, "Rook")
+            .into_iter()
+            .find_map(|line| line.open_box)
+            .unwrap();
+        assert_eq!(question, "- [ ] Who pays Rook\n  to open the gate?");
+        assert_eq!(
+            tick_file(body, at, &question, true).as_deref(),
+            Some("- [x] Who pays Rook\n  to open the gate?\n")
+        );
+        let changed = body.replace("open the gate", "kill the king");
+        assert_eq!(tick_file(&changed, at, &question, true), None);
         // Kaun has no page, and two lines want it.
         assert_eq!(checks.wanted.len(), 1);
         assert_eq!(

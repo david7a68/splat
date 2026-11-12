@@ -33,6 +33,10 @@ pub struct Line {
     pub bare: bool,
     /// A task line: `Some(true)` when it is ticked.
     pub task: Option<bool>,
+    /// An unticked task line's box: the number of the body's line that holds it, and the whole
+    /// question as read, that line and its continuation lines joined by `\n`, so a tick finds
+    /// exactly this question.
+    pub open_box: Option<(usize, String)>,
     /// Under the Log heading, or under a heading inside the Log.
     log: bool,
 }
@@ -362,19 +366,26 @@ fn line(kind: Kind, heading: &Option<String>, log: bool, raw: &str) -> Option<Li
         links,
         targets,
         task,
+        open_box: None,
         log,
     })
 }
 
 /// Every line of a note's body. `title` is the note's name, whose heading is not a section.
 pub fn lines(body: &str, title: &str) -> Vec<Line> {
-    /// The open block: its kind and its raw words.
-    type Open = Option<(Kind, String)>;
+    /// The open block: its kind, its raw words, and for a list item its first line's number and
+    /// words as read.
+    type Open = Option<(Kind, String, Option<(usize, String)>)>;
     /// The heading above, and the level of the Log heading when the lines are inside it.
     type Section = (Option<String>, Option<usize>);
     fn close(found: &mut Vec<Line>, open: &mut Open, (heading, log): &Section) {
-        if let Some((kind, raw)) = open.take() {
-            found.extend(line(kind, heading, log.is_some(), &raw));
+        if let Some((kind, raw, first)) = open.take() {
+            found.extend(line(kind, heading, log.is_some(), &raw).map(|mut line| {
+                if line.task == Some(false) {
+                    line.open_box = first;
+                }
+                line
+            }));
         }
     }
     let mut found = Vec::new();
@@ -382,7 +393,7 @@ pub fn lines(body: &str, title: &str) -> Vec<Line> {
     let mut open: Open = None;
     let mut fence = false;
     let mut header_row = false;
-    for source in body.lines() {
+    for (number, source) in body.lines().enumerate() {
         // A quote or a callout holds lines too.
         let mut text = source.trim_start();
         while let Some(rest) = text.strip_prefix('>') {
@@ -439,15 +450,24 @@ pub fn lines(body: &str, title: &str) -> Vec<Line> {
         header_row = false;
         if let Some(rest) = list_marker(text) {
             close(&mut found, &mut open, &heading);
-            open = Some((Kind::Item, rest.to_owned()));
+            let first = rest
+                .trim_start()
+                .starts_with("[ ] ")
+                .then(|| (number, source.to_owned()));
+            open = Some((Kind::Item, rest.to_owned(), first));
             continue;
         }
         match &mut open {
-            Some((_, raw)) => {
+            Some((_, raw, first)) => {
                 raw.push(' ');
                 raw.push_str(text);
+                // The question as read holds its continuation lines too.
+                if let Some((_, question)) = first {
+                    question.push('\n');
+                    question.push_str(source);
+                }
             }
-            None => open = Some((Kind::Paragraph, text.to_owned())),
+            None => open = Some((Kind::Paragraph, text.to_owned(), None)),
         }
     }
     close(&mut found, &mut open, &heading);
@@ -559,6 +579,11 @@ mod tests {
         assert!(found[7].in_log() && !found[5].in_log());
         assert_eq!(found[8].task, Some(false));
         assert_eq!(found[7].task, None);
+        // An open question knows the line that holds its box, as read.
+        let (at, line) = found[8].open_box.clone().expect("the open question's box");
+        assert_eq!(ZAREL.lines().nth(at), Some(line.as_str()));
+        assert!(line.starts_with("- [ ] Does Zarel know"));
+        assert_eq!(found[7].open_box, None);
         assert_eq!(found[5].link_targets(), ["Tournament", "Undercroft"]);
     }
 
