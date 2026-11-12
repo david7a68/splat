@@ -2948,7 +2948,9 @@ pub fn keep_above_footer(ui: &Ui, response: &Response) {
         .and_then(|id| ctx.read_response(id))
         .map(|field| field.rect)
         .filter(|field| field.intersects(clip));
-    let by = (rect.bottom() - view.bottom()).min(next.owed);
+    // egui puts scrolled content on whole pixels, so the row needs the delta rounded up.
+    let need = (rect.bottom() - view.bottom()).ceil();
+    let by = need.min(next.owed.ceil());
     // What holds the reveal back; only the checks read it.
     #[cfg_attr(not(test), allow(unused_variables))]
     let held = if next.owed <= 0.0 {
@@ -2961,7 +2963,7 @@ pub fn keep_above_footer(ui: &Ui, response: &Response) {
         ui.scroll_with_delta_animation(vec2(0.0, -by), egui::style::ScrollAnimation::none());
         ctx.request_discard("a next action came back into view above its footer");
         top -= by;
-        next.capped = by < rect.bottom() - view.bottom() - 0.5;
+        next.capped = by < need;
         next.owed = 0.0;
         None
     };

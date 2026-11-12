@@ -11681,11 +11681,10 @@ pub mod session_notes {
         // The save row whole in view before a letter brings the warning, as the DM sees it with
         // a short folder path. A long path (a deep checkout) puts it lower; the reveal never pulls
         // back a row that was already cut, so the scenario scrolls it whole first.
-        let save_row_whole = |d: &mut Driver<'_>| {
-            for _ in 0..10 {
+        let scroll_whole = |d: &mut Driver<'_>, name: &str| {
+            for _ in 0..15 {
                 let whole = d.nodes().iter().any(|node| {
-                    (node.name.ends_with("No changes") || node.name.ends_with("Unsaved"))
-                        && node.fully_in_view()
+                    (node.name == name || node.name.ends_with(name)) && node.fully_in_view()
                 });
                 if whole {
                     break;
@@ -11693,6 +11692,14 @@ pub mod session_notes {
                 d.scroll_points_at(pos2(600.0, 300.0), 40.0);
             }
             d.pointer_away();
+        };
+        let save_row_whole = |d: &mut Driver<'_>| {
+            let row = if d.has_containing("Unsaved") {
+                "Unsaved"
+            } else {
+                "No changes"
+            };
+            scroll_whole(d, row);
         };
         d.app_mut().timeline.save();
         save_row_whole(d);
@@ -11724,6 +11731,14 @@ pub mod session_notes {
         save_row_whole(d);
         d.replace_text_in("Folder", "30 Sessions");
         d.expect("Save without moving");
+        // R3f X40: at 960x640 the warning came while the save row was whole, so the reveal
+        // brought it back whole above the footer, with no resize in between.
+        super::session_recording::check_row_clear_of_footer(
+            d,
+            "Move files and save",
+            "r3f-X40-move-clear",
+            true,
+        );
         // Review of PR 274, item 3: the footer and the form share one scan of the current folder,
         // so an unchanged frame lists its files at most once, as before the footer. The count is
         // kept inside `storage_files`.
@@ -11741,14 +11756,10 @@ pub mod session_notes {
         // FT4 (round 16): with no run and no other form, moving the files is the one primary,
         // as Move runs and save is on Rules and runs.
         d.state_prepared("session-folder-move-offered", Sizes::All, |d| {
+            // After a resize the rule may stop short (a narrower window wraps a long folder path
+            // onto more lines than the room lost); the DM scrolls, and so does the scenario.
+            scroll_whole(d, "Move files and save");
             super::session_recording::check_one_primary(d, "Move files and save", "iter-16-C-FT4");
-            // R3f X40: the warning came while the save row was whole.
-            super::session_recording::check_row_clear_of_footer(
-                d,
-                "Move files and save",
-                "r3f-X40-move-clear",
-                true,
-            );
             // iter-23-S FK8: the warning names which choice hides the files.
             d.observe(
                 "iter-23-S-FK8",
@@ -11765,6 +11776,9 @@ pub mod session_notes {
             .field_text("Campaign name")
             .expect("the campaign name field");
         d.type_into("Campaign name", " (edited)");
+        // Save details became the primary under the footer: the rule owes it nothing, and the
+        // DM scrolls to it.
+        scroll_whole(d, "Save details");
         super::session_recording::check_one_primary(
             d,
             "Save details",
