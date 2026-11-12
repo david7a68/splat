@@ -16,19 +16,6 @@ Each entry is one of three kinds:
   later change can be weighed.
 
 Every outcome that a journey states is an assertion on the saved file, read after the act (`Audit::outcome`).
-One outcome is recorded and not asserted, because the app is wrong on `main` today: J2-2.
-
-## J2-2. The fight that a road check names is on the day after the journey ends (app fault; recorded, not checked)
-
-- **Journey and step:** J2 step 7, at 1200x800. The Travel row of `2 days` starts on Day 1; its check at `24h`
-  (the second day) names the Wolf Pack; the DM presses `Plan “Wolf Pack”` and `Start fight`.
-- **What I saw:** in the saved `Timeline.md`, the Wolf Pack fight follows the whole journey, so the app's day
-  count (`timeline::day_numbers`) puts it on **Day 3**. The check that named it is on Day 2, and the design says
-  the fight is the second day's.
-- **What the script does:** it records `the Wolf Pack fight is on Day Some(3); the design says Day 2` in
-  `J2/summary.tsv` and does not fail. **To become an assertion when the road encounter's day is repaired** on
-  `main` (another pull request repairs it). Then the line in `improvised_evening` becomes an `a.outcome` that
-  the fight is on Day 2.
 
 ## J3-3. With unsaved words and a changed file, the comparison takes the note's place on the Session page (not walked by the design as measured)
 
@@ -98,6 +85,14 @@ One outcome is recorded and not asserted, because the app is wrong on `main` tod
 - **Now:** after the merge of `main` at `bd7ff4b0` (pull requests 280 and 281), the focus is in `How long`, and
   both steps cost what the design says. The script keeps both routes, so `summary.tsv` says where the focus
   is, and G6 goes red if it moves again.
+
+## J2-2. The fight that a road check names was on the day after the journey ended (repaired by 284)
+
+- **What I saw on `19cec3d2`:** the Travel row of `2 days` starts on Day 1, and its check at `24h` names the Wolf
+  Pack. `Plan “Wolf Pack”` and `Start fight` put the fight after the whole journey, so `Timeline.md` had it on
+  Day 3.
+- **Now:** on `53bb0156` (pull request 284), the fight is on Day 2, and J2 asserts it on the saved
+  `Timeline.md`.
 
 ## J3-2. A removed scene's `Undo remove` went away when the next fight began (W6-D1; repaired by 280)
 

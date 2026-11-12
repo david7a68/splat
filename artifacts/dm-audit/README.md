@@ -196,8 +196,7 @@ scripts found, as app faults, limits the design accepts, and tasks the design do
 session read: the session note (its plan, rewards blocks, carried parts, each line once), a World entry's Log,
 `Timeline.md` (each event and its day, by the app's own day count), `Trackers.md` (by the app's own ledger
 type), the run file, and the encounter. A wrong record fails the journey before its counts
-(`Audit::outcome`). One outcome is recorded and not checked, because `main` is wrong today: J2's road fight is
-on Day 3, not Day 2 (FINDINGS J2-2).
+(`Audit::outcome`).
 
 The tables put each step's measured count beside the count that section 2 promises, and beside "today" (the cost
 before the features) where the design gives it. **T** is a page transition.
@@ -229,8 +228,8 @@ into view.
 Checked on the saved files: each Log line once in `NPCs/Warden Ostrel.md`, stamped with the session and its
 day; one rewards block for each fight, with its XP line and the ring under Ostrel's; the fight with Ostrel on
 Day 1 and the journey of 2 days with one check for each day, the second naming the Wolf Pack; the Wolf Pack
-once, above the skipped fight; the talk ticked done once. The Wolf Pack fight is on Day 3, where the design says
-Day 2: recorded, not checked, until `main` repairs it (FINDINGS J2-2).
+once, above the skipped fight, and its fight on Day 2, the day of the check that named it (since pull request
+284; FINDINGS J2-2); the talk ticked done once.
 
 ### J3, the broken evening (960x640, Lookup open)
 

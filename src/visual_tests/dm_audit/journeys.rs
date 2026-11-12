@@ -513,12 +513,13 @@ fn improvised_evening(a: &mut Audit<'_, '_>) {
     a.act(Nav, CLOSE_RUN, close_run);
 
     // The Wolf Pack came from the check at 24h, the second day of the journey, so its fight is
-    // on Day 2. To become an assertion when the road encounter's day is repaired on `main`
-    // (FINDINGS.md, J2-2): the app puts it on Day 3 today.
+    // on Day 2 (pull request 284).
     let wolves = saved_event(a.d, WOLVES).map(|(_, day)| day);
-    a.fact(format!(
-        "the Wolf Pack fight is on Day {wolves:?}; the design says Day 2 (J2-2, recorded, not checked)"
-    ));
+    a.outcome(
+        "Timeline.md puts the Wolf Pack fight on Day 2, the day of the check that named it",
+        wolves == Some(2),
+        wolves,
+    );
 
     a.phase = "after";
     a.task("Put the Wolf Pack fight's rewards in the note");
