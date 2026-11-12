@@ -8,8 +8,8 @@ use crate::{
     encounter_run::RunGroup,
     encounters::PlanFight,
     sessions::{
-        ActFault, Note, NoteUndo, body_of, each_linked_name, list_recordings, section_text,
-        split_note, task_parts, ticked,
+        ActFault, Note, NoteUndo, body_of, each_linked_name, list_recordings, properties_yaml,
+        section_text, split_note, task_parts, ticked,
     },
     timeline::Book,
 };
@@ -60,21 +60,9 @@ struct Carried {
 /// The carry-over properties of a note's whole text. Properties that cannot be read carry
 /// nothing.
 fn carried(text: &str) -> Carried {
-    let Some((front, _)) = split_note(text) else {
-        return Carried::default();
-    };
-    front
-        .trim_start_matches('\u{feff}')
-        .trim_end()
-        .strip_suffix("---")
-        .map(|inner| inner.trim_start_matches("---"))
+    properties_yaml(text)
         .and_then(|inner| serde_yaml_ng::from_str(inner).ok())
         .unwrap_or_default()
-}
-
-/// The session a note carried from, once it did. Carry over then reads only that session.
-pub(super) fn carried_from(text: &str) -> Option<Uuid> {
-    carried(text).carried_from
 }
 
 /// The lines under `## heading` that hold words, up to the next heading of that level.
@@ -602,7 +590,7 @@ impl Sessions {
         let from = self
             .draft
             .as_ref()
-            .and_then(|draft| carried_from(&draft.text()));
+            .and_then(|draft| carried(&draft.text()).carried_from);
         let note = match from {
             Some(id) => self.notes.iter().find(|note| note.id == id)?,
             None => previous,
@@ -733,14 +721,14 @@ impl Sessions {
     /// The act. It reads the last session again at the click, and writes nothing when what the
     /// line offered changed; otherwise one save of this note through `Draft::apply`.
     fn carry_over(&mut self, session: Uuid, previous: Uuid, plan: &Plan<'_>, book: &Book) {
-        let Some(previous) = self.notes.iter().find(|note| note.id == previous).cloned() else {
+        let Some(previous) = self.notes.iter().find(|note| note.id == previous) else {
             return;
         };
         let shown = self
             .last_time
             .as_ref()
             .and_then(|(_, last)| last.as_ref()?.source.clone());
-        let now = self.carry_source(&previous, plan, book);
+        let now = self.carry_source(previous, plan, book);
         let seen = self
             .draft
             .as_ref()
@@ -896,7 +884,7 @@ fn embed_target(line: &str) -> Option<(&str, &str)> {
 impl Sessions {
     /// The open note's embeds of session notes' headings, read when its words or the content
     /// change and at each folder scan, never on a quiet frame. An embed of another note that
-    /// the content holds stays a link, as today.
+    /// the content holds stays a link.
     fn embeds(
         &mut self,
         index: Option<&crate::lookup::ContentIndex>,
@@ -1017,6 +1005,13 @@ impl Sessions {
         text: &str,
         embeds: &[EmbedLine],
     ) {
+        // No embed: no line to look for, so the words are not copied on each frame.
+        if embeds.is_empty() {
+            if !text.trim().is_empty() {
+                crate::markdown_view::show_reader(ui, text);
+            }
+            return;
+        }
         let mut part = String::new();
         let mut open = None;
         let mut update = None;

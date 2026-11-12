@@ -169,14 +169,20 @@ impl Note {
     }
 }
 
-fn parse_note(path: &Path, text: &str) -> Option<Note> {
+/// The YAML inside a note's properties block, without its fences.
+pub(crate) fn properties_yaml(text: &str) -> Option<&str> {
     let (front, _) = split_note(text)?;
-    let inner = front
-        .trim_start_matches('\u{feff}')
-        .trim_end()
-        .strip_suffix("---")?
-        .trim_start_matches("---");
-    let value: Value = serde_yaml_ng::from_str(inner).ok()?;
+    Some(
+        front
+            .trim_start_matches('\u{feff}')
+            .trim_end()
+            .strip_suffix("---")?
+            .trim_start_matches("---"),
+    )
+}
+
+fn parse_note(path: &Path, text: &str) -> Option<Note> {
+    let value: Value = serde_yaml_ng::from_str(properties_yaml(text)?).ok()?;
     let id = Uuid::parse_str(value.get("session_id")?.as_str()?).ok()?;
     let text_of = |name: &str| match value.get(name) {
         Some(Value::String(text)) => text.clone(),
