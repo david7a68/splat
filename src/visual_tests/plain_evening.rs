@@ -101,7 +101,7 @@ const SCENARIO: &str = "plain-evening";
 const WIDE: (f32, f32) = (1200.0, 800.0);
 const NARROW: (f32, f32) = (960.0, 640.0);
 /// Section 2.5 numbers its rows 1 to 22.
-const CONTRACT_ROWS: std::ops::RangeInclusive<u32> = 1..=24;
+const CONTRACT_ROWS: std::ops::RangeInclusive<u32> = 1..=26;
 /// What the test folder becomes in a run's `splat_run_source_path`.
 const WORLD: &str = "<world>";
 const SAME: &str = "the same as at the start";
@@ -1860,6 +1860,22 @@ mod allowed_classes {
             name: "R1c b: an act's words that scrolled out of or into History's view",
             fits: history::act_words,
         },
+        // R3g, rows 25 and 26 (by the lead's ruling after app round 2).
+        Class {
+            row: 25,
+            name: "R3g a: History kept the opened run in view: one scroll, the log 6 px lower",
+            fits: kept::history,
+        },
+        Class {
+            row: 25,
+            name: "R3g b: an act's words that scrolled out of or into History's view",
+            fits: history::act_words,
+        },
+        Class {
+            row: 26,
+            name: "R3g c: the editor's actions on the name's line beside Lookup, the rest one line up",
+            fits: kept::editor,
+        },
         // P7, F7.
         Class {
             row: 10,
@@ -2249,7 +2265,7 @@ mod allowed_classes {
         }
 
         /// `x y w h` of `x y wxh` or `x y wxh, seen …`.
-        fn numbers(text: &str) -> Option<[f32; 4]> {
+        pub(super) fn numbers(text: &str) -> Option<[f32; 4]> {
             let whole = text.split(',').next()?.replace('x', " ");
             let numbers: Vec<f32> = whole
                 .split_whitespace()
@@ -2268,7 +2284,7 @@ mod allowed_classes {
         }
 
         /// The part of the item in view after: its `seen` part, or the whole item.
-        fn shown_after(d: &Difference) -> Option<[f32; 4]> {
+        pub(super) fn shown_after(d: &Difference) -> Option<[f32; 4]> {
             let after = after_text(d)?;
             match after.split_once(", seen ") {
                 Some((_, seen)) => numbers(seen),
@@ -2277,7 +2293,7 @@ mod allowed_classes {
         }
 
         /// The item's place before and after.
-        fn places(d: &Difference) -> (Option<[f32; 4]>, Option<[f32; 4]>) {
+        pub(super) fn places(d: &Difference) -> (Option<[f32; 4]>, Option<[f32; 4]>) {
             match d.change.as_str() {
                 "gone" => (d.detail.strip_prefix("was ").and_then(numbers), None),
                 "new" => (None, d.detail.strip_prefix("at ").and_then(numbers)),
@@ -2290,7 +2306,7 @@ mod allowed_classes {
 
         /// How far the list scrolled in a view: how far the opened run's own row moved, with
         /// its place across and its size kept.
-        fn scroll(d: &Difference, rows: &[AllowedRow]) -> Option<f32> {
+        pub(super) fn scroll(d: &Difference, rows: &[AllowedRow]) -> Option<f32> {
             rows.iter()
                 .map(|row| &row.difference)
                 .filter(|o| (&o.screen, &o.view) == (&d.screen, &d.view))
@@ -2770,6 +2786,413 @@ mod allowed_classes {
                 let mut rows = vec![scroll.clone(), fault];
                 rows.push(row(LAST, "text", "gone", "Resume", "was 753.1 99 95.8x28"));
                 assert!(!fits(&rows), "{why} was accepted");
+            }
+        }
+    }
+
+    /// R3g's classes, rows 25 and 26 (by the lead's ruling after app round 2), measured
+    /// against the reference this pull request froze at bd7ff4b0. Each proves itself from all
+    /// the rows of its view, as R1c's do, because G7 pairs the items of one name by their order.
+    mod kept {
+        use super::super::{AllowedRow, Difference, Reference, View};
+        use super::history::{places, scroll, shown_after};
+        use std::collections::BTreeMap;
+
+        /// X66: `COMBAT LOG` is `M` below the last Final state row, where it was the rows' own
+        /// gap (6 px): the log moves down by this much more than the list.
+        const LOG: f32 = crate::design::M - 6.0;
+
+        /// The frozen view of `d`.
+        fn frozen(d: &Difference) -> Option<&'static View> {
+            static REFERENCE: std::sync::OnceLock<Reference> = std::sync::OnceLock::new();
+            REFERENCE
+                .get_or_init(|| super::super::read(&super::super::folder().join("reference.json")))
+                .views
+                .iter()
+                .find(|view| (&view.screen, &view.view) == (&d.screen, &d.view))
+        }
+
+        /// The frozen place of the first item of `d`'s kind whose name passes `pick`.
+        fn frozen_place(d: &Difference, pick: impl Fn(&str) -> bool) -> Option<[f32; 4]> {
+            let view = frozen(d)?;
+            let items = if d.what == "control" {
+                &view.controls
+            } else {
+                &view.texts
+            };
+            let item = items.iter().find(|item| pick(&item.0))?;
+            item.1.get(..4)?.try_into().ok()
+        }
+
+        /// The rows of `d`'s view and kind.
+        fn view<'a>(d: &Difference, rows: &'a [AllowedRow]) -> Vec<&'a Difference> {
+            rows.iter()
+                .map(|row| &row.difference)
+                .filter(|o| (&o.screen, &o.view, &o.what) == (&d.screen, &d.view, &d.what))
+                .collect()
+        }
+
+        /// An item after is cut only by the list's edges: its top at `top`, its bottom at `bottom`.
+        fn cut_at_edges(o: &Difference, top: f32, bottom: f32) -> bool {
+            let (Some(whole), Some(shown)) = (places(o).1, shown_after(o)) else {
+                return true;
+            };
+            let cut_top = shown[1] > whole[1] + 0.05;
+            let cut_bottom = shown[1] + shown[3] < whole[1] + whole[3] - 0.05;
+            shown[0] == whole[0]
+                && shown[2] == whole[2]
+                && (!cut_top || (shown[1] - top).abs() < 0.5)
+                && (!cut_bottom || (shown[1] + shown[3] - bottom).abs() < 0.5)
+        }
+
+        /// Row 25: History keeps the opened run at the list's top (X36, X37). The list scrolled
+        /// by one offset, the run's own row's, down the content; `COMBAT LOG` and everything
+        /// below it in the frozen view moved by `LOG` more (X66). Each item of today that stays
+        /// in view is one to one an item after of its name, with its place across and its size
+        /// kept; what goes scrolled out at the top, what is new scrolled in from below, and an
+        /// item after is cut only by the list's edges.
+        pub(super) fn history(d: &Difference, rows: &[AllowedRow]) -> bool {
+            if !d.screen.starts_with("run-ended: played ")
+                || !["control", "text"].contains(&d.what.as_str())
+                || places(d) == (None, None)
+            {
+                return false;
+            }
+            let Some(dy) = scroll(d, rows).filter(|dy| *dy < 0.0) else {
+                return false;
+            };
+            // With no log in the frozen view, nothing of it moves in view.
+            let log = frozen_place(d, |name| name.ends_with("COMBAT LOG"))
+                .map_or(f32::INFINITY, |place| place[1]);
+            let shift = |before: f32| if before >= log - 0.5 { dy + LOG } else { dy };
+            let view = view(d, rows);
+            let top = view
+                .iter()
+                .filter_map(|o| shown_after(o))
+                .map(|b| b[1])
+                .fold(f32::INFINITY, f32::min);
+            // The bottom of what showed before; an item after is cut only at the bottom of what
+            // shows after.
+            let bottom = view
+                .iter()
+                .filter_map(|o| places(o).0)
+                .map(|a| a[1] + a[3])
+                .fold(f32::NEG_INFINITY, f32::max);
+            let edge = view
+                .iter()
+                .filter_map(|o| shown_after(o))
+                .map(|b| b[1] + b[3])
+                .fold(f32::NEG_INFINITY, f32::max);
+            let mut names: BTreeMap<&str, (Vec<[f32; 4]>, Vec<[f32; 4]>)> = BTreeMap::new();
+            for o in &view {
+                if !cut_at_edges(o, top, edge) {
+                    return false;
+                }
+                let (a, b) = places(o);
+                let (before, after) = names.entry(o.name.as_str()).or_default();
+                // Today's items that stay in view, and the items after that were in view.
+                before.extend(a.filter(|a| a[1] + shift(a[1]) + a[3] > top + 0.5));
+                after.extend(b.filter(|b| {
+                    let back = if b[1] >= log + dy + LOG - 0.5 {
+                        dy + LOG
+                    } else {
+                        dy
+                    };
+                    b[1] - back < bottom - 0.5
+                }));
+            }
+            names.values_mut().all(|(before, after)| {
+                before.sort_by(|a, b| a[1].total_cmp(&b[1]));
+                after.sort_by(|a, b| a[1].total_cmp(&b[1]));
+                before.len() == after.len()
+                    && before.iter().zip(after.iter()).all(|(a, b)| {
+                        a[0] == b[0] && a[2..] == b[2..] && (b[1] - a[1] - shift(a[1])).abs() < 0.05
+                    })
+            })
+        }
+
+        /// Row 26: beside Lookup at 960x640, `Save encounter` and `Start fight` moved up to the
+        /// name field's line, with their place across and their size (X51); the field kept its
+        /// place and height and ends before them; every other item moved straight up by the
+        /// line they left, and only what was below the pane's bottom comes into view there.
+        /// Nothing is gone, and only the pane's bottom cuts an item.
+        pub(super) fn editor(d: &Difference, rows: &[AllowedRow]) -> bool {
+            if (d.screen.as_str(), d.view.as_str()) != ("encounter-editor", "960x640 Lookup open")
+                || !["control", "text"].contains(&d.what.as_str())
+            {
+                return false;
+            }
+            let view = view(d, rows);
+            let action =
+                |name: &str| name.ends_with("Save encounter") || name.ends_with("Start fight");
+            // The line the actions left: Save encounter's own move, straight up.
+            let Some((save, up)) = view.iter().find_map(|o| {
+                let (Some(a), Some(b)) = places(o) else {
+                    return None;
+                };
+                (o.change == "moved"
+                    && o.name.ends_with("Save encounter")
+                    && a[0] == b[0]
+                    && a[2..] == b[2..]
+                    && b[1] < a[1])
+                    .then_some((b, b[1] - a[1]))
+            }) else {
+                return false;
+            };
+            // The name field's line, in the frozen view.
+            let Some(field) = frozen(d)
+                .and_then(|view| {
+                    view.controls
+                        .iter()
+                        .find(|item| item.0.starts_with("TextInput: Encounter name"))
+                })
+                .and_then(|item| <[f32; 4]>::try_from(item.1.get(..4)?).ok())
+            else {
+                return false;
+            };
+            // The pane's bottom, in the frozen view: where the items of `d`'s kind in the
+            // editor's column end, from the back button to Start fight.
+            let Some(bottom) = frozen(d).and_then(|view| {
+                let control = |start: &str| {
+                    view.controls
+                        .iter()
+                        .find(|item| item.0.starts_with(start))
+                        .map(|item| (item.1[0], item.1[0] + item.1[2]))
+                };
+                let (left, right) = (
+                    control("Button: Back to")?.0,
+                    control("Button: Start fight")?.1,
+                );
+                let items = if d.what == "control" {
+                    &view.controls
+                } else {
+                    &view.texts
+                };
+                Some(
+                    items
+                        .iter()
+                        .filter(|item| item.1[0] >= left && item.1[0] < right)
+                        .map(|item| {
+                            let shown = if item.1.len() == 8 {
+                                &item.1[4..]
+                            } else {
+                                &item.1[..]
+                            };
+                            shown[1] + shown[3]
+                        })
+                        .fold(f32::NEG_INFINITY, f32::max),
+                )
+            }) else {
+                return false;
+            };
+            let (a, b) = places(d);
+            match (d.change.as_str(), a, b) {
+                ("width", Some(a), Some(b)) => {
+                    d.name.starts_with("TextInput: Encounter name")
+                        && a[..2] == b[..2]
+                        && a[3] == b[3]
+                        && b[2] < a[2]
+                        && b[0] + b[2] <= save[0]
+                }
+                ("moved", Some(a), Some(b)) => {
+                    let whole = cut_at_edges(d, f32::NEG_INFINITY, bottom);
+                    let straight =
+                        a[0] == b[0] && a[2..] == b[2..] && (b[1] - a[1] - up).abs() < 0.05;
+                    let on_line = !action(&d.name)
+                        || (field[1]..=field[1] + field[3]).contains(&(b[1] + b[3] / 2.0));
+                    whole && straight && on_line
+                }
+                // Came into view from below the pane's bottom, cut only there.
+                ("new", None, Some(b)) => {
+                    b[1] - up >= bottom - 0.5 && cut_at_edges(d, f32::NEG_INFINITY, bottom)
+                }
+                _ => false,
+            }
+        }
+
+        /// The faults R3g's classes refuse, beside today's scroll and today's editor header.
+        #[test]
+        fn the_r3g_classes_refuse_a_loss_a_sideways_move_a_narrowing_and_other_shifts() {
+            let row =
+                |row: u32, screen: &str, view: &str, change: &str, name: &str, detail: &str| {
+                    AllowedRow {
+                        row,
+                        why: String::new(),
+                        difference: Difference {
+                            screen: screen.into(),
+                            view: view.into(),
+                            what: "control".into(),
+                            change: change.into(),
+                            name: name.into(),
+                            detail: detail.into(),
+                        },
+                    }
+                };
+            let fits =
+                |rows: &[AllowedRow]| rows.iter().all(|row| super::class_of(row, rows).is_some());
+            let with = |good: &[AllowedRow], fault: AllowedRow| {
+                let mut rows = good.to_vec();
+                match rows
+                    .iter()
+                    .position(|row| row.difference.name == fault.difference.name)
+                {
+                    Some(at) => rows[at] = fault,
+                    None => rows.push(fault),
+                }
+                rows
+            };
+            // History at 960x640: the run's row at the list's top, the log 6 px lower.
+            let history = |change: &str, name: &str, detail: &str| {
+                row(
+                    25,
+                    "run-ended: played last",
+                    "960x640 Lookup closed",
+                    change,
+                    name,
+                    detail,
+                )
+            };
+            let good = [
+                history(
+                    "moved",
+                    "Button: Close the run of Wolves",
+                    "847.2 220 50.8x28 -> 847.2 82 50.8x28",
+                ),
+                history(
+                    "moved",
+                    "Label: FINAL STATE",
+                    "180 324 73.6x14 -> 180 186 73.6x14",
+                ),
+                history(
+                    "moved",
+                    "Label: COMBAT LOG",
+                    "180 512 73.8x14 -> 180 380 73.8x14",
+                ),
+                history(
+                    "moved",
+                    "Label: HP 0/22",
+                    "306.8 344 44.2x16 -> 306.8 206 44.2x16",
+                ),
+                history("gone", "Label: GROUPS", "was 148 104 46.7x14"),
+                history(
+                    "new",
+                    "Label: Oren Thistlewick: Initiative set to 13.",
+                    "at 180 510 198.3x16",
+                ),
+            ];
+            assert!(fits(&good), "today's History fits its class");
+            for fault in [
+                // The log without X66's gap: the list's shift alone.
+                history(
+                    "moved",
+                    "Label: COMBAT LOG",
+                    "180 512 73.8x14 -> 180 374 73.8x14",
+                ),
+                // Moved sideways, or narrower.
+                history(
+                    "moved",
+                    "Label: FINAL STATE",
+                    "180 324 73.6x14 -> 184 186 73.6x14",
+                ),
+                history(
+                    "moved",
+                    "Label: HP 0/22",
+                    "306.8 344 44.2x16 -> 306.8 206 40.0x16",
+                ),
+                // Gone, or new, in the middle of the view.
+                history("gone", "Label: HP 0/22", "was 306.8 344 44.2x16"),
+                history("new", "Label: Absent", "at 180 300 40x16"),
+                // Cut inside the view.
+                history(
+                    "moved",
+                    "Label: FINAL STATE",
+                    "180 324 73.6x14 -> 180 186 73.6x14, seen 180 190 73.6x10",
+                ),
+            ] {
+                let name = fault.difference.to_string();
+                assert!(!fits(&with(&good, fault)), "R3g a takes {name}");
+            }
+            // The editor beside Lookup at 960x640: the actions on the name's line.
+            let editor = |change: &str, name: &str, detail: &str| {
+                row(
+                    26,
+                    "encounter-editor",
+                    "960x640 Lookup open",
+                    change,
+                    name,
+                    detail,
+                )
+            };
+            let good = [
+                editor(
+                    "moved",
+                    "Button: Save encounter",
+                    "381.8 44 123.4x30 -> 381.8 8 123.4x30",
+                ),
+                editor(
+                    "moved",
+                    "Button: Start fight",
+                    "513.2 44 89.3x30 -> 513.2 8 89.3x30",
+                ),
+                editor(
+                    "width",
+                    "TextInput: Encounter name: Shrine of Cinders",
+                    "186 8 416.4x30 -> 186 8 168.4x30",
+                ),
+                editor(
+                    "moved",
+                    "Button: Roster, 7 participants",
+                    "148 121 69.4x28 -> 148 85 69.4x28",
+                ),
+                editor(
+                    "new",
+                    "Label: Lists this encounter under Ready to run",
+                    "at 148 609 422.8x32, seen 148 609 422.8x23",
+                ),
+            ];
+            assert!(fits(&good), "today's editor header fits its class");
+            for fault in [
+                // The field runs under Save encounter, or moves.
+                editor(
+                    "width",
+                    "TextInput: Encounter name: Shrine of Cinders",
+                    "186 8 416.4x30 -> 186 8 300x30",
+                ),
+                editor(
+                    "width",
+                    "TextInput: Encounter name: Shrine of Cinders",
+                    "186 8 416.4x30 -> 186 10 168.4x30",
+                ),
+                // An action moves sideways, or stays below the name's line.
+                editor(
+                    "moved",
+                    "Button: Start fight",
+                    "513.2 44 89.3x30 -> 500 8 89.3x30",
+                ),
+                editor(
+                    "moved",
+                    "Button: Start fight",
+                    "513.2 44 89.3x30 -> 513.2 44 89.3x30",
+                ),
+                // The rest moves by another amount, or something is gone or new mid-pane.
+                editor(
+                    "moved",
+                    "Button: Roster, 7 participants",
+                    "148 121 69.4x28 -> 148 90 69.4x28",
+                ),
+                editor(
+                    "gone",
+                    "Button: Roster, 7 participants",
+                    "was 148 121 69.4x28",
+                ),
+                editor(
+                    "new",
+                    "Label: Lists this encounter under Ready to run",
+                    "at 148 300 422.8x32",
+                ),
+            ] {
+                let name = fault.difference.to_string();
+                assert!(!fits(&with(&good, fault)), "R3g c takes {name}");
             }
         }
     }

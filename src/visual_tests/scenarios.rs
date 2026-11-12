@@ -15878,23 +15878,28 @@ pub mod encounter_history {
     }
 
     /// X36: after the DM scrolls History, a resize does not pull the list back to the run.
+    /// The scenario's window is 960x640, where the list keeps the run; at 1200x800 the whole
+    /// list fits, so the way back to 960x640 is where a kept run would pull it again.
     fn a_scroll_wins_over_a_resize(d: &mut Driver<'_>) {
         let row = |d: &Driver<'_>| d.place_of(&d.name_starting(&OPEN_OLD.replace("Open", "Close")));
-        let Some(at) = d.place_of("Read-only") else {
-            d.observe("X36-scroll-wins", false, "Read-only is not shown");
+        let Some(at) = row(d) else {
+            d.observe(
+                "X36-scroll-wins",
+                false,
+                "The opened run's row is not shown",
+            );
             return;
         };
         let before = row(d);
         d.scroll_up_at(at.center(), 1);
         let scrolled = row(d);
-        let smaller = d.at_size(SMALL, row);
+        let larger = d.at_size(DEFAULT, row);
         let back = row(d);
         d.observe(
             "X36-scroll-wins",
             scrolled.zip(before).is_some_and(|(scrolled, before)| scrolled.top() > before.top())
-                && smaller.map(|r| r.top().round()) == scrolled.map(|r| r.top().round())
                 && back.map(|r| r.top().round()) == scrolled.map(|r| r.top().round()),
-            format!("The row before {before:?}, after the DM's scroll {scrolled:?}, at {SMALL:?} {smaller:?}, back {back:?}"),
+            format!("The row before {before:?}, after the DM's scroll {scrolled:?}, at {DEFAULT:?} {larger:?}, back {back:?}"),
         );
     }
 
@@ -15975,7 +15980,7 @@ pub mod encounter_history {
         );
         d.state("ended-run-open", Sizes::All);
         // The opened run stays at the list's top; the DM scrolls up to In progress.
-        if let Some(at) = d.place_of("Read-only") {
+        if let Some(at) = d.place_of(&d.name_starting("Close the run of ")) {
             d.scroll_up_at(at.center(), 10);
         }
         resume_run(d, RUN);
