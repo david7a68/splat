@@ -6628,8 +6628,9 @@ impl RowLayout {
     }
 
     /// The row's rule of section 1.4, as a choice: the effects to show and whether the save's
-    /// DC shows. Each form must keep the lines, the height and every condition that `base`
-    /// shows. The first that does wins; with none, the row is `base`.
+    /// DC shows. Each form must keep the lines and the height of `base`, and show each official
+    /// condition with a time that `base` shows. The first that does wins; with none, the row
+    /// is `base`.
     fn choose(
         ui: &egui::Ui,
         base: &Self,
@@ -6646,7 +6647,12 @@ impl RowLayout {
                 .filter(|name| !["Run conditions", "Run changes"].contains(&name.as_str()))
                 .collect()
         };
-        let shown = names(base);
+        // An official condition that gained a time stays in view: as its words with the
+        // count, or as the plain condition it was. Other plain conditions fold as today.
+        let shown: Vec<String> = names(base)
+            .into_iter()
+            .filter(|name| effects.iter().any(|(_, effect)| effect == name))
+            .collect();
         let keeps = |layout: &Self| {
             let now = names(layout);
             layout.keeps_place_of(base, scale) && shown.iter().all(|name| now.contains(name))
