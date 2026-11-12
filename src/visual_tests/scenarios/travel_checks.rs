@@ -576,10 +576,9 @@ fn road_fight_keeps_its_day(d: &mut Driver<'_>, dir: &Path) {
     let journey_before = journey(d, "Travel");
     let travel_start = |d: &Driver<'_>| {
         let events = &d.app().timeline.events;
-        let at = events.iter().position(|event| {
-            event.title == "Travel"
-                || (event.kind == crate::timeline::Kind::Travel && event.title.is_empty())
-        })?;
+        let at = events
+            .iter()
+            .position(|event| event.id == journey_before.id)?;
         crate::timeline::clock(events)[at]
     };
     d.observe(
