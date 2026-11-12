@@ -515,7 +515,11 @@ title, length, place and notes. A paused fight on the plan offers Resume even wh
 The Add strip stays directly below Tonight, above messages and plan rows. Fight,
 Group and Long rest stay visible. When all actions do not fit on one line, More holds
 Day, Short rest, Travel and Major event. The menu uses a compact `⋯⌄` button named `More Add actions`; hover text names its actions. The strip stays on one line. Timeline
-uses the same width rule. At the top, **Last time** links to the previous session and shows the first line of its recap. The title and date share one line. A **Playing** status marks the session being played.
+uses the same width rule. At the top, **Last time** links to the previous session and shows the first line of its `What happened`,
+else of its processed recording's recap, else its first written line. While the session has no event and no run,
+**Carry over** at the end of that line adds the last session's recap as a link, its plan lines that were not
+played and its open threads to this note, in one save with `carried_from` and `carried_parts`, and `Undo carry
+over` puts the note back exactly. Read shows such an embed as the recap's words under `From <session>`. The title and date share one line. A **Playing** status marks the session being played.
 **Return to the session being played** opens that note from another session. If both sessions have the same
 number, the warning names both note files.
 In a narrow window, the plan and the note have a tab each. **Read** and **Write** turn the note between its two forms, and

@@ -169,14 +169,20 @@ impl Note {
     }
 }
 
-fn parse_note(path: &Path, text: &str) -> Option<Note> {
+/// The YAML inside a note's properties block, without its fences.
+pub(crate) fn properties_yaml(text: &str) -> Option<&str> {
     let (front, _) = split_note(text)?;
-    let inner = front
-        .trim_start_matches('\u{feff}')
-        .trim_end()
-        .strip_suffix("---")?
-        .trim_start_matches("---");
-    let value: Value = serde_yaml_ng::from_str(inner).ok()?;
+    Some(
+        front
+            .trim_start_matches('\u{feff}')
+            .trim_end()
+            .strip_suffix("---")?
+            .trim_start_matches("---"),
+    )
+}
+
+fn parse_note(path: &Path, text: &str) -> Option<Note> {
+    let value: Value = serde_yaml_ng::from_str(properties_yaml(text)?).ok()?;
     let id = Uuid::parse_str(value.get("session_id")?.as_str()?).ok()?;
     let text_of = |name: &str| match value.get(name) {
         Some(Value::String(text)) => text.clone(),
@@ -1423,6 +1429,11 @@ impl Draft {
         self.revision = next_revision();
     }
 
+    /// The note's whole text in this draft: its properties, then its words.
+    pub fn text(&self) -> String {
+        format!("{}{}", self.prefix, self.body)
+    }
+
     /// The text this draft was read from or last wrote.
     pub fn file_text(&self) -> Option<&str> {
         self.baseline.as_deref()
@@ -1682,6 +1693,33 @@ impl Draft {
         write: Apply,
         patch: impl FnOnce(&str) -> Option<String>,
     ) -> Result<NoteUndo, ActFault> {
+        self.apply_parts(note, write, |prefix, body| {
+            patch(body).map(|body| (prefix.to_owned(), body))
+        })
+    }
+
+    /// `apply` for an act that also changes the note's properties: `patch` gets the note's
+    /// whole text, properties first, and returns it whole. Its Undo puts both back.
+    pub fn apply_with_properties(
+        &mut self,
+        note: Uuid,
+        patch: impl FnOnce(&str) -> Option<String>,
+    ) -> Result<NoteUndo, ActFault> {
+        self.apply_parts(note, Apply::Now, |prefix, body| {
+            let text = patch(&format!("{prefix}{body}"))?;
+            let (prefix, body) = split_note(&text).unwrap_or(("", &text));
+            Some((prefix.to_owned(), body.to_owned()))
+        })
+    }
+
+    /// The one path of `apply` and `apply_with_properties`: `patch` gets the properties and the
+    /// words, and returns both.
+    fn apply_parts(
+        &mut self,
+        note: Uuid,
+        write: Apply,
+        patch: impl FnOnce(&str, &str) -> Option<(String, String)>,
+    ) -> Result<NoteUndo, ActFault> {
         if write == Apply::Now {
             // An edit made elsewhere a moment ago is in the words that the act changes.
             self.follow_disk();
@@ -1701,14 +1739,20 @@ impl Draft {
             }
         }
         let before = self.body.clone();
-        let after = patch(&before).ok_or(ActFault::LineChanged)?;
+        let (prefix, after) = patch(&self.prefix, &before).ok_or(ActFault::LineChanged)?;
+        // Only an act that changed the properties puts them back.
+        let properties = (prefix != self.prefix).then(|| {
+            let before = std::mem::replace(&mut self.prefix, prefix);
+            Box::new((before, self.prefix.clone()))
+        });
         self.body.clone_from(&after);
         self.edited();
         let mut undo = NoteUndo {
-            path: self.path.clone(),
+            path: self.path.as_path().into(),
             note,
             before,
             after,
+            properties,
             written: false,
         };
         if write == Apply::WithTyping {
@@ -1732,6 +1776,9 @@ impl Draft {
         parse_note(&self.path, self.baseline.as_deref()?).map(|note| note.id)
     }
 }
+
+/// What a note act says when its save failed and the fragment waits in the draft.
+pub const NOT_SAVED: &str = "Notes not saved";
 
 /// How a note act meets the DM's typing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1762,13 +1809,13 @@ pub enum ActFault {
 
 impl ActFault {
     /// The words at the act's place.
-    pub fn words(&self) -> &str {
+    pub fn words(&self) -> &'static str {
         match self {
             Self::Changed => "The note changed on disk. Choose in the note first.",
             Self::Missing => "The note is gone from its folder.",
             Self::OtherNote => "The file now holds another note.",
             Self::LineChanged => "That line changed on disk.",
-            Self::NotSaved(..) => "Notes not saved",
+            Self::NotSaved(..) => NOT_SAVED,
         }
     }
 }
@@ -1779,11 +1826,14 @@ impl ActFault {
 #[derive(Clone, Debug, PartialEq)]
 pub struct NoteUndo {
     /// The note's file. It follows a move of that note, never a copy.
-    path: PathBuf,
+    path: Box<Path>,
     /// The session the act was for.
     note: Uuid,
     before: String,
     after: String,
+    /// The properties before and after the act, when the act changed them. Boxed, as most
+    /// acts change only words.
+    properties: Option<Box<(String, String)>>,
     /// Whether the act's save wrote the fragment. One that waits in the draft is taken back
     /// from the draft alone.
     written: bool,
@@ -1795,20 +1845,32 @@ impl NoteUndo {
         &self.after
     }
 
+    /// Whether the act's fragment is in the file. One whose save failed waits in the draft.
+    pub fn written(&self) -> bool {
+        self.written
+    }
+
     /// Whether this Undo still applies to the note in this draft.
     pub fn live(&self, draft: &Draft) -> bool {
-        self.owns(draft) && draft.body == self.after
+        self.owns(draft) && draft.body == self.after && self.left_properties(&draft.prefix)
+    }
+
+    /// The properties are the ones the act left, or the act did not change them.
+    fn left_properties(&self, prefix: &str) -> bool {
+        self.properties
+            .as_ref()
+            .is_none_or(|properties| properties.1 == prefix)
     }
 
     /// Whether the draft is the note that the act changed: its file and its ID.
     fn owns(&self, draft: &Draft) -> bool {
-        draft.path == self.path && draft.note_id() == Some(self.note)
+        *draft.path == *self.path && draft.note_id() == Some(self.note)
     }
 
     /// The folder scan followed this note, the one note with its ID, to a new file.
     pub fn moved(&mut self, from: &Path, to: &Path) {
-        if self.path == from {
-            to.clone_into(&mut self.path);
+        if *self.path == *from {
+            self.path = to.into();
         }
     }
 
@@ -1827,17 +1889,21 @@ impl NoteUndo {
         if !self.owns(draft) {
             return Err(ActFault::OtherNote);
         }
+        let back = |prefix: &str, words: &str| {
+            (words == self.after && self.left_properties(prefix)).then(|| {
+                let prefix = self
+                    .properties
+                    .as_ref()
+                    .map_or(prefix, |properties| &properties.0);
+                (prefix.to_owned(), self.before.clone())
+            })
+        };
         if self.written {
-            return draft
-                .apply(self.note, Apply::Now, |words| {
-                    (words == self.after).then(|| self.before.clone())
-                })
-                .map(drop);
+            return draft.apply_parts(self.note, Apply::Now, back).map(drop);
         }
-        if draft.body != self.after {
-            return Err(ActFault::LineChanged);
-        }
-        draft.body.clone_from(&self.before);
+        let (prefix, before) = back(&draft.prefix, &draft.body).ok_or(ActFault::LineChanged)?;
+        draft.prefix = prefix;
+        draft.body = before;
         draft.edited();
         Ok(())
     }

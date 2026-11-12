@@ -393,7 +393,7 @@ that G7 allows.
 
 | # | Screen | What differs | From |
 |---|---|---|---|
-| 11 | The **Last time** line | `Carry over` at its end, while the session has no event and no run and the last session holds a part to carry (F5). The preview is cut to its room today (`page.rs:4106-4115`), so the action takes about 90 px from it. The preview shortens first, to nothing; then the link's words shorten; nothing wraps | Round 3: the one ruled exception to rule J |
+| 11 | The **Last time** line | `Carry over` at its end, while the session has no event and no run and the last session holds a part to carry (F5). The preview is cut to its room today (`page.rs:4106-4115`), so the action takes 81 px (measured in P8) and an `L` gap from it. The preview shortens first, to nothing; then the link's words shorten; nothing wraps | Round 3: the one ruled exception to rule J |
 | 14 | The plan, when the DM's note has a task line under `## Plan for tonight` | The line is a scene: a row with a box, counted in **Tonight**, and not repeated in Read (F3). When the plan's rows do not fit its pane, the scenes fold to `N scenes` on the **Tonight** line, so no other row moves or narrows and the next fight's action stays whole and in view (F3, the fold). The measured evening has none | The ruling on scenes: it is the DM's own plan |
 | 15 | The **Conditions** tab's `Other effect…` field | Words that end with a time, a count of uses or a recharge are read as F2 says: `Bless 10 rounds` counts down, and `Frightened 10 rounds` becomes that condition with a count. The field, its label, its `Add` button and its place are as today | Round 3: the field stays, so `Effect` has a way when the dock has no room |
 | 16 | The **Last time** line | Its preview reads the last session's `What happened`. Today it reads that note's own recap first (`page.rs:915`) | Rule H: the preview and the carry-over read one source |
@@ -402,6 +402,7 @@ that G7 allows.
 | 19 | A **Change** of status, place or group | It writes its Log line when a session is being played by W14's test. Today the test is "dated today" (`page.rs:1929-1937`). So a change during a fight or a recording on a note with another date, and a change in prep for a session dated later, now write a line | Rule M: one definition of the session being played |
 | 20 | The run's notice line, when a conflict's name is wider than the line beside the bare `Undo` | The name shortens as the dock's name does. Today nothing gives | Rule K |
 | 21 | A package creature's reader, with no run open | A quiet `Start fight` in a header that holds no action today (F3) | Rule Q |
+| 22 | The **Last time** line | When the last note has no prose under `What happened` and no processed recap, the preview is the note's first written line outside its title and date, `Recap of last time` and `Plan for tonight`. Today the line shows the link alone (`recap_preview`, `src/sessions/page.rs`) | The lead's ruling W5-D5, from the first scored round on the app: the measured evening's two reads of last week cost 2 each because the line showed none of last week's words |
 | 22 | History on the Encounters page, after `Whole run` or `Open` | The list scrolls once, at that act, so the opened run's row is at its top and its outcome, the line under Read-only and the whole Final state are in view below it (V31). The line under Read-only is `S` below it and `M` above `FINAL STATE` (V11), so what is under Read-only moves up by at most 8 px more, and the Read-only line's words are as tall as a line. Otherwise only the list's scroll offset differs: what it holds is as today, and nothing moves sideways, is cut or is resized | By the lead's ruling after app round 1 |
 
 Nothing else differs. A free-words effect from an encounter or an older run gives no reminder. A Travel row
@@ -1019,13 +1020,18 @@ Case A, before and after
 Last time:  Session 1: The Road — Hobb the miller says the toll collectors …    Carry over
 
 Last time:  Session 1: The Road — Hobb the miller says the toll collectors …
+…
 ✓ Carried over from Session 1: the recap, 2 plan lines and 2 open threads.   ↶ Undo carry over
 ```
+
+The result sits in the Session page's message footer, as every result of that page does since that rule
+landed (P8 followed it at the merge with `main`), so the line, the tabs and the plan never move.
 
 **An embed in Read.** Read draws an embed of a session note's heading as that heading's text, under a muted
 line, `From Session 1: The Road`, which links that session. The rule is by the embed's target, not by who
 wrote the line, so an embed that the DM typed is drawn the same way (section 2.5, row 18). Today Read shows it
-as a link. In Write it is the one line of source.
+as a link. In Write it is the one line of source. The target resolves as every campaign link does, with its
+folder; an ambiguous target, and an embed inside a callout or a list item, stay links (a P8 limit).
 
 **Cases B, C and D.** `Carry over` never takes a line of its own, and the result message wraps.
 
@@ -1033,14 +1039,14 @@ as a link. In Write it is the one line of source.
 open threads to this note.` Result: `Carried over from Session 1: the recap, 2 plan lines and 2 open
 threads.` It names only what it added. When this note has a recap: `… Your recap was kept.` When the recap is
 not there yet: `… The recap is still to come.` When the embed takes the draft's place: `The recap now follows
-your notes.` `Undo carry over`. `Update the link`, with `Undo link`.
+your notes.` `Undo carry over`.
 
 | State | What shows |
 |---|---|
 | No earlier session; no part can be carried now; every part is done | No action |
 | The last note cannot be read | The action is blocked: `Splat cannot read Session 1’s note.` |
 | This note changed on disk and Splat holds unsaved words | The act does nothing and says `The note changed on disk. Choose in the note first.` |
-| The embed's note was renamed outside Obsidian | For the embed line that `Carry over` wrote, Read finds the session by the ID in `carried_from` and shows its text, with the quiet `Update the link`, which writes the note's new name into that line. Another embed whose note is gone has the words of the next row |
+| The embed's note was renamed outside Obsidian | As the next row. Splat never rewrites an embed: the DM links again by hand. (P8 cut `Update the link` and `Undo link`: a sole recap embed that the DM kept could not be told from the one `Carry over` wrote, so the repair could rewrite the DM's own link; review of PR 277) |
 | The embed's note or its heading is gone | Read says `The recap’s source is gone: Session 1 The Road › What happened.` in the embed's place. The line stays in the note |
 
 **What the note stores.** The lines, and two flat properties in the same save. Obsidian's Properties view
@@ -1070,7 +1076,9 @@ carried_parts: [recap, plan, threads]
 
 **Undo.** `Undo carry over` puts back exactly what the act replaced. The lines that it added go. A draft that
 became an embed comes back. `carried_from` and `carried_parts` have the values, or the absence, that they had
-before the act. Section 4.1 says when it ends. After that the DM removes a carried
+before the act. Section 4.1 says when it ends. Its result and its Undo belong to the session note by its ID: another session or
+another page leaves them, so after an act elsewhere the DM comes back and still has `Undo carry over` (P8, by the
+lead's rule that an Undo is kept by the ID of the thing it belongs to). After that the DM removes a carried
 line as any line, and the part stays done.
 
 **Keyboard.** Tab reaches `Carry over` after the **Last time** link. Enter presses it.
@@ -1578,7 +1586,6 @@ Each row is one new write, with the fragment as the file holds it. Longer fragme
 | A tracker press, roll, `Done`, `Dismiss` (F4) | `Trackers.md` | One entry at the end of `changes` (F4). A press that changes two trackers writes two entries that share a `use`, in one save | `Undo: <label>`, step by step |
 | `Add to Timeline` after a tracker act (F4) | `Timeline.md` | `- Major event: **Throw a gift** ^t-7d2c9a41be`, with its `Session` line | Today's `Undo add`, on the Trackers result line |
 | `Carry over` (F5) | This session's note | The embed line or the copied recap, the copied lines, and `carried_from` with `carried_parts`, in one save (F5) | `Undo carry over`, which puts back what the act replaced |
-| `Update the link` (F5) | This session's note | The embed line | `Undo link` |
 | `Add to Log` (F6) | The World entry's note | `- [[Session 12]], Day 3: Told the party who burned the ropes.` at the end of `## Log` | `Undo Log line` |
 | `Add rewards` (F7) | The session note | One list line that starts with the fight's reference, with its XP line and its loot lines (F7) | `Undo rewards` |
 | `Roll for encounters`; a table choice; `No checks` (F9) | `Timeline.md` | `  - Checks table: road` in the event, or `  - Checks table:` while no table is chosen | `Undo checks`; later `No checks` |

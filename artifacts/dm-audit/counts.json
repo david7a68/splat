@@ -12,7 +12,7 @@
       "phase": "before",
       "task": "Recall what happened last session, and where the story stands",
       "transitions": 0,
-      "interactions": 2,
+      "interactions": 0,
       "path": "Session"
     },
     {
@@ -58,6 +58,13 @@
       "path": "Session"
     },
     {
+      "phase": "before",
+      "task": "Carry over what last week left into tonight's note",
+      "transitions": 0,
+      "interactions": 1,
+      "path": "Session"
+    },
+    {
       "phase": "during",
       "task": "Start recording",
       "transitions": 0,
@@ -68,7 +75,7 @@
       "phase": "during",
       "task": "Read last session's recap aloud",
       "transitions": 0,
-      "interactions": 2,
+      "interactions": 0,
       "path": "Session"
     },
     {
