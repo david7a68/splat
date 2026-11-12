@@ -229,7 +229,7 @@ impl Party {
                     investigation: stat("passive_investigation"),
                     spell_dc: record.and_then(spell_dc),
                     conditions: in_run.map_or_else(
-                        || record.map_or_else(Vec::new, sheet_conditions),
+                        || record.map_or_else(Vec::new, sheet_labels),
                         |row| row.conditions.clone(),
                     ),
                 }
@@ -815,7 +815,7 @@ impl Party {
                         temporary_hp,
                         death_saves: record.initial.death_saves.clone(),
                         death_saves_shown: false,
-                        conditions: sheet_conditions(record),
+                        conditions: sheet_labels(record),
                     });
                 sheet_page(ui, record, self.page, &self.search, live.as_ref());
                 if self.page == 0 {
@@ -942,7 +942,7 @@ pub struct LiveValues {
     pub hp: Option<i64>,
     pub max_hp: Option<i64>,
     pub temporary_hp: i64,
-    pub conditions: Vec<String>,
+    pub conditions: Vec<crate::encounter_run::Condition>,
     pub death_saves: splat::character::DeathSaves,
     /// The run already drew its editable block above this page.
     pub death_saves_shown: bool,
@@ -1102,6 +1102,14 @@ const COMPARE_FROM: f32 = 480.0;
 /// The right edge of one compare column, in the header and in a row.
 fn compare_right(hp_right: f32, at: usize) -> f32 {
     hp_right - HP_WIDTH - AC_WIDTH - (2 - at) as f32 * COMPARE_WIDTH
+}
+
+/// The conditions a sheet names, as a run's entries: labels, with no count.
+fn sheet_labels(record: &EntitySnapshot) -> Vec<crate::encounter_run::Condition> {
+    sheet_conditions(record)
+        .into_iter()
+        .map(crate::encounter_run::Condition::Label)
+        .collect()
 }
 
 /// The conditions a sheet names.
@@ -2060,7 +2068,12 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<
                     })
                     .collect()
             },
-            |live| live.conditions.clone(),
+            |live| {
+                live.conditions
+                    .iter()
+                    .map(crate::encounter_run::Condition::words)
+                    .collect()
+            },
         );
         if names.is_empty() {
             ui.label("None");

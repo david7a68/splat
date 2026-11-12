@@ -3,7 +3,7 @@
 //! Rows never move when the selection changes: the entry controls have a fixed dock.
 use super::{
     Command, MAX_FROM_SHEET, Panel, Participant, PartySync, Phase, Run, SAVED_HP_USED,
-    SHEET_SOURCE, Unend, display, mode_label,
+    SHEET_SOURCE, Unend, display, effect::Time, mode_label,
 };
 use crate::{
     combat_sync::SyncState,
@@ -1792,8 +1792,7 @@ impl Run {
                 ui.spacing_mut().item_spacing = vec2(design::XS, design::XS);
                 let found = |name: &str| {
                     p.conditions.iter().position(|c| {
-                        c.eq_ignore_ascii_case(name)
-                            || (name == "Exhaustion" && c.starts_with("Exhaustion"))
+                        c.same(name) || (name == "Exhaustion" && c.name().starts_with("Exhaustion"))
                     })
                 };
                 // Fixed columns, `S` apart: never spread across the form, never moved by a toggle.
@@ -1804,9 +1803,12 @@ impl Run {
                     ));
                 }
                 // One level, not a pile of lines. Each step replaces the last.
-                let exhausted = p.conditions.iter().position(|c| c.starts_with("Exhaustion"));
+                let exhausted = p
+                    .conditions
+                    .iter()
+                    .position(|c| c.name().starts_with("Exhaustion"));
                 if let Some(at) = exhausted {
-                    let start = exhaustion_level(&p.conditions[at]);
+                    let start = exhaustion_level(p.conditions[at].name());
                     // A drag shows its level here and commits one step when it ends, from the
                     // level it started at. A drag that the run no longer matches is dropped.
                     let frame = ui.ctx().cumulative_frame_nr();
@@ -1851,17 +1853,22 @@ impl Run {
                     }
                 }
                 ui.add_space(design::S);
-                let official = |c: &String| super::recognized_condition(c).is_some();
+                // Each effect with its whole words: an official condition's count is here too,
+                // where the DM removes it.
+                let listed = |c: &super::Condition| {
+                    c.is_effect() || super::recognized_condition(c.name()).is_none()
+                };
                 let custom: Vec<_> = p
                     .conditions
                     .iter()
                     .enumerate()
-                    .filter(|(_, c)| !official(c))
+                    .filter(|(_, c)| listed(c))
+                    .map(|(at, c)| (at, c.words()))
                     .collect();
                 let width = (ui.available_width() - 80.0).max(100.0);
                 if let Some(at) = other_effects_list(
                     ui,
-                    custom.iter().map(|(_, condition)| condition.as_str()),
+                    custom.iter().map(|(_, words)| words.as_str()),
                     width,
                 ) {
                     command = Some(Command::RemoveCondition(index, custom[at].0));
@@ -4500,7 +4507,7 @@ impl Run {
                 detail.push_str(&format!(" · as {}", p.definition.name));
             }
             for (at, condition) in p.conditions.iter().enumerate() {
-                let next = format!("{detail} · {condition}");
+                let next = format!("{detail} · {}", condition.words());
                 let remaining = p.conditions.len() - at - 1;
                 let reserve = if remaining > 0 {
                     format!(" · {remaining} more")
@@ -6070,7 +6077,7 @@ fn row_name(p: &Participant, turn: TurnMark, sync: Option<SyncState>) -> String 
     if p.concentration {
         parts.push("Concentrating".into());
     }
-    parts.extend(p.conditions.iter().cloned());
+    parts.extend(p.conditions.iter().map(super::Condition::words));
     if p.named_stat_block() {
         parts.push(format!("as {}", p.definition.name));
     }
@@ -6132,6 +6139,69 @@ fn even_height(heights: &[f32], room: f32, cap: f32) -> f32 {
 /// The fixed columns of a run row, and its second line, which grows rather than cuts.
 const PICTURE_GAP: f32 = 6.0;
 
+/// What a row's second line holds beyond today's words: its effects and a save's DC.
+#[derive(Clone, Default)]
+struct Extra {
+    effects: EffectPart,
+    conc_dc: Option<u32>,
+}
+
+/// The effects a row shows: the first ones with their words, each with its count, then the
+/// count of the rest, `⚑ +2`, or of them all, `⚑ 3`.
+#[derive(Clone, Default)]
+struct EffectPart {
+    /// Each shown effect's place in the row's conditions, and the words of its name.
+    shown: Vec<(usize, String)>,
+    rest: usize,
+}
+
+/// What a click on an effect's target does.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum EffectAct {
+    /// Opens **Conditions**, where the effect is removed.
+    Open,
+    /// `time is up`: removes the effect.
+    Remove(usize),
+    Spend(usize),
+    Recharge(usize),
+}
+
+/// The count after an effect's name, in its colours, and every form it can take, to measure
+/// its slot. The first part is the gap after the name: `Bless 9`, `Bless · last round`.
+fn count_slot(condition: &super::Condition) -> (Vec<(String, egui::Color32)>, Vec<String>) {
+    let c = colors();
+    let gap = " ·\u{a0}";
+    let forms = condition
+        .count_forms()
+        .into_iter()
+        .map(|form| match form.strip_prefix("· ") {
+            Some(words) if words == "time is up" => format!("{gap}{} {words}", icons::WARN),
+            Some(words) => format!("{gap}{words}"),
+            None if form == "spent" => format!(" spent {}", icons::DICE),
+            None => format!(" {form}"),
+        })
+        .collect();
+    let Some(count) = condition.count() else {
+        return (Vec::new(), forms);
+    };
+    let parts = match condition.time() {
+        Some(Time::Rounds { left: 0, .. }) => vec![
+            (gap.to_owned(), c.muted),
+            (format!("{} ", icons::WARN), c.result.warning),
+            (count, c.text),
+        ],
+        Some(Time::Rounds { left: 1, .. }) => {
+            vec![(gap.to_owned(), c.muted), (count, c.participant.condition)]
+        }
+        Some(Time::Recharge { spent: true, .. }) => vec![
+            (" ".to_owned(), c.muted),
+            (format!("{count} {}", icons::DICE), c.participant.condition),
+        ],
+        _ => vec![(" ".to_owned(), c.muted), (count, c.participant.condition)],
+    };
+    (parts, forms)
+}
+
 struct RowLayout {
     /// The participant's picture. A row with none shows the first letter of the name.
     art: Option<PathBuf>,
@@ -6146,6 +6216,13 @@ struct RowLayout {
     second_line: Option<Arc<Galley>>,
     /// Where each condition is on the second line, in characters.
     condition_spans: Vec<(String, std::ops::Range<usize>)>,
+    /// Each target of the effects on the second line: its act, the effect's place in the
+    /// row's conditions (none for the count of the rest), and where it is, in characters.
+    effect_spans: Vec<(EffectAct, usize, std::ops::Range<usize>)>,
+    /// The second line needed the small type to keep to one line.
+    detail_small: bool,
+    /// The same row with no effect and no save DC, whose lines and height this row keeps.
+    without_effects: Option<Box<RowLayout>>,
     initiative_span: Option<std::ops::Range<usize>>,
     /// The row has no room for a state column. Its state and sync words open the second
     /// line, so that the name stays whole.
@@ -6220,15 +6297,124 @@ impl RowLayout {
         fit: RowFit,
         longest_name: f32,
     ) -> Self {
-        Self::measured(
-            ui,
-            width,
-            p,
-            sync,
-            scale,
-            (fit, p.conditions.len(), BonusFit::All),
-            longest_name,
-        )
+        Self::fitted(ui, width, p, (sync, None), scale, fit, longest_name)
+    }
+
+    /// The row's rule of section 1.4. The row is first laid out with no effect and no save DC:
+    /// that gives its lines and its height. The effects then take only the room that is spare
+    /// there, in the first of these forms that keeps both: each effect whole; the first ones
+    /// whole and a count of the rest; the first one's words shortened from their end and a
+    /// count; the count of them all. Else the row shows none, and its hover has them. The save
+    /// DC then takes the room that the effects leave.
+    fn fitted(
+        ui: &egui::Ui,
+        width: f32,
+        p: &Participant,
+        (sync, conc_dc): (Option<SyncState>, Option<u32>),
+        scale: RunScale,
+        fit: RowFit,
+        longest_name: f32,
+    ) -> Self {
+        let plain = p.conditions.iter().filter(|c| !c.is_effect()).count();
+        let measure = |extra: &Extra| {
+            Self::measured(
+                ui,
+                width,
+                p,
+                sync,
+                scale,
+                (fit, plain, BonusFit::All, extra),
+                longest_name,
+            )
+        };
+        let base = measure(&Extra::default());
+        let effects: Vec<(usize, &str)> = p
+            .conditions
+            .iter()
+            .enumerate()
+            .filter(|(_, c)| c.is_effect())
+            .map(|(at, c)| (at, c.name()))
+            .collect();
+        if effects.is_empty() && conc_dc.is_none() {
+            return base;
+        }
+        let keeps = |layout: &Self| layout.keeps_place_of(&base, scale);
+        let mut forms: Vec<EffectPart> = (0..=effects.len())
+            .rev()
+            .map(|whole| EffectPart {
+                shown: effects[..whole]
+                    .iter()
+                    .map(|(at, name)| (*at, (*name).to_owned()))
+                    .collect(),
+                rest: effects.len() - whole,
+            })
+            .collect();
+        // The first effect alone, shortened to the room that the line leaves it.
+        if let Some(&(at, name)) = effects.first() {
+            let bare = measure(&Extra {
+                effects: EffectPart {
+                    shown: vec![(at, String::new())],
+                    rest: effects.len() - 1,
+                },
+                conc_dc: None,
+            });
+            if let Some(line) = bare.second_line.as_ref().filter(|_| keeps(&bare)) {
+                let font = line.job.sections[0].format.font_id.clone();
+                let room = line.job.wrap.max_width - line.size().x;
+                let cut = design::words_that_fit(ui, name, &font, room);
+                if cut != name && cut != "…" && design::number_width(ui, &cut, &font) <= room {
+                    forms.insert(
+                        forms.len() - 1,
+                        EffectPart {
+                            shown: vec![(at, cut)],
+                            rest: effects.len() - 1,
+                        },
+                    );
+                }
+            }
+        }
+        // The count of them all is the last form. With no effect, the one form is no part.
+        let found = forms.into_iter().find_map(|part| {
+            let layout = measure(&Extra {
+                effects: part.clone(),
+                conc_dc: None,
+            });
+            keeps(&layout).then_some((part, layout))
+        });
+        let Some((effects, layout)) = found else {
+            return base;
+        };
+        let with_dc = conc_dc.map(|dc| {
+            measure(&Extra {
+                effects: effects.clone(),
+                conc_dc: Some(dc),
+            })
+        });
+        let layout = with_dc.filter(keeps).unwrap_or(layout);
+        Self {
+            without_effects: Some(Box::new(base)),
+            ..layout
+        }
+    }
+
+    /// This row has the lines and the height of `base`, the same row with no effect: nothing
+    /// that an effect adds may wrap, shrink the type, move the HP bar or grow the row.
+    fn keeps_place_of(&self, base: &Self, scale: RunScale) -> bool {
+        let rows = |layout: &Self| {
+            layout
+                .second_line
+                .as_ref()
+                .map_or(0, |line| line.rows.len())
+        };
+        let height = self.height(scale);
+        rows(self) <= rows(base).max(1)
+            && !self.detail_small
+            && !base.detail_small
+            && self.bar_inset == base.bar_inset
+            && self.bar_below_detail == base.bar_below_detail
+            && self.tight == base.tight
+            && (height - base.height(scale)).abs() < 0.01
+            && (self.line_y(scale, height) - base.line_y(scale, height)).abs() < 0.01
     }
 
     fn measured(
@@ -6237,10 +6423,10 @@ impl RowLayout {
         p: &Participant,
         sync: Option<SyncState>,
         scale: RunScale,
-        fit_and_count: (RowFit, usize, BonusFit),
+        fit_and_count: (RowFit, usize, BonusFit, &Extra),
         longest_name: f32,
     ) -> Self {
-        let (fit, condition_count, bonus_fit) = fit_and_count;
+        let (fit, condition_count, bonus_fit, extra) = fit_and_count;
         let c = colors();
         // Fixed columns from the left of the numbers. A name stays near its HP.
         // The smallest scale has one set of columns, compressed or not, so that a list that
@@ -6298,7 +6484,9 @@ impl RowLayout {
         let role = if narrow { Type::Body } else { Type::Strong };
         let font = role.sized(ui, scale.condition);
         let mut first = true;
-        let mut add = |text: &str, color: egui::Color32| {
+        // One part of the line: its words after ` · `, in one or more colours, and the room
+        // after them that keeps a count's slot as wide as its widest form.
+        let mut add_parts = |parts: &[(&str, egui::Color32)], pad: f32| {
             if !first {
                 job.append(
                     " ·\u{a0}",
@@ -6312,75 +6500,134 @@ impl RowLayout {
             }
             first = false;
             let start = job.text.chars().count();
-            job.append(
-                text,
-                0.0,
-                egui::TextFormat {
-                    font_id: font.clone(),
-                    color,
-                    ..Default::default()
-                },
-            );
-            start..job.text.chars().count()
+            for (text, color) in parts {
+                job.append(
+                    text,
+                    0.0,
+                    egui::TextFormat {
+                        font_id: font.clone(),
+                        color: *color,
+                        ..Default::default()
+                    },
+                );
+            }
+            let end = job.text.chars().count();
+            if pad > 0.0 {
+                job.append("", pad, egui::TextFormat::simple(font.clone(), c.muted));
+            }
+            start..end
         };
         if inline_state && let Some((icon, word, color)) = hp_word(p) {
-            add(&format!("{icon} {word}"), color);
+            add_parts(&[(&*format!("{icon} {word}"), color)], 0.0);
         }
         if !p.present {
-            add(&format!("{} Absent", icons::ABSENT), c.muted);
+            add_parts(&[(&*format!("{} Absent", icons::ABSENT), c.muted)], 0.0);
         }
-        let initiative_span =
-            (p.present && p.initiative.is_none()).then(|| add("No initiative", c.accent));
+        let initiative_span = (p.present && p.initiative.is_none())
+            .then(|| add_parts(&[("No initiative", c.accent)], 0.0));
         if p.concentration {
-            add(
-                &format!("{} Conc", icons::CONCENTRATING),
-                c.participant.concentrating,
+            add_parts(
+                &[(
+                    &*format!("{} Conc", icons::CONCENTRATING),
+                    c.participant.concentrating,
+                )],
+                0.0,
             );
         }
-        let mut condition_spans: Vec<_> = p
-            .conditions
-            .iter()
-            .take(condition_count)
-            .map(|condition| {
-                let shown = if condition.split_whitespace().count() > 4 {
-                    format!(
-                        "{} more",
-                        condition
-                            .split_whitespace()
-                            .take(4)
-                            .collect::<Vec<_>>()
-                            .join(" ")
-                    )
-                } else {
-                    condition.clone()
-                };
-                (condition.clone(), add(&shown, c.participant.condition))
-            })
-            .collect();
+        // Effects take the conditions' place, before the plain conditions (section 1.4). Each
+        // count has a slot as wide as its widest form, so that a change of count moves no word.
+        let mut condition_spans = Vec::new();
+        let mut effect_spans = Vec::new();
+        for (at, words) in &extra.effects.shown {
+            let condition = &p.conditions[*at];
+            let (slot, forms) = count_slot(condition);
+            let width = |parts: &[(String, egui::Color32)]| {
+                let text: String = parts.iter().map(|(text, _)| text.as_str()).collect();
+                design::number_width(ui, &text, &font)
+            };
+            let widest = forms
+                .iter()
+                .map(|form| design::number_width(ui, form, &font))
+                .fold(0.0, f32::max);
+            let mut parts = vec![(words.as_str(), c.participant.condition)];
+            parts.extend(slot.iter().map(|(text, color)| (text.as_str(), *color)));
+            let span = add_parts(&parts, (widest - width(&slot)).max(0.0));
+            let name_end = span.start + words.chars().count();
+            let whole = words == condition.name();
+            if whole && super::recognized_condition(condition.name()).is_some() {
+                condition_spans.push((condition.name().to_owned(), span.start..name_end));
+            }
+            let separator = slot.first().map_or(0, |(text, _)| text.chars().count());
+            let target = match condition.time() {
+                Some(Time::Rounds { left: 0, .. }) => EffectAct::Remove(*at),
+                Some(Time::Uses { .. }) => EffectAct::Spend(*at),
+                Some(Time::Recharge { .. }) => EffectAct::Recharge(*at),
+                _ => EffectAct::Open,
+            };
+            if slot.is_empty() {
+                effect_spans.push((target, *at, span.start..name_end));
+            } else {
+                effect_spans.push((target, *at, name_end + separator..span.end));
+            }
+        }
+        if extra.effects.rest > 0 {
+            let words = if extra.effects.shown.is_empty() {
+                format!("{}\u{a0}{}", icons::PIN, extra.effects.rest)
+            } else {
+                format!("{}\u{a0}+{}", icons::PIN, extra.effects.rest)
+            };
+            let span = add_parts(&[(&*words, c.participant.condition)], 0.0);
+            effect_spans.push((EffectAct::Open, usize::MAX, span));
+        }
+        let plain: Vec<&super::Condition> =
+            p.conditions.iter().filter(|c| !c.is_effect()).collect();
+        for condition in plain.iter().take(condition_count) {
+            let condition = condition.name();
+            let shown = if condition.split_whitespace().count() > 4 {
+                format!(
+                    "{} more",
+                    condition
+                        .split_whitespace()
+                        .take(4)
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                )
+            } else {
+                condition.to_owned()
+            };
+            let span = add_parts(&[(&*shown, c.participant.condition)], 0.0);
+            condition_spans.push((condition.to_owned(), span));
+        }
         // A side of its own needs its word: a name and a number can look like another side's.
-        if p.conditions.len() > condition_count {
+        if plain.len() > condition_count {
             condition_spans.push((
                 "Run conditions".into(),
-                add(
-                    &design::count(p.conditions.len() - condition_count, "more", "more")
-                        .replace(' ', "\u{a0}"),
-                    c.participant.condition,
+                add_parts(
+                    &[(
+                        &*design::count(plain.len() - condition_count, "more", "more")
+                            .replace(' ', "\u{a0}"),
+                        c.participant.condition,
+                    )],
+                    0.0,
                 ),
             ));
         }
         if !["party", "enemies"].contains(&p.side.as_str()) {
-            add(&style::human_label(&p.side), c.side.other);
+            add_parts(&[(&*style::human_label(&p.side), c.side.other)], 0.0);
         }
         // A change is never hidden. What the run cannot apply is on the row, for the roll.
         // A number stays with its word when the line wraps.
         if p.npc_identity() {
-            add(&format!("as {}", p.definition.name), c.muted);
+            add_parts(&[(&*format!("as {}", p.definition.name), c.muted)], 0.0);
         }
         let mut bonus_start = None;
         if let Some(changes) = p.changes.as_ref().filter(|_| p.stat_changes()) {
-            add(
-                &format!("{}\u{a0}Changed", icons::CHANGED),
-                c.participant.changed,
+            add_parts(
+                &[(
+                    &*format!("{}\u{a0}Changed", icons::CHANGED),
+                    c.participant.changed,
+                )],
+                0.0,
             );
             let bonuses = changes.overrides.table_bonuses(&changes.base);
             for bonus in bonuses.iter().take(match bonus_fit {
@@ -6388,19 +6635,25 @@ impl RowLayout {
                 BonusFit::One => 1,
                 BonusFit::All => bonuses.len(),
             }) {
-                let span = add(&bonus.replace(' ', "\u{a0}"), c.participant.changed);
+                let span = add_parts(
+                    &[(&*bonus.replace(' ', "\u{a0}"), c.participant.changed)],
+                    0.0,
+                );
                 bonus_start.get_or_insert(span.start);
             }
             if !bonuses.is_empty()
                 && (bonus_fit == BonusFit::None
                     || (bonus_fit == BonusFit::One && bonuses.len() > 1))
             {
-                condition_spans.push(("Run changes".into(), add("more", c.participant.changed)));
+                condition_spans.push((
+                    "Run changes".into(),
+                    add_parts(&[("more", c.participant.changed)], 0.0),
+                ));
             }
         }
         // Down, with something to take: the DM rolls it from the card or the ended view.
         if p.loot_ready() {
-            add(&format!("{}\u{a0}Loot", icons::LOOT), c.accent);
+            add_parts(&[(&*format!("{}\u{a0}Loot", icons::LOOT), c.accent)], 0.0);
         }
         if inline_state && let Some(sync) = sync {
             let status = sync_status(sync);
@@ -6429,6 +6682,21 @@ impl RowLayout {
                     },
                     ..Default::default()
                 },
+            );
+        }
+        // Damage to a row marked Conc: its save, until the next step, in the room left.
+        if let Some(dc) = extra.conc_dc {
+            if !job.is_empty() {
+                job.append(
+                    " ·\u{a0}",
+                    0.0,
+                    egui::TextFormat::simple(font.clone(), c.muted),
+                );
+            }
+            job.append(
+                &format!("Conc save DC {dc}"),
+                0.0,
+                egui::TextFormat::simple(font.clone(), c.participant.concentrating),
             );
         }
         if let Some(span) = &initiative_span {
@@ -6488,6 +6756,7 @@ impl RowLayout {
                     } else {
                         BonusFit::None
                     },
+                    extra,
                 ),
                 longest_name,
             );
@@ -6501,11 +6770,12 @@ impl RowLayout {
                 p,
                 sync,
                 scale,
-                (fit, condition_count - 1, bonus_fit),
+                (fit, condition_count - 1, bonus_fit, extra),
                 longest_name,
             );
         }
         let mut bar_below_detail = false;
+        let mut detail_small = false;
         // At the narrowest width, mandatory state words can need the unused left
         // part of the HP bar. Keep the bar under HP, with at least an XL of length.
         if second_line.as_ref().is_some_and(|line| line.rows.len() > 1) {
@@ -6519,6 +6789,7 @@ impl RowLayout {
             job.wrap.max_width += extra;
             second_line = Some(ui.fonts_mut(|fonts| fonts.layout_job(job.clone())));
             if second_line.as_ref().is_some_and(|line| line.rows.len() > 1) {
+                detail_small = true;
                 for section in &mut job.sections {
                     section.format.font_id = Type::Small.sized(ui, scale.mark);
                 }
@@ -6560,6 +6831,9 @@ impl RowLayout {
             bar_below_detail,
             second_line,
             condition_spans,
+            effect_spans,
+            detail_small,
+            without_effects: None,
             initiative_span,
             inline_state,
             tight,
@@ -7582,7 +7856,7 @@ mod tests {
                     "Deafened",
                     "Frightened",
                 ]
-                .map(str::to_owned)
+                .map(super::super::Condition::from)
                 .to_vec();
                 for sync in [SyncState::Off, SyncState::Conflict] {
                     let layout = RowLayout::new(

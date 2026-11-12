@@ -20,7 +20,8 @@ pub struct Glance {
     pub investigation: Option<i64>,
     /// The highest spell save DC, for a caster.
     pub spell_dc: Option<i64>,
-    pub conditions: Vec<String>,
+    /// A run's entries while the member is in one, or the sheet's names as labels.
+    pub conditions: Vec<crate::encounter_run::Condition>,
 }
 
 /// Where the numbers come from, as a status: an icon, a word and a colour. `short` names the
@@ -91,7 +92,11 @@ impl Glance {
             if self.conditions.is_empty() {
                 "No conditions".to_owned()
             } else {
-                self.conditions.join(", ")
+                self.conditions
+                    .iter()
+                    .map(crate::encounter_run::Condition::words)
+                    .collect::<Vec<_>>()
+                    .join(", ")
             },
         ]
     }

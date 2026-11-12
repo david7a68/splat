@@ -2285,7 +2285,7 @@ impl Sessions {
                         detail.push_str(" · Absent");
                     }
                     for condition in &row.conditions {
-                        detail.push_str(&format!(" · {condition}"));
+                        detail.push_str(&format!(" · {}", condition.words()));
                     }
                     let mut words = egui::text::LayoutJob::default();
                     let format = |color| egui::TextFormat {

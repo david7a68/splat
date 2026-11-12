@@ -1,6 +1,7 @@
 //! Manual DM controls. These record rulings; they do not execute creature rules.
 mod ad_hoc;
 mod dock;
+pub(crate) mod effect;
 mod loot;
 mod notice;
 mod rolling;
@@ -8,6 +9,7 @@ mod undo;
 pub(crate) mod view;
 use crate::encounter_settings::{Grouping, Initiative};
 pub(crate) use ad_hoc::RunCreature;
+pub(crate) use effect::Condition;
 use eframe::egui;
 use serde::{Deserialize, Serialize};
 use serde_yaml_ng::{Mapping, Value};
@@ -62,7 +64,7 @@ pub(crate) struct Participant {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shared_roll: Option<String>,
     pub present: bool,
-    pub conditions: Vec<String>,
+    pub conditions: Vec<Condition>,
     pub concentration: bool,
     pub successes: u8,
     pub failures: u8,
@@ -511,6 +513,8 @@ impl Participant {
                 conditions.push(condition.clone());
             }
         }
+        // Free words from an encounter stay labels: nothing typed in prep starts to count.
+        let conditions: Vec<Condition> = conditions.into_iter().map(Condition::Label).collect();
         let counter = |name: &str| {
             initial
                 .get("death_saves")
@@ -1039,8 +1043,13 @@ enum Command {
     RollInitiative(usize),
     Bonus(usize, Option<i64>),
     Presence(usize, bool),
+    /// Words the DM typed for a condition or an effect, read with their time.
     Condition(usize, String),
     RemoveCondition(usize, usize),
+    /// Spend one use of the effect at this place, or give all back when none are left.
+    Spend(usize, usize),
+    /// Mark the recharge effect at this place spent, or roll to make it ready again.
+    Recharge(usize, usize),
     Concentration(usize, bool),
     DeathSaves(usize, u8, u8),
     Note(usize, String),
@@ -2151,6 +2160,9 @@ impl Run {
                 if !next.participants.iter().any(|p| p.present) {
                     return Err(NOBODY_PRESENT.into());
                 }
+                let ending = next.order[next.cursor];
+                next.log
+                    .extend(effect::count_down(&mut next.participants[ending]));
                 Self::end_turn(&mut next, self.initiative.roster_ties)?;
                 format!(
                     "Round {}: {}{TURN}",
@@ -2291,6 +2303,7 @@ impl Run {
                 last
             }
             Command::TableRoll(roll) => roll.resolve(&mut next.random)?,
+            Command::Recharge(index, at) => effect::recharge(&mut next, index, at)?,
             Command::Loot(rolls) => {
                 let mut lines = loot::roll(&mut next, rolls)?;
                 let last = lines.pop().ok_or("Choose a loot roll first.")?;
@@ -2363,6 +2376,7 @@ impl Run {
             | Command::Presence(i, ..)
             | Command::Condition(i, ..)
             | Command::RemoveCondition(i, ..)
+            | Command::Spend(i, ..)
             | Command::Concentration(i, ..)
             | Command::DeathSaves(i, ..)
             | Command::Note(i, ..) => *i,
@@ -2484,25 +2498,57 @@ impl Run {
                     "Marked absent; retains initiative and state.".into()
                 }
             }
-            Command::Condition(_, condition) => {
-                let condition = condition.trim();
-                if condition.is_empty() {
+            Command::Condition(_, typed) => {
+                let condition = Condition::read(&typed);
+                if condition.name().is_empty() {
                     return Err("Enter a condition name.".into());
                 }
-                if p.conditions
-                    .iter()
-                    .any(|c| c.eq_ignore_ascii_case(condition))
-                {
-                    return Err("That condition is already recorded.".into());
+                match p.conditions.iter().position(|c| c.same(condition.name())) {
+                    // Words already on the row change their time and add nothing.
+                    Some(at) if condition.is_effect() => {
+                        let mut changed = condition;
+                        if let Condition::Effect(effect) = &mut changed {
+                            effect.name = p.conditions[at].name().to_owned();
+                        }
+                        let words = changed.words();
+                        p.conditions[at] = changed;
+                        format!("Effect changed: {words}.")
+                    }
+                    Some(_) => return Err("That condition is already recorded.".into()),
+                    None if condition.is_effect() => {
+                        let words = condition.words();
+                        p.conditions.push(condition);
+                        format!("Effect added: {words}.")
+                    }
+                    None => {
+                        let words = condition.words();
+                        p.conditions.push(condition);
+                        format!("Condition added: {words}.")
+                    }
                 }
-                p.conditions.push(condition.into());
-                format!("Condition added: {condition}.")
             }
             Command::RemoveCondition(_, i) => {
                 if i >= p.conditions.len() {
                     return Err("Condition is missing.".into());
                 }
-                format!("Condition removed: {}.", p.conditions.remove(i))
+                let removed = p.conditions.remove(i);
+                if removed.is_effect() {
+                    format!("Effect removed: {}.", removed.words())
+                } else {
+                    format!("Condition removed: {}.", removed.words())
+                }
+            }
+            Command::Spend(_, at) => {
+                let Some(Condition::Effect(effect::Effect {
+                    name,
+                    time: effect::Time::Uses { uses, left },
+                })) = p.conditions.get_mut(at)
+                else {
+                    return Err("That effect has no uses.".into());
+                };
+                // At none left, the same target gives them all back.
+                *left = if *left == 0 { *uses } else { *left - 1 };
+                format!("{name}: {left} of {uses} left.")
             }
             Command::Concentration(_, value) => {
                 p.concentration = value;
@@ -2627,6 +2673,12 @@ impl Run {
                 .get(*index)
                 .map_or("a participant", |p| p.name.as_str())
         };
+        let condition = |index: &usize, at: &usize| {
+            self.state
+                .participants
+                .get(*index)
+                .and_then(|p| p.conditions.get(*at))
+        };
         match command {
             Command::RollNpcs(_) => "NPC initiative roll".into(),
             Command::Npc(i, _) => format!("NPC control on {}", name(i)),
@@ -2656,27 +2708,42 @@ impl Run {
                 name(i),
                 if *present { "present" } else { "absent" }
             ),
-            Command::Condition(i, condition) => format!("{} on {}", condition.trim(), name(i)),
-            Command::RemoveCondition(i, at)
-                if self
-                    .state
-                    .participants
-                    .get(*i)
-                    .and_then(|p| p.conditions.get(*at))
-                    .is_some_and(|condition| condition.starts_with("Exhaustion")) =>
-            {
-                let old = view::exhaustion_level(&self.state.participants[*i].conditions[*at]);
-                format!("exhaustion {old} → 0 on {}", name(i))
-            }
-            Command::RemoveCondition(i, at) => format!(
-                "{} off {}",
-                self.state
-                    .participants
-                    .get(*i)
-                    .and_then(|p| p.conditions.get(*at))
-                    .map_or("an effect", String::as_str),
-                name(i)
-            ),
+            Command::Condition(i, typed) => match Condition::read(typed) {
+                Condition::Effect(effect) => format!("effect {} on {}", effect.name, name(i)),
+                Condition::Label(words) => format!("{words} on {}", name(i)),
+            },
+            Command::RemoveCondition(i, at) => match condition(i, at) {
+                Some(old) if old.name().starts_with("Exhaustion") => format!(
+                    "exhaustion {} → 0 on {}",
+                    view::exhaustion_level(old.name()),
+                    name(i)
+                ),
+                Some(old) if old.is_effect() => format!("remove {} from {}", old.name(), name(i)),
+                old => format!(
+                    "{} off {}",
+                    old.map_or("an effect", Condition::name),
+                    name(i)
+                ),
+            },
+            Command::Spend(i, at) => match condition(i, at).and_then(Condition::time) {
+                Some(effect::Time::Uses { left: 0, .. }) => format!(
+                    "{} back on {}",
+                    condition(i, at).map_or("uses", Condition::name),
+                    name(i)
+                ),
+                _ => format!(
+                    "spend {} on {}",
+                    condition(i, at).map_or("a use", Condition::name),
+                    name(i)
+                ),
+            },
+            Command::Recharge(i, at) => match condition(i, at).and_then(Condition::time) {
+                Some(effect::Time::Recharge { spent: false, .. }) => format!(
+                    "{} spent",
+                    condition(i, at).map_or("an effect", Condition::name)
+                ),
+                _ => format!("recharge roll for {}", name(i)),
+            },
             Command::Concentration(i, value) => format!(
                 "{} concentration for {}",
                 if *value { "start" } else { "stop" },
@@ -2703,8 +2770,8 @@ impl Run {
                             .participants
                             .get(*i)
                             .and_then(|p| p.conditions.get(*at));
-                        if let Some(old) = old.filter(|old| old.starts_with("Exhaustion")) {
-                            let old = view::exhaustion_level(old);
+                        if let Some(old) = old.filter(|old| old.name().starts_with("Exhaustion")) {
+                            let old = view::exhaustion_level(old.name());
                             let new = commands
                                 .iter()
                                 .find_map(|command| match command {
@@ -2983,7 +3050,7 @@ struct SheetShadow {
     temp: i64,
     successes: u8,
     failures: u8,
-    conditions: Vec<String>,
+    conditions: Vec<Condition>,
 }
 impl SheetShadow {
     fn of(p: &Participant) -> Self {
@@ -3047,13 +3114,30 @@ fn apply_sheet_values(
         .get(SheetGroup::Conditions.key())
         .and_then(serde_json::Value::as_object)
     {
-        p.conditions.retain(|c| recognized_condition(c).is_none());
+        // One entry holds a condition and its count: an official condition the sheet still
+        // has keeps its count, one it removed goes with its count, and one it adds starts
+        // with none.
+        let mut official = Vec::new();
+        p.conditions.retain(|c| {
+            let known = recognized_condition(c.name()).is_some();
+            if known {
+                official.push(c.clone());
+            }
+            !known
+        });
         for (id, name) in crate::combat_sync::CONDITIONS {
             if let Some(level) = conditions.get(&id.to_string()) {
-                p.conditions.push(if id == 4 {
+                let words = if id == 4 {
                     format!("Exhaustion ({})", level.as_u64().unwrap_or(1))
                 } else {
                     name.into()
+                };
+                let kept = official
+                    .iter()
+                    .position(|c| recognized_condition(c.name()) == recognized_condition(&words));
+                p.conditions.push(match kept {
+                    Some(at) => official.remove(at),
+                    None => Condition::Label(words),
                 });
             }
         }
@@ -3098,21 +3182,24 @@ fn change_line(
             before.successes, before.failures, after.successes, after.failures
         ));
     }
-    let official = |shadow: &SheetShadow| -> Vec<String> {
+    let official = |shadow: &SheetShadow| -> Vec<Condition> {
         shadow
             .conditions
             .iter()
-            .filter(|c| recognized_condition(c).is_some())
+            .filter(|c| recognized_condition(c.name()).is_some())
             .cloned()
             .collect()
     };
-    let same = |a: &str, b: &str| recognized_condition(a) == recognized_condition(b);
+    let same = |a: &Condition, b: &Condition| {
+        recognized_condition(a.name()) == recognized_condition(b.name())
+    };
     let (old, new) = (official(before), official(after));
+    // A condition with a count says what went with it: `Frightened, 7 rounds left removed`.
     for gone in old.iter().filter(|c| !new.iter().any(|n| same(c, n))) {
-        parts.push(format!("{gone} removed"));
+        parts.push(format!("{} removed", gone.what_went()));
     }
     for added in new.iter().filter(|c| !old.iter().any(|o| same(c, o))) {
-        parts.push(format!("{added} added"));
+        parts.push(format!("{} added", added.name()));
     }
     format!("{name} {}", parts.join(", "))
 }
@@ -3120,10 +3207,10 @@ fn change_line(
 /// Which groups hold different values in these two. Only conditions the sheet knows count, by
 /// what they are: `poisoned` and `Poisoned` are one condition.
 fn shadow_differences(now: &SheetShadow, then: &SheetShadow) -> Vec<SheetGroup> {
-    let sorted = |conditions: &[String]| {
+    let sorted = |conditions: &[Condition]| {
         let mut conditions: Vec<String> = conditions
             .iter()
-            .filter_map(|c| recognized_condition(c))
+            .filter_map(|c| recognized_condition(c.name()))
             .map(|(id, level)| format!("{id}:{level}"))
             .collect();
         conditions.sort();
@@ -3165,7 +3252,7 @@ fn local_group(
                 values.remove(&id.to_string());
             }
             for condition in &p.conditions {
-                if let Some((id, level)) = recognized_condition(condition) {
+                if let Some((id, level)) = recognized_condition(condition.name()) {
                     values.insert(id.to_string(), level);
                 }
             }
@@ -3830,7 +3917,8 @@ impl Run {
     #[cfg(test)]
     pub(crate) fn combat_state_for_test(&self, index: usize) -> (Option<i64>, Vec<String>) {
         let participant = &self.state.participants[index];
-        (participant.hp, participant.conditions.clone())
+        let words = participant.conditions.iter().map(Condition::words);
+        (participant.hp, words.collect())
     }
     /// The encounter this run came from, if it says.
     pub(crate) fn source(&self) -> Option<Uuid> {
@@ -4588,7 +4676,7 @@ pub struct FightRow {
     pub hp: Option<i64>,
     pub max_hp: Option<i64>,
     pub temporary_hp: i64,
-    pub conditions: Vec<String>,
+    pub conditions: Vec<Condition>,
     pub present: bool,
 }
 
@@ -5789,7 +5877,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mut run = self::run();
         begin(&mut run);
-        run.state.participants[0].conditions = vec![String::new(); 40_000];
+        run.state.participants[0].conditions = vec![Condition::Label(String::new()); 40_000];
         for _ in 0..12 {
             run.apply(Command::Next).unwrap();
         }
@@ -7924,7 +8012,7 @@ mod tests {
             run.state.round,
             run.state.phase.clone(),
         );
-        assert!(state.0.is_some() && state.1.contains(&"Prone".to_owned()));
+        assert!(state.0.is_some() && state.1.contains(&Condition::from("Prone")));
         run.dirty = false;
         assert!(!run.follow_prep(Uuid::new_v4(), "Other words."));
         assert_eq!(run.prep().0, "Ash falls.");

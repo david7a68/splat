@@ -900,7 +900,8 @@ fn history_summary(
                         blocked_reason(ui, Some("Absent"));
                     }
                     if !row.conditions.is_empty() {
-                        blocked_reason(ui, Some(&row.conditions.join(", ")));
+                        let words: Vec<_> = row.conditions.iter().map(|c| c.words()).collect();
+                        blocked_reason(ui, Some(&words.join(", ")));
                     }
                 });
             });
