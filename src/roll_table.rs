@@ -428,16 +428,29 @@ struct RollState {
     value: Option<i64>,
 }
 
-fn roll_state_id(key: &str) -> egui::Id {
-    egui::Id::new(("roll_table", key))
+/// One table's roll state in one reader. `reader` is the reader's own `Ui` id, so World and
+/// Lookup showing the same table keep their own typed roll, result and field (round 26 AE1).
+fn roll_state_id(reader: egui::Id, key: &str) -> egui::Id {
+    egui::Id::new(("roll_table", reader, key))
 }
 
 fn request_id() -> egui::Id {
     egui::Id::new("roll_table_request")
 }
 
-/// **Roll** and a box for a typed result, under a marked table.
-pub fn roll_control(ui: &mut egui::Ui, marker: &Result<Marker, String>, table: &[Vec<String>]) {
+/// The roll state that asked for the pending roll, so its result goes back to that reader only.
+fn requester_id() -> egui::Id {
+    egui::Id::new("roll_table_requester")
+}
+
+/// **Roll** and a box for a typed result, under a marked table. `reader` is the id of the
+/// reader that shows the table: the same one `matched_row` gets.
+pub fn roll_control(
+    ui: &mut egui::Ui,
+    reader: egui::Id,
+    marker: &Result<Marker, String>,
+    table: &[Vec<String>],
+) {
     let checked = marker
         .as_ref()
         .map_err(String::clone)
@@ -450,7 +463,7 @@ pub fn roll_control(ui: &mut egui::Ui, marker: &Result<Marker, String>, table: &
             return;
         }
     };
-    let id = roll_state_id(key);
+    let id = roll_state_id(reader, key);
     let mut state: RollState = ui.data(|data| data.get_temp(id)).unwrap_or_default();
     let mut request = None;
     ui.horizontal_wrapped(|ui| {
@@ -463,8 +476,9 @@ pub fn roll_control(ui: &mut egui::Ui, marker: &Result<Marker, String>, table: &
         {
             request = Some(None);
         }
-        let response = design::number_field(
+        let response = design::number_field_with_id(
             ui,
+            id.with("typed"),
             &format!("Typed roll for {}", design::reader::human_label(key)),
             &mut state.typed,
             "Typed roll",
@@ -487,7 +501,10 @@ pub fn roll_control(ui: &mut egui::Ui, marker: &Result<Marker, String>, table: &
             typed,
             rows,
         };
-        ui.data_mut(|data| data.insert_temp(request_id(), roll));
+        ui.data_mut(|data| {
+            data.insert_temp(request_id(), roll);
+            data.insert_temp(requester_id(), id);
+        });
     }
     // One line under the Roll row is kept for the result, empty until the first roll, so a roll
     // moves nothing below the table. A result longer than the line ends in `…`; its hover and
@@ -514,10 +531,13 @@ pub fn take_roll(ctx: &egui::Context) -> Option<TableRoll> {
     ctx.data_mut(|data| data.remove_temp::<TableRoll>(request_id()))
 }
 
-/// Show a roll's result under its table.
-pub fn settle_roll(ctx: &egui::Context, key: &str, result: String) {
-    let id = roll_state_id(key);
+/// Show a roll's result under its table, in the reader that asked for it.
+pub fn settle_roll(ctx: &egui::Context, result: String) {
     ctx.data_mut(|data| {
+        let Some(id) = data.get_temp::<egui::Id>(requester_id()) else {
+            return;
+        };
+        data.remove::<egui::Id>(requester_id());
         let mut state: RollState = data.get_temp(id).unwrap_or_default();
         state.value = result
             .split_whitespace()
@@ -530,12 +550,13 @@ pub fn settle_roll(ctx: &egui::Context, key: &str, result: String) {
 
 pub fn matched_row(
     ui: &egui::Ui,
+    reader: egui::Id,
     marker: &Result<Marker, String>,
     table: &[Vec<String>],
 ) -> Option<usize> {
     let Marker { key, dice, .. } = marker.as_ref().ok()?;
     let value = ui
-        .data(|data| data.get_temp::<RollState>(roll_state_id(key)))?
+        .data(|data| data.get_temp::<RollState>(roll_state_id(reader, key)))?
         .value?;
     table_rows(dice, table)
         .ok()?

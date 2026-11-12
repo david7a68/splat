@@ -1230,12 +1230,11 @@ impl Splat {
             self.start_fight_with(&fight);
         }
         if let Some(roll) = roll_table::take_roll(ctx) {
-            let key = roll.key.clone();
             let result = match self.encounters.run_mut() {
                 Some(run) if !run.ended() => run.roll_table(roll),
                 _ => roll_table::roll_alone(&roll),
             };
-            roll_table::settle_roll(ctx, &key, result.unwrap_or_else(|error| error));
+            roll_table::settle_roll(ctx, result.unwrap_or_else(|error| error));
         }
     }
 
