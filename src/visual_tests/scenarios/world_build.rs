@@ -1224,6 +1224,7 @@ pub fn broken(d: &mut Driver<'_>) {
     d.click("Undo name change");
     d.settle();
     let refused = fs::read_to_string(&lamp).unwrap() == lamp_both
+        && d.has_containing("changed on disk")
         && d.in_view("Undo stat block change")
         && d.in_view("Undo name change");
     d.click("Undo stat block change");
