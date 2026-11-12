@@ -8427,28 +8427,8 @@ mod tests {
                 // Whole pixels: a form measured alone and the same form in the line can round
                 // apart by one pixel. No word moves more, or to another line.
                 assert!(at.iter().all(|x| (x - at[0]).abs() <= 1.0), "{at:?}");
-                // Review of PR 276, round 1. A count's target starts after its condition's
-                // name, so the name keeps its own target.
-                let mut prone = p.clone();
-                prone.initiative = Some(10);
-                prone.conditions = vec![Condition::read("Prone 2 rounds")];
-                for scale in [design::RUN_REGULAR, design::RUN_COMPACT] {
-                    let layout =
-                        RowLayout::new(ui, 900.0, &prone, None, scale, RowFit::Natural, 0.0);
-                    let line = layout.second_line.as_ref().unwrap();
-                    let (_, name) = layout.condition_spans.first().expect("Prone's name");
-                    let (_, _, count) = layout.effect_spans.first().expect("its count");
-                    let name_end = last_letter_right(line, name.end).unwrap();
-                    let rect = Rect::from_min_size(pos2(0.0, 0.0), vec2(900.0, 60.0));
-                    let (_, target) = effect_target(line, count, pos2(0.0, 0.0), rect).unwrap();
-                    assert!(
-                        target.left() >= name_end,
-                        "{name_end} {target:?}: {}",
-                        line.text()
-                    );
-                    assert!(target.width() >= design::XL);
-                }
-                // A time on a condition that shows keeps the row's height and its words.
+                // Review of PR 276, round 1. A time on a condition that shows keeps the row's
+                // height and its words.
                 let mut poisoned = p.clone();
                 poisoned.name = "Guard".into();
                 poisoned.initiative = Some(10);
@@ -8472,6 +8452,27 @@ mod tests {
                             words(&after)
                         );
                     }
+                }
+                let mut prone = p.clone();
+                prone.initiative = Some(10);
+                prone.conditions = vec![Condition::read("Prone 2 rounds")];
+                // A count's target starts after its condition's
+                // name, so the name keeps its own target.
+                for scale in [design::RUN_REGULAR, design::RUN_COMPACT] {
+                    let layout =
+                        RowLayout::new(ui, 900.0, &prone, None, scale, RowFit::Natural, 0.0);
+                    let line = layout.second_line.as_ref().unwrap();
+                    let (_, name) = layout.condition_spans.first().expect("Prone's name");
+                    let (_, _, count) = layout.effect_spans.first().expect("its count");
+                    let name_end = last_letter_right(line, name.end).unwrap();
+                    let rect = Rect::from_min_size(pos2(0.0, 0.0), vec2(900.0, 60.0));
+                    let (_, target) = effect_target(line, count, pos2(0.0, 0.0), rect).unwrap();
+                    assert!(
+                        target.left() >= name_end,
+                        "{name_end} {target:?}: {}",
+                        line.text()
+                    );
+                    assert!(target.width() >= design::XL);
                 }
                 // Through `2`, `last round` and `time is up`, the same words show at every width
                 // and the word after the slot keeps its place.
