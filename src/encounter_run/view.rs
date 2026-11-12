@@ -6844,6 +6844,9 @@ struct Extra {
     /// An official condition with a time shows as the plain condition: the row as it was
     /// before the DM gave it the time.
     official_as_plain: bool,
+    /// Plain conditions shown before `N more`: all of them, or at fewest one, as the row's
+    /// folding of section 1.4 can leave them.
+    fewest_plain: bool,
 }
 
 /// The effects a row shows: the first ones with their words, each with its count, then the
@@ -7077,6 +7080,7 @@ impl RowLayout {
                 .iter()
                 .filter(|c| !c.is_effect() || (extra.official_as_plain && official(c)))
                 .count();
+            let plain = if extra.fewest_plain { plain.min(1) } else { plain };
             Self::measured(ui, input, (plain, BonusFit::All, extra))
         };
         // The row with each time taken away: an official condition that gained a time shows
@@ -7101,7 +7105,7 @@ impl RowLayout {
         let layout = measure(&Extra {
             effects,
             conc_dc: dc,
-            official_as_plain: false,
+            ..Extra::default()
         });
         Self {
             without_effects: Some(Box::new(base)),
@@ -7151,11 +7155,14 @@ impl RowLayout {
             .collect();
         // The first effect alone, shortened to the room that the line leaves it.
         if let Some(&(at, name)) = effects.first() {
+            // Its room is what the line leaves with the plain conditions folded as far as the
+            // row folds them, since the effects come first.
             let bare = measure(&Extra {
                 effects: EffectPart {
                     shown: vec![(at, String::new())],
                     rest: effects.len() - 1,
                 },
+                fewest_plain: true,
                 ..Extra::default()
             });
             if let Some(line) = bare.second_line.as_ref().filter(|_| keeps(&bare)) {
@@ -7198,7 +7205,7 @@ impl RowLayout {
             let with = measure(&Extra {
                 effects: effects.clone(),
                 conc_dc: Some(*dc),
-                official_as_plain: false,
+                ..Extra::default()
             });
             keeps(&with)
                 && line(&with)
