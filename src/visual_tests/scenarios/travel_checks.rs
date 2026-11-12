@@ -160,8 +160,19 @@ pub fn run(d: &mut Driver<'_>) {
         "With several tables and no earlier choice, the block waits for a table, and focus is in How long",
     );
     // App round 2: where the line has no room, the result shortens by whole words, never
-    // inside a word (at 1200x800 the note is beside the plan).
-    for size in [SMALL, DEFAULT, LARGE] {
+    // inside a word (at 1200x800 the note is beside the plan). Review round 1: widths between,
+    // so that a cut that is blind to words lands inside one at some of them.
+    for size in [
+        SMALL,
+        (1040.0, 800.0),
+        (1080.0, 800.0),
+        (1120.0, 800.0),
+        (1160.0, 800.0),
+        DEFAULT,
+        (1240.0, 800.0),
+        (1280.0, 800.0),
+        LARGE,
+    ] {
         // The line that paints the result: whole, or its start and `…`.
         let line = d.at_size(size, |d| {
             d.painted_lines_in(egui::Rect::EVERYTHING)

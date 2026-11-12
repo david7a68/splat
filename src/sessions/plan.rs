@@ -687,13 +687,12 @@ fn read_encounter(
             job
         }
         (None, Some(missing)) => {
-            let (Some(words), Some(fitted)) = (
-                missing.words(),
-                missing.fitted(|words| crate::difficulty::width(ui, &muted(words)) <= room),
-            ) else {
-                return link;
-            };
-            if fitted != words {
+            // With no name known, the reason in its short form, as the editor's heading has it
+            // (pull request 290).
+            let fitted = missing
+                .fitted(|words| crate::difficulty::width(ui, &muted(words)) <= room)
+                .unwrap_or_else(|| missing.short().to_owned());
+            if let Some(words) = missing.words().filter(|words| *words != fitted) {
                 whole = Some(words);
             }
             muted(&fitted)
@@ -733,6 +732,27 @@ fn edit_encounter_line(ui: &mut egui::Ui, plan: &Plan<'_>) -> bool {
         .blocked(plan.group_blocked)
         .show(ui)
         .clicked()
+}
+
+/// One scroll, on the frame the DM opened a played fight's row (review round 1): the row with its
+/// fields and the next fight's primary action both in view when they fit together, with as little
+/// scroll as that needs; else that action in view at the pane's bottom, under as much of the row
+/// as fits. With no fight to come, the row at the top, as for any other row.
+fn reveal_opened_played(
+    ui: &egui::Ui,
+    opened: Option<egui::Rect>,
+    next_action: Option<egui::Rect>,
+) {
+    let Some(opened) = opened else {
+        return;
+    };
+    match next_action.filter(|action| action.top() > opened.top()) {
+        Some(action) if opened.union(action).height() <= ui.clip_rect().height() => {
+            ui.scroll_to_rect(opened.union(action), None);
+        }
+        Some(action) => ui.scroll_to_rect(action, Some(egui::Align::BOTTOM)),
+        None => ui.scroll_to_rect(opened, Some(egui::Align::TOP)),
+    }
 }
 
 /// The rule below a row. Returns its height, which the scenes' fold counts with the row's.
@@ -2623,6 +2643,9 @@ impl Sessions {
                     + Density::Read.control() + design::S;
                 let mut any = false;
                 let mut primary_available = plan.open_run.is_none() && !self.confirm_record;
+                // The opened played row, on the frame the DM opened it, and the next fight's action.
+                let mut opened_played = None;
+                let mut next_action = None;
                 for (at, event) in book.events.iter_mut().enumerate() {
                     if let Some((removed_at, words)) = &removed_row && *removed_at == at {
                         ui.add_space(design::S);
@@ -2775,7 +2798,10 @@ impl Sessions {
                         closed += plan_rule(ui);
                     });
                     // The opened row and the next row stay in reach.
-                    if is_open && std::mem::take(&mut self.reveal_event) { row.response.scroll_to_me(Some(egui::Align::TOP)); }
+                    if is_open && std::mem::take(&mut self.reveal_event) {
+                        // A played fight's row waits for the next fight's action (review round 1).
+                        if event.run.is_some() { opened_played = Some(row.response.rect); } else { row.response.scroll_to_me(Some(egui::Align::TOP)); }
+                    }
                     reveal.after(ui, Some(&event.id), row.response.rect);
                 }
                 if let Some((at, words)) = &removed_row && *at >= event_count {
@@ -2827,15 +2853,19 @@ impl Sessions {
                                 // The run strip owns Back to run.
                             } else if let Some(saved) = saved {
                                 let action = if std::mem::take(&mut primary_available) { Action::primary("Resume") } else { Action::secondary("Resume") };
-                                if action.icon(icons::RUN).name(&format!("Resume: {}", fight.name)).density(Density::Read).blocked(plan.blocked).show(ui).clicked() {
+                                let shown = action.icon(icons::RUN).name(&format!("Resume: {}", fight.name)).density(Density::Read).blocked(plan.blocked).show(ui);
+                                if position == 0 { next_action = Some(shown.rect); }
+                                if shown.clicked() {
                                     self.wants_saved_run = Some(saved.path.clone());
                                 }
                             } else {
                                 let action = if std::mem::take(&mut primary_available) {
                                     Action::primary("Start fight")
                                 } else { Action::secondary("Start fight") };
-                                if action.icon(icons::RUN).name(&format!("Start fight: {}", fight.name))
-                                    .density(Density::Read).blocked(plan.blocked).show(ui).clicked() {
+                                let shown = action.icon(icons::RUN).name(&format!("Start fight: {}", fight.name))
+                                    .density(Density::Read).blocked(plan.blocked).show(ui);
+                                if position == 0 { next_action = Some(shown.rect); }
+                                if shown.clicked() {
                                     self.wants_fight = Some(fight.path.clone());
                                 }
                             }
@@ -2931,6 +2961,7 @@ impl Sessions {
                     design::empty_state(ui, icons::SESSIONS, "Nothing planned yet",
                         "Use Add to plan a fight, a group, or an event.", |_| {});
                 }
+                reveal_opened_played(ui, opened_played, next_action);
                 reveal.finish(ui);
                 self.scene_field(ui, index.as_deref(), shown, &mut scene_act);
                 let drawn = ui.min_rect();
@@ -4221,12 +4252,24 @@ mod tests {
                 names: vec!["Nameless Thing".into(), "Wisp".into()],
             }),
         };
+        // A roster member whose name cannot be read: the reason in its short form.
+        let nameless = Difficulty {
+            xp: 0,
+            rating: None,
+            unknown: 1,
+            missing: Some(Missing {
+                what: Unknown::Level,
+                at: vec![0],
+                names: Vec::new(),
+            }),
+        };
         for (difficulty, words) in [
             (rated, "Read encounter · Above High · XP 6,300"),
             (
                 unknown,
                 "Read encounter · XP not known: Nameless Thing and 1 more",
             ),
+            (nameless, "Read encounter · Level not known"),
         ] {
             // The second frame has the app's fonts.
             let frame = || {

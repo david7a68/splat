@@ -758,6 +758,57 @@ fn after_the_session(a: &mut Audit<'_, '_>) {
             .iter()
             .any(|event| event.title == TONIGHT && event.place == "The ford")
     ));
+    // Review round 1 (REVIEW-291-next-primary): opening the played row, taller by `Where`, keeps
+    // the next fight's primary action in view with the row's fields, at both sizes and with
+    // Lookup closed and open. Uncounted: the DM opens the row at each size; the row ends open at
+    // the evening's own size, as before.
+    a.setup(
+        "the opened row and the next fight's action, at both sizes",
+        |d| {
+            for lookup in [false, true] {
+                if lookup {
+                    d.press_ctrl(Key::K);
+                }
+                for size in [super::driver::SMALL, super::driver::DEFAULT] {
+                    let (next, place) = d.at_size_mut(size, |d| {
+                        show_plan(d);
+                        d.click(TONIGHT);
+                        d.click(TONIGHT);
+                        let nodes = d.nodes();
+                        let next = nodes
+                            .iter()
+                            .find(|node| {
+                                node.name.starts_with("Start fight: ")
+                                    || node.name.starts_with("Resume: ")
+                            })
+                            .map(|node| (node.name.clone(), node.rect, node.fully_in_view()));
+                        let place = nodes
+                            .iter()
+                            .find(|node| {
+                                node.name == "Where"
+                                    && node.role == egui::accesskit::Role::TextInput
+                            })
+                            .map(|node| (node.rect, node.fully_in_view()));
+                        (next, place)
+                    });
+                    d.observe(
+                        "REVIEW-291-next-primary",
+                        next.as_ref().is_some_and(|next| next.2)
+                            && place.is_some_and(|place| place.1),
+                        format!(
+                            "At {size:?}, Lookup open {lookup}: next {next:?}, Where {place:?}"
+                        ),
+                    );
+                }
+                if lookup {
+                    d.press_ctrl(Key::K);
+                }
+            }
+            show_plan(d);
+            d.click(TONIGHT);
+            d.click(TONIGHT);
+        },
+    );
 
     a.task("Process the recording and read the summary");
     a.click(Sub, "Recordings, 1 recording");

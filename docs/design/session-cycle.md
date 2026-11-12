@@ -262,7 +262,7 @@ encounter and plan the fights. These four change:
 | **F9.** To check for an encounter on the road | The row's menu; `Roll for encounters`; `Roll` | Find 1, Do 2 = 3. With several marked tables and no earlier choice, 2 more, once | `Timeline.md`: the table's key and one check line |
 | **F7.** The first fight's rewards, with XP | `Add rewards`. The notes have no rewards yet, so it writes the XP line and says how to stop it | Do 1 | The note: a block under `## Loot and rewards` |
 | **F7.** The second fight's rewards | `Add rewards`. It follows the first block | Do 1 | A second block. The result says `XP tonight` |
-| **F6.** To put what Varra said in her note | `Add to Log` on the done scene's row, which opens Lookup with the Log field; type; Enter; close Lookup | Panel 2, Do 2 = 4 | `NPCs/Captain Varra.md`: one line under `## Log` |
+| **F6.** To put what Varra said in her note | `Add to Log` on the done scene's row, which opens Lookup with the Log field; type; Enter; close Lookup | Panel 2, Do 2 = 4; 5 in the measured evening, where the reviewed fight's row is open and taller by `Where`, so the DM closes it first (section 2.5 rows 14 and 35) | `NPCs/Captain Varra.md`: one line under `## Log` |
 
 Both fights' titles leave room for `Add rewards` on the row at 330 px. A long title costs 1 more: open the row.
 At 960x640 with Lookup open the counts are the same, with one exception: the note is behind its tab, so the
@@ -404,7 +404,7 @@ today and its fit rule. No row adds a line, changes a row's height or takes widt
 | 10 | An ended fight's plan row | `Add rewards` (F7) | The action band: `plan.rs:692-694`; the opened row's links: `:1313-1321` | On the row only when the title keeps its lines beside the action's own width. Else the last link of the opened row, after `Timeline`. A fight whose reference an old note already has as a list line says `In notes` |
 | 8 | A campaign World entry's reader | `Add to Log` after `Edit` (F6) | The header: `src/world.rs:1733-1768` | Section 1.2: its word, then its icon, then not shown |
 | 9 | A campaign creature's or NPC's reader, with no run open | A quiet `Start fight` after `Add to Log` (F3) | The same header | Section 1.2: with its word, or not shown |
-| 10 | An ended fight's plan row | `Add rewards` (F7) | The action band: `plan.rs:692-694`; the opened row's links: `:1313-1321` | On the row only when the title keeps its width and its line breaks beside the action's own width. Else the last link of the opened row, after `Timeline`, while that line has room. Else the last line of the row's menu (measured in P7: the links with `Add rewards` take about 326 px, and the plan at 330 px gives them 296). A fight whose reference an old note already has as a list item says `In notes`, also in the menu |
+| 10 | An ended fight's plan row | `Add rewards` (F7) | The action band: `plan.rs:692-694`; the opened row's links: `:1313-1321` | On the row only when the title keeps its width and its line breaks beside the action's own width. Else the last link of the opened row, after `Timeline`, while that line has room. Else the last line of the row's menu (measured in P7 at the page's wider gap: the links with `Add rewards` took about 326 px; with one `S` gap at each `·` (X48) they take about 286, and the plan at 330 px gives them 296, so there they are the last link). A fight whose reference an old note already has as a list item says `In notes`, also in the menu |
 | 12 | A Travel row's menu | One more line, `Roll for encounters`, when the campaign has a marked table (F9) | `plan.rs:727-735`; `src/timeline/page.rs:875-877` | A menu line |
 | 13 | A **Ready to run** row's menu, for an encounter with no saved run | One more line, `Remove…` (F3) | `src/encounters/list.rs:560-565` | A menu line |
 
@@ -414,7 +414,7 @@ that G7 allows.
 | # | Screen | What differs | From |
 |---|---|---|---|
 | 11 | The **Last time** line | `Carry over` at its end, while the session has no event and no run and the last session holds a part to carry (F5). The preview is cut to its room today (`page.rs:4106-4115`), so the action takes 81 px (measured in P8) and an `L` gap from it. The preview shortens first, to nothing; then the link's words shorten; nothing wraps | Round 3: the one ruled exception to rule J |
-| 14 | The plan, when the DM's note has a task line under `## Plan for tonight` | The line is a scene: a row with a box, counted in **Tonight**, and not repeated in Read (F3). When the plan's rows do not fit its pane, the scenes fold to `N scenes` on the **Tonight** line, so no other row moves or narrows and the next fight's action stays whole and in view (F3, the fold). The fold has three causes: the closed rows with the scenes do not fit; an opened row's details would push the next fight's action out of view with scenes above that fight; and, in a plan with no fight still to come (an older session), the rows with an opened row's details do not fit (app round 2, X15). The measured evening has none | The ruling on scenes: it is the DM's own plan |
+| 14 | The plan, when the DM's note has a task line under `## Plan for tonight` | The line is a scene: a row with a box, counted in **Tonight**, and not repeated in Read (F3). When the plan's rows do not fit its pane, the scenes fold to `N scenes` on the **Tonight** line, so no other row moves or narrows and the next fight's action stays whole and in view (F3, the fold). The fold has three causes: the closed rows with the scenes do not fit; an opened row's details would push the next fight's action out of view with scenes above that fight; and, in a plan with no fight still to come (an older session), the rows with an opened row's details do not fit (app round 2, X15). In the measured evening the scenes fold once: in the after phase, the reviewed fight's row, open and taller by `Where` (row 35), would push the improvised fight's action out of view with Hobb's scene above it, so the DM closes that row before the scene's `Add to Log` (1 more, by the lead's ruling after app round 2) | The ruling on scenes: it is the DM's own plan |
 | 15 | The **Conditions** tab's `Other effect…` field | Words that end with a time, a count of uses or a recharge are read as F2 says: `Bless 10 rounds` counts down, and `Frightened 10 rounds` becomes that condition with a count. The field, its label, its `Add` button and its place are as today | Round 3: the field stays, so `Effect` has a way when the dock has no room |
 | 16 | The **Last time** line | Its preview reads the last session's `What happened`. Today it reads that note's own recap first (`page.rs:915`) | Rule H: the preview and the carry-over read one source |
 | 17 | Lookup, while it holds an unsaved generated NPC | An entry that opens shows under one row, `Unsaved NPC: <name> · Show`. Today the card hides it (`src/lookup.rs:2167-2169`) | The accepted repair of Lookup |
@@ -453,7 +453,11 @@ The campaign's notes already use XP, and the last session's note has words under
 | 9 | **F1.** Is each of the two fights right for this party? | Session plan | Read the word on each row; open a row whose summary has no room | 0 to 2 (`Find`) | By hand, with the rule open | None |
 | 10 | To start | Session plan | `Start fight` | Nav 1, **T** | 1 | The run file |
 
-Totals: **2 transitions and 23 to 25 interactions (Nav 2, Panel 2, Find 1 to 3, Do 18).** Today's app has no
+Totals: **2 transitions and 23 to 25 interactions (Nav 2, Panel 2, Find 1 to 3, Do 18).** After step 9, a DM
+whose word says a fight is wrong changes its roster from the plan (Sol's W1-D1, app round 2): the row's menu,
+`Edit encounter`, the change (a duplicate is the row's menu and `Duplicate`), `Save encounter`, `Back to
+session`: Find 1, Nav 2, Do 3 = 6, **T T**, where the way by Encounters cost 7, **T T**. The measured evening's
+task "Change a planned fight's roster from the plan, and come back" counts it; it is outside these totals. Today's app has no
 route for steps 5, 7 and 9; the steps that it has cost 20 and leave less record. HP carries inside one
 session, as today (`src/lib.rs:328`, `src/timeline.rs:300`): the new session's first fight starts from the
 sheets, and a paused fight that the DM resumes keeps its own HP. At 960x640, step 3 goes by `Edit` beside a
@@ -1283,9 +1287,10 @@ holds only the menu today (`src/sessions/plan.rs:692-694`), and its title has th
 `Add rewards` is a quiet action in that band, left of the menu, only when the title keeps the width and the
 line breaks that it has today beside the action's own width; the same number of lines is not enough. P7 works this out when the title or the width changes, not each
 frame. When the title uses the width, it is the last of the opened row's links: `Log · Whole run · Timeline ·
-Add rewards` (`:4918-4926`), so no link of today moves, while that line has room for it. Measured in P7, that
-line takes about 326 px and the plan at 330 px gives it 296, so there it is the last line of the row's menu
-(rule 2: a menu that exists in that place), and the opened row gains no line. After the act, the same place says `In notes`: the
+Add rewards` (`:4918-4926`), so no link of today moves, while that line has room for it. With one `S` gap on
+each side of each `·` (app round 2, X48) that line takes about 286 px, and the plan at 330 px gives it 296, so
+there it is the last link; where the line has no room, it is the last line of the row's menu (rule 2: a menu
+that exists in that place), and the opened row gains no line. After the act, the same place says `In notes`: the
 status that an event's row has today (`:4392`), muted words in the opened row, or the same status as the
 last line of the row's menu.
 

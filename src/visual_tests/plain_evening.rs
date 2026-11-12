@@ -2028,17 +2028,48 @@ mod allowed_classes {
                 .flatten()
         }
 
+        /// The frozen view of a difference: its controls as they were (review round 1).
+        fn frozen(d: &Difference) -> Option<&'static super::super::View> {
+            static REFERENCE: std::sync::OnceLock<super::super::Reference> =
+                std::sync::OnceLock::new();
+            REFERENCE
+                .get_or_init(|| super::super::read(&super::super::folder().join("reference.json")))
+                .views
+                .iter()
+                .find(|view| (&view.screen, &view.view) == (&d.screen, &d.view))
+        }
+
+        /// A control of the frozen view, by its name.
+        fn was(d: &Difference, name: impl Fn(&str) -> bool) -> Vec<[f32; 4]> {
+            frozen(d).map_or_else(Vec::new, |view| {
+                view.controls
+                    .iter()
+                    .filter(|item| name(&item.0))
+                    .filter_map(|item| <[f32; 4]>::try_from(item.1.as_slice()).ok())
+                    .collect()
+            })
+        }
+
         /// The view's `Where` block: its label's and its field's new places, the field whole,
-        /// at least `XL` tall and as wide as its label, starting at the label's left
-        /// `LABEL_TO_FIELD` under it.
+        /// at least `XL` tall, starting at the label's left `LABEL_TO_FIELD` under it. Anchored
+        /// to the frozen view (review round 1): the label at the links' line's start (`Log`'s
+        /// target, which reaches past its word by less than half), below that line; the field
+        /// ends where the plan's row menus end, so it is as wide as the rows' column.
         fn block(d: &Difference, rows: &[AllowedRow]) -> Option<([f32; 4], [f32; 4])> {
             let label = same_view(d, rows).find_map(|o| new_at(o, "Label: Where"))?;
             let field = same_view(d, rows).find_map(|o| new_at(o, "TextInput: Where"))?;
-            (near(field[0], label[0])
+            let log = *was(d, |name| name == "Link: Log").first()?;
+            let menus = was(d, |name| name.starts_with("Button: More actions for "));
+            let right = menus.first().map(|menu| menu[0] + menu[2])?;
+            (menus.iter().all(|menu| near(menu[0] + menu[2], right))
+                && label[0] >= log[0]
+                && label[0] <= log[0] + log[2] / 2.0
+                && label[1] >= log[1] + log[3]
+                && near(field[0], label[0])
                 && near(field[1], label[1] + LABEL_TO_FIELD)
                 && field[3] >= 24.0
-                && field[2] >= label[2])
-                .then_some((label, field))
+                && near(field[0] + field[2], right))
+            .then_some((label, field))
         }
 
         /// A move straight down: the same left and size, lower.
@@ -2173,11 +2204,20 @@ mod allowed_classes {
         /// tall, and its words inside it.
         pub(super) fn edit_line(d: &Difference, rows: &[AllowedRow]) -> bool {
             const MENU: &str = "session-tonight: fight row menu";
+            // The menu's last line of today, and the new line one menu line under it, at its
+            // left and its width (review round 1).
             let button = |o: &Difference| {
+                let last = was(o, |name| name == "Button: Remove from tonight");
                 (o.screen == MENU && o.what == "control" && o.change == "new")
                     .then(|| new_at(o, "Button: Edit encounter"))
                     .flatten()
-                    .filter(|r| r[3] >= 24.0)
+                    .filter(|r| {
+                        r[3] >= 24.0
+                            && last.len() == 1
+                            && near(r[0], last[0][0])
+                            && near(r[2], last[0][2])
+                            && near(r[1], last[0][1] + super::MENU_LINE)
+                    })
             };
             if button(d).is_some() {
                 return true;
@@ -4446,15 +4486,18 @@ mod allowed_classes {
             log("738.5 363 103.5x28 -> 758.5 363 83.5x28"),
             icon.clone(),
         ]);
+        // The menu's views are named by size alone.
         let edit = |screen: &str, detail: &str| {
-            at(
+            let mut row = at(
                 37,
                 screen,
                 "control",
                 "new",
                 "Button: Edit encounter",
                 detail,
-            )
+            );
+            row.difference.view = "1200x800".into();
+            row
         };
         good.push(edit(
             "session-tonight: fight row menu",
@@ -4664,6 +4707,57 @@ mod allowed_classes {
             unfit.join("\n")
         );
         println!("allowed.json classes: {counts:?}");
+        // Review round 1 (the review's probe): the real rows with the new controls moved into
+        // old content are refused: `Where` 80 px sideways, its field narrowed to 35 px, and
+        // `Edit encounter` 34 px up over `Remove from tonight`.
+        for (fault, mode) in [
+            ("Where block 80 px sideways", 0),
+            ("Edit encounter over the preceding menu line", 1),
+            ("Where field narrowed to 35 px", 2),
+        ] {
+            let menu = mode == 1;
+            let mut attacked: Allowed = read(&folder().join("allowed.json"));
+            let mut changed = 0;
+            for row in &mut attacked.rows {
+                let d = &mut row.difference;
+                let where_part = row.row == 35
+                    && d.change == "new"
+                    && [
+                        "Where",
+                        "Label: Where",
+                        "TextRun: Where",
+                        "TextInput: Where",
+                    ]
+                    .contains(&d.name.as_str());
+                if !(where_part && !menu || menu && row.row == 37 && d.change == "new") {
+                    continue;
+                }
+                let mut parts: Vec<String> =
+                    d.detail.split_whitespace().map(str::to_owned).collect();
+                if mode == 2 {
+                    if d.name != "TextInput: Where" {
+                        continue;
+                    }
+                    let (_, height) = parts[3].split_once('x').unwrap();
+                    parts[3] = format!("35x{height}");
+                } else {
+                    let at = if menu { 2 } else { 1 };
+                    let value: f32 = parts[at].parse().unwrap();
+                    parts[at] = (value + if menu { -34.0 } else { 80.0 }).to_string();
+                }
+                d.detail = parts.join(" ");
+                changed += 1;
+            }
+            assert!(changed > 0, "{fault}: no row changed");
+            let rejected = classes(&attacked.rows)
+                .iter()
+                .filter(|class| class.is_none())
+                .count();
+            assert!(
+                rejected > 0,
+                "{fault} was accepted ({changed} rows changed)"
+            );
+        }
         // The classes refuse what a fault looks like: a line gone, or `Remove` narrower.
         let remove = Difference {
             screen: TRAVEL_MENU.into(),

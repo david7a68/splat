@@ -1787,7 +1787,7 @@ at the link's right edge, so each `·` has the same blank on each side. A fight 
 known says why on that line, in `muted`: `Read encounter · XP not known: Nameless Thing`, or `Level not known:
 <name>`; with more names, the first and `and 2 more`. Where the line has no room for the whole, the first name
 shortens from its end (`XP not known: Namel…`, `and 2 more` stays) and goes only when no letter of it fits; hover
-and the accessible name keep the whole. The names come from `Scale::weigh`'s typed answer
+and the accessible name keep the whole. With no name known, the reason shows in its short form (`XP not known`). The names come from `Scale::weigh`'s typed answer
 (`Difficulty::missing`). Its closed row is as before. A running or played fight's row shows its status, not a word.
 
 The first upcoming fight gets primary Start fight when no run is open; later fights use secondary. Use Start
@@ -1810,8 +1810,13 @@ Timeline links, with one `S` gap on each side of each `·` at every size (the pa
 note does not reach them). Under them is `Where`, the Timeline detail's own field on the same event: typed here
 or on Timeline, it is one value, saved as any event edit is. Hover keeps full names and conditions; Remove stays
 in the name-aligned row menu. A planned fight's menu ends with `Edit encounter`, which opens that encounter, by
-its ID, in the editor, whose `Back to session` returns to this session; it is blocked while the editor holds
-unsaved words.
+its ID, in the editor, whose `Back to session` returns to the session it came from, through the Session page's
+own guards. The way back belongs to that route: leaving the editor another way (the rail, another page) ends it,
+and the editor then says `Back to encounters`. It is blocked while the editor holds unsaved words. When the
+encounter's file is gone or now holds another encounter, nothing opens and the Session page says `This encounter
+is no longer in the campaign. Open it from Encounters.` When the DM opens a played fight's row, the plan scrolls
+once, at that act: just enough that the row's fields and the next fight's primary action are both in view when
+they fit together; else that action at the pane's bottom, with as much of the row as fits above it.
 
 **Rewards (F7).** A played fight that ended has `Add rewards`, an `Action::quiet` in its row's action band left of
 the menu, only while its title keeps the width and the line breaks it has beside the menu alone at the action's
@@ -1865,7 +1870,10 @@ painted words; a link opens its entry in Lookup. A done scene's words and links 
 link keeps its underline. No row changes height for a state. When the words link exactly one World entry, the
 second line gives its kind, status and place
 (`NPC · alive · Ashfall Keep`) in `Type::Small` `muted`; when its words link a name that no entry has any
-more, the second line says `Not found` in `Type::Small` and the warning tone, as Lookup and World say it. The action place is empty until the scene is done; then,
+more (a name that two entries share is not gone), it says `Not found` in `Type::Small` and the warning tone, as
+Lookup and World say it, where the row has room, so no row changes height with its state: on the second line
+when the entry had one when it was last found; else after the warning mark at the end of the words' own line,
+the words giving up whole words first, with the whole words on hover. The action place is empty until the scene is done; then,
 when its words link exactly one World entry of the campaign, it holds a quiet `Add to Log` left of the menu, with no icon, as the row's other actions
 (accessible name `Add to Log: <words>`; its menu line and the reader's header keep the icon) while the words keep their lines beside it; else `Add to Log` is a
 line of the scene's menu, so the row keeps its words and its height. It opens Lookup on that entry with
