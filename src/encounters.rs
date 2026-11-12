@@ -2530,8 +2530,9 @@ pub struct Encounters {
     /// A creature made the campaign's own, with its text open beside the roster.
     creature: Option<CreatureEditor>,
 
-    /// The open encounter came from the Session page, and goes back there.
-    pub from_session: bool,
+    /// The session the open encounter came from, which its way back returns to. The route ends
+    /// when the DM leaves the editor by another way (`end_session_route`).
+    pub from_session: Option<Uuid>,
     /// A new encounter joins the session's plan when it is first saved.
     plan_on_save: bool,
     pub saved_for_plan: Option<String>,
@@ -2541,7 +2542,7 @@ pub struct Encounters {
     pub planned_groups: Vec<String>,
     /// The open group draft goes back to the session's plan when it is saved.
     group_in_plan: bool,
-    pub wants_session: bool,
+    pub wants_session: Option<Uuid>,
     pub wants_run_folder: bool,
     /// The run just opened began on the Session page, by way of this editor.
     pub run_from_session: bool,
@@ -3137,9 +3138,9 @@ impl Encounters {
             .is_none()
             .then_some("Still reading this campaign."))
     }
-    pub fn new_from_plan(&mut self) {
+    pub fn new_from_plan(&mut self, session: Option<Uuid>) {
         self.start_new_draft();
-        self.from_session = true;
+        self.from_session = session;
         self.plan_on_save = true;
     }
     fn start_new_draft(&mut self) {
@@ -3156,7 +3157,7 @@ impl Encounters {
         self.focus_name = true;
         self.error = None;
         self.message = None;
-        self.from_session = false;
+        self.from_session = None;
         self.plan_on_save = false;
         self.creature = None;
     }
@@ -3167,7 +3168,7 @@ impl Encounters {
             Ok(draft) => {
                 self.search.clear();
                 self.draft = Some(draft);
-                self.from_session = false;
+                self.from_session = None;
                 self.plan_on_save = false;
                 self.error = None;
                 self.message = None;
@@ -3180,8 +3181,14 @@ impl Encounters {
     /// editor read from its file at the click, and the editor's way back is the session. The plan
     /// blocks the act while the editor holds unsaved words; a group left open with nothing
     /// unsaved gives way, so the page shows this encounter. When the encounter is gone, or its
-    /// file now holds another encounter, nothing opens and the words say why, for the plan.
-    pub fn edit_from_plan(&mut self, id: Uuid, active: &Campaign) -> Result<(), String> {
+    /// file is gone or now holds another encounter, nothing opens and the words say why, for the
+    /// plan. `session` is where the editor's way back leads.
+    pub fn edit_from_plan(
+        &mut self,
+        id: Uuid,
+        session: Option<Uuid>,
+        active: &Campaign,
+    ) -> Result<(), String> {
         if let Some(reason) = self.plan_group_blocked() {
             return Err(reason.to_owned());
         }
@@ -3197,6 +3204,10 @@ impl Encounters {
                     .map(|template| template.path.clone())
             })
             .ok_or_else(|| gone().to_owned())?;
+        // A file moved or deleted since the campaign was last read.
+        if !active.path.join(&path).is_file() {
+            return Err(gone().to_owned());
+        }
         let draft = Draft::open(&active.path, &path)?;
         if draft.id != id {
             return Err(gone().to_owned());
@@ -3206,11 +3217,17 @@ impl Encounters {
         self.group_draft = None;
         self.group_in_plan = false;
         self.draft = Some(draft);
-        self.from_session = true;
+        self.from_session = session;
         self.plan_on_save = false;
         self.error = None;
         self.message = None;
         Ok(())
+    }
+
+    /// The DM left the editor by another way than its own way back (the rail, another page):
+    /// `Back to session` would no longer lead to the session the DM came from.
+    pub fn end_session_route(&mut self) {
+        self.from_session = None;
     }
 
     /// The file the editor holds, for the visual tests.
@@ -4130,7 +4147,7 @@ impl Encounters {
         let draft = self.draft.take().expect("the editor has a draft");
         // A new draft has nothing to go back to, so it is no longer the session's.
         if draft.baseline.is_none() {
-            self.from_session = false;
+            self.from_session = None;
         }
         if draft.baseline.is_some() {
             match Draft::open(&active.path, &draft.path) {
@@ -4783,7 +4800,7 @@ impl Encounters {
                 Ok(d) => {
                     self.search.clear();
                     self.draft = Some(d);
-                    self.from_session = false;
+                    self.from_session = None;
                     self.plan_on_save = false;
                     self.error = None;
                     self.message = None;
@@ -4915,7 +4932,7 @@ impl Encounters {
         };
         let (roster_right, header_right) = (edge(ROSTER_PANE), edge(ADD_PANE));
         ui.horizontal_wrapped(|ui| {
-            let back_name = if from_session {
+            let back_name = if from_session.is_some() {
                 "Back to session"
             } else {
                 "Back to encounters"
@@ -5151,9 +5168,9 @@ impl Encounters {
                     self.open_run(active, campaigns.modules());
                 }
                 // A fight started from the session goes back there, not to this editor.
-                if self.from_session && self.run.is_some() {
+                if self.from_session.is_some() && self.run.is_some() {
                     self.draft = None;
-                    self.from_session = false;
+                    self.from_session = None;
                     self.run_from_session = true;
                     return;
                 }

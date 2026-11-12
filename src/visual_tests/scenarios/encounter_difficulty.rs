@@ -513,4 +513,45 @@ pub fn run(d: &mut Driver<'_>) {
             d.app().encounters.draft_path()
         ),
     );
+    // Review round 1: a file deleted since the campaign was read opens nothing either, and the
+    // plan gives the same words with their next step, not the file system's error.
+    std::fs::remove_file(folder.join(format!("{ABOVE}.md"))).unwrap();
+    d.click(&format!("More actions for {ABOVE}"));
+    d.click("Edit encounter");
+    d.observe(
+        "W1-D1-edit",
+        d.app().encounters.draft_path().is_none()
+            && d.page_title().as_deref() == Some("Session")
+            && d.has_containing(GONE)
+            && !d.has_containing("No such file"),
+        "A deleted encounter file opens nothing, and the plan says why with its next step",
+    );
+    // Review round 1 (REVIEW-291-return-owner): the way back belongs to the route. After a
+    // detour by the rail to a new session, the editor no longer offers `Back to session`, so no
+    // press can land on the other session.
+    d.click(&format!("More actions for {HIGH}"));
+    d.click("Edit encounter");
+    d.expect("Back to session");
+    d.click(NAV_SESSIONS);
+    d.click("New session");
+    d.type_into("Session title", "Review detour session");
+    d.click("Create session");
+    d.expect("Session 2: Review detour session");
+    let detour = d
+        .app()
+        .sessions
+        .selected_path()
+        .map(std::path::Path::to_owned);
+    d.click(NAV_ENCOUNTERS);
+    d.observe(
+        "REVIEW-291-return-owner",
+        detour.is_some()
+            && detour != session
+            && d.has("Back to encounters")
+            && !d.has("Back to session"),
+        format!(
+            "Opened from {session:?}; after the rail made {detour:?}, Back to session shows {}",
+            d.has("Back to session")
+        ),
+    );
 }

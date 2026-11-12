@@ -875,8 +875,11 @@ struct Scene {
     task: TaskLine,
     /// The one entry that its words link, when they link exactly one.
     entry: Option<SceneEntry>,
-    /// Its words link a name and no entry has it (X14): its second line says `Not found`.
+    /// Its words link a name and no entry has it (X14): it says `Not found`.
     not_found: bool,
+    /// Its entry had a second line when it was last found, so `Not found` takes that line; else
+    /// it ends the words' own line, so the row keeps its height (review round 1).
+    second_line: bool,
     /// Whether `Add to Log` fits on the row, for the last few rooms it was measured in. The
     /// words and the done mark are this model's, so only the room can change it
     /// (`Scene::log_keeps_rows`).
@@ -1071,6 +1074,7 @@ impl PlanModel {
                             task,
                             entry,
                             not_found,
+                            second_line: false,
                             fit: std::sync::Mutex::new(Vec::new()),
                         })
                     }
@@ -1089,6 +1093,27 @@ impl PlanModel {
             })
             .collect();
         Self { lines }
+    }
+
+    /// What each linked name's entry looked like when it was found: whether it had a second
+    /// line. A scene whose entry is gone keeps the row it had: `Not found` on that second line,
+    /// else at the end of its words' line. `seen` is the plan's, kept from one build to the next.
+    fn place_not_found(&mut self, seen: &mut std::collections::HashMap<String, bool>) {
+        for line in &mut self.lines {
+            let ModelLine::Scene(scene) = line else {
+                continue;
+            };
+            let names = each_linked_name(&scene.task.words);
+            if let Some(entry) = &scene.entry {
+                for name in &names {
+                    seen.insert(name.to_lowercase(), entry.detail.is_some());
+                }
+            }
+            scene.second_line = scene.not_found
+                && names
+                    .iter()
+                    .any(|name| seen.get(&name.to_lowercase()) == Some(&true));
+        }
     }
 
     /// Each scene's whole line, as the note holds it.
@@ -1113,6 +1138,9 @@ pub(super) struct PlanModelCache {
     /// How often a frame asked for the model, and how often it was built.
     pub(super) reached: usize,
     pub(super) builds: usize,
+    /// Per linked name, whether its entry had a second line when last found
+    /// (`PlanModel::place_not_found`).
+    seen: std::collections::HashMap<String, bool>,
 }
 
 /// Where a scene act's words show: under the scene's row, under the Scene field, or in the
@@ -1359,7 +1387,13 @@ fn scene_row(
                 design::named(ui, &response, &format!("{state}: {plain}"));
                 tick = response.clicked();
             },
-            |ui| scene_words(ui, task, &plain),
+            |ui| {
+                if scene.not_found && !scene.second_line {
+                    gone_scene_words(ui, task, &plain);
+                } else {
+                    scene_words(ui, task, &plain);
+                }
+            },
             |ui| {
                 if let Some(detail) = scene
                     .entry
@@ -1367,7 +1401,7 @@ fn scene_row(
                     .and_then(|entry| entry.detail.as_deref())
                 {
                     wrapped_words(ui, Type::Small, detail, c.muted);
-                } else if scene.not_found {
+                } else if scene.not_found && scene.second_line {
                     // As Lookup and World say it of a link whose entry is gone (X14).
                     wrapped_words(ui, Type::Small, "Not found", c.result.warning);
                 }
@@ -1448,6 +1482,64 @@ fn scene_words(ui: &mut egui::Ui, task: &TaskLine, plain: &str) {
         ui.add_space(((design::XL - row_height) / 2.0).max(0.0));
     }
     crate::markdown_view::show_row_words(ui, &task.words, task.done);
+}
+
+/// The words of a scene whose entry is gone and that had no second line: the words, then the
+/// warning mark and `Not found` at the end of their line, in the lines the words take alone, so
+/// the row keeps its height. Where the mark has no room, the words give up whole words from
+/// their end first; hover keeps them whole (review round 1).
+fn gone_scene_words(ui: &mut egui::Ui, task: &TaskLine, plain: &str) {
+    let c = colors();
+    let width = ui.available_width();
+    let words_color = if task.done { c.muted } else { c.text };
+    let (body, small) = (Type::Body.font(ui), Type::Small.font(ui));
+    let job = |words: &str| {
+        let mut job = egui::text::LayoutJob::default();
+        let format = |font_id: &egui::FontId, color| egui::TextFormat {
+            font_id: font_id.clone(),
+            color,
+            ..Default::default()
+        };
+        job.append(words, 0.0, format(&body, words_color));
+        job.append(
+            &format!("  {} Not found", icons::WARN),
+            0.0,
+            format(&small, c.result.warning),
+        );
+        job.wrap.max_width = width;
+        job
+    };
+    let rows = |job: egui::text::LayoutJob| ui.fonts_mut(|fonts| fonts.layout_job(job).rows.len());
+    let alone = ui.fonts_mut(|fonts| {
+        fonts
+            .layout(plain.to_owned(), Type::Body.font(ui), words_color, width)
+            .rows
+            .len()
+    });
+    let all: Vec<&str> = plain.split_whitespace().collect();
+    let whole = all.join(" ");
+    let fitted = (1..=all.len())
+        .rev()
+        .map(|kept| {
+            let words = all[..kept].join(" ");
+            if kept == all.len() {
+                words
+            } else {
+                format!("{words}…")
+            }
+        })
+        .find(|words| rows(job(words)) <= alone)
+        .unwrap_or_else(|| format!("{}…", all.first().copied().unwrap_or_default()));
+    let shown = job(&fitted);
+    if alone == 1 {
+        let row_height = ui.fonts_mut(|fonts| fonts.row_height(&body));
+        ui.add_space(((design::XL - row_height) / 2.0).max(0.0));
+    }
+    let response = ui.add(egui::Label::new(shown).wrap());
+    design::named(ui, &response, &format!("{plain} · Not found"));
+    if fitted != whole {
+        response.on_hover_text(plain);
+    }
 }
 
 /// A scene's box, the theme's checkbox with a 24 px target, in the leading slot that a fight's
@@ -2118,6 +2210,11 @@ impl Sessions {
             Ok(None) => {}
             Err(error) => self.travel.block.failed(&act, error),
         }
+    }
+
+    /// The selected session's ID: where an encounter editor opened from the plan goes back to.
+    pub fn selected_id(&self) -> Option<Uuid> {
+        self.selected
     }
 
     /// A planned fight's `Edit encounter` that opened nothing: why, on the page where the DM acted.
@@ -3123,12 +3220,9 @@ impl Sessions {
         if cache.key != Some(key) || cache.model.is_none() {
             cache.builds += 1;
             let body = self.draft.as_ref().map_or("", |draft| draft.body.as_str());
-            cache.model = Some(Arc::new(PlanModel::build(
-                body,
-                plan.fights,
-                plan.groups,
-                index,
-            )));
+            let mut model = PlanModel::build(body, plan.fights, plan.groups, index);
+            model.place_not_found(&mut cache.seen);
+            cache.model = Some(Arc::new(model));
             cache.key = Some(key);
         }
         Arc::clone(cache.model.as_ref().expect("the model was just built"))
@@ -4391,6 +4485,71 @@ mod tests {
     fn scenes_are_note_acts_with_their_own_undo() {
         use crate::sessions::{NewNote, create_note, plan_lines};
         use egui_kittest::kittest::Queryable;
+        // Review round 1 (REVIEW-291-scene-state-height): a scene that links a rule note has no
+        // second line; when the note goes, `Not found` ends its line and the row keeps its
+        // height.
+        let mut row = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(400.0, 800.0))
+            .build_state(
+                |ctx, state: &mut (bool, f32)| {
+                    let mut group = |_: &mut egui::Ui| {};
+                    let plan = Plan {
+                        fights: &[],
+                        saved_runs: &[],
+                        groups: &[],
+                        group_blocked: None,
+                        group_open: false,
+                        group_discarded: false,
+                        group_discarded_name: String::new(),
+                        group_discarded_order: 0,
+                        arrivals_open: false,
+                        group_editor: std::cell::RefCell::new(&mut group),
+                        blocked: None,
+                        run_directory: None,
+                        open_run: None,
+                        open_state: String::new(),
+                        open_encounter: None,
+                        party: &[],
+                        tables: &[],
+                    };
+                    let scene = Scene {
+                        task: TaskLine {
+                            at: 0,
+                            line: "- [ ] Read [[Emberfall Rumours]]".into(),
+                            done: false,
+                            words: "Read [[Emberfall Rumours]]".into(),
+                        },
+                        // A rule note that is found has no World detail, no fight and no Log.
+                        entry: (!state.0).then_some(SceneEntry {
+                            detail: None,
+                            start: None,
+                            log: None,
+                        }),
+                        not_found: state.0,
+                        second_line: false,
+                        fit: std::sync::Mutex::new(Vec::new()),
+                    };
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        ui.set_width(330.0);
+                        state.1 = scene_row(ui, 330.0, &scene, ((0, 0), 0), &plan, &mut None);
+                    });
+                },
+                (false, 0.0),
+            );
+        design::theme::install(&row.ctx);
+        row.run_steps(3);
+        let found = row.state().1;
+        row.state_mut().0 = true;
+        row.run_steps(3);
+        let missing = row.state().1;
+        assert!(
+            (found - missing).abs() < 0.5,
+            "REVIEW-291-scene-state-height: a rule-note scene changes height when its entry goes: {found} -> {missing}"
+        );
+        assert!(
+            row.query_by_label("Read Emberfall Rumours · Not found")
+                .is_some()
+        );
         let dir = tempfile::tempdir().unwrap();
         let note = create_note(
             dir.path(),
