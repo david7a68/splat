@@ -1,8 +1,10 @@
 # Example: the Heralds of the End Tournament
 
-This is the acceptance test for part 3 of [World and house rules](../world-and-house-rules.md). It is a design
-example. Trackers are not implemented, so nothing has validated the members. To use it, put the properties below at
-the top of the vault's `Tournament.md` and the Splat data callout at its end. The note's own text stays between them.
+This is the acceptance test for part 3 of [World and house rules](../world-and-house-rules.md). The trackers
+slice between fights reads it: a unit test (`src/trackers.rs`) and the `trackers` visual scenario load this note
+as it is written here. To use it, put the properties below at the top of the vault's `Tournament.md` and the Splat
+data callout at its end. The note's own text stays between them. Each bell rolls the Rival Track once for each
+rival (`for:`).
 
 Times, bells and rewards come from `Undercroft.md` and `Tournament.md`. Those notes are early drafts, so tune the
 numbers there and here together.
@@ -46,27 +48,47 @@ splat_name: Tournament
 >     - at: 20
 >       say: Bell. A Brown Bear enters the Pit. Announce the standings. Roll each rival. Check d6 for wandering.
 >       tables:
->       - rival_track
+>       - table: rival_track
+>         for:
+>         - Old Guard
+>         - Keyring
+>         - Convicts
 >       - wander_early
 >     - at: 40
 >       say: Bell. The Cistern floods. Announce the standings. Roll each rival. Check d6 for wandering.
 >       tables:
->       - rival_track
+>       - table: rival_track
+>         for:
+>         - Old Guard
+>         - Keyring
+>         - Convicts
 >       - wander_middle
 >     - at: 60
 >       say: Bell. The Sands turn to mire. A Dire Wolf enters the Pit. Announce the standings. Roll each rival. Check d6 for wandering.
 >       tables:
->       - rival_track
+>       - table: rival_track
+>         for:
+>         - Old Guard
+>         - Keyring
+>         - Convicts
 >       - wander_middle
 >     - at: 80
 >       say: Bell. The Prison floods, and anyone caged drowns. Announce the standings. Roll each rival. Check d6 for wandering.
 >       tables:
->       - rival_track
+>       - table: rival_track
+>         for:
+>         - Old Guard
+>         - Keyring
+>         - Convicts
 >       - wander_late
 >     - at: 100
 >       say: Bell. The Pit overflows. Steam fills the Kitchens. An Owlbear enters the Ring. Announce the standings. Roll each rival. Check d6 for wandering.
 >       tables:
->       - rival_track
+>       - table: rival_track
+>         for:
+>         - Old Guard
+>         - Keyring
+>         - Convicts
 >       - wander_late
 >     - at: 120
 >       say: Everything floods. Any team still inside is out of the race.
@@ -121,7 +143,6 @@ splat_name: Tournament
 >     name: Practice Ring activation
 >     start: 0
 >     goal: 30
->     pin: true
 >     quick:
 >     - label: Touch controls
 >       add: 1d6
@@ -160,7 +181,7 @@ Change the Rival Track's `2 to 5` to `2–5`.
 
 ## Other setup
 
-- In `Campaign.md`, add the note to the in-play list. **Make house rule note** does this by itself.
+- In `Campaign.md`, add the note to the in-play list, or turn it on in **Campaign → Rules and runs**.
 
   ```yaml
   splat_in_play:

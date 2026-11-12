@@ -194,6 +194,10 @@ during	End the fight	Do	end with Enter	1	Run		false
 during	End the fight	Nav	Close run	1	Run	Session	false
 during	Record a short rest	Find	More Add actions	1	Session		false
 during	Record a short rest	Do	Add Short rest	1	Session		false
+during	Set-up	Setup	the campaign has a house rule note in play	0	Session		false
+during	Mark a house rule's number between fights	Panel	Ctrl+T	1	Session		false
+during	Mark a house rule's number between fights	Do	Burn a torch	1	Session		false
+during	Mark a house rule's number between fights	Panel	Ctrl+T	1	Session		false
 during	Next fight: start it, with the party as it stands	Nav	Start fight: Shrine of Cinders	1	Session	Run	false
 during	Next fight: roll and begin	Do	Roll NPC initiative	1	Run		false
 during	Next fight: roll and begin	Do	type Brannoch Vale's initiative	1	Run		false

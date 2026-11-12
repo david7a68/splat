@@ -601,7 +601,7 @@ A marker is a suggestion. The recording's row lists them, and only what you add 
 
 **World** lists the Markdown notes in the campaign's folder, with no change to the files. Obsidian stays their editor,
 and Splat picks up changes when you return to it. A note is any Markdown file with no `splat_` field, except session
-notes, `Timeline.md`, session templates, recordings, and anything in a folder whose name starts with a dot. **Lookup**
+notes, `Timeline.md`, `Trackers.md`, session templates, recordings, and anything in a folder whose name starts with a dot. **Lookup**
 (Ctrl+K) searches these notes as well: names first, then each heading, then their words, then session notes and
 transcripts. Links such as `[[Verori]]`, `[[Gate Mechanics#Reliability]]` and `![[Map.png]]` work as in Obsidian. A link
 to two notes asks which one, and a link to nothing offers to create it. Each note lists what links to it.
@@ -628,6 +628,33 @@ must cover what the dice can roll. A bad table says so, and the rest of the note
 
 **Roll** and a box for a typed result, for a player's own dice, sit under the table. During a run the result goes in the
 run's log, and Undo takes it back. Otherwise it only shows.
+
+### House rules and trackers
+
+A **house rule note** counts a house rule's numbers: a race clock, a crowd's favour, seals for each team. It is a
+`rule` note with `implementation: splat:house_rules` and its trackers in a `splat:yaml path=splat_members` block;
+[the Tournament example](docs/design/world-examples/heralds-tournament.md) shows every field. Turn it on under
+**Campaign → Rules and runs**, in **House rules in play**, and save; that writes `splat_in_play` in `Campaign.md`.
+A note that is not in play shows nothing anywhere. A note in play that is gone keeps its row there, with its ID and
+`not found`, so that you can switch it off.
+
+**Ctrl+T** shows **Trackers** in the Lookup panel, beside any page, and Ctrl+T again goes back to what Lookup
+showed. Each tracker has its value and its quick actions; a tracker with `per` has a line for each name. One press
+is one act. A value that rises past a mark raises a notice in the **Due** list, with a button for each table it
+rolls (with `for:`, one roll for each name), its proposed changes ticked, and **Done**, which applies the ticked
+changes, or **Dismiss** in its menu. While a notice is due, the rail says `Due N` on every page. Splat counts and
+shows; it never applies a rule by itself.
+
+Every act is one entry in `Trackers.md` in the campaign's root folder, written at once. The result line names the
+last act of the session being played, with **Undo: <label>**, which steps back newest first, also after a
+restart, and **Add to Timeline**, which makes a Major event with the act's label. A wrong press seen late is
+corrected by the opposite quick action. An act reads the file and the house rule notes as they are on disk when you press, so an entry you edit
+in Obsidian counts at once and is never written over; an act on a definition or an entry that changed on disk writes
+nothing and says so. A file that cannot be read (`Trackers.md`, `Campaign.md` or a house rule note in play) blocks every act and
+shows `Trackers not read`. A save that fails records nothing and keeps nothing: the bottom of Trackers says
+`Trackers.md was not saved` with the reason, and you press again. Entries for a tracker that no note in play has are kept and not
+counted; the end of Trackers names them. To take back an entry of an older session, edit `Trackers.md` in Obsidian. In a fight the run shows no tracker part: use Ctrl+T, press, and
+go back.
 
 ### Loot
 
@@ -932,6 +959,7 @@ step, so **Undo** after a roll takes back the change before it, and the roll sta
 | `A` | Focus the amount |
 | `C` | Conditions |
 | `Ctrl+K` | Open or close Lookup. `Escape` also closes it |
+| `Ctrl+T` | Show Trackers in Lookup, and go back. The run's letter keys stay off beside it |
 
 **Add to fight** opens the panel for creatures and groups that join this fight. To add one creature, find it in the campaign,
 or type a new name and its HP to make one up. A value you type replaces the creature's own for this
