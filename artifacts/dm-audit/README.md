@@ -258,7 +258,7 @@ tracker notice due from before the fight (the first bell), so the rail says `Due
 
 The sync conflict is simulated, as the scenario `run-sync-conflict` does (`simulate_sync_conflict`): a test
 build reads no live sheet. Its `Review` and choice are the app's own. Checked on the saved files: the run file
-is in round 2 again after `Undo`; after the restart it is in round 3, the wolf holds `Poisoned` with its count,
+is in round 2 again after `Undo`; after the restart it is in round 3, the wolf holds exactly `Poisoned`, 3 rounds with 2 left,
 `Undo` names the step it named before the crash, and `Trackers.md` still holds the bell's notice, not done, so
 the rail says `Due 1`; after the conflict, Kestrel's HP in the run file is the one the row shows; the refused
 act leaves the note byte-equal to Obsidian's; the chosen version holds the DM's line and the first Obsidian
@@ -277,7 +277,7 @@ note comes due on Day 2.
 |---|---|---|---:|---:|
 | 1 | Open the numbers | Panel 1 = **1** | 1 | 0 |
 | 2 | Enter a room: the clock reaches 40, a bell is due | Do 1 = **1** | 1 | 1 |
-| 3 | The bell: each rival's roll and the wandering roll | Do 4 = **4** | 4 | 4, 5 dice |
+| 3 | The bell: each rival's roll and the wandering roll (one is a scroll that brings the first roll into view) | Do 5 = **5** | 4 | 4, 5 dice |
 | 4 | The Old Guard takes its first seal | Do 1 = **1** | 1 | 1 |
 | — | Put the seal on the Timeline (`Add to Timeline`) | Do 1 = **1** | — | — |
 | 5 | Finish the bell | Do 1 = **1** | 1 | 1 |
@@ -296,16 +296,17 @@ note comes due on Day 2.
 | 10 | The crowd loved a move, then threw a gift | Do 2 = **2** | 2 | 2, 1 die |
 | 11 | A wrong press on `Throw a gift`, corrected by the opposite action | Do 3 = **3** | 3 | 3 |
 | 12 | A soul is collected: the clock passes 60 | Do 1 = **1** | 1 | 2 |
-| 13 | The second bell | Do 5 = **5** | 5 | 5, 5 dice |
+| 13 | The second bell (one is the same scroll) | Do 6 = **6** | 5 | 5, 5 dice |
 | — | A new day between sessions: the prize day comes due | Nav 1, Panel 2, Do 2 = **5**, T | — | — |
-| | **Steps 1 to 13** | **25** (Panel 2, Do 23) | **25** | **25** |
+| | **Steps 1 to 13** | **27** (Panel 2, Do 25) | **25** | **25** |
 | | **The fight (as today, with the ruled tracker act and the arrival)** | **47, 2 T** | — | — |
-| | **The whole journey** | **78, 3 T** (Nav 3, Panel 7, Find 1, Do 67) | | |
+| | **The whole journey** | **80, 3 T** (Nav 3, Panel 7, Find 1, Do 69) | | |
 
 The fight runs three rounds: the Old Guard's 1-2 seals group (three goblin warriors, side `rivals`, made in prep)
 joins at the start of round 2, while the rail says `Due 1` for the seal's notice, and the DM ends the fight in
 round 3. Checked on the saved files: the seal is a Day 1 event of `Timeline.md`; the ledger holds the four bell
-rolls and the seal; the run file ends in round 3 with the goblin warriors in it, and `Timeline.md` says
+rolls and the seal; as the group joins, the run file holds all three goblin warriors, side `rivals`, added in
+round 2, in the order of play, at their shared roll; the run file ends in round 3 with them, and `Timeline.md` says
 `round 3` on Day 1; after the fight, three `Fight minute` changes, the seal's notice done, the presses of steps
 10 and 11 in order with Favor at 4 and a gift roll on each `Throw a gift`; the clock at 63 and one soul after
 the second bell; on Day 2, the prize day's notice done and Favor at 5.
@@ -331,7 +332,8 @@ the second bell; on Day 2, the prize day's notice done and Favor at 5.
 
 Last week's note holds what `Carry over` reads: prose under `What happened`, two fights and a scene not played,
 and two threads, one ticked. Checked on the saved files: `NPCs/Verori.md` holds `status: dead` and each Log line
-once, stamped; the note holds one rewards block for each of the three fights; the new note holds, once each,
+once, stamped; the Ember Watch run saves two gem rolls, and each rewards block is exactly its link, its XP line and, for the
+Ember Watch, the coffer and each saved gem, once; the new note holds, once each,
 the recap's embed, the two fights and the scene, the open thread and not the ticked one, `carried_from` and
 `carried_parts` `recap`, `plan`, `threads`; then the three scenes; both fights' rows have a word; the saved
 Gate Watch holds the Oni and its word changes; `Timeline.md` holds the road of 2 days; the new run holds the
@@ -343,9 +345,10 @@ Oni.
 |---|---:|---:|---|---|
 | J6 step 2 | 7 | 5 | Ctrl+K, type `verori`, `Edit Verori`, click Status, select all, type `dead`, `Save changes` | Lookup's reader is compact and has no `Change` on Status (FINDINGS J6-2) |
 | J3 step 2 | 5 | not counted; the walk implies 4 | select the wolf, **Conditions**, click `Other effect` and type, Enter | A limit the design accepts (section 7: `Effect` by the pointer costs 5 with Lookup open); the tab takes Lookup's place (FINDINGS J3-1) |
+| J4 steps 3 and 13, a bell's rolls | 5 and 6 | 4 and 5 | a scroll, `Roll Rival Track` three times, the wandering roll (and `Done` at step 13) | App fault since pull request 285: after a press, the view holds the pressed action where it was, so the new Due row's first roll is below the view (FINDINGS J4-2) |
 | J4, the arena fight's start | 2 | 1 (no tracker act in the fight) | `Start fight`, Ctrl+T | A limit the design accepts: a side panel stays until the DM closes it (section 1.2), and trackers in a fight are behind Ctrl+T (section 7). FINDINGS J4-1 |
 
-J6 step 2 is the one app fault above the design. The others are limits that section 1.2 or 7 states; their
+J6 step 2 and J4's bells are the app faults above the design. The others are limits that section 1.2 or 7 states; their
 cost stays here so that a later change can be weighed. J3 step 6 costs less than its walk (3 against 4,
 FINDINGS J3-3). The design's own arithmetic is right in all four walks (J2: 21; J3: 8 for steps 1 to 5 and 4
 for step 6; J4: 25; J6: 23 to 25), so the design document is not changed.

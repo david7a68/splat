@@ -19,7 +19,7 @@
       "phase": "between fights",
       "task": "The bell: roll each rival and the wandering table",
       "transitions": 0,
-      "interactions": 4,
+      "interactions": 5,
       "path": "Session"
     },
     {
@@ -152,7 +152,7 @@
       "phase": "after the fight",
       "task": "The second bell",
       "transitions": 0,
-      "interactions": 5,
+      "interactions": 6,
       "path": "Session"
     },
     {

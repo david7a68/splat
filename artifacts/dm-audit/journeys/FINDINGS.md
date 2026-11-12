@@ -4,8 +4,9 @@ Each journey script (`src/visual_tests/dm_audit/journeys.rs`) plays the real app
 done as section 2 of `docs/design/session-cycle.md` walks it, or cost more, or the app showed a wrong state,
 it is below, and the script takes the route a DM would have to take, so that the measure is true. No app code
 changed in this pull request. The journeys were first played on `main` at `9d3e0677`, frozen after the
-merge of `main` at `bd7ff4b0` (pull request 280), frozen again after review round 1, and cost the same after
-the merge of `main` at `19cec3d2` (pull request 282).
+merge of `main` at `bd7ff4b0` (pull request 280), frozen again after review round 1, cost the same after the
+merge of `main` at `19cec3d2` (pull request 282), and were frozen again after the merge of `main` at `53bb0156`
+(pull requests 284, 285 and 288), where J4 costs 2 more (J4-2).
 
 Each entry is one of three kinds:
 
@@ -16,6 +17,18 @@ Each entry is one of three kinds:
   later change can be weighed.
 
 Every outcome that a journey states is an assertion on the saved file, read after the act (`Audit::outcome`).
+
+## J4-2. After a press, a bell's first roll is below the view (app fault, since pull request 285)
+
+- **Journey and step:** J4 steps 3 and 13, at 1200x800, Trackers open beside the Session page.
+- **What I did:** `Enter room` (step 2), and `Collect soul` (step 12): each raises a bell, whose Due row lists
+  `Roll Rival Track` for each rival. Then the three rolls and the wandering roll.
+- **What I saw:** since pull request 285 the view holds the pressed action where it was after a press, so the
+  new Due row's first `Roll Rival Track` is below the view. The driver scrolls it into view: 1 more act at each
+  bell. On `19cec3d2` the bell's rolls cost 4 and 5, as the design says.
+- **The driver's words:** `J4/steps.tsv`: the first `Roll Rival Track` of each bell takes 2 interactions.
+- **Route measured:** 5 against 4 for step 3, and 6 against 5 for step 13: steps 1 to 13 cost 27 against the
+  design's 25 and paper's 25. The design counts a scroll only at case D (section 2.4).
 
 ## J3-3. With unsaved words and a changed file, the comparison takes the note's place on the Session page (not walked by the design as measured)
 

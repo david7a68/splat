@@ -5,10 +5,10 @@ before	Set-up	Setup	open the app on it	0	Encounters		false
 before	Set-up	Setup	the race is on Day 1	2	Encounters	Timeline	false
 before	Set-up	Setup	prep: tonight's plan holds the arena fight	9	Timeline	Session	false
 before	Set-up	Setup	save, quit and open the app at the table	0	Session		false
-before	Set-up	Setup	the race so far: the clock at 30, Favor 2, no seals	7	Session		false
+before	Set-up	Setup	the race so far: the clock at 30, Favor 2, no seals	8	Session		false
 between fights	Open the numbers	Panel	Ctrl+T	1	Session		false
 between fights	The party enters a room: the clock reaches 40, and a bell is due	Do	Enter room	1	Session		false
-between fights	The bell: roll each rival and the wandering table	Do	Roll Rival Track	1	Session		false
+between fights	The bell: roll each rival and the wandering table	Do	Roll Rival Track	2	Session		false
 between fights	The bell: roll each rival and the wandering table	Do	Roll Rival Track	1	Session		false
 between fights	The bell: roll each rival and the wandering table	Do	Roll Rival Track	1	Session		false
 between fights	The bell: roll each rival and the wandering table	Do	Roll Wandering, 0:40 to 1:19	1	Session		false
@@ -74,7 +74,7 @@ after the fight	A wrong press on Throw a gift, seen after the next right press	D
 after the fight	A wrong press on Throw a gift, seen after the next right press	Do	Crowd loves it	1	Session		false
 after the fight	A wrong press on Throw a gift, seen after the next right press	Do	Crowd loves it	1	Session		false
 after the fight	A soul is collected: the clock passes 60	Do	Collect soul	1	Session		false
-after the fight	The second bell	Do	Roll Rival Track	1	Session		false
+after the fight	The second bell	Do	Roll Rival Track	2	Session		false
 after the fight	The second bell	Do	Roll Rival Track	1	Session		false
 after the fight	The second bell	Do	Roll Rival Track	1	Session		false
 after the fight	The second bell	Do	Roll Wandering, 0:40 to 1:19	1	Session		false
