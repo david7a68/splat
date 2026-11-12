@@ -872,7 +872,7 @@ A finished change has the success tone, as Library's results have: `Changes save
 Part of alike), `Name changed to <name>.`, `Note repaired.` and
 `<file> is now a separate note.` (`world::CHANGED`). Encounters' finished changes have it too: a replacement
 (`Replaced Unknown creature with Ember Cultist.`, `2 Cinder Wolf rows replaced with Guard.`), a removed member or
-group, a group moved or deleted on save, and a deleted run. A result that wrote nothing keeps the info tone:
+group, a group moved or deleted on save, a removed encounter (`Removed encounter <name>.`), and a deleted run. A result that wrote nothing keeps the info tone:
 `Your changes are already in the note.` and `<name> draft discarded.`. The unread `Part of` warning draws
 `Edit in Obsidian` with `message_with_actions`, so the link starts at the warning's words, in the edit form and in a
 reader with no file line.
@@ -1082,7 +1082,8 @@ because a colour would be a verdict. Its hover and accessible description give t
 level 3: Low 750 · Moderate 1,125 · High 2,000` (`at levels 3 to 4`; `for the party of 5` when the roster has no
 character). The editor's `ROSTER 8` heading ends `· XP 1,050 of 1,125 · Moderate` (`XP 2,400 · Above High`);
 below 760 px the tab row ends at its right with `Moderate · XP 1,050 of 1,125`. A Ready to run row's summary ends
-`· Low`. Each shows only while the line keeps its lines and words with it, and only when the XP, every level and
+`· Low`; where the word gives way, the row's hover and its accessible name keep it. Each shows only while the line
+keeps its lines and words with it, and only when the XP, every level and
 the table are known and something stands against the party; otherwise the line is as before. A row with an
 unfinished run shows no word. The answer is worked out when the encounter, the saved sheets or the rules
 change, and when the editor's draft changes; never on a frame with no change.
@@ -1093,7 +1094,9 @@ encounter <name>.` with `Undo remove encounter`, as a saved group's `Remove…` 
 back only where no file has its path. A plan line that linked it gets no row, and its link in the note has the
 hover `Not found in this campaign`.
 
-History opens read-only final state and log in place, outside the live-run slot. Final state has one name column, as
+History opens read-only final state and log in place, outside the live-run slot. When a run opens there, by `Open`
+or by `Whole run` from the plan, the list scrolls once, at that act, so the run's row is at its top and the outcome,
+the line under Read-only and the whole Final state are in view below it; the log follows. Final state has one name column, as
 wide as the longest name up to half the room, so every HP starts at one x. HP and temporary HP follow in columns of
 their own, each as wide as its widest value, kept where a row has none; Absent and the conditions start after them and
 wrap inside the last column. Each row's values sit on its name's baseline. Rows put outcome before ended
@@ -1556,17 +1559,18 @@ uses muted recovery text; failed Connect retains error state. Sync stopped links
 An ended view has one control that takes the ending away. While the ending is the newest Undo step, that is
 `Undo: end encounter`, and no other control shows. Otherwise it is secondary `Continue fight` with the run icon,
 `S` left of primary Close run: the two ways out of an ended fight, with the one that changes nothing last. Undo stays
-at the roster's right edge. The title, the outcome and the save word keep their words: Undo gives up its target
-first (`Undo`, with the full action in hover and its accessible name). When the actions still cannot share the
-title's line, as beside Lookup at 960x640, Close run stays on that line and Undo and Continue fight take a line of
-their own below it, at the right edge, with Undo's full action. A closed, ended run read in History has the same
+at the roster's right edge. The title, the outcome and the save word keep their words. Beside Continue fight or the
+sentence that stands in its place, Undo keeps its target (`Undo: roll loot`); alone, Undo gives up its target first
+(`Undo`, with the full action in hover and its accessible name). When the actions cannot share the title's line with
+Undo's target, as beside Lookup at 960x640 or at 1200x800, Close run stays on that line and Undo and Continue fight
+take a line of their own below it, at the right edge, with Undo's full action. A closed, ended run read in History has the same
 secondary `Continue fight` on its own line under Read-only, blocked with `Close the open run first.` while another
 run is open. Continue fight is offered only for the fight that was played last (`README.md`, Running an encounter
 as DM). For any other ended fight the control is absent, and one muted `Small` sentence stands in its place and says
 why: `A later fight or rest was played. Start a new run to play this one again.` It is a sentence and not a blocked
 button, because no step in this view makes the control work. In the ended header the sentence wraps to at most
 `15 × L` wide, so Close run and the title keep their places; on the two-line header it follows Undo on the second
-line. In History it is the line under Read-only. Neither is modal, and Undo names the step: `Undo: continue fight`. After Continue fight, the
+line. In History it is the line under Read-only, `S` below it and `M` above `FINAL STATE`. Neither is modal, and Undo names the step: `Undo: continue fight`. After Continue fight, the
 footer's End step starts its outcome field with the outcome of the ending that went. Whenever that field opens
 with text, the text is selected, so that Enter keeps it and typing replaces it.
 
@@ -1673,11 +1677,14 @@ hairline follows details after `S`. New events stay closed with kind as title. O
 duration and place stay on Timeline.
 
 **Encounter checks** (F9). While the campaign has a marked table, a Travel row's menu (on the plan and on
-Timeline) has `Roll for encounters`. Only that act puts the block on that row: `Encounter checks`, the table
-as a `menu_button` with `· 1d20 each day` (or `each watch`, `every 4 hours`) after it, **How long** (on the plan;
-Timeline's own field above serves there), and one line for each check. Focus goes to **How long** when the
-journey has no length, and the event takes the length on Enter or when the field loses focus, not on each key;
-the lines follow the words as typed. One check at each whole interval from the start, and none at the end; an
+Timeline) has `Roll for encounters`. Only that act puts the block on that row: the label `Encounter checks` above
+the table as a `menu_button`, with `· 1d20 each day` (or `each watch`, `every 4 hours`) after it on its line, the
+act's kept result line, **How long** (on the plan; Timeline's own field above serves there), and one line for
+each check. Dice words that move to a line of their own start with the words, never with `·`. On the plan the
+block comes first in the open row, before Title and Notes; a Travel row without it is as before. Focus goes to
+**How long** when the journey has no length, and while the block shows, the event takes the length on Enter or
+when the field loses focus, not on each key; the lines follow the words as typed. Every other event's **How
+long** changes the event on each key. One check at each whole interval from the start, and none at the end; an
 empty or unread length gives one line, `This journey`; a length of zero gives none. A line is its clock name (`Day 3`, or `Day 3, 08:00` for
 a watch or hours), then a secondary `Roll` with the dice icon and an `Enter a roll` number field; `Roll all N`
 follows when two or more wait. A result shows its number and words, a quiet `Clear` at the line's end, and,
@@ -1687,13 +1694,21 @@ the muted `Outside this journey now` until cleared. The table menu lists the tab
 which waits with `Clear the results first.` while a result stands. With several tables the block starts on the
 table of the latest journey with checks, else on `Choose a table`, and `Roll` waits with `Choose a table first.`.
 A journey of more than 31 checks says `This journey has N checks. Split it into shorter journeys to roll them
-here.` Each act's message, with `Undo checks`, `Undo roll` or `Undo clear`, is kept by its journey's event: it
+here.` Each act's message, with `Undo checks`, `Undo roll` or `Undo clear`, shows on one kept line under the table's
+line (`design::undo_line`): reserved while the block shows, so the message moves nothing; words that do not fit
+beside Undo end in `…` and keep their whole text on hover. It is kept by its journey's event: it
 lasts while that event is as the act left it, until the DM leaves the page, and an act on another journey
 leaves it. The length being typed has one owner, the Timeline book, whichever page shows the field; leaving
 the page gives it to the journey, as a loss of focus does. `Plan “<name>”` is a note act through `Draft::apply`: it writes
 `- [[<name>]]` before the first plan line still to come, says `“<name>” is in tonight’s plan.` and offers `Undo
 plan line`, which is the note's: it lasts while the note's words are what the act left, also through a page
-change, and ends when they change or another session is selected. Splat rolls and offers; it never plans or starts a fight by itself. The Add strip stays directly below Tonight (or This session), above
+change, and ends when they change or another session is selected. The message and its Undo take the place of
+the `Plan “<name>”` line of the check the DM clicked, and `In the plan` takes that place after them. Each offer
+keeps from the start the height that its message needs at that width (`design::undo_message_height`): one line
+when the words and Undo fit, else the words with Undo under them. So nothing moves when the message comes or
+goes, and the message is never cut. When that check is
+gone (cleared, or edited) while the Undo lives, the message takes the block's kept line; if a roll's result holds
+that line, the message ends the block, the one case where it can move what is below. Splat rolls and offers; it never plans or starts a fight by itself. The Add strip stays directly below Tonight (or This session), above
 messages and scrolling rows. Fight, Group and Long rest stay visible. If all seven actions do not fit on one line,
 a compact `⋯⌄` button, named `More Add actions`, holds Day, Short rest, Travel and Major event. Its hover text names those actions. Keep the strip on one line at all three supported window sizes. Long rest stays one click away (T11.2). Timeline uses the same width rule.
 It stays in place when messages or rows change. Empty plans use empty_state
@@ -1702,8 +1717,11 @@ text's inner edge.
 
 A planned fight's summary ends with its difficulty word (`5 party · 2 × Ember Cultist · Low`) only while the
 summary keeps its lines with it. The opened row's `Read encounter` line ends with `· Low · XP 550 of 750` when the
-line has room for the whole; so a row whose summary had no room gives its word there, for 1 `Find`. A running or
-played fight's row shows its status, not a word.
+line has room for the whole; so a row whose summary had no room gives its word there, for 1 `Find`. The words start
+at the link's right edge, so each `·` has the same blank on each side. A fight with no word because an input is not
+known says why on that line, in `muted`: `Read encounter · XP not known: Nameless Thing`, or `Level not known:
+<name>`; with more names, the first and `and 2 more`. The names come from `Scale::weigh`'s typed answer
+(`Difficulty::missing`). Its closed row is as before. A running or played fight's row shows its status, not a word.
 
 The first upcoming fight gets primary Start fight when no run is open; later fights use secondary. Use Start
 fight here and in Encounters. Saved unfinished fights offer Resume, including timeline rows whose run
@@ -1875,7 +1893,9 @@ out of total while filtering; the filter says Major events.
 
 Added, removed and link-update notices sit in the list column's message footer (`design::Footer`), pinned below
 the rows, with the rest ruling's result and the file's flags, duplicate warning, reload result, save error and
-`Timeline.md also changed outside Splat.`, so a result never moves the Add strip, a row or the open form.
+`Timeline.md also changed outside Splat.`, so a result never moves the Add strip, a row or the open form. A
+journey's encounter checks keep their own act's result on one kept line under the table's line, reserved while
+the block shows, so that result moves no field either and stays in view where the DM pressed `Roll`.
 With one column and an event open, they end the form. An unreadable file and a conflict stay above the Add strip:
 the DM must choose before anything else. Removing an event counts notes that still link
 to it and uses warning tone when any do. Each item's save state tracks its own edits: muted Saving… during

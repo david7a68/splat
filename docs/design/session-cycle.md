@@ -376,7 +376,7 @@ today and its fit rule. No row adds a line, changes a row's height or takes widt
 | # | Screen | What differs | Band today | Fit rule |
 |---|---|---|---|---|
 | 1 | A planned fight's row, on the plan and in **Ready to run** | The summary ends with one word, such as `· Low` (F1), when the XP, the levels and the budget table are known | The summary: `src/sessions/plan.rs:795`; `src/encounters/list.rs:553-558` | Only when the summary keeps its lines and words |
-| 2 | An opened planned fight | The line of `Read encounter` ends with `· Low · XP 550 of 750` (F1) | `plan.rs:832-835` | The line holds one link today. The word goes first, then the numbers, as F1's table says; the words show only when the whole fits on the line |
+| 2 | An opened planned fight | The line of `Read encounter` ends with `· Low · XP 550 of 750` (F1); with no word because an input is not known, with `· XP not known: <name>` (W1-D2). The words start at the link's right edge, so each `·` has the same blank on each side (V9) | `plan.rs:832-835` | The line holds one link today. The word goes first, then the numbers, as F1's table says; the words show only when the whole fits on the line |
 | 3 | The encounter editor | `· XP 550 of 2,500 · Low` (F1) at the end of the `Roster` heading, or of the tab row below 760 px | `src/encounters.rs:4381`; `:3932-3955` | One line. The numbers go first, then the word |
 | 4 | Arrivals | A group's XP is followed by `→ Moderate` (F1) | `src/encounter_run/view.rs:3468-3520` | Only where the totals and the status words are in the heading today (`:3479-3492`) and stay there |
 | 5 | A row marked `Conc` that takes damage | The row's second line ends with `Conc save DC 10` until the next step (F2) | `view.rs:6476-6486` | Only when the line keeps its lines and folds nothing that shows today. Else in the hover and accessible name only |
@@ -403,6 +403,7 @@ that G7 allows.
 | 20 | The run's notice line, when a conflict's name is wider than the line beside the bare `Undo` | The name shortens as the dock's name does. Today nothing gives | Rule K |
 | 21 | A package creature's reader, with no run open | A quiet `Start fight` in a header that holds no action today (F3) | Rule Q |
 | 22 | The **Last time** line | When the last note has no prose under `What happened` and no processed recap, the preview is the note's first written line outside its title and date, `Recap of last time` and `Plan for tonight`. Today the line shows the link alone (`recap_preview`, `src/sessions/page.rs`) | The lead's ruling W5-D5, from the first scored round on the app: the measured evening's two reads of last week cost 2 each because the line showed none of last week's words |
+| 22 | History on the Encounters page, after `Whole run` or `Open` | The list scrolls once, at that act, so the opened run's row is at its top and its outcome, the line under Read-only and the whole Final state are in view below it (V31). The line under Read-only is `S` below it and `M` above `FINAL STATE` (V11), so what is under Read-only moves up by at most 8 px more, and the Read-only line's words are as tall as a line. Otherwise only the list's scroll offset differs: what it holds is as today, and nothing moves sideways, is cut or is resized | By the lead's ruling after app round 1 |
 
 Nothing else differs. A free-words effect from an encounter or an older run gives no reminder. A Travel row
 shows no checks and no new field until the DM asks. The rail says nothing about trackers unless a notice is
@@ -511,6 +512,7 @@ Case A, the plan at 330 px
 |---|---|
 | The XP, every level and the budget table are known | The words above |
 | A creature has no XP and no CR; a level is not known; there are no sheets; the rules have no table; there is no creature against the party | Nothing. The line is as today |
+| A creature's XP or a character's level is not known, and the party and the table are known (by the lead's ruling after app round 1, W1-D2) | The summary is as today. The opened row's line says why, in `muted`: `Read encounter · XP not known: Nameless Thing`, or `Level not known: <name>`; with more names, the first and `and 2 more`. The names are in `Scale::weigh`'s typed answer (`Difficulty::missing`) |
 | Run open | The open fight's plan row shows its status link, not a word. Arrivals shows the live word |
 
 **What the file stores.** Nothing. **Undo.** None is needed. **Keyboard.** Nothing takes focus.
@@ -1412,18 +1414,36 @@ first.` So a wrong `Roll for encounters` can go at any time.
 
 ```text
 ▾  Road to the ford by the old quarry     Add to notes ⋯
-   Title      [Road to the ford by the old quarry ]
-   Notes      [                                   ]
-   Encounter checks    On the road ⌄ · 1d20 each day
+   Encounter checks
+   On the road ⌄ · 1d20 each day
+   ✓ 2 travel checks rolled.   ↶ Undo roll
    How long   [2 days                ]
               Day 3, 08:00 to Day 5, 08:00
      Day 3   12 · Nothing stirs.                    Clear
      Day 4   16 · Wolf Pack pick up the trail
              near the quarry gate.                  Clear
              Plan “Wolf Pack”
+   Title      [Road to the ford by the old quarry ]
+   Notes      [                                   ]
    Timeline
-✓ 2 travel checks rolled.   ↶ Undo roll
 ```
+
+- **The block comes first in the open row,** before **Title** and **Notes**, so the rolls stay near the row
+  (repair R1b). A Travel row without the block is as today. `Encounter checks` is a label above the table
+  menu, as every field's label is; `· 1d20 each day` follows the menu on its line, and dice words that move
+  to a line of their own start with the words, never with `·`.
+- **An act's result has one kept line** under the table's line: `2 travel checks rolled.` with `Undo roll`,
+  and the results of `Roll for encounters` and `Clear` there too. The line is reserved while the block shows, so a result coming or
+  going moves nothing below it, and at 960x640 it is in view where the DM pressed `Roll`. Words that do not
+  fit beside Undo end in `…`; the hover keeps them whole.
+- **The plan line's message** (`“Wolf Pack” is in tonight’s plan.` with `Undo plan line`, the note's Undo)
+  shows in place of the `Plan “Wolf Pack”` line of the check that the DM clicked; `In the plan` takes that place
+  when the Undo ends. The offer keeps from the start the height that its message needs at that width: one line
+  when the words and Undo fit, else the words with Undo under them (at 960x640 the message of `Bridge Ambush`
+  needs about 420 px and the row has less). So nothing moves when the message comes or goes, and it is never cut.
+  When that check is gone (cleared or rolled again) while the Undo lives, the message takes the kept line. If a
+  roll's result holds the kept line, the message ends the block, as before: the one known case where it moves
+  what is below (repair R1b, the owner's ruling).
 
 - **How long** is the Timeline's field. It is part of the block, so a plain Travel row does not gain a line.
 - **One check at each whole interval from the start, and none at the journey's end.** Two days give two
@@ -1431,8 +1451,8 @@ first.` So a wrong `Roll for encounters` can go at any time.
   results stay, under `Outside this journey now`. An empty length, or one that the clock cannot read, gives
   one line, `This journey`. `Roll all 2` shows under the lines while two or more are not rolled.
 - **The lines on screen follow the length as the DM types it.** New in P5, on Timeline and on the
-  Session page: the file takes the length on Enter or when the field loses focus. Today each key changes the
-  event (`src/timeline/page.rs:1011-1019`). An outside change to the event meets the Timeline's choices of
+  Session page, only for a journey whose block shows: the file takes the length on Enter or when the field
+  loses focus. Every other event's **How long** changes the event on each key, as before P5 (repair R1b). An outside change to the event meets the Timeline's choices of
   today at that save. `Roll for encounters` puts focus in **How long** when the
   journey has no length.
 - **A check belongs to its offset** from the journey's start: 0 hours, 24 hours, and so on. Its name is read
