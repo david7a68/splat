@@ -5163,11 +5163,14 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
         .find("Ember Reach: Package.md was written again.")
         .zip(part.find("Ashen Marches: Package.md was written again."))
         .is_some_and(|(b, a)| b < a);
-    d.click_below(
-        "Ashen Marches: Package.md was written again.",
-        "Undo write Package.md",
-    );
-    d.settle();
+    // A fault that loses A's result fails the observation below, not this click.
+    if d.has_containing("Ashen Marches: Package.md was written again.") {
+        d.click_below(
+            "Ashen Marches: Package.md was written again.",
+            "Undo write Package.md",
+        );
+        d.settle();
+    }
     let a_back = fs::read_to_string(&path).unwrap() == broken;
     let b_kept = fs::read_to_string(&b_path).unwrap() == b_written;
     let b_undo = d.has_containing("Ember Reach: Package.md was written again.")
@@ -5181,11 +5184,14 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
         ),
     );
     // Back to one package, with A broken, as the steps below expect.
-    d.click_below(
-        "Ember Reach: Package.md was written again.",
-        "Undo write Package.md",
-    );
-    d.settle();
+    if d.has_containing("Ember Reach: Package.md was written again.") {
+        d.click_below(
+            "Ember Reach: Package.md was written again.",
+            "Undo write Package.md",
+        );
+        d.settle();
+    }
+    fs::write(&path, &broken).unwrap();
     d.app_mut().campaigns.unregister_module(b_id).unwrap();
     fs::remove_dir_all(&b_folder).unwrap();
     d.click("Reload from disk");
