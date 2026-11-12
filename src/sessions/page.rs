@@ -1828,6 +1828,7 @@ impl Sessions {
         self.notes = list_notes(folder);
         // A new, renamed or removed note can change which titles are shared.
         self.last_time = None;
+        self.carries.scanned();
         if let Err(error) = super::remember_notes(folder, &self.notes) {
             self.folder_error = Some(error);
         }
@@ -3982,7 +3983,9 @@ impl Sessions {
             return;
         }
         let body = self.note_body();
-        let model = self.plan_model(reader_index(ui).as_deref(), plan);
+        let index = reader_index(ui);
+        let model = self.plan_model(index.as_deref(), plan);
+        let (body, embeds) = self.mark_embeds(&body, index.as_deref());
         let compact = compact_plan_for_reading(
             &body,
             plan.fights,
@@ -4015,11 +4018,11 @@ impl Sessions {
                     } else if let Some(summary) = &summary
                         && let Some((before, after)) = text.split_once(summary)
                     {
-                        markdown_view::show_reader(ui, before);
+                        self.show_reader_with_embeds(ui, before, &embeds, book);
                         ui.label(Type::Small.rich(ui, summary).color(colors().muted));
-                        markdown_view::show_reader(ui, after);
+                        self.show_reader_with_embeds(ui, after, &embeds, book);
                     } else {
-                        markdown_view::show_reader(ui, &text);
+                        self.show_reader_with_embeds(ui, &text, &embeds, book);
                     }
                     self.world_changes(ui);
                 });
