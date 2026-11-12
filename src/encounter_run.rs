@@ -9,6 +9,7 @@ pub(crate) mod view;
 use crate::encounter_settings::{Grouping, Initiative};
 pub(crate) use ad_hoc::RunCreature;
 use eframe::egui;
+pub(crate) use loot::rewards;
 use serde::{Deserialize, Serialize};
 use serde_yaml_ng::{Mapping, Value};
 use splat::content::inspiration::Inspiration;
@@ -1481,10 +1482,7 @@ impl Run {
     }
     /// The read-aloud text and notes, and the setup's technical details, if a run has them.
     pub(crate) fn prep(&self) -> (&str, Option<&str>) {
-        match self.setup_details.split_once(SETUP_HEADING) {
-            Some((prep, technical)) => (prep.trim(), Some(technical.trim())),
-            None => (self.setup_details.trim(), None),
-        }
+        prep_parts(&self.setup_details)
     }
     fn current(&self) -> Option<usize> {
         (self.state.phase == Phase::Running).then(|| self.state.order[self.state.cursor])
@@ -4636,6 +4634,14 @@ impl From<&Participant> for FightRow {
 /// Check the same saved-run model as normal loading, without opening a campaign.
 pub(crate) fn check_saved_text(text: &str) -> Result<(), String> {
     SavedRun::parse(text.as_bytes(), None).map(drop)
+}
+
+/// A run's read-aloud text and notes, and its setup's technical details, if it has them.
+fn prep_parts(setup_details: &str) -> (&str, Option<&str>) {
+    match setup_details.split_once(SETUP_HEADING) {
+        Some((prep, technical)) => (prep.trim(), Some(technical.trim())),
+        None => (setup_details.trim(), None),
+    }
 }
 
 /// A saved run's file, within the size limit.
@@ -8734,6 +8740,41 @@ mod tests {
         // The ending is the newest step again, so Undo is the one way on, also after a close.
         let dir = tempfile::tempdir().unwrap();
         let campaign = stored(&mut run, dir.path());
+        // F7: what the saved run gives the session note, read from its file: the encounter's
+        // loot and the downed guard's, as Copy loot words them. The guard has no XP that Splat
+        // knows, so it is named, and no amount is counted for it; what stood is not counted.
+        let rewards = loot::rewards(run.path().unwrap(), campaign).unwrap();
+        assert_eq!(
+            rewards.loot,
+            [
+                "30 gp",
+                "2 × gems (not rolled)",
+                "gems (not rolled)",
+                "Iron key",
+                "gems (not rolled)"
+            ]
+        );
+        assert_eq!(rewards.not_rolled, 3);
+        assert_eq!(
+            rewards.xp_line(),
+            (
+                format!(
+                    "XP 0 for 0 at 0 HP. XP not known for {}: enter an award here.",
+                    run.state.participants[1].name
+                ),
+                1
+            )
+        );
+        let known = loot::Rewards {
+            downed: vec![("Wolf".into(), Some(200)), ("Wolf 2".into(), Some(200))],
+            standing: vec![Some(200)],
+            characters: 5,
+            ..loot::Rewards::default()
+        };
+        assert_eq!(
+            known.xp_line().0,
+            "XP 400 for 2 at 0 HP · 80 each for 5 · 1 still stood (XP 200)"
+        );
         let mut reopened = close_and_reopen(&mut run, campaign);
         assert_same_undo(&run, &reopened);
         assert!(reopened.undo_continues());

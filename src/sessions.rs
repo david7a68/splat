@@ -1824,9 +1824,385 @@ impl NoteUndo {
     }
 }
 
+/// Where `Add rewards` puts a new block (F7). A block found under another heading counts too.
+pub const REWARDS_HEADING: &str = "## Loot and rewards";
+
+/// The Timeline ID that a list line starts with: `- [[Timeline#^t-…|Name]]`.
+fn listed_reference(line: &str) -> Option<&str> {
+    let rest = line.trim_start();
+    let rest = ["- ", "* ", "+ "]
+        .iter()
+        .find_map(|mark| rest.strip_prefix(mark))?;
+    let rest = rest.trim_start().strip_prefix("[[Timeline#^")?;
+    let end = rest.find(['|', ']'])?;
+    Some(rest[..end].trim())
+}
+
+/// Each Timeline ID that a list line of the note starts with: the fights whose rewards are in
+/// the note, wherever the line is.
+pub fn listed_references(text: &str) -> std::collections::BTreeSet<String> {
+    text.lines()
+        .filter_map(listed_reference)
+        .map(str::to_owned)
+        .collect()
+}
+
+/// One rewards block as the note holds it: the line that starts with a fight's reference, and
+/// the lines indented under it.
+struct Block<'a> {
+    id: &'a str,
+    /// Byte range of the whole block, each line with its line end.
+    range: std::ops::Range<usize>,
+    /// The words of its first line under it that starts with `XP`.
+    xp: Option<&'a str>,
+}
+
+/// The rewards blocks of a note, in its order. `fight` says which Timeline IDs are fights; a
+/// line that starts with another event's reference is not a block.
+fn blocks<'a>(text: &'a str, fight: &dyn Fn(&str) -> bool) -> Vec<Block<'a>> {
+    let indent = |line: &str| line.len() - line.trim_start().len();
+    let lines: Vec<(usize, &str)> = text
+        .split_inclusive('\n')
+        .scan(0, |at, line| {
+            let start = *at;
+            *at += line.len();
+            Some((start, line))
+        })
+        .collect();
+    let mut out = Vec::new();
+    for (at, (start, line)) in lines.iter().enumerate() {
+        let Some(id) = listed_reference(line).filter(|id| fight(id)) else {
+            continue;
+        };
+        let mut end = start + line.len();
+        let mut xp = None;
+        for (child_start, child) in &lines[at + 1..] {
+            if child.trim().is_empty() || indent(child) <= indent(line) {
+                break;
+            }
+            end = child_start + child.len();
+            let words = child.trim();
+            let words = ["- ", "* ", "+ "]
+                .iter()
+                .find_map(|mark| words.strip_prefix(mark))
+                .unwrap_or(words);
+            if xp.is_none() && (words == "XP" || words.starts_with("XP ")) {
+                xp = Some(words);
+            }
+        }
+        out.push(Block {
+            id,
+            range: *start..end,
+            xp,
+        });
+    }
+    out
+}
+
+/// Whether the next rewards block gets an XP line, from the newest block that Splat can read
+/// (F7: XP has no switch). `notes` are the session notes in order: this one first, then each
+/// earlier one, newest first; `None` is a note that cannot be read. A note with no block is
+/// passed. An unreadable note stops the search in its place: what it holds is not known, and an
+/// older block is never used in its stead. `None` when nothing is known.
+pub fn rewards_with_xp<'a>(
+    notes: impl IntoIterator<Item = Option<&'a str>>,
+    fight: &dyn Fn(&str) -> bool,
+) -> Option<bool> {
+    for note in notes {
+        if let Some(block) = blocks(note?, fight).last() {
+            return Some(block.xp.is_some());
+        }
+    }
+    None
+}
+
+/// The words of the session notes before `session`, newest first, read now from `folder`, for
+/// [`rewards_with_xp`]. A note that cannot be read keeps its place as `None`. A file that
+/// claims a session but whose properties cannot be read, or a file of the folder that cannot
+/// be read at all, has no known place: it could be the newest, so it stands first. `None` alone when `session` is not in the folder.
+pub fn earlier_notes(folder: &Path, session: Uuid) -> Vec<Option<String>> {
+    let notes = list_notes(folder);
+    let Some(at) = notes.iter().position(|note| note.id == session) else {
+        return vec![None];
+    };
+    let unplaced = (!unreadable_notes(folder).is_empty()
+        || note_paths(folder)
+            .iter()
+            .any(|path| fs::read_to_string(path).is_err()))
+    .then_some(None);
+    unplaced
+        .into_iter()
+        .chain(notes[at + 1..].iter().map(|note| {
+            fs::read_to_string(&note.path)
+                .ok()
+                .map(|text| body_of(&text).to_owned())
+        }))
+        .collect()
+}
+
+/// The first number of an XP line: `XP 1,250 for 3 at 0 HP` is 1,250.
+pub fn first_number(words: &str) -> Option<u64> {
+    let start = words.find(|c: char| c.is_ascii_digit())?;
+    let digits: String = words[start..]
+        .chars()
+        .take_while(|c| c.is_ascii_digit() || *c == ',')
+        .filter(char::is_ascii_digit)
+        .collect();
+    digits.parse().ok()
+}
+
+/// The session's XP as the note stands: the first number of each block's XP line, and how many
+/// blocks it sums. Splat stores no total.
+pub fn xp_in_note(text: &str, fight: &dyn Fn(&str) -> bool) -> (u64, usize) {
+    blocks(text, fight)
+        .iter()
+        .filter_map(|block| first_number(block.xp?))
+        .fold((0, 0), |(sum, count), xp| {
+            (sum.saturating_add(xp), count + 1)
+        })
+}
+
+/// A rewards block that `Add rewards` wrote, as it left it, so that its Undo takes back exactly
+/// it. `lead` is what the act put before the block: a line end, the heading, or nothing.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Rewarded {
+    pub id: String,
+    lead: String,
+    block: String,
+}
+
+/// Put a block for the fight `id` at the end of `## Loot and rewards`, after its last line,
+/// or add that heading at the end of the note. `block` is whole lines, each ending in `\n`.
+pub fn add_rewards(text: &str, id: &str, block: &str) -> (String, Rewarded, usize) {
+    let mut starts = text
+        .split_inclusive('\n')
+        .scan(0, |at, line| {
+            let start = *at;
+            *at += line.len();
+            Some((start, line))
+        })
+        .skip_while(|(_, line)| !line.trim().eq_ignore_ascii_case(REWARDS_HEADING));
+    let (at, lead) = match starts.next() {
+        Some((heading, line)) => {
+            // The section ends at the next heading of its level or higher.
+            let mut last = (heading + line.len(), true);
+            for (start, line) in starts {
+                if line.starts_with("# ") || line.starts_with("## ") {
+                    break;
+                }
+                if !line.trim().is_empty() {
+                    last = (start + line.len(), false);
+                }
+            }
+            let (at, under_heading) = last;
+            // The last line can be the file's last, with no line end.
+            let end = if text[..at].ends_with('\n') { "" } else { "\n" };
+            // A blank line between the heading and its first block.
+            let blank = if under_heading { "\n" } else { "" };
+            (at, format!("{end}{blank}"))
+        }
+        None => {
+            let gap = if text.is_empty() || text.ends_with("\n\n") {
+                ""
+            } else if text.ends_with('\n') {
+                "\n"
+            } else {
+                "\n\n"
+            };
+            (text.len(), format!("{gap}{REWARDS_HEADING}\n\n"))
+        }
+    };
+    let after = format!("{}{lead}{block}{}", &text[..at], &text[at..]);
+    let written = Rewarded {
+        id: id.to_owned(),
+        lead,
+        block: block.to_owned(),
+    };
+    let block_at = at + written.lead.len();
+    (after, written, block_at)
+}
+
+/// The note with the block taken back, while it stands as `Add rewards` left it: the one block
+/// with its fight's ID holds exactly those lines. When no line follows the block before a
+/// blank line or the end, what the act put before it goes too, or the blank line of a block
+/// that it followed and that is gone. `None` when the block changed.
+pub fn remove_rewards(text: &str, written: &Rewarded) -> Option<String> {
+    let all = |_: &str| true;
+    let mut found = blocks(text, &all)
+        .into_iter()
+        .filter(|block| block.id == written.id);
+    let block = found.next()?;
+    if found.next().is_some() || text[block.range.clone()] != written.block {
+        return None;
+    }
+    let rest = &text[block.range.end..];
+    let before = &text[..block.range.start];
+    let alone = rest
+        .lines()
+        .next()
+        .is_none_or(|line| line.trim().is_empty());
+    let start = if !alone {
+        block.range.start
+    } else if !written.lead.is_empty() && before.ends_with(&written.lead) {
+        block.range.start - written.lead.len()
+    } else if written.lead.is_empty() && before.ends_with("\n\n") {
+        // It followed a block that is gone: the blank line above it was that block's.
+        block.range.start - 1
+    } else {
+        block.range.start
+    };
+    Some(format!("{}{rest}", &text[..start]))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// F7: a block goes at the end of `## Loot and rewards`, or under that heading added at the
+    /// end; its Undo takes back exactly what the act wrote, also beside another act's change.
+    #[test]
+    fn a_rewards_block_and_its_undo_are_exact_fragments() {
+        let a = "- [[Timeline#^t-a|Bridge]]\n  - XP 200 for 1 at 0 HP\n  - 30 gp\n";
+        let b = "- [[Timeline#^t-b|Shrine]]\n  - Iron key\n";
+        let template =
+            "# Session 2\n\n## What happened\n\n## Loot and rewards\n\n## Open threads\n\n";
+        let (one, written, at) = add_rewards(template, "t-a", a);
+        assert_eq!(
+            one,
+            "# Session 2\n\n## What happened\n\n## Loot and rewards\n\n- [[Timeline#^t-a|Bridge]]\n  - XP 200 for 1 at 0 HP\n  - 30 gp\n\n## Open threads\n\n"
+        );
+        assert_eq!(&one[at..at + a.len()], a);
+        // The next block follows the first.
+        let (two, second, _) = add_rewards(&one, "t-b", b);
+        assert!(two.contains(&format!("\n\n{a}{b}\n## Open threads")));
+        // A: add, B: another act on another line, then Undo of A. B's change stays.
+        let other = two.replace("## What happened\n", "## What happened\n\nThe ford held.\n");
+        let undone = remove_rewards(&other, &written).expect("the block stands");
+        assert_eq!(
+            undone,
+            template
+                .replace("## What happened\n", "## What happened\n\nThe ford held.\n")
+                .replace(
+                    "## Loot and rewards\n\n",
+                    &format!("## Loot and rewards\n\n{b}\n")
+                )
+        );
+        assert_eq!(
+            remove_rewards(&undone, &second).unwrap(),
+            template.replace("## What happened\n", "## What happened\n\nThe ford held.\n")
+        );
+        // A block that the DM changed, or typed under, is no longer the act's: no Undo.
+        assert_eq!(
+            remove_rewards(&one.replace("30 gp", "40 gp"), &written),
+            None
+        );
+        assert_eq!(
+            remove_rewards(
+                &one.replace("  - 30 gp\n", "  - 30 gp\n  - A signet ring\n"),
+                &written
+            ),
+            None
+        );
+        // With no heading, the heading is added at the end, and Undo takes it back too, also
+        // from a note with no line end at its end.
+        for note in [
+            "# Session 3\n\nWords.\n",
+            "# Session 3\n\nWords.",
+            "",
+            "# S\n\n",
+        ] {
+            let (with, written, _) = add_rewards(note, "t-a", a);
+            assert!(
+                with.ends_with(&format!("{REWARDS_HEADING}\n\n{a}")),
+                "{with:?}"
+            );
+            assert_eq!(remove_rewards(&with, &written).as_deref(), Some(note));
+        }
+        // A heading that is the note's last line, and a section whose last line has no end.
+        for note in [
+            "# S\n\n## Loot and rewards",
+            "# S\n\n## Loot and rewards\n\nTyped",
+        ] {
+            let (with, written, _) = add_rewards(note, "t-a", a);
+            assert!(with.ends_with(&format!("\n{a}")), "{with:?}");
+            assert_eq!(remove_rewards(&with, &written).as_deref(), Some(note));
+        }
+        // The fights listed in a note, wherever the line is; a link in prose is not a list line.
+        let listed = listed_references(
+            "Words [[Timeline#^t-c|C]]\n## X\n  * [[Timeline#^t-b]]\n- [[Timeline#^t-a|A]] and more\n",
+        );
+        assert_eq!(listed.into_iter().collect::<Vec<_>>(), ["t-a", "t-b"]);
+    }
+
+    /// F7: XP has no switch. The newest block that Splat can read says whether the next one
+    /// has XP; an unreadable note stops the search in its place.
+    #[test]
+    fn the_newest_rewards_block_says_whether_the_next_has_xp() {
+        let fight = |id: &str| id != "t-rest";
+        let with = "## Loot and rewards\n\n- [[Timeline#^t-1|One]]\n  - XP 1,250 for 3 at 0 HP · 250 each for 5\n";
+        let without = "## Loot and rewards\n\n- [[Timeline#^t-2|Two]]\n  - 30 gp\n";
+        let rest = "- [[Timeline#^t-rest|Short rest]]\n";
+        let read = |notes: &[Option<&str>]| rewards_with_xp(notes.iter().copied(), &fight);
+        assert_eq!(read(&[Some(with)]), Some(true));
+        assert_eq!(read(&[Some(""), Some(without), Some(with)]), Some(false));
+        // The last block of a note is its newest; an event's line is not a block.
+        assert_eq!(read(&[Some(&format!("{without}{with}{rest}"))]), Some(true));
+        assert_eq!(read(&[Some(rest), Some(without)]), Some(false));
+        // Nothing found, or an unreadable note before any block: not known.
+        assert_eq!(read(&[Some(""), Some(rest)]), None);
+        assert_eq!(read(&[Some(""), None, Some(with)]), None);
+        // The sum reads the first number of each block's XP line, as the note stands.
+        let two = format!(
+            "{with}- [[Timeline#^t-3|Three]]\n  - XP 400 for 2 at 0 HP · 1 still stood (XP 200)\n{rest}"
+        );
+        assert_eq!(xp_in_note(&two, &fight), (1650, 2));
+        assert_eq!(xp_in_note(without, &fight), (0, 0));
+
+        // The notes in their order, read now: this one is not among them; one that cannot be
+        // read keeps its place, and one whose place is not known stands first.
+        let dir = tempfile::tempdir().unwrap();
+        let note = |number: u32, body: &str| {
+            create_note(
+                dir.path(),
+                &NewNote {
+                    number,
+                    title: "",
+                    date: "2026-11-01",
+                    campaign: "Marches",
+                    template: body,
+                },
+            )
+            .unwrap()
+        };
+        note(1, with);
+        let second = note(2, "");
+        note(3, without);
+        let fourth = note(4, "");
+        let found = earlier_notes(dir.path(), fourth.id);
+        assert_eq!(found.len(), 3);
+        assert_eq!(
+            rewards_with_xp(found.iter().map(Option::as_deref), &fight),
+            Some(false)
+        );
+        assert!(found.iter().all(Option::is_some));
+        assert_eq!(
+            rewards_with_xp(
+                earlier_notes(dir.path(), second.id)
+                    .iter()
+                    .map(Option::as_deref),
+                &fight
+            ),
+            Some(true)
+        );
+        fs::write(dir.path().join("Broken.md"), "---\nsession_id: [\n---\n").unwrap();
+        let found = earlier_notes(dir.path(), fourth.id);
+        assert_eq!(found[0], None);
+        assert_eq!(
+            rewards_with_xp(found.iter().map(Option::as_deref), &fight),
+            None
+        );
+        assert_eq!(earlier_notes(dir.path(), Uuid::nil()), [None]);
+    }
 
     #[test]
     fn integrity_d10_new_notes_and_templates_refuse_a_gone_folder() {

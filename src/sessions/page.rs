@@ -281,6 +281,8 @@ pub struct Sessions {
     removed_group: Option<(Option<Uuid>, usize, String, String, f32, String)>,
     /// The plan's scenes: the Scene field and the results of scene acts.
     scenes: plan::Scenes,
+    /// The rewards record (F7): each `Add rewards` result by its note and fight.
+    rewards: plan::Rewards,
     /// The note's plan as rows, built when the note, the content or the encounters change.
     plan_model: plan::PlanModelCache,
     /// The fight behind the open event, read once.
@@ -1743,6 +1745,7 @@ impl Sessions {
         self.link_undo_state = None;
         self.removed_fight = None;
         self.scenes = plan::Scenes::default();
+        self.rewards = plan::Rewards::default();
         self.campaign = active.cloned();
         self.folder_error = None;
         match active {
