@@ -181,9 +181,12 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
   change that makes a task cost more or less on purpose runs `devenv shell -- audit-freeze counts`
   and says why in the pull request; a new task goes in with `devenv shell -- audit-freeze add`.
 - `journey-j2`, `journey-j3`, `journey-j4` and `journey-j6` are G6 too: they play the workflow score's other
-  journeys the same way and compare them with `artifacts/dm-audit/journeys/<J>/counts.json`.
-  `devenv shell -- audit-freeze journeys` writes those rows again; `audit-freeze add` adds new tasks to every
-  journey and refuses when a frozen task changed (`artifacts/dm-audit/README.md`).
+  journeys the same way and compare them with `artifacts/dm-audit/journeys/<J>/counts.json`. Each fails
+  first when a saved record that its journey states is wrong (the note, a Log, `Timeline.md`,
+  `Trackers.md`, the run file). `devenv shell -- audit-freeze journeys` writes those rows again;
+  `audit-freeze add` adds new tasks to every journey and refuses when a frozen task changed
+  (`artifacts/dm-audit/README.md`). A freeze writes all its files or none, and a refusal changes no frozen
+  file.
 - `plain-evening` (G7) always runs and captures, but compares with
   `src/visual_tests/plain_evening/reference.json` only with the switch `SPLAT_FROZEN=1`, as in
   `SPLAT_FROZEN=1 devenv shell -- audit-gate <label>`: any change of the user interface fails it

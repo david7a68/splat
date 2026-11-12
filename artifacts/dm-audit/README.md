@@ -186,7 +186,17 @@ the app is saved, closed and opened at the table.
 totals. The same code compares them in every gate (`measure` in `src/visual_tests/dm_audit.rs`), so a change
 that makes a journey's task cost more or less fails it. `devenv shell -- audit-freeze journeys` writes every row
 of the four; `devenv shell -- audit-freeze add` adds new tasks to J1 and to each journey and refuses when a frozen
-task changed. `journeys/FINDINGS.md` lists the faults that the scripts found.
+task changed. A freeze writes all its files or none: each scenario writes into a staging folder, the command
+copies it into the tree only when every scenario passed, and on a refusal it checks that no file under
+`artifacts/dm-audit/` or `src/visual_tests/plain_evening/` changed. `journeys/FINDINGS.md` lists what the
+scripts found, as app faults, limits the design accepts, and tasks the design does not walk.
+
+**Each outcome is checked on the saved files.** After the act, the script reads what Obsidian and the next
+session read: the session note (its plan, rewards blocks, carried parts, each line once), a World entry's Log,
+`Timeline.md` (each event and its day, by the app's own day count), `Trackers.md` (by the app's own ledger
+type), the run file, and the encounter. A wrong record fails the journey before its counts
+(`Audit::outcome`). One outcome is recorded and not checked, because `main` is wrong today: J2's road fight is
+on Day 3, not Day 2 (FINDINGS J2-2).
 
 The tables put each step's measured count beside the count that section 2 promises, and beside "today" (the cost
 before the features) where the design gives it. **T** is a page transition.
@@ -215,7 +225,16 @@ the row or as the opened row's last link (the fit rule of section 2.5, row 10). 
 design counts for opening the row. One of the last task's four Do is the scroll that brings the done scene's row
 into view.
 
+Checked on the saved files: each Log line once in `NPCs/Warden Ostrel.md`, stamped with the session and its
+day; one rewards block for each fight, with its XP line and the ring under Ostrel's; the fight with Ostrel on
+Day 1 and the journey of 2 days with one check for each day, the second naming the Wolf Pack; the Wolf Pack
+once, above the skipped fight; the talk ticked done once. The Wolf Pack fight is on Day 3, where the design says
+Day 2: recorded, not checked, until `main` repairs it (FINDINGS J2-2).
+
 ### J3, the broken evening (960x640, Lookup open)
+
+The start, checked: fight 2 in round 2, Lookup open on last week's note found by `miller`, sync on, and one
+tracker notice due from before the fight (the first bell), so the rail says `Due 1`.
 
 | Design step | The DM wants | Measured | Designed | Today |
 |---|---|---|---:|---:|
@@ -225,24 +244,34 @@ into view.
 | — | Play on into round 3 | Do 8 = **8** | as today | 8 |
 | 2 | After the crash in round 3: back to the fight | **0** | 0 | — |
 | 3 | Lookup is closed after the restart: find the note again | Panel 1, Find 1 = **2** | 2 | — |
-| 4 | A D&D Beyond sync conflict | not played: the test build has no route to sync | 5 | — |
-| 5 | The note changed in Obsidian | **0** | 0 | — |
-| 6 | The same, while Splat holds unsaved words | not played: the design names no plan act to refuse | 4 | — |
+| 4 | A sync conflict on Kestrel Dunmoor: `Review`, `Use D&D Beyond values`, select the wolf, Ctrl+K, the note again | Panel 1, Find 2, Do 2 = **5** | 5 | — |
+| 5 | The note changed in Obsidian (a tick and a new plan line) | **0** | 0 | — |
 | — | End the second fight | Nav 1, Do 2 = **3**, T | as today | 3, T |
-| W6-D1 | Take a scene off tonight's plan | Find 1, Do 1 = **2** | — | — |
+| 6 | The same, while Splat holds unsaved words: a plan act is refused | Do 1 = **1** | in the 4 | — |
+| 6 | Choose a version, and the plan act again | Do 2 = **2** | in the 4 | — |
+| W6-D1 | Take a scene off tonight's plan (the scenes are folded: `3 scenes`) | Find 2, Do 1 = **3** | — | — |
 | W6-D1 | Begin the fight before it | Nav 1 = **1**, T | — | — |
 | W6-D1 | The scene is wanted after all: **Session**, `Undo remove` | Nav 1, Do 1 = **2**, T | — | — |
-| | **Steps 1, 2, 3 and 5 (recovery)** | **3** | **3** (8 with step 4) | **8** with step 4, with pull request 232 |
-| | **The whole journey** | **26, 3 T** (Nav 3, Sub 1, Panel 1, Find 3, Do 18) | | |
+| | **Steps 1 to 5 (recovery)** | **8** | **8** | **8**, with pull request 232 |
+| | **Step 6** | **3** | **4** | — |
+| | **The whole journey** | **36, 3 T** (Nav 3, Sub 1, Panel 2, Find 6, Do 24) | | |
 
-After the restart the app opens on the run, the wolf's row says `Poisoned 2`, and `Undo` names the last saved
-step. The line added in Obsidian shows in the plan once the app's one-second poll has run, and the later
-`Remove from tonight` and `Undo remove` keep it in the file. With pull request 280, `Undo remove` stays in reach
-after the next fight begins (W6-D1 of the first scored round), from the Session page (facts in
-`journeys/J3/summary.tsv`). The design's 8 for steps 1 to 5 holds 5 for step 4, which the driver
-cannot play.
+The sync conflict is simulated, as the scenario `run-sync-conflict` does (`simulate_sync_conflict`): a test
+build reads no live sheet. Its `Review` and choice are the app's own. Checked on the saved files: the run file
+is in round 2 again after `Undo`; after the restart it is in round 3, the wolf holds `Poisoned` with its count,
+`Undo` names the step it named before the crash, and `Trackers.md` still holds the bell's notice, not done, so
+the rail says `Due 1`; after the conflict, Kestrel's HP in the run file is the one the row shows; the refused
+act leaves the note byte-equal to Obsidian's; the chosen version holds the DM's line and the first Obsidian
+edit, and the rewards once; after `Undo remove`, the plan is byte-equal to the plan before the removal.
+
+Step 6 costs 3, not 4: the design walks it in the run, where the choice is behind Ctrl+J. Played after the
+fight, the Session page shows the comparison in the plan's place, with its choices, and Lookup stays open
+(FINDINGS J3-3).
 
 ### J4, the race (1200x800)
+
+The start, checked on `Trackers.md`: the clock at 30, Favor 2, no seals. The prize day of the Tournament's
+note comes due on Day 2.
 
 | Design step | The DM wants | Measured | Designed | Paper |
 |---|---|---|---:|---:|
@@ -256,7 +285,11 @@ cannot play.
 | 7 | The party enters the arena | Do 1 = **1** | 1 | 1 |
 | — | Start the arena fight | Nav 1, Panel 1 = **2**, T | no tracker act | — |
 | — | Roll and begin the arena fight | Do 11 = **11** | as today | — |
+| — | Round 1 | Do 7 = **7** | as today | — |
 | — | In the fight, the crowd loves a move: Ctrl+T, press, Ctrl+T | Panel 2, Do 1 = **3** | ruled by the owner | 1 |
+| — | The seal's notice is due: the Old Guard's group joins (`Add to fight`, the group's `Add`) | Find 1, Do 1 = **2** | as today | — |
+| — | Round 2 | Do 10 = **10** | as today | — |
+| — | Round 3 | Do 9 = **9** | as today | — |
 | — | End the arena fight | Nav 1, Do 2 = **3**, T | as today | — |
 | 8 | Three minutes passed in the fight | Panel 1, Do 3 = **4** | 4 | 3 |
 | 9 | The rivals came: finish the seal's notice | Do 1 = **1** | 1 | 1 |
@@ -266,7 +299,16 @@ cannot play.
 | 13 | The second bell | Do 5 = **5** | 5 | 5, 5 dice |
 | — | A new day between sessions: the prize day comes due | Nav 1, Panel 2, Do 2 = **5**, T | — | — |
 | | **Steps 1 to 13** | **25** (Panel 2, Do 23) | **25** | **25** |
-| | **The whole journey** | **50, 3 T** (Nav 3, Panel 7, Do 40) | | |
+| | **The fight (as today, with the ruled tracker act and the arrival)** | **47, 2 T** | — | — |
+| | **The whole journey** | **78, 3 T** (Nav 3, Panel 7, Find 1, Do 67) | | |
+
+The fight runs three rounds: the Old Guard's 1-2 seals group (three goblin warriors, side `rivals`, made in prep)
+joins at the start of round 2, while the rail says `Due 1` for the seal's notice, and the DM ends the fight in
+round 3. Checked on the saved files: the seal is a Day 1 event of `Timeline.md`; the ledger holds the four bell
+rolls and the seal; the run file ends in round 3 with the goblin warriors in it, and `Timeline.md` says
+`round 3` on Day 1; after the fight, three `Fight minute` changes, the seal's notice done, the presses of steps
+10 and 11 in order with Favor at 4 and a gift roll on each `Throw a gift`; the clock at 63 and one soul after
+the second bell; on Day 2, the prize day's notice done and Favor at 5.
 
 ### J6, the week between (1200x800)
 
@@ -278,7 +320,7 @@ cannot play.
 | 4 | Back to the evening | Nav 1 = **1**, T | 1, T | 1 |
 | 5 | Rewards for each of the three fights | Do 3 = **3** | 3 | no route |
 | 6 | A week later: a new session | Do 3 = **3** | 3 | 3 |
-| 7 | Carry over what the last session left | Do 1 = **1** | 1 | by hand |
+| 7 | Carry over what the last session left (the recap, two fights and a scene, one open thread) | Do 1 = **1** | 1 | by hand |
 | 8 | Three scenes | Do 4 = **4** | 4 | 4 |
 | 9 | Is each fight right for this party? | **0** | 0 to 2 | by hand |
 | — | Make the Gate Watch harder in the encounter editor | Nav 2, Find 3, Do 2 = **7**, T T | — | — |
@@ -287,16 +329,26 @@ cannot play.
 | | **Steps 1 to 10** | **25, 2 T** (Nav 2, Panel 2, Find 1, Do 20) | **23 to 25, 2 T** | **20**, with no route for 5, 7 and 9 |
 | | **The whole journey** | **38, 4 T** (Nav 4, Panel 2, Find 6, Do 26) | | |
 
+Last week's note holds what `Carry over` reads: prose under `What happened`, two fights and a scene not played,
+and two threads, one ticked. Checked on the saved files: `NPCs/Verori.md` holds `status: dead` and each Log line
+once, stamped; the note holds one rewards block for each of the three fights; the new note holds, once each,
+the recap's embed, the two fights and the scene, the open thread and not the ticked one, `carried_from` and
+`carried_parts` `recap`, `plan`, `threads`; then the three scenes; both fights' rows have a word; the saved
+Gate Watch holds the Oni and its word changes; `Timeline.md` holds the road of 2 days; the new run holds the
+Oni.
+
 ### Above the design
 
 | Journey and step | Measured | Designed | The acts, in order | Why |
 |---|---:|---:|---|---|
 | J6 step 2 | 7 | 5 | Ctrl+K, type `verori`, `Edit Verori`, click Status, select all, type `dead`, `Save changes` | Lookup's reader is compact and has no `Change` on Status (FINDINGS J6-2) |
-| J3 step 2 | 5 | not counted; the walk implies 4 | select the wolf, **Conditions**, click `Other effect` and type, Enter | At 960x640 with Lookup open the dock has no `Effect` and `E` is off; the Conditions tab closes Lookup (FINDINGS J3-1) |
-| J4, the arena fight's start | 2 | 1 (no tracker act in the fight) | `Start fight`, Ctrl+T | Trackers stays open in the run, in the fight panel's place (FINDINGS J4-1) |
+| J3 step 2 | 5 | not counted; the walk implies 4 | select the wolf, **Conditions**, click `Other effect` and type, Enter | A limit the design accepts (section 7: `Effect` by the pointer costs 5 with Lookup open); the tab takes Lookup's place (FINDINGS J3-1) |
+| J4, the arena fight's start | 2 | 1 (no tracker act in the fight) | `Start fight`, Ctrl+T | A limit the design accepts: a side panel stays until the DM closes it (section 1.2), and trackers in a fight are behind Ctrl+T (section 7). FINDINGS J4-1 |
 
-The design's own arithmetic is right in all four walks (J2: 21; J3: 8 for steps 1 to 5; J4: 25; J6: 23 to 25),
-so the design document is not changed.
+J6 step 2 is the one app fault above the design. The others are limits that section 1.2 or 7 states; their
+cost stays here so that a later change can be weighed. J3 step 6 costs less than its walk (3 against 4,
+FINDINGS J3-3). The design's own arithmetic is right in all four walks (J2: 21; J3: 8 for steps 1 to 5 and 4
+for step 6; J4: 25; J6: 23 to 25), so the design document is not changed.
 
 ## Update: what the design changes did
 
