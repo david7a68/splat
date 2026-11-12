@@ -339,9 +339,13 @@ fn check(def: &Definition, rules: &Rules) -> Result<(), String> {
             };
             if let Ok(target) = &target.def
                 && !target.per.is_empty()
-                && def.per.is_empty()
             {
-                return Err(format!("{key} has per, so a change to it needs a name."));
+                if def.per.is_empty() {
+                    return Err(format!("{key} has per, so a change to it needs a name."));
+                }
+                if let Some(word) = def.per.iter().find(|word| !target.per.contains(word)) {
+                    return Err(format!("{key} has no line for {word}."));
+                }
             }
         }
         match (&change.add, change.set) {
@@ -482,6 +486,18 @@ pub fn replay(rules: &Rules, ledger: &Ledger) -> State {
         }
     }
     state
+}
+
+/// The notice the DM clicked, as the file on disk holds it now: the same change and mark, for
+/// the same tracker and name. An outside edit that moved it writes nothing.
+fn open_as_drawn<'a>(state: &'a State, drawn: &Notice) -> Result<&'a Notice, String> {
+    let open = state
+        .notice(&drawn.id)
+        .ok_or("That notice is no longer due. Nothing was recorded.")?;
+    if open.tracker != drawn.tracker || open.instance != drawn.instance {
+        return Err("That notice changed on disk. Nothing was recorded.".into());
+    }
+    Ok(open)
 }
 
 /// The mark that a notice is for.
@@ -733,6 +749,17 @@ fn change_entry(
     let target = rules
         .def(key)
         .ok_or_else(|| format!("No tracker in play has the key “{key}”."))?;
+    if target.per.is_empty() != instance.is_none()
+        || instance
+            .as_ref()
+            .is_some_and(|name| !target.per.contains(name))
+    {
+        return Err(format!(
+            "{} has no line for {}. Nothing was recorded.",
+            target.name,
+            instance.as_deref().unwrap_or("this action")
+        ));
+    }
     let place = (key.to_owned(), instance.clone());
     let before = values
         .get(&place)
@@ -1033,6 +1060,8 @@ impl Trackers {
                 self.baseline = None;
             }
             Err(Fault::Refused(reason)) => {
+                // A retry that the file refuses ends the act that waited; it says why.
+                self.pending = None;
                 self.reason = Some((place, reason));
                 // The view draws again from the file.
                 self.read_disk();
@@ -1054,12 +1083,11 @@ impl Trackers {
     }
 
     /// A notice's `Roll <table>`: for the next name when the table names its rolls.
-    pub fn roll_notice(&mut self, notice: &NoticeRef, table: &str) {
+    pub fn roll_notice(&mut self, drawn: &Notice, table: &str) {
+        let notice = &drawn.id;
         let session = self.played;
         self.act(Place::Notice(notice.clone()), |rules, state| {
-            let open = state
-                .notice(notice)
-                .ok_or("That notice is no longer due. Nothing was rolled.")?;
+            let open = open_as_drawn(state, drawn)?;
             let mark = mark_of(rules, open).ok_or("That mark changed in its note.")?;
             let names = mark
                 .tables
@@ -1091,13 +1119,12 @@ impl Trackers {
     }
 
     /// `Done`: the ticked proposed changes and the notice's end, as one act.
-    pub fn done(&mut self, notice: &NoticeRef, ticked: &[bool]) {
+    pub fn done(&mut self, drawn: &Notice, ticked: &[bool]) {
+        let notice = &drawn.id;
         let session = self.played;
         let ledger = self.ledger.clone();
         self.act(Place::Notice(notice.clone()), |rules, state| {
-            let open = state
-                .notice(notice)
-                .ok_or("That notice is no longer due. Nothing was recorded.")?;
+            let open = open_as_drawn(state, drawn)?;
             let mark = mark_of(rules, open).ok_or("That mark changed in its note.")?;
             if mark.changes.len() != ticked.len() {
                 return Err("That mark changed in its note. Nothing was recorded.".into());
@@ -1138,12 +1165,11 @@ impl Trackers {
     }
 
     /// `Dismiss`: the notice ends, and nothing is applied.
-    pub fn dismiss(&mut self, notice: &NoticeRef) {
+    pub fn dismiss(&mut self, drawn: &Notice) {
+        let notice = &drawn.id;
         let session = self.played;
         self.act(Place::Notice(notice.clone()), |_, state| {
-            state
-                .notice(notice)
-                .ok_or("That notice is no longer due. Nothing was recorded.")?;
+            open_as_drawn(state, drawn)?;
             Ok(stamp(
                 vec![Entry {
                     notice: Some(notice.clone()),
@@ -1175,7 +1201,8 @@ impl Trackers {
 
     /// Save the act that waits, once.
     pub fn retry(&mut self) {
-        let Some((op, _)) = self.pending.take() else {
+        // The act waits until it is written or refused: a file that cannot be read keeps it.
+        let Some((op, _)) = self.pending.clone() else {
             return;
         };
         let Some(path) = self.path() else { return };
@@ -1339,10 +1366,17 @@ mod tests {
         assert_eq!(newest_label(t), "Cistern or Sands");
 
         // `for:` rolls for the next name, and then the button is off.
-        let bell = t.state.due[0].id.clone();
+        let bell = t.state.due[0].clone();
         for name in ["Old Guard", "Keyring", "Convicts"] {
             t.roll_notice(&bell, "rival_track");
-            let roll = t.state.notice(&bell).unwrap().rolls.last().unwrap().clone();
+            let roll = t
+                .state
+                .notice(&bell.id)
+                .unwrap()
+                .rolls
+                .last()
+                .unwrap()
+                .clone();
             assert_eq!(roll.name.as_deref(), Some(name));
             assert_eq!(newest_label(t), "Rival Track roll");
         }
@@ -1352,7 +1386,7 @@ mod tests {
         assert_eq!(
             t.reason,
             Some((
-                Place::Notice(bell.clone()),
+                Place::Notice(bell.id.clone()),
                 "Each name has its roll.".into()
             ))
         );
@@ -1361,7 +1395,7 @@ mod tests {
         let t = &mut race.trackers;
         t.roll_notice(&bell, "wander_early");
         t.roll_notice(&bell, "wander_early");
-        assert_eq!(t.state.notice(&bell).unwrap().rolls.len(), 5);
+        assert_eq!(t.state.notice(&bell.id).unwrap().rolls.len(), 5);
         t.done(&bell, &[]);
         assert_eq!(t.due(), 0);
         assert_eq!(newest_label(t), "Bell done");
@@ -1402,6 +1436,29 @@ mod tests {
             short_name(&t.rules, "seals", Some("Old Guard"), 1),
             "First seal for Old Guard"
         );
+        // The DM clicks Dismiss on that notice; a moment before, Obsidian moved its seal to
+        // Party. The click writes nothing and says so, and the view draws from the file.
+        let drawn = t.state.due[0].clone();
+        let path = ledger::path(&race.campaign.path);
+        let before = fs::read_to_string(&path).unwrap();
+        fs::write(&path, before.replace("for: Old Guard", "for: Party")).unwrap();
+        let t = &mut race.trackers;
+        t.dismiss(&drawn);
+        assert_eq!(
+            t.reason,
+            Some((
+                Place::Notice(drawn.id.clone()),
+                "That notice changed on disk. Nothing was recorded.".into()
+            ))
+        );
+        assert_eq!(
+            fs::read_to_string(&path).unwrap(),
+            before.replace("for: Old Guard", "for: Party")
+        );
+        fs::write(&path, &before).unwrap();
+        let t = &mut race.trackers;
+        t.read_disk();
+        assert_eq!(t.state.due[0], drawn);
         // A wrong press seen late: the opposite action corrects the value, and the history
         // keeps both presses.
         t.press("seals", Some("Old Guard"), "Lose seal", None);
@@ -1441,11 +1498,42 @@ mod tests {
     }
 
     #[test]
+    fn a_linked_change_names_a_line_its_tracker_has() {
+        let def = |yaml: &str| serde_yaml_ng::from_str::<Definition>(yaml).unwrap();
+        let rules = Rules {
+            notes: vec!["Rules".into()],
+            trackers: vec![
+                Tracker {
+                    key: "teams".into(),
+                    def: Ok(def(
+                        "name: Teams\nper: [Party]\nquick:\n- label: Score\n  changes: [{tracker: rivals, add: 1}]",
+                    )),
+                },
+                Tracker {
+                    key: "rivals".into(),
+                    def: Ok(def("name: Rivals\nper: [Old Guard]")),
+                },
+            ],
+            ..Rules::default()
+        };
+        let teams = rules.def("teams").unwrap();
+        assert_eq!(
+            check(teams, &rules),
+            Err("Score: rivals has no line for Party.".into())
+        );
+        let state = replay(&rules, &Ledger::default());
+        assert_eq!(
+            press_op(&rules, &state, "teams", Some("Party"), "Score", None, None),
+            Err("Rivals has no line for Party. Nothing was recorded.".into())
+        );
+    }
+
+    #[test]
     fn undo_of_a_change_that_raised_a_notice_takes_the_notice_and_its_entries() {
         let mut race = race();
         let t = &mut race.trackers;
         t.press("race_clock", None, "Cistern or Sands", None);
-        let bell = t.state.due[0].id.clone();
+        let bell = t.state.due[0].clone();
         let raised = t.newest().to_vec();
         // The roll is made with no session being played, so it has another stamp.
         t.played = None;
@@ -1510,6 +1598,12 @@ mod tests {
         t.retry();
         assert!(t.pending.is_some(), "still not saved");
         assert_eq!(fs::read(&path).unwrap(), before);
+        // A retry that meets a file it cannot read keeps the act, with its dice.
+        let waiting = t.pending.clone();
+        fs::write(&path, "---\nchanges: [\n---\n").unwrap();
+        t.retry();
+        assert_eq!(t.pending, waiting);
+        fs::write(&path, &before).unwrap();
         readonly.set_mode(0o755);
         fs::set_permissions(&race.campaign.path, readonly).unwrap();
         let t = &mut race.trackers;

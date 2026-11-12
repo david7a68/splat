@@ -27,9 +27,9 @@ enum Act {
         label: String,
         asked: Option<i64>,
     },
-    Roll(NoticeRef, String),
-    Done(NoticeRef, Vec<bool>),
-    Dismiss(NoticeRef),
+    Roll(super::Notice, String),
+    Done(super::Notice, Vec<bool>),
+    Dismiss(super::Notice),
     Undo(Vec<Entry>),
     AddToTimeline(String, String),
     UndoAdd(String),
@@ -97,7 +97,7 @@ fn apply(trackers: &mut Trackers, act: Act) {
         Act::Done(notice, ticked) => {
             trackers.done(&notice, &ticked);
             if trackers.reason.is_none() {
-                trackers.view.unticked.retain(|(id, _)| *id != notice);
+                trackers.view.unticked.retain(|(id, _)| *id != notice.id);
             }
         }
         Act::Dismiss(notice) => trackers.dismiss(&notice),
@@ -251,7 +251,7 @@ fn notice_row(
                     .show(ui)
                     .clicked()
                 {
-                    *act = Some(Act::Roll(notice.id.clone(), key.to_owned()));
+                    *act = Some(Act::Roll(notice.clone(), key.to_owned()));
                 }
                 if each_rolled && blocked.is_none() {
                     design::blocked_reason(ui, Some("Each name has its roll."));
@@ -389,7 +389,7 @@ fn finish(
             .show(ui)
             .clicked()
         {
-            *act = Some(Act::Dismiss(notice.id.clone()));
+            *act = Some(Act::Dismiss(notice.clone()));
             ui.close();
         }
     });
@@ -404,7 +404,7 @@ fn finish(
         let ticked = (0..mark.changes.len())
             .map(|at| !view.unticked.contains(&(notice.id.clone(), at)))
             .collect();
-        *act = Some(Act::Done(notice.id.clone(), ticked));
+        *act = Some(Act::Done(notice.clone(), ticked));
     }
 }
 

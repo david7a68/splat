@@ -154,9 +154,6 @@ pub fn scan(root: &Path, sessions_folder: &Path) -> Scan {
         if extension != "md"
             || (file_name.eq_ignore_ascii_case(timeline::FILE)
                 && path.parent() == Some(sessions_folder))
-            // The tracker ledger is Splat's own file, not a world note.
-            || (file_name.eq_ignore_ascii_case(crate::trackers::ledger::FILE)
-                && path.parent() == Some(root))
         {
             continue;
         }
@@ -175,6 +172,11 @@ pub fn scan(root: &Path, sessions_folder: &Path) -> Scan {
         let text = text.trim_start_matches('\u{feff}').replace("\r\n", "\n");
         let (front, body) =
             sessions::split_note(&text).map_or((None, text.as_str()), |(f, b)| (Some(f), b));
+        // The tracker ledger is Splat's own file, not a world note. A note of the DM's that has
+        // that name and is no ledger stays a world note.
+        if path.parent() == Some(root) && crate::trackers::ledger::is_ledger(&file_name, front) {
+            continue;
+        }
         let (name, role) = match transcript {
             Some(name) => (name, Role::Transcript),
             None => {
@@ -4628,9 +4630,22 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         note(dir.path(), "Setting.md", "# Setting\n");
         note(dir.path(), "Timeline.md", "---\ntimeline_version: 2\n---\n");
+        note(
+            dir.path(),
+            "Trackers.md",
+            "---\ntrackers_version: 1\nchanges: []\n---\n",
+        );
         let scan = scan(dir.path(), dir.path());
         assert_eq!(scan.notes.len(), 1);
         assert_eq!(scan.notes[0].path, "Setting.md");
+        // A note of the DM's named Trackers.md that is no ledger stays a world note.
+        note(
+            dir.path(),
+            "Trackers.md",
+            "---\ntags: [race]\n---\n\n# Trackers\n",
+        );
+        let scan = super::scan(dir.path(), dir.path());
+        assert_eq!(scan.notes.len(), 2);
     }
 
     #[test]

@@ -149,7 +149,15 @@ impl Ledger {
         let (front, _) = crate::sessions::split_note(text)
             .ok_or("Trackers.md has no properties block at its top.")?;
         let yaml = front_yaml(front);
-        let ledger: Self = serde_yaml_ng::from_str(yaml).map_err(|error| error.to_string())?;
+        let value: Value = serde_yaml_ng::from_str(yaml).map_err(|error| error.to_string())?;
+        // A note of the DM's with this name is not a ledger, and is never written over.
+        if value.get("trackers_version").is_none() {
+            return Err(
+                "Trackers.md is not a tracker ledger: its properties have no trackers_version."
+                    .into(),
+            );
+        }
+        let ledger: Self = serde_yaml_ng::from_value(value).map_err(|error| error.to_string())?;
         let mut seen = std::collections::HashSet::new();
         for entry in &ledger.changes {
             if !seen.insert(entry.id.as_str()) {
@@ -204,6 +212,17 @@ fn front_yaml(front: &str) -> &str {
         .unwrap_or(front);
     let inner = inner.trim_start_matches(['\r', '\n']);
     inner.rsplit_once("---").map_or(inner, |(yaml, _)| yaml)
+}
+
+/// Is this file in a campaign's root the ledger? Its name, and `trackers_version` in its
+/// properties.
+pub fn is_ledger(file_name: &str, front: Option<&str>) -> bool {
+    file_name.eq_ignore_ascii_case(FILE)
+        && front.is_some_and(|front| {
+            front
+                .lines()
+                .any(|line| line.starts_with("trackers_version:"))
+        })
 }
 
 /// Where the ledger of a campaign lives.
@@ -318,6 +337,14 @@ mod tests {
         let fault = commit(&path, |_| Ok(Op::Append(Vec::new()))).unwrap_err();
         assert!(matches!(fault, Fault::NotRead(_)), "{fault:?}");
         assert_eq!(fs::read_to_string(&path).unwrap(), "---\nchanges: [\n---\n");
+        // A note of the DM's with the ledger's name.
+        let note = "---\ntags: [race]\n---\n\n# Trackers\n";
+        fs::write(&path, note).unwrap();
+        assert!(matches!(
+            commit(&path, |_| Ok(Op::Append(Vec::new()))),
+            Err(Fault::NotRead(_))
+        ));
+        assert_eq!(fs::read_to_string(&path).unwrap(), note);
         fs::write(&path, DESIGN.replace("c-5e6f7a8b", "c-1a2b3c4d")).unwrap();
         assert!(matches!(
             commit(&path, |_| Ok(Op::Append(Vec::new()))),

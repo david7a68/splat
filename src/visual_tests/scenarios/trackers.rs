@@ -161,7 +161,21 @@ pub fn run(d: &mut Driver<'_>) {
             "Done: First seal for Party",
             "Undo: Take seal",
         ];
-        let missing: Vec<_> = parts.iter().filter(|name| !d.in_view(name)).collect();
+        let words = [
+            "Bell. The Cistern floods.",
+            "Old Guard: ",
+            "Keyring: ",
+            "Convicts: ",
+            "Wandering, 0:40 to 1:19: ",
+            "Old Guard: First seal.",
+            "Party: First seal.",
+            "Take seal: Seals (Party) 1.",
+        ];
+        let missing: Vec<_> = parts
+            .iter()
+            .filter(|name| !d.in_view(name))
+            .chain(words.iter().filter(|words| !d.in_view_containing(words)))
+            .collect();
         (missing.is_empty(), format!("not in view: {missing:?}"))
     });
     d.observe(
