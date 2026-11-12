@@ -697,9 +697,11 @@ impl Sessions {
                 ui.label(Type::Small.rich(ui, words).color(colors().muted))
                     .on_hover_text(&full);
             }
+            // At the line's right end, in the room the link and the preview left it.
             if let Some(action) = action {
-                ui.add_space((ui.available_width() - carry_room + design::L).max(design::L));
-                carry = action.show(ui).clicked();
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    carry = action.show(ui).clicked();
+                });
             }
         });
         let id = last.id;

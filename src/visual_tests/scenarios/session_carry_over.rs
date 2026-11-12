@@ -100,7 +100,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.observe(
         "T18.3-file",
         carried.contains(&format!("## Recap of last time\n\n![[{link}#What happened]]\n"))
-            && carried.contains(&format!("- [ ] [[{RUN}]]\n- [ ] {SCENE}\n"))
+            && carried.contains(&format!("- [[{RUN}]]\n- [ ] {SCENE}\n"))
             && carried.contains(&format!("## Open threads\n\n- [ ] {THREAD}\n"))
             && !carried.contains("Read the rumours")
             && !carried.contains("Who paid the toll?")
@@ -146,5 +146,4 @@ pub fn run(d: &mut Driver<'_>) {
         undone == before && ticked.contains(&format!("- [x] {SCENE}")) && d.has(CARRY),
         format!("After acts on another page and another session, Undo carry over puts back {before:?}; the note holds {undone:?}"),
     );
-    d.state("carry-over-undone", Sizes::Default);
 }

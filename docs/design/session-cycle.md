@@ -402,6 +402,7 @@ that G7 allows.
 | 19 | A **Change** of status, place or group | It writes its Log line when a session is being played by W14's test. Today the test is "dated today" (`page.rs:1929-1937`). So a change during a fight or a recording on a note with another date, and a change in prep for a session dated later, now write a line | Rule M: one definition of the session being played |
 | 20 | The run's notice line, when a conflict's name is wider than the line beside the bare `Undo` | The name shortens as the dock's name does. Today nothing gives | Rule K |
 | 21 | A package creature's reader, with no run open | A quiet `Start fight` in a header that holds no action today (F3) | Rule Q |
+| 22 | The **Last time** line | When the last note has no prose under `What happened` and no processed recap, the preview is the note's first written line outside its title and date, `Recap of last time` and `Plan for tonight`. Today the line shows the link alone (`recap_preview`, `src/sessions/page.rs`) | The lead's ruling W5-D5, from the first scored round on the app: the measured evening's two reads of last week cost 2 each because the line showed none of last week's words |
 
 Nothing else differs. A free-words effect from an encounter or an older run gives no reminder. A Travel row
 shows no checks and no new field until the DM asks. The rail says nothing about trackers unless a notice is
@@ -1064,7 +1065,9 @@ carried_parts: [recap, plan, threads]
 
 **Undo.** `Undo carry over` puts back exactly what the act replaced. The lines that it added go. A draft that
 became an embed comes back. `carried_from` and `carried_parts` have the values, or the absence, that they had
-before the act. Section 4.1 says when it ends. After that the DM removes a carried
+before the act. Section 4.1 says when it ends. Its result and its Undo belong to the session note by its ID: another session or
+another page leaves them, so after an act elsewhere the DM comes back and still has `Undo carry over` (P8, by the
+lead's rule that an Undo is kept by the ID of the thing it belongs to). After that the DM removes a carried
 line as any line, and the part stays done.
 
 **Keyboard.** Tab reaches `Carry over` after the **Last time** link. Enter presses it.
