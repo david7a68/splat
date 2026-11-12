@@ -315,6 +315,13 @@
       "transitions": 1,
       "interactions": 1,
       "path": "Session > Party"
+    },
+    {
+      "phase": "after",
+      "task": "Put what an NPC said in the NPC's own note",
+      "transitions": 0,
+      "interactions": 4,
+      "path": "Session"
     }
   ]
 }

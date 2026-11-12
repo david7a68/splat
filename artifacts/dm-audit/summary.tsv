@@ -2,8 +2,8 @@ Phase totals
 phase	tasks	transitions	interactions	nav	sub	panel	find	do
 before	8	5	36	5	0	1	9	21
 during	30	9	192	9	2	13	46	122
-after	7	5	21	5	4	0	1	11
-total	45	19	249	19	6	14	56	154
+after	8	5	25	5	4	2	1	13
+total	46	19	253	19	6	16	56	156
 
 Tasks
 phase	task	transitions	interactions	overhead	path
@@ -52,6 +52,7 @@ after	Add a suggested event to the timeline	0	1	0	Session
 after	Write the wrap-up in the note	0	4	1	Session
 after	Link the fight in the note	2	6	2	Session > Timeline > Session
 after	Check the party's HP for next time	1	1	1	Session > Party
+after	Put what an NPC said in the NPC's own note	0	4	2	Session
 
 Set-up, not counted
 before	play last week's session, then quit and open the app
@@ -62,6 +63,7 @@ during	the recorder hears the table
 during	the campaign has a marked road table
 after	save, quit and open the app after the session
 after	the recording service has its keys
+after	the plan holds a done scene with Hobb the Miller
 
 Blocked
 
@@ -91,3 +93,4 @@ after / Stop recording: the app reopened on Session
 after / Review how the fight went: log and final HP: final HP reads in place: true
 after / Link the fight in the note: the note holds the fight's link: true
 after / Check the party's HP for next time: Kestrel on Party after the evening: [Kestrel Dunmoor · Level 5 Rogue · Per 11 · Ins 11 · HP 9/41 · AC 15 · Poisoned]
+after / Put what an NPC said in the NPC's own note: the NPC's note holds the line: true
