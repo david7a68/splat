@@ -1397,10 +1397,17 @@ first.` So a wrong `Roll for encounters` can go at any time.
   menu, as every field's label is; `· 1d20 each day` follows the menu on its line, and dice words that move
   to a line of their own start with the words, never with `·`.
 - **An act's result has one kept line** under the table's line: `2 travel checks rolled.` with `Undo roll`,
-  and the results of `Roll for encounters` and `Clear` there too. The plan line's message (`Undo plan line`)
-  is the note's act and stays at the block's end. The line is reserved while the block shows, so a result coming or
+  and the results of `Roll for encounters` and `Clear` there too. The line is reserved while the block shows, so a result coming or
   going moves nothing below it, and at 960x640 it is in view where the DM pressed `Roll`. Words that do not
   fit beside Undo end in `…`; the hover keeps them whole.
+- **The plan line's message** (`“Wolf Pack” is in tonight’s plan.` with `Undo plan line`, the note's Undo)
+  shows in place of the `Plan “Wolf Pack”` line of the check that the DM clicked; `In the plan` takes that place
+  when the Undo ends. The offer keeps from the start the height that its message needs at that width: one line
+  when the words and Undo fit, else the words with Undo under them (at 960x640 the message of `Bridge Ambush`
+  needs about 420 px and the row has less). So nothing moves when the message comes or goes, and it is never cut.
+  When that check is gone (cleared or rolled again) while the Undo lives, the message takes the kept line. If a
+  roll's result holds the kept line, the message ends the block, as before: the one known case where it moves
+  what is below (repair R1b, the owner's ruling).
 
 - **How long** is the Timeline's field. It is part of the block, so a plain Travel row does not gain a line.
 - **One check at each whole interval from the start, and none at the journey's end.** Two days give two

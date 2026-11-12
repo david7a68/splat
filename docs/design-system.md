@@ -1575,7 +1575,13 @@ leaves it. The length being typed has one owner, the Timeline book, whichever pa
 the page gives it to the journey, as a loss of focus does. `Plan “<name>”` is a note act through `Draft::apply`: it writes
 `- [[<name>]]` before the first plan line still to come, says `“<name>” is in tonight’s plan.` and offers `Undo
 plan line`, which is the note's: it lasts while the note's words are what the act left, also through a page
-change, and ends when they change or another session is selected. Splat rolls and offers; it never plans or starts a fight by itself. The Add strip stays directly below Tonight (or This session), above
+change, and ends when they change or another session is selected. The message and its Undo take the place of
+the `Plan “<name>”` line of the check the DM clicked, and `In the plan` takes that place after them. Each offer
+keeps from the start the height that its message needs at that width (`design::undo_message_height`): one line
+when the words and Undo fit, else the words with Undo under them. So nothing moves when the message comes or
+goes, and the message is never cut. When that check is
+gone (cleared, or edited) while the Undo lives, the message takes the block's kept line; if a roll's result holds
+that line, the message ends the block, the one case where it can move what is below. Splat rolls and offers; it never plans or starts a fight by itself. The Add strip stays directly below Tonight (or This session), above
 messages and scrolling rows. Fight, Group and Long rest stay visible. If all seven actions do not fit on one line,
 a compact `⋯⌄` button, named `More Add actions`, holds Day, Short rest, Travel and Major event. Its hover text names those actions. Keep the strip on one line at all three supported window sizes. Long rest stays one click away (T11.2). Timeline uses the same width rule.
 It stays in place when messages or rows change. Empty plans use empty_state
