@@ -331,7 +331,8 @@ above it. World uses this, so a typed note with no set values starts its prose w
 Lookup has no file line: there an empty value block draws nothing, and the prose keeps the reader's gap below
 the kind line, as a spell's does, and so does a plain note's prose. Lookup's reader keeps the app's row spacing whether a search or a link
 opened the entry. Library draws no value block. `design::reader` holds the typographic parts. Library shows quiet Back whenever it has reading
-history. Its toolbar stays on one line: Read and Edit Markdown at the left, then visible copy, creation and
+history. Every way to open another entry records the entry it leaves: a link, a list row, the About row and the header
+count's menu. Back returns to the entry just left in one action, and a new entry ends Forward. Its toolbar stays on one line: Read and Edit Markdown at the left, then visible copy, creation and
 campaign-choice actions (`Choose for this campaign`, `Choose every entry`), then Back. Drop Back's key hint first; fold Copy, Make NPC note and the campaign choice into quiet More when needed, with
 Back before More. Every toolbar action, Make NPC note and the actions in More included, is a Read control
 (28 px), so the toolbar row has one height and a campaign creature's title sits where a campaign spell's does. Lookup keeps its Back hint; its Back is a Read control (28 px), as its title line's icon buttons are, so the title line has one height with or without Back and the search field below never moves. Both use Alt+Left, and Alt+Right for Forward, which has no button. Lookup takes the key when focus is there. Beside the Library, the mouse's Back and Forward buttons act on the side under the pointer.
@@ -348,7 +349,7 @@ have Edit in Obsidian. The path shortens from the front only and keeps its file 
 second Read row. An unreadable entry keeps `Cannot be read` on its owner line, in place of `Chosen for this campaign`.
 A file that the system will not read at all (not UTF-8 text, or no permission) has no text to repair, in a package
 or a campaign. Library keeps why the read failed, from the error's kind, as World does. Its row's cause is short
-(`Text format cannot be read`). Its reader keeps the title and a file line with only `Show file`: no Edit in
+(`Not a text file`). Its reader keeps the title and a file line with only `Show file`: no Edit in
 Obsidian, because no editor can open the file either. Below the title, an error names the file (`Splat cannot read
 Notes/Broken.md as text.`), then the recovery in plain words, then quiet `Try again` at the message words.
 Technical details holds the system's words. Edit Markdown is blocked with its reason, and the reader offers no
@@ -481,16 +482,18 @@ Draw the manifest error with `message_with_action`, then its muted `Small` conse
 text edge below the action. The consequence wraps at the pane's notice measure, not at the action's width. In Edit
 Markdown the error is in the message space below the save row, and the bordered action and its consequence follow
 directly below that space, at the message text edge: they depend on the saved file only, so they stay while the DM
-edits. Show the chosen and total entries (`5 of 6 entries chosen`, `All entries chosen`) and `Choose every entry`
+edits. Show the chosen and total entries (`4 of 6 entries chosen · 1 still needed`, `All entries chosen`) and `Choose every entry`. `chosen` counts only the DM's own choices, as Campaign's package row does; `still needed` counts the entries
+those choices need that the DM did not choose, and is left out when it is 0
 with Undo. Its result
-and Undo sit in the reader's results place, after the title, like manifest-write results (see Files and recovery). Omit the entry breadcrumb and Engine support. Empty package counts have no separator.
+and Undo sit in the pane's message footer, like manifest-write results (see Files and recovery). Omit the entry breadcrumb and Engine support. Empty package counts have no separator.
 
 Nonzero file status links sit in the page header before Packages and New entry. The validation count says how
 many files need fixing: a validation message, a broken link, a duplicate identity or more than one count a file
 once, and both files of a duplicate identity count. It has the tone of the most severe fault it counts: amber with
 the warning icon, or red with the error icon when a counted file cannot be read. A file is
 its owner and its path, so two packages that each have `Rules/Watch.md` count as two files. Its menu
-lists the messages, then a link for each file with broken links (`<path>: N broken links`) that opens it.
+lists the messages, then a link for each file with broken links (`<path>: N broken links`) that opens it. The menu is as wide as its
+content, up to `READER_MEASURE`, and ends at the count's right edge, so it stays clear of the list's splitter.
 When two owners have the same path, the message and link name the owner first (`Ashen Marches ·
 Rules/Watch.md`). Unreadable notes use CANNOT BE READ. Rows name
 their kind, path and error line; the owner line says Cannot be read. The reader's title is the file name, and its
@@ -609,22 +612,22 @@ entries` and `Undo separate entries`, with one guarded Undo for the batch. In Li
 or folder choice states which file or folder an encounter will keep or use, in `Small` muted text an
 `XS` gap below its own action. Library, World and Lookup draw the choices and these lines through
 `message_with_actions`, so they start at the message text edge, not at the warning bar. The Library reader
-draws the warning and its choices after the title, inside its scroll area, so they scroll with the entry;
-Edit Markdown keeps them above the editor. A file's warnings share this one place: the first-heading
-warning and its `Use <name>` action come directly above the duplicate warning, so no warning moves the
-title. Its result, `The first heading now says <name>.` with `Undo heading change` on the message line, takes
-the same place. Every Library result takes it too: package use, a manifest write, `<file> is now a
-separate entry.`, a folder's separate entries, a discarded draft, the offer to change links after a rename and its
-result, and a copied package's registration with `Use the copy in encounters`. One result place per reader: in Read
-they sit after the title's kind line, so the columns, the tabs, the file line and the title never move. Edit
-Markdown keeps its messages in the pane's message footer (`Footer`), pinned below the editor; the editor starts
-directly below the save row. Its order: a result that carries a live Undo comes first (Discard's, the heading and stat
+draws the warning and its choices in the pane's message footer (`Footer`), pinned below the body in Read and below
+the editor in Edit Markdown, so Save keeps one place and nothing moves the body or the editor. A file's warnings share
+this one place: the first-heading warning and its `Use <name>` action come directly above the duplicate warning. Its
+result, `The first heading now says <name>.` with `Undo heading change` on the message line, takes the same place.
+Every Library result takes it too: package use, a manifest write, `<file> is now a separate entry.`, a folder's
+separate entries, a discarded draft, the offer to change links after a rename and its result, a copied package's
+registration with `Use the copy in encounters`, a package entry's `<name> is in this campaign only.` with its copy
+action and result, and the page's `Error:`. One message place per reader, in Read and in Edit Markdown: the columns,
+the tabs, the file line, the title and the body never move. The editor starts directly below the save row. Its order: a result that carries a live Undo comes first (Discard's, the heading and stat
 fixes', a write's), because a broken file's reason never clears after Discard or Reload; then Save's reason (a repair
 draft's parse error with a broken manifest's recovery, a refusal before the write, the disk's failure); then the
 notices: results with no Undo, the link Campaign sent the DM to fix, each broken link, the first heading, a stat line.
 With none of these, the footer says why other actions wait for the draft. So no result, reason, warning, Discard or
 Undo moves the editor's top. With no entry
-open, they sit above the empty reader, and above a form that takes the reader's place. The link offer after a
+open, they sit in the footer below the empty reader, with Remove's `Undo remove`, and below a form that takes the
+reader's place. A file that changed on disk keeps its messages above the comparison, which owns the pane. The link offer after a
 rename and its result belong to the renamed entry: they show only in its reader, stay hidden while another entry is
 open, and end on its next link update or saved edit (a saved edit ends the earlier offer whatever it offers), on
 Undo, or when a file the update wrote changes on disk. An offer is checked again on every load and before its write:
@@ -632,7 +635,8 @@ its entry still has the new name, and neither name names another entry, or it go
 the write, Splat reads the entry's own file from disk; if it no longer has the new name, the update writes nothing
 and says `No links were changed. This entry changed on disk since it was renamed. Reload from disk, then rename it
 again.` Each linking file must still hold what was read, or nothing is written.
-Undo restores only the files that update wrote, so another entry's link update stays.
+Undo restores only the files that update wrote, so another entry's link update stays. After Undo the links say the
+old name again, so the offer comes back in the result's place; pressing it again is a new update with its own Undo.
 An `L` gap separates choices. Name the folder when filenames match. Making an entry separate also sets
 its name and matching first heading to its file stem. Other actions name encounters whose source will
 change; results explaining which entry an encounter will use are Small muted text below the action.
@@ -723,7 +727,7 @@ longer on this computer`. Count affected campaign entries when references are kn
 campaign and Find the folder… beside the message. Only Technical details shows IDs. Removing an unavailable
 package has Undo and keeps links to affected encounters; the message's icon centres on its first line, whose
 words are those links. Unregister keeps the last folder in Settings. Library
-offers Undo unregister in its success result, which sits in the reader's result place (above the form that takes the
+offers Undo unregister in its success result, which sits in the pane's message footer (below the form that takes the
 reader's place), so the scope, the search and the list never move; Campaign offers Register it again.
 
 Missing-package recovery searches beside known package folders. A unique match gets bordered secondary Use
@@ -961,7 +965,7 @@ longer be read, its error and the note's file line also offer no editor link unt
 names the file only as `this note`, because the title and file line name it (`Splat cannot read this note as text.`),
 then gives the recovery in plain words at the reader measure, with `Try again` and, `L` after it, `Close note` (which closes the pane; nothing is in progress), each with
 the secondary border, the first border at the message text. Technical details below holds the system's words. Its row's cause is short
-(`Text format cannot be read`). Try again reads the folder again: a fixed note opens in the reader, a note that is
+(`Not a text file`). Try again reads the folder again: a fixed note opens in the reader, a note that is
 still broken opens its repair, and a file moved or deleted outside Splat ends the pane. Splat never writes that file.
 Every other World message about a file that the system will not read or write, away from that file's pane, names the
 file and the recovery, never the system's words. A rolled table selects the matching row, marks it with dice and

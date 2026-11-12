@@ -1686,7 +1686,7 @@ mod tests {
             )))
         });
         let detail = &page.broken_details["Notes/Broken.md"];
-        assert_eq!(detail.cause, "Text format cannot be read", "AD2-row-cause");
+        assert_eq!(detail.cause, "Not a text file", "AD2-row-cause");
         assert_eq!(
             detail.hover, "Splat cannot read Notes/Broken.md as text.",
             "AD2-row-hover"
