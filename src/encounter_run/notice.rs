@@ -45,9 +45,9 @@ impl Run {
         Some((whole, reminders.len().to_string(), full))
     }
 
-    /// X49: whether the current turn's name, at its least size, fits beside Next turn with
-    /// its `N` key letter. When it does not, the letter gives way first, so the name takes
-    /// that room before it is cut. The Keys list still has N.
+    /// X49: whether Next turn keeps its `N` key letter. When the current turn's name, at its
+    /// least size, is cut beside it and would show more words in its room, the letter gives
+    /// way first. The Keys list still has N.
     fn turn_name_keeps_room(
         &self,
         ui: &egui::Ui,
@@ -72,7 +72,13 @@ impl Run {
         let room = ui.available_width()
             - (next + add + round + 3.0 * (gap + design::S))
             - design::HAIRLINE_WIDTH;
-        design::number_width(ui, name, &Type::Name.sized(ui, least)) <= room
+        let font = Type::Name.sized(ui, least);
+        let keyless = Action::primary("Next turn")
+            .icon(icons::NEXT)
+            .density(Density::Glance)
+            .natural_width(ui);
+        design::number_width(ui, name, &font) <= room
+            || dock_name(ui, name, &font, room) == dock_name(ui, name, &font, room + next - keyless)
     }
 
     /// The round and the turn are the strongest things on the page, above any row, and

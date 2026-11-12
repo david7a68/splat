@@ -5399,9 +5399,12 @@ impl Run {
         // line, as beside Lookup in a small window, Undo and Continue fight take a line below.
         let gap = ui.spacing().item_spacing.x;
         let title_width = self.ended_title_width(ui, &outcome);
-        let one_line = title_width + self.ended_actions_width(ui) <= ui.available_width();
+        let undo_room = self.ended_undo_room(ui);
+        let one_line =
+            title_width + self.ended_actions_width(ui, undo_room) <= ui.available_width();
         let first_line = design::L * 4.0;
-        let (reason_room, second_line) = self.ended_second_line(ui, ui.available_width());
+        let (reason_room, second_line) =
+            self.ended_second_line(ui, ui.available_width(), undo_room);
         let (header_rect, _) = ui.allocate_exact_size(
             vec2(
                 ui.available_width(),
@@ -5656,7 +5659,7 @@ impl Run {
     /// (X38): where a later step could need the second line, the header has it from the start,
     /// and the lone Undo there names its target (W6-D2). Undo is at the roster's right edge, so
     /// beside the log panel the actions to its right take at least the panel's width.
-    fn ended_actions_width(&self, ui: &egui::Ui) -> f32 {
+    fn ended_actions_width(&self, ui: &egui::Ui, undo_room: f32) -> f32 {
         let gap = ui.spacing().item_spacing.x;
         let glance = |action: Action<'_>| action.density(Density::Glance).natural_width(ui) + gap;
         let mut actions = glance(Action::primary(if self.close_block().is_some() {
@@ -5672,15 +5675,22 @@ impl Run {
             let panel = design::side_panel_width(ui.ctx().content_rect().width());
             actions = actions.max(panel + design::S);
         }
-        actions + self.ended_undo_room(ui) + gap
+        actions + undo_room + gap
     }
 
-    /// The room the ended header keeps for Undo: Undo with the ending's target. A longer
-    /// target shortens in it by the rule of every Undo label (`undo_forms`).
+    /// The room the ended header keeps for Undo: the widest Undo that this view's own steps
+    /// make, the ending's and each loot roll's. It stays the same while the DM rolls, so no
+    /// roll changes the header (X38). A longer target from another step shortens in it by
+    /// the rule of every Undo label (`undo_forms`).
     fn ended_undo_room(&self, ui: &egui::Ui) -> f32 {
-        self.undo_action(&format!("Undo: {END_STEP}"))
-            .density(Density::Glance)
-            .natural_width(ui)
+        std::iter::once(END_STEP.to_owned())
+            .chain(self.loot_step_words())
+            .map(|step| {
+                self.undo_action(&format!("Undo: {step}"))
+                    .density(Density::Glance)
+                    .natural_width(ui)
+            })
+            .fold(0.0, f32::max)
     }
 
     /// The header's second line, when the actions take it: the room for the sentence that
@@ -5688,13 +5698,13 @@ impl Run {
     /// sentence wraps narrower there, so Undo keeps its target (V27). Both come from the
     /// sentence and Undo's kept room, never from Undo's target now, so the line keeps its
     /// height when a step changes the target or Continue fight comes (X38).
-    fn ended_second_line(&self, ui: &egui::Ui, width: f32) -> (f32, f32) {
+    fn ended_second_line(&self, ui: &egui::Ui, width: f32, undo_room: f32) -> (f32, f32) {
         let control = Density::Glance.control();
         let Some(reason) = self.continue_words() else {
             return (f32::INFINITY, control);
         };
         let gap = ui.spacing().item_spacing.x;
-        let undo = self.ended_undo_room(ui) + gap;
+        let undo = undo_room + gap;
         let room = continue_reason_width(ui, reason)
             .min(width - undo - gap)
             .max(design::L * 6.0);

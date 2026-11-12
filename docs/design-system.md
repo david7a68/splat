@@ -1355,8 +1355,9 @@ after the DM stops sync for that character; an untouched linked row has no sync 
 ### Header, dock and panels
 
 The header has two lines. Round and current turn use bold sans larger than row names, beside Next turn.
-When the turn heading does not fit, drop `’s turn` before shortening the name. Keep the final copy number,
-such as `Cinder… 1`. Hover and accessibility keep the full name. Line
+When the turn heading does not fit, drop `’s turn` before shortening the name. When the name at its least size
+does not fit beside Next turn, Next turn gives up its `N` key letter before the name is cut (the Keys list keeps N).
+Keep the final copy number, such as `Cinder… 1`. Hover and accessibility keep the full name. Line
 two keeps a result icon and notice at the left and Undo at the right. Measure notice first; Undo gets the
 remainder less `L`. Undo always keeps the word `Undo`: shorten the target first, then drop the `Next:` notice
 (the roster still marks NEXT). A state notice stays whole. Beside one, Undo keeps a shortened target while
@@ -1367,7 +1368,10 @@ for that target goes below the roster. When no shortened target fits, Undo shows
 number; `participants` and the half count go),
 `Undo: exhaustion 0 → 3` or `Undo: initiative` for one row. Undo shows `Undo` alone only when not even that fits. A name
 is never cut to only `…` and its copy number; retain copy numbers, action words, amounts and condition
-directions. Hover and accessibility keep the full action. Empty history says Nothing to undo, to the left of
+directions. The target shortens by whole words and keeps the part that tells two rows apart: its copy number or
+letter (`Cinder… 2`), else its last word; a short form that another row's name also gives is not used. When no
+such form fits, the target goes. One function makes every Undo label of the run, in the live and the ended header
+(`undo_forms`). Hover and accessibility keep the full action. Empty history says Nothing to undo, to the left of
 blocked Undo on setup and live screens. A run file from before Undo steps were saved says Nothing to undo since
 reopening, and a file whose steps could not be read says so. A narrow slot uses
 Nothing to undo with full hover and accessible text. Sheet updates name whose sheet changed; only sheet reads
@@ -1375,12 +1379,14 @@ say sheet changed. Sync-panel choices stay in Log and Undo.
 
 Notice priority is conflict, recording silence, other sync notices, next name. Silence and short sync state
 stay together when space is tight. Connect to sync loses its link before either state loses its word. Keep the
-full `Sync off for the party` beside recording silence. If the Undo target cannot fit, show `Undo` and keep
+full `Sync off for the party` beside recording silence. A link after a notice's words (`Review`, `Connect to sync`)
+starts `S` after them, and the fit counts that gap. If the Undo target cannot fit, show `Undo` and keep
 its full target in hover and accessibility. An empty Undo can omit its adjacent reason when it cannot fit;
 the control keeps that reason in hover and accessibility. Keep the
 next participant visible when Undo is empty. Sheet notices fit after conflict with Log and Dismiss when
 possible; shorten to character name and first changed value, with full text in hover and Log. When the update removed
-Undo steps, the notice ends with their count (`Brannoch Vale: HP 49 → 46 · 1 Undo step removed`); the Log names each. Otherwise show
+Undo steps, the notice ends with their count (`Brannoch Vale: HP 49 → 46 · 1 Undo step removed`) in every form, in the
+header and below the roster; the Log names each. Otherwise show
 once below the roster, keeping Undo visible. Sheet-change notices use `small_message`: warning icon and bar,
 text-colour words. A result below the roster (`Brannoch Vale joined at 20 · acts next round.`) uses the same
 `small_message` in the success tone, with the past tense Arrivals uses (`joined at`, `moved to`). Centre compact notices with their Log and Dismiss controls, in the header and below
@@ -1390,8 +1396,9 @@ text colour, fitted to one line, with the full error on hover, then `Campaign �
 gap: a bordered secondary button, as Arrivals offers it. The words, the button and the close icon share one centre.
 
 Long local effects show four words and `…` (`Hexed until the hag…`), the last shown word a link to the whole effect;
-a hidden count keeps its number (`2 more`, never a bare `more`); Undo keeps four when they fit. Narrow Undo keeps Undo add or Undo
-remove, two effect words and target. Concentration Undo says start concentration or stop concentration before
+a hidden count keeps its number (`2 more`, never a bare `more`); Undo keeps four when they fit. An added effect's Undo has
+one form, `Undo: effect <words>`: narrower, it keeps two effect words and its target (`Undo: effect Wis save… on Cinder
+Wolf 2`), then the target shortens by the rule above, then the target goes (`Undo: effect Wis save…`). Concentration Undo says start concentration or stop concentration before
 the target. Exhaustion Undo keeps both levels, such as `exhaustion 2 → 3 on Oren`. Exhaustion level uses the shared `stepper` at Scan height. One drag on the level is one Undo step, from the level where the drag started, committed when the drag ends; each − or + press is one step. At a limit the button says `Exhaustion stops at 6.` or `Exhaustion is already 0.` Hover and accessibility keep full text.
 
 The dock has a fixed place above the footer: Amount, Damage, Heal, Temp HP, selected name, Conditions, Conc,
@@ -1490,8 +1497,9 @@ A stat block's actions are tiles: each rules paragraph with an attack, a save DC
 wrapping row with `S` gaps. As many 208 px tiles as fit share a line; a tile alone on its line (the only tile, or the
 last of an odd row) takes the line's width, up to the reader measure, in a run, the Library and Party. Tiles on one line
 share one height. A tile has a hairline frame with control radius:
-a Phosphor icon (sword, shield-check, fire) in muted Body, the name in Strong, its Ctrl number in faint Small at the
-right in a run, then its numbers in muted Small, then, when the text says, where it lands and what a save does
+a Phosphor icon (sword, shield-check, fire) in muted Body, the name in Strong, its keys in faint Small at the
+right in a run (`Ctrl+1`, never a bare digit; when the name would be cut beside them, the keys give way and the hover
+keeps them), then its numbers in muted Small, then, when the text says, where it lands and what a save does
 (`Reach 5 ft`, `Range 80/320 ft`, `10-ft emanation · half on a success`). Numbers and that line wrap; they are never
 cut. The rules paragraph shows on hover and on keyboard focus, and it is the tile's accessible description. Hover
 draws the frame in the focus colour. In a run a tile shows the numbers Splat rolls, with the run's attack and damage
@@ -1577,7 +1585,8 @@ one name, the arrival adds its first member: `Rival Team (Rival Captain 2) moved
 button cannot show those words whole, it gives up the whole parenthesis, never only the member's name
 (`Move Shrine Reserve before Brannoch Vale`): it sits under the message that names the arrival whole and moves only
 that arrival. Undo is not beside that message, so a shortened move Undo keeps the copy number and gives up the
-member's name (`Undo: move Rival… (… 2) before Rival…`). Hover and the accessible name keep the whole words. The
+member's name (`Undo: move Rival… (… 2) before Rival…`); narrower, the place goes (`Undo: move Rival Team (… 2)`),
+then the target (`Undo: move`). Hover and the accessible name keep the whole words. The
 result and its Move button stay while their step is the newest, also while the DM types search words; only a new
 step or Undo ends them. The Log keeps `Added by hand` and `entered by the DM`.
 
@@ -1624,10 +1633,13 @@ An ended view has one control that takes the ending away. While the ending is th
 `Undo: end encounter`, and no other control shows. Otherwise it is secondary `Continue fight` with the run icon,
 `S` left of primary Close run: the two ways out of an ended fight, with the one that changes nothing last. Undo stays
 at the roster's right edge. The title, the outcome and the save word keep their words. Beside Continue fight or the
-sentence that stands in its place, Undo keeps its target (`Undo: roll loot`); alone, Undo gives up its target first
-(`Undo`, with the full action in hover and its accessible name). When the actions cannot share the title's line with
-Undo's target, as beside Lookup at 960x640 or at 1200x800, Close run stays on that line and Undo and Continue fight
-take a line of their own below it, at the right edge, with Undo's full action. A closed, ended run read in History has the same
+sentence that stands in its place, Undo keeps its target (`Undo: roll loot`). The header's form depends on the width
+only, never on Undo's target or on whether Continue fight shows yet: when the title's line cannot hold Close run,
+Continue fight (or the sentence in its place) and `Undo: end encounter`, as beside Lookup at 960x640 or at 1200x800,
+Close run stays on that line and Undo and Continue fight take a line of their own below it, at the right edge, from
+the start of the ended view. So a loot roll moves nothing under the pointer, and the lone Undo names its target there
+too (`Undo: end encounter`). A target too long for its room shortens by the rule of the run's Undo labels (`Undo: 2
+loot rolls`), with the full action in hover and its accessible name. A closed, ended run read in History has the same
 secondary `Continue fight` on its own line under Read-only, blocked with `Close the open run first.` while another
 run is open. Continue fight is offered only for the fight that was played last (`README.md`, Running an encounter
 as DM). For any other ended fight the control is absent, and one muted `Small` sentence stands in its place and says

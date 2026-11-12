@@ -75,12 +75,22 @@ pub(super) fn roll(state: &mut State, rolls: Vec<LootRoll>) -> Result<Vec<String
 /// The Undo words for these rolls. Short, because the ended view's header holds them.
 pub(super) fn describe(rolls: &[LootRoll]) -> String {
     match rolls {
-        [one] if one.times == 1 => format!("loot roll on {}", one.roll.key),
-        [one] => format!("{} loot rolls on {}", one.times, one.roll.key),
-        all => format!(
-            "{} loot rolls",
-            all.iter().map(|roll| roll.times).sum::<u32>()
-        ),
+        [one] => step_words(one.times, Some(&one.roll.key)),
+        all => step_words(all.iter().map(|roll| roll.times).sum(), None),
+    }
+}
+
+/// A loot step's words: `loot roll on gems`, `2 loot rolls on gems`, or, for several lines,
+/// `3 loot rolls`.
+fn step_words(times: u32, key: Option<&str>) -> String {
+    let rolls = if times == 1 {
+        "loot roll".to_owned()
+    } else {
+        format!("{times} loot rolls")
+    };
+    match key {
+        Some(key) => format!("{rolls} on {key}"),
+        None => rolls,
     }
 }
 
@@ -303,6 +313,27 @@ impl Run {
     /// Everyone with loot: the encounter first, then participants in turn order.
     pub(super) fn holders(&self) -> Vec<Holder> {
         holders(&self.name, self.prep().0, &self.state)
+    }
+
+    /// X38: every Undo step's words that this ended fight's loot can make: one for each roll
+    /// line, and one for rolling them all. Read from the loot as the encounter has it, rolled
+    /// or not, so they stay the same while the DM rolls.
+    pub(super) fn loot_step_words(&self) -> Vec<String> {
+        let rolls: Vec<(u32, String)> = self
+            .holders()
+            .into_iter()
+            .flat_map(|holder| holder.lines)
+            .filter_map(|line| match Loot::parse(&line) {
+                Loot::Roll { times, key } => Some((times, key)),
+                Loot::Text(_) => None,
+            })
+            .collect();
+        let all = (rolls.len() > 1).then(|| step_words(rolls.iter().map(|r| r.0).sum(), None));
+        rolls
+            .iter()
+            .map(|(times, key)| step_words(*times, Some(key)))
+            .chain(all)
+            .collect()
     }
 
     /// The roll lines of these holders with no result yet, as `(holder, line)`.

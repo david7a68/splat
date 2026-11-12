@@ -320,7 +320,7 @@ Wolf 2.
 
 | # | What happens | What the DM sees | Recovery | Count | File |
 |---|---|---|---|---|---|
-| 1 | The DM ends the fight by mistake | The ended view, 442 px wide. The header says `Undo`; its hover and accessible name say `Undo: end encounter` | Click `Undo`. `U` is off while Lookup is open. Play returns to the same turn | Do 1 | The run file is at round 2 again |
+| 1 | The DM ends the fight by mistake | The ended view, 442 px wide. The header has its second line from the start, and it says `Undo: end encounter` there (W6-D2, by the lead's ruling after app round 2) | Click `Undo: end encounter`. `U` is off while Lookup is open. Play returns to the same turn | Do 1 | The run file is at round 2 again |
 | 2 | The DM pins `Poisoned 3 rounds` to the wolf (`Effect`, type, Enter). The app stops in round 3 | After a restart the app opens on the run, on the current turn. The row says `Poisoned 2`. `Undo` names the last saved step. The rail says `Due 1`, read from the ledger | Nothing for the run | 0 | The run file holds the effect, its count and the Undo steps |
 | 3 | Lookup is closed after the restart (a limit, section 7) | The run, with no Lookup | Ctrl+K; type `miller` | Panel 1, Find 1 = 2 | None |
 | 4 | A sync conflict opens on Kestrel Dunmoor, on the wolf's turn | The notice line: `⚠ Conflict: Kestrel Dunmoor  Review`, and `Undo` with its target, as today. Part 3 has no room there (section 1.4); the wolf's row says `Poisoned 2` | `Review`; choose. **Review** closes Lookup and selects Kestrel, as today. Then: select the wolf; Ctrl+K, which shows the results of `miller`; click the note again | Do 2, Find 2, Panel 1 = 5 | The run file |
