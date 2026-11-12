@@ -1370,8 +1370,9 @@ first.` So a wrong `Roll for encounters` can go at any time.
 
 - **How long** is the Timeline's field. It is part of the block, so a plain Travel row does not gain a line.
 - **One check at each whole interval from the start, and none at the journey's end.** Two days give two
-  checks, at 0 and 24 hours. An empty length, or one that the clock cannot read, gives one line, `This
-  journey`. `Roll all 2` shows under the lines while two or more are not rolled.
+  checks, at 0 and 24 hours. A length of zero gives none, because its only check would be at its end; its
+  results stay, under `Outside this journey now`. An empty length, or one that the clock cannot read, gives
+  one line, `This journey`. `Roll all 2` shows under the lines while two or more are not rolled.
 - **The lines on screen follow the length as the DM types it.** New in P5, on Timeline and on the
   Session page: the file takes the length on Enter or when the field loses focus. Today each key changes the
   event (`src/timeline/page.rs:1011-1019`). An outside change to the event meets the Timeline's choices of
@@ -1395,9 +1396,12 @@ first.` So a wrong `Roll for encounters` can go at any time.
   journeys to roll them here.`
 - **Cases B, C and D.** The plan has the page's width, which is wider than 330 px, so nothing more gives.
 - **On Timeline** the event's menu has the same `Roll for encounters`, and the detail column shows the same
-  block under its own **How long**.
+  block under its own **How long**, with no `Plan “…”` (section 7).
+- **The length being typed has one owner,** whichever page shows the field. Leaving the page gives it to the
+  journey, as the field's loss of focus does, so a length typed on one page never outlives a newer one typed
+  on the other.
 
-**Lookup.** The table's name is a link. It opens the table's note at its heading in Lookup, beside the page.
+**Lookup.** The table's name is the table menu's button, and opens nothing else (section 7).
 
 
 **Exact words.** Menu: `Roll for encounters`. Label: `Encounter checks`. `<table’s name> · 1d20 each day`, or
@@ -1741,6 +1745,12 @@ Each is a limit that this design keeps and states, with its count.
   change, and change back, across two files. The DM starts a new run.
 - **Where the note is behind its tab** (cases B, C and D), a typed line costs the tab changes: 2 in J2 and in
   J6.
+- **Timeline offers no `Plan “…”`** (F9, P5). The offer needs the session's plan and its open note, which
+  Timeline does not hold. The route that is left: `Open this session` in the event's detail, open the Travel
+  row, `Plan “…”`: Nav 1, Find 1, Do 1 = 3, **T**.
+- **A journey's table name does not open its note** (F9, P5). It is the button of the table menu, and one
+  control does one thing. The route that is left: Ctrl+K, type the table's name, choose its heading: Panel 1,
+  Find 2 = 3, with no page transition.
 
 **Two rulings of the owner** (2026-11-11).
 

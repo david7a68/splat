@@ -232,7 +232,12 @@ _Avoid_: Ledger, which is the proposed history of trackers.
 An unticked task line in a world note: a fact the DM has not decided.
 
 **Roll table**:
-An existing Markdown table that a marker makes rollable.
+An existing Markdown table that a marker makes rollable. The marker can say how often a journey rolls it (`per`).
+
+**Travel check**:
+One roll on a marked table for one day or watch of a Travel event, kept with that event by its offset from the
+journey's start.
+_Avoid_: Random encounter roll, which names no journey.
 
 **Campaign clock**:
 The one count of standard hours, computed from the timeline, whatever world the party is on.

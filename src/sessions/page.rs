@@ -89,6 +89,8 @@ pub struct Plan<'a> {
     pub open_encounter: Option<&'a str>,
     /// The party's identities in the party bar's order.
     pub party: &'a [Uuid],
+    /// The campaign's marked tables, for a journey's encounter checks.
+    pub tables: &'a [crate::roll_table::Table],
 }
 
 /// What the previous session left, for the top of this one.
@@ -267,6 +269,8 @@ pub struct Sessions {
     /// and its error stay through the usual expiry until Undo puts them back or a new update.
     link_partial: bool,
     removed_fight: Option<(Option<Uuid>, usize, String, NoteUndo)>,
+    /// A journey's encounter checks in the plan.
+    travel: plan::Travel,
     plan_notice_state: Option<(String, Vec<timeline::Event>)>,
     removed_event_in_plan: bool,
     /// What the removal's owner note looked like; a later edit of it ends the removal.
@@ -6617,6 +6621,8 @@ mod tests {
             restores: false,
             continued_in: None,
             played_order: 0,
+            checks_table: None,
+            checks: Vec::new(),
             extra: Default::default(),
         };
         let mut book = Book::default();

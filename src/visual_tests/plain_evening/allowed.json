@@ -1,4 +1,149 @@
 {
   "about": "G7's allowed differences from reference.json. Each row names its row of docs/design/session-cycle.md section 2.5 and one difference, whole, as the G7 failure prints it. A row that matches nothing fails. Add rows only for a change that section 2.5 lists.",
-  "rows": []
+  "rows": [
+    {
+      "row": 12,
+      "why": "Row 12: Remove moves down one line below Roll for encounters, and its button takes the menu's width.",
+      "difference": {
+        "screen": "session-tonight: Travel row menu",
+        "view": "1200x800",
+        "what": "control",
+        "change": "resized",
+        "name": "Button: Remove this event",
+        "detail": "669 299 67.8x30 -> 669 335 137.9x30"
+      }
+    },
+    {
+      "row": 12,
+      "why": "Row 12: the Travel row's menu has one more line, Roll for encounters, because the plain campaign has a marked table.",
+      "difference": {
+        "screen": "session-tonight: Travel row menu",
+        "view": "1200x800",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Roll for encounters",
+        "detail": "at 669 299 137.9x30"
+      }
+    },
+    {
+      "row": 12,
+      "why": "Row 12: Remove moves down one line below Roll for encounters, and its button takes the menu's width.",
+      "difference": {
+        "screen": "session-tonight: Travel row menu",
+        "view": "1200x800",
+        "what": "text",
+        "change": "moved",
+        "name": "Remove",
+        "detail": "677 305 51.8x18 -> 677 341 51.8x18"
+      }
+    },
+    {
+      "row": 12,
+      "why": "Row 12: the Travel row's menu has one more line, Roll for encounters, because the plain campaign has a marked table.",
+      "difference": {
+        "screen": "session-tonight: Travel row menu",
+        "view": "1200x800",
+        "what": "text",
+        "change": "new",
+        "name": "Roll for encounters",
+        "detail": "at 677 305 121.9x18"
+      }
+    },
+    {
+      "row": 12,
+      "why": "Row 12: Remove moves down one line below Roll for encounters, and its button takes the menu's width.",
+      "difference": {
+        "screen": "session-tonight: Travel row menu",
+        "view": "960x640",
+        "what": "control",
+        "change": "resized",
+        "name": "Button: Remove this event",
+        "detail": "857 300 67.8x30 -> 733 336 137.9x30"
+      }
+    },
+    {
+      "row": 12,
+      "why": "Row 12: the Travel row's menu has one more line, Roll for encounters, because the plain campaign has a marked table.",
+      "difference": {
+        "screen": "session-tonight: Travel row menu",
+        "view": "960x640",
+        "what": "control",
+        "change": "new",
+        "name": "Button: Roll for encounters",
+        "detail": "at 733 300 137.9x30"
+      }
+    },
+    {
+      "row": 12,
+      "why": "Row 12: Remove moves down one line below Roll for encounters, and its button takes the menu's width.",
+      "difference": {
+        "screen": "session-tonight: Travel row menu",
+        "view": "960x640",
+        "what": "text",
+        "change": "moved",
+        "name": "Remove",
+        "detail": "865 306 51.8x18 -> 741 342 51.8x18"
+      }
+    },
+    {
+      "row": 12,
+      "why": "Row 12: the Travel row's menu has one more line, Roll for encounters, because the plain campaign has a marked table.",
+      "difference": {
+        "screen": "session-tonight: Travel row menu",
+        "view": "960x640",
+        "what": "text",
+        "change": "new",
+        "name": "Roll for encounters",
+        "detail": "at 741 306 121.9x18"
+      }
+    },
+    {
+      "row": 12,
+      "why": "Row 12: opening and closing the Travel row's menu shows and hides its new line, Roll for encounters.",
+      "difference": {
+        "screen": "act 10",
+        "view": "",
+        "what": "act",
+        "change": "changed",
+        "name": "open More actions for Road to the ford at 1200x800",
+        "detail": "appeared + Roll for encounters"
+      }
+    },
+    {
+      "row": 12,
+      "why": "Row 12: opening and closing the Travel row's menu shows and hides its new line, Roll for encounters.",
+      "difference": {
+        "screen": "act 11",
+        "view": "",
+        "what": "act",
+        "change": "changed",
+        "name": "close More actions for Road to the ford at 1200x800",
+        "detail": "went + Roll for encounters"
+      }
+    },
+    {
+      "row": 12,
+      "why": "Row 12: opening and closing the Travel row's menu shows and hides its new line, Roll for encounters.",
+      "difference": {
+        "screen": "act 12",
+        "view": "",
+        "what": "act",
+        "change": "changed",
+        "name": "open More actions for Road to the ford at 960x640",
+        "detail": "appeared + Roll for encounters"
+      }
+    },
+    {
+      "row": 12,
+      "why": "Row 12: opening and closing the Travel row's menu shows and hides its new line, Roll for encounters.",
+      "difference": {
+        "screen": "act 13",
+        "view": "",
+        "what": "act",
+        "change": "changed",
+        "name": "close More actions for Road to the ford at 960x640",
+        "detail": "went + Roll for encounters"
+      }
+    }
+  ]
 }
