@@ -145,7 +145,11 @@ Lookup, Notes, Settings and the account line keep fixed places at the rail's bot
 has a slot of two `Small` lines below Settings; a one-line status leaves the second line empty, so an account
 status that wraps never moves Lookup, Notes or Settings. Rail statuses (recording, processing, unsaved words,
 sync) fill one slot that grows upward above Lookup, so a status that comes, goes or wraps never moves these
-targets. Tab order still follows reading order.
+targets. Tab order still follows reading order. The tracker status (F4) is one of them, and only while a
+house rule note is in play: a bell and `Due N` in the text colour while N notices are due, else `Trackers not
+read` with the error icon while `Trackers.md`, `Campaign.md` or a house rule note in play cannot be read, else
+nothing. Its hover and accessible name say `N notices are
+due. Open Trackers (Ctrl+T).`, and a click shows Trackers. It never says `Trackers` alone.
 
 No rail target moves when a state comes or goes. The Run slot is always the first item: the open run, the
 paused run, or, with no run, a quiet `Run` with `No fight open` on line two that opens Encounters. All three
@@ -581,6 +585,34 @@ above the entry follows the results or `Show N results` at the normal gap. While
 NPC, its card is the view until an entry or a found note opens (a result, a link, typed words, `Back`). That view then
 shows below the World page's own row, `Unsaved NPC: <name> · Show` (`world::page::unsaved_npc_row`), and Show makes the
 card the view again. Lookup's place and its NPC are not kept across a restart.
+
+**Trackers** is a view of Lookup, never a third panel (F4). Ctrl+T shows it in the Lookup panel and Ctrl+T again
+shows what Lookup showed before: its entry, its found note or its results; when Ctrl+T opened Lookup, the second
+press closes it. Ctrl+K opens Lookup on what it showed last, also on Trackers. `Back` (and Alt+Left) returns to
+the entry that Lookup held; words typed in the search field leave Trackers for their results; an entry that opens
+from elsewhere takes the panel. The title line says `Trackers` in `Heading`, then the bell (`icons::BELL`) and
+`Due N` while a notice is due, then `Back` when Lookup holds an entry, and the close icon. The view is one scroll
+area that opens at its top: the Due rows under `DUE N`, the pinned trackers under `PINNED` in the note's order,
+then a collapsed `MORE TRACKERS N` (`group_heading`). A Due row is its words, its `Roll <table’s heading>` buttons
+(`Action::secondary`, `icons::DICE`, Read) with their results listed under them in Body, a theme checkbox for each
+proposed change, ticked, and a quiet `Done` with the row's menu (`Dismiss`) at the right end of the words' last
+line when they fit there, else on a line of their own. With `for:` each roll is for the next name; after the
+last name the button is off and says `Each name has its roll.` beside it. A tracker's line is its name, its value
+in `Numeral` right-aligned in a column (`value / goal` with a goal), then its quick actions (`Action::secondary`,
+Read), which wrap below. A tracker with `per` has a line for each instance, under its name. `add: ask` puts a
+number field in the action's place; it holds focus until Enter or Escape, and Escape there does not close Lookup.
+The result line keeps its place at the panel's bottom
+edge above a hairline: the last act of the session being played as a success message, then `Undo: <label>` at the
+words and `Add to Timeline` at the right end, or each on its own line when both do not fit. After `Add to
+Timeline` it says `Added to the Timeline.` with `Undo add` for 30 seconds; while the Timeline cannot save that event, it says the Timeline's own words as an error (`The timeline was not saved. <reason>`) with `Undo add`, and the event waits in the Timeline's draft. Why an act recorded nothing shows on
+the result line too, above the last act, until the next act or until the ledger is read again: a refusal as a
+warning, and a failed save as the error `Trackers.md was not saved: <reason>. Nothing was recorded.` The result line
+is drawn before anything else of the view, so these words stay in view when the row pressed went away. Nothing
+waits after a failed save: the DM presses again, and a number typed for `add: ask` stays in its field. When
+`Campaign.md` or a house rule note in play cannot be read, the view names the file and shows no tracker. At the end of the scroll area each problem is a small error message: a note in play that is missing
+or no house rule note, a definition that cannot be used, and the count of `Trackers.md` entries that name a tracker
+no note in play has, with its key, which are not counted. With no house rule note in play the view says `No house rules are in play.` and `Turn one
+on in Campaign → Rules and runs.`; the rail then says nothing about trackers.
 
 A copy starts with the original name selected. Destination and dependency preview update with its fields. Copy
 to… requires a campaign or package destination and states that reason on hover. Create copy saves in one step.

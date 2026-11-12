@@ -227,6 +227,13 @@
     },
     {
       "phase": "during",
+      "task": "Mark a house rule's number between fights",
+      "transitions": 0,
+      "interactions": 3,
+      "path": "Session"
+    },
+    {
+      "phase": "during",
       "task": "Next fight: start it, with the party as it stands",
       "transitions": 1,
       "interactions": 1,
@@ -315,13 +322,6 @@
       "transitions": 1,
       "interactions": 1,
       "path": "Session > Party"
-    },
-    {
-      "phase": "after",
-      "task": "Put what an NPC said in the NPC's own note",
-      "transitions": 0,
-      "interactions": 4,
-      "path": "Session"
     }
   ]
 }

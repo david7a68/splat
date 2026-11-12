@@ -918,7 +918,9 @@ Seals
   action corrects the value in one press, as an erasure does on paper; the history keeps both.
 - **The result line** names the last act and has `Undo` and `Add to Timeline`. After `Add to Timeline` it says
   `Added to the Timeline.` with `Undo add`.
-- **A tracker's history,** with **Remove**, and the list of problems show in the house rule note's reader.
+- **A tracker's history,** with **Remove**, and the list of problems show in the house rule note's reader. Not built in
+  P9: the reader is `src/world.rs`, which P6 changes at the same time. P9 shows each problem in the view, at the end
+  of its scroll area, and an entry with another stamp stays until it is edited out in Obsidian.
 - **In a fight** the DM marks the paper sheet. Ctrl+T still opens the view (three acts for each press), and
   the run offers nothing more. After the fight the DM enters the fight's marks; a mark that those raise
   shows then.
@@ -937,7 +939,9 @@ in Campaign → Rules and runs.`
 | No house rule note in play; or in play with nothing due | Nothing in the rail |
 | A notice is due | Rail: bell and `Due 1`, in the text colour |
 | `Trackers.md` cannot be read | Rail: error icon and `Trackers not read`. The view names the file, says the history is safe, and offers `Try again` and `Show file`. Quick actions are blocked with that reason |
-| `Trackers.md` changed on disk | Separate changes merge with a quiet notice, as `Timeline.md` does. The same entry needs a choice |
+| A save of `Trackers.md` fails | Nothing is recorded and nothing waits (the lead's ruling after review round 2 of P9: a waiting act needed a snapshot of more and more state). The result line, at the view's bottom edge, says `Trackers.md was not saved: <reason>. Nothing was recorded.` as an error until the next act or until the ledger is read again. The DM presses the action again: one more act. A dice act rolls again; nothing was recorded, so no roll is lost from the record. A number typed for `add: ask` stays in its field |
+| `Campaign.md` or a house rule note in play cannot be read | No empty list: the view names the file, shows no value and no old one, and every act is refused with the same words. The rail says `Trackers not read`. A note that was moved or renamed outside Splat says that Splat reads the notes again when its window gets focus |
+| `Trackers.md` changed on disk | Splat reads it again within a second, and every act reads it at the press, so an edit in Obsidian counts at once and is never written over (as built in P9: no merge and no notice are needed). An Undo whose entries changed on disk writes nothing and says `The ledger changed on disk. Nothing was undone.` |
 
 **What the files store.** Definitions are in the house rule note's Splat data, as before, with one new
 optional word: `for:` on a mark's table. The ledger is one ordered list. Each act is one entry. A notice's
@@ -978,7 +982,7 @@ route, as today). A `Make house rule note` action (no band holds it today; the D
 | Primary action in view | None in the view. The page's own primary stays |
 | Components and tokens | Rail: the status slot with `status_link`; icon `icons::BELL`. View title: Lookup's title line. `DUE`, `PINNED`: `group_heading`. Quick actions and `Roll`: `Action::secondary` at Read density; `Roll` has `icons::DICE`. `Done`: `Action::quiet`. Proposed change: the theme's checkbox. Values: `Type::Numeral`, right-aligned with `number`. Result: `undo_message` with a second quiet action, above a hairline |
 | In view at 960x640 | The rail's `Due N` on every page. In the view: the Due rows first, and the result line |
-| States | Due: bell and `Due 1`. Not read: error icon and `Trackers not read`. Blocked: the reason beside the action |
+| States | Due: bell and `Due 1`. Not read: error icon and `Trackers not read`. Refused or not saved: the reason on the result line, which stays in view when the row it was pressed on goes away |
 | Keys and targets | Ctrl+T, Tab, Enter. Every action is 28 px high (Read) |
 
 ### F5. Carry-over between sessions
@@ -1504,7 +1508,7 @@ new, and one save is new; the table says which.
 | **Session note** | A plan act changes the draft (`insert_in_plan`, `src/sessions.rs:1071`); the save comes 2 seconds later (`SAVE_AFTER`, `:26`). `Draft::save` writes only when the file is as Splat last read it (`:1282`). `follow_disk` takes the file's text when Splat holds no unsaved words, on a poll each second (`:1423`) | **New in P1c: one function, `Draft::apply`.** It follows the disk, patches one fragment, saves now through `Draft::save`, and keeps the Undo. It reports a patch or a save that failed, checks that the note is still the one it read, and tells a missing file from an outside edit, before a feature says that its act is done. Every note act of this design calls it. Today's two plan acts (`add_to_plan`, `src/sessions/page.rs:3942`; the removal, `src/sessions/plan.rs:926`) keep today's behaviour under it, also with unsaved words and a changed file | The note holds what the act wrote. The DM removes it as any words | `Notes not saved`, as today. The fragment waits in the draft |
 | **World note** | A change reads the note, changes it and writes it with `write_note`, which writes only when the file still holds the text that was read (`src/world.rs:1033`) | The same call. An edit form with changes for the same entry blocks the act | The same | An error that names the file |
 | **`Timeline.md`** | `Book::save` writes the file atomically, checks for an outside change, and merges by event (`src/timeline.rs:924`, `:774`) | The act changes the lines of one event. Separate events merge with a quiet notice; the same event needs a choice, as today | The lines are in the file | `Timeline not saved`, as today |
-| **`Trackers.md`** | No code today | **New in P9: the ledger's save.** It shares `Book`'s atomic write and outside-change check, which P9 moves to a shared place, and it merges by entry ID with its own code, because the Timeline's merge is written for events | The entries, and so their Undo, are in the file | `Trackers not saved`. The entry waits |
+| **`Trackers.md`** | No code today | **Built in P9: the ledger's save** (`src/trackers/ledger.rs`). An act reads the file as it is on disk at the press, builds its entries from it, and writes with the shared atomic write and its outside-change check (`file_batch::apply`, which already served several files, so `Book` keeps its own). So nothing needs a merge: an outside edit stays. An act also reads the house rule notes in play at the press, and a definition that changed writes nothing | The entries, and so their Undo, are in the file | `Trackers.md was not saved: <reason>. Nothing was recorded.` on the result line. Nothing waits; the DM presses again (the lead's ruling after review round 2) |
 | **Run file** | The run saves after each step and has its own choices when the file changed | As today | The step and its Undo are in the file (F8) | The run's footer, as today |
 
 **What `Draft::apply` does with an outside edit.** It calls `follow_disk` first, so an edit made in Obsidian a
