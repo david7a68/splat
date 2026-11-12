@@ -474,14 +474,15 @@ fn read_encounter(
     let width = crate::difficulty::width(ui, &job);
     if width <= room {
         // The words start at the link's right edge, so the blank before the first separator
-        // is the blank of the job's own leading space (V9). `ui.put` would centre them.
+        // is the blank of the job's own leading space (V9). `ui.put` would lay them out
+        // justified and centred. The label keeps the link's height, as before.
         let rect =
             egui::Rect::from_min_size(link.rect.right_top(), egui::vec2(width, link.rect.height()));
         let response = ui
             .scope_builder(
-                egui::UiBuilder::new()
-                    .max_rect(rect)
-                    .layout(egui::Layout::left_to_right(egui::Align::Center)),
+                egui::UiBuilder::new().max_rect(rect).layout(
+                    egui::Layout::left_to_right(egui::Align::Center).with_cross_justify(true),
+                ),
                 |ui| ui.add(egui::Label::new(job).extend()),
             )
             .inner;
