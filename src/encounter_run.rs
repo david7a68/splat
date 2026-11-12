@@ -5532,11 +5532,23 @@ mod tests {
         let mut run = super::tests::run();
         begin(&mut run);
         let campaign = stored(&mut run, dir.path());
-        let names: Vec<String> = run.state.participants.iter().map(|p| p.name.clone()).collect();
-        run.apply(Command::Condition(0, "poisoned 2 rounds".into())).unwrap();
-        assert_eq!(run.undo_label(), format!("Undo: effect Poisoned on {}", names[0]));
+        let names: Vec<String> = run
+            .state
+            .participants
+            .iter()
+            .map(|p| p.name.clone())
+            .collect();
+        run.apply(Command::Condition(0, "poisoned 2 rounds".into()))
+            .unwrap();
+        assert_eq!(
+            run.undo_label(),
+            format!("Undo: effect Poisoned on {}", names[0])
+        );
         assert_eq!(run.state.participants[0].conditions, vec!["Poisoned 2"]);
-        for words in ["Wis save DC 15 (Hold Person) on its turn", "Fire Breath recharge 5-6"] {
+        for words in [
+            "Wis save DC 15 (Hold Person) on its turn",
+            "Fire Breath recharge 5-6",
+        ] {
             run.apply(Command::Condition(1, words.into())).unwrap();
         }
         run.apply(Command::Condition(2, "Legendary actions 3 uses".into()))
@@ -5546,7 +5558,10 @@ mod tests {
         // The count goes down when its participant's turn ends, in the step of Next turn, and
         // Undo of that step gives it back, also after a restart.
         run.apply(Command::Next).unwrap();
-        assert_eq!(run.state.participants[0].conditions, vec!["Poisoned · last round"]);
+        assert_eq!(
+            run.state.participants[0].conditions,
+            vec!["Poisoned · last round"]
+        );
         // A recharge and uses give no reminder.
         assert_eq!(
             reminders(&run).as_deref(),
@@ -5562,13 +5577,19 @@ mod tests {
             run.apply(Command::Next).unwrap();
         }
         assert_eq!(run.current(), Some(1));
-        assert_eq!(run.state.participants[0].conditions, vec!["Poisoned · last round"]);
+        assert_eq!(
+            run.state.participants[0].conditions,
+            vec!["Poisoned · last round"]
+        );
         run.apply(Command::Presence(0, true)).unwrap();
         for _ in 0..3 {
             run.apply(Command::Next).unwrap();
         }
         // At 0 it says so, in the row and the Log, and Splat removes nothing.
-        assert_eq!(run.state.participants[0].conditions, vec!["Poisoned · time is up"]);
+        assert_eq!(
+            run.state.participants[0].conditions,
+            vec!["Poisoned · time is up"]
+        );
         let up = format!("{}: Poisoned · time is up.", names[0]);
         assert_eq!(run.state.log.iter().filter(|line| **line == up).count(), 1);
         // A use is spent in one step; at none left the same act gives all back.
@@ -5590,18 +5611,51 @@ mod tests {
         assert_eq!(run.undo_label(), "Undo: Fire Breath spent");
         assert_eq!(run.state.participants[1].conditions[2], "Fire Breath spent");
         run.apply(Command::Recharge(1, 2)).unwrap();
-        assert_eq!(run.undo_label(), format!("Undo: recharge roll for {}", names[1]));
-        assert!(run.state.log.last().unwrap().contains(": Fire Breath: Rolled "));
-        assert!(run.apply(Command::Spend(1, 2)).is_err(), "a recharge has no uses");
+        assert_eq!(
+            run.undo_label(),
+            format!("Undo: recharge roll for {}", names[1])
+        );
+        assert!(
+            run.state
+                .log
+                .last()
+                .unwrap()
+                .contains(": Fire Breath: Rolled ")
+        );
+        assert!(
+            run.apply(Command::Spend(1, 2)).is_err(),
+            "a recharge has no uses"
+        );
         // Act A, an unrelated act B, then Undo of both: A's effect goes with its own step.
         run.apply(Command::RemoveCondition(0, 0)).unwrap();
-        assert_eq!(run.undo_label(), format!("Undo: remove Poisoned from {}", names[0]));
+        assert_eq!(
+            run.undo_label(),
+            format!("Undo: remove Poisoned from {}", names[0])
+        );
         run.apply(Command::Damage(2, 1)).unwrap();
         run.undo();
         assert!(run.state.participants[0].conditions.is_empty());
         run.undo();
-        assert_eq!(run.state.participants[0].conditions, vec!["Poisoned · time is up"]);
-        assert_eq!(run.undo_label(), format!("Undo: recharge roll for {}", names[1]));
+        assert_eq!(
+            run.state.participants[0].conditions,
+            vec!["Poisoned · time is up"]
+        );
+        assert_eq!(
+            run.undo_label(),
+            format!("Undo: recharge roll for {}", names[1])
+        );
+        // T17.6: damage to a row marked Conc gives its save's DC, read from the newest step:
+        // 10, or half the damage if that is more, and at most 30, until the next step.
+        run.apply(Command::Concentration(2, true)).unwrap();
+        assert_eq!(run.conc_save_dc(2), None);
+        run.apply(Command::TempHp(2, 100)).unwrap();
+        for (damage, dc) in [(5, 10), (30, 15), (80, 30)] {
+            run.apply(Command::Damage(2, damage)).unwrap();
+            assert_eq!(run.conc_save_dc(2), Some(dc), "{damage}");
+            assert_eq!(run.conc_save_dc(1), None, "only the row that took it");
+        }
+        run.apply(Command::Note(1, "Next step".into())).unwrap();
+        assert_eq!(run.conc_save_dc(2), None, "until the next step");
     }
 
     #[test]
@@ -6127,7 +6181,11 @@ mod tests {
         let source = fs::read_dir(&folder)
             .unwrap()
             .map(|entry| entry.unwrap().path())
-            .find(|path| fs::read_to_string(path).unwrap().contains("Bless 10 rounds"))
+            .find(|path| {
+                fs::read_to_string(path)
+                    .unwrap()
+                    .contains("Bless 10 rounds")
+            })
             .expect("the plain campaign's run file");
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join(source.file_name().unwrap());
@@ -6175,8 +6233,14 @@ mod tests {
         run.dirty = true;
         run.save().unwrap();
         let text = fs::read_to_string(&path).unwrap();
-        assert!(text.contains("\"Bless 10 rounds\""), "a label stays a string");
-        assert!(!text.contains("\"rounds\":"), "no old words started to count");
+        assert!(
+            text.contains("\"Bless 10 rounds\""),
+            "a label stays a string"
+        );
+        assert!(
+            !text.contains("\"rounds\":"),
+            "no old words started to count"
+        );
     }
     #[test]
     fn undo_steps_this_version_cannot_read_are_dropped_and_the_run_says_so_once() {
@@ -6724,6 +6788,18 @@ mod tests {
         run.syncs.get_mut(&0).unwrap().start();
         assert!(!run.syncs[&0].session_lost());
         assert!(!run.strip().sync_stopped);
+    }
+    /// A run whose first row is in a sync conflict: the DM's damage while sync was stopped
+    /// meets the sheet's own value.
+    pub(super) fn conflicted() -> Run {
+        let (mut run, _, max) = matched_with_sheet(5);
+        offline_tick(&mut run);
+        run.apply(Command::Damage(0, 4)).unwrap();
+        offline_tick(&mut run);
+        reconnect(&mut run);
+        read_sheet(&mut run, max, 5);
+        assert_eq!(run.sync_word(0), Some(SyncState::Conflict));
+        run
     }
     /// A linked participant with sync on, showing a sheet with this much damage taken. Its
     /// maximum is the test creature's.
@@ -7383,11 +7459,15 @@ mod tests {
         // F2: one entry holds a condition and its count. A sheet that keeps the condition
         // keeps its count; one that adds a condition starts it with none; one that removes it
         // removes both, and says what went.
-        run.apply(Command::Condition(0, "Prone 7 rounds".into())).unwrap();
+        run.apply(Command::Condition(0, "Prone 7 rounds".into()))
+            .unwrap();
         let mut update = sheet(5, &[12, 5]);
         update["temporaryHitPoints"] = 4.into();
         read_full_sheet(&mut run, max, &update);
-        assert_eq!(run.state.participants[0].conditions, vec!["Frightened", "Prone 7"]);
+        assert_eq!(
+            run.state.participants[0].conditions,
+            vec!["Frightened", "Prone 7"]
+        );
         let mut update = sheet(5, &[5]);
         update["temporaryHitPoints"] = 4.into();
         read_full_sheet(&mut run, max, &update);

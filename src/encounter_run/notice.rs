@@ -364,23 +364,19 @@ impl Run {
                 } else {
                     0.0
                 };
-                let reminder = self
-                    .turn_reminders()
-                    .and_then(|(whole, count, full)| {
-                        let room = slot - undo_width - design::L + next_width;
-                        [whole, count]
-                            .into_iter()
-                            .map(|words| {
-                                let width = design::number_width(
-                                    ui,
-                                    &format!("{} {words}", icons::PIN),
-                                    &font,
-                                ) + design::XS;
-                                (words, width)
-                            })
-                            .find(|(_, width)| *width <= room)
-                            .map(|(words, width)| (words, width, full))
-                    });
+                let reminder = self.turn_reminders().and_then(|(whole, count, full)| {
+                    let room = slot - undo_width - design::L + next_width;
+                    [whole, count]
+                        .into_iter()
+                        .map(|words| {
+                            let width =
+                                design::number_width(ui, &format!("{} {words}", icons::PIN), &font)
+                                    + design::XS;
+                            (words, width)
+                        })
+                        .find(|(_, width)| *width <= room)
+                        .map(|(words, width)| (words, width, full))
+                });
                 if let Some((_, width, _)) = &reminder {
                     slot -= width + design::L - next_width;
                 }
@@ -674,6 +670,111 @@ mod tests {
                 "iter8-B-AT2-bar: {bar:?}, {notice_rect:?}"
             );
         }
+    }
+
+    /// F2, section 1.4: the current turn's reminders take only the room that the notice,
+    /// the sheet summary and today's Undo label leave: whole, else their count, else nothing.
+    /// No reminder makes Undo shorter. Row 20: a conflict's long name shortens, and `Review`
+    /// stays.
+    #[test]
+    fn reminders_take_only_spare_room_and_a_long_conflict_name_shortens() {
+        use crate::encounter_run::Condition;
+        use egui_kittest::kittest::Queryable;
+        let header = |mut run: crate::encounter_run::Run, width: f32| {
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(vec2(width, 640.0))
+                .build(move |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        run.live_header(ui, design::RUN_REGULAR);
+                    });
+                });
+            design::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            harness
+        };
+        let painted = |harness: &egui_kittest::Harness<'_>, words: &str| {
+            harness.output().shapes.iter().any(|shape| {
+                matches!(&shape.shape, egui::Shape::Text(text) if text.galley.text() == words)
+            })
+        };
+        let undo = |harness: &egui_kittest::Harness<'_>| {
+            harness
+                .query_by_label_contains("Undo:")
+                .map(|node| node.rect())
+        };
+        let begun = || {
+            let mut run = super::super::tests::run();
+            for (index, total) in [20, 15, 10].into_iter().enumerate() {
+                run.apply(Command::Initiative(index, Some(total))).unwrap();
+            }
+            run.apply(Command::Begin).unwrap();
+            run
+        };
+        let name = begun().state.participants[0].name.clone();
+        let next = begun().state.participants[1].name.clone();
+        let mut long = begun();
+        let mut three = begun();
+        let plain = header(begun(), 442.0);
+        assert!(painted(&plain, &format!("Next: {next}")));
+        let before = undo(&plain).expect("Undo with its target");
+        long.state.participants[0].conditions =
+            vec![Condition::read("Wis save DC 15 (Hold Person) on its turn")];
+        let harness = header(long, 442.0);
+        assert!(painted(&harness, "Wis save DC 15 (Hold Person)"));
+        assert!(
+            !painted(&harness, &format!("Next: {next}")),
+            "Next gives way"
+        );
+        assert!(
+            harness
+                .query_by_label(&format!(
+                    "Reminders for {name}: Wis save DC 15 (Hold Person)"
+                ))
+                .is_some()
+        );
+        assert_eq!(
+            undo(&harness),
+            Some(before),
+            "no reminder makes Undo shorter"
+        );
+        three.state.participants[0].conditions = vec![
+            Condition::read("Wis save DC 15 (Hold Person) on its turn"),
+            Condition::read("Wis save DC 15 (Hold Person) ends 10 rounds"),
+            Condition::read("Wis save DC 15 (Hold Monster) on its turn"),
+        ];
+        let harness = header(three, 442.0);
+        assert!(
+            painted(&harness, "3"),
+            "three long reminders are their count"
+        );
+        assert_eq!(undo(&harness), Some(before));
+        // A conflict comes first: a long name shortens beside the bare Undo, `Review` stays,
+        // and the reminders have no room.
+        let mut conflict = super::super::tests::conflicted();
+        conflict.state.participants[0].name =
+            "Oren Thistlewick, Keeper of the Southern Road".into();
+        conflict.state.participants[0].conditions =
+            vec![Condition::read("Wis save DC 15 (Hold Person) on its turn")];
+        conflict.hide_panel = true;
+        let harness = header(conflict, 442.0);
+        assert!(
+            harness.query_by_label("Review").is_some(),
+            "{:?}",
+            harness.root()
+        );
+        let shown = harness
+            .output()
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.text().contains("Conflict: ") => {
+                    Some(text.galley.text().to_owned())
+                }
+                _ => None,
+            })
+            .expect("the conflict's words");
+        assert!(shown.ends_with('…'), "{shown}");
+        assert!(!painted(&harness, "Wis save DC 15 (Hold Person)"));
     }
 
     #[test]

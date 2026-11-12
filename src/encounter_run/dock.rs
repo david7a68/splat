@@ -89,8 +89,13 @@ impl Run {
                     self.target_words(ui);
                     return;
                 }
-                // Line two becomes one field while the DM adds an effect to this row.
-                if self.effect_open.as_ref() == Some(&self.state.participants[index].key) {
+                // Line two becomes one field while the DM adds an effect to this row. The
+                // field belongs to that row: another selection closes it, and its words wait.
+                let key = &self.state.participants[index].key;
+                if self.effect_open.as_ref().is_some_and(|open| open != key) {
+                    self.effect_open = None;
+                }
+                if self.effect_open.is_some() {
                     command = self.effect_line(ui, index);
                     return;
                 }
@@ -292,7 +297,8 @@ impl Run {
             self.effect_open = None;
         }
         if self.effect_open.is_none() {
-            self.effect_fields.retain(|_, field| !field.words.is_empty());
+            self.effect_fields
+                .retain(|_, field| !field.words.is_empty());
         }
         command
     }
@@ -406,5 +412,136 @@ impl Run {
         if std::mem::take(&mut self.focus_amount) {
             response.request_focus();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use egui_kittest::kittest::Queryable;
+    use std::{cell::RefCell, collections::BTreeSet, rc::Rc};
+
+    fn dock(name: &str, width: f32) -> (Rc<RefCell<Run>>, egui_kittest::Harness<'static>) {
+        let mut run = super::super::tests::run();
+        for (index, total) in [20, 15, 10].into_iter().enumerate() {
+            run.apply(Command::Initiative(index, Some(total))).unwrap();
+        }
+        run.apply(Command::Begin).unwrap();
+        run.state.participants[0].name = name.into();
+        let run = Rc::new(RefCell::new(run));
+        let shown = run.clone();
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(vec2(width, 200.0))
+            .build(move |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| shown.borrow_mut().dock(ui));
+            });
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        (run, harness)
+    }
+
+    /// The painted name, and its size.
+    fn name_shown(harness: &egui_kittest::Harness<'_>, name: &str) -> Option<(String, f32)> {
+        let first = name.split_whitespace().next().unwrap();
+        harness
+            .output()
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.text().starts_with(first) => Some((
+                    text.galley.text().to_owned(),
+                    text.galley.job.sections[0].format.font_id.size,
+                )),
+                _ => None,
+            })
+    }
+
+    /// F2: `Effect` shows with its word while the selected name keeps its size and its words,
+    /// with its icon while the name keeps both beside the icon, and not at all otherwise.
+    #[test]
+    fn effect_gives_up_its_place_before_the_name_loses_a_word_or_its_size() {
+        let name = "Oren Thistlewick of the Southern Road";
+        let (_, wide) = dock(name, 900.0);
+        let (_, size) = name_shown(&wide, name).unwrap();
+        let mut forms = BTreeSet::new();
+        for width in (360..=760).step_by(8) {
+            let (run, harness) = dock(name, width as f32);
+            let effect = harness.query_by_label("Effect: words for this row");
+            let word = harness.output().shapes.iter().any(|shape| {
+                matches!(&shape.shape, egui::Shape::Text(text) if text.galley.text() == "Effect")
+            });
+            let form = match (effect.is_some(), word) {
+                (true, true) => "word",
+                (true, false) => "icon",
+                (false, _) => "none",
+            };
+            forms.insert(form);
+            assert_eq!(run.borrow().effect_in_dock, effect.is_some(), "{width}");
+            if effect.is_some() {
+                assert_eq!(
+                    name_shown(&harness, name),
+                    Some((name.to_owned(), size)),
+                    "{width} {form}: the name keeps its size and its words"
+                );
+            }
+        }
+        assert_eq!(
+            forms,
+            BTreeSet::from(["icon", "none", "word"]),
+            "each form at some width"
+        );
+    }
+
+    /// F2: the dock's field adds one effect to the row it opened for. Enter adds and puts
+    /// focus in Amount; Escape clears; another selection closes it, and its words wait.
+    #[test]
+    fn the_effect_field_belongs_to_its_row() {
+        let (run, mut harness) = dock("Guard", 900.0);
+        let field = "Effect";
+        harness.get_by_label("Effect: words for this row").click();
+        harness.run_steps(3);
+        harness.get_by_label(field).type_text("Bless 10 rounds");
+        harness.run_steps(1);
+        harness.key_press(egui::Key::Enter);
+        harness.run_steps(2);
+        {
+            let run = run.borrow();
+            assert!(
+                run.state.participants[0]
+                    .conditions
+                    .iter()
+                    .any(|c| c == "Bless 10")
+            );
+            assert_eq!(run.undo_label(), "Undo: effect Bless on Guard");
+            assert!(run.effect_open.is_none() && run.effect_fields.is_empty());
+        }
+        assert!(harness.query_by_label(field).is_none(), "the field closed");
+        // Escape clears the words and adds nothing.
+        harness.get_by_label("Effect: words for this row").click();
+        harness.run_steps(3);
+        harness.get_by_label(field).type_text("Haste");
+        harness.run_steps(1);
+        harness.key_press(egui::Key::Escape);
+        harness.run_steps(2);
+        assert!(run.borrow().effect_fields.is_empty());
+        assert_eq!(run.borrow().state.participants[0].conditions.len(), 2);
+        // Next turn moves the selection: the field closes, and its words wait for its row.
+        harness.get_by_label("Effect: words for this row").click();
+        harness.run_steps(3);
+        harness.get_by_label(field).type_text("Haste");
+        harness.run_steps(1);
+        run.borrow_mut().run_command(Command::Next);
+        harness.run_steps(2);
+        assert!(harness.query_by_label(field).is_none());
+        let key = run.borrow().state.participants[0].key.clone();
+        assert_eq!(run.borrow().effect_fields[&key].words, "Haste");
+        run.borrow_mut().select(0);
+        harness.run_steps(2);
+        harness.get_by_label("Effect: words for this row").click();
+        harness.run_steps(3);
+        assert_eq!(
+            harness.get_by_label(field).value().as_deref(),
+            Some("Haste")
+        );
     }
 }

@@ -1358,7 +1358,9 @@ impl Run {
                     let badge = self.row_badge(index);
                     let turn = TurnMark::of(index, current, next_up);
                     let mut name = row_name(p, turn, sync);
-                    let conc_dc = self.conc_save_dc(index).map(|dc| format!("Conc save DC {dc}"));
+                    let conc_dc = self
+                        .conc_save_dc(index)
+                        .map(|dc| format!("Conc save DC {dc}"));
                     if let Some(dc) = &conc_dc {
                         name.push_str(&format!(", {dc}"));
                     }
@@ -6186,7 +6188,7 @@ pub(super) fn row_words_for_test(p: &Participant) -> String {
 }
 
 /// How much height a row may use.
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 enum RowFit {
     Natural,
     /// The list needs the height, so a row gives up its padding too.
@@ -8070,6 +8072,101 @@ mod tests {
                         line.text()
                             .contains(sync_status(sync).word.replace(' ', "\u{a0}").as_str())
                     );
+                }
+                // F2, section 1.4: effects take the conditions' place, before the plain ones,
+                // and a row keeps the lines and the height it has with no effect. What does
+                // not fit is a count; with no room for that, the row shows none.
+                use super::super::Condition;
+                let mut q = p.clone();
+                q.conditions = vec![
+                    Condition::from("Poisoned"),
+                    Condition::read("Wis save DC 15 (Hold Person) on its turn"),
+                    Condition::read("Bless 10 rounds"),
+                    Condition::read("Frightened 10 rounds"),
+                ];
+                let mut plain = q.clone();
+                plain.conditions.retain(|c| !c.is_effect());
+                let mut counted = 0;
+                for (width, scale) in [
+                    (442.0, design::RUN_REGULAR),
+                    (596.0, design::RUN_REGULAR),
+                    (442.0, design::RUN_COMPACT),
+                    (1040.0, design::RUN_LARGE),
+                ] {
+                    for fit in [RowFit::Natural, RowFit::Compressed, RowFit::Summary] {
+                        let base = RowLayout::new(ui, width, &plain, None, scale, fit, 0.0);
+                        let layout = RowLayout::new(ui, width, &q, None, scale, fit, 0.0);
+                        assert_eq!(layout.height(scale), base.height(scale), "{width} {fit:?}");
+                        let rows =
+                            |l: &RowLayout| l.second_line.as_ref().map_or(0, |g| g.rows.len());
+                        assert!(rows(&layout) <= rows(&base).max(1), "{width} {fit:?}");
+                        let Some(line) = &layout.second_line else {
+                            continue;
+                        };
+                        let text = line.text();
+                        // The first effect leads, before the plain condition.
+                        if let (Some(effect), Some(poisoned)) =
+                            (text.find("Wis save"), text.find("Poisoned"))
+                        {
+                            assert!(effect < poisoned, "{text}");
+                        }
+                        if text.contains(icons::PIN) {
+                            counted += 1;
+                            assert!(!text.contains("Frightened 10"), "{text}");
+                        } else if base.tight {
+                            assert!(!text.contains("Wis"), "a tight row shows none: {text}");
+                        }
+                    }
+                }
+                assert!(counted > 0, "some width counts the effects that do not fit");
+                // A count's slot is as wide as its widest form: `2`, `last round` and `time is
+                // up` move no word after it.
+                let mut timed = p.clone();
+                let mut at = Vec::new();
+                for left in [2, 1, 0] {
+                    let mut effect = Condition::read("Bless 2 rounds");
+                    if let Condition::Effect(super::super::effect::Effect {
+                        time: Time::Rounds { left: l, .. },
+                        ..
+                    }) = &mut effect
+                    {
+                        *l = left;
+                    }
+                    timed.conditions = vec![effect, Condition::from("Prone")];
+                    let layout = RowLayout::new(
+                        ui,
+                        596.0,
+                        &timed,
+                        None,
+                        design::RUN_REGULAR,
+                        RowFit::Natural,
+                        0.0,
+                    );
+                    let line = layout.second_line.unwrap();
+                    let prone = line.text().chars().count() - "Prone".chars().count();
+                    at.push(line.pos_from_cursor(egui::text::CCursor::new(prone)).min.x);
+                }
+                assert!(at.iter().all(|x| (x - at[0]).abs() < 0.01), "{at:?}");
+                // T17.6: a save's DC ends the line where it has room, and is never what makes
+                // the row grow; with no room it is in the hover and the name only.
+                let mut conc = plain.clone();
+                conc.concentration = true;
+                conc.initiative = Some(10);
+                for (width, shows) in [(900.0, true), (300.0, false)] {
+                    let scale = design::RUN_REGULAR;
+                    let base = RowLayout::new(ui, width, &conc, None, scale, RowFit::Natural, 0.0);
+                    let layout = RowLayout::fitted(
+                        ui,
+                        width,
+                        &conc,
+                        (None, Some(12)),
+                        scale,
+                        RowFit::Natural,
+                        0.0,
+                    );
+                    let text = layout.second_line.as_ref().unwrap().text().to_owned();
+                    assert_eq!(text.ends_with("Conc save DC 12"), shows, "{width}: {text}");
+                    assert_eq!(layout.height(scale), base.height(scale));
                 }
             });
         });
