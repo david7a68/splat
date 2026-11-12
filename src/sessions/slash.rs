@@ -1,7 +1,7 @@
 //! `/` in a session note opens a short menu of commands. Each command ends with a link
 //! where the `/` was typed, so the DM keeps writing and never leaves the note.
 use crate::{
-    design::{self, Action, Density, Tone, Type, colors, icons},
+    design::{self, Density, Tone, Type, colors, icons},
     lookup::{self, ContentIndex},
     npc_generator::{self, Generated},
     persistence::Campaign,
@@ -332,16 +332,20 @@ impl Slash {
                     let Some(generated) = npc.as_ref() else {
                         match error.as_deref() {
                             Some(problem) => {
-                                // The choice starts at the message text; a quiet one keeps its
-                                // words there too.
-                                let close =
-                                    design::message_with_actions(ui, Tone::Error, problem, |ui| {
-                                        Action::quiet("Close")
-                                            .density(Density::Read)
-                                            .line_start()
-                                            .show(ui)
-                                            .clicked()
-                                    });
+                                // Closing is a dismiss: the close icon at the message end.
+                                let close = ui
+                                    .horizontal_top(|ui| {
+                                        let room = ui.available_width()
+                                            - Density::Read.control()
+                                            - design::S;
+                                        ui.allocate_ui_with_layout(
+                                            egui::vec2(room, 0.0),
+                                            egui::Layout::top_down(egui::Align::Min),
+                                            |ui| design::message(ui, Tone::Error, problem),
+                                        );
+                                        design::icon_button(ui, icons::CLOSE, "Close").clicked()
+                                    })
+                                    .inner;
                                 if close {
                                     result = Outcome::Cancel;
                                 }

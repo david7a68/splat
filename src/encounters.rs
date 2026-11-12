@@ -3606,6 +3606,7 @@ impl Encounters {
             return;
         };
         let words = deleted.message();
+        // A finished change has the success tone, as on the Session plan.
         if design::undo_message(
             ui,
             if deleted.unsent.is_empty() {

@@ -4374,7 +4374,7 @@ impl Run {
                 .and_then(|id| identities.get(&id))
                 .is_some_and(|paths| paths.len() > 1);
             let at = if duplicate { 0 } else { after_copy(run) };
-            run.label.insert_str(at, "Closed last · ");
+            run.label.insert_str(at, "Played last · ");
         }
         let all_recent = runs
             .iter()
@@ -6114,7 +6114,7 @@ mod tests {
         let copies = Run::list(dir.path(), campaign).unwrap();
         assert_eq!(copies[0].id, Some(latest));
         assert_eq!(copies[0].encounter, "Ambush");
-        assert!(copies[0].label.starts_with("Copy 1 · Closed last · "));
+        assert!(copies[0].label.starts_with("Copy 1 · Played last · "));
         assert!(copies[0].label.contains(" · Last: "));
         let old = copies
             .iter()

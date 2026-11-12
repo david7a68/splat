@@ -1386,9 +1386,9 @@ member of a shared-roll block. Keep tie details in Arrivals and Log, outside the
 
 ### Saving and closing
 
-Recovery copies keep the encounter name and preserve the other file. Start their second line with `Copy 2`, before `Closed last`, round and state. Only file names keep the UTC save-time suffix.
+Recovery copies keep the encounter name and preserve the other file. Start their second line with `Copy 2`, before `Played last`, round and state. Only file names keep the UTC save-time suffix.
 The last closed run owns primary Resume, unless the encounter's editor holds unsaved changes (then `Save
-encounter` is primary). `Closed last` follows a copy number; Changed on disk marks a preserved disk version, after the copy number when present. Keep last-change wording from the close dialog. Saved rows use relative time today and yesterday,
+encounter` is primary). `Played last` follows a copy number; Changed on disk marks a preserved disk version, after the copy number when present. Keep last-change wording from the close dialog. Saved rows use relative time today and yesterday,
 then a short UTC date. Edit stays for recovery copies whose encounter exists; reserve an empty slot otherwise.
 Measure actions before assigning paused-row text width. Saved time follows turn without a full stop. State
 words come from one function: Setup, Setup · Paused, Round 2, Round 2 · Paused, Ended · Round 2. An open run
@@ -1463,7 +1463,8 @@ Details sit beside Read on the content tab row. Read and Write sit there while n
 Read view keeps only its inline Write link; hide tab-row Write until the note has content. Notes saved
 centres on the title action row. A saved note is the calm, usual state: `✓ Notes saved` is muted
 (`document.clean`) on the session page and in the Notes panel, also just after a write. Last time is one line linking the previous session and recap, with full recap
-on hover. Without recap, use prose under What happened and omit link-only lines; without either, show the
+on hover. When another note shares that session's title, the link adds its file name
+(`Session 1: The Bridge (Session 1 - The Bridge.md)`), as the list's second line does. Without recap, use prose under What happened and omit link-only lines; without either, show the
 session link alone. An older session warns once and links the session being played, which the list marks
 Playing. The action says Return to the session being played. When the two session numbers match, the warning
 names both note files. Reading old notes changes neither the destination for new events nor runs: use the newest session
@@ -1546,10 +1547,13 @@ the run icon.
 Session and Timeline add long rests with the same full-HP ruling, message and Undo add. Every closed
 long-rest row shows an icon and either Everyone at full or Not at full. Open rows hide that summary so the
 ruling stays in place. Actions say Mark everyone at full
-or Mark not at full; states say Everyone at full or Not at full, with the ruling's icon and colour on the
-plan row, the Timeline row and the detail alike. Keep one Undo ruling until the next edit. Its message says the
+or Mark not at full; they change data, so each is a quiet button `L` after the state, never a link. States say
+Everyone at full or Not at full, with the ruling's icon and colour on the
+plan row, the Timeline row and the detail alike. Keep one Undo ruling until the next edit. Its message is a
+finished change, in the success tone, and says the
 ruling now in force: `Everyone starts the next fight at full.` or `The next fight starts from the HP the party
-has now.`
+has now.` On Timeline it sits in the list column with the other results, so the form does not move; in one
+column, it ends the form.
 Resuming a saved Setup after a restoring rest starts party HP full, says `Party HP is full after the long
 rest.` and offers Use the saved HP. Splat made that fill, so it is no Undo step: the header keeps the step before it,
 or `Nothing to undo`, and Use the saved HP is the one way back. Every kept Undo state gets the same full HP, so Undo of
@@ -1609,11 +1613,19 @@ Field labels have `M` before them. Copy link uses a check and Copied for two sec
 quiet section; Place after is the only ordering control. Adds to shares the filter line. Context shows visible
 out of total while filtering; the filter says Major events.
 
-Added, removed and link-update notices stay in the list column. Removing an event counts notes that still link
+Added, removed and link-update notices stay in the list column, with the rest ruling's result and the file's
+flags, duplicate warning, reload result and save error, so a result never moves the Add strip or the open form.
+With one column and an event open, they end the form. An unreadable file and a conflict stay above the Add strip:
+the DM must choose before anything else. Removing an event counts notes that still link
 to it and uses warning tone when any do. Each item's save state tracks its own edits: muted Saving… during
 delay, Saved when unchanged, Unsaved with reason when blocked. Rests show default duration as a faint
-placeholder, with Starts and Ends beside duration help. Rename never changes notes automatically. Update links
-in notes names old and new titles below Title and updates old-title aliases as one batch with Undo; custom
+placeholder, with Starts and Ends beside duration help. Rename never changes notes automatically. The offer is the Library's, from one function:
+`Change links from “<old>” to “<new>”.` with `Update N links`, in the list column; it updates old-title aliases as one batch with Undo,
+and checks every note first: if one is changed on disk or needs a choice, no note is written. Each note is then
+saved on its own, after one more check of its file. If a save fails part way, nothing is rolled back: one result
+names every note already written and the error, and `Undo link update` puts back exactly those; the result stays
+until Undo or a new update. Undo writes only into the same file it wrote (same bytes, same session id), else it
+names the note and changes nothing; custom
 aliases remain. Undo stays only in the list column until a note/event edit or leaving Timeline, never in
 conflict. Completed link updates use success.
 
@@ -1627,10 +1639,27 @@ use error Timeline not saved. Run updates change only the Result line and never 
 
 Copied sessions say `<first file> and <second file> claim to be the same session.` They offer
 Make <file> a separate session with Undo separate session. The header names the clock (`Now: Day 1, 00:10`) only once a day sets it. Moved or deleted note drafts
-offer the new path, a new file and red `Discard`. When Splat found the note under a new name, the warning
+offer the new path, a new file and red `Discard`. Discard follows the moved file when it still holds the note:
+the editor shows that file's words and saves there. With no file left, the editor keeps the last saved words in
+the File gone state, says so, and offers `Save these words as a new file`; no edit or Save writes the old path.
+A new file takes a new identity only once it exists: if a file arrived at that path, nothing is written, the draft
+keeps its identity and the File gone state, and the warning says why above the choices. Discarded or reloaded
+words stay recoverable when the draft follows a later outside edit; their Undo then meets the conflict choice. When Splat found the note under a new name, the warning
 says so: `This note was moved or renamed. It is now <file>. Your draft is still here.`; `gone from the folder`
 is only for a note with no new place; Discard says `Draft discarded.` with `Undo discard`. After
 `Reload and lose my draft`, a note says `Reloaded from disk.` with `Undo reload`, as World does. Missing session and run folders offer Choose folder.
+
+A session notice that arrives on its own, not as the result of the DM's action on this page, sits in the bottom
+banner where the recording banners sit, never above the tabs or the note: processing finished (`“<session>” is
+processed. …`, with the close icon named `Dismiss`), a copy that claims the session, notes whose properties cannot
+be read, and a note or template draft whose file changed on disk, went, moved or could not be saved, with their
+choices. In the banner they follow the recording alerts, whose order and one primary stay as they are, and each
+wraps at `LIST_MEASURE`. The result of the DM's own action on the page keeps its place above the tabs: `Recording
+saved: …`, `Recording deleted.`, `Added to the notes.`, `<file> is now a separate session.`, where an open run
+stays or moved, `No entry is named …`, and `Draft discarded.` or `Reloaded from disk.` with their Undo. When the
+banner makes the note's view shorter and the view was at the note's end, it stays at the end, so the line being
+typed stays in view. The banner is at most a third of the window; longer content scrolls inside it, with the
+recording alerts at its top, and a choice that gains keyboard focus scrolls into view.
 
 ### Notes panel
 
@@ -1695,7 +1724,8 @@ Continue processing.
 A stopped or stalled row keeps Record again beside Process. Missing inputs put Choose an input first, before
 Record again and Process, in row and banner. Banners and rows share the recovery sentence. Visible recording
 rows own failures, stops and stalls; other pages use a bottom banner that does not move Next turn. Automatic
-stops offer Open the session. Failures stay in banner and rail until dismissed or retried. Record again is
+stops offer Open the session. Banner choices are secondary, except the one primary; the banner's dismiss is the
+close icon at the message end, named `Dismiss this error`. Failures stay in banner and rail until dismissed or retried. Record again is
 primary when no open run owns it. Unresolved recording recovery takes priority over processing: Choose an
 input when the input is missing, otherwise Record again. A blocked action never owns primary. Audio removed
 stays visible in results after WAV deletion. A recording row's sentences (stop, failure, cancel and result
@@ -1786,8 +1816,10 @@ service that leaves such a field empty, the notice and that reason scroll into v
 problem keeps its reason at the key row, so the view stays. A saved key says `Saved on this computer.`;
 `keyring` stays in warnings about the keyring itself.
 
-Warnings name the saved key's service and chosen service. A key for another service keeps Save key visible
-with Paste a key first and a separate quiet remove action. A saved key for the chosen service hides Save key
+Warnings name the saved key's service and chosen service. The key field and Save key share the form's width,
+so Save key ends at the edge Service, Address and Model end at; its slot stays when it is hidden. The line below
+the field holds Paste a key first, else `Saved on this computer.`, and stays when empty. A key for another
+service keeps Save key visible with Paste a key first and a separate quiet remove action. A saved key for the chosen service hides Save key
 and its empty reason until a replacement is typed. Saved fields invite replacement keys. Remove-key buttons
 name slot and service, including accessibility, such as Remove speech key (OpenAI) or Remove transcript and
 summary key (OpenAI). Put them below key state at the left edge.
