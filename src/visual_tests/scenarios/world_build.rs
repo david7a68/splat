@@ -9708,6 +9708,14 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
         );
     }
     let rows = tops_at_sizes(d, "Change Status");
+    // The footer checks above assert the change: `Changes saved.` with `Undo changes` and the
+    // saved Status. The rows keep their place now, so this state differs from the read picker's
+    // only by those words at the pane's foot.
+    d.expect_same(
+        "Round 26: the save result sits in the footer and the rows keep their place, so the saved \
+         note differs from the read picker state only by the footer's Changes saved. with Undo \
+         changes and the Status value.",
+    );
     d.state("overwrite-keeps-unread-disk-groups", Sizes::All);
     d.click("Undo changes");
     // The rows keep their place when the result goes with its Undo.

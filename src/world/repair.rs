@@ -223,7 +223,13 @@ impl Repair {
         }
         // Save's own checks: the state word, its cause and Save's availability all come from them.
         let (problem, line) = refusal(campaign, &self.path, &self.draft);
-        if self.disk.is_none() && self.footer(ui, problem.as_deref()) {
+        // The y where the body ends: `S` above the footer, or the pane's bottom.
+        let mut bottom = ui.max_rect().bottom();
+        if self.disk.is_none() && {
+            let (pressed, end) = self.footer(ui, problem.as_deref());
+            bottom = end;
+            pressed
+        } {
             let back = if self.discarded.is_some() {
                 self.discarded.take()
             } else {
@@ -257,7 +263,7 @@ impl Repair {
         // save row end together at `LIST_MEASURE`, so Save stays near the state and Discard.
         ui.scope(|ui| {
             ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
-            self.edit(ui, campaign, run_open, problem, line)
+            self.edit(ui, campaign, run_open, problem, line, bottom)
         })
         .inner
     }
@@ -291,8 +297,9 @@ impl Repair {
 
     /// The pane's message footer (round 26 FA1): a result with a live Undo first (Undo discard
     /// or Undo reload), then Save's reason. It sits at the bottom of the pane, as tall as what it
-    /// holds, so the editor never moves and both messages show whole. True when Undo is pressed.
-    fn footer(&self, ui: &mut egui::Ui, problem: Option<&str>) -> bool {
+    /// holds, so the editor never moves and both messages show whole. Returns whether Undo is
+    /// pressed, and the y where the body ends.
+    fn footer(&self, ui: &mut egui::Ui, problem: Option<&str>) -> (bool, f32) {
         let name = self.path.rsplit('/').next().unwrap_or(&self.path);
         let undo = if self.discarded.is_some() {
             Some(UndoResult::Discard)
@@ -325,8 +332,8 @@ impl Repair {
                 design::message(ui, design::Tone::Error, reason);
             });
         }
-        footer.show(ui);
-        pressed.get()
+        let bottom = footer.show(ui);
+        (pressed.get(), bottom)
     }
 
     /// The editor and its save row.
@@ -337,14 +344,16 @@ impl Repair {
         run_open: bool,
         problem: Option<String>,
         line: Option<usize>,
+        bottom: f32,
     ) -> bool {
         // Nothing above the editor comes and goes: its reason and its results are in the pane's
         // footer (round 26), so the editor never moves. The editor leaves room for the save row
-        // above the footer.
+        // above `bottom`, where the footer's room starts.
         let save_row = design::Density::Read.control() + ui.spacing().item_spacing.y;
         let (changed, _) = ui
             .scope(|ui| {
-                ui.set_max_height((ui.available_height() - save_row).max(design::XXL));
+                let room = bottom.min(ui.max_rect().bottom()) - ui.cursor().top();
+                ui.set_max_height((room - save_row).max(design::XXL));
                 editor_events(ui, &self.path, &mut self.draft, line)
             })
             .inner;
