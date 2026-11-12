@@ -402,6 +402,7 @@ that G7 allows.
 | 19 | A **Change** of status, place or group | It writes its Log line when a session is being played by W14's test. Today the test is "dated today" (`page.rs:1929-1937`). So a change during a fight or a recording on a note with another date, and a change in prep for a session dated later, now write a line | Rule M: one definition of the session being played |
 | 20 | The run's notice line, when a conflict's name is wider than the line beside the bare `Undo` | The name shortens as the dock's name does. Today nothing gives | Rule K |
 | 21 | A package creature's reader, with no run open | A quiet `Start fight` in a header that holds no action today (F3) | Rule Q |
+| 22 | An opened played fight that ended | The Timeline detail's `Where` field under the row's links: the same event's field, saved by the Timeline's write, so the DM types the place without two page transitions (repair W2-D3, P7) | By the lead's ruling after app round 1 |
 
 Nothing else differs. A free-words effect from an encounter or an older run gives no reminder. A Travel row
 shows no checks and no new field until the DM asks. The rail says nothing about trackers unless a notice is
@@ -1211,8 +1212,8 @@ Case A, the plan at 330 px
   also those marked absent at 0 HP, and each character's share. F1's function gives the numbers. The line
   names what it counted and what still stood, so the DM can change it. With nobody at 0 HP it says `XP 0 for 0
   at 0 HP`. When a creature at 0 HP has no XP that Splat knows (a made-up creature, an NPC with no stat
-  block), the line says so: `XP 450 for 3 at 0 HP. XP not known for Captain Varra: enter an award here.` It
-  is still an XP line, and the link and the loot are written. An amount that is not known is left out of
+  block), the line says so: `XP 450 for 3 at 0 HP. XP not known for Captain Varra: enter an award here.` The
+  count is of the creatures whose XP is summed. It is still an XP line, and the link and the loot are written. An amount that is not known is left out of
   every sum and is never counted as zero. This is the rule (section 7).
 - **Loot,** as lines under it: the encounter's loot and the loot of each creature at 0 HP. A roll that was
   made has its result. A roll that was not made is written with `(not rolled)`, as `Copy loot` writes it
@@ -1222,7 +1223,8 @@ Case A, the plan at 330 px
 newest rewards block: in this note first (the last block in its text), then in the note of each earlier
 session, newest first. A note
 with no block is passed. A note that cannot be read stops the search; P7 reads the notes in order and keeps
-an unreadable one in its place.
+an unreadable one in its place. A file that claims a session but whose properties cannot be read has no known
+place, so it stops the search right after this note (built in P7: `earlier_notes`, `rewards_with_xp`).
 
 | The search finds | `Add rewards` writes | The result says |
 |---|---|---|
@@ -1280,8 +1282,10 @@ not made.`; with an award that is not known, `1 award is not known.` `Undo rewar
 The last line of the first block is one that the DM typed. An XP line is a line under a fight's line that
 starts with `XP`; the sum reads its first number, so `(XP 200)` is not counted.
 
-**Undo.** `Undo rewards` removes the block that the act added, when it still stands as Splat left it (section
-4.1). **Keyboard.** Tab reaches `Add rewards` in the row or among the opened row's links, and the result's
+**Undo.** `Undo rewards` removes the block that the act added, when it still stands as Splat left it. By the
+lead's ruling for P7 it is kept by the note's ID and the fight, not by the note's whole text: another act, another
+session or another page leaves it, and it takes back exactly the block (and the heading it added, when nothing
+follows), whatever else changed in the note. **Keyboard.** Tab reaches `Add rewards` in the row or among the opened row's links, and the result's
 action after its words.
 
 **What stays with the DM.** Who earned XP, whether a creature that fled counts, how loot is shared, and when

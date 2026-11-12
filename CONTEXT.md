@@ -258,6 +258,12 @@ bar and a World entry's Log line follow it.
 The fights, groups and scenes a session's note lists under its plan, with what has happened so far. The note
 holds the plan, so that Obsidian sees it too.
 
+**Rewards**:
+What the party received in a fight: its loot results and, where the notes use XP, its XP, as one block in the
+session note that starts with the fight's Timeline reference. The note owns it; Splat writes it once and never
+rewrites it.
+_Avoid_: Treasure.
+
 **Scene**:
 A task line of a session's plan that is not a fight or a group, with a done mark: a talk, a person to meet, a
 place, a secret to reveal.

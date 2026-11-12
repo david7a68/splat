@@ -1599,6 +1599,27 @@ without Paused; ended, named and custom results keep stored words. Played fights
 once on line two, then final party HP in a grid of two or three first-name cells in the party bar's order
 (players the party no longer has come last), quiet Log, Whole run and
 Timeline links. Hover keeps full names and conditions; Remove stays in the name-aligned row menu.
+An opened played fight that ended has the Timeline detail's `Where` under its links: the same event's field,
+saved by the Timeline's own write, so the DM says where it happened without leaving the plan.
+
+**Rewards (F7).** A played fight that ended has `Add rewards`, an `Action::quiet` in its row's action band left of
+the menu, only while its title keeps the lines it has beside the menu alone at the action's own width; the fit is
+worked out when the title or the width changes, not each frame. Else it is the last link of the opened row:
+`Log · Whole run · Timeline · Add rewards`, so no link of today moves. It writes one block at the end of
+`## Loot and rewards` (the heading goes at the end of a note that has none): a list line with the fight's
+Timeline reference, then an XP line and the loot lines: the encounter's and each downed creature's, a roll's
+results in its place and a roll not made as `(not rolled)`, as `Copy loot` words them. XP has no switch: the
+newest rewards block that Splat can read, in this note and then in each earlier note, newest first, says whether
+the new one has an XP line; with no block, or a note that cannot be read before one, it has one, and the result
+says how to stop it. The XP comes from `Scale::weigh`; a creature at 0 HP whose XP is not known is named on the
+line, and its amount is left out of every sum. The result, an `undo_message` under the row, says `Rewards added
+under Loot and rewards.`, the XP choice, `XP tonight: <sum> for <n> fights.` from the note as it stands, and the
+loot rolls not made and the awards not known. `Undo rewards` takes back exactly that block while it stands as the
+act left it, also after another act, another session or another page; it is kept by the note's ID and the fight.
+A fight whose reference starts a list line anywhere in the note says `In notes` (`design::status`,
+`icons::OK`, `document.saved`) in the action's place, or in muted words in the opened row. The note beside the plan
+(in Write) scrolls to the block; behind its tab, the Note tab shows it. A run that cannot be read blocks the act
+with `Splat cannot read this fight’s run, so its rewards are not known.` under the row.
 
 An act that changes a session note's words goes through `Draft::apply`, the one path for a note act: it is for one
 session, by its ID, and the file must still hold that note; it reads the file first, changes one fragment, and its
