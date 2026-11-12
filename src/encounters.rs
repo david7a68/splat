@@ -4244,6 +4244,7 @@ impl Encounters {
                 ui.available_rect_before_wrap()
                     .width()
                     .min(header_right - ui.cursor().left())
+                    .max(0.0)
             };
             ui.allocate_ui_with_layout(
                 egui::vec2(action_width, Density::Scan.control()),
