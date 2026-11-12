@@ -45,6 +45,7 @@
       "run-add-creature": 7,
       "run-continue": 26,
       "run-edge-states": 5,
+      "run-effects": 2,
       "run-large-roster": 2,
       "run-long-names": 9,
       "run-lookup": 3,
@@ -144,6 +145,7 @@
       "run-add-creature": 41,
       "run-continue": 119,
       "run-edge-states": 44,
+      "run-effects": 14,
       "run-folder-defect": 3,
       "run-large-roster": 16,
       "run-long-names": 37,
@@ -155,7 +157,7 @@
       "run-resume": 7,
       "run-rolls": 61,
       "run-roster-conflict": 24,
-      "run-sync-conflict": 41,
+      "run-sync-conflict": 43,
       "run-sync-states": 32,
       "session-notes": 204,
       "session-plan": 201,
@@ -316,6 +318,9 @@
       "advance through a full round of 20": 20,
       "open a run with 12 participants": 1,
       "open a run with 20 participants": 1
+    },
+    "run-long-names": {
+      "T20.1: pin an effect beside the longest name": 4
     },
     "run-lookup": {
       "T2.1: read a spell from a run": 2,

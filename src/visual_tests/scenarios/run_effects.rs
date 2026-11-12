@@ -132,7 +132,10 @@ pub fn run(d: &mut Driver<'_>) {
     d.observe(
         "T20.3",
         row_name(d, &current).contains("Bless 10"),
-        format!("Undo of Next turn gives the count back: {}", row_name(d, &current)),
+        format!(
+            "Undo of Next turn gives the count back: {}",
+            row_name(d, &current)
+        ),
     );
 
     // T20.1 beside Lookup: the letter keys are text, so the pointer adds an effect in 4, and
@@ -144,7 +147,10 @@ pub fn run(d: &mut Driver<'_>) {
     d.observe(
         "T20.1",
         row_name(d, ISELLE).contains("Frightened 10") && d.has(SEARCH_LOOKUP),
-        format!("The effect joined its row, and Lookup stays: {}", row_name(d, ISELLE)),
+        format!(
+            "The effect joined its row, and Lookup stays: {}",
+            row_name(d, ISELLE)
+        ),
     );
     d.state("effects-beside-lookup", Sizes::Default);
     // T20.4: no row changed its height for its effects.

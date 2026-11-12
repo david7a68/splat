@@ -7113,6 +7113,21 @@ fn condition_links(
     opened
 }
 
+/// The right edge of the letter before character `end`, on that letter's row, when the
+/// words from the row's start to it are on one row.
+fn last_letter_right(galley: &Galley, end: usize) -> Option<f32> {
+    let mut at = 0;
+    for row in &galley.rows {
+        let count = row.glyphs.len();
+        if end > at && end <= at + count {
+            let glyph = &row.glyphs[end - at - 1];
+            return Some(row.pos.x + glyph.pos.x + glyph.advance_width);
+        }
+        at += count + usize::from(row.ends_with_newline);
+    }
+    None
+}
+
 /// Each target of a row's effects: a count, words shown on each turn, or the count of the
 /// rest. Each is its own target, at least `XL` wide, so the name beside it keeps its act.
 /// Returns the act the DM asked for, and the effect's place.
@@ -7163,12 +7178,12 @@ fn effect_links(
             _ => format!("{words}. Remove it in Conditions"),
         };
         let start = galley.pos_from_cursor(egui::text::CCursor::new(span.start));
-        let end = galley.pos_from_cursor(egui::text::CCursor::new(span.end));
-        if start.top() != end.top() {
+        // The words end at their last letter, before the room that keeps a count's slot.
+        let Some(right) = last_letter_right(galley, span.end) else {
             continue;
-        }
-        let word = Rect::from_min_max(start.min, pos2(end.left(), start.bottom()))
-            .translate(origin.to_vec2());
+        };
+        let word =
+            Rect::from_min_max(start.min, pos2(right, start.bottom())).translate(origin.to_vec2());
         let bottom = (word.center().y + design::XL / 2.0).min(rect.bottom());
         let width = word.width().max(design::XL);
         let left = (word.center().x - width / 2.0)

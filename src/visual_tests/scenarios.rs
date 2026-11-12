@@ -3741,15 +3741,18 @@ pub mod encounter_run {
             d.place_of("Effect: words for this row")
                 .map(|effect| d.painted_in(effect).replace('\u{a0}', " "))
         };
-        let closed = effect_key(d);
-        look_up(d, KEYBOARD_LOOKUP);
-        let open = effect_key(d);
-        d.press_ctrl(Key::K);
-        d.click_row(TARGET);
+        let (closed, open) = d.aside(|d| {
+            let closed = d.at_size(DEFAULT, effect_key);
+            look_up(d, KEYBOARD_LOOKUP);
+            let open = d.at_size(DEFAULT, effect_key);
+            d.press_ctrl(Key::K);
+            d.click_row(TARGET);
+            (closed, open)
+        });
         d.observe(
             "T20.1",
-            closed.as_deref().is_some_and(|words| words.contains("Effect") && words.contains('E'))
-                && open.as_deref().is_none_or(|words| !words.contains(" E")),
+            closed.as_deref() == Some(&format!("{} Effect E", crate::design::icons::PIN)[..])
+                && open.as_deref() == Some(&format!("{} Effect", crate::design::icons::PIN)[..]),
             format!("Effect with Lookup closed: {closed:?}; open: {open:?}"),
         );
         d.type_text(DAMAGE);
@@ -6209,21 +6212,30 @@ pub mod run_sync_conflict {
             });
             let review = d.place_of("Review");
             let undo = d.place_of(&undo);
-            let reminders = d.has_containing(&format!("Reminders for {current}"));
+            let reminders = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name.starts_with(&format!("Reminders for {current}")))
+                .map(|node| node.shown);
             (conflict, review, undo, reminders)
         };
         for size in [SMALL, DEFAULT] {
             let (conflict, review, undo, reminders) = d.at_size(size, line);
+            // The reminders, when they show at all, are in the room between Review and Undo.
             let clear = conflict
                 .zip(review)
                 .zip(undo)
                 .is_some_and(|((conflict, review), undo)| {
-                    conflict.right() <= review.left() + 1.0 && review.right() < undo.left()
+                    conflict.right() <= review.left() + 1.0
+                        && review.right() < undo.left()
+                        && reminders.is_none_or(|place| {
+                            place.left() > review.right() && place.right() < undo.left()
+                        })
                 });
             d.observe(
                 "T20.4",
-                clear && !reminders,
-                format!("{size:?}: conflict {conflict:?}, Review {review:?}, Undo {undo:?}, reminders shown {reminders}"),
+                clear,
+                format!("{size:?}: conflict {conflict:?}, Review {review:?}, Undo {undo:?}, reminders {reminders:?}"),
             );
         }
         d.state("conflict-and-reminders-beside-lookup", Sizes::Default);
