@@ -525,8 +525,8 @@ fn broken_evening(a: &mut Audit<'_, '_>) {
     a.phase = "after the fight";
     a.task("Take a scene off tonight's plan");
     a.fact(format!(
-        "the plan holds the line added in Obsidian: {}",
-        a.d.has_containing("Pay the ferryman")
+        "the plan holds the line added in Obsidian, as a row or in the fold `2 scenes`: {}",
+        a.d.has_containing("Pay the ferryman") || a.d.has("2 scenes")
     ));
     a.click(Find, "More actions for Ask the watch about the ropes");
     a.click(Do, "Remove from tonight");
