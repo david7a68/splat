@@ -2760,13 +2760,25 @@ impl<'a> Driver<'a> {
             &window,
         ));
         // R3f: a pane's content ends above its message footer, so no primary action shows in
-        // part where a footer takes its room.
-        let under = self.primaries_under_footers();
-        if !under.is_empty() {
+        // part where a footer takes its room. Each state with a footer names its words.
+        let bands = self.footer_bands();
+        if !bands.is_empty() {
+            let footers: Vec<String> = self
+                .nodes()
+                .into_iter()
+                .filter(|node| {
+                    node.role == Role::GenericContainer
+                        && bands.iter().any(|band| band.contains_rect(node.rect))
+                })
+                .map(|node| node.name.chars().take(80).collect())
+                .collect();
+            let under = self.primaries_under_footers();
             self.observe(
-                &format!("r3f-primary-under-footer {state}"),
-                false,
-                format!("{window}: a primary action shows in part in a footer's room: {under:?}"),
+                &format!("r3f-footer-room {state}"),
+                under.is_empty(),
+                format!(
+                    "{window}: footers {footers:?}; primary actions in part in their room: {under:?}"
+                ),
             );
         }
     }
