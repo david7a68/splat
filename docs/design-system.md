@@ -1477,7 +1477,8 @@ Stored line breaks stay unchanged. Events and recordings follow column width;
 book prose keeps READER_MEASURE. The gallery's Markdown sheet shows both
 views of one note. Autosave runs two seconds after editing; show muted Saving… with the busy icon during
 delay. Disk changes stop saving and open the comparison in Keeping a draft. Missing notes show Notes not saved
-with error status in header and rail. Rail conflicts say Notes changed, with Notes changed on disk on hover
+with warning status in header and rail, the tone of their banner: the draft is safe and the DM has a choice.
+A failed write stays an error. Rail conflicts say Notes changed, with Notes changed on disk on hover
 and for accessibility.
 
 Session title and muted date wrap together, with Record on the title line. Below 640 px, save state and
@@ -1641,7 +1642,10 @@ With one column and an event open, they end the form. An unreadable file and a c
 the DM must choose before anything else. Removing an event counts notes that still link
 to it and uses warning tone when any do. Each item's save state tracks its own edits: muted Saving… during
 delay, Saved when unchanged, Unsaved with reason when blocked. Rests show default duration as a faint
-placeholder, with Starts and Ends beside duration help. Rename never changes notes automatically. The offer is the Library's, from one function:
+placeholder, with Starts and Ends beside duration help. The clock counts a number and a unit (`4 hours`, `1 day`,
+`half a day`); the help names these forms. A length it cannot count is a warning, not a muted fact: the row's
+detail and the plan row say `⚠ Not counted in the day’s time` in the warning colour, with how to write it on
+hover, and in the open form the same warning takes the place of Ends, so the fields below keep their place. Rename never changes notes automatically. The offer is the Library's, from one function:
 `Change links from “<old>” to “<new>”.` with `Update N links`, in the list column; it updates old-title aliases as one batch with Undo,
 and checks every note first: if one is changed on disk or needs a choice, no note is written. Each note is then
 saved on its own, after one more check of its file. If a save fails part way, nothing is rolled back: one result
@@ -1738,7 +1742,10 @@ does the same for Not saving audio: only its icon and word are red; time and ses
 muted. The stall banner says `The recording of “<session>” stopped saving audio. The first <time> are kept.
 Record again starts a new file.` Rail silence omits time; hover and accessibility say `Recording silence · 2:14:05 recorded`. Put duration in row detail, outside bold status.
 
-Recordings' live row owns sound state, duration, input help and Stop recording, beside Process. Hide its
+Recordings' live row owns sound state, duration, input help and Stop recording, beside Process. Its detail
+starts with the time in every live state (`0:00 recorded · Hearing sound`, `0:00 recorded · Silent for over a
+minute`). Stop recording keeps the row's first slot while the recording is live: a stall or silence comes by
+itself, so its Record again and Check the input in Settings go after Stop, and Process comes last. Hide its
 header status; Plan and notes retains the live header line. Other tabs keep header Stop recording. A row
 offering Record again owns recording on that tab and omits its repeated session name. Failed, Stopped and
 Cancelled stay in the session list until retry or dismissal. Failures and stops use error icon and colour;
@@ -1786,7 +1793,9 @@ message names transcript and context sent to the LLM and says audio is not sent 
 secondary Not now and red Replace the results; Keep the recording is secondary. Processing help keeps
 READER_MEASURE; the Process again message sits in a scope capped at it, with Not now and Replace the results
 together below. Clean and warned results say Processed in the rail until a later recording or processing replaces the result.
-Opening the session acknowledges the completion notice and keeps the result and its warning. Warnings retain icon and colour. The
+Opening the session acknowledges the completion notice and keeps the result and its warning. On that
+session's own Recordings tab the row says Processed, so the `is processed` banner does not show there, and
+that view counts as reading it. Warnings retain icon and colour. The
 session list shows the warning icon and Processed in warning colour, then ` · Playing` on the same line, as
 its sibling states do. A clean result is a status too: the check icon and Processed in the success colour, as
 on the recording row; the recording row, list hover and accessible name use Processed, with a warning. On the timeline is a success link for added events

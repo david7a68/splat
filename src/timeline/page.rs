@@ -515,6 +515,16 @@ impl TimelinePage {
             ruling = Some((detail.len(), status.color));
             detail.push_str(&format!("{} {}", status.icon, status.word));
         }
+        // Round 26 FG4, FD7: a length the clock cannot count is a warning part, in its colour.
+        let mut spans = Vec::new();
+        if let Some(warning) = event.time_warning()
+            && let Some(start) = detail.find(&warning)
+        {
+            spans.push((start..start + warning.len(), c.result.warning));
+        }
+        if let Some((start, color)) = ruling {
+            spans.push((start..detail.len(), color));
+        }
         // A day heading written out of order keeps its Day icon and says what it was written as.
         let flag = written_as.map(|day| format!("Written as Day {day}"));
         let mut name = if detail.is_empty() {
@@ -591,7 +601,7 @@ impl TimelinePage {
             }
             painter.galley(egui::pos2(x, top), galley, c.text);
             if !detail.is_empty() && !open {
-                let second = second_line(ui, &detail, ruling, width);
+                let second = second_line(ui, &detail, &spans, width);
                 painter.galley(
                     egui::pos2(x, top + lines - Type::Small.line()),
                     second,
@@ -639,6 +649,11 @@ impl TimelinePage {
                 },
             );
         }
+        let response = if event.time_not_read() {
+            response.on_hover_text(format!("{}. {}", super::TIME_NOT_COUNTED, super::TIME_REPAIR))
+        } else {
+            response
+        };
         if response.clicked() {
             self.reset_detail = self.selected.as_ref() != Some(&event.id);
             self.selected = Some(event.id.clone());
@@ -1065,7 +1080,7 @@ impl TimelinePage {
                 design::field(
                     ui,
                     "How long",
-                    Some("A number and a unit move the clock: 3 days, 8 hours, an hour."),
+                    Some("A number and a unit move the clock, such as 4 hours, 1 day or half a day."),
                     None,
                     |ui| {
                         let hint = match event.kind {
@@ -1092,7 +1107,12 @@ impl TimelinePage {
                             .rich(ui, format!("Starts: {}", clock_words(start)))
                             .color(c.muted),
                     );
-                    if event.kind != Kind::Day {
+                    // Round 26 FG4: a length the clock cannot count leaves Ends at Starts, so
+                    // the warning takes Ends' place on the line that is always there.
+                    if let Some(warning) = event.time_warning() {
+                        ui.label(Type::Small.rich(ui, warning).color(c.result.warning))
+                            .on_hover_text(super::TIME_REPAIR);
+                    } else if event.kind != Kind::Day {
                         ui.label(
                             Type::Small
                                 .rich(
@@ -1474,26 +1494,33 @@ pub fn check_long_rest_add(kinds: &'static [Kind]) {
 }
 
 /// A row's second line on one line, muted, with the rest ruling from `at` in its own colour.
+/// A row's second line: muted, with each status part (the rest ruling, a length the clock
+/// cannot count) in its own colour. `spans` are byte ranges in `detail`, in order.
 fn second_line(
     ui: &egui::Ui,
     detail: &str,
-    ruling: Option<(usize, egui::Color32)>,
+    spans: &[(std::ops::Range<usize>, egui::Color32)],
     width: f32,
 ) -> std::sync::Arc<egui::Galley> {
-    let detail = detail.replace(['\n', '\r'], " ");
-    let (before, after, color) =
-        ruling.map_or((detail.as_str(), "", colors().muted), |(at, color)| {
-            let (before, after) = detail.split_at(at.min(detail.len()));
-            (before, after, color)
-        });
     let mut job = egui::text::LayoutJob::default();
-    for (words, color) in [(before, colors().muted), (after, color)] {
+    let mut at = 0;
+    let mut append = |words: &str, color| {
         job.append(
-            words,
+            &words.replace(['\n', '\r'], " "),
             0.0,
             egui::TextFormat::simple(Type::Small.font(ui), color),
         );
+    };
+    for (range, color) in spans {
+        let (start, end) = (range.start.max(at).min(detail.len()), range.end.min(detail.len()));
+        if start >= end {
+            continue;
+        }
+        append(&detail[at..start], colors().muted);
+        append(&detail[start..end], *color);
+        at = end;
     }
+    append(&detail[at..], colors().muted);
     job.wrap.max_width = width.max(1.0);
     job.wrap.max_rows = 1;
     job.wrap.break_anywhere = true;

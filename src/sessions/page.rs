@@ -1188,6 +1188,17 @@ impl Sessions {
         (self.on_page && self.view == View::Notes && self.form.is_none()) || self.notes_open
     }
 
+    /// Round 26 FM7: the session's own Recordings tab shows the processed row, so the DM has
+    /// read the `is processed` notice there. Its banner does not show, and the view ends it.
+    fn processed_notice_read_here(&self) -> bool {
+        self.on_page
+            && self.view == View::Notes
+            && self.form.is_none()
+            && self.tab == Tab::Recordings
+            && self.notice_arrived()
+            && self.notice_session == self.selected
+    }
+
     fn has_banner_notices(&self) -> bool {
         let notes = self.on_page && self.view == View::Notes && self.form.is_none();
         let selected = self
@@ -1195,6 +1206,7 @@ impl Sessions {
             .and_then(|id| self.notes.iter().find(|note| note.id == id));
         (notes
             && self.notice_arrived()
+            && !self.processed_notice_read_here()
             && (self.notice_session.is_none() || self.notice_session == self.selected))
             || (notes && selected.is_some_and(|note| !note.also.is_empty()))
             || (notes && !self.unreadable.is_empty())
@@ -1216,6 +1228,7 @@ impl Sessions {
         let width = ui.available_width().min(design::LIST_MEASURE);
         if notes
             && self.notice_arrived()
+            && !self.processed_notice_read_here()
             && (self.notice_session.is_none() || self.notice_session == self.selected)
             && let Some((tone, words)) = self.notice.clone()
         {
@@ -2922,7 +2935,9 @@ impl Sessions {
             DraftState::Clean | DraftState::Saved => (icons::OK, "Notes saved", c.document.clean),
             DraftState::Unsaved => (icons::BUSY, "Saving…", c.muted),
             DraftState::Conflict => (icons::WARN, "Changed on disk", c.document.external),
-            DraftState::Missing => (icons::ERROR, "Notes not saved", c.document.invalid),
+            // A moved or gone note keeps the draft safe and offers a choice, so it is a warning
+            // here, in the rail and in its banner alike. A failed write stays an error (FM5).
+            DraftState::Missing => (icons::WARN, "Notes not saved", c.document.external),
             DraftState::Failed(_) => (icons::ERROR, "Notes not saved", c.document.invalid),
         };
         Status { icon, word, color }
@@ -4139,7 +4154,7 @@ impl Sessions {
             .collect();
         let days = timeline::day_numbers(&book.events);
         written.extend(book.events.iter().zip(&days).map(|(event, day)| {
-            let summary = event.summary(None);
+            let summary = event.facts();
             Written {
                 title: event.label(*day),
                 detail: if summary.is_empty() {
@@ -4383,8 +4398,9 @@ impl Sessions {
                 Type::Small
                     .rich(
                         ui,
+                        // The time keeps the line's start in every live state (FM8).
                         format!(
-                            "Silent for over a minute · {} recorded",
+                            "{} recorded · Silent for over a minute",
                             clock(live.recorder.seconds())
                         ),
                     )
@@ -4485,15 +4501,6 @@ impl Sessions {
                 .as_ref()
                 .is_some_and(|words| words.starts_with("Stopped by itself:"));
         let mut actions = |ui: &mut egui::Ui| {
-            if stalled {
-                record_again = (if self.run_open || !primary {
-                    Action::secondary("Record again")
-                } else {
-                    Action::primary("Record again")
-                })
-                .show(ui)
-                .clicked();
-            }
             if !live
                 && !job_here
                 && stored
@@ -4530,11 +4537,22 @@ impl Sessions {
                 .show(ui)
                 .clicked();
             }
+            // Stop recording keeps the first slot for as long as the recording is live. A stall
+            // or silence comes by itself, so its actions go after Stop, never before it (FM2).
             if live {
                 stop = Action::secondary("Stop recording")
                     .density(Density::Read)
                     .show(ui)
                     .clicked();
+                if stalled {
+                    record_again = (if self.run_open || !primary {
+                        Action::secondary("Record again")
+                    } else {
+                        Action::primary("Record again")
+                    })
+                    .show(ui)
+                    .clicked();
+                }
                 if silent
                     && Action::quiet("Check the input in Settings")
                         .density(Density::Read)
@@ -5657,6 +5675,10 @@ impl Sessions {
                 self.note_pane(ui, book, plan, beside)
             }),
             Tab::Recordings => {
+                if self.processed_notice_read_here() {
+                    self.notice = None;
+                    self.notice_session = None;
+                }
                 self.recordings_tab(ui, settings, book);
             }
         }
@@ -5769,7 +5791,6 @@ impl Sessions {
     }
 
     fn templates_view(&mut self, ui: &mut egui::Ui) {
-        let c = colors();
         if self.template.is_none()
             && let Some(first) = self.templates.first().map(|t| t.name.clone())
         {
@@ -5810,17 +5831,13 @@ impl Sessions {
                 ..Default::default()
             }))
             .show_inside(ui, |ui| {
-                if self.new_template.is_none() { ui.add(
-                    egui::Label::new(
-                        Type::Small
-                            .rich(
-                                ui,
-                                "Splat fills {{number}}, {{title}}, {{date}} and {{campaign}}. Obsidian’s core Templates plugin also fills {{date}} and {{title}}.",
-                            )
-                            .color(c.muted),
-                    )
-                    .wrap(),
-                ); }
+                // Round 26 AN1, FN4, SN2, AL1: help keeps the reader measure.
+                if self.new_template.is_none() {
+                    design::help(
+                        ui,
+                        "Splat fills {{number}}, {{title}}, {{date}} and {{campaign}}. Obsidian’s core Templates plugin also fills {{date}} and {{title}}.",
+                    );
+                }
                 if let Some(error) = &self.template_error {
                     design::message(ui, Tone::Error, error);
                 }

@@ -9590,6 +9590,18 @@ pub mod session_notes {
                 d.click("Add a fight");
             }
             d.wait_for_text("Bridge Ambush");
+            // Round 26 FL4: the menu has one left edge: each name starts at the x of the word
+            // after `+`, and `+` keeps its own slot before it.
+            let word = d.painted_left("New encounter");
+            let name = d.painted_left("Bridge Ambush");
+            let plus = d.place_of("New encounter").map(|rect| rect.left());
+            d.observe(
+                "iter-26-S-FL4",
+                word.zip(name).zip(plus).is_some_and(|((word, name), plus)| {
+                    (word - name).abs() < 1.0 && plus < word
+                }),
+                format!("Names start at New encounter's word: word {word:?}, name {name:?}, target {plus:?}"),
+            );
             // FT3: with temporary HP and a Bloodied player, AC stays at 1200 and names stay at
             // every size. Portraits give way before AC.
             let (items, painted) = session_recording::party_bar_items(d);
@@ -9942,6 +9954,80 @@ pub mod session_notes {
         d.click("Undo remove");
         d.expect("Rest at the mill");
 
+        // Round 26 FG4, FD7: a length the clock cannot count is a warning with its icon, in the
+        // Timeline row, in the open form's Ends line and on the plan row; `half a day` counts.
+        d.aside(|d| {
+            let not_counted = |d: &Driver<'_>| {
+                let mut colours = Vec::new();
+                d.each_painted_text(|text, clip| {
+                    let job = &text.galley.job;
+                    if clip.intersects(text.visual_bounding_rect()) {
+                        for section in &job.sections {
+                            let words = &job.text[section.byte_range.clone()];
+                            if words.contains("Not") && words.contains("counted") {
+                                colours.push((words.to_owned(), section.format.color));
+                            }
+                        }
+                    }
+                });
+                colours
+            };
+            let warned = |colours: &[(String, egui::Color32)]| {
+                !colours.is_empty()
+                    && colours.iter().all(|(words, colour)| {
+                        words.starts_with(crate::design::icons::WARN)
+                            && *colour == crate::design::colors().result.warning
+                    })
+            };
+            d.click_containing("Travel ·");
+            d.replace_text_in("How long", "a few hours");
+            d.settle();
+            let timeline = not_counted(d);
+            let where_warned = d.place_of("Where").map(|rect| rect.top());
+            d.observe(
+                "iter-26-S-FG4",
+                timeline.len() >= 2 && warned(&timeline),
+                format!("The row and the form's Ends line warn in the warning colour: {timeline:?}"),
+            );
+            d.state("timeline-time-not-counted", Sizes::All);
+            d.click(NAV_SESSIONS);
+            // In a narrow page the note has its own tab; the plan's rows are on Plan.
+            let narrow = !d.has("Plan and notes") && d.has("Plan");
+            if narrow {
+                d.click("Plan");
+            }
+            d.expect("Travel");
+            let plan = not_counted(d);
+            if narrow {
+                d.click("Note");
+            }
+            d.observe(
+                "iter-26-S-FG4-plan",
+                warned(&plan),
+                format!("The plan row warns in the warning colour: {plan:?}"),
+            );
+            d.click(NAV_TIMELINE);
+            d.click_containing("Travel ·");
+            d.replace_text_in("How long", "half a day");
+            d.settle();
+            let read = not_counted(d);
+            let where_read = d.place_of("Where").map(|rect| rect.top());
+            d.observe(
+                "iter-26-S-FD7",
+                read.is_empty() && d.has_containing("Travel · half a day"),
+                format!("`half a day` is a length the clock counts: {read:?}"),
+            );
+            // The warning takes Ends' place, so the fields below How long keep their y.
+            d.observe(
+                "iter-26-S-FG4-still",
+                where_warned.is_some() && where_warned == where_read,
+                format!("Where keeps its y with and without the warning: {where_warned:?}, {where_read:?}"),
+            );
+            d.clear_text_in("How long");
+            d.press_ctrl(Key::S);
+            d.settle();
+        });
+
         // Back to the note from the event, and the file is readable outside Splat.
         d.click_starting("Rest at the mill ·");
         d.click("Open this session");
@@ -10094,7 +10180,17 @@ pub mod session_notes {
 
         d.click("Templates");
         d.expect("Standard session");
-        d.state("templates-built-in", Sizes::All);
+        d.state_prepared("templates-built-in", Sizes::All, |d| {
+            // Round 26 AN1, FN4, SN2, AL1: the template help wraps at the reader measure.
+            let help = d.place_of(
+                "Splat fills {{number}}, {{title}}, {{date}} and {{campaign}}. Obsidian’s core Templates plugin also fills {{date}} and {{title}}.",
+            );
+            d.observe(
+                "iter-26-S-AN1",
+                help.is_some_and(|help| help.width() <= crate::design::READER_MEASURE + 1.0),
+                format!("The template help keeps the reader measure: {help:?}"),
+            );
+        });
         d.click("Customize this template");
         d.expect("Campaign");
         d.state("templates-own", Sizes::Default);
@@ -11953,7 +12049,7 @@ pub mod session_recording {
             .simulate_recorder_health(Health::Silent);
         d.settle();
         assert_eq!(tabs_top(d), Some(hearing_top));
-        d.expect("Silent for over a minute · 0:00 recorded");
+        d.expect("0:00 recorded · Silent for over a minute");
         d.app_mut()
             .sessions
             .simulate_recorder_health(Health::Hearing);
@@ -11992,7 +12088,7 @@ pub mod session_recording {
         d.expect("Silent for over a minute");
         d.expect("Check the input in Settings");
         d.state_prepared("recording-silent", Sizes::All, |d| {
-            let detail = "Silent for over a minute · 0:00 recorded";
+            let detail = "0:00 recorded · Silent for over a minute";
             assert!(d.visible_text(detail) && d.in_view("Stop recording"));
             d.observe(
                 "iter-9-C-FT13",
@@ -12006,16 +12102,30 @@ pub mod session_recording {
             "iter-12-R2",
             "The silent row owns its detail and stop action",
             |d| {
-                d.visible_text("Silent for over a minute · 0:00 recorded")
+                d.visible_text("0:00 recorded · Silent for over a minute")
                     && d.in_view("Stop recording")
                     && d.in_view("Check the input in Settings")
             },
         );
+        // Round 26 FM2: a stall comes by itself, so it must not move Stop recording. The silent
+        // row has Stop and Check the input; the stalled row adds Record again after Stop.
+        let stop_left = |d: &Driver<'_>| d.place_of("Stop recording").map(|rect| rect.left());
+        let silent_stop = stop_left(d).expect("Stop recording is on the silent row");
         d.app_mut()
             .sessions
             .simulate_recorder_health(Health::Stalled);
         d.settle();
         d.expect("Stopped saving after");
+        let stalled_stop = stop_left(d).expect("Stop recording is on the stalled row");
+        let again_left = d
+            .place_of("Record again")
+            .map(|rect| rect.left())
+            .expect("Record again is on the stalled row");
+        d.observe(
+            "iter-26-S-FM2",
+            stalled_stop == silent_stop && again_left > stalled_stop,
+            "A stall keeps Stop recording in the first slot; Record again comes after it",
+        );
         d.state("recording-stalled", Sizes::All);
         d.observe(
             "T11.5",
@@ -12363,7 +12473,23 @@ pub mod session_recording {
 
         // The open recording row owns the retry and clears the old failure.
         d.click_containing("Continue processing:");
-        d.expect("is processed");
+        // Round 26 FM7: on the session's own Recordings tab the row says Processed, so the
+        // `is processed` banner does not come, and leaving the tab does not bring it back.
+        d.expect("EVENTS MARKED IN THIS RECORDING 2");
+        let banner_here = d.has_containing("is processed.");
+        let mut banner_after = true;
+        d.aside(|d| {
+            d.click(if d.has("Plan and notes") { "Plan and notes" } else { "Plan" });
+            banner_after = d.has_containing("is processed.");
+            d.click_starting("Recordings");
+        });
+        d.observe(
+            "iter-26-S-FM7",
+            !banner_here && !banner_after && d.rail_words().contains("Processed"),
+            format!(
+                "The processed row's own tab counts as reading the notice: banner on the tab {banner_here}, after leaving it {banner_after}"
+            ),
+        );
         d.observe(
             "T11.6",
             !d.has_containing("Processing failed") && !d.has_containing("your limit is reached"),
@@ -12825,6 +12951,25 @@ pub mod session_recording {
             Some(DISCARD),
             &[SMALL, DEFAULT, LARGE],
         );
+        // Round 26 FM5: one fault, one tone. The moved note's banner is a warning, so the header
+        // and the rail say `Notes not saved` with the warning icon and colour too.
+        let mut tones = Vec::new();
+        d.each_painted_text(|text, clip| {
+            let words = &text.galley.job.text;
+            if clip.intersects(text.visual_bounding_rect()) && words.ends_with(" Notes not saved") {
+                let colour = text.galley.job.sections.first().map(|part| part.format.color);
+                tones.push((words.clone(), colour));
+            }
+        });
+        let warn = format!("{} Notes not saved", crate::design::icons::WARN);
+        d.observe(
+            "iter-26-S-FM5",
+            tones.len() >= 2
+                && tones.iter().all(|(words, colour)| {
+                    *words == warn && *colour == Some(crate::design::colors().document.external)
+                }),
+            format!("The header and the rail match the moved note's warning: {tones:?}"),
+        );
         d.state("note-file-gone", Sizes::All);
         // FT4: Discard has one name. Its notice and Undo say discard, not drop or reload. These
         // steps prove the words and come back to the same choices, so they are not task cost.
@@ -12979,6 +13124,40 @@ pub mod session_recording {
                     reason.top() >= address.bottom() && reason.bottom() <= model.top()
                 }),
             format!("`Enter the address.` is in view below Address: {address:?}, {reason:?}"),
+        );
+        // Round 26 FM6: each missing value says why in one form, the plain `Small` line
+        // directly below its field. Model's reason comes before its help, as Address's comes
+        // before the next field.
+        let reasons = ["Enter the address.", "Enter the model’s name.", "Paste a key first."];
+        let forms: Vec<_> = reasons
+            .iter()
+            .map(|words| {
+                let place = d.place_of(words);
+                (
+                    *words,
+                    place.is_some(),
+                    d.painted_color(words),
+                    place.and_then(|place| d.painted_size(place, words)),
+                )
+            })
+            .collect();
+        let model_reason = d.place_of("Enter the model’s name.");
+        let model_help = d.place_of("The name your service gives it. For OpenAI, gpt-transcribe.");
+        d.observe(
+            "iter-26-S-FM6",
+            forms.iter().all(|(_, shown, colour, size)| {
+                *shown
+                    && *colour == Some(crate::design::colors().muted)
+                    && *size == Some(crate::design::Type::Small.size())
+            }) && model
+                .zip(model_reason)
+                .zip(model_help)
+                .is_some_and(|((model, reason), help)| {
+                    reason.top() >= model.bottom() && reason.bottom() <= help.top()
+                }),
+            format!(
+                "Missing values share one reason form below their field: {forms:?}; Model {model:?}, reason {model_reason:?}, help {model_help:?}"
+            ),
         );
         d.expect("The saved key is for OpenAI, so Splat will not send it to this service. Save a key for it.");
         d.state("processing-custom-speech-service", Sizes::All);

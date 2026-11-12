@@ -78,7 +78,7 @@ pub fn removed_event_words(
             if event.run.is_some() {
                 played_fight_summary(event, false)
             } else {
-                event.summary(None)
+                event.facts()
             }
         })
         .filter(|detail| !detail.trim().is_empty());
@@ -279,30 +279,46 @@ impl Event {
         self.kind != Kind::Day && !text.is_empty() && read_duration(text).is_none()
     }
 
+    /// Round 26 FG4, FD7: a length the clock cannot count is a warning with its icon, in the
+    /// row's detail. Rows paint these words in the warning colour, and say `TIME_REPAIR` on
+    /// hover; the event form says it below How long.
+    pub fn time_warning(&self) -> Option<String> {
+        self.time_not_read()
+            .then(|| format!("{} {TIME_NOT_COUNTED}", icons::WARN))
+    }
+
     /// The second line of a row: what is known, with the session if one is given.
     pub fn summary(&self, session: Option<&str>) -> String {
         self.summary_with_result(session, &self.result)
     }
 
+    /// The row's facts without its warning, for words that name the event elsewhere: a
+    /// removal's result and the list of what is written. Its state belongs to its rows.
+    pub fn facts(&self) -> String {
+        self.parts(None, &self.result, false)
+    }
+
     fn summary_with_result(&self, session: Option<&str>, result: &str) -> String {
+        self.parts(session, result, true)
+    }
+
+    fn parts(&self, session: Option<&str>, result: &str, warning: bool) -> String {
         let mut parts = Vec::new();
         // An untitled event already shows its kind as its name.
         if self.kind != Kind::Day
             && !self.title.trim().is_empty()
             && self.title.trim() != self.kind.word()
         {
-            parts.push(self.kind.word());
+            parts.push(self.kind.word().to_owned());
         }
         for part in [self.duration.as_str(), self.place.as_str(), result] {
             if !part.trim().is_empty() {
-                parts.push(part);
+                parts.push(part.to_owned());
             }
         }
-        if self.time_not_read() {
-            parts.push("time not read");
-        }
+        parts.extend(self.time_warning().filter(|_| warning));
         if let Some(session) = session {
-            parts.push(session);
+            parts.push(session.to_owned());
         }
         parts.join(" · ")
     }
@@ -380,11 +396,23 @@ const DAY: u64 = 24 * HOUR;
 const MONTH: u64 = 30 * DAY;
 const YEAR: u64 = 12 * MONTH;
 
+/// A length the clock cannot count says so in these words, after the warning icon.
+pub const TIME_NOT_COUNTED: &str = "Not counted in the day’s time";
+
+/// How to write a length the clock counts. The event form's help and the rows' hover say it.
+pub const TIME_REPAIR: &str =
+    "Write a number and a unit, such as 4 hours, 1 day or half a day.";
+
 /// A length in the closed form the clock can count, in minutes: `3 days`, `an hour`.
 pub fn read_duration(text: &str) -> Option<u64> {
     let mut words = text.split_whitespace();
     let number = match words.next()?.to_lowercase().as_str() {
         "a" | "an" => 1.0,
+        // Round 26 FD7: `half a day` and `half an hour` are lengths a DM writes.
+        "half" => match words.next()?.to_lowercase().as_str() {
+            "a" | "an" => 0.5,
+            _ => return None,
+        },
         number => number.parse::<f64>().ok()?,
     };
     let unit = match words.next()?.to_lowercase().trim_end_matches('s') {
@@ -2046,7 +2074,19 @@ mod tests {
         assert_eq!(read_duration("2 weeks"), Some(14 * 1440));
         assert_eq!(read_duration("1 month"), Some(30 * 1440));
         assert_eq!(read_duration("1 year"), Some(360 * 1440));
-        for words in ["a few hours", "soon", "", "3", "-1 day", "3 days and a bit"] {
+        assert_eq!(read_duration("half a day"), Some(720));
+        assert_eq!(read_duration("Half an hour"), Some(30));
+        for words in [
+            "a few hours",
+            "soon",
+            "",
+            "3",
+            "-1 day",
+            "3 days and a bit",
+            "half day",
+            "half",
+            "half a day more",
+        ] {
             assert_eq!(read_duration(words), None, "{words}");
         }
     }
@@ -2097,11 +2137,13 @@ mod tests {
     #[test]
     fn a_length_the_clock_cannot_read_says_so() {
         assert!(event(Kind::Travel, "a few hours").time_not_read());
-        assert!(
-            event(Kind::Travel, "a few hours")
-                .summary(None)
-                .contains("time not read")
+        // Round 26 FG4, FD7: the part is a warning with its icon, not a muted fact.
+        assert_eq!(
+            event(Kind::Travel, "a few hours").summary(Some("Session 8")),
+            "a few hours · ⚠ Not counted in the day’s time · Session 8"
         );
+        assert!(!event(Kind::Travel, "half a day").time_not_read());
+        assert_eq!(event(Kind::Travel, "half a day").time_warning(), None);
         assert!(!event(Kind::Travel, "3 days").time_not_read());
         assert!(!event(Kind::Travel, "").time_not_read());
         assert_eq!(

@@ -79,14 +79,39 @@ fn in_party_order<'a>(
 }
 
 /// Keep each summary item and its separator together, including the rest ruling.
-fn plan_event_summary(ui: &mut egui::Ui, summary: &str, restores: Option<bool>) {
+fn plan_event_summary(
+    ui: &mut egui::Ui,
+    summary: &str,
+    restores: Option<bool>,
+    warning: Option<&str>,
+) {
     let mut job = egui::text::LayoutJob::default();
     let format = egui::TextFormat {
         font_id: Type::Small.font(ui),
         color: colors().muted,
         ..Default::default()
     };
-    job.append(&plan_summary(summary), 0.0, format.clone());
+    let text = plan_summary(summary);
+    // Round 26 FG4, FD7: a length the clock cannot count is a warning part, in its colour.
+    let warning = warning.map(plan_summary);
+    match warning
+        .as_deref()
+        .and_then(|warning| text.find(warning).map(|at| (at, warning.len())))
+    {
+        Some((at, len)) => {
+            job.append(&text[..at], 0.0, format.clone());
+            job.append(
+                &text[at..at + len],
+                0.0,
+                egui::TextFormat {
+                    color: colors().result.warning,
+                    ..format.clone()
+                },
+            );
+            job.append(&text[at + len..], 0.0, format.clone());
+        }
+        None => job.append(&text, 0.0, format.clone()),
+    }
     if let Some(restores) = restores {
         let status = long_rest_status(restores);
         let words = format!(
@@ -105,7 +130,10 @@ fn plan_event_summary(ui: &mut egui::Ui, summary: &str, restores: Option<bool>) 
         );
     }
     if !job.text.is_empty() {
-        ui.add(egui::Label::new(job).wrap());
+        let response = ui.add(egui::Label::new(job).wrap());
+        if warning.is_some() {
+            response.on_hover_text(timeline::TIME_REPAIR);
+        }
     }
 }
 
@@ -432,8 +460,15 @@ fn plan_menu(
                 .show(ui, |ui| {
                     for name in names {
                         if name.to_lowercase().contains(&query) {
-                            let row = ui.selectable_label(false, *name);
-                            design::named(ui, &row, &format!("Plan {name}"));
+                            // Round 26 FL4: one left edge. Each name is a quiet action with the
+                            // new action's padding and an empty icon slot, so the names start
+                            // at the x of the word after `+`.
+                            let row = Action::quiet(name)
+                                .plain()
+                                .icon("")
+                                .name(&format!("Plan {name}"))
+                                .density(Density::Read)
+                                .show(ui);
                             if row.clicked() {
                                 chosen = Some((*name).to_owned());
                             }
@@ -708,7 +743,8 @@ impl Sessions {
                                 design::status(ui, Status { icon: icons::RUN,
                                     word: &plan_saved_status(saved), color: c.muted });
                             } else if !(is_open && event.kind == Kind::LongRest) {
-                                plan_event_summary(ui, &summary, (event.kind == Kind::LongRest).then_some(event.restores));
+                                plan_event_summary(ui, &summary, (event.kind == Kind::LongRest).then_some(event.restores),
+                                    event.time_warning().filter(|_| event.run.is_none()).as_deref());
                             }
                         }, |ui| {
                             if let Some(saved) = saved {
@@ -1537,7 +1573,7 @@ mod tests {
         use egui_kittest::kittest::Queryable;
         let mut harness = egui_kittest::Harness::builder().build(|ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
-                plan_event_summary(ui, "Old mill", Some(false));
+                plan_event_summary(ui, "Old mill", Some(false), None);
             });
         });
         design::theme::install(&harness.ctx);
@@ -1556,12 +1592,12 @@ mod tests {
             egui::CentralPanel::default().show(ctx, |ui| {
                 ui.set_width(design::FORM_WIDTH);
                 let plain = ui
-                    .scope(|ui| plan_event_summary(ui, "Long rest · Old mill", None))
+                    .scope(|ui| plan_event_summary(ui, "Long rest · Old mill", None, None))
                     .response
                     .rect
                     .height();
                 let restored = ui
-                    .scope(|ui| plan_event_summary(ui, "Long rest · Old mill", Some(true)))
+                    .scope(|ui| plan_event_summary(ui, "Long rest · Old mill", Some(true), None))
                     .response
                     .rect
                     .height();
