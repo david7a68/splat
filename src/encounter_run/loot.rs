@@ -253,8 +253,9 @@ impl Rewards {
     /// The XP line, from the one XP answer (`Scale::weigh`): what it counted, each character's
     /// share and what still stood, as `XP 400 for 2 at 0 HP · 80 each for 5 · 1 still stood
     /// (XP 200)`. A creature whose XP Splat does not know is named, and its amount is left out
-    /// of every sum, never counted as zero. The count is of those awards not known.
-    pub(crate) fn xp_line(&self) -> (String, u64) {
+    /// of every sum, never counted as zero. With the line: its XP, and the count of those
+    /// awards not known.
+    pub(crate) fn xp_line(&self) -> (String, u64, u64) {
         let scale = crate::difficulty::Scale::default();
         let downed = scale.weigh(&[], self.downed.iter().map(|(_, xp)| *xp));
         let grouped = crate::encounter_run::grouped_number;
@@ -271,7 +272,7 @@ impl Rewards {
                 ". XP not known for {}: enter an award here.",
                 and_list(&names)
             ));
-            return (line, downed.unknown);
+            return (line, downed.xp, downed.unknown);
         }
         if self.characters > 0 && downed.xp > 0 {
             line.push_str(&format!(
@@ -287,7 +288,7 @@ impl Rewards {
                 line.push_str(&format!(" (XP {})", grouped(standing.xp)));
             }
         }
-        (line, 0)
+        (line, downed.xp, 0)
     }
 }
 

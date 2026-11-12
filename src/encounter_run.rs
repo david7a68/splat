@@ -8762,6 +8762,7 @@ mod tests {
                     "XP 0 for 0 at 0 HP. XP not known for {}: enter an award here.",
                     run.state.participants[1].name
                 ),
+                0,
                 1
             )
         );

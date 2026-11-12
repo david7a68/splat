@@ -1601,7 +1601,8 @@ once on line two, then final party HP in a grid of two or three first-name cells
 Timeline links. Hover keeps full names and conditions; Remove stays in the name-aligned row menu.
 
 **Rewards (F7).** A played fight that ended has `Add rewards`, an `Action::quiet` in its row's action band left of
-the menu, only while its title keeps the lines it has beside the menu alone at the action's own width; the fit is
+the menu, only while its title keeps the width and the line breaks it has beside the menu alone at the action's
+own width; the fit is
 worked out when the title or the width changes, not each frame. Else it is the last link of the opened row,
 `Log · Whole run · Timeline · Add rewards`, while that line has room for it; else the last line of the row's
 menu. No line is added, and no link or menu line of today moves. It writes one block at the end of
@@ -1613,10 +1614,14 @@ the new one has an XP line; with no block, or a note that cannot be read before 
 says how to stop it. The XP comes from `Scale::weigh`; a creature at 0 HP whose XP is not known is named on the
 line, and its amount is left out of every sum. The result, an `undo_message` under the row, says `Rewards added
 under Loot and rewards.`, the XP choice, `XP tonight: <sum> for <n> fights.` from the note as it stands, and the
-loot rolls not made and the awards not known. `Undo rewards` takes back exactly that block while it stands as the
-act left it, also after another act, another session or another page; it is kept by the note's ID and the fight.
-A fight whose reference starts a list line anywhere in the note says `In notes` (`design::status`,
-`icons::OK`, `document.saved`) in the action's place, or in muted words in the opened row. The note beside the plan
+loot rolls not made and the awards not known. `Undo rewards` takes back exactly that block while it is still the
+complete, unchanged list item that the act wrote, also after another act, an edit elsewhere in the note, another
+session or another page; it is kept by the note's ID and the fight. It takes the heading too only when the act
+added it and nothing else is under it. When the block changed, it writes nothing and says `That line changed on
+disk.` under the row. A fight whose reference starts a list item anywhere in the note, also in a callout, says
+`In notes` (`design::status`, `icons::OK`, `document.saved`) in the action's place, in muted words in the opened
+row, or as the last line of the row's menu. Splat reads the note's Markdown blocks: text in a code fence is never
+a heading and never a block. The note beside the plan
 (in Write) scrolls to the block; behind its tab, the Note tab shows it. A run that cannot be read blocks the act
 with `Splat cannot read this fight’s run, so its rewards are not known.` under the row.
 

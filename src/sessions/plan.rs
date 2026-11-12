@@ -1097,9 +1097,9 @@ impl Rewards {
     }
 
     /// Where a played row has `Add rewards` (rule 2, the fit rule): in its action band while the
-    /// title keeps the lines it has beside the menu alone, at the action's own width; else as the
-    /// last link of the opened row while that line has room for it; else as a line of the row's
-    /// menu. No line is added. `row` is the row's width with its icon.
+    /// title keeps the width and the line breaks it has beside the menu alone, at the action's
+    /// own width; else as the last link of the opened row while that line has room for it; else
+    /// as a line of the row's menu. No line is added. `row` is the row's width with its icon.
     fn fits(
         &mut self,
         ui: &egui::Ui,
@@ -1133,13 +1133,18 @@ impl Rewards {
         };
         // As `plan_row_with` lays it out: the icon, a gap, and the title beside the band.
         let column = row - galley(Type::Body.rich(ui, icon), f32::INFINITY).size().x - design::S;
-        let lines = |band: f32| {
-            galley(
+        // The title's width and where each of its lines breaks, beside a band.
+        let layout = |band: f32| {
+            let title = galley(
                 Type::Body.rich(ui, title).underline(),
                 (column - band - design::S).max(design::XL).max(1.0),
-            )
-            .rows
-            .len()
+            );
+            let breaks: Vec<usize> = title
+                .rows
+                .iter()
+                .map(|row| row.char_count_excluding_newline())
+                .collect();
+            (breaks, title.size().x)
         };
         // As `fight_block` lays out its links, beside the opened row's indent.
         let spacing = ui.spacing().item_spacing.x;
@@ -1149,7 +1154,8 @@ impl Rewards {
             .sum::<f32>()
             + 3.0 * word("·", Type::Small)
             + 7.0 * spacing;
-        let fits = if lines(action) == lines(Density::Read.control()) {
+        let (with, alone) = (layout(action), layout(Density::Read.control()));
+        let fits = if with.0 == alone.0 && (with.1 - alone.1).abs() < 0.5 {
             RewardsAt::Row
         } else if links <= row - Type::Body.size() - design::S {
             RewardsAt::Link
@@ -1222,13 +1228,11 @@ fn rewards_block(reference: &str, xp: Option<&str>, loot: &[String]) -> String {
 }
 
 /// The words of an `Add rewards` result for its XP choice, from the newest block before it.
-fn rewards_choice(with_xp: Option<bool>, xp_line: &str) -> String {
+fn rewards_choice(with_xp: Option<bool>, xp: u64) -> String {
     match with_xp {
         Some(true) => format!(
             "XP {}, as in your last rewards.",
-            crate::encounter_run::grouped_number(
-                crate::sessions::first_number(xp_line).unwrap_or(0)
-            )
+            crate::encounter_run::grouped_number(xp)
         ),
         Some(false) => "No XP, as in your last rewards.".to_owned(),
         None => "XP added. Delete that line to leave XP out from now on.".to_owned(),
@@ -1298,7 +1302,7 @@ impl Sessions {
                     |folder| crate::sessions::earlier_notes(folder, note),
                 );
                 let fights = played_fights(book);
-                let (xp, unknown) = found.xp_line();
+                let (xp, xp_sum, unknown) = found.xp_line();
                 let mut made = None;
                 let result = draft.apply(note, Apply::Now, |text| {
                     // Put there on disk a moment ago: the row then says `In notes`.
@@ -1325,7 +1329,7 @@ impl Sessions {
                         (note, event.clone()),
                         RewardsDone {
                             written,
-                            choice: rewards_choice(with_xp, &xp),
+                            choice: rewards_choice(with_xp, xp_sum),
                             with_xp: has_xp,
                             not_rolled: found.not_rolled,
                             unknown: unknown * u64::from(has_xp),
@@ -1856,9 +1860,12 @@ impl Sessions {
                                     }
                                     if running { wrapped_words(ui, Type::Small, "This run is open. Close it first.", c.muted); }
                                     // Last, so no line of today's menu moves.
-                                    if let Some(run) = ended.filter(|_| place == RewardsAt::Menu && !listed)
-                                        && Action::quiet(ADD_REWARDS).show(ui).clicked() {
-                                        rewards_act = Some(RewardsAct::Add(event.id.clone(), run)); ui.close();
+                                    if let Some(run) = ended.filter(|_| place == RewardsAt::Menu) {
+                                        if listed {
+                                            design::status(ui, Status { icon: icons::OK, word: "In notes", color: c.document.saved });
+                                        } else if Action::quiet(ADD_REWARDS).show(ui).clicked() {
+                                            rewards_act = Some(RewardsAct::Add(event.id.clone(), run)); ui.close();
+                                        }
                                     }
                                 });
                                 if let Some(run) = ended.filter(|_| on_row) {
@@ -3689,6 +3696,77 @@ mod tests {
         assert_eq!(fs::read_to_string(&note.path).unwrap(), before);
     }
 
+    /// F7, rule 2: `Add rewards` goes on a played row only when the title keeps its width and
+    /// its line breaks, laid out as `wrapped_link` lays it out. Two lines are not enough.
+    #[test]
+    fn the_rewards_fit_keeps_each_title_as_it_is() {
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(500.0, 800.0))
+            .build_state(
+                |ctx, faults: &mut Vec<String>| {
+                    faults.clear();
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        ui.set_width(330.0);
+                        let mut rewards = Rewards::default();
+                        let band = Action::quiet(ADD_REWARDS)
+                            .density(Density::Read)
+                            .natural_width(ui)
+                            + Density::Read.control()
+                            + design::S;
+                        let words: Vec<_> = "Ambush of the caravan at the abandoned bridge over the river beside the mill at dawn"
+                            .split_whitespace()
+                            .collect();
+                        let titles = (3..=words.len())
+                            .map(|n| words[..n].join(" "))
+                            .chain((3..18).map(|n| format!("{}at the bridge", "Wolf ".repeat(n))));
+                        // How many titles take the action on the row, and how many do not.
+                        let mut placed = [0, 0];
+                        for title in titles {
+                            let on_row =
+                                rewards.fits(ui, &title, icons::NEXT, 330.0, band) == RewardsAt::Row;
+                            placed[usize::from(on_row)] += 1;
+                            if !on_row {
+                                continue;
+                            }
+                            let galley = |text: egui::RichText, room| {
+                                egui::WidgetText::from(text).into_galley(
+                                    ui,
+                                    Some(egui::TextWrapMode::Wrap),
+                                    room,
+                                    egui::TextStyle::Body,
+                                )
+                            };
+                            let column = 330.0
+                                - galley(Type::Body.rich(ui, icons::NEXT), f32::INFINITY).size().x
+                                - design::S;
+                            let measure = |action: f32| {
+                                galley(
+                                    Type::Body.rich(ui, &title).underline(),
+                                    (column - action - design::S).max(design::XL).max(1.0),
+                                )
+                                .size()
+                            };
+                            let (before, after) = (measure(Density::Read.control()), measure(band));
+                            if (before - after).length() > 0.5 {
+                                faults.push(format!("{title:?}: {before:?} -> {after:?}"));
+                            }
+                        }
+                        if placed.contains(&0) {
+                            faults.push(format!("off the row and on it: {placed:?}"));
+                        }
+                    });
+                },
+                Vec::<String>::new(),
+            );
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        assert!(
+            harness.state().is_empty(),
+            "a title of today changed its size: {:?}",
+            harness.state()
+        );
+    }
+
     /// F7, T18.1: `Add rewards` writes one block in the session note through the note's one act
     /// path, with its own Undo kept by the note and the fight.
     #[test]
@@ -3885,6 +3963,15 @@ mod tests {
         let no_xp = with_a.replace("  - XP 200 for 1 at 0 HP · 1 still stood (XP 200)\n", "");
         harness.get_by_label("Add rewards: Bridge").click();
         harness.run_steps(2);
+        // An item typed under the block in Obsidian, after a blank line, is the block's: Undo
+        // takes back nothing and says so under the row.
+        let typed = read().replace(&block_a, &format!("{block_a}\n  - Varra's signet ring\n"));
+        fs::write(&note.path, &typed).unwrap();
+        harness.get_by_label("Undo rewards").click();
+        harness.run_steps(2);
+        assert_eq!(read(), typed);
+        assert!(shown(&harness, "That line changed on disk."));
+        assert!(harness.query_by_label("Undo rewards").is_none());
         fs::write(&note.path, &no_xp).unwrap();
         harness.state_mut().0.draft.as_mut().unwrap().follow_disk();
         harness.run_steps(2);
@@ -4005,6 +4092,14 @@ mod tests {
         harness.get_by_label(ADD_REWARDS).click();
         harness.run_steps(2);
         assert!(read().contains(&format!("- [[Timeline#^{a}|{long}]]\n  - XP 200")));
+        // The menu then says `In notes` in the action's place.
+        assert!(!shown(&harness, "In notes"));
+        harness
+            .get_by_label(&format!("More actions for {long}"))
+            .click();
+        harness.run_steps(2);
+        assert!(shown(&harness, "In notes"));
+        assert!(harness.query_by_label(ADD_REWARDS).is_none());
     }
 
     #[test]
