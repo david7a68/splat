@@ -919,6 +919,16 @@ phases, and completion conditions. The dice field beside the amount accepts expr
 such as `2d6 + 3`, and shows the total beside it. The roll also goes in the log. It is not an Undo
 step, so **Undo** after a roll takes back the change before it, and the roll stays in the log.
 
+**Effect** (`E`) in the dock pins words to the selected row, such as `Bless 10 rounds`; the Conditions tab's
+**Other effect…** field reads them the same way. A time at the end counts: `10 rounds` or `1 minute` goes down
+by one when that participant's turn ends, and says `last round`, then `time is up`; `on its turn` repeats on
+each of its turns. On that participant's turn the run header repeats these reminders where it has room. `3
+uses` is spent from the row, and `recharge 5–6` is marked spent and rolled from the row. An official condition
+with a time keeps one entry with its count, and a sheet that removes it removes both. Splat removes nothing by
+itself, and each act is one named Undo step. Words with no time, and the words of an encounter or a run saved
+before effects, stay as words. After damage to a row marked **Conc**, the row shows its save DC until the next
+step.
+
 | Key | Command |
 |---|---|
 | `N` | Next turn |
@@ -929,6 +939,7 @@ step, so **Undo** after a roll takes back the change before it, and the roll sta
 | `Escape` | Select the current turn again |
 | `A` | Focus the amount |
 | `C` | Conditions |
+| `E` | Effect: words for the selected row |
 | `Ctrl+K` | Open or close Lookup. `Escape` also closes it |
 
 **Add to fight** opens the panel for creatures and groups that join this fight. To add one creature, find it in the campaign,
@@ -1115,7 +1126,8 @@ Library shows **Back** with **Alt+Left** whenever an earlier entry is available.
 
 The visual suite includes `npc-in-lookup`, `package-rename` and `package-about`. `run-continue` covers Undo after a
 close and a restart, Continue fight and the sentence that stands in its place for a fight that was not played last,
-and unread Undo steps, each with Lookup closed and open. `share-to-package` checks the new references after **Copy both**, and Library navigation checks the dependency copy action and its Undo.
+and unread Undo steps, each with Lookup closed and open. `run-effects` covers effects and turn reminders: the
+dock's **Effect**, a count through a turn and a restart, the row's targets, and Lookup open. `share-to-package` checks the new references after **Copy both**, and Library navigation checks the dependency copy action and its Undo.
 
 On window focus, Splat checks campaign notes and every registered package for disk changes. Library, Lookup and encounter search reload changed content. A changed draft opens the disk comparison. A package's About page counts its chosen entries and offers **Choose every entry** with Undo. Removing an unavailable package also offers Undo and keeps links to the encounters that need its creatures.
 
