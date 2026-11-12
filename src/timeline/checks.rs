@@ -849,6 +849,44 @@ mod tests {
         assert!(book.conflict && book.events[0].duration == "2 days");
     }
 
+    /// V4, V22: the label is above the table menu; the dice words share the menu's line after
+    /// `·`, and a line of their own starts with the words.
+    #[test]
+    fn t11_9_the_dice_words_never_start_a_line_with_the_separator() {
+        use egui_kittest::{Harness, kittest::Queryable};
+        let tables = [table("road", "On the road", Per::Day)];
+        let event = journey("journey", Some("road"));
+        for (width, words) in [(400.0, "· 1d20 each day"), (160.0, "1d20 each day")] {
+            let mut harness = Harness::builder()
+                .with_size(egui::vec2(480.0, 200.0))
+                .build_ui(|ui| {
+                    ui.set_max_width(width);
+                    let view = View {
+                        event: &event,
+                        start: None,
+                        length: "",
+                        tables: &tables,
+                        planned: &|_| None,
+                    };
+                    header(ui, &view, &mut State::default());
+                });
+            design::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            let label = harness.get_by_label("Encounter checks").rect();
+            let menu = harness.get_by_label("On the road").rect();
+            let dice = harness.get_by_label(words).rect();
+            assert!(label.bottom() <= menu.top(), "{width}: {label:?} {menu:?}");
+            if width > 200.0 {
+                assert!(
+                    menu.y_range().contains(dice.center().y),
+                    "{dice:?} {menu:?}"
+                );
+            } else {
+                assert!(dice.top() >= menu.bottom() && (dice.left() - menu.left()).abs() < 1.0);
+            }
+        }
+    }
+
     #[test]
     fn t11_10_the_first_table_follows_the_four_cases_never_a_key_or_file_order() {
         let road = table("road", "On the road", Per::Day);
