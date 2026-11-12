@@ -742,10 +742,14 @@ fn check_start(
                 return (None, None, Err(format!("no {action} below {above:?}")));
             };
             let words = words_left_in(d, node.rect);
-            // A frame starts at the text, and its words start inside it.
+            // A frame starts at the text, and its words start inside it. It has a border.
             let start = if frame {
                 words
                     .filter(|words| *words > node.rect.left() + 1.0)
+                    .filter(|_| {
+                        d.control_frame_at(node.rect)
+                            .is_some_and(|frame| frame.stroke.width > 0.0)
+                    })
                     .map(|_| node.rect.left())
             } else {
                 words
