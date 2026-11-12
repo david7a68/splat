@@ -319,7 +319,7 @@ pub fn run(d: &mut Driver<'_>) {
     let below = below_checks(d);
     write_note(d);
     d.type_into_editor("\nThe road is quiet.\n");
-    d.settle();
+    show_plan(d);
     let after = below_checks(d);
     d.observe(
         "T11.10",
