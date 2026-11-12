@@ -286,9 +286,7 @@ impl DndBeyond {
                         crate::design::blocked_reason(ui, Some("Already refreshing."));
                     });
                 }
-                if let Some(error) = &self.error {
-                    crate::design::message(ui, crate::design::Tone::Error, error);
-                }
+                // Round 26: the list's error is in the pane's footer (`footer_messages`).
                 if self.loaded && self.campaigns.is_empty() {
                     ui.label("No campaigns returned for this account.");
                 }
@@ -320,6 +318,21 @@ impl DndBeyond {
                 }
             });
         crate::design::locked_control(ui, &header.header_response);
+    }
+
+    /// Round 26: the D&D Beyond list's error and, on Link and folder (`link`), the link's result,
+    /// in the footer of the pane that shows them. Both live until the next refresh or link.
+    pub fn footer_messages<'a>(&'a self, footer: &mut crate::design::Footer<'a>, link: bool) {
+        if let Some(error) = &self.error {
+            footer.reason(error.as_str(), move |ui| {
+                crate::design::message(ui, crate::design::Tone::Error, error);
+            });
+        }
+        if link && let Some(message) = &self.message {
+            footer.result(message.as_str(), false, move |ui| {
+                crate::design::message(ui, crate::design::Tone::Success, message);
+            });
+        }
     }
 
     pub fn show(
@@ -374,12 +387,7 @@ impl DndBeyond {
             self.requested_visible_link = self.pending_link.clone();
             self.refresh(session, ui.ctx());
         }
-        if let Some(error) = &self.error {
-            crate::design::message(ui, crate::design::Tone::Error, error);
-        }
-        if let Some(message) = &self.message {
-            ui.label(message);
-        }
+        // Round 26: the link's error and result are in the pane's footer (`footer_messages`).
         let current = campaign.dndbeyond_campaign_id;
         let mut selected = current.clone();
         let label = current
@@ -397,11 +405,9 @@ impl DndBeyond {
             let dropdown = crate::design::locked(ui, blocked, |ui| {
                 egui::ComboBox::from_id_salt(("ddb_link", campaign.id))
                     .icon(crate::design::combo_icon)
-                    .width(ui.available_width().min(if blocked.is_some() {
-                        crate::design::FORM_WIDTH / 2.0
-                    } else {
-                        crate::design::FORM_WIDTH
-                    }))
+                    // Round 26 FN6: one width in every state. A lock keeps the form's width,
+                    // so the picker ends with the Session folder field; its reason is above.
+                    .width(ui.available_width().min(crate::design::FORM_WIDTH))
                     .selected_text(crate::design::Type::Body.rich(ui, label).color(
                         if ui.is_enabled() {
                             crate::design::colors().text

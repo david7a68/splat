@@ -1607,6 +1607,7 @@ impl Splat {
             |ui| {
                 if self.page == Page::Campaign && no_campaigns {
                     self.campaigns.show_add_form(ui);
+                    self.campaigns.form_error_inline(ui);
                 } else {
                     add = Action::primary(if no_campaigns {
                         "Add campaign"
@@ -1689,56 +1690,100 @@ impl Splat {
                     return;
                 }
                 let blocked = self.blocked_switch();
-                egui::ScrollArea::vertical()
-                    .id_salt("settings_page")
-                    .auto_shrink([false, false])
-                    .show(ui, |ui| {
-                        ui.add_space(design::L);
-                        let account = |ui: &mut egui::Ui, settings: &mut settings::Settings| {
-                            settings.show(ui);
-                        };
-                        let list =
-                            |ui: &mut egui::Ui,
-                             campaigns: &mut campaigns::Campaigns,
-                             dndbeyond: &mut dndbeyond::DndBeyond| {
-                                campaigns.show(ui, session.clone(), dndbeyond, blocked);
+                // The footer and the tab share a child `Ui` that starts below the tab rule.
+                let rest = ui.available_rect_before_wrap();
+                ui.scope_builder(egui::UiBuilder::new().max_rect(rest), |ui| {
+                    // Round 26: results, reasons and errors on this tab sit in one footer at the
+                    // bottom of the pane (a failed Connect, the campaign form, the campaign list), so
+                    // none of them moves the form the DM works in.
+                    let bottom = {
+                        let width = ui.available_width().min(design::LIST_MEASURE);
+                        let campaigns = std::cell::RefCell::new(&mut self.campaigns);
+                        let mut footer = design::Footer::new("settings_footer", width);
+                        campaigns::Campaigns::footer_messages(
+                            &campaigns,
+                            &mut footer,
+                            true,
+                            blocked,
+                        );
+                        self.settings.footer_messages(&mut footer);
+                        self.dndbeyond.footer_messages(&mut footer, false);
+                        footer.show(ui)
+                    };
+                    let page = egui::ScrollArea::vertical()
+                        .id_salt("settings_page")
+                        .max_height((bottom - ui.cursor().top()).max(0.0))
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            ui.add_space(design::L);
+                            let account = |ui: &mut egui::Ui, settings: &mut settings::Settings| {
+                                settings.show(ui);
                             };
-                        if ui.ctx().content_rect().width() >= 1000.0 {
-                            // A clear gutter, so that the left column's text does not run on.
-                            // Not `ui.columns`, whose justified layout stretches the words in a paragraph.
-                            let width = (ui.available_width() - design::XL) / 2.0;
-                            ui.horizontal_top(|ui| {
-                                ui.spacing_mut().item_spacing.x = design::XL;
-                                let column = egui::vec2(width, 0.0);
-                                let layout = egui::Layout::top_down(egui::Align::Min);
-                                for place in 0..2 {
-                                    ui.allocate_ui_with_layout(column, layout, |ui| {
-                                        // Both ways, so the second column starts in one place.
-                                        ui.set_width(width);
-                                        ui.spacing_mut().item_spacing.x = 8.0;
-                                        if place == 0 {
-                                            list(ui, &mut self.campaigns, &mut self.dndbeyond);
-                                        } else {
-                                            self.settings.campaign_form_open =
-                                                self.campaigns.form_open();
-                                            account(ui, &mut self.settings);
-                                        }
-                                    });
-                                }
-                            });
-                        } else {
-                            self.settings.campaign_form_open = self.campaigns.form_open();
-                            if self.encounters.has_run() {
-                                self.settings.show_compact(ui);
-                                ui.add_space(design::L);
-                                list(ui, &mut self.campaigns, &mut self.dndbeyond);
+                            let list =
+                                |ui: &mut egui::Ui,
+                                 campaigns: &mut campaigns::Campaigns,
+                                 dndbeyond: &mut dndbeyond::DndBeyond| {
+                                    campaigns.show(ui, session.clone(), dndbeyond, blocked);
+                                };
+                            if ui.ctx().content_rect().width() >= 1000.0 {
+                                // A clear gutter, so that the left column's text does not run on.
+                                // Not `ui.columns`, whose justified layout stretches the words in a paragraph.
+                                let half = (ui.available_width() - design::XL) / 2.0;
+                                // Round 26 AG1: the account column starts an `XL` gap after the
+                                // campaign list, which is as wide as its rows need.
+                                let widths = [
+                                    self.campaigns.list_width(half),
+                                    ui.available_width()
+                                        - design::XL
+                                        - self.campaigns.list_width(half),
+                                ];
+                                ui.horizontal_top(|ui| {
+                                    ui.spacing_mut().item_spacing.x = design::XL;
+                                    let layout = egui::Layout::top_down(egui::Align::Min);
+                                    for (place, width) in widths.into_iter().enumerate() {
+                                        let column = egui::vec2(width, 0.0);
+                                        ui.allocate_ui_with_layout(column, layout, |ui| {
+                                            // Both ways, so the second column starts in one place.
+                                            ui.set_width(width);
+                                            ui.spacing_mut().item_spacing.x = 8.0;
+                                            if place == 0 {
+                                                list(ui, &mut self.campaigns, &mut self.dndbeyond);
+                                            } else {
+                                                self.settings.campaign_form_open =
+                                                    self.campaigns.form_open();
+                                                account(ui, &mut self.settings);
+                                            }
+                                        });
+                                    }
+                                });
                             } else {
-                                list(ui, &mut self.campaigns, &mut self.dndbeyond);
-                                ui.add_space(design::L);
-                                self.settings.show_compact(ui);
+                                self.settings.campaign_form_open = self.campaigns.form_open();
+                                if self.encounters.has_run() {
+                                    self.settings.show_compact(ui);
+                                    ui.add_space(design::L);
+                                    list(ui, &mut self.campaigns, &mut self.dndbeyond);
+                                } else {
+                                    list(ui, &mut self.campaigns, &mut self.dndbeyond);
+                                    ui.add_space(design::L);
+                                    self.settings.show_compact(ui);
+                                }
                             }
-                        }
-                    });
+                        });
+                    // After a failed Connect, Connect comes into view above the footer.
+                    let reveal = self.settings.take_reveal();
+                    if let Some(connect) = reveal
+                        && connect.bottom() > page.inner_rect.bottom()
+                    {
+                        let mut state = page.state;
+                        let most = (page.content_size.y - page.inner_rect.height()).max(0.0);
+                        state.offset.y = (state.offset.y + connect.bottom()
+                            - page.inner_rect.bottom()
+                            + design::S)
+                            .min(most);
+                        state.store(ui.ctx(), page.id);
+                        ui.ctx().request_repaint();
+                    }
+                });
             }
             Page::Sessions => {
                 if let Some(campaign) = &active {
@@ -1750,6 +1795,7 @@ impl Splat {
                     let group_open = self.encounters.group_open_in_plan();
                     let group_discarded = self.encounters.group_discarded_in_plan();
                     let group_discarded_name = self.encounters.discarded_group_name();
+                    let group_discarded_order = self.encounters.discarded_group_order();
                     let arrivals_open = self.encounters.run_takes_arrivals();
                     let run_directory = self.encounters.run_directory(campaign);
                     let open_state = self
@@ -1774,6 +1820,7 @@ impl Splat {
                         group_open,
                         group_discarded,
                         group_discarded_name,
+                        group_discarded_order,
                         arrivals_open,
                         group_editor: std::cell::RefCell::new(&mut group_editor),
                         blocked,
@@ -1925,27 +1972,50 @@ impl Splat {
                         // The same guard as Settings: a link or folder change would stop
                         // the run's sync, or hide an open draft.
                         let blocked = self.blocked_switch();
-                        egui::ScrollArea::vertical()
-                            .id_salt("campaign_link")
-                            .auto_shrink([false, false])
-                            .show(ui, |ui| {
-                                self.campaigns.show_active(
-                                    ui,
-                                    session,
-                                    &mut self.dndbeyond,
+                        let rest = ui.available_rect_before_wrap();
+                        ui.scope_builder(egui::UiBuilder::new().max_rect(rest), |ui| {
+                            // Round 26: the link's and the details form's messages sit in the pane's
+                            // footer, below its scroll area.
+                            let bottom = {
+                                let width = ui.available_width().min(design::LIST_MEASURE);
+                                let campaigns = std::cell::RefCell::new(&mut self.campaigns);
+                                let mut footer = design::Footer::new("campaign_link_footer", width);
+                                campaigns::Campaigns::footer_messages(
+                                    &campaigns,
+                                    &mut footer,
+                                    false,
                                     blocked,
                                 );
-                                design::locked(ui, blocked, |ui| {
-                                    let details_open = self.campaigns.show_form_if_editing(ui);
-                                    design::rule(ui);
-                                    self.sessions.folder_view(
+                                self.dndbeyond.footer_messages(&mut footer, true);
+                                // Round 26 FN2, FN5: the session folder form's warning, error and
+                                // move result share this one footer; its scan is shared with
+                                // the form below.
+                                self.sessions.folder_messages(&mut footer, &self.timeline);
+                                footer.show(ui)
+                            };
+                            egui::ScrollArea::vertical()
+                                .id_salt("campaign_link")
+                                .max_height((bottom - ui.cursor().top()).max(0.0))
+                                .auto_shrink([false, false])
+                                .show(ui, |ui| {
+                                    self.campaigns.show_active(
                                         ui,
-                                        &self.timeline,
+                                        session,
+                                        &mut self.dndbeyond,
                                         blocked,
-                                        details_open,
                                     );
+                                    design::locked(ui, blocked, |ui| {
+                                        let details_open = self.campaigns.show_form_if_editing(ui);
+                                        design::rule(ui);
+                                        self.sessions.folder_view(
+                                            ui,
+                                            &self.timeline,
+                                            blocked,
+                                            details_open,
+                                        );
+                                    });
                                 });
-                            });
+                        });
                     }
                 }
             }

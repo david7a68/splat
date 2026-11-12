@@ -2245,6 +2245,7 @@ impl Encounters {
                 }
             }
             self.discarded_group = Some(draft);
+            self.discarded_group_order = crate::timeline::next_result_order();
             self.discarded = None;
             return;
         }
