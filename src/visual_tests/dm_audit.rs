@@ -22,7 +22,7 @@ use super::{
     fixture::{Seed, World},
     steps::*,
 };
-use eframe::egui::{self, Key};
+use eframe::egui::Key;
 use serde::{Deserialize, Serialize};
 use std::{
     fmt::Write as _,
@@ -327,56 +327,26 @@ fn before_the_session(a: &mut Audit<'_, '_>) {
         ));
         a.click(Find, TONIGHT);
     }
-
-    // F5: what last week left joins tonight's note in one act. The last act of prep: its result
-    // stays under the Last time line until the note changes, and the restart that starts the
-    // evening ends it, so no frozen task after it sees that line.
-    a.task("Carry over what last week left into tonight's note");
-    a.click(Do, "Carry over");
-    a.fact(format!(
-        "tonight's note holds last week's open thread: {}",
-        a.d.app()
-            .sessions
-            .selected_path()
-            .and_then(|path| std::fs::read_to_string(path).ok())
-            .is_some_and(|note| note.contains(MILLER) && note.contains("carried_from: "))
-    ));
 }
 
-/// Whether the Last time line itself paints last week's words whole.
-fn last_time_shows(d: &Driver<'_>, words: &str) -> bool {
-    d.place_of("Last time:").is_some_and(|label| {
-        let line = egui::Rect::from_x_y_ranges(
-            0.0..=d.window_size().0,
-            label.center().y - crate::design::XL / 2.0..=label.center().y + crate::design::XL / 2.0,
-        );
-        d.painted_in(line).contains(words)
-    })
-}
-
-/// Last week's words are under none of the recap headings, so the Last time line shows the
-/// note's first written line (F5's repair, W5-D5). When the line shows them whole, the DM reads
-/// them there; otherwise the DM opens the last session from its link, reads, and comes back.
+/// The Last time line previews only a recap or `What happened`, and last week's words are under
+/// another heading. So the DM opens the last session from its link, reads, and comes back.
 fn recall_last_session(a: &mut Audit<'_, '_>) {
     a.d.expect("Last time:");
-    let shown = last_time_shows(a.d, MILLER);
     a.fact(format!(
-        "the Last time line shows last week's words with no act: {shown}"
+        "the Last time line shows last week's words with no act: {}",
+        a.d.visible_text(MILLER)
     ));
-    if !shown {
-        a.act(Find, "open last session from Last time", |d| {
-            d.click_link(&format!("Session 1: {LAST_WEEK}"));
-        });
-    }
+    a.act(Find, "open last session from Last time", |d| {
+        d.click_link(&format!("Session 1: {LAST_WEEK}"));
+    });
     a.fact(format!(
         "last week's words are in view: {}",
         a.d.visible_text(MILLER)
     ));
-    if !shown {
-        a.act(Find, "back to tonight's session", |d| {
-            d.click_starting(&format!("Session 2: {TONIGHT_SESSION}"));
-        });
-    }
+    a.act(Find, "back to tonight's session", |d| {
+        d.click_starting(&format!("Session 2: {TONIGHT_SESSION}"));
+    });
 }
 
 /// One turn. The player or monster acts, and the DM records the result.
@@ -771,6 +741,52 @@ fn after_the_session(a: &mut Audit<'_, '_>) {
             .iter()
             .find(|node| node.name.contains("Kestrel Dunmoor ·"))
             .map_or_else(String::new, |node| node.name.clone())
+    ));
+
+    next_morning(a);
+}
+
+/// P11: a day mark. The torch rules gain a supply wagon on the next day; the DM starts that
+/// day on the Timeline, sees `Due 1` on the rail, and takes the wagon's torches in Trackers.
+fn next_morning(a: &mut Audit<'_, '_>) {
+    a.setup("the torch rules have a supply wagon on the next day", |d| {
+        let day = crate::timeline::day_now(&d.app().timeline.events).unwrap_or(0) + 1;
+        let campaign = d.app_mut().campaigns.active_campaign().expect("a campaign");
+        let id = splat::character::stable_id("Torch Rules.md");
+        let wagon = format!(
+            "```yaml\nday_marks:\n  wagon:\n    name: Supply wagon\n    at: {day}\n    say: The supply wagon arrives with fresh torches.\n    changes:\n    - {{tracker: torches, add: 6}}\ntrackers:\n"
+        );
+        let note = torch_rules(id).replacen("```yaml\ntrackers:\n", &wagon, 1);
+        fs::write(campaign.path.join("Torch Rules.md"), note).expect("write the house rule note");
+        d.app_mut().lookup.refresh();
+        d.settle();
+    });
+    a.task("A new day starts: take the supply wagon's torches");
+    a.click(Nav, NAV_TIMELINE);
+    a.click(Do, "Add Day");
+    a.fact(format!(
+        "the rail counts the day mark: {}",
+        a.d.has_containing("1 notice is due")
+    ));
+    a.act(Panel, "Ctrl+T", |d| d.press_ctrl(Key::T));
+    let done =
+        a.d.nodes()
+            .iter()
+            .find(|node| node.name.starts_with("Done: Supply wagon, Day "))
+            .map(|node| node.name.clone())
+            .unwrap_or_else(|| "Done: Supply wagon".to_owned());
+    a.click(Do, &done);
+    a.act(Panel, "Ctrl+T", |d| d.press_ctrl(Key::T));
+    let ledger =
+        a.d.app_mut()
+            .campaigns
+            .active_campaign()
+            .map(|campaign| campaign.path.join("Trackers.md"))
+            .and_then(|path| fs::read_to_string(path).ok())
+            .unwrap_or_default();
+    a.fact(format!(
+        "the ledger holds the wagon's Done: {}",
+        ledger.contains("mark: wagon") && ledger.contains("done: true")
     ));
 }
 

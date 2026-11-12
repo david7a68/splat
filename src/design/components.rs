@@ -624,13 +624,6 @@ impl<'a> Action<'a> {
         self
     }
 
-    /// A quiet action that ends a line of text, at the line's height (`XL`), so that the line
-    /// keeps the height it has without the action.
-    pub fn in_line(mut self) -> Self {
-        self.height = XL;
-        self
-    }
-
     /// Keep a repeated action as wide as its shared column.
     pub fn min_width(mut self, width: f32) -> Self {
         self.min_width = Some(width);

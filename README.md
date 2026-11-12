@@ -515,11 +515,7 @@ title, length, place and notes. A paused fight on the plan offers Resume even wh
 The Add strip stays directly below Tonight, above messages and plan rows. Fight,
 Group and Long rest stay visible. When all actions do not fit on one line, More holds
 Day, Short rest, Travel and Major event. The menu uses a compact `⋯⌄` button named `More Add actions`; hover text names its actions. The strip stays on one line. Timeline
-uses the same width rule. At the top, **Last time** links to the previous session and shows the first line of its `What happened`,
-else of its processed recording's recap, else its first written line. While the session has no event and no run,
-**Carry over** at the end of that line adds the last session's recap as a link, its plan lines that were not
-played and its open threads to this note, in one save with `carried_from` and `carried_parts`, and `Undo carry
-over` puts the note back exactly. Read shows such an embed as the recap's words under `From <session>`. The title and date share one line. A **Playing** status marks the session being played.
+uses the same width rule. At the top, **Last time** links to the previous session and shows the first line of its recap. The title and date share one line. A **Playing** status marks the session being played.
 **Return to the session being played** opens that note from another session. If both sessions have the same
 number, the warning names both note files.
 In a narrow window, the plan and the note have a tab each. **Read** and **Write** turn the note between its two forms, and
@@ -652,6 +648,15 @@ is one act. A value that rises past a mark raises a notice in the **Due** list, 
 rolls (with `for:`, one roll for each name), its proposed changes ticked, and **Done**, which applies the ticked
 changes, or **Dismiss** in its menu. While a notice is due, the rail says `Due N` on every page. Splat counts and
 shows; it never applies a rule by itself.
+
+A **day mark** (`day_marks` in the same block) raises a notice on the campaign's day count, which the Timeline
+works out: `at: 721` at the start of Day 721, or `every: 30, from: 2` on Day 32, Day 62 and so on (with no `from`,
+the count starts on Day 1). Its proposed changes name their tracker, and `for:` names the line of a tracker with
+`per`. Raising a day notice writes nothing. Days of one mark that are due together, after a long journey or while
+Splat was closed, are one row (`End of month ×3`) with **Next**, which ends the oldest day, and **Dismiss all** in
+its menu. When the clock goes back, for example by the Timeline's Undo, a day no longer reached leaves the Due
+list; a day already done stays done. While `Timeline.md` cannot be read, no day notice shows, the Due list says so,
+and no act on one is recorded.
 
 Every act is one entry in `Trackers.md` in the campaign's root folder, written at once. The result line names the
 last act of the session being played, with **Undo: <label>**, which steps back newest first, also after a

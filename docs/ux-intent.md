@@ -335,12 +335,7 @@ recap and the open threads are where the next step needs them, with nothing type
 `Add rewards`; the newest rewards block says whether the next has XP, so a campaign with no XP deletes one line,
 once.
 
-The Last time line shows last week's words. While the new session has no event and no run, `Carry over` at the
-end of that line adds the last session's recap as a link, the plan lines that were not played and the open
-threads to the new note, in one act with its Undo. HP carries inside one session only: the new session's first
-fight starts from the sheets.
-
-**Done well:** T18.1, T18.3 and T18.4.
+**Done well:** T18.1.
 ### W17. Run a house rule's numbers
 **Trigger:** a house rule such as a race clock, a crowd's favour or seals moves between fights. **Goal:** between
 fights, one press records a change, a due notice stays in view, and the history is a file. **Context:** table,
@@ -348,8 +343,10 @@ between fights. **Frequency:** a campaign with house rules, many times a session
 puts in play shows its trackers in Trackers (Ctrl+T). A press writes one entry to `Trackers.md`; a value that passes
 a mark raises a Due row and the rail's `Due N` on every page; `Done` finishes it. Splat counts and shows; the DM
 rules. In a fight the DM opens Trackers with Ctrl+T, presses, and goes back; the run shows no other tracker part.
+A day mark raises its Due row when the Timeline's day count reaches its day, with the same words, rolls, `Done`
+and `Dismiss`.
 
-**Done well:** T19.1 to T19.4.
+**Done well:** T19.1 to T19.5.
 
 ## 3. Information architecture
 
@@ -677,12 +674,11 @@ reading the code, not from a test run.
 | T17.6 | The ended view, the History row, the sentence that stands where Continue fight would be, and the unread-steps message are whole with Lookup open and closed at 960x640, and none of their actions closes or changes Lookup. Beside Continue fight or its reason, the ended header's Undo keeps its target, on the second line where the title's line has no room for it. In History the line under Read-only is `S` below it and `M` above Final state | run-continue | view, state | New |
 | T17.7 | After Continue fight, End encounter starts with the outcome of the ending that Continue removed, selected: Enter keeps it and typing replaces it | run-continue | state | New |
 | T17.8 | Continue fight is offered only for the fight that was played last. After a later fight or long rest, and while `Timeline.md` cannot be read, the ended view and History offer no Continue fight and say why in its place. When that is no longer so, the control is back | run-continue | state | New |
-| T18.3 | `Carry over` shows only while the session has no event and no run, on the Last time line's one line. It adds the recap link, the plan lines (a paused fight has `Resume`) and the threads in 1, below the DM's words. A written recap is kept. After a copied draft became the embed, `Undo carry over` gives back the draft and both properties as they were. After acts on another page and another session, `Undo carry over` puts back the note's bytes. Read draws the embed as the recap's words under `From <session>` | session-carry-over, session-plan | cost, state | New |
-| T18.4 | A note the DM did not act on does not change. A new session with no carry-over is the template, and the last session's note changes only by the DM's own acts | session-carry-over, plain-evening | state | New |
 | T19.1 | Ctrl+T opens Trackers in Lookup, and Ctrl+T again shows what Lookup showed: an entry, a found note, or nothing. `Back` returns to the entry Lookup held. Ctrl+K opens Lookup on what it showed last, also on Trackers | trackers, run-lookup, nav-state | keys, state | New |
 | T19.2 | A quick action takes 1, also on an instance's line. `Undo` steps back through the acts of the session being played, also after a restart. The opposite action corrects a value in 1. `Add to Timeline` makes a Major event with the act's label, with `Undo add` | trackers | cost, state | New |
 | T19.3 | A value that passes a mark raises a Due row above the trackers and the rail's count, on every page. The Run page shows no tracker part except the rail's count. With no house rule note in play the rail says nothing | trackers, run-lookup | state | New |
 | T19.4 | Case D, beside the Session page: three notices with four rolls and the result line are in view with no scroll | trackers | view | New |
+| T19.5 | The Timeline's day count raises a day mark's Due row and the rail's count, and raising it writes nothing. Days that pass in one step are one row that says how many, with `Next`. A clock that goes back takes the row away and keeps what was done. At 960x640 with Lookup narrow, the row, its `Next` and the result line are in view | trackers | view, state | New |
 | G1 | Every disabled control states why, in text or a working tooltip | all | state | Fail |
 | G2 | Go through every top-level page and back: each page restores section 3 state | nav-state **new** | state | Fail |
 | G3 | No dead nav items | nav-state **new** | state | Fail |
