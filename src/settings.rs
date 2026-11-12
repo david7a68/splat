@@ -502,10 +502,9 @@ impl Settings {
                     .trim()
                     .is_empty()
                     .then_some("Paste your session cookie first.");
-                let action = if reason.is_none()
-                    && account != Account::Connected
-                    && !self.campaign_form_open
-                {
+                let primary =
+                    reason.is_none() && account != Account::Connected && !self.campaign_form_open;
+                let action = if primary {
                     design::Action::primary("Connect")
                 } else {
                     design::Action::secondary("Connect")
@@ -513,8 +512,12 @@ impl Settings {
                 let clicked = ui
                     .with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let connect = action.blocked(reason).show(ui);
-                        // After a failed Connect, its cause comes in the footer; the footer's
-                        // rule brings this primary Connect back into view whole above it.
+                        // After a failed Connect, its cause comes in the footer, and the
+                        // footer's rule brings the retry back into view whole above it, also
+                        // while an open campaign form owns the accent fill.
+                        if !primary && reason.is_none() && account != Account::Connected {
+                            design::keep_above_footer(ui, &connect);
+                        }
                         ui.spacing_mut().item_spacing.x = design::S;
                         design::blocked_reason(ui, reason);
                         connect.clicked()

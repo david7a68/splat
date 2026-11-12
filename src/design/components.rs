@@ -674,7 +674,7 @@ impl<'a> Action<'a> {
         }
         locked_control(ui, &response);
         if next {
-            keep_above_footer(ui, response.id, response.rect);
+            keep_above_footer(ui, &response);
         }
         response
     }
@@ -2799,10 +2799,12 @@ impl FooterRooms {
         let ctx = ui.ctx();
         let pass = ctx.cumulative_pass_nr();
         let applied = (height, pane.size());
+        // New room: the footer came or grew, or its pane changed size. A footer that shrinks
+        // gives room back, so it never scrolls what the DM scrolled away.
         let new = ctx.data_mut(|data| {
             let last = data.get_temp::<(f32, Vec2)>(id.with("applied"));
             data.insert_temp(id.with("applied"), applied);
-            last != Some(applied)
+            last.is_none_or(|(height, size)| applied.0 > height || applied.1 != size)
         });
         let band = Rect::from_min_max(pos2(pane.left(), footer.top() - S), pane.right_bottom());
         ctx.data_mut(|data| {
@@ -2844,11 +2846,15 @@ pub(crate) fn footer_bands(ctx: &egui::Context) -> Vec<Rect> {
 }
 
 /// A pane's content ends above its message footer. When a footer's room is new (it came, grew,
-/// or the pane was resized), or the action has just become the pane's primary, and the room cuts
-/// or covers that action, the pane's scroll area scrolls up by as little as it takes to show it
-/// whole above the footer: the row that holds the action the DM needs next stays in reach. An
+/// or the pane was resized), or the action has just become the pane's next action, and the room
+/// cuts or covers that action, the pane's scroll area scrolls up by as little as it takes to show
+/// it whole above the footer: the row that holds the action the DM needs next stays in reach. An
 /// action inside the footer, wholly above it, or wholly below the pane moves nothing.
-fn keep_above_footer(ui: &Ui, id: Id, rect: Rect) {
+///
+/// Every primary `Action` does this by itself. Call it for an action the DM needs next that is
+/// not drawn as the primary (a retry while another form owns the accent fill).
+pub fn keep_above_footer(ui: &Ui, response: &Response) {
+    let (id, rect) = (response.id, response.rect);
     let pass = ui.ctx().cumulative_pass_nr();
     let key = id.with("primary_pass");
     let came = ui.ctx().data_mut(|data| {
@@ -4860,6 +4866,95 @@ mod tests {
                 "{words} wraps to two lines, each at the word x {word_x}: {xs:?}"
             );
         }
+    }
+
+    /// R3f: a pane's content ends above its footer. When the footer comes over the pane's next
+    /// action, the body scrolls by no more than the footer's room so that action is whole above
+    /// it; a footer that then shrinks after the DM scrolled away moves nothing; and an action the
+    /// DM needs next that is not drawn as the primary (`keep_above_footer`) comes into view too.
+    #[test]
+    fn r3f_the_next_action_is_whole_above_a_footer_that_comes() {
+        use std::{cell::Cell, rc::Rc};
+        let messages = Rc::new(Cell::new(0_usize));
+        let primary = Rc::new(Cell::new(true));
+        let (count, kind) = (messages.clone(), primary.clone());
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(vec2(960.0, 640.0))
+            .build_ui(move |ui| {
+                let mut footer = Footer::new("r3f_footer", ui.available_width());
+                for at in 0..count.get() {
+                    footer.notice(format!("Notice {at}"), move |ui| {
+                        message(ui, Tone::Warning, &format!("Notice {at}"));
+                    });
+                }
+                let bottom = footer.show(ui);
+                egui::ScrollArea::vertical()
+                    .id_salt("r3f_body")
+                    .max_height(bottom - ui.cursor().top())
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        ui.add_space(560.0);
+                        let response = if kind.get() {
+                            Action::primary("Save").show(ui)
+                        } else {
+                            let response = Action::secondary("Save").show(ui);
+                            keep_above_footer(ui, &response);
+                            response
+                        };
+                        ui.ctx()
+                            .data_mut(|data| data.insert_temp(Id::new("r3f_save"), response.rect));
+                    });
+            });
+        super::super::theme::install(&harness.ctx);
+        let save = |harness: &mut egui_kittest::Harness<'_>| {
+            harness.run_steps(4);
+            harness
+                .ctx
+                .data(|data| data.get_temp::<Rect>(Id::new("r3f_save")))
+                .unwrap()
+        };
+        let band = |harness: &egui_kittest::Harness<'_>| {
+            footer_bands(&harness.ctx)
+                .first()
+                .copied()
+                .expect("the footer takes room")
+        };
+        for next_is_primary in [true, false] {
+            primary.set(next_is_primary);
+            messages.set(0);
+            let clear = save(&mut harness);
+            messages.set(3);
+            let shown = save(&mut harness);
+            let room = band(&harness);
+            assert!(
+                shown.bottom() <= room.top() + 0.5
+                    && clear.top() - shown.top() <= room.height() + 0.5
+                    && clear.top() > shown.top(),
+                "primary {next_is_primary}: Save {clear:?} → {shown:?}, whole above the footer's room {room:?}"
+            );
+        }
+        // The DM scrolls back to the top; a footer that shrinks then gives room back and moves
+        // nothing, though Save is still cut.
+        harness
+            .input_mut()
+            .events
+            .push(egui::Event::PointerMoved(pos2(400.0, 200.0)));
+        harness.input_mut().events.push(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: vec2(0.0, 400.0),
+            modifiers: egui::Modifiers::NONE,
+        });
+        let scrolled = save(&mut harness);
+        assert!(
+            scrolled.bottom() > band(&harness).top(),
+            "the wheel scrolled Save back under the footer: {scrolled:?}"
+        );
+        messages.set(2);
+        let shrunk = save(&mut harness);
+        assert_eq!(
+            scrolled, shrunk,
+            "a footer that shrinks moves nothing the DM scrolled away"
+        );
     }
 
     /// iter-26-A footer contract: the body's top is the same with 0, 1, 3 and 10 messages, at
