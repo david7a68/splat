@@ -755,7 +755,7 @@ impl WorldPage {
     }
 
     /// Above another view: the held NPC's one row. The Undo for a discarded NPC is a result, so
-    /// it sits below the file line.
+    /// it sits in the pane footer.
     fn held_row(&mut self, ui: &mut egui::Ui) {
         if let Some(npc) = self.generated.as_ref().filter(|_| !self.generated_shown)
             && unsaved_npc_row(ui, &npc.name)
