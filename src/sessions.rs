@@ -313,6 +313,10 @@ pub(crate) fn remember_notes(folder: &Path, notes: &[Note]) -> Result<(), String
         );
     }
     let text = serde_json::to_string_pretty(&known).map_err(|e| e.to_string())?;
+    // A scan that found nothing new writes nothing: an idle campaign's files keep their times.
+    if fs::read(&path).is_ok_and(|bytes| bytes == text.as_bytes()) {
+        return Ok(());
+    }
     replace_file(&path, &text)
 }
 
@@ -2684,6 +2688,12 @@ mod tests {
             "{text}"
         );
         assert_eq!(list_notes(dir.path()), [note]);
+        // An idle scan writes nothing: the index of note paths keeps its file (W9-D2).
+        let index = dir.path().join(NOTE_PATHS);
+        let file = |path: &Path| std::os::unix::fs::MetadataExt::ino(&fs::metadata(path).unwrap());
+        let written = file(&index);
+        remember_notes(dir.path(), &list_notes(dir.path())).unwrap();
+        assert_eq!(file(&index), written, "an idle scan replaced the index");
     }
 
     #[test]

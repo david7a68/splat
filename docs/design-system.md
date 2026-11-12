@@ -1696,8 +1696,10 @@ Recap, the one source that carry-over reads too; then the note's first written l
 `Recap of last time` and `Plan for tonight`; with none of these, show the session link alone. While the
 session is the current one and has no event, no run and no live recording, and the last session holds a part
 to carry, a quiet `Carry over` (`Action::in_line`, 24 px, so the line keeps its height) ends the line, `L` after
-the preview, with what it adds on hover. The preview gives it room first, to nothing, then the link's words
-shorten; nothing wraps. The preview stops at `READER_MEASURE`, as muted help does. A last note that cannot be read blocks it: `Splat cannot read Session 1’s note.` It
+the line's last word (the preview's, or the link's when no word of the preview fits) at every width, never at
+the pane's edge, with what it adds on hover. The preview gives it room first, to nothing, then the link's words
+shorten; nothing wraps. The preview is the longest run of whole words that fits; when no word fits, no dash and
+no ellipsis show. The preview stops at `READER_MEASURE`, as muted help does. A last note that cannot be read blocks it: `Splat cannot read Session 1’s note.` It
 adds, through `Draft::apply_with_properties` and in one save, the recap as one embed line
 `![[<note>#What happened]]` (or the processed recap under `> This draft was written automatically. Check it
 against your memory.`, which the embed replaces once What happened has prose), the plan lines still to come
@@ -1707,11 +1709,13 @@ every result of that page, so the Last time line, the tabs and the plan never mo
 what it added, with `Undo carry over`, which puts back the exact text and properties. The result belongs to
 the new note by its ID: another session or page leaves it, it shows also when the last session can no longer be
 found, and any other change of the note's text ends it. A refusal shows in the same footer, in a warning. Read draws an embed of a session note's heading as that heading's words under a
-`Type::Small` muted `From` and a small link to the session. Its target is resolved as every campaign link is
+`Type::Small` muted `From` and, one `S` after it in every layout, a small link to the session. Its target is resolved as every campaign link is
 (`ContentIndex::resolve_link`), with its folder when it has one: a target that two notes share stays a link,
 and so does an embed inside a callout or a list item. A target that names nothing, also after a rename outside
-Obsidian, is a warning `small_message`, `The recap’s source is gone: <target> › <heading>.`, and the line
-stays in the note; Splat never rewrites an embed, and the DM links again by hand. Read's words are prepared
+Obsidian, is a warning `small_message`, `The recap’s source is gone: <target> › <heading>. Link the session
+again in Write.`, and the line stays in the note. A session note at the target's whole path (as Obsidian reads
+`Archive/Same`) keeps it a link: the index has not read that note yet, or the target names part of its path. A
+note with only the same last name in another folder does not; Splat never rewrites an embed, and the DM links again by hand. Read's words are prepared
 when the note's words, the content, the plan or the folder change, not on a quiet frame. An older session warns once and links the session being played, which the list marks
 Playing. The action says Return to the session being played. When the two session numbers match, the warning
 names both note files. Reading old notes changes neither the destination for new events nor runs: use the newest session
