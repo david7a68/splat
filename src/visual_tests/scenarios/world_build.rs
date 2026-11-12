@@ -2436,7 +2436,11 @@ pub fn round_trip(d: &mut Driver<'_>) {
             let statuses: Vec<_> = d
                 .nodes()
                 .into_iter()
-                .filter(|node| node.role == Role::Label && node.name.contains("World repair draft"))
+                // iter-26-B FF2: a rail draft status is a link to its draft.
+                .filter(|node| {
+                    matches!(node.role, Role::Label | Role::Link)
+                        && node.name.contains("World repair draft")
+                })
                 .collect();
             !statuses.is_empty()
                 && statuses.len() == 1
