@@ -5463,7 +5463,7 @@ mod tests {
         assert!(
             nodes
                 .iter()
-                .any(|(_, node)| node.label().as_deref() == Some("Edit Hob")),
+                .any(|(_, node)| node.label() == Some("Edit Hob")),
             "the copy's reader drew its header"
         );
         assert!(
