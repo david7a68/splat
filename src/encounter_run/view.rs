@@ -1832,6 +1832,11 @@ impl Run {
             self.effect_fields.entry(key.clone()).or_default().focus = true;
             self.effect_open = Some(key);
         } else {
+            // One draft: the row's waiting words move to the Conditions tab's field.
+            let key = &self.state.participants[self.selected].key;
+            if let Some(field) = self.effect_fields.remove(key) {
+                self.condition = field.words;
+            }
             self.open_conditions_tab();
             self.focus_other_effect = true;
         }
@@ -1963,8 +1968,11 @@ impl Run {
                 let focus = std::mem::take(&mut self.focus_other_effect);
                 if other_effect_field(ui, &mut self.condition, width, focus) {
                     // Typed as a level, it is still the one Exhaustion a creature has.
+                    // Words with a time go through the one reader, which keeps the level.
                     let typed = self.condition.trim();
-                    command = Some(match exhausted.filter(|_| typed.starts_with("Exhaustion")) {
+                    let level = typed.starts_with("Exhaustion")
+                        && !super::Condition::read(typed).is_effect();
+                    command = Some(match exhausted.filter(|_| level) {
                         Some(at) => set_exhaustion(index, at, exhaustion_level(typed)),
                         None => Command::Condition(index, self.condition.clone()),
                     });
@@ -6600,7 +6608,24 @@ impl RowLayout {
                 conc_dc: Some(dc),
             })
         });
-        let layout = with_dc.filter(keeps).unwrap_or(layout);
+        // The DC folds nothing that shows: the line without it is the start of the line with
+        // it. Else it is in the hover and the accessible name only.
+        let shown = |layout: &Self| {
+            layout
+                .second_line
+                .as_ref()
+                .map(|line| line.text().to_owned())
+        };
+        let layout = with_dc
+            .filter(|with| {
+                keeps(with)
+                    && shown(with)
+                        .zip(shown(&layout))
+                        .is_some_and(|(with, without)| {
+                            without.is_empty() || with.starts_with(&without)
+                        })
+            })
+            .unwrap_or(layout);
         Self {
             without_effects: Some(Box::new(base)),
             ..layout
@@ -8247,6 +8272,7 @@ mod tests {
                 // A count's slot is as wide as its widest form: `2`, `last round` and `time is
                 // up` move no word after it.
                 let mut timed = p.clone();
+                timed.initiative = Some(10);
                 let mut at = Vec::new();
                 for left in [2, 1, 0] {
                     let mut effect = Condition::read("Bless 2 rounds");
@@ -8260,7 +8286,7 @@ mod tests {
                     timed.conditions = vec![effect, Condition::from("Prone")];
                     let layout = RowLayout::new(
                         ui,
-                        596.0,
+                        900.0,
                         &timed,
                         None,
                         design::RUN_REGULAR,
@@ -8268,10 +8294,16 @@ mod tests {
                         0.0,
                     );
                     let line = layout.second_line.unwrap();
+                    let form = ["2", "last round", "time is up"][2 - left as usize];
+                    assert!(line.text().starts_with("Bless"), "{}", line.text());
+                    assert!(line.text().contains(form), "{form}: {}", line.text());
+                    assert!(line.text().ends_with("Prone"), "{}", line.text());
                     let prone = line.text().chars().count() - "Prone".chars().count();
                     at.push(line.pos_from_cursor(egui::text::CCursor::new(prone)).min.x);
                 }
-                assert!(at.iter().all(|x| (x - at[0]).abs() < 0.01), "{at:?}");
+                // Whole pixels: a form measured alone and the same form in the line can round
+                // apart by one pixel. No word moves more, or to another line.
+                assert!(at.iter().all(|x| (x - at[0]).abs() <= 1.0), "{at:?}");
                 // T17.6: a save's DC ends the line where it has room, and is never what makes
                 // the row grow; with no room it is in the hover and the name only.
                 let mut conc = plain.clone();
@@ -8292,6 +8324,31 @@ mod tests {
                     let text = layout.second_line.as_ref().unwrap().text().to_owned();
                     assert_eq!(text.ends_with("Conc save DC 12"), shows, "{width}: {text}");
                     assert_eq!(layout.height(scale), base.height(scale));
+                }
+                // The DC folds no condition and no bonus that shows without it.
+                let mut crowded = conc.clone();
+                crowded.conditions = ["Poisoned", "Prone", "Restrained", "Blinded"]
+                    .map(super::super::Condition::from)
+                    .to_vec();
+                for width in (300..=900).step_by(10) {
+                    let width = width as f32;
+                    let scale = design::RUN_REGULAR;
+                    let line = |dc| {
+                        RowLayout::fitted(
+                            ui,
+                            width,
+                            &crowded,
+                            (None, dc),
+                            scale,
+                            RowFit::Natural,
+                            0.0,
+                        )
+                        .second_line
+                        .map(|line| line.text().to_owned())
+                        .unwrap_or_default()
+                    };
+                    let (without, with) = (line(None), line(Some(12)));
+                    assert!(with.starts_with(&without), "{width}: {without} / {with}");
                 }
             });
         });
@@ -10111,6 +10168,19 @@ mod tests {
         assert_eq!(
             run.borrow().state.participants[0].conditions,
             ["Exhaustion (7)".to_string()]
+        );
+        // F2: a level with a time is read by the one reader: the level stays, with its count.
+        harness.get_by_label("Other effect").click();
+        harness.run_steps(1);
+        harness
+            .get_by_label("Other effect")
+            .type_text("Exhaustion (7) 10 rounds");
+        harness.run_steps(1);
+        harness.get_by_label("Add").click();
+        harness.run_steps(2);
+        assert_eq!(
+            run.borrow().state.participants[0].conditions,
+            ["Exhaustion (7) 10".to_string()]
         );
     }
 

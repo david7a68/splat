@@ -564,5 +564,20 @@ mod tests {
             harness.get_by_label(field).value().as_deref(),
             Some("Haste")
         );
+        // One draft: where Effect has no room, `E` opens the Conditions tab's field with the
+        // row's waiting words, and the dock keeps no second copy.
+        harness.key_press(egui::Key::Escape);
+        harness.run_steps(2);
+        harness.get_by_label("Effect: words for this row").click();
+        harness.run_steps(3);
+        harness.get_by_label(field).type_text("Haste");
+        harness.run_steps(1);
+        run.borrow_mut().run_command(Command::Next);
+        harness.run_steps(2);
+        run.borrow_mut().select(0);
+        run.borrow_mut().effect_in_dock = false;
+        run.borrow_mut().open_effect_field();
+        assert_eq!(run.borrow().condition, "Haste");
+        assert!(run.borrow().effect_fields.is_empty());
     }
 }
