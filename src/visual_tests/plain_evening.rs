@@ -1644,3 +1644,129 @@ pub fn run(d: &mut Driver<'_>) {
         ),
     );
 }
+
+/// Each row of `allowed.json` is in a named class of its row of section 2.5. A class lets a new
+/// thing appear and an old one move, never go, be cut or get narrower. A row that fits no
+/// class fails, so the list cannot allow a fault by copying the failures.
+#[cfg(test)]
+mod allowed_classes {
+    use super::*;
+
+    struct Class {
+        row: u32,
+        name: &'static str,
+        fits: fn(&Difference) -> bool,
+    }
+
+    const TRAVEL_MENU: &str = "session-tonight: Travel row menu";
+    /// One line of a row's menu, as the reference measures it.
+    const MENU_LINE: f32 = 36.0;
+
+    const CLASSES: &[Class] = &[
+        Class {
+            row: 12,
+            name: "the new line in a Travel row's open menu",
+            fits: new_travel_menu_line,
+        },
+        Class {
+            row: 12,
+            name: "`Remove` one line lower in that menu",
+            fits: remove_one_line_lower,
+        },
+    ];
+
+    fn new_travel_menu_line(d: &Difference) -> bool {
+        let line = ["Button: Roll for encounters", "Roll for encounters"];
+        let shown = d.screen == TRAVEL_MENU
+            && ["control", "text"].contains(&d.what.as_str())
+            && d.change == "new"
+            && line.contains(&d.name.as_str());
+        // Opening the menu shows the line, and closing it takes the same line away.
+        let act = d.what == "act"
+            && d.change == "changed"
+            && ((d.name.starts_with("open More actions for ")
+                && d.detail == "appeared + Roll for encounters")
+                || (d.name.starts_with("close More actions for ")
+                    && d.detail == "went + Roll for encounters"));
+        shown || act
+    }
+
+    /// `x y wxh -> x y wxh`.
+    fn rects(detail: &str) -> Option<([f32; 4], [f32; 4])> {
+        let read = |part: &str| -> Option<[f32; 4]> {
+            let mut words = part.split_whitespace();
+            let x = words.next()?.parse().ok()?;
+            let y = words.next()?.parse().ok()?;
+            let (w, h) = words.next()?.split_once('x')?;
+            Some([x, y, w.parse().ok()?, h.parse().ok()?])
+        };
+        let (old, new) = detail.split_once(" -> ")?;
+        Some((read(old)?, read(new)?))
+    }
+
+    fn remove_one_line_lower(d: &Difference) -> bool {
+        let remove = ["Button: Remove this event", "Remove"];
+        d.screen == TRAVEL_MENU
+            && ["control", "text"].contains(&d.what.as_str())
+            && ["moved", "resized"].contains(&d.change.as_str())
+            && remove.contains(&d.name.as_str())
+            && rects(&d.detail).is_some_and(|(old, new)| {
+                // One line lower, the same height, and never narrower: the menu took the
+                // width of its new line.
+                (new[1] - old[1] - MENU_LINE).abs() < 0.5
+                    && (new[3] - old[3]).abs() < 0.05
+                    && new[2] >= old[2]
+            })
+    }
+
+    fn class_of(row: &AllowedRow) -> Option<&'static str> {
+        CLASSES
+            .iter()
+            .find(|class| class.row == row.row && (class.fits)(&row.difference))
+            .map(|class| class.name)
+    }
+
+    #[test]
+    fn every_allowed_row_is_in_a_class_of_its_row() {
+        let allowed: Allowed = read(&folder().join("allowed.json"));
+        let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
+        for row in &allowed.rows {
+            let class = class_of(row).unwrap_or_else(|| {
+                panic!(
+                    "allowed.json row {} fits no class of its row: {}",
+                    row.row, row.difference
+                )
+            });
+            *counts.entry(class).or_default() += 1;
+        }
+        println!("allowed.json classes: {counts:?}");
+        // The classes refuse what a fault looks like: a line gone, or `Remove` narrower.
+        let remove = Difference {
+            screen: TRAVEL_MENU.into(),
+            view: "1200x800".into(),
+            what: "control".into(),
+            change: "resized".into(),
+            name: "Button: Remove this event".into(),
+            detail: "681 299 67.8x30 -> 681 335 137.9x30".into(),
+        };
+        assert!(remove_one_line_lower(&remove));
+        let narrower = Difference {
+            detail: "681 299 67.8x30 -> 681 335 60.0x30".into(),
+            ..remove.clone()
+        };
+        let gone = Difference {
+            change: "gone".into(),
+            ..remove.clone()
+        };
+        let other = Difference {
+            name: "Button: Delete the saved run".into(),
+            ..remove
+        };
+        for fault in [narrower, gone, other] {
+            assert!(
+                CLASSES.iter().all(|class| !(class.fits)(&fault)),
+                "a class allows {fault}"
+            );
+        }
+    }
+}
