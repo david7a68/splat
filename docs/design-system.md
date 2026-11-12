@@ -166,7 +166,7 @@ eye during long sessions.
 | Buttons | `Action::primary / secondary / quiet / destructive` | `.blocked(reason)` disables and adds a hover reason and accessible description. For one blocked control, show `blocked_reason` beside it in `Small` text, then an `L` gap before the next action. `.key("N")` shows the key beside the word |
 | Split button | `split_action` | Default `Action`, then a caret menu for other actions |
 | Field | `field`, `small_field` | Sentence-case muted `Small` label, control, help and error; accessible name. The help is `help` |
-| Help | `help` | Help under a field or a section: `Small` muted words that wrap at `READER_MEASURE`, whatever the pane's width. Every help line uses it: the gate's `help-measure` check fails on any muted `Small` label wider than `READER_MEASURE`, whether it wraps, is cut or keeps one line. A row's own detail line is not help: it is inside its row's control, or the row marks it with `row_detail` |
+| Help | `help` | Help under a field or a section: `Small` muted words that wrap at `READER_MEASURE`, whatever the pane's width. Every help line uses it: the gate's `help-measure` check fails on any muted `Small` label wider than `READER_MEASURE`, whether it wraps, is cut or keeps one line. A row's own detail line is not help: it is inside its row's control, or it is marked with `row_detail` and lies inside a row that the row component gave `register_row` (`row` and the Encounters list row do). A mark outside every registered row changes nothing |
 | Text fields | `text_field`, `text_input`, `number_field`, `search_field`, `named` | Accessible name and a 26 px target; left-aligned numbers keep the caret off digits; placeholders use faint `Body` text |
 | Editable numbers | `stepper` | A value the DM can change: − and + beside the number in a bordered well. A value without a stepper is read only, so the two never look alike. The D&D Beyond sheet panel uses it for every value Splat can send; in each of its blocks the labels share one column (the widest label plus `S`) and every well has the widest value's width, so each − and each + share an x. At a limit, − or + is disabled; when the caller gives the limit's reason, that button says it on hover and in its accessible description. An enclosing lock's reason comes first |
 | Dialog | `dialog`, `dialog_actions` | `egui::Modal`, for the brief's modal tasks only; one action line, red at the left, keep and commit at the right, commit last |
@@ -1967,7 +1967,7 @@ tooltips.
   reach and workflow goals. Overlap includes labels except those fully inside their interactive ancestor.
   Clipping includes ellipses and text past pane edges, read from painted shapes. Missing-glyph checks fail for
   characters absent from the chosen font and fallbacks. `help-measure` fails on a muted `Small` label wider than
-  `READER_MEASURE`, in any wrap mode: help that skipped `help`. Row details marked with `row_detail` pass. All checks except workflow goals have seeded unit
+  `READER_MEASURE`, in any wrap mode: help that skipped `help`. Row details marked with `row_detail` pass only inside a row given to `register_row`. All checks except workflow goals have seeded unit
   failures, including an unassigned glyph and a 560 px help label. Workflow goals were verified by deliberately breaking the app.
 - An overlap of an app control or text with a scroll bar or a column splitter is an app fault
   (`no-overlap/app-vs-chrome`), because egui can give the press to the bar or splitter. No baseline may

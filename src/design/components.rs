@@ -1341,6 +1341,7 @@ pub fn row(
     let c = colors();
     let (rect, mut response) =
         ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::click());
+    register_row(ui, rect);
     // egui hit-tests the previous frame's rectangles. Paint hover at the current
     // position so it does not trail the pointer while the list scrolls.
     let hovered = response.enabled()
@@ -2303,22 +2304,39 @@ pub fn message_with_actions<R>(
 /// Where test builds keep the labels that `row_detail` marked in the last pass.
 #[cfg(test)]
 pub const ROW_DETAILS: &str = "design_row_details";
+/// Where test builds keep the rects that `register_row` registered in the last pass.
+#[cfg(test)]
+pub const ROW_RECTS: &str = "design_row_rects";
 
-/// Marks a label as a row's own detail line (its second line), not help, so the gate's
-/// `help-measure` check passes it whatever its width. Call it on the label's response. Only test
-/// builds keep the mark.
+/// Keep `item` under `key` for this pass only: a new pass starts a new list.
+#[cfg(test)]
+fn keep_for_pass<T: Clone + Send + std::marker::Sync + 'static>(ui: &Ui, key: &str, item: T) {
+    let pass = ui.ctx().cumulative_pass_nr();
+    ui.ctx().data_mut(|data| {
+        let kept = data.get_temp_mut_or_default::<(u64, Vec<T>)>(Id::new(key));
+        if kept.0 != pass {
+            *kept = (pass, Vec::new());
+        }
+        kept.1.push(item);
+    });
+}
+
+/// A row component registers its whole rect, so that the gate's `help-measure` check can tell a
+/// row's own detail line from help. Only test builds keep it.
+pub fn register_row(ui: &Ui, rect: Rect) {
+    #[cfg(test)]
+    keep_for_pass(ui, ROW_RECTS, rect);
+    #[cfg(not(test))]
+    let _ = (ui, rect);
+}
+
+/// Marks a label as its row's own detail line (its second line), not help. The gate's
+/// `help-measure` check passes it whatever its width, but only while it lies inside a row that
+/// `register_row` registered: a mark on a label outside any row changes nothing. Call it on the
+/// label's response. Only test builds keep the mark.
 pub fn row_detail(ui: &Ui, response: &Response) {
     #[cfg(test)]
-    {
-        let pass = ui.ctx().cumulative_pass_nr();
-        ui.ctx().data_mut(|data| {
-            let marked = data.get_temp_mut_or_default::<(u64, Vec<Id>)>(Id::new(ROW_DETAILS));
-            if marked.0 != pass {
-                *marked = (pass, Vec::new());
-            }
-            marked.1.push(response.id);
-        });
-    }
+    keep_for_pass(ui, ROW_DETAILS, response.id);
     #[cfg(not(test))]
     let _ = (ui, response);
 }

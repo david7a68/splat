@@ -218,7 +218,7 @@ pub(super) fn list_row(
     actions: impl FnOnce(&mut egui::Ui),
 ) {
     ui.push_id(id, |ui| {
-        ui.allocate_ui_with_layout(
+        let row = ui.allocate_ui_with_layout(
             egui::vec2(ui.available_width(), Density::Scan.row() + design::S),
             egui::Layout::right_to_left(egui::Align::Center),
             |ui| {
@@ -323,6 +323,8 @@ pub(super) fn list_row(
                 );
             },
         );
+        // The row registers its rect, so its second line is known as a row detail, not help.
+        design::register_row(ui, row.response.rect);
     });
 }
 
