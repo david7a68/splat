@@ -13,7 +13,15 @@ const ROW: f32 = 40.0;
 const LIST_WIDTH: f32 = 260.0;
 /// More rows than this in one check are counted, not shown.
 const CHECK_ROWS: usize = 40;
-/// What the Problems page lists, in the words of its sections.
+/// The line above the World card while Lookup holds a second unsaved NPC (round 26 FB8).
+pub(crate) fn kept_in_lookup(lookup: &str, card: &str) -> String {
+    format!("{lookup} is not saved. It is in Lookup. Save or discard {card} to show {lookup} here.")
+}
+
+/// The advice page's row and title: what to check, not what is broken (round 26 FF3, FH1).
+pub(crate) const PROBLEMS_TITLE: &str = "Things to check";
+
+/// What the Things to check page lists, in the words of its sections.
 const PROBLEMS_INTRO: &str = "These lists show notes with a date outside an event, a link to no note, no summary, no links, or a name or sentence on two notes. Splat only lists them. You change the notes.";
 /// The words for a held NPC, in the rail and in the row above another view. The rail's link
 /// is found by this constant.
@@ -832,7 +840,7 @@ impl WorldPage {
                         .show(ui)
                         .clicked();
                     ui.add_space(design::L - ui.spacing().item_spacing.x);
-                    let cancel = design::Action::secondary("Cancel")
+                    let cancel = design::Action::secondary("Close note")
                         .density(design::Density::Read)
                         .show(ui)
                         .clicked();
@@ -923,18 +931,13 @@ impl WorldPage {
         }
         if let Some(npc) = self.generated.as_ref().filter(|_| self.generated_shown) {
             if let Some(name) = self.lookup_npc.as_ref().filter(|_| self.lookup_kept) {
-                ui.label(
-                    Type::Small
-                        .rich(
-                            ui,
-                            // Two NPCs: the one Lookup keeps and the one on this card. Each is
-                            // named, so the DM knows which to save and which moves here.
-                            format!(
-                                "Lookup keeps {name}. Save or discard {} to move {name} here.",
-                                npc.name
-                            ),
-                        )
-                        .color(colors().muted),
+                // Two NPCs: the one Lookup keeps and the one on this card. Each is named, so the
+                // DM knows which to save and which moves here. It is a state, so it is an info
+                // message with its icon (round 26 FB8).
+                design::small_message(
+                    ui,
+                    design::Tone::Info,
+                    &kept_in_lookup(name, &npc.name),
                 );
             }
             let choice = crate::lookup::generator_card(
@@ -1015,8 +1018,10 @@ impl WorldPage {
             ),
             (
                 View::Problems,
-                "Problems",
-                design::count(checks.problems(), "thing to check", "things to check"),
+                // Round 26 FF3, FH1: advice, not faults. The header's `needs fixing` is the
+                // only fault count, so this row names suggestions.
+                PROBLEMS_TITLE,
+                design::count(checks.problems(), "suggestion", "suggestions"),
                 checks.problems(),
             ),
         ];
@@ -1050,18 +1055,26 @@ impl WorldPage {
                 note(ui, &design::count(count - CHECK_ROWS, "more", "more"));
             }
         };
-        // One page's lines under its name, as the reader lists lines from other pages.
+        // One page's lines, then its name. The page answers "which questions are open?", so
+        // each line is `Body` first and opens the note at its heading; the note that holds them
+        // follows in `Small` (round 26 FE4).
         let mut by_page = |ui: &mut egui::Ui, found: &[super::checks::Found]| {
             for group in found.chunk_by(|a, b| a.page == b.page).take(CHECK_ROWS) {
                 ui.push_id(group[0].page, |ui| {
-                    if design::link(ui, &index.items[group[0].page].entry.name).clicked() {
-                        open = Some((group[0].page, None));
-                    }
                     for line in group {
-                        if design::line_link(ui, "", &line.words).clicked() {
+                        if design::wrapped_link(ui, &line.words).clicked() {
                             open = Some((line.page, line.heading.clone()));
                         }
                     }
+                    ui.horizontal_wrapped(|ui| {
+                        ui.spacing_mut().item_spacing.x = 0.0;
+                        note(ui, "In ");
+                        if design::small_link(ui, &index.items[group[0].page].entry.name).clicked()
+                        {
+                            open = Some((group[0].page, None));
+                        }
+                    });
+                    ui.add_space(design::S);
                 });
             }
             more(ui, found.chunk_by(|a, b| a.page == b.page).count());
@@ -1076,7 +1089,7 @@ impl WorldPage {
             by_page(ui, &checks.questions);
             return open;
         }
-        design::reader::title(ui, "Problems");
+        design::reader::title(ui, PROBLEMS_TITLE);
         design::reader::subtitle(ui, PROBLEMS_INTRO);
         if !checks.loose_dates.is_empty() {
             design::reader::section_heading(ui, "Dates outside events");
@@ -1418,7 +1431,7 @@ mod tests {
             (
                 "AD1-problems",
                 Box::new(|harness| {
-                    click_starting(harness, "Problems · ");
+                    click_starting(harness, "Things to check · ");
                     harness.state().view == View::Problems
                         && harness.query_by_label(PROBLEMS_INTRO).is_some()
                 }),
@@ -1534,7 +1547,7 @@ mod tests {
                 page.begin_new("generate", None)
             }),
         ] {
-            click_starting(&mut harness, "Problems · ");
+            click_starting(&mut harness, "Things to check · ");
             open(harness.state_mut());
             harness.run_steps(2);
             if held(harness.state()).as_deref() != Some(npc.as_str())
@@ -1609,7 +1622,7 @@ mod tests {
         harness.run_steps(2);
         assert!(harness.query_by_label(&notice).is_some());
         let problems = harness
-            .query_all_by_label_contains("Problems · ")
+            .query_all_by_label_contains("Things to check · ")
             .next()
             .unwrap()
             .accesskit_node()

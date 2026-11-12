@@ -1178,6 +1178,18 @@ fn log_words(index: &ContentIndex, key: &str, before: Option<&Value>, after: &Va
     )
 }
 
+/// A value change's result as a sentence (round 26 FE3): `Stat block set to Guard.`, `In set to
+/// North Gate. It was Watch House.`, `In cleared. It was Ashfall Keep.` The arrow form stays in
+/// the note's Log lines only (`log_words`). `None` is a value that is not set.
+fn change_words(label: &str, before: Option<&str>, after: Option<&str>) -> String {
+    match (before, after) {
+        (None, Some(after)) => format!("{label} set to {after}."),
+        (Some(before), Some(after)) => format!("{label} set to {after}. It was {before}."),
+        (Some(before), None) => format!("{label} cleared. It was {before}."),
+        (None, None) => format!("{label} cleared."),
+    }
+}
+
 /// One NPC, as an encounter group of one, so a run adds them the way it adds any group.
 pub fn npc_group(npc: &Entry, stat_block: &Entry, side: &str) -> Arc<RunGroup> {
     let overrides = Overrides {
@@ -2689,12 +2701,16 @@ impl Reader {
             Some(at) => index.shown_name(at),
             None => edit::value_name(index, value, label),
         };
+        // `None` is a value that is not set: no words, an empty list or blank text.
         let name = |value: &Value| match value.as_sequence() {
-            Some(groups) if groups.is_empty() => "not set".into(),
+            Some(groups) if groups.is_empty() => None,
             // Each value by the name the reader shows: the note its link opens, else the words
             // written in the file.
-            Some(groups) => groups.iter().map(one_name).collect::<Vec<_>>().join(", "),
-            None => one_name(value),
+            Some(groups) => Some(groups.iter().map(one_name).collect::<Vec<_>>().join(", ")),
+            None if empty_optional(value) => None,
+            // A status is a word, not a link: the words in the file, as its row shows them.
+            None if key == "status" => value.as_str().map(|word| word.trim().to_owned()),
+            None => Some(one_name(value)),
         };
         // Choosing what is already there changes nothing, and writes no Log line.
         let current = world_field(current_entry, key).filter(|value| !value.is_null());
@@ -2712,8 +2728,11 @@ impl Reader {
             self.place_choices_open = false;
             return None;
         }
-        let before_name = world_field(current_entry, key).map_or_else(|| "not set".into(), name);
-        let after_name = name(&value);
+        let words = change_words(
+            label,
+            world_field(current_entry, key).and_then(name).as_deref(),
+            name(&value).as_deref(),
+        );
         // What play changes goes in the entry's Log, in the same write, so one Undo takes
         // both back.
         let log = self
@@ -2741,7 +2760,7 @@ impl Reader {
                 path: item.entry.path.clone(),
                 before: before.clone(),
                 after: after.clone(),
-                word: format!("{label}: {before_name} → {after_name}."),
+                word: words,
                 kind: ChangeKind::of_key(key),
             })
         })();
@@ -2863,13 +2882,13 @@ impl Reader {
             values.push(("not read".into(), Type::Small));
         }
         let status = if status_unread(&item.entry) {
-            "not read"
+            ("not read", Type::Small)
         } else if status(&item.entry).is_empty() {
-            "not set"
+            ("not set", Type::Small)
         } else {
-            status(&item.entry)
+            (status(&item.entry), Type::Body)
         };
-        values.push((status.into(), Type::Small));
+        values.push((status.0.into(), status.1));
         // The place choices' files share the value column, so Change and each choice's action
         // stand in one column.
         let choices = index.place_choices(item.entry.id);
@@ -3025,7 +3044,7 @@ impl Reader {
                 .clicked()
                 .then_some(Go::Item(at, None)),
             None if label == "Status" => {
-                ui.label(Type::Small.rich(ui, name).color(colors().muted));
+                ui.label(Type::Body.rich(ui, name).color(colors().text));
                 None
             }
             None => {
@@ -3053,7 +3072,7 @@ impl Reader {
             .map(|(label, name, target)| {
                 let (words, role) = match target {
                     Some(_) => (name.clone(), Type::Body),
-                    None if *label == "Status" => (name.clone(), Type::Small),
+                    None if *label == "Status" => (name.clone(), Type::Body),
                     None => return missing_width(ui, name, stacked),
                 };
                 design::number_width(ui, &words, &role.font(ui))
@@ -3593,24 +3612,16 @@ impl Reader {
                     "Status",
                     value_width,
                     |ui| {
-                        ui.label(
-                            Type::Small
-                                .rich(
-                                    ui,
-                                    if unread {
-                                        "not read"
-                                    } else if value.is_empty() {
-                                        "not set"
-                                    } else {
-                                        value
-                                    },
-                                )
-                                .color(if unread {
-                                    colors().result.warning
-                                } else {
-                                    colors().muted
-                                }),
-                        );
+                        // Round 26 FE5: a set value is in `Body` in the text colour, as a set
+                        // link is; only `not read` and `not set` stay `Small`.
+                        let (words, role, color) = if unread {
+                            ("not read", Type::Small, colors().result.warning)
+                        } else if value.is_empty() {
+                            ("not set", Type::Small, colors().muted)
+                        } else {
+                            (value, Type::Body, colors().text)
+                        };
+                        ui.label(role.rich(ui, words).color(color));
                     },
                     notice.as_ref().map(|(word, kind)| (word.as_str(), *kind)),
                     None,
@@ -3739,7 +3750,7 @@ impl Reader {
                         stored_link(stat_block).into(),
                     ) {
                         Ok(mut change) => {
-                            change.word = format!("Stat block: not set → {}.", stat_block.name);
+                            change.word = change_words("Stat block", None, Some(&stat_block.name));
                             self.undo = Some(change);
                             self.kept = None;
                         }
@@ -4383,7 +4394,11 @@ mod tests {
         ctx.enable_accesskit();
         let output = ctx.run(Default::default(), |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
-                Reader::change_notice(ui, "In: Watch House → North Gate.", ChangeKind::Place);
+                Reader::change_notice(
+                    ui,
+                    "In set to North Gate. It was Watch House.",
+                    ChangeKind::Place,
+                );
             });
         });
         let nodes = output.platform_output.accesskit_update.unwrap().nodes;
@@ -4837,7 +4852,7 @@ mod tests {
             assert!(reader.change(&campaign, item, &index, key, value).is_some());
             reader.undo.clone().unwrap()
         };
-        change("status", "dead".into());
+        let status = change("status", "dead".into());
         let place = change("in", serde_yaml_ng::to_value(EntryRef::id(arena)).unwrap());
         let group = change("part_of", Value::Sequence(vec!["[[Harvest Cart]]".into()]));
         let text = fs::read_to_string(&path).unwrap();
@@ -4847,7 +4862,10 @@ mod tests {
             ),
             "{text}"
         );
-        assert_eq!(place.word, "In: not set → The Arena.");
+        // Round 26 FE3: a result is a sentence; only the Log keeps the arrow form.
+        assert_eq!(status.word, "Status set to dead. It was alive.");
+        assert_eq!(place.word, "In set to The Arena.");
+        assert_eq!(group.word, "Part of set to Harvest Cart.");
         assert_eq!(group.kind, ChangeKind::PartOf);
 
         // The session, the place and the group each show the line. The entry holds it.

@@ -513,7 +513,7 @@ pub fn broken(d: &mut Driver<'_>) {
     d.type_into("Status", "on watch");
     d.click("Save changes");
     d.wait_for_text("Changes saved.");
-    d.click_containing("Problems · ");
+    d.click_containing("Things to check · ");
     fs::write(&path, "---\nsplat_schema: 2\nsplat_id: [\n---\n").unwrap();
     reload(d);
     d.click("1 note cannot be read");
@@ -546,7 +546,7 @@ pub fn broken(d: &mut Driver<'_>) {
     d.click("Rename the note to Gate Warden");
     d.wait_for_text("Undo name change");
     let renamed = fs::read_to_string(&warden).unwrap();
-    d.click_containing("Problems · ");
+    d.click_containing("Things to check · ");
     fs::write(&path, "---\nsplat_schema: 2\nsplat_id: [\n---\n").unwrap();
     reload(d);
     d.click("1 note cannot be read");
@@ -772,9 +772,9 @@ pub fn broken(d: &mut Driver<'_>) {
                 .is_some_and(|(show, words)| show.bottom() <= words.top()),
         "The file line with Show file sits above the message",
     );
-    // Round 25 FG3 (replaces round 18's quiet `line_start` edge): Try again and Cancel are
+    // Round 25 FG3 (replaces round 18's quiet `line_start` edge): Try again and Close note are
     // message actions without an icon, so each has the secondary border. Try again's border, not
-    // its words, starts at the message text; its words sit inside the border. Cancel follows on
+    // its words, starts at the message text; its words sit inside the border. Close note follows on
     // the same line, `L` after it.
     for size in [SMALL, DEFAULT, LARGE] {
         let (again, cancel, edge, words, splitter) = d.at_size(size, |d| {
@@ -782,7 +782,7 @@ pub fn broken(d: &mut Driver<'_>) {
             let words = again.and_then(|again| words_left_in(d, again));
             (
                 again,
-                d.place_of("Cancel"),
+                d.place_of("Close note"),
                 d.painted_left(headline),
                 words,
                 d.place_of("Resize World notes column"),
@@ -809,11 +809,11 @@ pub fn broken(d: &mut Driver<'_>) {
                 frame.stroke.width > 0.0 && frame.stroke.color == design::colors().field_border
             })
         };
-        let framed = border("Try again") && border("Cancel");
+        let framed = border("Try again") && border("Close note");
         d.observe(
             "iter-25-D-FG3-border",
             framed,
-            format!("At {size:?}, Try again and Cancel have the secondary border"),
+            format!("At {size:?}, Try again and Close note have the secondary border"),
         );
         d.observe(
             "iter-18-D-cancel-follows",
@@ -821,7 +821,7 @@ pub fn broken(d: &mut Driver<'_>) {
                 (again.top() - cancel.top()).abs() < 0.5
                     && (cancel.left() - again.right() - design::L).abs() <= 1.0
             }),
-            format!("At {size:?}, Cancel {cancel:?} follows Try again {again:?}, L apart"),
+            format!("At {size:?}, Close note {cancel:?} follows Try again {again:?}, L apart"),
         );
     }
     // Round 24 FG1, FE1, AG1 (L, D contract): a row marks every fault the header counts. The two
@@ -869,11 +869,11 @@ pub fn broken(d: &mut Driver<'_>) {
         "Technical details opens one short line of the system's words under its heading.",
     );
     d.state("repair-cannot-open-details", Sizes::Default);
-    d.click("Cancel");
+    d.click("Close note");
     d.observe(
         "iter-17-D-error-cancel-closes",
         !d.has(headline),
-        "Cancel removes the error",
+        "Close note removes the error",
     );
     d.observe(
         "iter-18-D-AD1-bytes-cancel",
@@ -913,7 +913,7 @@ pub fn broken(d: &mut Driver<'_>) {
             .iter()
             .any(|node| node.name == long_headline && node.fully_in_view())
             && d.in_view("Try again")
-            && d.in_view("Cancel")
+            && d.in_view("Close note")
     });
     d.observe(
         "iter-18-D-long-path-960",
@@ -1920,7 +1920,7 @@ pub fn facts(d: &mut Driver<'_>) {
     d.click("Change Part of");
     d.type_into("Find a group", "Arena");
     d.click("The Arena");
-    d.expect("Part of: Arena Guild → Arena Guild, The Arena.");
+    d.expect("Part of set to Arena Guild, The Arena. It was Arena Guild.");
     let after = fs::read_to_string(&path).unwrap();
     d.observe(
         "T15.4",
@@ -1942,7 +1942,7 @@ pub fn facts(d: &mut Driver<'_>) {
     d.click("Change Part of");
     d.type_into("Find a group", "Arena");
     d.click("The Arena");
-    d.expect("Part of: Arena Guild → Arena Guild, The Arena.");
+    d.expect("Part of set to Arena Guild, The Arena. It was Arena Guild.");
     assert_eq!(fs::read_to_string(&path).unwrap(), after);
     reload(d);
     d.click(NAV_SESSIONS);
@@ -1973,7 +1973,7 @@ pub fn facts(d: &mut Driver<'_>) {
         d.click("Change Part of");
         d.type_into("Find a group", "Arena");
         d.click("The Arena");
-        d.expect("Part of: Arena Guild → Arena Guild, The Arena.");
+        d.expect("Part of set to Arena Guild, The Arena. It was Arena Guild.");
         fs::read_to_string(&path).unwrap()
     };
     let later = change_part_of(d, "2999-01-01");
@@ -2030,6 +2030,31 @@ pub fn facts(d: &mut Driver<'_>) {
             format!("Open questions leaves the remembered note without selected fill at {size:?}"),
         );
     }
+    // Round 26 FE4: the question is `Body` and comes first; its note's link follows in `Small`.
+    let (question, source) = d.at_size(DEFAULT, |d| {
+        (
+            d.place_of("Can a horn ring be sold?"),
+            d.place_of("Horn Rings"),
+        )
+    });
+    let sizes = question.zip(source).map(|(question, source)| {
+        (
+            d.painted_size(question, "Can a horn ring be sold?"),
+            d.painted_size(source, "Horn Rings"),
+        )
+    });
+    d.observe(
+        "iter-26-D-FE4",
+        question
+            .zip(source)
+            .is_some_and(|(question, source)| question.bottom() <= source.top() + 0.5)
+            && sizes
+                == Some((
+                    Some(design::Type::Body.size()),
+                    Some(design::Type::Small.size()),
+                )),
+        format!("The question {question:?} is Body above its note {source:?}: {sizes:?}"),
+    );
     d.state("open-questions", Sizes::All);
     d.click("Can a horn ring be sold?");
     d.observe(
@@ -2037,7 +2062,21 @@ pub fn facts(d: &mut Driver<'_>) {
         d.visible_text("Tieflings wear one ring on their horns for each kept ancestor."),
         "An open question opens the page that holds it",
     );
-    d.click_containing("Problems · ");
+    // Round 26 FF3, FH1: the advice row names suggestions, not a fault count, so it never
+    // reads as a second `needs fixing` count. Its page has the same title.
+    let row = d.name_starting("Things to check · ");
+    d.observe(
+        "iter-26-D-FF3-row",
+        (row.ends_with(" suggestion") || row.ends_with(" suggestions"))
+            && !d.has_containing("Problems · "),
+        format!("The advice row says {row:?}"),
+    );
+    d.click_containing("Things to check · ");
+    d.observe(
+        "iter-26-D-FF3-title",
+        d.has_label("Things to check") && !d.has_label("Problems"),
+        "The advice page's title is Things to check",
+    );
     d.expect("No summary");
     d.observe(
         "T15.5",
@@ -2128,7 +2167,7 @@ pub fn places(d: &mut Driver<'_>) {
     // in the file (`The Keep`).
     d.observe(
         "iter-23-D-FG3-cleared",
-        d.visible_text("In: Ashfall Keep → not set.") && !d.visible_text("The Keep"),
+        d.visible_text("In cleared. It was Ashfall Keep.") && !d.visible_text("The Keep"),
         "The cleared place's message names the note the In row showed",
     );
     d.observe(
@@ -2158,8 +2197,8 @@ pub fn places(d: &mut Driver<'_>) {
     d.click("New location…");
     d.type_into("Location name", "Watch House");
     d.click("Create location here");
-    d.expect("In: Ashfall Keep → Watch House.");
-    let (success, detail) = finished_change_tone(d, "In: Ashfall Keep → Watch House.");
+    d.expect("In set to Watch House. It was Ashfall Keep.");
+    let (success, detail) = finished_change_tone(d, "In set to Watch House. It was Ashfall Keep.");
     d.observe("iter-20-D-FD5-place", success, detail);
     d.state("npc-new-place", Sizes::All);
     d.click("Undo place change");
@@ -2950,12 +2989,22 @@ pub fn generator(d: &mut Driver<'_>) {
     let kept_line = |file: &str| {
         let name = file.strip_suffix(".md").unwrap_or(file);
         let card = world[0].strip_suffix(".md").unwrap_or(&world[0]);
-        format!("Lookup keeps {name}. Save or discard {card} to move {name} here.")
+        crate::world::page::kept_in_lookup(name, card)
     };
     d.observe(
         "iter-14-D3-FD5-reason",
         d.visible_text(&kept_line(&lookup[0])),
         "World's card says why it kept its own NPC, naming Lookup's",
+    );
+    // Round 26 FB8: the line is a state, so it is an info message with its icon and bar.
+    let line = kept_line(&lookup[0]);
+    let info = d
+        .place_of(&line)
+        .is_some_and(|words| d.has_tone_bar(words, design::colors().result.info));
+    d.observe(
+        "iter-26-D-FB8",
+        line.contains(" is not saved. It is in Lookup.") && info,
+        format!("World's card line {line:?} is an info message with its bar ({info})"),
     );
     d.state("generator-world-keeps-its-npc", Sizes::All);
     d.click(NAV_LOOKUP);
@@ -3081,8 +3130,8 @@ pub fn held_npc(d: &mut Driver<'_>) {
             format!("{view} opens below one row that keeps the unsaved NPC"),
         );
     };
-    d.click_containing("Problems · ");
-    kept(d, "iter-15-D-AD1-problems", "Problems");
+    d.click_containing("Things to check · ");
+    kept(d, "iter-15-D-AD1-problems", "Things to check");
     let short = d
         .nodes()
         .into_iter()
@@ -7158,7 +7207,7 @@ pub fn world_note_moved(d: &mut Driver<'_>) {
     // folder as the list shows it. The other folder is not named.
     d.observe(
         "iter-24-D-AD2",
-        d.has_containing("In: Watch House → Watch House (Locations).")
+        d.has_containing("In set to Watch House (Locations). It was Watch House.")
             && !d.has_containing("Watch House (Other)"),
         "The place result names the folder of the file the DM chose",
     );
@@ -7326,6 +7375,27 @@ pub fn world_note_deleted(d: &mut Driver<'_>) {
             d.painted_color("In"),
             d.painted_color(&missing)
         ),
+    );
+    // Round 26 AE2: Lookup's result says the fault that World's row says, with its warning
+    // mark, before the note's summary. Neighbour: the stat block's result has no mark.
+    let mark = format!("{} Place not found", design::icons::WARN);
+    let row = d
+        .nodes()
+        .into_iter()
+        .find(|node| node.name.starts_with("Watchkeeper · ") && node.name.contains("NPC"))
+        .map(|node| node.name);
+    d.observe(
+        "iter-26-D-AE2",
+        row.as_ref().is_some_and(|row| {
+            row.find(&mark)
+                .zip(row.find("A note for tonight"))
+                .is_some_and(|(mark, summary)| mark < summary)
+        }) && d
+            .nodes()
+            .iter()
+            .filter(|node| node.name.starts_with("Watchkeeper Guard · "))
+            .all(|node| !node.name.contains(&mark)),
+        format!("Lookup's result row is {row:?}"),
     );
     d.state("npc-place-deleted-in-lookup", Sizes::All);
     d.press(Key::Escape);
@@ -8798,6 +8868,20 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
                 && d.in_view_containing("1 note needs fixing")
                 && d.has_containing("the Archdevil · Not found")
         },
+    );
+    // Round 26 FE5: the set Status value `alive` is `Body` in the text colour, as a set link is.
+    // Neighbour: the `not set` placeholder in a row above stays muted `Small`.
+    let status = |d: &Driver<'_>, words: &str| {
+        let row = d.place_of("Change Status")?;
+        let area = egui::Rect::from_x_y_ranges(0.0..=row.left(), row.top() - 4.0 * design::Density::Scan.row()..=row.bottom());
+        Some((d.painted_size(area, words)?, d.painted_color(words)?))
+    };
+    let (alive, unset) = (status(d, "alive"), status(d, "not set"));
+    d.observe(
+        "iter-26-D-FE5",
+        alive == Some((design::Type::Body.size(), design::colors().text))
+            && unset == Some((design::Type::Small.size(), design::colors().muted)),
+        format!("Status alive {alive:?} is Body text; not set {unset:?} stays Small muted"),
     );
     d.state("missing-group-on-one-line", Sizes::All);
     // From another note, the header count's menu opens the note that needs fixing.

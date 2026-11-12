@@ -697,7 +697,7 @@ says to add a table of names to a note and paste the marker on the line above th
 the marker line for you; then change `1d6` in it to the number of names.
 
 On the World page, an unsaved NPC stays until you save it or choose **Discard**, and **Undo discard** brings it back.
-While you look at other notes, Problems or a repair, one row above them says **Unsaved NPC: <name> · Show**.
+While you look at other notes, Things to check or a repair, one row above them says **Unsaved NPC: <name> · Show**.
 The rail says **Unsaved NPC** on every page; select it to see the NPC's card on World.
 
 The built-in lists suit no world in particular, so a campaign can replace any of the four. Mark a table with the key
