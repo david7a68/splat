@@ -1280,20 +1280,29 @@ impl Splat {
             self.page = Page::World;
         }
         let mut refresh = std::mem::take(&mut self.world_page.reload);
-        let log_as = self.sessions.current_link().map(|session| {
-            match timeline::day_now(&self.timeline.events) {
-                Some(day) => format!("{session}, Day {day}"),
-                None => session,
-            }
-        });
+        let played = self.sessions.current_link();
+        let day = timeline::day_now(&self.timeline.events);
         let start_blocked = self.encounters.plan_blocked();
+        // A Log line whose entry is gone waits for no one; the footer says its words.
+        if let Some(index) = self.lookup.index() {
+            self.world_page.reader.forget_gone_log_lines(&index);
+            self.lookup.reader.forget_gone_log_lines(&index);
+        }
+        // An edit form in one reader holds back the other's Log field for that entry.
+        self.lookup
+            .reader
+            .edit_forms_into(&mut self.world_page.reader.edited_elsewhere);
+        self.world_page
+            .reader
+            .edit_forms_into(&mut self.lookup.reader.edited_elsewhere);
         let mut start_fight = None;
         for reader in [&mut self.world_page.reader, &mut self.lookup.reader] {
             reader.start_blocked = start_blocked;
             if let Some(fight) = reader.start_fight.take() {
                 start_fight = Some(fight);
             }
-            reader.log_as.clone_from(&log_as);
+            reader.played.clone_from(&played);
+            reader.day = day;
             reader.sides = sides.clone();
             reader.live = live;
             reader.in_run = in_run.clone();
@@ -2351,6 +2360,11 @@ impl Splat {
             if let Some(fight) = self.sessions.wants_start_fight.take() {
                 self.start_fight_with(&fight);
             }
+            if let Some((id, name, words)) = self.sessions.wants_log.take() {
+                self.notes_give_way();
+                self.lookup.open_id(id);
+                self.lookup.reader.open_log(campaign.id, id, &name, &words);
+            }
             // Encounters shows why, and a button that seems dead tells the table nothing.
             if asked && !self.encounters.go_to_run {
                 self.page = Page::Encounters;
@@ -2371,6 +2385,9 @@ impl Splat {
         if std::mem::take(&mut self.sessions.wants_content_refresh) {
             self.lookup.refresh();
             self.lookup.files_changed = true;
+        }
+        if std::mem::take(&mut self.sessions.wants_index_refresh) {
+            self.lookup.refresh();
         }
         if let Some(name) = self.sessions.wants_lookup.take() {
             self.notes_give_way();

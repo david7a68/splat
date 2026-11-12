@@ -1,22 +1,23 @@
 Phase totals
 phase	tasks	transitions	interactions	nav	sub	panel	find	do
-before	8	5	36	5	0	1	9	21
-during	32	9	199	9	2	15	47	126
-after	8	5	22	5	4	0	1	12
-total	48	19	257	19	6	16	57	159
+before	9	5	35	5	0	1	7	22
+during	31	9	193	9	2	15	44	123
+after	9	5	26	5	4	2	1	14
+total	49	19	254	19	6	18	52	159
 
 Tasks
 phase	task	transitions	interactions	overhead	path
 before	Start tonight's session note	1	4	1	Encounters > Session
-before	Recall what happened last session, and where the story stands	0	2	2	Session
+before	Recall what happened last session, and where the story stands	0	0	0	Session
 before	Compare the party's passive Perception, to plan an ambush	1	1	1	Session > Party
 before	Build tonight's encounter	2	16	9	Party > Session > Encounters
 before	Make the boss your own: copy it, change it, and swap it in	0	5	0	Encounters
 before	Write the read-aloud text and tactics for the encounter	0	4	0	Encounters
 before	Back to the session plan, with tonight's encounter in it	1	4	2	Encounters > Session
 before	Is each planned fight right for this party?	0	0	0	Session
+before	Carry over what last week left into tonight's note	0	1	0	Session
 during	Start recording	0	2	0	Session
-during	Read last session's recap aloud	0	2	2	Session
+during	Read last session's recap aloud	0	0	0	Session
 during	A player asks who Captain Varra is	0	3	3	Session
 during	Note what the party decides	0	2	1	Session
 during	The party travels for half a day: record it	0	2	1	Session
@@ -28,7 +29,6 @@ during	Fireball hits three enemies: apply half to one, full to two	0	6	3	Run
 during	The table rules that the Fireball missed: undo it	0	1	0	Run
 during	A wolf frightens Oren: mark the condition	0	3	2	Run
 during	What does Frightened do?	0	2	2	Run
-during	A wolf frightens Oren for 10 rounds: give the condition its count	0	4	1	Run
 during	Iselle starts concentrating: mark it	0	2	1	Run
 during	Combat: round 2	0	32	8	Run
 during	Check Iselle's spell save DC and spell list	0	3	3	Run
@@ -55,6 +55,7 @@ after	Write the wrap-up in the note	0	4	1	Session
 after	Link the fight in the note	2	6	2	Session > Timeline > Session
 after	Put the fight's rewards in the note	0	1	0	Session
 after	Check the party's HP for next time	1	1	1	Session > Party
+after	Put what an NPC said in the NPC's own note	0	4	2	Session
 
 Set-up, not counted
 before	play last week's session, then quit and open the app
@@ -66,24 +67,25 @@ during	the campaign has a marked road table
 during	the campaign has a house rule note in play
 after	save, quit and open the app after the session
 after	the recording service has its keys
+after	the plan holds a done scene with Hobb the Miller, in view
 
 Blocked
 
 Facts
-before / Recall what happened last session, and where the story stands: the Last time line shows last week's words with no act: false
+before / Recall what happened last session, and where the story stands: the Last time line shows last week's words with no act: true
 before / Recall what happened last session, and where the story stands: last week's words are in view: true
 before / Compare the party's passive Perception, to plan an ambush: Party compares without opening a sheet: true
 before / Make the boss your own: copy it, change it, and swap it in: the roster has a row for the copy: true
 before / Back to the session plan, with tonight's encounter in it: the plan offers tonight's fight: true
 before / Is each planned fight right for this party?: the planned fights' rows say ["Low", "Low"]
+before / Carry over what last week left into tonight's note: tonight's note holds last week's open thread: true
 during / Open the app at the table: the app reopened on Session
-during / Read last session's recap aloud: the Last time line shows last week's words with no act: false
+during / Read last session's recap aloud: the Last time line shows last week's words with no act: true
 during / Read last session's recap aloud: last week's words are in view: true
 during / Note what the party decides: the words reached the note: true
 during / Check the road for encounters: the journey holds one check: true
 during / Ambush: read the read-aloud text and start the fight: setup shows the read-aloud text: true
 during / Fireball hits three enemies: apply half to one, full to two: one step of undo for all three: true
-during / A wolf frightens Oren for 10 rounds: give the condition its count: the row holds one Frightened, with its count: true
 during / Roll a save for a monster: the roll is beside the amount, with the stat block or sheet in view: true
 during / A player asks what the miller said last session: Lookup finds last session's notes: true
 during / End the fight: after the fight, the page is Session
@@ -98,3 +100,4 @@ after / Review how the fight went: log and final HP: final HP reads in place: tr
 after / Link the fight in the note: the note holds the fight's link: true
 after / Put the fight's rewards in the note: the note holds the fight's rewards block: true
 after / Check the party's HP for next time: Kestrel on Party after the evening: [Kestrel Dunmoor · Level 5 Rogue · Per 11 · Ins 11 · HP 9/41 · AC 15 · Poisoned]
+after / Put what an NPC said in the NPC's own note: the NPC's note holds the line: true

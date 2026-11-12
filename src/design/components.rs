@@ -539,6 +539,8 @@ pub struct Action<'a> {
     key: Option<&'a str>,
     plain: bool,
     line_start: bool,
+    /// A `line_start` Undo whose target stays in its message's column: the row's left edge.
+    column: bool,
     min_width: Option<f32>,
 }
 
@@ -556,6 +558,7 @@ impl<'a> Action<'a> {
             key: None,
             plain: false,
             line_start: false,
+            column: false,
             min_width: None,
         }
     }
@@ -580,6 +583,14 @@ impl<'a> Action<'a> {
     /// reaches only `S` into the pane's gutter.
     pub fn line_start(mut self) -> Self {
         self.line_start = true;
+        self
+    }
+
+    /// `line_start` for an Undo on its own line under its message: its target stays in the
+    /// message's column, which starts at the row's left edge.
+    fn line_start_in_column(mut self) -> Self {
+        self.line_start = true;
+        self.column = true;
         self
     }
 
@@ -621,6 +632,13 @@ impl<'a> Action<'a> {
     }
     pub fn selected(mut self, selected: bool) -> Self {
         self.selected = selected;
+        self
+    }
+
+    /// A quiet action that ends a line of text, at the line's height (`XL`), so that the line
+    /// keeps the height it has without the action.
+    pub fn in_line(mut self) -> Self {
+        self.height = XL;
         self
     }
 
@@ -724,7 +742,15 @@ impl<'a> Action<'a> {
                 .align_size_within_rect(size, allocated)
                 .translate(vec2(-padding, 0.0));
             let rect = rect.with_min_x(rect.min.x - icon_width);
-            (rect, ui.interact(rect, id, Sense::click()))
+            // An Undo under its message keeps its target in the message's column, so it never
+            // hangs past a pane whose text edge is the message's (Lookup's reader). The icon
+            // and the words keep their places.
+            let target = if self.column {
+                rect.with_min_x(rect.min.x.max(ui.max_rect().left()))
+            } else {
+                rect
+            };
+            (rect, ui.interact(target, id, Sense::click()))
         } else {
             ui.allocate_exact_size(vec2(width, self.height), Sense::click())
         };
@@ -762,7 +788,7 @@ impl<'a> Action<'a> {
             Kind::Destructive => (plain_fill, Stroke::new(HAIRLINE_WIDTH, c.destructive)),
         };
         ui.painter().rect(
-            rect,
+            response.rect,
             corner(RADIUS_CONTROL),
             fill,
             stroke,
@@ -2261,7 +2287,7 @@ fn undo_message_with_links_inside(
         clicked = notice(ui, tone, names, suffix);
         ui.horizontal(|ui| {
             ui.add_space((inset - gap).max(0.0));
-            pressed = button.line_start().show(ui).clicked();
+            pressed = button.line_start_in_column().show(ui).clicked();
         });
     } else {
         clicked = ui
@@ -2902,7 +2928,7 @@ fn undo_message_inside(
         message(ui, tone, text);
         ui.horizontal(|ui| {
             ui.add_space((inset - gap).max(0.0));
-            pressed = button.line_start().show(ui).clicked();
+            pressed = button.line_start_in_column().show(ui).clicked();
         });
     } else {
         ui.horizontal_top(|ui| {
