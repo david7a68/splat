@@ -3,8 +3,9 @@
 Each journey script (`src/visual_tests/dm_audit/journeys.rs`) plays the real app. Where a step could not be
 done as section 2 of `docs/design/session-cycle.md` walks it, or cost more, or the app showed a wrong state,
 it is below, and the script takes the route a DM would have to take, so that the measure is true. No app code
-changed in this pull request. The journeys were first played on `main` at `9d3e0677`, and frozen after the
-merge of `main` at `bd7ff4b0`, which holds pull request 280.
+changed in this pull request. The journeys were first played on `main` at `9d3e0677`, frozen after the
+merge of `main` at `bd7ff4b0` (pull request 280), frozen again after review round 1, and cost the same after
+the merge of `main` at `19cec3d2` (pull request 282).
 
 Each entry is one of three kinds:
 
