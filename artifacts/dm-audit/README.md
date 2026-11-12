@@ -77,7 +77,7 @@ participants in one fight. Its runs have IDs made from their campaign and name, 
 on every run of the test.
 
 The scenario `plain-evening` plays it with today's controls (`src/visual_tests/plain_evening.rs`). `SCREENS`
-and `HOVERS` in that file fix its 140 views in code; a missing or extra view always fails, and no row of
+and `HOVERS` in that file fix its 142 views in code; a missing or extra view always fails, and no row of
 `allowed.json` can excuse one. After every act the screen must equal a view that G7 records, or the act is in
 `PASSING` with its reason (setting the stage, one `Next turn` of twelve, the editor scrolled to its loot row);
 so a form or panel that the evening opens between two views cannot go unseen:

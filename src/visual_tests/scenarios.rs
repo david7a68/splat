@@ -20,8 +20,10 @@ pub mod integrity;
 pub mod list_formats;
 pub mod markdown_links;
 pub mod run_continue;
+pub mod session_carry_over;
 pub mod session_plan_scenes;
 pub mod stat_formats;
+pub mod trackers;
 pub mod travel_checks;
 pub mod world_build;
 
@@ -282,6 +284,86 @@ fn is_icon(text: &str) -> bool {
 /// Where a control's words start: the leftmost text painted inside its press area. An icon
 /// before the words does not count: `line_start` hangs it in the gutter, so the words start at
 /// the text edge.
+/// Round 26 FB6: an inline creation row. The action is on its field's line (centres within
+/// 1 px), after the field; the reason is on a line below, under the field (after a quiet
+/// Cancel or Clear that starts that line). The rects when it holds.
+fn creation_row(
+    d: &Driver<'_>,
+    field: &str,
+    action: &str,
+    reason: &str,
+) -> Result<(egui::Rect, egui::Rect, egui::Rect), String> {
+    let field = d
+        .nodes()
+        .into_iter()
+        .find(|node| node.name == field && node.role == egui::accesskit::Role::TextInput)
+        .ok_or(format!("no text field {field:?}"))?
+        .rect;
+    let action = d.place_of(action).ok_or(format!("no {action:?}"))?;
+    let reason = d
+        .painted_rect_in(reason, egui::Rect::EVERYTHING)
+        .ok_or(format!("no reason {reason:?}"))?;
+    if (action.center().y - field.center().y).abs() <= 1.0
+        && action.left() > field.right()
+        && reason.left() >= field.left() - 1.0
+        && reason.right() <= action.left()
+        && reason.top() >= field.bottom() - 0.5
+    {
+        Ok((field, action, reason))
+    } else {
+        Err(format!(
+            "field {field:?}, action {action:?}, reason {reason:?}"
+        ))
+    }
+}
+
+/// Round 26 review: words of the page that show inside the footer's area. A footer's own words
+/// are clipped to the footer; a page's words are clipped above it, so a clip that starts above
+/// the footer and a visible part inside it mean the page reaches under the footer.
+fn body_under_footer(d: &Driver<'_>, words: &str) -> Vec<String> {
+    let Some(footer) = footer_with(d, words) else {
+        return vec!["no footer".to_owned()];
+    };
+    let mut leaks = Vec::new();
+    d.each_painted_text(|text, clip| {
+        let shown = egui::Rect::from_min_size(text.pos, text.galley.size()).intersect(clip);
+        if clip.top() < footer.top() - 1.0
+            && shown.is_positive()
+            && shown.intersects(footer.shrink(1.0))
+        {
+            leaks.push(text.galley.job.text.clone());
+        }
+    });
+    leaks
+}
+
+/// Click the control whose name starts with `name`. When it is not wholly in view, Tab brings it
+/// into view first, as the page's focus scroll does for a keyboard or a screen reader: AccessKit's
+/// scroll-into-view stops at a list's own scroll area inside a scrolled page.
+fn click_by_focus(d: &mut Driver<'_>, name: &str) {
+    let full = d
+        .nodes()
+        .into_iter()
+        .find(|node| node.name.starts_with(name))
+        .unwrap_or_else(|| panic!("{name:?} is drawn"));
+    if !full.fully_in_view() {
+        d.tab_to(&full.name);
+        d.harness_focus_nothing();
+    }
+    d.click(&full.name);
+}
+
+/// Round 26: the pane footer whose words hold `words`: the smallest named group that holds them.
+fn footer_with(d: &Driver<'_>, words: &str) -> Option<egui::Rect> {
+    d.nodes()
+        .into_iter()
+        .filter(|node| {
+            node.role == egui::accesskit::Role::GenericContainer && node.name.contains(words)
+        })
+        .map(|node| node.rect)
+        .min_by(|a, b| a.area().total_cmp(&b.area()))
+}
+
 fn words_left_in(d: &Driver<'_>, area: egui::Rect) -> Option<f32> {
     let mut left = None::<f32>;
     d.each_painted_text(|text, _| {
@@ -713,23 +795,65 @@ fn check_line_start(
     sizes: &[(f32, f32)],
     among: Option<&[&str]>,
 ) {
+    check_start(d, id, action, above, sizes, among, false);
+}
+
+/// A bordered action that starts a line: its frame starts at the text edge of the line above
+/// and its words sit inside the frame, so it is a button and not a label. Its press area clears
+/// every splitter, and no other press area overlaps it.
+fn check_frame_start(
+    d: &mut Driver<'_>,
+    id: &str,
+    action: &str,
+    above: &str,
+    sizes: &[(f32, f32)],
+    among: Option<&[&str]>,
+) {
+    check_start(d, id, action, above, sizes, among, true);
+}
+
+fn check_start(
+    d: &mut Driver<'_>,
+    id: &str,
+    action: &str,
+    above: &str,
+    sizes: &[(f32, f32)],
+    among: Option<&[&str]>,
+    frame: bool,
+) {
     for &size in sizes {
         let (words, edge, clear) = d.at_size(size, |d| {
             let Some((line, node)) = line_and_action_below(d, above, action) else {
                 return (None, None, Err(format!("no {action} below {above:?}")));
             };
+            let words = words_left_in(d, node.rect);
+            // A frame starts at the text, and its words start inside it. It has a border.
+            let start = if frame {
+                words
+                    .filter(|words| *words > node.rect.left() + 1.0)
+                    .filter(|_| {
+                        d.control_frame_at(node.rect)
+                            .is_some_and(|frame| frame.stroke.width > 0.0)
+                    })
+                    .map(|_| node.rect.left())
+            } else {
+                words
+            };
             (
-                words_left_in(d, node.rect),
+                start,
                 Some(line.left()),
                 press_area_clear(d, node.shown, action, among),
             )
         });
+        let part = if frame { "frame" } else { "words" };
         d.observe(
             id,
             words
                 .zip(edge)
                 .is_some_and(|(words, edge)| (words - edge).abs() <= 1.0),
-            format!("At {size:?}, {action} starts at {words:?}, the text above at {edge:?}"),
+            format!(
+                "At {size:?}, {action}'s {part} start at {words:?}, the text above at {edge:?}"
+            ),
         );
         d.observe(
             &format!("{id}-clear"),
@@ -1319,6 +1443,22 @@ pub mod library_author {
         d.state("package-actions", Sizes::Default);
         d.click(MANAGE_PACKAGES);
         d.expect(MANAGE_TITLE);
+        // Review round 26 FB6: each creation action follows its last field on that field's
+        // line (centres within 1 px), and the reason sits on the line below at the field's edge.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let rows = d.at_size(size, |d| {
+                [
+                    ("Package folder", "Add folder", "Choose a folder first."),
+                    ("Folder", "Create package", "Type a name first."),
+                ]
+                .map(|(field, action, reason)| creation_row(d, field, action, reason))
+            });
+            d.observe(
+                "iter-26-C-FB6-library",
+                rows.iter().all(Result::is_ok),
+                format!("At {size:?}, Add folder and Create package on their field's line, reasons below: {rows:?}"),
+            );
+        }
         d.state("manage-packages", Sizes::All);
         escape_closes(d, "manage packages form", MANAGE_TITLE, CLOSE_WINDOW);
         d.goal("open and close the package form");
@@ -1341,6 +1481,16 @@ pub mod library_author {
                 "iter-7-D-SD1",
                 labels,
                 format!("Peer field labels use sentence-case Small at {size:?}"),
+            );
+        }
+        for size in [SMALL, DEFAULT, LARGE] {
+            let row = d.at_size(size, |d| {
+                creation_row(d, "Folder", CREATE_ENTRY, "Type a name first.")
+            });
+            d.observe(
+                "iter-26-C-FB6-entry",
+                row.is_ok(),
+                format!("At {size:?}, Create entry on the Folder field's line, its reason below: {row:?}"),
             );
         }
         d.state("new-entry-form", Sizes::All);
@@ -1835,8 +1985,8 @@ pub mod campaign_content {
     const MODULE_ROW: &str = "Ashen Marches · ";
     // Round 25 FA2: `chosen` counts the DM's own choices; the entry the other choices need is
     // counted once, as needed.
-    const PARTIAL: &str = "4 of 6 chosen · 1 needed";
-    const CHANGED: &str = "5 of 6 chosen · 1 needed";
+    const PARTIAL: &str = "4 of 6 chosen · 1 still needed";
+    const CHANGED: &str = "5 of 6 chosen · 1 still needed";
     const UNSELECTED_ENTRY: &str = "Ash Wraith";
     const DISCARD_SELECTION: &str = "Discard";
     const CAMPAIGN_ENTRY: &str = "Captain Varra";
@@ -1854,7 +2004,7 @@ pub mod campaign_content {
     pub fn run(d: &mut Driver<'_>) {
         go_campaign(d);
         d.expect(PAGE_TITLE);
-        d.expect("2,069 entries chosen · 1 needed");
+        d.expect("2,069 entries chosen · 1 still needed");
         d.click_starting("D&D 2024 · SRD");
         d.expect("Whole package, with future additions");
         d.state("packages-tab", Sizes::Default);
@@ -1879,12 +2029,45 @@ pub mod campaign_content {
             "Package mode comes before the selection actions",
             |d| {
                 d.place_of("Chosen entries only")
-                    .zip(d.place_of("Use all"))
+                    .zip(d.place_of("Choose all"))
                     .is_some_and(|(mode, action)| {
                         mode.left() < action.left() && mode.center().y < action.bottom()
                     })
             },
         );
+        // Round 26 FA8: the package's heading sits on the line of its mode and its actions.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let centres = d.at_size(size, |d| {
+                // The ink of the first letter, not the galley: a wrapping row pads a text's
+                // first line to the row height, so the galley's centre is right even when the
+                // words sit at its bottom.
+                let ink = |words: &str| {
+                    let mut found = None;
+                    d.each_painted_text(|text, _| {
+                        if text.galley.job.text.starts_with(words)
+                            && let Some(row) = text.galley.rows.first()
+                            && let Some(glyph) = row.glyphs.first()
+                        {
+                            found = Some(text.pos.y + row.pos.y + glyph.logical_rect().center().y);
+                        }
+                    });
+                    found
+                };
+                let none = d.painted_rect_in("Choose none", egui::Rect::EVERYTHING)?;
+                Some((
+                    ink("ASHEN MARCHES")?,
+                    ink("Chosen entries only")?,
+                    none.center().y,
+                ))
+            });
+            d.observe(
+                "iter-26-C-FA8",
+                centres.is_some_and(|(heading, mode, none)| {
+                    (heading - mode).abs() <= 1.0 && (heading - none).abs() <= 1.0
+                }),
+                format!("At {size:?}, heading, mode and Choose none centres: {centres:?}"),
+            );
+        }
         d.state("packages-partial-selection", Sizes::All);
         d.goal("see a partial package selection");
 
@@ -1915,7 +2098,7 @@ pub mod campaign_content {
             "A needed entry is not counted as chosen as well",
         );
         d.expect("Include future additions");
-        d.expect("2,070 entries chosen · 1 needed");
+        d.expect("2,070 entries chosen · 1 still needed");
         d.observe_both(
             "iter-18-A-lock",
             "A package draft states the campaign switch lock",
@@ -2095,17 +2278,16 @@ pub mod campaign_content {
             },
         );
         // FD2: one rule separates the open repair from the package list, an `L` gap below the
-        // repair. Round 25 FD1: the repair ends with its message space below Save repaired note,
-        // so the gap is below that space. The rule must sit above the first thing drawn after
-        // the repair.
+        // repair. Round 26: the repair's messages are in the page's footer, so the repair ends
+        // with its save row. The rule must sit above the first thing drawn after the repair.
         d.observe_both(
             "iter-14-E-FD2",
-            "One rule, an L gap below the repair's message space, separates the repair from the list",
+            "One rule, an L gap below the repair's save row, separates the repair from the list",
             |d| {
                 let Some(save) = d.place_of("Save repaired note") else {
                     return false;
                 };
-                let end = save.bottom() + crate::design::message_space_height();
+                let end = save.bottom();
                 let Some(next) = d
                     .nodes()
                     .into_iter()
@@ -2305,7 +2487,9 @@ pub mod campaign_content {
         set_read_only(true);
         d.click("Save repaired note");
         d.settle();
-        const READ_ONLY: &str = "Not saved. This file is read only.";
+        // Round 26 FA3: the state slot says `Not saved`; the cause is a reason in the page's
+        // footer, where a parse cause also sits, and it names its repair's file.
+        const READ_ONLY: &str = "Broken.md is not saved. This file is read only.";
         const NOT_SAVED_TWICE: &str = "The repair has not been saved";
         let unchanged = std::fs::read(&file).unwrap() == on_disk;
         d.observe(
@@ -2317,9 +2501,42 @@ pub mod campaign_content {
                 d.visible_text("Unsaved")
             ),
         );
+        for size in REPAIR_SIZES {
+            let placed = d.at_size(size, |d| {
+                let save = d.place_of("Save repaired note")?;
+                // The save row's state: the painted text on Save's line that says Not saved.
+                let mut slot = None;
+                d.each_painted_text(|text, _| {
+                    let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                    if text.galley.job.text.contains("Not saved")
+                        && (rect.center().y - save.center().y).abs() <= crate::design::S
+                    {
+                        slot = Some(text.galley.job.text.clone());
+                    }
+                });
+                let footer = footer_with(d, READ_ONLY)?;
+                let cause = d.painted_rect_in(READ_ONLY, egui::Rect::EVERYTHING)?;
+                Some((slot?, footer, cause, save, d.window_size().1))
+            });
+            d.observe(
+                "iter-26-C-FA3",
+                placed
+                    .as_ref()
+                    .is_some_and(|(slot, footer, cause, save, height)| {
+                        slot.trim_start_matches(|c: char| !c.is_alphabetic()) == "Not saved"
+                            && footer.contains(cause.center())
+                            && footer.top() > save.bottom()
+                            && footer.bottom() >= *height - crate::design::XXL
+                    }),
+                format!(
+                    "At {size:?}: the slot says only Not saved, and the cause is in the footer at \
+                     the pane's bottom (slot, footer, cause, Save, window height): {placed:?}"
+                ),
+            );
+        }
         // Round 24 FD1, AD3, SD1: the failed Save stays open for a retry, but does not own the
-        // primary. FD9: the failure shows once, in the state slot; the message above stops at
-        // the way to fix the file.
+        // primary. FD9: the failure shows once, in the footer; the message above stops at the
+        // way to fix the file.
         d.observe_both(
             "iter-24-C-FD1",
             "After a read-only Save, Save repaired note is open, secondary and the failure shows once",
@@ -2350,34 +2567,26 @@ pub mod campaign_content {
         );
         set_read_only(false);
         d.click("Discard");
-        // Round 25 FD1: the discard result sits in the message space below the save row. Its
-        // Undo is live, so it comes first, on the space's first line, and the invalid file's
-        // reason follows it in the same part. The editor keeps its top through the result, Undo
-        // discard, an invalid draft and a valid one, at every size.
+        // Round 25 FD1, round 26: the discard result sits in the page's footer. Its Undo is live,
+        // so it comes first, and the invalid file's reason follows it. The editor keeps its top
+        // through the result, Undo discard, an invalid draft and a valid one, at every size.
         const DISCARDED: &str = "Broken.md draft discarded.";
         const UNDO_DISCARD: &str = "Undo discard of Broken.md";
         let discarded_tops = editor_tops(d);
         let first_line = REPAIR_SIZES.map(|size| {
             d.at_size(size, |d| {
-                let save = d
-                    .nodes()
-                    .into_iter()
-                    .filter(|node| node.name == "Save repaired note")
-                    .map(|node| node.rect)
-                    .next();
+                let footer = footer_with(d, DISCARDED);
                 let undo = d.place_of(UNDO_DISCARD);
                 let reason = d.painted_rect_in("Line 3 opens a list", egui::Rect::EVERYTHING);
-                // The space starts below the save row; its first line is one Body line deep.
-                save.zip(undo)
-                    .zip(reason)
-                    .is_some_and(|((save, undo), reason)| {
-                        undo.top() >= save.bottom()
-                            && undo.center().y
-                                < save.bottom()
-                                    + crate::design::Type::Body.line()
-                                    + crate::design::S
+                let editor = d.place_of("Note text: Notes/Broken.md");
+                footer.zip(undo).zip(reason).zip(editor).is_some_and(
+                    |(((footer, undo), reason), editor)| {
+                        footer.contains_rect(undo)
+                            && footer.contains(reason.center())
                             && reason.top() > undo.center().y
-                    })
+                            && footer.top() > editor.top()
+                    },
+                )
             })
         });
         d.observe(
@@ -2388,7 +2597,7 @@ pub mod campaign_content {
                 && d.visible_text(DISCARDED)
                 && d.visible_text("Invalid"),
             format!(
-                "Editor tops: clean {clean_tops:?}, after Discard {discarded_tops:?}; Undo on the first line, reason after it, at 960/1200/1920: {first_line:?}"
+                "Editor tops: clean {clean_tops:?}, after Discard {discarded_tops:?}; Undo first in the footer, the reason after it, at 960/1200/1920: {first_line:?}"
             ),
         );
         d.click(UNDO_DISCARD);
@@ -2506,10 +2715,11 @@ pub mod campaign_content {
         assert!(manifest.exists());
     }
 
-    /// Round 25 review: a repair whose discard result and cause need more than the message
-    /// space's two lines. The part stays two lines high; its words scroll inside it by keyboard
-    /// and wheel; Tab reaches it by its whole message, and its focus ring stays clear of its
-    /// scroll bar. At 960, 1200 and 1920. Starts and ends with only Broken.md's repair.
+    /// Round 25 review, round 26: a repair whose discard result and cause are long. They sit in
+    /// the page's footer, which is as tall as its words up to a third of the pane; Tab reaches it
+    /// by its whole message and its focus ring stays clear of its scroll bar. When the words need
+    /// more than that third, they scroll inside by keyboard and wheel; otherwise every word is in
+    /// view. At 960, 1200 and 1920. Starts and ends with only Broken.md's repair.
     fn message_space_overflows_and_scrolls(d: &mut Driver<'_>) {
         const NAME: &str = "The ledger of the toll keeper at the old Ashford bridge and every name he wrote down.md";
         let path = format!("Notes/{NAME}");
@@ -2523,10 +2733,10 @@ pub mod campaign_content {
         let editor = crate::world::repair::editor_name(&path);
         d.replace_text_in(&editor, &format!("{broken}extra\n"));
         d.click_below(&message, "Discard");
-        let words =
-            format!("{NAME} draft discarded. Line 3 opens a list with [ that never closes.");
+        let result = format!("{NAME} draft discarded.");
+        let cause = format!("{NAME}: Line 3 opens a list with [ that never closes.");
         let base = d.window_size();
-        // The part's own scroll bar lane, as `design::fixed_part` keeps it.
+        // The footer's own scroll bar lane.
         let lane = {
             let style = d.app_style();
             style.spacing.scroll.bar_width + style.spacing.scroll.bar_outer_margin
@@ -2534,85 +2744,76 @@ pub mod campaign_content {
         let mut results = Vec::new();
         for size in [SMALL, DEFAULT, LARGE] {
             d.set_base(size);
-            // Tab first: focus scrolls the page to the part. Then back to the part's start.
-            let focused = d.tab_to(&words);
-            for _ in 0..4 {
+            let footer = |d: &Driver<'_>| {
+                d.nodes().into_iter().find(|node| {
+                    node.role == egui::accesskit::Role::GenericContainer
+                        && node.name.contains(&result)
+                        && node.name.contains(&cause)
+                })
+            };
+            let Some(name) = footer(d).map(|node| node.name) else {
+                results.push((size, false, false, None, false));
+                continue;
+            };
+            let focused = d.tab_to(&name);
+            for _ in 0..8 {
                 d.press(Key::ArrowUp);
             }
-            // The part's texts, by their clip inside it: the result's top and the content's
-            // bottom, measured from the part's top.
+            let part = footer(d).map(|node| node.rect).unwrap();
+            // The footer's texts, by their clip inside it: the result's top and the content's
+            // bottom, measured from the footer's top.
             let inside = |d: &Driver<'_>| {
-                let part = d.nodes().into_iter().find(|node| node.name == words)?.rect;
-                let (mut result, mut bottom) = (None, f32::MIN);
+                let (mut top, mut bottom) = (None, f32::MIN);
                 d.each_painted_text(|text, clip| {
-                    // The part's scroll area clips its texts to the part's lines (its clip is
-                    // wider than the part).
-                    if (clip.top() - part.top()).abs() <= 4.0
-                        && (clip.bottom() - part.bottom()).abs() <= 4.0
-                        && part.x_range().contains(text.pos.x)
-                    {
+                    if part.contains(clip.center()) && part.x_range().contains(text.pos.x) {
                         let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
                         bottom = bottom.max(rect.bottom() - part.top());
                         if text.galley.job.text.contains("draft discarded.") {
-                            result = Some(rect.top() - part.top());
+                            top = Some(rect.top() - part.top());
                         }
                     }
                 });
-                Some((part, result, bottom))
+                (top, bottom)
             };
-            // Where the result's first line sits in the part: `Some(None)` once it has scrolled
-            // out of the part's view (a line out of view is not painted); `None` without a part.
-            let top = |d: &Driver<'_>| inside(d).map(|(_, top, _)| top);
-            let Some((part, Some(before), bottom)) = inside(d) else {
-                results.push((size, false, focused, None, None, None, None, None));
-                continue;
-            };
-            // The words need more than two lines: they end below the part's end.
-            let overflows = (part.height() - crate::design::message_space_height()).abs() < 1.0
-                && bottom > part.height() + 1.0;
+            let (before, bottom) = inside(d);
+            let overflows = bottom > part.height() + 1.0;
             let ring = d
                 .focus_rings()
                 .into_iter()
                 .find(|(ring, _)| part.expand(2.0).contains_rect(*ring))
-                .map(|(ring, _)| ring);
-            let ring_clear = ring.is_some_and(|ring| ring.right() <= part.right() - lane + 1.0);
-            d.press(Key::ArrowDown);
-            let keyboard = top(d);
-            for _ in 0..4 {
-                d.press(Key::ArrowUp);
-            }
-            d.press(Key::Escape);
-            let wheel_start = top(d);
-            d.scroll_at(part.center(), 1);
-            let wheel = top(d);
-            results.push((
-                size,
-                overflows,
-                focused,
-                ring.filter(|_| ring_clear),
-                Some(Some(before)),
-                keyboard,
-                wheel_start,
-                wheel,
-            ));
+                .map(|(ring, _)| ring)
+                .filter(|ring| ring.right() <= part.right() - lane + 1.0);
+            let readable = if overflows {
+                d.press(Key::ArrowDown);
+                let keyboard = inside(d).0;
+                for _ in 0..8 {
+                    d.press(Key::ArrowUp);
+                }
+                d.press(Key::Escape);
+                let start = inside(d).0;
+                d.scroll_at(part.center(), 1);
+                let wheel = inside(d).0;
+                let moved = |from: Option<f32>, to: Option<f32>| match (from, to) {
+                    (Some(from), Some(to)) => to < from,
+                    (Some(_), None) => true,
+                    _ => false,
+                };
+                moved(before, keyboard) && moved(start, wheel)
+            } else {
+                d.press(Key::Escape);
+                d.visible_text(&result) && d.visible_text(&cause)
+            };
+            results.push((size, overflows, focused, ring, readable));
         }
         d.set_base(base);
-        // Moved up inside the part, or out of its view; the part itself is still there.
-        let moved = |from: Option<Option<f32>>, to: Option<Option<f32>>| match (from, to) {
-            (Some(Some(from)), Some(Some(to))) => to < from,
-            (Some(Some(_)), Some(None)) => true,
-            _ => false,
-        };
         d.observe(
             "iter-25-C-space-overflow",
-            results.iter().all(|(_, overflows, focused, ring, before, keyboard, start, wheel)| {
-                *overflows
-                    && *focused
-                    && ring.is_some()
-                    && moved(*before, *keyboard)
-                    && moved(*start, *wheel)
-            }),
-            format!("Per size (overflows, Tab, ring clear of the bar, result top before, after ArrowDown, before wheel, after wheel): {results:?}"),
+            results
+                .iter()
+                .all(|(_, _, focused, ring, readable)| *focused && ring.is_some() && *readable),
+            format!(
+                "Per size (overflows, Tab, ring clear of the bar, every word readable): {results:?}"
+            ),
         );
         std::fs::remove_file(&file).unwrap();
         d.click(RELOAD);
@@ -2888,9 +3089,10 @@ pub mod campaign_content {
         );
 
         // Round 23 review: a failed Save belongs to its own repair. A's cause stays through B's
-        // edit, B's Save and B's own failed Save; B's state is its own.
-        const READ_ONLY: &str = "Not saved. This file is read only.";
-        const CHANGED_ON_DISK: &str = "Not saved. This entry changed on disk.";
+        // edit, B's Save and B's own failed Save; B's state is its own. Round 26 FA3: each
+        // repair's slot says `Not saved`; each cause is in the page's footer and names its file.
+        const READ_ONLY: &str = "Broken.md is not saved. This file is read only.";
+        const CHANGED_ON_DISK: &str = "Cracked.md is not saved. This entry changed on disk.";
         const B_MESSAGE: &str = "Notes/Cracked.md cannot be read";
         let top_of = |d: &Driver<'_>, words: &str| {
             d.nodes()
@@ -2901,11 +3103,17 @@ pub mod campaign_content {
                 .map(|node| node.rect.top())
                 .collect::<Vec<_>>()
         };
-        // A's cause sits above B's message; B's state sits below it.
+        // A's state sits above B's message and A's cause is in the footer, once; B's state sits
+        // below B's message.
         let a_owns = |d: &Driver<'_>| {
             let message = top_of(d, B_MESSAGE);
-            let cause = top_of(d, READ_ONLY);
-            message.len() == 1 && cause.len() == 1 && cause[0] < message[0]
+            let state = top_of(d, "Not saved");
+            message.len() == 1
+                && state.iter().any(|top| *top < message[0])
+                && d.painted_in(egui::Rect::EVERYTHING)
+                    .matches(READ_ONLY)
+                    .count()
+                    == 1
         };
         let b_state = |d: &Driver<'_>, word: &str| {
             let message = top_of(d, B_MESSAGE);
@@ -2965,16 +3173,176 @@ pub mod campaign_content {
         d.settle();
         d.observe(
             "iter-23-C-own-failure-fail",
-            a_owns(d) && b_state(d, CHANGED_ON_DISK) && !b_file.exists(),
+            a_owns(d)
+                && b_state(d, "Not saved")
+                && d.visible_text(CHANGED_ON_DISK)
+                && !b_file.exists(),
             format!(
-                "After B's Save fails: A's cause {}, B's own cause {}",
+                "After B's Save fails: A's cause {}, B's own state {} and cause {}",
                 a_owns(d),
-                b_state(d, CHANGED_ON_DISK)
+                b_state(d, "Not saved"),
+                d.visible_text(CHANGED_ON_DISK)
             ),
         );
         set_read_only(&a_file, false);
-        d.click("Discard");
-        d.click("Discard");
+        // Round 26, brief revision 18: two results of one kind. A's Discard, then B's Discard:
+        // both results are listed in the footer, each with its Undo. Undo A brings back A's
+        // draft; B's result and B's discarded state stay. Neither result moves B's editor.
+        const A_DISCARDED: &str = "Broken.md draft discarded.";
+        const B_DISCARDED: &str = "Cracked.md draft discarded.";
+        const A_MESSAGE: &str = "Notes/Broken.md cannot be read";
+        const A_PATH: &str = "Notes/Broken.md";
+        const B_PATH: &str = "Notes/Cracked.md";
+        let draft = |d: &mut Driver<'_>, path: &str| {
+            d.app_mut()
+                .campaign_content
+                .repair_draft(path)
+                .map(str::to_owned)
+        };
+        // The package list against B's save row, the last repair's: a message in the page's
+        // flow (as the old message space below each save row was) would move it; the page's
+        // scroll and A's editor height do not.
+        let b_top = |d: &Driver<'_>| {
+            let save = d
+                .nodes()
+                .into_iter()
+                .filter(|node| node.name == "Save repaired note")
+                .map(|node| node.rect.bottom())
+                .reduce(f32::max)?;
+            let list = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name.starts_with("D&D 2024"))?
+                .rect
+                .top();
+            Some(list - save)
+        };
+        let listed = |d: &Driver<'_>, words: &str| footer_with(d, words).is_some();
+        let undo_top = |d: &Driver<'_>, name: &str| d.place_of(name).map(|rect| rect.top());
+        const P_DISCARDED: &str = "Campaign packages draft discarded.";
+        const UNDO_A: &str = "Undo discard of Broken.md";
+        const UNDO_B: &str = "Undo discard of Cracked.md";
+        const UNDO_P: &str = "Undo discard of Campaign packages";
+        let base = d.window_size();
+        let a_draft = draft(d, A_PATH);
+        let before = b_top(d);
+        d.click_below(A_MESSAGE, "Discard");
+        let a_discarded = a_draft.is_some() && draft(d, A_PATH) != a_draft;
+        let after_a = b_top(d);
+        // Review round 26: the page's body ends where the footer starts. With A's result in the
+        // footer, at 960, 1200 and 1920: Tab and screen-reader focus bring the Ash Wraith row
+        // into view above the footer; a click on it changes only the package selection, never
+        // A's result; and the packages' own Undo restores only its own state.
+        let selections = |d: &mut Driver<'_>| d.app_mut().campaign_content.selections_changed();
+        let row_name = format!("Use {UNSELECTED_ENTRY}");
+        let a_discarded_draft = draft(d, A_PATH);
+        // Rows below the page's viewport come into view by focus, as Tab or a screen reader
+        // brings them: AccessKit's scroll-into-view stops at the package list's own scroll
+        // area, so the driver's reveal cannot reach them.
+        click_by_focus(d, MODULE_ROW);
+        for size in [SMALL, DEFAULT, LARGE] {
+            d.set_base(size);
+            let above_footer = |d: &Driver<'_>| {
+                let row = d.nodes().into_iter().find(|node| node.name == row_name)?;
+                let footer = footer_with(d, A_DISCARDED)?;
+                Some(row.fully_in_view() && row.rect.bottom() <= footer.top())
+            };
+            // Nothing of the page shows under the footer: the body ends where the footer starts.
+            let leaks = body_under_footer(d, A_DISCARDED);
+            let tabbed = d.tab_to(&row_name) && above_footer(d) == Some(true);
+            d.harness_focus_nothing();
+            let read = d.reader_focus(&row_name) && above_footer(d) == Some(true);
+            d.harness_focus_nothing();
+            let before = selections(d);
+            click_by_focus(d, &row_name);
+            let only_selection = selections(d) != before
+                && draft(d, A_PATH) == a_discarded_draft
+                && listed(d, A_DISCARDED);
+            d.click_below(SAVE_SELECTIONS, DISCARD_SELECTION);
+            let discarded = !selections(d);
+            d.click(UNDO_P);
+            let own_undo =
+                selections(d) && draft(d, A_PATH) == a_discarded_draft && listed(d, A_DISCARDED);
+            d.click_below(SAVE_SELECTIONS, DISCARD_SELECTION);
+            d.observe(
+                "iter-26-C-rows-above-footer",
+                leaks.is_empty() && tabbed && read && only_selection && discarded && own_undo,
+                format!(
+                    "At {size:?}: page words under the footer {leaks:?}; Tab reaches the row above the footer {tabbed}; screen-reader \
+                     focus {read}; a click changes only the selection {only_selection}; Discard \
+                     {discarded}; the packages' Undo restores only its own state {own_undo}"
+                ),
+            );
+        }
+        d.set_base(base);
+        // Review round 26: a package-selection Discard between the two repairs' Discards. All
+        // live Undos share one order, newest first.
+        click_by_focus(d, MODULE_ROW);
+        click_by_focus(d, &format!("Use {UNSELECTED_ENTRY}"));
+        d.click_below(SAVE_SELECTIONS, DISCARD_SELECTION);
+        let b_draft = draft(d, B_PATH);
+        d.click_below(B_MESSAGE, "Discard");
+        let b_baseline = draft(d, B_PATH);
+        let both = listed(d, A_DISCARDED)
+            && listed(d, B_DISCARDED)
+            && listed(d, P_DISCARDED)
+            && b_baseline != b_draft;
+        let order = [UNDO_B, UNDO_P, UNDO_A].map(|name| undo_top(d, name));
+        let newest_first =
+            order.iter().all(Option::is_some) && order.windows(2).all(|pair| pair[0] < pair[1]);
+        let after_b = b_top(d);
+        d.click(UNDO_A);
+        let a_back = draft(d, A_PATH) == a_draft;
+        let b_kept = listed(d, B_DISCARDED)
+            && listed(d, P_DISCARDED)
+            && !listed(d, A_DISCARDED)
+            && draft(d, B_PATH) == b_baseline;
+        let after_undo = b_top(d);
+        d.observe(
+            "iter-26-C-two-discards",
+            a_discarded && both && a_back && b_kept,
+            format!(
+                "A discarded {a_discarded}; A, the packages and B listed and B discarded {both}; \
+                 Undo A restores A {a_back}; the newer results and B's state kept {b_kept}"
+            ),
+        );
+        d.observe(
+            "iter-26-C-undo-order",
+            newest_first,
+            format!("Undo tops, newest first (B, packages, A): {order:?}"),
+        );
+        d.observe(
+            "iter-26-C-two-discards-still",
+            before.is_some()
+                && [after_a, after_b, after_undo]
+                    .iter()
+                    .all(|top| *top == before),
+            format!(
+                "Package list below B's save row: before {before:?}, after A's discard \
+                 {after_a:?}, after B's {after_b:?}, after Undo A {after_undo:?}"
+            ),
+        );
+        // Review round 26: a campaign change ends this campaign's Undos at the change, also
+        // while the page is hidden (A → B → A from Settings).
+        d.click_below(A_MESSAGE, "Discard");
+        let live_before =
+            listed(d, A_DISCARDED) && listed(d, B_DISCARDED) && listed(d, P_DISCARDED);
+        go_settings(d);
+        d.click("Make Quiet Harbor the active campaign");
+        d.click("Make The Emberfall Marches the active campaign");
+        go_campaign(d);
+        d.settle();
+        let ended = !d.has(UNDO_A) && !d.has(UNDO_B) && !d.has(UNDO_P);
+        d.observe(
+            "iter-26-C-switch-ends-undo",
+            live_before && ended,
+            format!("Three Undos before the round trip {live_before}; all ended after it {ended}"),
+        );
+        // The steps after these start, as before, with a live package-selection discard.
+        click_by_focus(d, MODULE_ROW);
+        click_by_focus(d, &format!("Use {UNSELECTED_ENTRY}"));
+        d.click_below(SAVE_SELECTIONS, DISCARD_SELECTION);
+        d.set_base(base);
         let _ = std::fs::remove_file(d.root.join(SECOND));
         d.click(RELOAD);
         d.settle();
@@ -3718,7 +4086,28 @@ pub mod encounter_build {
                 "With sync on, the roster has the option: {option}. It says what the party has now, together: {together}. And for each row: {row}"
             ),
         );
+        // iter-26-B FB5: the run state keeps its x in the save row when the first edit brings
+        // `Unsaved`, Discard and the campaign-switch reason, at 960, 1200 and 1920.
+        let run_state_x = |d: &mut Driver<'_>| {
+            [SMALL, DEFAULT, LARGE].map(|size| {
+                d.at_size(size, |d| {
+                    d.nodes()
+                        .into_iter()
+                        .filter(|node| node.name.contains("Round 2 · Paused"))
+                        .map(|node| node.rect.left().round())
+                        .collect::<Vec<_>>()
+                })
+            })
+        };
+        let clean_x = run_state_x(d);
         d.click(SYNC_OPTION);
+        d.expect("Unsaved");
+        let edited_x = run_state_x(d);
+        d.observe(
+            "iter-26-B-FB5",
+            clean_x.iter().all(|x| !x.is_empty()) && clean_x == edited_x,
+            format!("The run state's x, clean {clean_x:?} and after the first edit {edited_x:?}"),
+        );
         d.state("saved-roster-sync-off", Sizes::Default);
         d.observe(
             "T5.6",
@@ -3854,6 +4243,14 @@ pub mod encounter_build {
             "T12.12",
             !file.exists() && !d.has(&format!("More actions for {NEW_NAME}")),
             "Remove… takes the encounter's file away, and its row goes",
+        );
+        // V6: a finished change has the success tone, as a deleted run's result has.
+        let removed = painted_paragraph(d, &format!("Removed encounter {NEW_NAME}."));
+        d.observe(
+            "V6-removed-tone",
+            removed
+                .is_some_and(|words| d.has_tone_bar(words, crate::design::colors().result.success)),
+            format!("Removed encounter has the success tone: {removed:?}"),
         );
         d.state("encounter-removed", Sizes::All);
         d.click(BACK_TO_RUN);
@@ -4246,6 +4643,16 @@ pub mod settings {
                 .is_some_and(|(button, field)| (button.right() - field.right()).abs() < 1.0)
         });
         d.state("cookie-entered", Sizes::Default);
+        // Round 26 FG2: the failure's cause is in the footer, so the cookie field and Connect
+        // keep their place, under the pointer, where the window had room for the footer.
+        let places = |d: &mut Driver<'_>| {
+            [DEFAULT, LARGE].map(|size| {
+                d.at_size(size, |d| {
+                    Some((d.place_of(COOKIE_FIELD)?.top(), d.place_of(CONNECT)?.top()))
+                })
+            })
+        };
+        let entered = places(d);
         d.click(CONNECT);
         d.expect(OFFLINE_ERROR);
         // Round 23 SF1: the failure scrolls the form so its cause, the kept cookie and the retry
@@ -4269,6 +4676,18 @@ pub mod settings {
                 fully(d, OFFLINE_ERROR, false),
                 fully(d, COOKIE_FIELD, true),
                 fully(d, CONNECT, true)
+            ),
+        );
+        // Measured after the 960 check above: a resize ends that scroll.
+        let failed = places(d);
+        d.observe(
+            "iter-26-C-FG2",
+            entered.iter().all(Option::is_some)
+                && entered == failed
+                && footer_with(d, OFFLINE_ERROR).is_some(),
+            format!(
+                "Cookie field and Connect tops at 1200 and 1920 before {entered:?} and after \
+                 {failed:?} a failed Connect; the cause is in the footer"
             ),
         );
         // Round 23 FM4: the trust text uses the DM's words, not the code's.
@@ -4429,6 +4848,57 @@ pub mod settings {
         d.expect_same(
             "The rail's status slot gains Sync stopped; Lookup, Notes, Settings and the account line stay where they were.",
         );
+        // Round 26 AG1: the actions follow the widest name and link block after an `L` gap,
+        // in one column for every row, and the account column starts `XL` after the list.
+        for size in [DEFAULT, (1920.0, 1080.0)] {
+            let placed = d.at_size(size, |d| {
+                let nodes = d.nodes();
+                let block_right = nodes
+                    .iter()
+                    .filter(|node| {
+                        node.name.contains("Linked to ") || node.name.ends_with("Not linked")
+                    })
+                    .map(|node| node.rect.right())
+                    .reduce(f32::max)?;
+                let opens: Vec<f32> = nodes
+                    .iter()
+                    .filter(|node| {
+                        node.name.starts_with("Make ")
+                            && node.name.ends_with(" the active campaign")
+                    })
+                    .map(|node| node.rect.left())
+                    .collect();
+                let edits: Vec<f32> = nodes
+                    .iter()
+                    .filter(|node| node.name == EDIT_DETAILS && node.rect.left() < 1200.0)
+                    .map(|node| node.rect.left())
+                    .collect();
+                let reload = nodes
+                    .iter()
+                    .find(|node| node.name.contains("Reload from disk"))?
+                    .rect;
+                let account = d.painted_rect_in("D&D BEYOND ACCOUNT", egui::Rect::EVERYTHING)?;
+                Some((block_right, opens, edits, reload.right(), account.left()))
+            });
+            d.observe(
+                "iter-26-C-AG1",
+                placed
+                    .as_ref()
+                    .is_some_and(|(block, opens, edits, reload, account)| {
+                        opens.len() >= 2
+                            && edits.len() >= 3
+                            && opens
+                                .iter()
+                                .all(|open| (open - block - crate::design::L).abs() <= 1.5)
+                            && edits.iter().all(|edit| (edit - edits[0]).abs() <= 0.5)
+                            && (account - reload - crate::design::XL).abs() <= 1.5
+                    }),
+                format!(
+                    "At {size:?}: widest block right, Open lefts, Edit details lefts, list right, \
+                     account left: {placed:?}"
+                ),
+            );
+        }
         d.state("campaign-list", Sizes::All);
         d.goal("find campaign management");
 
@@ -4531,10 +5001,12 @@ pub mod settings {
             d.wait_for_text("Campaign name");
             assert_eq!(d.field_text("Campaign name").as_deref(), Some("Salt Road"));
             for _ in 0..4 {
-                if d.nodes()
-                    .iter()
-                    .any(|node| node.name == "Add campaign" && node.fully_in_view())
-                {
+                let nodes = d.nodes();
+                if ["Add campaign", "Cancel"].iter().all(|name| {
+                    nodes
+                        .iter()
+                        .any(|node| node.name == *name && node.fully_in_view())
+                }) {
                     break;
                 }
                 let folder = d.row_of("Folder");
@@ -4546,8 +5018,10 @@ pub mod settings {
                 .iter()
                 .find(|node| node.name == "Add campaign")
                 .unwrap();
-            assert!(cancel.rect.right() < add.rect.left());
-            assert!((cancel.rect.center().y - add.rect.center().y).abs() <= 1.0);
+            // Round 26 FB6: Add campaign is on the Folder field's line; quiet Cancel starts the
+            // line below, with the reason.
+            assert!(cancel.rect.top() >= add.rect.bottom() - 1.0);
+            assert!(cancel.rect.center().x < add.rect.left());
             assert!(cancel.fully_in_view() && add.fully_in_view());
         });
         d.click(CANCEL);
@@ -4580,14 +5054,34 @@ pub mod settings {
                     .max_by(|a, b| a.rect.left().total_cmp(&b.rect.left())).unwrap().rect;
                 let notice = d.place_of("Combat sync stopped when the connection to D&D Beyond ended. Changes not yet sent did not reach D&D Beyond. Connect in Settings, and sync starts again.").unwrap();
                 let dismiss = d.place_of("Dismiss this message").unwrap();
-                notice.left() < header.left() + crate::design::L * 3.0
-                    && dismiss.left() > notice.left()
-                    && dismiss.top() < notice.top() + crate::design::L
+                // Round 26 AE3: an `L` gap ends the notice, as it ends every Party notice,
+                // before the list and the sheet.
+                let next = d
+                    .nodes()
+                    .iter()
+                    .filter(|node| node.rect.top() > notice.bottom() - 0.5 && node.in_view())
+                    .map(|node| node.rect.top())
+                    .reduce(f32::min);
+                let gap = next.map(|next| next - notice.bottom());
+                (
+                    notice.left() < header.left() + crate::design::L * 3.0
+                        && dismiss.left() > notice.left()
+                        && dismiss.top() < notice.top() + crate::design::L,
+                    gap,
+                )
             });
             d.observe(
                 "iter6-B-FD9",
-                aligned,
+                aligned.0,
                 format!("Party notice starts at the page edge with a trailing dismiss at {size:?}"),
+            );
+            d.observe(
+                "iter-26-C-AE3",
+                aligned.1.is_some_and(|gap| gap >= crate::design::L - 0.5),
+                format!(
+                    "At {size:?}, the stopped-sync notice's words end {:?} px above what follows",
+                    aligned.1
+                ),
             );
         }
         d.state("sync-stopped-recovery", Sizes::All);
@@ -4806,10 +5300,68 @@ pub mod empty {
         go_settings(d);
         d.expect(ADD_CAMPAIGN);
         d.state("settings-no-campaigns", Sizes::All);
+        // Round 26 FB6: an inline creation form puts Create on its last field's line, after
+        // the field, and its reason on a line below, at the field's left edge, that stays when
+        // the reason goes.
+        const ADD_REASON: &str = "Enter a campaign name and a folder first.";
+        for size in [SMALL, DEFAULT, LARGE] {
+            let placed = d.at_size(size, |d| {
+                let field = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| {
+                        node.name == FOLDER_FIELD && node.role == egui::accesskit::Role::TextInput
+                    })?
+                    .rect;
+                Some((field, d.place_of(ADD_CAMPAIGN)?, d.place_of(ADD_REASON)?))
+            });
+            d.observe(
+                "iter-26-C-FB6",
+                placed.is_some_and(|(field, add, reason)| {
+                    (add.center().y - field.center().y).abs() <= 1.0
+                        && add.left() > field.right()
+                        && (reason.left() - field.left()).abs() <= 1.0
+                        && reason.top() >= field.bottom() - 0.5
+                }),
+                format!(
+                    "At {size:?}, Add campaign is on the Folder field's line, after it, and its \
+                     reason is on the line below at the field's edge (field, Add, reason): \
+                     {placed:?}"
+                ),
+            );
+        }
+        // Must stay true: what follows the form keeps its y when the reason goes away. At 960
+        // the account section is below the form.
+        let below = |d: &Driver<'_>| {
+            let add = d.place_of(ADD_CAMPAIGN).expect("Add campaign is on screen");
+            let mut tops: Vec<(String, i32)> = d
+                .nodes()
+                .iter()
+                .filter(|node| node.rect.top() > add.bottom() + crate::design::L)
+                // Cancel comes on the reason's line once there is something to cancel.
+                .filter(|node| {
+                    !node.name.is_empty() && node.name != ADD_REASON && node.name != "Cancel"
+                })
+                .map(|node| (node.name.clone(), node.rect.top().round() as i32))
+                .collect();
+            tops.sort();
+            (add.top().round() as i32, tops)
+        };
+        let reason_shown = d.at_size(SMALL, below);
         let folder = d.root.join(NEW_FOLDER);
         std::fs::create_dir_all(&folder).expect("create campaign folder");
         d.type_into(NAME_FIELD, NEW_CAMPAIGN);
         d.type_into(FOLDER_FIELD, &folder.display().to_string());
+        assert!(!d.has(ADD_REASON), "A filled form has no reason");
+        let reason_gone = d.at_size(SMALL, below);
+        d.observe(
+            "iter-26-C-FB6-steady",
+            !reason_shown.1.is_empty() && reason_shown == reason_gone,
+            format!(
+                "At 960, the form's reason going away moves nothing below Add campaign: \
+                 {reason_shown:?} then {reason_gone:?}"
+            ),
+        );
         d.click_below(FOLDER_FIELD, OPEN_CAMPAIGN);
         d.expect(NEW_CAMPAIGN);
         d.state_prepared("campaign-added", Sizes::Default, |d| {
@@ -4946,6 +5498,37 @@ pub mod run_lookup {
             d.in_view(NEXT_TURN)
                 && d.row_node(PARTICIPANT)
                     .is_some_and(|row| row.fully_in_view())
+        });
+        // T19.1, T19.3: in a fight, Ctrl+T shows Trackers in Lookup, and Ctrl+T again shows the
+        // spell. A campaign with no house rule note in play has the empty view and nothing in
+        // the rail; the run's keys stay off beside it, and Next turn stays.
+        d.aside(|d| {
+            let rail = d.rail_words();
+            d.press_ctrl(Key::T);
+            d.expect("No house rules are in play.");
+            d.observe(
+                "T19.1",
+                d.has(SEARCH_LOOKUP) && !d.in_view(SPELL) && d.in_view(NEXT_TURN),
+                "Ctrl+T shows Trackers in Lookup beside the run, and Next turn stays in view",
+            );
+            d.state("trackers-beside-run", Sizes::Small);
+            let turn = current_participant(d);
+            d.harness_focus_nothing();
+            d.press(Key::N);
+            d.observe(
+                "T19.3",
+                current_participant(d) == turn
+                    && d.has("No house rules are in play.")
+                    && d.rail_words() == rail
+                    && !d.has_containing("due. Open Trackers"),
+                "Beside Trackers the run's letter keys are off, and the rail shows no tracker part",
+            );
+            d.press_ctrl(Key::T);
+            d.observe(
+                "T19.1",
+                d.in_view(SPELL) && !d.has_containing("No house rules are in play."),
+                "Ctrl+T again shows the spell that Lookup held",
+            );
         });
         // SI1: at 960 the strip's hidden action is in a menu, by name and number, and the mouse
         // arms it while Lookup stays open.
@@ -5225,6 +5808,26 @@ pub mod run_long_names {
         d.app_mut().encounters.simulate_rename(RENAMED, LONG_NAME);
         d.settle();
         d.click_row(LONG_NAME);
+        // iter-26-R FK1: the dock's name slot has one width for the fight, so Conditions keeps
+        // one x whichever row is selected: a long name, a short one, a party name.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let mut lefts = Vec::new();
+            for row in [LONG_NAME, ENEMY, "Kestrel Dunmoor"] {
+                d.click_row(row);
+                lefts.push(d.at_size(size, |d| {
+                    d.place_of("Conditions for this participant")
+                        .map(|rect| rect.left().round())
+                }));
+            }
+            d.observe(
+                "iter-26-R-FK1",
+                lefts.iter().all(Option::is_some) && lefts.windows(2).all(|w| w[0] == w[1]),
+                format!(
+                    "At {size:?}, Conditions x for a long, a short and a party name: {lefts:?}"
+                ),
+            );
+        }
+        d.click_row(LONG_NAME);
         d.state("long-name", Sizes::All);
         check_columns_stay(d, "Selected");
         let row = d.row_words(LONG_NAME);
@@ -5457,6 +6060,21 @@ pub mod run_absent_player {
             if d.field_text(&field(name)).as_deref() != Some(total) {
                 d.type_into(&field(name), total);
             }
+        }
+        // iter-26-R FN1: the on Absent toggle keeps the off toggles' padding, so its icon and
+        // word start at their x in the column.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let lefts = d.at_size(size, |d| {
+                (
+                    words_left(d, &format!("Absent: {PLAYER}")),
+                    words_left(d, &format!("Absent: {LAST}")),
+                )
+            });
+            d.observe(
+                "iter-26-R-FN1",
+                matches!(lefts, (Some(on), Some(off)) if (on - off).abs() < 1.0),
+                format!("At {size:?}, the on and off Absent words start at {lefts:?}"),
+            );
         }
         d.state("ready-with-one-absent", Sizes::All);
         d.observe_both(
@@ -6231,7 +6849,8 @@ pub mod run_sync_conflict {
         );
         // FT4: the app-close dialog draws Review conflict through the run-close dialog's
         // function, so it starts at the dialog text as it does there (signed_in, iter-17-B).
-        check_line_start(
+        // iter-26-R FK2: it is a bordered button, its frame at the dialog text.
+        check_frame_start(
             d,
             "iter-18-B-FT4",
             "Review conflict",
@@ -6461,6 +7080,34 @@ pub mod nav_state {
         d.expect_same("Encounters keeps its open editor on return.");
         d.assert_state_matches("encounters-returned", "encounters-set-up");
         d.goal("return to every page");
+        // T19.1: Trackers is a view of Lookup. With Lookup closed, Ctrl+T opens it on Trackers;
+        // Ctrl+K closes it and opens it again on what it showed last, Trackers; Ctrl+T then
+        // shows what Lookup showed before, and Lookup stays open. The page keeps its state.
+        d.aside(|d| {
+            d.press_ctrl(Key::T);
+            let opened = d.has(SEARCH_LOOKUP) && d.has("No house rules are in play.");
+            d.press_ctrl(Key::K);
+            let closed = !d.has(SEARCH_LOOKUP);
+            d.press_ctrl(Key::K);
+            let reopened = d.has("No house rules are in play.");
+            d.press_ctrl(Key::T);
+            let back = d.has(SEARCH_LOOKUP)
+                && !d.has("No house rules are in play.")
+                && d.has_containing("Search built-in rules");
+            d.press_ctrl(Key::K);
+            d.observe(
+                "T19.1",
+                opened
+                    && closed
+                    && reopened
+                    && back
+                    && !d.has(SEARCH_LOOKUP)
+                    && d.in_view_containing(ROSTER_TEXT),
+                format!(
+                    "Ctrl+T opens Trackers {opened}, Ctrl+K closes {closed} and reopens on Trackers {reopened}, Ctrl+T goes back {back}; Encounters keeps its editor"
+                ),
+            );
+        });
         d.observe(
             "G2",
             library && campaign && party && encounters,
@@ -6714,8 +7361,25 @@ pub mod party_from_run {
             "Editable counts below the tabs replace the duplicate manual fields",
         );
         d.state("death-saves-under-correct", Sizes::Default);
+        // iter-26-R FJ5: the death-save line has one place, directly below the tabs, so its
+        // actions keep their y when the DM changes tab.
+        let success_y = |d: &mut Driver<'_>| {
+            [SMALL, DEFAULT, LARGE].map(|size| {
+                d.at_size(size, |d| {
+                    d.place_of("Add a death save success")
+                        .map(|rect| rect.top().round())
+                })
+            })
+        };
+        let on_correct = success_y(d);
         d.click(SHEET_TAB);
         d.expect("1 success · 0 failures");
+        let on_sheet = success_y(d);
+        d.observe(
+            "iter-26-R-FJ5",
+            on_correct.iter().all(Option::is_some) && on_correct == on_sheet,
+            format!("+ Success y on Correct {on_correct:?}, on Sheet {on_sheet:?}"),
+        );
         d.observe_both(
             "C1",
             "The Sheet shows the run's death saves once and omits stored counts",
@@ -6758,6 +7422,23 @@ pub mod library_to_encounter {
         d.type_text(DRAFT_NAME);
         d.expect(SEEDED_ROW);
         d.state("draft-open", Sizes::Default);
+        // iter-26-B FF2: on another page, the rail's `Encounter draft` is a link that opens the
+        // draft, as `Unsaved NPC` opens its card.
+        go_library(d);
+        let link = d
+            .nodes()
+            .into_iter()
+            .any(|node| node.name.ends_with("Encounter draft") && node.is_link());
+        d.click_containing("Encounter draft");
+        d.expect(&format!("Encounter name: {DRAFT_NAME}"));
+        d.observe(
+            "iter-26-B-FF2",
+            link && d.current_page() == "Encounters",
+            format!(
+                "The rail's Encounter draft is a link ({link}) to the draft, on {}",
+                d.current_page()
+            ),
+        );
         d.begin_task();
 
         go_library(d);
@@ -6826,7 +7507,37 @@ pub mod run_folder_defect {
     pub fn run(d: &mut Driver<'_>) {
         go_campaign(d);
         d.click(TAB_RUN_SETTINGS);
+        // iter-26-B, FN2's sibling: the folder move's warning sits in the tab's footer, so the
+        // first letter typed moves no field and no save state, at 960, 1200 and 1920.
+        let form_tops = |d: &mut Driver<'_>| {
+            [SMALL, DEFAULT, LARGE].map(|size| {
+                d.at_size(size, |d| {
+                    let top = |name: &str| {
+                        d.nodes()
+                            .into_iter()
+                            .filter(|node| node.name.contains(name))
+                            .map(|node| node.rect.top().round())
+                            .reduce(f32::max)
+                    };
+                    let state = top("No changes").or(top("Unsaved"));
+                    [
+                        top("Roll NPC initiative"),
+                        top("Break initiative ties"),
+                        state,
+                    ]
+                })
+            })
+        };
+        let clean = form_tops(d);
         d.replace_text_in(RUN_FOLDER, "Elsewhere");
+        let typed = form_tops(d);
+        d.observe(
+            "iter-26-B-FN2-run-folder",
+            clean.iter().flatten().all(Option::is_some)
+                && typed == clean
+                && d.has_containing("From the new folder, Splat will not show"),
+            format!("Field and state tops clean {clean:?} and after typing {typed:?}"),
+        );
         d.observe_both(
             "iter-18-A-lock",
             "Run settings state the campaign switch lock",
@@ -6872,6 +7583,52 @@ pub mod run_folder_defect {
                         .is_some_and(|frame| frame.stroke.width == 0.0)
             },
         );
+        // iter-26-B AC2, FN3, SN1 (help): the initiative help wraps at the reader measure, at
+        // every size; the menu above it ends at the form's edge, where Run folder ends (FA10).
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (widths, menu, folder) = d.at_size(size, |d| {
+                let mut widths = Vec::new();
+                d.each_painted_text(|text, _| {
+                    if text
+                        .galley
+                        .job
+                        .text
+                        .starts_with("Run setup starts with this choice")
+                    {
+                        widths.push(text.galley.size().x);
+                    }
+                });
+                // The menu, not its label: the node of that name that reaches furthest.
+                let menu = d
+                    .nodes()
+                    .into_iter()
+                    .filter(|node| node.name.starts_with("Roll NPC initiative"))
+                    .map(|node| node.rect.right())
+                    .reduce(f32::max);
+                let folder = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| {
+                        node.name.starts_with("Run folder")
+                            && node.role == egui::accesskit::Role::TextInput
+                    })
+                    .map(|node| node.rect.right());
+                (widths, menu, folder)
+            });
+            d.observe(
+                "iter-26-B-help",
+                !widths.is_empty()
+                    && widths
+                        .iter()
+                        .all(|width| *width <= crate::design::READER_MEASURE + 0.5)
+                    && menu
+                        .zip(folder)
+                        .is_some_and(|(menu, folder)| (menu - folder).abs() <= 1.0),
+                format!(
+                    "At {size:?}: help widths {widths:?}; menu ends {menu:?}, Run folder {folder:?}"
+                ),
+            );
+        }
         d.state("run-folder-edited", Sizes::All);
         d.goal("edit the run folder with no draft");
         // A panic ends this app, so the video stops first and nothing follows.
@@ -7328,7 +8085,10 @@ pub mod column_resize {
         let run_edge = right_of(d, NEXT_TURN) + crate::design::M;
         d.drag_column_edge(run_edge, FAR_RIGHT);
         d.state("run-panel-narrow", Sizes::All);
-        // AD1: at 1920 the dock's controls are one block after the selected name, `L` from it.
+        // AD1: at 1920 the dock's controls are one block after the selected name. iter-26-R FK1:
+        // they follow the name's slot (the widest roster name, at most `12 × L`) after `L`, so
+        // they start right of the name and no further than that slot and its gap; FK1's own
+        // check (run-long-names) holds their x for every selection.
         let (name, conditions) = d.at_size(LARGE, |d| {
             (
                 d.nodes()
@@ -7341,8 +8101,8 @@ pub mod column_resize {
         d.observe(
             "iter-24-R-AD1",
             name.zip(conditions).is_some_and(|(name, conditions)| {
-                let gap = conditions.left() - name.right();
-                (0.0..=crate::design::L + 1.0).contains(&gap)
+                conditions.left() >= name.right()
+                    && conditions.left() - name.left() <= 13.0 * crate::design::L + 1.0
             }),
             format!("At 1920 Conditions follows the selected name: {name:?} then {conditions:?}"),
         );
@@ -7434,6 +8194,15 @@ pub mod column_resize {
         d.click(NAV_LOOKUP);
         d.settle();
         d.expect("Close Lookup");
+        // Round 26 AB2: the search help keeps the reader measure at every size.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let help = d.at_size(size, |d| d.place_of(crate::lookup::SEARCH_HELP));
+            d.observe(
+                "iter-26-D-AB2",
+                help.is_some_and(|help| help.width() <= crate::design::READER_MEASURE + 0.5),
+                format!("At {size:?}, Lookup's search help {help:?} keeps the reader measure"),
+            );
+        }
         d.state("lookup-beside-run-rail", Sizes::All);
         // Lookup gives the run room beside its natural-width rail.
         let lookup_edge = d.column_edge("lookup");
@@ -7674,6 +8443,18 @@ pub mod run_edge_states {
             d.click_row(name);
             d.click(MARK_PRESENT);
         }
+        // iter-26-R FI2: each row's top before the file changes, at every captured size.
+        let tops = |d: &mut Driver<'_>| {
+            [SMALL, DEFAULT, LARGE].map(|size| {
+                d.at_size(size, |d| {
+                    roster_places(d)
+                        .into_iter()
+                        .map(|(name, rect)| (name, rect.top().round()))
+                        .collect::<Vec<_>>()
+                })
+            })
+        };
+        let quiet = tops(d);
         // A second instance writes the file. Saving must stop and say so.
         let path = d
             .app_mut()
@@ -7688,6 +8469,13 @@ pub mod run_edge_states {
         d.press(Key::Enter);
         d.expect("changed on disk");
         d.expect("Not saved");
+        // iter-26-R FI2: the notice sits in the message footer below the roster: no row moves.
+        let noticed = tops(d);
+        d.observe(
+            "iter-26-R-FI2",
+            quiet.iter().all(|rows| rows.len() >= 8) && quiet == noticed,
+            format!("Row tops without the notice {quiet:?}, with it {noticed:?}"),
+        );
         // The red choice keeps an `L` gap from the safe one, which stays first on the same line.
         d.observe_both(
             "iter-12-FT2",
@@ -8004,6 +8792,39 @@ pub mod run_sync_states {
                 && d.has(USE_REMOTE),
             "With a conflict, Close is blocked in the ended view, whose row and controls show it",
         );
+        // iter-26-R FK3: every sync block heading has one form: the name in the text colour,
+        // ` · `, then the status's icon and word in its own colour.
+        let mut headings = Vec::new();
+        d.each_painted_text(|text, _| {
+            let job = &text.galley.job;
+            if job.sections.len() == 3
+                && STATES
+                    .iter()
+                    .any(|(name, _, _)| job.text.starts_with(&format!("{name} · ")))
+            {
+                headings.push((
+                    job.text.clone(),
+                    job.sections
+                        .iter()
+                        .map(|s| s.format.color)
+                        .collect::<Vec<_>>(),
+                ));
+            }
+        });
+        let text = crate::design::colors().text;
+        d.observe(
+            "iter-26-R-FK3",
+            headings
+                .iter()
+                .any(|(words, _)| words.ends_with("HP conflict"))
+                && headings
+                    .iter()
+                    .any(|(words, _)| words.ends_with("Sync pending"))
+                && headings
+                    .iter()
+                    .all(|(_, colors)| colors[0] == text && colors[2] != text),
+            format!("Sync block headings, one form: {headings:?}"),
+        );
         d.state("ended-with-conflict", Sizes::All);
         // FJ3: the closed Prep and Combat log sections start at one x.
         for size in [SMALL, DEFAULT, LARGE] {
@@ -8258,7 +9079,20 @@ pub mod run_roster_conflict {
         );
         d.state("loaded-roster-of-12", Sizes::All);
         let fault = "Ember Cultist's stat block could not be read.";
-        let words = d.place_of(fault);
+        // The words fit their line by whole words (`words_that_fit`), so a narrow roster can
+        // cut them: find them by their start, and their full words in hover.
+        let fault_words = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .find(|node| {
+                    node.name.starts_with("Ember Cultist")
+                        && node.name.contains("stat block")
+                        && node.role == egui::accesskit::Role::Label
+                        && node.in_view()
+                })
+                .map(|node| node.rect)
+        };
+        let words = fault_words(d);
         d.observe(
             "iter-23-R-FJ6",
             words.is_some_and(|words| d.has_tone_bar(words, crate::design::colors().result.error))
@@ -8266,17 +9100,57 @@ pub mod run_roster_conflict {
                     .nodes()
                     .iter()
                     .any(|node| node.name == fault && node.is_link())
-                && d.nodes()
-                    .iter()
-                    .any(|node| node.name == "Repair in Campaign → Packages" && node.is_link())
+                // iter-26-R FI11, SI2: the repair is a bordered button, as in Arrivals.
+                && d.nodes().iter().any(|node| {
+                    node.name == "Repair in Campaign → Packages"
+                        && node.role == egui::accesskit::Role::Button
+                })
+                && d.control_frame("Repair in Campaign → Packages")
+                    .is_some_and(|frame| frame.stroke.width > 0.0)
                 && d.visible_text("Campaign → Packages"),
-            "A stat-block error is an error message, and only its repair place is the link",
+            "A stat-block error is an error message, and its repair place is a bordered button",
         );
+        // iter-26-R AI1, Astra 3: the error is in the run's message footer, its whole fault
+        // wrapped, the bordered repair under its words with its frame at them, and the close
+        // icon beside the fault; FI11: the button lies whole inside the roster column.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let places = d.at_size(size, |d| {
+                (
+                    fault_words(d),
+                    d.place_of("Repair in Campaign → Packages"),
+                    d.place_of("Dismiss this error"),
+                    d.place_of(NEXT_TURN),
+                )
+            });
+            d.observe(
+                "iter-26-R-AI1",
+                matches!(places, (Some(words), Some(button), Some(close), Some(next))
+                    if (button.left() - words.left()).abs() <= 1.0
+                        && button.top() >= words.bottom() - 0.5
+                        && close.top() < words.bottom()
+                        && button.right() <= next.right() + 1.0),
+                format!("At {size:?}, error words, repair, close and Next turn: {places:?}"),
+            );
+        }
+        // Astra 3: at 960 the whole fault is read in view, reached by the keyboard alone.
+        let full_fault = "Ember Cultist's stat block could not be read. Its row still works.";
+        let reached = d.tab_to("Repair in Campaign → Packages");
+        d.observe(
+            "iter-26-R-AI1-whole",
+            d.window_size() == SMALL && reached && d.visible_text(full_fault),
+            format!("At 960, Tab reaches the repair and the whole fault shows: reached {reached}"),
+        );
+        // Astra 3 changes this check on purpose: the error's whole fault wraps in the run's message
+        // footer (the lead's footer ruling: the list keeps its top and only its visible height
+        // shrinks), so at 960 a row may sit behind it. Every such row is counted by the overflow
+        // line, and the dock stays in view. Before, the fault was cut to one line to keep every
+        // row in view.
         let cut = rows_cut(d);
+        let counted = cut.is_empty() || d.visible_text(&format!("{} below", cut.len()));
         d.observe(
             "T1.3",
-            cut.is_empty() && d.in_view(AMOUNT) && d.in_view(APPLY_DAMAGE),
-            format!("At 960x640 with {errored} extra lines and a message not dismissed, rows not in full view: {cut:?}"),
+            counted && d.in_view(AMOUNT) && d.in_view(APPLY_DAMAGE),
+            format!("At 960x640 with {errored} extra lines, a message not dismissed and the error in the footer, rows not in full view are counted: {cut:?}"),
         );
         d.app_mut().encounters.simulate_run_error("");
         d.settle();
@@ -8570,7 +9444,7 @@ pub mod signed_in {
         );
         d.click("Add Salt Road from D&D Beyond");
         // Round 23 AM2/FM7: quiet Cancel starts the form's last row at the labels' text edge.
-        let (cancel, labels) = d.at_size(DEFAULT, |d| {
+        let (add, labels) = d.at_size(DEFAULT, |d| {
             (
                 d.place_of("Cancel")
                     .and_then(|cancel| words_left_in(d, cancel)),
@@ -8579,12 +9453,12 @@ pub mod signed_in {
         });
         d.observe(
             "iter-23-C-AM2",
-            cancel.is_some_and(|cancel| {
+            add.is_some_and(|add| {
                 labels
                     .iter()
-                    .all(|label| label.is_some_and(|label| (cancel - label).abs() <= 1.0))
+                    .all(|label| label.is_some_and(|label| (add - label).abs() <= 1.0))
             }),
-            format!("Cancel’s words start at {cancel:?}; the field labels at {labels:?}"),
+            format!("Cancel’s words start at {add:?}; the field labels at {labels:?}"),
         );
         d.state("import-remote-campaign", Sizes::Default);
         d.observe(
@@ -8726,6 +9600,8 @@ pub mod signed_in {
             let widths = [
                 "are editable. Splat sends a change",
                 "Concentration, custom effects",
+                // Round 26 AM2: the rest help too.
+                "A rest goes to D&D Beyond once",
             ]
             .map(|words| {
                 d.scroll_up_at(sheet_at, 30);
@@ -8930,8 +9806,9 @@ pub mod signed_in {
             "Closing after that names the changes that were never sent, and promises only what it keeps. A close keeps Undo, so it never says Undo ends",
         );
         d.state("close-with-unsent-changes", Sizes::Default);
-        // iter-17-B: Connect to sync starts its line at the dialog's text edge.
-        check_line_start(
+        // iter-17-B: Connect to sync starts its line at the dialog's text edge. iter-26-R FK2:
+        // it is a bordered button, its frame at that edge.
+        check_frame_start(
             d,
             "iter-17-B-connect",
             "Connect to sync",
@@ -9016,6 +9893,19 @@ pub mod signed_in {
                 && d.is_disabled("Folder"),
             "With a run open, the link tab states why it is locked, and its controls are",
         );
+        // Round 26 FN6: the locked picker keeps the form's width, so it ends with the session
+        // folder field, as it does unlocked.
+        let edges = d.place_of("D&D Beyond campaign link").zip(
+            d.nodes()
+                .iter()
+                .find(|node| node.name == "Folder" && node.role == egui::accesskit::Role::TextInput)
+                .map(|node| node.rect),
+        );
+        d.observe(
+            "iter-26-C-FN6",
+            edges.is_some_and(|(picker, folder)| (picker.right() - folder.right()).abs() <= 1.0),
+            format!("Locked picker and session folder field: {edges:?}"),
+        );
         d.state("link-tab-during-run", Sizes::Default);
         d.begin_task();
 
@@ -9051,6 +9941,8 @@ pub mod signed_in {
                     clear,
                 )
             });
+            // iter-26-R FK2: Connect to sync is bordered, so its frame (not its words) starts
+            // at the dialog text, and its words sit inside the frame.
             d.observe(
                 "iter-17-B-review-beside",
                 matches!(
@@ -9058,7 +9950,8 @@ pub mod signed_in {
                     (Some((edge, connect, Some(words))), Some(review), Some(Ok(_)))
                         if (connect.center().y - review.center().y).abs() < 1.0
                             && review.left() >= connect.right()
-                            && (words - edge).abs() <= 1.0
+                            && (connect.left() - edge).abs() <= 1.0
+                            && words > connect.left() + 1.0
                 ),
                 format!("At {size:?}, Connect to sync starts the line and Review conflict follows it, apart: {pair:?}"),
             );
@@ -9088,7 +9981,7 @@ pub mod signed_in {
                 && line_and_action_below(d, CHOOSE, "Connect to sync").is_none(),
             "Signed in again with the dialog open, Review conflict is the only action on its line",
         );
-        check_line_start(
+        check_frame_start(
             d,
             "iter-17-B-review",
             REVIEW,
@@ -9605,10 +10498,9 @@ pub mod world {
             d.has_containing(NPC) && d.has(CLOSE_RUN),
             "A new NPC joins the fight, and the run stays on screen",
         );
-        d.expect("Stat block: not set → Guard.");
+        d.expect("Stat block set to Guard.");
         d.expect("Undo stat block change");
-        let (success, detail) =
-            world_build::finished_change_tone(d, "Stat block: not set → Guard.");
+        let (success, detail) = world_build::finished_change_tone(d, "Stat block set to Guard.");
         d.observe("iter-20-D-FD5-stat-block", success, detail);
         d.state("world-npc-in-run", Sizes::All);
         d.observe(
@@ -9849,6 +10741,18 @@ pub mod session_notes {
                 d.click("Add a fight");
             }
             d.wait_for_text("Bridge Ambush");
+            // Round 26 FL4: the menu has one left edge: each name starts at the x of the word
+            // after `+`, and `+` keeps its own slot before it.
+            let word = d.painted_left("New encounter");
+            let name = d.painted_left("Bridge Ambush");
+            let plus = d.place_of("New encounter").map(|rect| rect.left());
+            d.observe(
+                "iter-26-S-FL4",
+                word.zip(name).zip(plus).is_some_and(|((word, name), plus)| {
+                    (word - name).abs() < 1.0 && plus < word
+                }),
+                format!("Names start at New encounter's word: word {word:?}, name {name:?}, target {plus:?}"),
+            );
             // FT3: with temporary HP and a Bloodied player, AC stays at 1200 and names stay at
             // every size. Portraits give way before AC.
             let (items, painted) = session_recording::party_bar_items(d);
@@ -9897,6 +10801,11 @@ pub mod session_notes {
             d.expect(ADD_LONG_REST);
         });
         d.press(Key::Escape);
+        // Round 26 FL1: the plan's Add result sits in its message footer, so neither the Add
+        // strip nor the rows move when it comes or goes.
+        let strip_top = |d: &Driver<'_>| d.place_of(ADD_LONG_REST).map(|rect| rect.top());
+        let rest_top = |d: &Driver<'_>| d.place_of("Long rest").map(|rect| rect.top());
+        let strip_before = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, strip_top));
         d.begin_task();
         assert!(
             d.nodes()
@@ -9907,6 +10816,18 @@ pub mod session_notes {
         d.wait_for_text("Long rest added to Session 1. Everyone starts the next fight at full.");
         d.goal_within("T11.2", "put a long rest on the timeline", 2);
         d.expect("Long rest added to Session 1. Everyone starts the next fight at full.");
+        let with_result = [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                let result = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| {
+                        node.name.starts_with("Long rest added to Session 1.") && node.in_view()
+                    })
+                    .map(|node| node.rect);
+                (strip_top(d), rest_top(d), result)
+            })
+        });
         d.state("session-event-added", Sizes::Default);
         d.click_add_event(ADD_SHORT_REST);
         d.observe(
@@ -9963,6 +10884,23 @@ pub mod session_notes {
             "T11.2",
             !d.has("Undo"),
             "Undo goes at the next thing the DM does, so it cannot undo the wrong event",
+        );
+        let without_result = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, rest_top));
+        d.observe(
+            "iter-26-S-FL1",
+            with_result.iter().zip(&strip_before).zip(&without_result).all(
+                |(((strip, rest, result), before), after)| {
+                    // The result is below the rows, and the strip and the row keep their y.
+                    strip.is_some()
+                        && strip == before
+                        && rest.is_some()
+                        && rest == after
+                        && result.zip(*rest).is_some_and(|(result, rest)| result.top() > rest)
+                },
+            ),
+            format!(
+                "Strip {strip_before:?}; with the result (strip, row, result) {with_result:?}; without it {without_result:?}"
+            ),
         );
         d.state_prepared("session-event-in-notes", Sizes::Default, |d| {
             write_note(d);
@@ -10210,6 +11148,83 @@ pub mod session_notes {
         d.click("Undo remove");
         d.expect("Rest at the mill");
 
+        // Round 26 FG4, FD7: a length the clock cannot count is a warning with its icon, in the
+        // Timeline row, in the open form's Ends line and on the plan row; `half a day` counts.
+        d.aside(|d| {
+            let not_counted = |d: &Driver<'_>| {
+                let mut colours = Vec::new();
+                d.each_painted_text(|text, clip| {
+                    let job = &text.galley.job;
+                    if clip.intersects(text.visual_bounding_rect()) {
+                        for section in &job.sections {
+                            let words = &job.text[section.byte_range.clone()];
+                            if words.contains("Not") && words.contains("counted") {
+                                colours.push((words.to_owned(), section.format.color));
+                            }
+                        }
+                    }
+                });
+                colours
+            };
+            let warned = |colours: &[(String, egui::Color32)]| {
+                !colours.is_empty()
+                    && colours.iter().all(|(words, colour)| {
+                        words.starts_with(crate::design::icons::WARN)
+                            && *colour == crate::design::colors().result.warning
+                    })
+            };
+            d.click_containing("Travel ·");
+            d.replace_text_in("How long", "a few hours");
+            d.press(Key::Enter);
+            d.settle();
+            let timeline = not_counted(d);
+            let where_warned = d.place_of("Where").map(|rect| rect.top());
+            d.observe(
+                "iter-26-S-FG4",
+                timeline.len() >= 2 && warned(&timeline),
+                format!("The row and the form's Ends line warn in the warning colour: {timeline:?}"),
+            );
+            d.state("timeline-time-not-counted", Sizes::All);
+            d.click(NAV_SESSIONS);
+            // In a narrow page the note has its own tab; the plan's rows are on Plan.
+            let narrow = !d.has("Plan and notes") && d.has("Plan");
+            if narrow {
+                d.click("Plan");
+            }
+            d.expect("Travel");
+            let plan = not_counted(d);
+            if narrow {
+                d.click("Note");
+            }
+            d.observe(
+                "iter-26-S-FG4-plan",
+                warned(&plan),
+                format!("The plan row warns in the warning colour: {plan:?}"),
+            );
+            d.click(NAV_TIMELINE);
+            d.click_containing("Travel ·");
+            d.replace_text_in("How long", "half a day");
+            d.press(Key::Enter);
+            d.settle();
+            let read = not_counted(d);
+            let where_read = d.place_of("Where").map(|rect| rect.top());
+            d.observe(
+                "iter-26-S-FD7",
+                read.is_empty() && d.has_containing("Travel · half a day"),
+                format!("`half a day` is a length the clock counts: {read:?}"),
+            );
+            // The warning takes Ends' place, so the fields below How long keep their y.
+            d.observe(
+                "iter-26-S-FG4-still",
+                where_warned.is_some() && where_warned == where_read,
+                format!("Where keeps its y with and without the warning: {where_warned:?}, {where_read:?}"),
+            );
+            d.clear_text_in("How long");
+            d.press(Key::Enter);
+            d.press_ctrl(Key::S);
+            d.settle();
+        });
+
         // Back to the note from the event, and the file is readable outside Splat.
         d.click_starting("Rest at the mill ·");
         d.click("Open this session");
@@ -10362,7 +11377,17 @@ pub mod session_notes {
 
         d.click("Templates");
         d.expect("Standard session");
-        d.state("templates-built-in", Sizes::All);
+        d.state_prepared("templates-built-in", Sizes::All, |d| {
+            // Round 26 AN1, FN4, SN2, AL1: the template help wraps at the reader measure.
+            let help = d.place_of(
+                "Splat fills {{number}}, {{title}}, {{date}} and {{campaign}}. Obsidian’s core Templates plugin also fills {{date}} and {{title}}.",
+            );
+            d.observe(
+                "iter-26-S-AN1",
+                help.is_some_and(|help| help.width() <= crate::design::READER_MEASURE + 1.0),
+                format!("The template help keeps the reader measure: {help:?}"),
+            );
+        });
         d.click("Customize this template");
         d.expect("Campaign");
         d.state("templates-own", Sizes::Default);
@@ -10395,6 +11420,18 @@ pub mod session_notes {
         );
         d.expect("Not connected · showing the name saved on this computer");
         d.state("session-folder-in-campaign", Sizes::All);
+        // Round 26 FN2, FN5: the form's warning and its result sit in the pane's message footer,
+        // so the save row keeps its y when the first letter brings the warning, and after a move.
+        let save_row = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .find(|node| {
+                    (node.name.ends_with("No changes") || node.name.ends_with("Unsaved"))
+                        && node.in_view()
+                })
+                .map(|node| node.rect.top())
+        };
+        let row_clean = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, save_row));
         d.app_mut().timeline.save();
         d.replace_text_in("Folder", "30 Sessions");
         d.expect("Move files and save");
@@ -10405,8 +11442,37 @@ pub mod session_notes {
             d.field_text("Folder").as_deref() == Some("Sessions"),
             "Discard restores the saved session folder",
         );
+        const KEEPS: &str = "If you save without moving, Splat no longer shows these files.";
+        let row_typed = d.aside(|d| {
+            d.replace_text_in("Folder", "3");
+            d.expect("Save without moving");
+            [SMALL, DEFAULT, LARGE].map(|size| {
+                d.at_size(size, |d| {
+                    let warning = d
+                        .nodes()
+                        .into_iter()
+                        .find(|node| node.name.contains(KEEPS) && node.in_view())
+                        .map(|node| node.rect.top());
+                    (save_row(d), warning)
+                })
+            })
+        });
         d.replace_text_in("Folder", "30 Sessions");
         d.expect("Save without moving");
+        // Review of PR 274, item 3: the footer and the form share one scan of the current folder,
+        // so an unchanged frame lists its files at most once, as before the footer. The count is
+        // kept inside `storage_files`.
+        let scans = || crate::sessions::storage_scans();
+        let (passes, before) = (d.passes(), scans());
+        for size in [SMALL, DEFAULT, LARGE] {
+            d.at_size(size, |_| ());
+        }
+        let (frames, done) = (d.passes() - passes, scans() - before);
+        d.observe(
+            "review-274-3",
+            frames > 0 && done > 0 && done <= frames,
+            format!("{frames} unchanged frames scanned the session folder {done} times"),
+        );
         // FT4 (round 16): with no run and no other form, moving the files is the one primary,
         // as Move runs and save is on Rules and runs.
         d.state_prepared("session-folder-move-offered", Sizes::All, |d| {
@@ -10455,6 +11521,31 @@ pub mod session_notes {
         d.expect("Move files and save");
         d.click("Move files and save");
         d.expect("Moved 1 note, 4 events, 2 templates and 1 recording to 30 Sessions.");
+        let row_moved = [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                let result = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| node.name.starts_with("Moved 1 note") && node.in_view())
+                    .map(|node| node.rect.top());
+                (save_row(d), result)
+            })
+        });
+        d.observe(
+            "iter-26-S-FN2",
+            row_clean.iter().zip(&row_typed).zip(&row_moved).all(
+                |((clean, (typed, warning)), (moved, result))| {
+                    clean.is_some()
+                        && clean == typed
+                        && clean == moved
+                        && warning.zip(*clean).is_some_and(|(warning, row)| warning > row)
+                        && result.zip(*clean).is_some_and(|(result, row)| result > row)
+                },
+            ),
+            format!(
+                "Save row clean {row_clean:?}; first letter (row, warning) {row_typed:?}; moved (row, result) {row_moved:?}"
+            ),
+        );
         d.observe_both(
             "iter-1-C-FT15-18",
             "The session folder uses one label and one right edge",
@@ -11463,6 +12554,18 @@ pub mod session_recording {
         );
     }
 
+    /// The top of the session's Recordings tab at 960, 1200 and 1920.
+    fn recording_tabs(d: &mut Driver<'_>) -> [Option<f32>; 3] {
+        [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                d.nodes()
+                    .into_iter()
+                    .find(|node| node.name.starts_with("Recordings") && node.in_view())
+                    .map(|node| node.rect.top())
+            })
+        })
+    }
+
     pub fn banner_priority(d: &mut Driver<'_>) {
         d.click(NAV_SESSIONS);
         new_session(d, "Failed processing");
@@ -11553,6 +12656,7 @@ pub mod session_recording {
             check_one_primary(d, "Record again", "iter-9-C2-ST1-two-alerts");
             check_processing_action(d, "Process:", false);
         });
+        let tabs_stopped = recording_tabs(d);
         assert!(d.in_view("Record again"));
         d.click("Record again");
         d.expect("Stop recording");
@@ -11620,6 +12724,7 @@ pub mod session_recording {
                 .name;
             check_one_primary(d, &process, "iter-9-C-ST1-blocked-banner");
         });
+        let tabs_saved = recording_tabs(d);
         std::fs::write(&failed, audio).unwrap();
         d.settle();
         assert!(d.in_view("Continue processing"));
@@ -11678,6 +12783,19 @@ pub mod session_recording {
             );
             check_one_primary(d, "Record again", "iter-8-C-banner-stalled-primary");
         });
+        let tabs_elsewhere = recording_tabs(d);
+        // Round 26 FD3: Session 2's tabs keep one y with its own stopped recording, with
+        // `Recording saved: …`, and with Session 1's stalled recording; each line that comes is
+        // in the message footer.
+        d.observe(
+            "iter-26-S-FD3",
+            tabs_stopped.iter().all(Option::is_some)
+                && tabs_stopped == tabs_saved
+                && tabs_saved == tabs_elsewhere,
+            format!(
+                "Session 2's tabs at 960, 1200 and 1920: stopped {tabs_stopped:?}, saved {tabs_saved:?}, stalled elsewhere {tabs_elsewhere:?}"
+            ),
+        );
         assert!(d.in_view("Record again"));
         d.click("Record again");
         d.expect("Stop recording");
@@ -12221,7 +13339,7 @@ pub mod session_recording {
             .simulate_recorder_health(Health::Silent);
         d.settle();
         assert_eq!(tabs_top(d), Some(hearing_top));
-        d.expect("Silent for over a minute · 0:00 recorded");
+        d.expect("0:00 recorded · Silent for over a minute");
         d.app_mut()
             .sessions
             .simulate_recorder_health(Health::Hearing);
@@ -12260,7 +13378,7 @@ pub mod session_recording {
         d.expect("Silent for over a minute");
         d.expect("Check the input in Settings");
         d.state_prepared("recording-silent", Sizes::All, |d| {
-            let detail = "Silent for over a minute · 0:00 recorded";
+            let detail = "0:00 recorded · Silent for over a minute";
             assert!(d.visible_text(detail) && d.in_view("Stop recording"));
             d.observe(
                 "iter-9-C-FT13",
@@ -12274,16 +13392,30 @@ pub mod session_recording {
             "iter-12-R2",
             "The silent row owns its detail and stop action",
             |d| {
-                d.visible_text("Silent for over a minute · 0:00 recorded")
+                d.visible_text("0:00 recorded · Silent for over a minute")
                     && d.in_view("Stop recording")
                     && d.in_view("Check the input in Settings")
             },
         );
+        // Round 26 FM2: a stall comes by itself, so it must not move Stop recording. The silent
+        // row has Stop and Check the input; the stalled row adds Record again after Stop.
+        let stop_left = |d: &Driver<'_>| d.place_of("Stop recording").map(|rect| rect.left());
+        let silent_stop = stop_left(d).expect("Stop recording is on the silent row");
         d.app_mut()
             .sessions
             .simulate_recorder_health(Health::Stalled);
         d.settle();
         d.expect("Stopped saving after");
+        let stalled_stop = stop_left(d).expect("Stop recording is on the stalled row");
+        let again_left = d
+            .place_of("Record again")
+            .map(|rect| rect.left())
+            .expect("Record again is on the stalled row");
+        d.observe(
+            "iter-26-S-FM2",
+            stalled_stop == silent_stop && again_left > stalled_stop,
+            "A stall keeps Stop recording in the first slot; Record again comes after it",
+        );
         d.state("recording-stalled", Sizes::All);
         d.observe(
             "T11.5",
@@ -12334,8 +13466,39 @@ pub mod session_recording {
         );
         d.click_containing("Recording 0:");
         d.expect("Stop recording");
+        // Round 26 FM4: `Recording saved: …` sits in the page's message footer, so the tabs and
+        // the recording row, whose Process is the DM's next act, keep their place.
+        let tab_top = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .find(|node| node.name.starts_with("Recordings") && node.in_view())
+                .map(|node| node.rect.top())
+        };
+        let tabs_live = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, tab_top));
         d.click("Stop recording");
         d.expect("saved: 2026-01-01 19:00");
+        let tabs_saved = [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                let saved = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| node.name.contains("saved: 2026-01-01 19:00") && node.in_view())
+                    .map(|node| node.rect.top());
+                (tab_top(d), saved)
+            })
+        });
+        d.observe(
+            "iter-26-S-FM4",
+            tabs_live
+                .iter()
+                .zip(&tabs_saved)
+                .all(|(live, (saved_tab, result))| {
+                    live.is_some()
+                        && live == saved_tab
+                        && result.zip(*live).is_some_and(|(result, tab)| result > tab)
+                }),
+            format!("Tabs while live {tabs_live:?}; after the save (tabs, result) {tabs_saved:?}"),
+        );
 
         d.expect(RECORDING);
         d.observe(
@@ -12631,7 +13794,27 @@ pub mod session_recording {
 
         // The open recording row owns the retry and clears the old failure.
         d.click_containing("Continue processing:");
-        d.expect("is processed");
+        // Round 26 FM7: on the session's own Recordings tab the row says Processed, so the
+        // `is processed` banner does not come, and leaving the tab does not bring it back.
+        d.expect("EVENTS MARKED IN THIS RECORDING 2");
+        let banner_here = d.has_containing("is processed.");
+        let mut banner_after = true;
+        d.aside(|d| {
+            d.click(if d.has("Plan and notes") {
+                "Plan and notes"
+            } else {
+                "Plan"
+            });
+            banner_after = d.has_containing("is processed.");
+            d.click_starting("Recordings");
+        });
+        d.observe(
+            "iter-26-S-FM7",
+            !banner_here && !banner_after && d.rail_words().contains("Processed"),
+            format!(
+                "The processed row's own tab counts as reading the notice: banner on the tab {banner_here}, after leaving it {banner_after}"
+            ),
+        );
         d.observe(
             "T11.6",
             !d.has_containing("Processing failed") && !d.has_containing("your limit is reached"),
@@ -13093,6 +14276,30 @@ pub mod session_recording {
             Some(DISCARD),
             &[SMALL, DEFAULT, LARGE],
         );
+        // Round 26 FM5: one fault, one tone. The moved note's banner is a warning, so the header
+        // and the rail say `Notes not saved` with the warning icon and colour too.
+        let mut tones = Vec::new();
+        d.each_painted_text(|text, clip| {
+            let words = &text.galley.job.text;
+            if clip.intersects(text.visual_bounding_rect()) && words.ends_with(" Notes not saved") {
+                let colour = text
+                    .galley
+                    .job
+                    .sections
+                    .first()
+                    .map(|part| part.format.color);
+                tones.push((words.clone(), colour));
+            }
+        });
+        let warn = format!("{} Notes not saved", crate::design::icons::WARN);
+        d.observe(
+            "iter-26-S-FM5",
+            tones.len() >= 2
+                && tones.iter().all(|(words, colour)| {
+                    *words == warn && *colour == Some(crate::design::colors().document.external)
+                }),
+            format!("The header and the rail match the moved note's warning: {tones:?}"),
+        );
         d.state("note-file-gone", Sizes::All);
         // FT4: Discard has one name. Its notice and Undo say discard, not drop or reload. These
         // steps prove the words and come back to the same choices, so they are not task cost.
@@ -13247,6 +14454,44 @@ pub mod session_recording {
                     reason.top() >= address.bottom() && reason.bottom() <= model.top()
                 }),
             format!("`Enter the address.` is in view below Address: {address:?}, {reason:?}"),
+        );
+        // Round 26 FM6: each missing value says why in one form, the plain `Small` line
+        // directly below its field. Model's reason comes before its help, as Address's comes
+        // before the next field.
+        let reasons = [
+            "Enter the address.",
+            "Enter the model’s name.",
+            "Paste a key first.",
+        ];
+        let forms: Vec<_> = reasons
+            .iter()
+            .map(|words| {
+                let place = d.place_of(words);
+                (
+                    *words,
+                    place.is_some(),
+                    d.painted_color(words),
+                    place.and_then(|place| d.painted_size(place, words)),
+                )
+            })
+            .collect();
+        let model_reason = d.place_of("Enter the model’s name.");
+        let model_help = d.place_of("The name your service gives it. For OpenAI, gpt-transcribe.");
+        d.observe(
+            "iter-26-S-FM6",
+            forms.iter().all(|(_, shown, colour, size)| {
+                *shown
+                    && *colour == Some(crate::design::colors().muted)
+                    && *size == Some(crate::design::Type::Small.size())
+            }) && model
+                .zip(model_reason)
+                .zip(model_help)
+                .is_some_and(|((model, reason), help)| {
+                    reason.top() >= model.bottom() && reason.bottom() <= help.top()
+                }),
+            format!(
+                "Missing values share one reason form below their field: {forms:?}; Model {model:?}, reason {model_reason:?}, help {model_help:?}"
+            ),
         );
         d.expect("The saved key is for OpenAI, so Splat will not send it to this service. Save a key for it.");
         d.state("processing-custom-speech-service", Sizes::All);
@@ -13533,7 +14778,9 @@ pub mod encounter_groups {
         d.expect("Unknown creature");
         let (found, invalid) = d.at_size(SMALL, |d| {
             (
-                d.in_view_containing("Unknown creature: not in this campaign’s packages."),
+                d.in_view_containing(
+                    "Unknown creature · line\u{a0}13: not in this campaign’s packages.",
+                ),
                 d.in_view_containing("would become −28"),
             )
         });
@@ -13544,13 +14791,17 @@ pub mod encounter_groups {
         );
         let tones = (
             tones_beside(d, "would become −28"),
-            tones_beside(d, "Unknown creature: not in this campaign’s packages."),
+            tones_beside(
+                d,
+                "Unknown creature · line\u{a0}13: not in this campaign’s packages.",
+            ),
         );
         // FA1 (Astra review of PR 259): the editor names the missing member in the one form,
-        // and its help follows on a line of its own.
+        // and its help follows on a line of its own. iter-26-B FJ6: the saved member's form
+        // names its line, as Arrivals does.
         d.observe(
             "iter-25-B-FA1-missing",
-            d.has("Unknown creature: not in this campaign’s packages.")
+            d.has("Unknown creature · line\u{a0}13: not in this campaign’s packages.")
                 && d.has(
                     "Choose a replacement, check the packages it uses, or remove this member.",
                 )
@@ -13573,7 +14824,7 @@ pub mod encounter_groups {
         for size in [SMALL, DEFAULT, LARGE] {
             let (aligned, detail) = d.at_size(size, |d| {
                 let text = d.painted_rect_in(
-                    "Unknown creature: not in this campaign’s packages.",
+                    "Unknown creature · line\u{a0}13: not in this campaign’s packages.",
                     egui::Rect::EVERYTHING,
                 );
                 let words = d.painted_rect_in("Campaign → Packages", egui::Rect::EVERYTHING);
@@ -13801,7 +15052,7 @@ pub mod encounter_groups {
         d.state("group-member-replacement-search", Sizes::Default);
         d.click("Use Ember Cultist");
         d.expect("Changes for Ember Cultist");
-        // Use gives a result and its Undo on the member result line, as Remove does.
+        // Use gives a result and its Undo in the editor's footer, as Remove does.
         const REPLACED: &str = "Replaced Unknown creature with Ember Cultist.";
         d.observe(
             "iter-23-B-FI1",
@@ -13834,6 +15085,21 @@ pub mod encounter_groups {
         );
         d.click("Discard");
         d.click("Back to encounters");
+        // iter-26-B FI1: the page's results sit in a footer below the list, so the headings and
+        // rows keep their y when a result comes or goes, at 960, 1200 and 1920.
+        let heading_tops = |d: &mut Driver<'_>| {
+            [SMALL, DEFAULT, LARGE].map(|size| {
+                d.at_size(size, |d| {
+                    ["IN PROGRESS", READY_TO_RUN, "GROUPS"].map(|heading| {
+                        d.nodes()
+                            .into_iter()
+                            .find(|node| node.name.starts_with(heading))
+                            .map(|node| node.rect.top().round())
+                    })
+                })
+            })
+        };
+        let one_result = heading_tops(d);
 
         // Removal and recovery are their own task, outside the build and arrival costs.
         d.begin_task();
@@ -13842,6 +15108,12 @@ pub mod encounter_groups {
         d.expect("Undo remove group");
         d.expect("Lost Patrol draft discarded.");
         assert!(d.has("Undo discard of Lost Patrol"));
+        let two_results = heading_tops(d);
+        // Newest first: the removal, then the older discard.
+        let order = d
+            .place_of("Undo remove group")
+            .zip(d.place_of("Undo discard of Lost Patrol"))
+            .map(|(removed, discarded)| (removed.top(), discarded.top()));
         d.state_prepared("group-removed", Sizes::All, |d| {
             // iter11-B-FT4: the discard notice is an Undo message, like the removal above it.
             let size = d.window_size();
@@ -13893,8 +15165,36 @@ pub mod encounter_groups {
             !d.has(&format!("Edit group {GROUP_GOBLINS}")),
             "Remove drops the saved group and offers Undo",
         );
+        // Undo of the older result while the newer one stays: the discarded draft comes back
+        // with its words, and the removal keeps its result and Undo. A discard again ends where
+        // this started.
+        let (older_undone, newer_kept) = d.aside(|d| {
+            d.click("Undo discard of Lost Patrol");
+            d.expect(&format!("Group name: {GROUP_LOST}"));
+            let back = d.visible_text("Arrive at dusk.");
+            d.click("Discard");
+            d.click("Back to encounters");
+            d.expect("Lost Patrol draft discarded.");
+            (
+                back,
+                d.has("Undo remove group") && !d.has(&format!("Edit group {GROUP_GOBLINS}")),
+            )
+        });
         d.click("Undo remove group");
         d.expect(&format!("Edit group {GROUP_GOBLINS}"));
+        let after_undo = heading_tops(d);
+        d.observe(
+            "iter-26-B-FI1",
+            one_result.iter().flatten().filter(|top| top.is_some()).count() >= 6
+                && two_results == one_result
+                && after_undo == one_result
+                && order.is_some_and(|(removed, discarded)| removed < discarded)
+                && older_undone
+                && newer_kept,
+            format!(
+                "Heading tops with one result {one_result:?}, two {two_results:?}, after Undo {after_undo:?}; removal above discard {order:?}; older Undo {older_undone}, newer kept {newer_kept}"
+            ),
+        );
         d.begin_task();
 
         // At the table: the panel, with members and XP.
@@ -13991,7 +15291,8 @@ pub mod encounter_groups {
                 && d.has_containing(
                     "Unknown creature · line\u{a0}13: not in this campaign’s packages.",
                 )
-                && d.visible_text("Will\u{a0}add: 1\u{a0}×\u{a0}Goblin\u{a0}Warrior"),
+                // iter-26-R FI8: `Will add:` keeps its first member on its line.
+                && d.visible_text("Will\u{a0}add:\u{a0}1\u{a0}×\u{a0}Goblin\u{a0}Warrior"),
             "The summary names the joining member; excluded members stay under Cannot join",
         );
         d.observe(
@@ -14018,10 +15319,38 @@ pub mod encounter_groups {
                 tones.0, tones.1
             ),
         );
+        // iter-26-R FI5: every other group's field keeps its place when a total's reason comes;
+        // the reason is in the footer below the list, named by its group.
+        // Measured from Rival Team's own field, in the same scroll list: the driver scrolls a
+        // control into view to press it, which moves every row alike and is not a fault.
+        let other_fields = |d: &Driver<'_>| {
+            let Some(rivals) = d.place_of(TOTAL_FOR_RIVALS) else {
+                return Vec::new();
+            };
+            let mut fields: Vec<_> = d
+                .nodes()
+                .into_iter()
+                .filter(|node| {
+                    node.name.starts_with("Initiative total for ") && node.name != TOTAL_FOR_RIVALS
+                })
+                .map(|node| (node.name, (node.rect.top() - rivals.top()).round()))
+                .collect();
+            fields.sort_by(|a, b| a.0.cmp(&b.0));
+            fields
+        };
+        let fields_before = other_fields(d);
         d.begin_task();
         d.type_into(TOTAL_FOR_RIVALS, "-");
-        d.expect("Enter a whole number, or clear the field to roll.");
+        d.expect("Rival Team: Enter a whole number, or clear the field to roll.");
         assert!(d.is_disabled(&add_group(GROUP_RIVALS)));
+        let fields_after = other_fields(d);
+        d.observe(
+            "iter-26-R-FI5",
+            !fields_before.is_empty() && fields_before == fields_after,
+            format!(
+                "Other groups' fields before {fields_before:?}, with the reason {fields_after:?}"
+            ),
+        );
         d.state("invalid-arrival-total", Sizes::All);
         // AH1 at the captured sizes: one Add edge for every group, within the shared block.
         for size in [SMALL, DEFAULT, LARGE] {
@@ -14112,8 +15441,27 @@ pub mod encounter_groups {
         );
         d.expect_same("Only the typed initiative differs from the group panel; the form and roster stay in place.");
         d.state("group-total-typed", Sizes::All);
+        // iter-26-R FI5: a join puts `Added in round N` on the members' line: Rival Team's Add
+        // and every other group's field keep their y.
+        let add_y = |d: &Driver<'_>| {
+            d.place_of(&add_group(GROUP_RIVALS))
+                .zip(d.place_of(TOTAL_FOR_RIVALS))
+                .map(|(add, field)| (add.top() - field.top()).round())
+        };
+        let (add_before, others_before) = (add_y(d), other_fields(d));
         d.click(&add_group(GROUP_RIVALS));
         d.expect(RIVAL_NAME);
+        let (add_after, others_after) = (add_y(d), other_fields(d));
+        d.observe(
+            "iter-26-R-FI5-joined",
+            d.has_containing("Added in round 2")
+                && add_before.is_some()
+                && add_before == add_after
+                && others_before == others_after,
+            format!(
+                "Rival Team's Add {add_before:?} → {add_after:?}; others {others_before:?} → {others_after:?}"
+            ),
+        );
         d.observe(
             "T13.2",
             d.nodes()
@@ -14131,6 +15479,19 @@ pub mod encounter_groups {
             },
         );
         d.expect("Tied with Kestrel Dunmoor at\u{a0}14, placed after.");
+        // iter-26-R FI10: a row's hidden changes say how many: `1 more`, never a bare `more`.
+        let words = d.at_size(DEFAULT, |d| d.row_words(RIVAL_NAME).replace('\u{a0}', " "));
+        let counted = words.match_indices(" more").all(|(at, _)| {
+            words[..at]
+                .chars()
+                .next_back()
+                .is_some_and(|c| c.is_ascii_digit())
+        });
+        d.observe(
+            "iter-26-R-FI10",
+            words.contains(" more") && counted,
+            format!("{RIVAL_NAME}'s row at 1200: {words}"),
+        );
         d.state("group-added-with-a-total", Sizes::All);
         d.observe(
             "T13.2",
@@ -14252,6 +15613,12 @@ pub mod encounter_groups {
                 "Group rows stay through a join in setup and its Undo: {setup_before:?}, added {setup_added:?}, undone {setup_undone:?}"
             ),
         );
+        // iter-26-B FJ6, review: whether the members are the saved ones is worked out after a
+        // change, never on an unchanged frame. The count is inside the comparison.
+        let compare = crate::test_support::CachedWork::start("Member comparison", d, |_| {
+            let (reached, work) = crate::encounters::member_comparisons();
+            crate::test_support::Counts { reached, work }
+        });
         d.click("Edit group");
         d.expect("Group name: Lost Patrol");
         let run_open = d.app_mut().encounters.has_run();
@@ -14261,13 +15628,118 @@ pub mod encounter_groups {
             "Edit group opens the broken group and keeps the run open",
         );
         d.expect("Replace Unknown creature");
+        // iter-26-B FJ6: the editor writes the saved member's fault in the one form, with its
+        // line, as Arrivals does; never the short `<name>: <cause>` form.
+        d.observe(
+            "iter-26-B-FJ6",
+            d.has_containing("Unknown creature · line\u{a0}13: not in this campaign’s packages.")
+                && !d.has_containing("Unknown creature: not in this campaign’s packages."),
+            "The group editor names a saved missing member with its line, in the one fault form",
+        );
         d.state("broken-group-open-for-repair", Sizes::All);
+        let warm = compare.warm(d, d.has("Replace Unknown creature"), 1);
+        let steady = compare.steady(d, |d| {
+            d.settle();
+            d.at_size(LARGE, |_| ());
+            d.settle();
+            d.has("Replace Unknown creature")
+        });
+        // Outside the rule's scope: once the members change, a line may no longer be the
+        // member's, so the fault names none, as Save's check does. Discard brings the line back.
+        let refresh = compare.refresh(d, 1, |d| {
+            d.click("More actions for Unknown creature");
+            d.click("Move down");
+            d.expect("Unsaved");
+            d.has("Unknown creature: not in this campaign’s packages.")
+        });
+        d.observe(
+            "iter-26-B-FJ6-cache",
+            warm.is_ok() && steady.is_ok() && refresh.is_ok(),
+            format!("Member comparison: warm {warm:?}, steady {steady:?}, refresh {refresh:?}"),
+        );
+        let changed = refresh.is_ok();
+        d.click("Discard");
+        d.observe(
+            "iter-26-B-FJ6-changed",
+            changed && !d.has("Unknown creature: not in this campaign’s packages."),
+            "A changed group's missing member names no line; Discard gives back the saved form",
+        );
+        // Review 2: a count edit lands after the comparison in its own frame. The input-free
+        // frames after it work the comparison out again (the line goes), putting the count back
+        // brings the line back, and unchanged frames still do no comparison.
+        const SHORT: &str = "Unknown creature: not in this campaign’s packages.";
+        let focused = d.tab_to("How many of Cinder Wolf");
+        // The open run takes the arrow keys, so the count is typed.
+        d.press_ctrl(Key::A);
+        d.type_text("2");
+        d.press(Key::Enter);
+        let edited = d.visible_text("Unsaved") && d.has(SHORT);
+        d.tab_to("How many of Cinder Wolf");
+        d.press_ctrl(Key::A);
+        d.type_text("1");
+        d.press(Key::Enter);
+        let restored = !d.has(SHORT) && !d.visible_text("Unsaved");
+        let idle = compare.steady(d, |d| {
+            d.settle();
+            d.at_size(SMALL, |_| ());
+            d.settle();
+            d.has("Replace Unknown creature")
+        });
+        d.observe(
+            "iter-26-B-FJ6-count",
+            focused && edited && restored && idle.is_ok(),
+            format!(
+                "Count field focused {focused}; after the edit the line went {edited}; restored {restored}; idle {idle:?}"
+            ),
+        );
     }
 }
 
 pub mod encounter_history {
     use super::*;
     const OPEN_OLD: &str = "Open the run of Old Mill Raid";
+
+    /// V31: the run that opened in History, as the list shows it: its row, its Read-only line
+    /// and every Final state row in view. The names of those that are not.
+    fn opened_run_in_view(d: &Driver<'_>) -> Result<usize, Vec<String>> {
+        let nodes = d.nodes();
+        let rows: Vec<_> = nodes
+            .iter()
+            .filter(|node| node.name.starts_with("HP ") && node.name.contains('/'))
+            .collect();
+        let hidden: Vec<String> = nodes
+            .iter()
+            .filter(|node| node.name.starts_with("Close the run of ") || node.name == "Read-only")
+            .chain(rows.iter().copied())
+            .filter(|node| !node.fully_in_view())
+            .map(|node| node.name.clone())
+            .collect();
+        if rows.len() >= 2 && hidden.is_empty() && d.visible_text("Read-only") {
+            Ok(rows.len())
+        } else {
+            Err(hidden)
+        }
+    }
+
+    /// V31: open the run at this size; then it is in view, and the list scrolled once.
+    fn open_brings_the_run_into_view(d: &mut Driver<'_>, what: &str) {
+        for size in [SMALL, DEFAULT] {
+            let shown = d.act_at_size(size, |d| {
+                if d.has_containing(&OPEN_OLD.replace("Open", "Close")) {
+                    d.click_starting(OPEN_OLD.replace("Open", "Close").as_str());
+                }
+                d.click_starting(OPEN_OLD);
+                d.expect("Read-only");
+                opened_run_in_view(d)
+            });
+            d.observe(
+                "V31-history-in-view",
+                shown.is_ok(),
+                format!("{what}, opened at {size:?}: the row and Final state in view: {shown:?}"),
+            );
+        }
+    }
+
     pub fn run(d: &mut Driver<'_>) {
         d.expect(READY_TO_RUN);
         d.expect(HISTORY);
@@ -14293,8 +15765,24 @@ pub mod encounter_history {
         );
         d.state("history-open", Sizes::All);
         d.check_tab_order("encounters, history open");
+        // iter-26-B FJ4: the deleted run's result sits in the page's footer, so the headings
+        // above the deleted row keep their y with it and after its Undo, at 960, 1200 and 1920.
+        let heading_tops = |d: &mut Driver<'_>| {
+            [SMALL, DEFAULT, LARGE].map(|size| {
+                d.at_size(size, |d| {
+                    ["IN PROGRESS", READY_TO_RUN].map(|heading| {
+                        d.nodes()
+                            .into_iter()
+                            .find(|node| node.name.starts_with(heading))
+                            .map(|node| node.rect.top().round())
+                    })
+                })
+            })
+        };
+        let no_result = heading_tops(d);
         delete_saved_run(d, RUN);
         d.expect("Undo delete run");
+        let with_result = heading_tops(d);
         d.observe(
             "T4.6",
             !d.has_containing(&format!("{RUN} · Round")),
@@ -14303,11 +15791,25 @@ pub mod encounter_history {
         d.state("run-deleted", Sizes::Default);
         d.click("Undo delete run");
         d.expect(&format!("{RUN} · Round"));
+        let undone = heading_tops(d);
+        // The deleted row was in In progress, so Ready to run below it moves up by that row; the
+        // heading above it moves nothing, and Undo puts every heading back.
+        d.observe(
+            "iter-26-B-FJ4",
+            no_result.iter().flatten().all(Option::is_some)
+                && with_result
+                    .iter()
+                    .zip(&no_result)
+                    .all(|(with, before)| with[0] == before[0])
+                && undone == no_result,
+            format!("Heading tops before {no_result:?}, with the result {with_result:?}, after Undo {undone:?}"),
+        );
         let before = d.app_mut().timeline.events.len();
         d.click_starting(OPEN_OLD);
         d.expect("Read-only");
         let unchanged =
             d.app_mut().timeline.events.len() == before && !d.app_mut().encounters.has_run();
+        open_brings_the_run_into_view(d, "Open in History");
         d.observe(
             "T4.6",
             unchanged,
@@ -14337,6 +15839,7 @@ pub mod encounter_history {
             .id
             == live;
         d.observe("T4.6", still_open, "History leaves the current fight open");
+        open_brings_the_run_into_view(d, "Open in History beside an open run");
         d.observe(
             "T4.4",
             d.nodes().iter().filter(|node| node.name == RUN && node.role == egui::accesskit::Role::Label).count() == 1,
@@ -14582,6 +16085,23 @@ pub mod encounter_owned_groups {
                 d.visible_text("Deleted encounter"),
                 "Belongs to still shows Deleted encounter",
             );
+            // iter-26-B FB4: the two choices with a label at their left start at one x.
+            let left_of = |d: &Driver<'_>, start: &str| {
+                d.nodes()
+                    .into_iter()
+                    .find(|node| node.name.starts_with(start))
+                    .map(|node| node.rect.left())
+            };
+            let (side, belongs) = (
+                left_of(d, "Default side for "),
+                left_of(d, "Belongs to: "),
+            );
+            d.observe(
+                "iter-26-B-FB4",
+                side.zip(belongs)
+                    .is_some_and(|(side, belongs)| (side - belongs).abs() < 0.5),
+                format!("Default side starts at {side:?}, Belongs to at {belongs:?}"),
+            );
             // A group no fight can offer says so as a warning, not as field help.
             let tones = tones_beside(d, "No fight offers this group now.");
             d.observe(
@@ -14640,16 +16160,61 @@ pub mod encounter_owned_groups {
             "A section shows the group's name and its members",
         );
 
+        // iter-26-B FB2: a change of Add target moves neither the search nor the line above it.
+        const SEARCH: &str = "Find a creature or party member";
+        let search_tops = |d: &mut Driver<'_>| {
+            [SMALL, DEFAULT, LARGE].map(|size| {
+                d.at_size(size, |d| {
+                    (
+                        d.place_of(SEARCH).map(|rect| rect.top().round()),
+                        d.nodes()
+                            .into_iter()
+                            .find(|node| node.name.starts_with("Adding to "))
+                            .map(|node| node.rect.top().round()),
+                    )
+                })
+            })
+        };
+        let roster_target = search_tops(d);
+
         // A new group is built right here, and saved with the encounter.
         d.begin_task();
         d.click(NEW_FOR_ENCOUNTER);
         d.type_text(NEW_NAME);
+        d.expect(&format!("Adding to {NEW_NAME}"));
+        let group_target = search_tops(d);
+        d.observe(
+            "iter-26-B-FB2",
+            roster_target
+                .iter()
+                .all(|(search, line)| search.is_some() && line.is_some())
+                && roster_target == group_target,
+            format!(
+                "Search and `Adding to` tops, adding to the roster {roster_target:?} and to the new group {group_target:?}"
+            ),
+        );
         d.observe(
             "T13.6",
             d.has(&format!("Adding to {NEW_NAME}"))
                 && !d.has(&format!("Belongs to: {SHRINE}"))
                 && d.has_containing("No members yet. Add creatures from the search."),
             "A new group belongs to this encounter, and takes what the search adds",
+        );
+        // iter-26-B AB1: Save checks the new group too, and refuses it empty, so the draft says
+        // Invalid now and Save and Ctrl+S are blocked: nothing is written.
+        let invalid = d.visible_text("Invalid")
+            && !d.visible_text("Unsaved")
+            && d.is_disabled(SAVE_ENCOUNTER)
+            && d.visible_text(&format!("Add a creature to {NEW_NAME} first."));
+        // A proof step that ends where it started: not part of the DM's task.
+        let kept = d.aside(|d| {
+            d.press_ctrl(Key::S);
+            d.app_mut().encounters.draft_dirty() && d.visible_text("Invalid")
+        });
+        d.observe(
+            "iter-26-B-AB1",
+            invalid && kept,
+            format!("With an empty new group, Invalid and Save blocked: {invalid}; Ctrl+S writes nothing: {kept}"),
         );
         d.state("new-group-in-the-encounter", Sizes::All);
         // Two frames, one adding and one not: both name fields end at one edge at every size.
@@ -14746,12 +16311,103 @@ pub mod encounter_owned_groups {
         d.expect("Undo move");
         let notice = format!("{NEW_NAME} moves to any encounter when you save.");
         d.expect(&notice);
+        // iter-26-B FB7: a move that waits for Save is info, never success.
+        let words = d.place_of(&notice);
+        let tones = crate::design::colors().result;
+        d.observe(
+            "iter-26-B-FB7",
+            words.is_some_and(|words| {
+                d.has_tone_bar(words, tones.info) && !d.has_tone_bar(words, tones.success)
+            }),
+            "A group move that waits for Save is an info message, not a success",
+        );
         d.state_prepared("saved-group-removed", Sizes::All, |d| {
             d.scroll_until(egui::pos2(400.0, 400.0), "Undo move", 20);
             assert!(d.in_view_containing(&notice));
         });
         d.click("Undo move");
         d.expect(&format!("Group name: {NEW_NAME}"));
+        // iter-26-B, review: a member result of a group in the encounter's own frame is in the
+        // editor's footer with its Undo, which goes to that group; results show newest first,
+        // and Undo of the older one keeps the newer change. Each case ends where it started.
+        let notes = format!("Group notes for {NEW_NAME}");
+        let member_undo = d.aside(|d| {
+            d.click("More actions for Wolf");
+            d.click("Remove");
+            d.expect("Undo remove member");
+            let removed = !d.has("1. Wolf") && d.has_containing("Removed Wolf.");
+            d.type_into(&notes, "Hungry.");
+            d.click("Undo remove member");
+            d.expect("1. Wolf");
+            // The notes field is multiline: its words are read where they are painted.
+            let kept = d.visible_text("Hungry.");
+            d.clear_text_in(&notes);
+            removed && kept && !d.has("Undo remove member")
+        });
+        let footer_tops = |d: &Driver<'_>| {
+            d.place_of("Undo remove member")
+                .zip(d.place_of("Undo move"))
+                .map(|(member, moved)| (member.top(), moved.top()))
+        };
+        // The member first, then the group: the group's result leads; Undo of the member
+        // brings Wolf back and the group stays moved.
+        let member_then_group = d.aside(|d| {
+            d.click("More actions for Wolf");
+            d.click("Remove");
+            d.click_first(&format!("More actions for {GROUP_SHRINE}"));
+            d.click("Make available to any encounter");
+            d.expect("Undo move");
+            let order = footer_tops(d).is_some_and(|(member, moved)| moved < member);
+            d.click("Undo remove member");
+            d.expect("1. Wolf");
+            let kept = d.has("Undo move") && !d.has(&format!("Group name: {GROUP_SHRINE}"));
+            d.click("Undo move");
+            d.expect(&format!("Group name: {GROUP_SHRINE}"));
+            order && kept
+        });
+        // The group first, then the member: the member's result leads; Undo of the group brings
+        // it back and Wolf stays removed.
+        let group_then_member = d.aside(|d| {
+            d.click_first(&format!("More actions for {GROUP_SHRINE}"));
+            d.click("Make available to any encounter");
+            d.expect("Undo move");
+            d.click("More actions for Wolf");
+            d.click("Remove");
+            d.expect("Undo remove member");
+            let order = footer_tops(d).is_some_and(|(member, moved)| member < moved);
+            d.click("Undo move");
+            d.expect(&format!("Group name: {GROUP_SHRINE}"));
+            let kept = !d.has("1. Wolf") && d.has("Undo remove member");
+            d.click("Undo remove member");
+            d.expect("1. Wolf");
+            order && kept
+        });
+        // Review 2: Undo move gives back only who owns the group. Its members and the cleared
+        // member result stay as they are now.
+        let move_keeps_members = d.aside(|d| {
+            d.click("More actions for Wolf");
+            d.click("Remove");
+            d.click_first(&format!("More actions for {NEW_NAME}"));
+            d.click("Make available to any encounter");
+            d.expect("Undo move");
+            d.click("Undo remove member");
+            let cleared = !d.has("Undo remove member");
+            d.click("Undo move");
+            d.expect(&format!("Group name: {NEW_NAME}"));
+            cleared && d.has("1. Wolf") && !d.has("Undo remove member") && !d.has("Undo move")
+        });
+        d.observe(
+            "iter-26-B-undo-move-owner",
+            move_keeps_members && !d.visible_text("Unsaved"),
+            format!("Undo move keeps Wolf and the cleared member result: {move_keeps_members}"),
+        );
+        d.observe(
+            "iter-26-B-encounter-group-results",
+            member_undo && member_then_group && group_then_member && !d.visible_text("Unsaved"),
+            format!(
+                "Member Undo keeps the notes typed after it: {member_undo}; newest first and Undo of the older keeps the newer: member then group {member_then_group}, group then member {group_then_member}"
+            ),
+        );
         d.begin_task();
         d.click("Back to encounters");
         d.expect("GROUPS");
@@ -15053,29 +16709,38 @@ pub mod encounter_owned_groups {
                 format!("Arrivals repairs are bordered message actions at {size:?}: {detail}"),
             );
         }
-        // iter-25-R FA4: a cut tie button keeps the arrival's copy number, the part that tells
-        // two arrivals apart.
-        if d.nodes()
-            .iter()
-            .any(|node| node.name.starts_with("Move Shrine Reserve"))
-        {
-            for size in [SMALL, DEFAULT, LARGE] {
-                let words = d.at_size(size, |d| {
-                    d.nodes()
-                        .into_iter()
-                        .find(|node| node.name.starts_with("Move Shrine Reserve"))
-                        .map(|node| d.painted_lines_in(node.rect).join(" "))
-                });
-                d.observe(
-                    "iter-25-R-FA4",
-                    words.as_deref().is_some_and(|words| {
-                        words.split_once(") before ").is_some_and(|(arrival, _)| {
-                            arrival.ends_with(|c: char| c.is_ascii_digit())
-                        })
-                    }),
-                    format!("At {size:?} the tie button keeps the copy number: {words:?}"),
-                );
-            }
+        // iter-26-R FA6 (replaces iter-25-R FA4): the tie button sits under the message that
+        // names the arrival whole, so a cut button gives up the whole parenthesis; it never
+        // shows a bare `(… 3)`. Its accessible name keeps the whole words.
+        let tie = d
+            .nodes()
+            .into_iter()
+            .find(|node| node.name.starts_with("Move Shrine Reserve"))
+            .map(|node| node.name);
+        d.observe(
+            "iter-26-R-FA6-found",
+            tie.as_deref()
+                .is_some_and(|name| name.contains("(Goblin Warrior 3)")),
+            format!("The tie button's accessible name: {tie:?}"),
+        );
+        for size in [SMALL, DEFAULT, LARGE] {
+            let words = d.at_size(size, |d| {
+                d.nodes()
+                    .into_iter()
+                    .find(|node| node.name.starts_with("Move Shrine Reserve"))
+                    .map(|node| d.painted_lines_in(node.rect).join(" "))
+            });
+            d.observe(
+                "iter-26-R-FA6",
+                words.as_deref().is_some_and(|words| {
+                    words.starts_with("Move Shrine")
+                        && !words.contains("(…")
+                        && (words.contains("(Goblin\u{a0}Warrior\u{a0}3)")
+                            || words.contains("(Goblin Warrior 3)")
+                            || !words.contains('('))
+                }),
+                format!("At {size:?} the tie button says: {words:?}"),
+            );
         }
         d.state("own-group-dragged-in-combat", Sizes::All);
         close_run(d);
@@ -15089,6 +16754,13 @@ pub mod encounter_owned_groups {
             "T13.5",
             d.has(&add_group(GROUP_ARENA)) && d.has_containing("For Arena Final"),
             "A run from an older save lists every group, and says who each is for",
+        );
+        // iter-26-B FB10: a group whose encounter is gone says the Groups list's heading words,
+        // short enough to sit beside its name as `For Arena Final` does.
+        d.observe(
+            "iter-26-B-FB10",
+            d.has_containing("Encounter deleted") && !d.has_containing("For a deleted encounter"),
+            "Arrivals says Encounter deleted for a group whose encounter is gone",
         );
     }
 }
@@ -15467,6 +17139,66 @@ pub mod run_loot {
             !refused.iter().any(|name| name == "Save encounter"),
             format!("A draft that Save refused: primaries {refused:?}"),
         );
+        d.click("Discard");
+        rewards_with_loot(d);
+    }
+
+    /// F7, T18.1: the ended fight's loot reaches the session note in 1: each roll's result in
+    /// its place, a roll not made as `(not rolled)`, and the downed guard's loot. The fight was
+    /// played before any session, so the DM gives it one on Timeline first.
+    fn rewards_with_loot(d: &mut Driver<'_>) {
+        if d.has("Close Lookup") {
+            d.click(NAV_LOOKUP);
+        }
+        d.click(NAV_SESSIONS);
+        new_session(d, "The Vault");
+        d.click(NAV_TIMELINE);
+        d.click_starting(&format!("{RUN_VAULT} ·"));
+        d.click("Session of this event");
+        d.click("Session 1: The Vault");
+        d.click("Open this session");
+        show_plan(d);
+        let action = format!("Add rewards: {RUN_VAULT}");
+        d.expect(&action);
+        d.state("rewards-for-loot", Sizes::All);
+        d.click(NAV_LOOKUP);
+        d.state("rewards-for-loot-beside-lookup", Sizes::Small);
+        d.click(NAV_LOOKUP);
+        let note = crate::sessions::list_notes(
+            &d.app()
+                .campaigns
+                .active_campaign()
+                .unwrap()
+                .path
+                .join(crate::sessions::DEFAULT_FOLDER),
+        )
+        .into_iter()
+        .find(|note| note.title == "The Vault")
+        .expect("the session's note")
+        .path;
+        d.begin_task();
+        d.click(&action);
+        d.audit_goal_within("T18.1", "put a fight's loot in the note", 1);
+        d.wait_for_text("In notes");
+        let written = std::fs::read_to_string(&note).unwrap();
+        let block = written
+            .split("## Loot and rewards\n\n")
+            .nth(1)
+            .and_then(|rest| rest.split("\n\n").next())
+            .unwrap_or_default()
+            .to_owned();
+        let lines: Vec<&str> = block.lines().skip(2).collect();
+        d.observe(
+            "T18.1",
+            block.contains(&format!("|{RUN_VAULT}]]\n  - XP "))
+                && lines.first() == Some(&"  - 120 gp in a locked coffer")
+                && lines.iter().filter(|line| line.contains("(not rolled)")).count() == 1
+                && lines.contains(&"  - Vault key")
+                && lines.len() == 5
+                && d.has_containing("1 loot roll was not made."),
+            format!("The block holds the encounter's loot with its rolls' results, and the guard's: {block:?}"),
+        );
+        d.state("rewards-with-loot-added", Sizes::All);
     }
 }
 
@@ -15581,6 +17313,13 @@ pub mod run_add_creature {
         resume_run(d, RUN);
         open_arrivals(d);
         d.expect(FIELD);
+        // iter-26-R FJ1: the search field's right edge, before typed words make the list long
+        // enough to scroll.
+        let search_right = |d: &mut Driver<'_>| {
+            [SMALL, DEFAULT]
+                .map(|size| d.at_size(size, |d| d.place_of(FIELD).map(|rect| rect.right().round())))
+        };
+        let short_list = search_right(d);
         d.state("arrivals-empty", Sizes::All);
         d.check_tab_order("run, arrivals panel");
 
@@ -15643,6 +17382,25 @@ pub mod run_add_creature {
             rules.as_ref().is_some_and(|rules| rules.len() == 1),
             format!("One rule below Add, not two: {rules:?}"),
         );
+        // iter-26-R FI8: in the narrow Arrivals column `Will add:` never ends a line: when it
+        // does not fit beside Initiative with its first member, the summary has its own line.
+        for size in [SMALL, DEFAULT] {
+            let lines = d.at_size(size, |d| {
+                d.painted_lines_in(egui::Rect::EVERYTHING)
+                    .into_iter()
+                    .map(|line| line.replace('\u{a0}', " "))
+                    .filter(|line| line.contains("Will add:"))
+                    .collect::<Vec<_>>()
+            });
+            d.observe(
+                "iter-26-R-FI8",
+                !lines.is_empty()
+                    && lines
+                        .iter()
+                        .all(|line| !line.trim_end().ends_with("Will add:")),
+                format!("At {size:?}, lines with Will add: {lines:?}"),
+            );
+        }
         d.state("arrivals-made-up-ready", Sizes::Default);
         d.click(ADD_GHOST);
         d.expect(
@@ -15708,7 +17466,21 @@ pub mod run_add_creature {
         d.type_into(FIELD, "wolf");
         d.expect("Choose Wolf");
         check_form(d);
-        assert!(!d.has_containing("Move Ghost of the Mill before"));
+        // iter-26-R FJ2: the arrival is the newest step again (the damage was undone), so its
+        // result and open Move choice stay while the DM types the next arrival.
+        d.observe(
+            "iter-26-R-FJ2-typing",
+            d.in_view("Move Ghost of the Mill before Ember Cultist"),
+            "A tie's Move choice stays in the footer while search words are typed",
+        );
+        // iter-26-R FJ1: the list keeps the scroll bar's lane, so a list long enough to scroll
+        // moves no field.
+        let long_list = search_right(d);
+        d.observe(
+            "iter-26-R-FJ1",
+            short_list.iter().all(Option::is_some) && short_list == long_list,
+            format!("Search right edge, short list {short_list:?}, long list {long_list:?}"),
+        );
         d.state("arrivals-found", Sizes::Default);
         d.observe(
             "T13.7",
@@ -15718,7 +17490,6 @@ pub mod run_add_creature {
         d.click("Choose Wolf");
         d.type_into("New creature count", "2");
         check_form(d);
-        assert!(!d.has_containing("Move Ghost of the Mill before"));
         d.state("arrivals-found-chosen", Sizes::Default);
         d.click("Add Wolf to the initiative list");
         d.expect("Wolf 1 and Wolf 2 joined at\u{a0}");
@@ -15733,10 +17504,49 @@ pub mod run_add_creature {
             d.has_containing("Wolf 1") && d.has_containing("Wolf 2"),
             "Creatures found in the campaign join with numbered names",
         );
+        // iter-26-R FJ2: the result's owner is the newest step. Typed words do not end it.
         d.type_into(FIELD, "new arrival");
-        assert!(!d.has_containing("Wolf 1 and Wolf 2 joined at"));
+        d.observe(
+            "iter-26-R-FJ2",
+            d.in_view_containing("Wolf 1 and Wolf 2 joined at\u{a0}")
+                && d.has_containing("Undo: add 2 × Wolf"),
+            "The newest arrival's result stays while search words are typed",
+        );
         d.clear_text_in(FIELD);
         d.expect("Wolf 1 and Wolf 2 joined at\u{a0}");
+        // Revision 18: A (the wolves join), then an unrelated step B (damage to another row)
+        // ends A's result; B really changed HP. Undo B gives A's result back with A's rows, and
+        // B's damage is gone.
+        d.click_row("Ember Cultist");
+        let cultist_hp = d.row_hp("Ember Cultist");
+        d.type_text("2");
+        d.press(Key::Enter);
+        let damaged = d.row_hp("Ember Cultist");
+        if !d.has("This fight · Arrivals") {
+            open_arrivals(d);
+        }
+        d.observe(
+            "iter-26-R-FJ2-ends",
+            cultist_hp
+                .zip(damaged)
+                .is_some_and(|(before, after)| after == before - 2)
+                && !d.has_containing("Wolf 1 and Wolf 2 joined at")
+                // Astra 1: what shows and what Undo reaches agree: Undo names B, not A.
+                && d.has_containing("Undo: 2 damage")
+                && !d.has_containing("Undo: add 2 × Wolf"),
+            format!("A later step ends the arrival's result: HP {cultist_hp:?} → {damaged:?}"),
+        );
+        d.click_containing("Undo: 2 damage");
+        if !d.has("This fight · Arrivals") {
+            open_arrivals(d);
+        }
+        d.observe(
+            "iter-26-R-FJ2-undo",
+            d.row_hp("Ember Cultist") == cultist_hp
+                && d.in_view_containing("Wolf 1 and Wolf 2 joined at\u{a0}")
+                && d.row_node("Wolf 2").is_some(),
+            "Undo of the later step gives the arrival's result back, with its rows",
+        );
         d.begin_task();
         d.type_into(FIELD, "wolf");
         d.expect("Choose Wolf");
@@ -15982,6 +17792,38 @@ pub mod session_plan_groups {
             d.has_containing("Session 1: The Crossing"),
             "Assembling a group stays on the session's page",
         );
+        // Review of PR 274: every result takes its order when it is made, also a repeat. Discard
+        // Ash Pack, add a scene, Undo the discard, discard Ash Pack again: the newer discard is
+        // now above the scene. Then both are undone, so the group is as it was.
+        d.aside(|d| {
+            const UNDO_DISCARD: &str = "Undo discard of Ash Pack";
+            let top = |d: &Driver<'_>, name: &str| d.place_of(name).map(|rect| rect.top());
+            d.click("Discard");
+            d.expect(UNDO_DISCARD);
+            d.click("More Add actions");
+            d.click("Add Scene");
+            d.type_text("Watch the ford");
+            d.press(Key::Enter);
+            d.expect("Scene added to tonight.");
+            d.press(Key::Escape);
+            let first = (top(d, "Undo scene"), top(d, UNDO_DISCARD));
+            d.click(UNDO_DISCARD);
+            d.expect("Back to the plan");
+            d.click("Discard");
+            d.expect(UNDO_DISCARD);
+            let second = (top(d, "Undo scene"), top(d, UNDO_DISCARD));
+            d.observe(
+                "review-274-order-repeat",
+                first.0.zip(first.1).is_some_and(|(scene, discard)| scene < discard)
+                    && second.0.zip(second.1).is_some_and(|(scene, discard)| discard < scene),
+                format!(
+                    "(scene, discard) Undo tops: first discard {first:?}; after the second discard {second:?}"
+                ),
+            );
+            d.click("Undo scene");
+            d.click(UNDO_DISCARD);
+            d.expect("Back to the plan");
+        });
         // AK1: the empty group's reason has a reserved place, so adding the first creature moves
         // no field. AH1: Save refuses an empty group, so it says Invalid.
         let sizes = [SMALL, DEFAULT, LARGE];
@@ -16058,8 +17900,25 @@ pub mod session_plan_groups {
             summary_visible,
             "The compact Add creatures pane keeps a member summary",
         );
+        // iter-26-B FF2, review: from another page, the rail's `Group draft` link takes the
+        // group back to the plan that owns it, so its Save still links it there. A round trip
+        // that ends where it started is not part of the DM's task.
+        let back_in_plan = d.aside(|d| {
+            go_library(d);
+            d.click_containing("Group draft");
+            d.expect("Save group");
+            d.current_page() == "Session"
+        });
         d.click("Save group");
         d.expect("Edit group Ash Pack");
+        d.observe(
+            "iter-26-B-FF2-plan",
+            back_in_plan && d.has_containing("2 × Wolf") && d.current_page() == "Session",
+            format!(
+                "The rail link went back to the plan ({back_in_plan}); Save linked the group there, on {}",
+                d.current_page()
+            ),
+        );
         d.state("plan-group-saved", Sizes::All);
         d.goal("assemble a group in the session's plan");
         d.observe(
@@ -16136,6 +17995,27 @@ pub mod session_plan_groups {
             d.place_of(&format!("Removed “{GROUP_RIVALS}” from tonight."))
                 .is_some_and(|words| d.has_tone_bar(words, crate::design::colors().result.success)),
             "Removing a group from the plan uses the tone a removed fight uses",
+        );
+        // Lead ruling, round 26 (one pane, one footer): the group's removal result is in the
+        // plan's message footer, below the rows, not in the removed row's place.
+        let removed = format!("Removed “{GROUP_RIVALS}” from tonight.");
+        let footer = d
+            .nodes()
+            .into_iter()
+            .find(|node| {
+                node.role == egui::accesskit::Role::GenericContainer && node.name.contains(&removed)
+            })
+            .map(|node| node.rect);
+        let rows_end = d
+            .nodes()
+            .into_iter()
+            .filter(|node| node.name.starts_with("More actions for ") && node.in_view())
+            .map(|node| node.rect.bottom())
+            .fold(f32::MIN, f32::max);
+        d.observe(
+            "iter-26-S-group-removed-footer",
+            footer.is_some_and(|footer| footer.top() > rows_end),
+            format!("The removal result is in the plan's footer {footer:?}, below the rows ending at {rows_end}"),
         );
         d.observe(
             "P17",
@@ -16917,6 +18797,107 @@ pub mod session_plan {
         );
     }
 
+    /// F7, T18.1: a played fight's rewards reach the note in 1, with its reference and one Undo,
+    /// and the note shows the block. Section 2.5, row 10: the action joins the played row, left
+    /// of its menu, at the action's own width, only while the title keeps its line; with Lookup
+    /// closed and open.
+    fn rewards_in_the_note(d: &mut Driver<'_>) {
+        let action = format!("Add rewards: {FIRST}");
+        let menu = format!("More actions for {FIRST}");
+        for lookup in [false, true] {
+            if lookup {
+                d.click(NAV_LOOKUP);
+            }
+            for size in [SMALL, DEFAULT, LARGE] {
+                let (fits, detail) = d.at_size(size, |d| {
+                    let (title, add, menu) =
+                        (d.place_of(FIRST), d.place_of(&action), d.place_of(&menu));
+                    let fits = title
+                        .zip(add)
+                        .zip(menu)
+                        .is_some_and(|((title, add), menu)| {
+                            title.right() < add.left()
+                                && add.right() <= menu.left()
+                                && (add.center().y - menu.center().y).abs() <= 0.5
+                                && title.height() <= crate::design::XL + 0.5
+                        });
+                    (
+                        fits,
+                        format!("title {title:?}, Add rewards {add:?}, menu {menu:?}"),
+                    )
+                });
+                d.observe(
+                    "T18.1",
+                    fits,
+                    format!("At {size:?}, Lookup open {lookup}: Add rewards is on the played row beside its one-line title. {detail}"),
+                );
+            }
+            if lookup {
+                d.state("rewards-offered-beside-lookup", Sizes::Small);
+                d.click(NAV_LOOKUP);
+            }
+        }
+        // Lookup closed, the row is `fight-in-place`.
+        let folder = d
+            .app()
+            .campaigns
+            .active_campaign()
+            .unwrap()
+            .path
+            .join(crate::sessions::DEFAULT_FOLDER);
+        let note = crate::sessions::list_notes(&folder)
+            .into_iter()
+            .find(|note| note.title == "The Crossing")
+            .expect("the session's note")
+            .path;
+        let before = std::fs::read_to_string(&note).unwrap();
+        // At 960x640 the note is behind its tab: the tab shows the block when the DM goes there.
+        let (written, shown, result) = d.act_at_size(SMALL, |d| {
+            d.begin_task();
+            d.click(&action);
+            d.audit_goal_within("T18.1", "put a played fight's rewards in the note", 1);
+            d.wait_for_text("In notes");
+            let result = d.has_containing("Rewards added under Loot and rewards. XP added. Delete that line to leave XP out from now on. XP tonight: ");
+            let written = std::fs::read_to_string(&note).unwrap();
+            // The counts assume the note in Write; this one shows as a reader.
+            write_note(d);
+            let shown = d
+                .painted_lines_in(egui::Rect::EVERYTHING)
+                .iter()
+                .any(|line| line.contains(&format!("|{FIRST}]]")));
+            d.click("Read");
+            show_plan(d);
+            (written, shown, result)
+        });
+        let block = written
+            .split("## Loot and rewards\n\n")
+            .nth(1)
+            .and_then(|rest| rest.split("\n\n").next())
+            .unwrap_or_default()
+            .to_owned();
+        d.observe(
+            "T18.1",
+            block.starts_with("- [[Timeline#^")
+                && block.contains(&format!("|{FIRST}]]\n  - XP "))
+                && written.replace(&format!("{block}\n\n"), "") == before
+                && result
+                && shown
+                && !d.has(&action),
+            format!("Add rewards writes one block under Loot and rewards: {block:?}; result {result}; the Note tab shows it: {shown}"),
+        );
+        d.state("rewards-added", Sizes::All);
+        d.click(NAV_LOOKUP);
+        d.state("rewards-added-beside-lookup", Sizes::Small);
+        d.click(NAV_LOOKUP);
+        d.click("Undo rewards");
+        d.expect(&action);
+        d.observe(
+            "T18.1",
+            std::fs::read_to_string(&note).unwrap() == before && !d.has("Undo rewards"),
+            "Undo rewards takes back exactly the block",
+        );
+    }
+
     /// FT1: the party bar says where its numbers come from whenever the room after the players
     /// holds it. Its words are the last fact of each player's accessible name.
     /// iter-23-S FK4: the plan's final HP grid reads in the party bar's order.
@@ -17047,6 +19028,12 @@ pub mod session_plan {
                 && d.visible_text("Hobb the miller says"),
             "A new session shows what the last one left, with nothing to open",
         );
+        // F5: while the new session is prepared, Carry over ends the line.
+        d.observe(
+            "T18.3-offered",
+            d.in_view("Carry over"),
+            "A new session with no event and no run offers Carry over",
+        );
 
         // T12.1: from the plan to the fight, and back to the plan.
         show_plan(d);
@@ -17151,6 +19138,12 @@ pub mod session_plan {
         close_run(d);
         d.click(NAV_SESSIONS);
         show_plan(d);
+        // F5: carry-over is a prep act. Once the session has a fight, the line is as before.
+        d.observe(
+            "T18.3-play",
+            d.has("Last time:") && !d.has("Carry over"),
+            "During play the Last time line has no Carry over",
+        );
         d.click(&format!("More actions for {FIRST}"));
         assert!(d.in_view("Remove this event"));
         d.click("Remove this event");
@@ -17308,14 +19301,14 @@ pub mod session_plan {
         // without its rows, not `Undo` alone; hover and the accessible name keep it whole.
         let shown = d.at_size(SMALL, |d| {
             (
-                d.visible_text("Undo: 8 damage to 3"),
+                d.visible_text("Undo: 8 damage × 3"),
                 d.visible_text("Undo: 8 damage to 3 participants"),
             )
         });
         d.observe(
             "iter-23-R-SH1",
             shown == (true, false) && d.has("Undo: 8 damage to 3 participants, half for 1"),
-            format!("At 960 Undo says `Undo: 8 damage to 3` (compact, whole): {shown:?}"),
+            format!("At 960 Undo says `Undo: 8 damage × 3` (compact, whole): {shown:?}"),
         );
         d.state("several-targets-applied", Sizes::Default);
         d.click_containing("Undo: 8 damage");
@@ -17331,6 +19324,29 @@ pub mod session_plan {
         d.type_into("Dice", "1d1+3");
         d.press(Key::Enter);
         let cost = d.goal("roll dice beside the stat block");
+        // iter-26-R SL1: the selected name keeps the dock's left edge at every size, and the
+        // total never starts the name's line: at 960 it has its own place at the line's end.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (name, amount, rolled) = d.at_size(size, |d| {
+                (
+                    d.place_of("Selected: Ember Cultist"),
+                    d.place_of("Amount"),
+                    d.place_of("Rolled 4"),
+                )
+            });
+            let painted = d.at_size(size, |d| {
+                name.map(|name| d.painted_in(name)).unwrap_or_default()
+            });
+            d.observe(
+                "iter-26-R-SL1",
+                name.zip(amount)
+                    .is_some_and(|(name, amount)| (name.left() - amount.left()).abs() <= 1.0)
+                    && !painted.contains('=')
+                    && (size != SMALL
+                        || name.zip(rolled).is_some_and(|(name, rolled)| rolled.left() > name.right())),
+                format!("At {size:?}: name {name:?} paints {painted:?}, Amount {amount:?}, total {rolled:?}"),
+            );
+        }
         d.state("dice-in-the-dock", Sizes::All);
         d.observe(
             "T12.4",
@@ -17682,6 +19698,7 @@ pub mod session_plan {
             d.visible_text("Kestrel 7/41") && d.page_title().as_deref() == Some("Session"),
             "Final HP names each character in the plan, with no run to reopen",
         );
+        rewards_in_the_note(d);
         d.click(FIRST);
 
         d.click(NAV_TIMELINE);
@@ -17896,6 +19913,17 @@ pub mod session_plan {
         let notice_top = d
             .place_of("Party HP is full after the long rest.")
             .map(|rect| rect.top());
+        // iter-26-R FI2: the offer, its result and the offer back after Undo are in the setup's
+        // message footer below the rows: no row moves through the three.
+        // Setup rows, by their initiative fields.
+        let row_tops = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .filter(|node| node.name.starts_with("Initiative for ") && node.in_view())
+                .map(|node| (node.name, node.rect.top().round()))
+                .collect::<Vec<_>>()
+        };
+        let rows_offered = row_tops(d);
         d.click("Use the saved HP");
         d.observe(
             "iter-7-S1",
@@ -17935,7 +19963,38 @@ pub mod session_plan {
             d.has(SAVED_HP_UNDO) && !d.has("Undo"),
             "The saved-HP result's Undo says Undo use saved HP, not a bare Undo",
         );
+        let rows_result = row_tops(d);
         d.state("saved-hp-restored", Sizes::All);
+        // Revision 18: A (use saved HP), then an unrelated step B (an initiative typed), then
+        // Undo B and Undo A. B ends A's result and empties the footer, and no row moves; Undo B
+        // gives A's result back with its Undo; Undo A still restores the full HP.
+        let field = rows_result
+            .first()
+            .map(|(name, _)| name.clone())
+            .expect("setup rows have initiative fields");
+        d.type_into(&field, "12");
+        d.press(Key::Enter);
+        let rows_b = row_tops(d);
+        d.observe(
+            "iter-26-R-FI2-setup-b",
+            d.field_text(&field).as_deref() == Some("12")
+                && !d.visible_text(SAVED_HP_SET)
+                // Astra 1: no result shows for a step Undo can no longer reach first.
+                && !d.has(SAVED_HP_UNDO)
+                && d.has_containing("Undo: initiative")
+                && rows_b == rows_result,
+            format!("B ends A's result and moves no row: {rows_result:?} then {rows_b:?}"),
+        );
+        d.click_containing("Undo: initiative");
+        d.observe(
+            "iter-26-R-FI2-setup-undo-b",
+            d.field_text(&field).as_deref() != Some("12")
+                && d.visible_text(SAVED_HP_SET)
+                && d.in_view(SAVED_HP_UNDO)
+                && kestrel(d).contains("HP 11/41")
+                && row_tops(d) == rows_result,
+            "Undo of B gives back A's result and its Undo, with A's HP",
+        );
         // AT1: this Undo has the shape of every Undo after a message: quiet, with its icon.
         let saved_hp_undo = undo_shape(d, SAVED_HP_UNDO);
         d.observe(
@@ -17956,6 +20015,12 @@ pub mod session_plan {
                 && !d.has_containing("full HP after long rest")
                 && !d.visible_text(SAVED_HP_SET),
             "After Undo the rest notice is back, with no Undo step of the fill, and the result is gone",
+        );
+        let rows_back = row_tops(d);
+        d.observe(
+            "iter-26-R-FI2-setup",
+            !rows_offered.is_empty() && rows_offered == rows_result && rows_result == rows_back,
+            format!("Setup row tops: offer {rows_offered:?}, result {rows_result:?}, after Undo {rows_back:?}"),
         );
         d.click("Use the saved HP");
         d.expect(SAVED_HP_SET);
@@ -18253,6 +20318,46 @@ pub mod session_plan {
                 name.zip(save)
                     .is_some_and(|(name, save)| (name.right() - save.right()).abs() <= 0.5),
                 format!("At {size:?}: Name {name:?}, Save creature {save:?}"),
+            );
+        }
+        // iter-26-B FA9, FI9: in a wide window the encounter's name field ends at the roster
+        // column's edge (where its rows' rules end), and the header's last action at the Add
+        // column's edge, where Save creature ends; at 960 the panes are tabs.
+        for size in [DEFAULT, LARGE] {
+            let (name, rule, start, creature) = d.at_size(size, |d| {
+                let name = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| node.name.starts_with("Encounter name: "))
+                    .map(|node| node.rect);
+                let rule = d
+                    .place_of("More actions for Werewolf copy")
+                    .and_then(|menu| {
+                        d.hairlines_in(egui::Rect::from_min_max(
+                            egui::pos2(0.0, menu.bottom()),
+                            egui::pos2(menu.right() + 60.0, menu.bottom() + 24.0),
+                        ))
+                        .into_iter()
+                        .map(|line| line.right())
+                        .reduce(f32::max)
+                    });
+                (
+                    name,
+                    rule,
+                    d.place_of("Start fight"),
+                    d.place_of("Save creature"),
+                )
+            });
+            d.observe(
+                "iter-26-B-FA9",
+                name.zip(rule)
+                    .is_some_and(|(name, rule)| (name.right() - rule).abs() <= 1.0)
+                    && start.zip(creature).is_some_and(|(start, creature)| {
+                        (start.right() - creature.right()).abs() <= 1.0
+                    }),
+                format!(
+                    "At {size:?}: name field {name:?}, roster rule ends at {rule:?}; Start fight {start:?}, Save creature {creature:?}"
+                ),
             );
         }
         d.observe(
@@ -19091,6 +21196,15 @@ pub mod run_rolls {
 
         // Right-click a tile: how its d20 rolls.
         d.click_row(ATTACKER);
+        // iter-26-R FK4: Stop's y with the plain hint, to compare with advantage below.
+        let stop_y = |d: &mut Driver<'_>| {
+            [SMALL, DEFAULT, LARGE]
+                .map(|size| d.at_size(size, |d| d.place_of("Stop").map(|rect| rect.top().round())))
+        };
+        d.click_starting(BITE);
+        d.expect("Stop");
+        let plain_stop = stop_y(d);
+        d.press(Key::Escape);
         d.begin_task();
         d.right_click_starting(BITE);
         // iter-20-R-FT3: one roll menu. It opens under its tile, headed in muted Small with the
@@ -19176,6 +21290,14 @@ pub mod run_rolls {
             d.visible_text("With advantage. Click a target")
                 && d.visible_text("% to hit · advantage"),
             "An attack armed with advantage says so in its hint and on the rows",
+        );
+        // iter-26-R FK4: the hint keeps the lines of the longest hint, so Stop keeps its y
+        // when the words grow with the roll mode.
+        let advantage_stop = stop_y(d);
+        d.observe(
+            "iter-26-R-FK4",
+            plain_stop.iter().all(Option::is_some) && plain_stop == advantage_stop,
+            format!("Stop y plain {plain_stop:?}, with advantage {advantage_stop:?}"),
         );
         // iter-20-R-FT7: the wrapped hint keeps its crosshair on its first line.
         d.observe_both(
@@ -19320,6 +21442,23 @@ pub mod run_rolls {
             |d| d.visible_text("10-ft emanation · half on a success"),
         );
         action_at_text(d, "iter-19-R-AT5", BURST, "Roll damage");
+        // iter-26-R FK5: the dock shows the mark that the rows paint, and leaves the count to
+        // the panel's hint, so `2 targets.` shows once.
+        d.observe_both(
+            "iter-26-R-FK5",
+            "The dock names the target's mark, and the count shows once",
+            |d| {
+                let hint = format!(
+                    "Press a target’s {} to give it half, rounded down.",
+                    crate::design::icons::OK
+                );
+                d.visible_text(&hint)
+                    && d.painted_in(egui::Rect::EVERYTHING)
+                        .matches("2 targets.")
+                        .count()
+                        == 1
+            },
+        );
         d.state("save-targets", Sizes::All);
         if d.has("Half for those at or above DC") {
             d.click("Half for those at or above DC");
@@ -19403,18 +21542,17 @@ pub mod run_rolls {
             finished,
         );
         // SJ1: at 960 Undo names the step in its short form; the accessible name keeps it whole.
+        // iter-26-R FI4: the count follows `×`, so it is not read as Cinder Wolf 2.
         let shown = d.at_size(SMALL, |d| {
             (
-                d.visible_text("Undo: 3 damage to 2"),
+                d.visible_text("Undo: 3 damage × 2"),
                 d.visible_text("Undo: 3 damage to 2 participants"),
             )
         });
         d.observe(
             "iter-23-R-SJ1",
             shown == (true, false) && d.has("Undo: 3 damage to 2 participants, half for 1"),
-            format!(
-                "At 960 the save's Undo says `Undo: 3 damage to 2` (compact, whole): {shown:?}"
-            ),
+            format!("At 960 the save's Undo says `Undo: 3 damage × 2` (compact, whole): {shown:?}"),
         );
         // iter-25-R SJ1: a save's result keeps its `(half)` at every size; a row whose
         // conditions leave no room for it gives it a line of its own.

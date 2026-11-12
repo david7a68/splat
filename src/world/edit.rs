@@ -585,17 +585,19 @@ impl Reader {
             .is_some_and(|draft| draft.campaign == campaign.id)
     }
 
+    /// An edit form with changes, or a Log line with typed words, that is not saved.
     pub fn has_unsaved_edits(&self) -> bool {
-        self.edits.values().any(EditDraft::dirty)
+        self.edits.values().any(EditDraft::dirty) || self.typed_log_lines().next().is_some()
     }
 
-    /// Entries with changes that are not saved, by name.
+    /// Entries with changes that are not saved, by name: edit forms, and typed Log lines.
     pub fn unsaved_edits(&self) -> Vec<(Uuid, String)> {
         let mut names: Vec<_> = self
             .edits
             .iter()
             .filter(|(_, draft)| draft.dirty())
             .map(|(id, draft)| (*id, draft.name.clone()))
+            .chain(self.typed_log_lines())
             .collect();
         names.sort_by(|a, b| a.1.cmp(&b.1));
         names
@@ -606,12 +608,83 @@ impl Reader {
         self.picker.is_some() || self.form_focused
     }
 
-    /// Start again with nothing on show. Unsaved changes stay.
+    /// A new reader that keeps only this one's typed Log lines.
+    pub(crate) fn keep_log_lines(mut old: Self) -> Self {
+        Self {
+            log_fields: std::mem::take(&mut old.log_fields),
+            ..Self::default()
+        }
+    }
+
+    /// Start again with nothing on show. Unsaved changes stay: edit forms, and Log lines.
     pub fn clear(&mut self) {
         *self = Self {
             edits: std::mem::take(&mut self.edits),
+            log_fields: std::mem::take(&mut self.log_fields),
             ..Self::default()
         };
+    }
+
+    /// The Log lines with typed words, by entry and name.
+    fn typed_log_lines(&self) -> impl Iterator<Item = (Uuid, String)> + '_ {
+        self.log_fields
+            .iter()
+            .filter(|(_, open)| !open.field.words.trim().is_empty())
+            .map(|((_, id), open)| (*id, open.name.clone()))
+    }
+
+    /// Drop the Log fields of this index's campaign whose entry is gone (deleted, or another
+    /// note took its ID), so no guard waits on words that no field can show. Typed words are
+    /// not lost without a word: the pane's footer says once what they were.
+    pub fn forget_gone_log_lines(&mut self, index: &ContentIndex) {
+        if self.log_fields.is_empty() {
+            return;
+        }
+        let campaign = index_campaign(index);
+        let gone: Vec<_> = self
+            .log_fields
+            .keys()
+            .filter(|(owner, id)| *owner == campaign && index.position(*id).is_none())
+            .copied()
+            .collect();
+        for key in gone {
+            if let Some(open) = self.log_fields.remove(&key)
+                && !open.field.words.trim().is_empty()
+            {
+                self.gone_log_lines.push((
+                    format!(
+                        "\u{201c}{}\u{201d} was deleted. The Log line was not added: \u{201c}{}\u{201d}",
+                        open.name,
+                        open.field.words.trim()
+                    ),
+                    false,
+                ));
+            }
+        }
+    }
+
+    /// The words of Log lines whose entry is gone, as footer notices. Each shows until the
+    /// reader shows another entry after it was shown.
+    pub(crate) fn gone_log_notices(&mut self) -> Vec<super::FooterLine> {
+        self.gone_log_lines
+            .iter_mut()
+            .map(|(words, shown)| {
+                *shown = true;
+                super::FooterLine::new(
+                    super::FooterRank::Notice,
+                    Tone::Warning,
+                    words,
+                    super::FooterKind::Plain,
+                )
+            })
+            .collect()
+    }
+
+    /// Put the entries whose edit form is open in this reader in `out`, with no new
+    /// allocation once `out` has room.
+    pub fn edit_forms_into(&self, out: &mut Vec<Uuid>) {
+        out.clear();
+        out.extend(self.edits.keys().copied());
     }
 
     /// A draft whose note is gone, or the Undo for one, is on show.
@@ -676,6 +749,7 @@ impl Reader {
                                 && let Some(draft) = self.edits.remove(&id)
                             {
                                 self.discarded = Some((id, draft));
+                                self.stamp(super::FooterAct::Discarded);
                             }
                         });
                     },
@@ -693,16 +767,16 @@ impl Reader {
         }
     }
 
-    /// Undo for a Discard that dropped changes, while the DM reads that entry again.
-    pub(super) fn discarded_notice(&mut self, ui: &mut egui::Ui, campaign: &Campaign, id: Uuid) {
-        if let Some((at, draft)) = &self.discarded
-            && *at == id
-            && draft.campaign == campaign.id
-            && design::draft_discarded(ui, &draft.name)
-            && let Some((id, draft)) = self.discarded.take()
-        {
-            self.edits.insert(id, draft);
-        }
+    /// Undo for a Discard that dropped changes, while the DM reads that entry again. It sits in
+    /// the pane's footer; `FooterAct::Discarded` brings the draft back.
+    pub(super) fn discarded_line(
+        &self,
+        campaign: &Campaign,
+        id: Uuid,
+    ) -> Option<super::FooterLine> {
+        let (at, draft) = self.discarded.as_ref()?;
+        (*at == id && draft.campaign == campaign.id)
+            .then(|| super::FooterLine::discarded(&draft.name, super::FooterAct::Discarded))
     }
 
     /// The form, in place of the entry's rows and text.
@@ -1076,15 +1150,17 @@ impl Reader {
             self.form_focused = false;
             if draft.dirty() {
                 self.discarded = Some((id, draft));
+                self.stamp(super::FooterAct::Discarded);
             }
             return None;
         }
         if save {
-            match draft.save(campaign, index, self.log_as.as_deref()) {
+            match draft.save(campaign, index, self.log_as().as_deref()) {
                 Ok(Saved::Written(change)) => {
                     self.picker = None;
                     self.form_focused = false;
                     self.undo = Some(change);
+                    self.stamp(super::FooterAct::Change);
                     self.kept = None;
                     return Some(Go::Reload(id));
                 }
@@ -1379,7 +1455,7 @@ mod tests {
 
     #[test]
     fn iter9_d_read_and_live_changes_keep_reported_unread_disk_bytes() {
-        for log_as in [None, Some("[[Session 1]]".to_owned())] {
+        for played in [None, Some("[[Session 1]]".to_owned())] {
             let (dir, campaign, _, id, file) = unread_group_note();
             // The picker opened on a readable file. The index is deliberately stale.
             let path = dir.path().join("NPCs/Rook.md");
@@ -1390,7 +1466,7 @@ mod tests {
             let stale = &index.items[index.position(id).unwrap()];
             fs::write(&path, &file).unwrap();
             let mut reader = Reader {
-                log_as,
+                played,
                 picker: Some(Picker {
                     key: "part_of",
                     ..Default::default()

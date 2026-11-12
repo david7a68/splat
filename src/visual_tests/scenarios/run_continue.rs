@@ -81,6 +81,79 @@ fn whole_at_every_size(d: &mut Driver<'_>, id: &str, what: &str, controls: &[&st
     }
 }
 
+/// V26, V27: beside Continue fight or its reason, the ended header's Undo keeps its whole
+/// target at every size, and touches neither the control beside it nor the title. Where the
+/// title's line has no room, the actions take the header's second line.
+fn undo_keeps_its_target(d: &mut Driver<'_>, what: &str, beside: &str) {
+    for size in [SMALL, DEFAULT] {
+        let (shown, apart) = d.at_size(size, |d| {
+            let undo = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name == LOOT_STEP && node.fully_in_view())
+                .map(|node| node.rect);
+            let beside = d.place_of(beside).or_else(|| painted_paragraph(d, beside));
+            let title = painted_paragraph(d, "Ended · Round 2");
+            let apart = match (undo, beside, title) {
+                (Some(undo), Some(beside), Some(title)) => {
+                    !undo.intersects(beside) && !undo.intersects(title)
+                }
+                _ => false,
+            };
+            (d.visible_text(LOOT_STEP), apart)
+        });
+        d.observe(
+            "V26-V27-undo-target",
+            shown && apart,
+            format!("{what} at {size:?}: Undo shows {LOOT_STEP:?} {shown}, apart from {beside:?} and the title {apart}"),
+        );
+    }
+}
+
+/// V11: in History, the line under Read-only (Continue fight, or the reason) is `S` below the
+/// Read-only line and `M` above `FINAL STATE`, at every size.
+fn history_line_gaps(d: &mut Driver<'_>, line: &str) {
+    for size in [SMALL, DEFAULT, LARGE] {
+        let gaps = d.at_size(size, |d| {
+            let middle = d.place_of(line).or_else(|| painted_paragraph(d, line))?;
+            let mut read_only = None;
+            let mut label = None;
+            d.each_painted_text(|text, clip| {
+                let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                let words = &text.galley.job.text;
+                if clip.intersects(rect) && words.ends_with("Read-only") {
+                    read_only = Some(rect);
+                }
+                if clip.intersects(rect) && words == "FINAL STATE" && rect.top() > middle.top() {
+                    label = label.or(Some(rect));
+                }
+            });
+            let (read_only, label) = (read_only?, label?);
+            // The Read-only line ends with its end reason, which can wrap.
+            let mut bottom = read_only.bottom();
+            d.each_painted_text(|text, clip| {
+                let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                if clip.intersects(rect)
+                    && rect.top() >= read_only.top() - 1.0
+                    && rect.bottom() <= middle.top() + 1.0
+                    && rect.left() >= read_only.left()
+                    && rect.left() < middle.right().max(read_only.right()) + 400.0
+                {
+                    bottom = bottom.max(rect.bottom());
+                }
+            });
+            Some((middle.top() - bottom, label.top() - middle.bottom()))
+        });
+        d.observe(
+            "V11-history-gaps",
+            gaps.is_some_and(|(after, before)| {
+                (after - crate::design::S).abs() <= 0.5 && (before - crate::design::M).abs() <= 0.5
+            }),
+            format!("At {size:?}, {line:?} is S below Read-only and M above FINAL STATE: {gaps:?}"),
+        );
+    }
+}
+
 pub fn run(d: &mut Driver<'_>) {
     // The fight belongs to a session, so the plan and Timeline have it.
     d.click(NAV_SESSIONS);
@@ -286,6 +359,7 @@ pub fn run(d: &mut Driver<'_>) {
             format!("At {size:?} every Final state row is in view above the loot: {rows:?}"),
         );
     }
+    undo_keeps_its_target(d, "The ended view with loot beside Lookup", CONTINUE);
     d.state("ended-with-loot-beside-lookup", Sizes::All);
     close_lookup(d);
     whole_at_every_size(
@@ -295,6 +369,7 @@ pub fn run(d: &mut Driver<'_>) {
         &[CONTINUE, CLOSE_RUN],
         "Ended · Round 2",
     );
+    undo_keeps_its_target(d, "The ended view with loot", CONTINUE);
     d.state("ended-continue-fight", Sizes::All);
 
     // Continue fight is for the fight that was played last. A long rest ruled after the
@@ -316,6 +391,7 @@ pub fn run(d: &mut Driver<'_>) {
         &[CLOSE_RUN, LATER],
         "Ended · Round 2",
     );
+    undo_keeps_its_target(d, "The ended view of a fight that is not the last", LATER);
     d.state("ended-not-the-last-fight", Sizes::All);
     open_lookup(d);
     whole_at_every_size(
@@ -324,6 +400,11 @@ pub fn run(d: &mut Driver<'_>) {
         "The ended view of a fight that is not the last, beside Lookup",
         &[CLOSE_RUN, LATER],
         "Ended · Round 2",
+    );
+    undo_keeps_its_target(
+        d,
+        "The ended view of a fight that is not the last, beside Lookup",
+        LATER,
     );
     d.state("ended-not-the-last-fight-beside-lookup", Sizes::All);
     close_lookup(d);
@@ -570,26 +651,94 @@ pub fn run(d: &mut Driver<'_>) {
     d.click("Whole run");
     d.expect("Read-only");
     whole_at_every_size(d, "T17.6", "The ended run in History", &[CONTINUE], "");
+    history_line_gaps(d, CONTINUE);
     d.state("history-continue-fight", Sizes::All);
     // AI1: Final state keeps one HP column: every row's HP starts at one x, at every size.
+    // iter-26-B AI1, FI6, SI1: temporary HP has a column of its own, the conditions start after
+    // it also on a row with no temporary HP, and each row's values sit on its name's baseline.
     for size in [SMALL, DEFAULT, LARGE] {
-        let xs = d.at_size(size, |d| {
-            let mut xs = Vec::new();
+        let (xs, temps, conditions, baselines) = d.at_size(size, |d| {
+            let (mut xs, mut temps, mut conditions, mut texts) =
+                (Vec::new(), Vec::new(), Vec::new(), Vec::new());
             d.each_painted_text(|text, clip| {
                 let words = &text.galley.job.text;
-                if words.starts_with("HP ")
-                    && words.contains('/')
-                    && clip.intersects(text.visual_bounding_rect())
-                {
+                if !clip.intersects(text.visual_bounding_rect()) {
+                    return;
+                }
+                let Some(row) = text.galley.rows.first() else {
+                    return;
+                };
+                let Some(glyph) = row.glyphs.first() else {
+                    return;
+                };
+                let baseline = text.pos.y + row.pos.y + glyph.pos.y;
+                let size = text
+                    .galley
+                    .job
+                    .sections
+                    .first()
+                    .map(|s| s.format.font_id.size);
+                texts.push((words.clone(), text.pos.x, baseline, size));
+                if words.starts_with("HP ") && words.contains('/') {
                     xs.push(text.pos.x);
+                } else if words.starts_with(crate::design::icons::TEMP_HP) {
+                    temps.push(text.pos.x + text.galley.size().x);
                 }
             });
-            xs
+            // A condition on a Final state row: on an HP's line, after it (the log has the words too).
+            for (words, x, base, _) in &texts {
+                if ["Prone", "Poisoned"]
+                    .iter()
+                    .any(|word| words.contains(word))
+                    && texts.iter().any(|(hp, hx, hbase, _)| {
+                        hp.starts_with("HP ") && hx < x && (hbase - base).abs() < 6.0
+                    })
+                {
+                    conditions.push(*x);
+                }
+            }
+            // Each HP's baseline beside the nearest larger text at its left on its line: the name.
+            let strong = crate::design::Type::Strong.size();
+            let baselines: Vec<(f32, Option<f32>)> = texts
+                .iter()
+                .filter(|(words, ..)| words.starts_with("HP ") && words.contains('/'))
+                .map(|(_, x, base, _)| {
+                    let name = texts
+                        .iter()
+                        .filter(|(_, nx, nbase, nsize)| {
+                            *nx < *x && (nbase - base).abs() < 8.0 && *nsize == Some(strong)
+                        })
+                        .max_by(|a, b| a.1.total_cmp(&b.1))
+                        .map(|(_, _, nbase, _)| *nbase);
+                    (*base, name)
+                })
+                .collect();
+            (xs, temps, conditions, baselines)
         });
+        let temp_end = temps.iter().copied().fold(f32::MIN, f32::max);
         d.observe(
             "iter-25-B-AI1",
             xs.len() >= 3 && xs.iter().all(|x| (x - xs[0]).abs() <= 0.5),
             format!("At {size:?}, the Final state HP x: {xs:?}"),
+        );
+        d.observe(
+            "iter-26-B-SI1",
+            !temps.is_empty()
+                && !conditions.is_empty()
+                && conditions
+                    .iter()
+                    .all(|x| (x - conditions[0]).abs() <= 0.5 && *x > temp_end),
+            format!(
+                "At {size:?}, temporary HP ends at {temps:?}; conditions start at {conditions:?}"
+            ),
+        );
+        d.observe(
+            "iter-26-B-FI6",
+            baselines.len() >= 3
+                && baselines
+                    .iter()
+                    .all(|(hp, name)| name.is_some_and(|name| (name - hp).abs() <= 1.0)),
+            format!("At {size:?}, each HP baseline with its name's: {baselines:?}"),
         );
     }
     d.click(CONTINUE);
@@ -755,7 +904,26 @@ pub fn run(d: &mut Driver<'_>) {
         "",
     );
     d.state("undo-steps-unread-beside-lookup", Sizes::All);
+    // iter-26-R FI2: the warning is in the message footer below the roster, so Dismiss moves
+    // no row, at every captured size.
+    let tops = |d: &mut Driver<'_>| {
+        [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                roster_places(d)
+                    .into_iter()
+                    .map(|(name, rect)| (name, rect.top().round()))
+                    .collect::<Vec<_>>()
+            })
+        })
+    };
+    let warned = tops(d);
     d.click(DISMISS);
+    let dismissed = tops(d);
+    d.observe(
+        "iter-26-R-FI2-dismiss",
+        warned.iter().all(|rows| !rows.is_empty()) && warned == dismissed,
+        format!("Row tops with the warning {warned:?}, after Dismiss {dismissed:?}"),
+    );
     d.observe(
         "T17.5",
         !d.visible_passage(UNREAD) && lookup_keeps_its_entry(d),
@@ -805,6 +973,7 @@ pub fn run(d: &mut Driver<'_>) {
         &[LATER_GONE],
         "",
     );
+    history_line_gaps(d, LATER_GONE);
     d.state("history-not-the-last-fight", Sizes::All);
     open_lookup(d);
     whole_at_every_size(

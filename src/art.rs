@@ -30,6 +30,11 @@ pub struct Loader {
 }
 
 impl Loader {
+    #[cfg(test)]
+    pub fn busy(&self) -> bool {
+        self.pending.is_some()
+    }
+
     pub fn poll(&mut self, ctx: &egui::Context, modules: &[Module]) {
         if !modules.iter().map(|m| &m.path).eq(self.roots.iter()) {
             self.roots = modules.iter().map(|m| m.path.clone()).collect();

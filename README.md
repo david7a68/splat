@@ -199,7 +199,9 @@ Spare width stays outside it; stored line breaks stay unchanged. Read omits plan
 A task line under the plan heading is a scene: a row with a done box, whose tick writes the note at once.
 When the plan's rows do not fit, the scenes fold to `N scenes` on the Tonight line, so the next fight stays in view.
 `Scene`, the last line of the Add strip's More menu, adds one. With no run open, a creature's or an NPC's
-reader, and a scene that links one, has `Start fight`, which saves and starts `Fight with <name>`. A Ready to
+reader, and a scene that links one, has `Start fight`, which saves and starts `Fight with <name>`. A campaign
+World entry's reader, and a done scene that links one, has `Add to Log`, which adds one line in the DM's words
+to the entry's Log, stamped as a Change is, with `Undo Log line`. A Ready to
 run encounter with no saved run has `Remove…` in its menu, with `Undo remove encounter`.
 A group editor stays beside the note when both fit at their width limits. Smaller pages use the Note tab.
 A paused fight on the plan offers Resume even when it came from a timeline event.
@@ -213,6 +215,10 @@ The reader keeps ordinary bold and bold italic as emphasis. A bold phrase opens 
 only when it resolves to an entry. Explicit Markdown and wiki links still work. Tab reaches each
 link in a paragraph in turn, and Enter or Space follows it. Each link, even a two-letter name, has its
 own press target at least 24 px square.
+
+A played fight that ended has `Add rewards`, on its row or as the opened row's last link. It writes the fight's
+link, an XP line and its loot under `## Loot and rewards` in the session note, with `Undo rewards`. The XP line
+follows the newest rewards block in the notes: delete it once to leave XP out from then on.
 
 A Travel row's menu has `Roll for encounters` while the campaign has a marked table. It adds encounter checks
 to that journey only: one roll a day (or as the table's `per` word says) on the chosen table, each result a
@@ -511,7 +517,11 @@ title, length, place and notes. A paused fight on the plan offers Resume even wh
 The Add strip stays directly below Tonight, above messages and plan rows. Fight,
 Group and Long rest stay visible. When all actions do not fit on one line, More holds
 Day, Short rest, Travel and Major event. The menu uses a compact `⋯⌄` button named `More Add actions`; hover text names its actions. The strip stays on one line. Timeline
-uses the same width rule. At the top, **Last time** links to the previous session and shows the first line of its recap. The title and date share one line. A **Playing** status marks the session being played.
+uses the same width rule. At the top, **Last time** links to the previous session and shows the first line of its `What happened`,
+else of its processed recording's recap, else its first written line. While the session has no event and no run,
+**Carry over** at the end of that line adds the last session's recap as a link, its plan lines that were not
+played and its open threads to this note, in one save with `carried_from` and `carried_parts`, and `Undo carry
+over` puts the note back exactly. Read shows such an embed as the recap's words under `From <session>`. The title and date share one line. A **Playing** status marks the session being played.
 **Return to the session being played** opens that note from another session. If both sessions have the same
 number, the warning names both note files.
 In a narrow window, the plan and the note have a tab each. **Read** and **Write** turn the note between its two forms, and
@@ -601,7 +611,7 @@ A marker is a suggestion. The recording's row lists them, and only what you add 
 
 **World** lists the Markdown notes in the campaign's folder, with no change to the files. Obsidian stays their editor,
 and Splat picks up changes when you return to it. A note is any Markdown file with no `splat_` field, except session
-notes, `Timeline.md`, session templates, recordings, and anything in a folder whose name starts with a dot. **Lookup**
+notes, `Timeline.md`, `Trackers.md`, session templates, recordings, and anything in a folder whose name starts with a dot. **Lookup**
 (Ctrl+K) searches these notes as well: names first, then each heading, then their words, then session notes and
 transcripts. Links such as `[[Verori]]`, `[[Gate Mechanics#Reliability]]` and `![[Map.png]]` work as in Obsidian. A link
 to two notes asks which one, and a link to nothing offers to create it. Each note lists what links to it.
@@ -628,6 +638,33 @@ must cover what the dice can roll. A bad table says so, and the rest of the note
 
 **Roll** and a box for a typed result, for a player's own dice, sit under the table. During a run the result goes in the
 run's log, and Undo takes it back. Otherwise it only shows.
+
+### House rules and trackers
+
+A **house rule note** counts a house rule's numbers: a race clock, a crowd's favour, seals for each team. It is a
+`rule` note with `implementation: splat:house_rules` and its trackers in a `splat:yaml path=splat_members` block;
+[the Tournament example](docs/design/world-examples/heralds-tournament.md) shows every field. Turn it on under
+**Campaign → Rules and runs**, in **House rules in play**, and save; that writes `splat_in_play` in `Campaign.md`.
+A note that is not in play shows nothing anywhere. A note in play that is gone keeps its row there, with its ID and
+`not found`, so that you can switch it off.
+
+**Ctrl+T** shows **Trackers** in the Lookup panel, beside any page, and Ctrl+T again goes back to what Lookup
+showed. Each tracker has its value and its quick actions; a tracker with `per` has a line for each name. One press
+is one act. A value that rises past a mark raises a notice in the **Due** list, with a button for each table it
+rolls (with `for:`, one roll for each name), its proposed changes ticked, and **Done**, which applies the ticked
+changes, or **Dismiss** in its menu. While a notice is due, the rail says `Due N` on every page. Splat counts and
+shows; it never applies a rule by itself.
+
+Every act is one entry in `Trackers.md` in the campaign's root folder, written at once. The result line names the
+last act of the session being played, with **Undo: <label>**, which steps back newest first, also after a
+restart, and **Add to Timeline**, which makes a Major event with the act's label. A wrong press seen late is
+corrected by the opposite quick action. An act reads the file and the house rule notes as they are on disk when you press, so an entry you edit
+in Obsidian counts at once and is never written over; an act on a definition or an entry that changed on disk writes
+nothing and says so. A file that cannot be read (`Trackers.md`, `Campaign.md` or a house rule note in play) blocks every act and
+shows `Trackers not read`. A save that fails records nothing and keeps nothing: the bottom of Trackers says
+`Trackers.md was not saved` with the reason, and you press again. Entries for a tracker that no note in play has are kept and not
+counted; the end of Trackers names them. To take back an entry of an older session, edit `Trackers.md` in Obsidian. In a fight the run shows no tracker part: use Ctrl+T, press, and
+go back.
 
 ### Loot
 
@@ -682,6 +719,8 @@ The **Edit** action beside a campaign entry's name, in World or Lookup, opens on
 **In**, **Part of** and the entry's text, without its title line. This form includes empty fields. If **Part of** could not be read, its **Change** action is blocked
 with a message that quotes the value it could not read, gives its line, and says to write each group as a link, such as `[[Arena Guild]]`. Other fields stay editable, and saving them keeps the stored group text unchanged. **Save changes** (Ctrl+S) writes them together and offers
 **Undo changes**. During a live fight, **Save changes** uses a secondary border so **Next turn** stays the primary action.
+Results and their Undo, such as **Stat block set to Guard.**, sit at the bottom of the World or Lookup pane, so the note
+you read does not move when a result comes or goes.
 The form keeps its state and quiet **Discard** at the left, with **Save changes** at the right edge of both text fields.
 **Discard** writes nothing and offers **Undo discard**. The rail shows **World draft** for an unsaved edit,
 or **World repair draft** once if a repair is also unsaved. If the note changed on disk, Splat writes
@@ -706,7 +745,7 @@ says to add a table of names to a note and paste the marker on the line above th
 the marker line for you; then change `1d6` in it to the number of names.
 
 On the World page, an unsaved NPC stays until you save it or choose **Discard**, and **Undo discard** brings it back.
-While you look at other notes, Problems or a repair, one row above them says **Unsaved NPC: <name> · Show**.
+While you look at other notes, Things to check or a repair, one row above them says **Unsaved NPC: <name> · Show**.
 The rail says **Unsaved NPC** on every page; select it to see the NPC's card on World.
 
 The built-in lists suit no world in particular, so a campaign can replace any of the four. Mark a table with the key
@@ -930,6 +969,7 @@ step, so **Undo** after a roll takes back the change before it, and the roll sta
 | `A` | Focus the amount |
 | `C` | Conditions |
 | `Ctrl+K` | Open or close Lookup. `Escape` also closes it |
+| `Ctrl+T` | Show Trackers in Lookup, and go back. The run's letter keys stay off beside it |
 
 **Add to fight** opens the panel for creatures and groups that join this fight. To add one creature, find it in the campaign,
 or type a new name and its HP to make one up. A value you type replaces the creature's own for this
@@ -961,7 +1001,7 @@ An encounter with an unfinished run appears only in **In progress** and returns 
 **Keep in Ready during a run** also keeps its Ready row, with **Start fight** blocked and a reason.
 Empty list sections show one muted line and hide the zero count.
 The rail keeps a paused run in view and resumes it in one click. Its detail wraps below the Run label. **History** holds dated, ended runs under their session.
-History rows show **Open** or **Close**, with **Start fight** and **Edit** in their menu. An ended run opens read-only in place, with its final state and log. It leaves the live run open. Run changes never
+History rows show **Open** or **Close**, with **Start fight** and **Edit** in their menu. An ended run opens read-only in place, with its final state and log; the list scrolls once so that its row and whole final state are in view. It leaves the live run open. Run changes never
 write to templates or character copies.
 
 A fight that ended by mistake can go on. In the ended view, **Undo: end encounter** takes the ending away while
@@ -1117,7 +1157,7 @@ The visual suite includes `npc-in-lookup`, `package-rename` and `package-about`.
 close and a restart, Continue fight and the sentence that stands in its place for a fight that was not played last,
 and unread Undo steps, each with Lookup closed and open. `encounter-difficulty` covers the difficulty word on
 the Ready to run rows, in the editor, on the plan's rows and their opened line, with Lookup closed and open, and
-the encounters whose XP or party is not known. `share-to-package` checks the new references after **Copy both**, and Library navigation checks the dependency copy action and its Undo.
+the encounters whose XP or party is not known, whose opened line says whose XP is not known. `share-to-package` checks the new references after **Copy both**, and Library navigation checks the dependency copy action and its Undo.
 
 On window focus, Splat checks campaign notes and every registered package for disk changes. Library, Lookup and encounter search reload changed content. A changed draft opens the disk comparison. A package's About page counts its chosen entries and offers **Choose every entry** with Undo. Removing an unavailable package also offers Undo and keeps links to the encounters that need its creatures.
 

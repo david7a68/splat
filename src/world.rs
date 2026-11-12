@@ -172,6 +172,11 @@ pub fn scan(root: &Path, sessions_folder: &Path) -> Scan {
         let text = text.trim_start_matches('\u{feff}').replace("\r\n", "\n");
         let (front, body) =
             sessions::split_note(&text).map_or((None, text.as_str()), |(f, b)| (Some(f), b));
+        // The tracker ledger is Splat's own file, not a world note. A note of the DM's that has
+        // that name and is no ledger stays a world note.
+        if path.parent() == Some(root) && crate::trackers::ledger::is_ledger(&file_name, front) {
+            continue;
+        }
         let (name, role) = match transcript {
             Some(name) => (name, Role::Transcript),
             None => {
@@ -789,6 +794,13 @@ pub fn is_world(item: &Item) -> bool {
     item.entry.kind == "world" || item.is_world_note()
 }
 
+/// Whether `Add to Log` can add a line to this entry's Log: a World entry of the campaign,
+/// as Edit can change it. A package's entry has no action: its Log would belong to every
+/// campaign that uses the package.
+pub fn takes_log(item: &Item, index: &ContentIndex) -> bool {
+    edit::editable(item, index)
+}
+
 /// A creature or an NPC that a fight can start with. A party member's copy is neither.
 pub fn start_fight(item: &Item, index: &ContentIndex) -> Option<StartFight> {
     let entry = &item.entry;
@@ -1221,6 +1233,18 @@ fn log_words(index: &ContentIndex, key: &str, before: Option<&Value>, after: &Va
     )
 }
 
+/// A value change's result as a sentence (round 26 FE3): `Stat block set to Guard.`, `In set to
+/// North Gate. It was Watch House.`, `In cleared. It was Ashfall Keep.` The arrow form stays in
+/// the note's Log lines only (`log_words`). `None` is a value that is not set.
+fn change_words(label: &str, before: Option<&str>, after: Option<&str>) -> String {
+    match (before, after) {
+        (None, Some(after)) => format!("{label} set to {after}."),
+        (Some(before), Some(after)) => format!("{label} set to {after}. It was {before}."),
+        (Some(before), None) => format!("{label} cleared. It was {before}."),
+        (None, None) => format!("{label} cleared."),
+    }
+}
+
 /// One NPC, as an encounter group of one, so a run adds them the way it adds any group.
 pub fn npc_group(npc: &Entry, stat_block: &Entry, side: &str) -> Arc<RunGroup> {
     let overrides = Overrides {
@@ -1407,6 +1431,8 @@ pub(crate) enum ChangeKind {
     Identity(IdentityNoun),
     /// Everything the edit form saved at once.
     Edit,
+    /// One line that `Add to Log` added, in the DM's words.
+    Log,
 }
 
 impl ChangeKind {
@@ -1429,15 +1455,8 @@ impl ChangeKind {
             Self::Name => "Undo name change",
             Self::Identity(noun) => noun.undo_label(),
             Self::Edit => "Undo changes",
+            Self::Log => "Undo Log line",
         }
-    }
-
-    /// A relationship row shows its own change when there is room beside it.
-    fn has_row(self) -> bool {
-        matches!(
-            self,
-            Self::Place | Self::PartOf | Self::StatBlock | Self::Status
-        )
     }
 }
 
@@ -1851,9 +1870,18 @@ impl GroupFault {
     }
 }
 
+/// When a result was made: one count for every World and Lookup result, so a footer lists its
+/// results with a live Undo newest first, whatever their kind (round 26 review 3).
+pub(crate) fn next_order() -> u64 {
+    static ORDER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    ORDER.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1
+}
+
 /// Lookup's and the World page's reader, and its controls for the item on show.
 #[derive(Default)]
 pub struct Reader {
+    /// When each kept result was made (`next_order`), by the action its Undo takes.
+    orders: HashMap<FooterAct, u64>,
     showing: Option<Uuid>,
     status: String,
     status_editing: bool,
@@ -1904,14 +1932,19 @@ pub struct Reader {
     pub live: bool,
     pub in_run: std::collections::BTreeMap<Uuid, (usize, Option<i64>)>,
     pub select_run: Option<usize>,
-    /// The session being played and the day, as a Log line begins: `[[Session 1]], Day 1`.
-    /// With no session, a change writes no Log line.
-    pub log_as: Option<String>,
-    /// The World page's result for this draw. It sits where every World result sits: below the
-    /// file line, so the title never moves.
-    pub page_result: Option<PageResult>,
-    /// The page result's Undo was pressed in the last draw.
-    pub page_result_undo: bool,
+    /// The session being played, as a Log line names it: `[[Session 1]]`. None when no
+    /// session is being played (`played_session`).
+    pub played: Option<String>,
+    /// The campaign's day on the Timeline's clock, when the clock has one.
+    pub day: Option<u64>,
+    /// Each open `Add to Log` field, by its entry and the session it was opened in. Its words
+    /// wait while the reader shows another entry; a restart loses them, as every held form.
+    log_fields: HashMap<LogKey, LogField>,
+    /// The words of Log lines whose entry is gone, for the footer, and whether they were shown.
+    gone_log_lines: Vec<(String, bool)>,
+    /// The entries whose edit form is open in the other reader (Lookup's, or the World
+    /// page's). Their Log field waits too, so Splat never makes its own disk conflict.
+    pub edited_elsewhere: Vec<Uuid>,
 }
 
 /// A result that the World page owns, drawn by the reader in the one place for results.
@@ -1927,18 +1960,264 @@ pub enum PageResult {
 /// already held the changes, a discarded draft) keeps the info tone.
 pub(crate) const CHANGED: Tone = Tone::Success;
 
-/// The one message form for a World result. Returns true when its Undo is pressed.
-pub(crate) fn page_result(ui: &mut egui::Ui, result: &PageResult) -> bool {
-    match result {
-        PageResult::Repaired => {
-            design::message(ui, CHANGED, "Note repaired.");
-            false
+impl PageResult {
+    /// The page's result as a footer line. Its Undo is the page's (`FooterAct::Page`).
+    pub(crate) fn line(&self) -> FooterLine {
+        match self {
+            Self::Repaired => FooterLine::new(
+                FooterRank::Notice,
+                CHANGED,
+                "Note repaired.",
+                FooterKind::Plain,
+            ),
+            Self::Discarded(name) => FooterLine::discarded(name, FooterAct::Page),
         }
-        PageResult::Discarded(name) => design::draft_discarded(ui, name),
     }
 }
 
+/// Whose an `Add to Log` field is: the campaign and the entry's ID, nothing else. A copied note
+/// in another campaign has the same entry ID, so the campaign is part of the key, and the words
+/// never reach another campaign's note. The session is not: the stamp is the session being
+/// played at Enter, so a renamed, closed or changed session cannot hide typed words.
+type LogKey = (Uuid, Uuid);
+
+/// One open `Add to Log` field: its words, and whether its next draw selects them.
+#[derive(Default)]
+struct LogField {
+    field: design::AddField,
+    /// The entry's name, for the warnings that list unsaved work.
+    name: String,
+    /// The words came from a done scene, so typing replaces them and Enter keeps them.
+    select: bool,
+}
+
+/// The least room that `Add to Log`'s field keeps for a sentence when its stamp shares its line.
+/// It also keeps the words it holds whole, with the field's margins.
+const LOG_FIELD_BESIDE: f32 = design::XXL * 7.0;
+
+/// How `Add to Log` shows in a reader's header.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum LogAction {
+    /// With its word, this wide.
+    Word(f32),
+    /// As its icon, with its name on hover.
+    Icon,
+}
+
+/// The header's quiet actions after Edit, in `room`, by section 1.2 of the session-cycle
+/// design: the first of these that fits. Both with their words; `Start fight` with its word and
+/// `Add to Log` as its icon; `Start fight` alone; `Add to Log` as its icon; neither. An entry
+/// with only `Add to Log` shows its word, then its icon, then nothing. `Start fight` is never an
+/// icon. Each action after the first has `XS` before it. Returns how `Add to Log` shows and
+/// `Start fight`'s width when it shows.
+fn header_actions(
+    room: f32,
+    log: Option<f32>,
+    start: Option<f32>,
+) -> (Option<LogAction>, Option<f32>) {
+    let icon = Density::Read.control();
+    let fits = |widths: &[f32]| {
+        widths.iter().sum::<f32>() + design::XS * widths.len().saturating_sub(1) as f32 <= room
+    };
+    let choices = [
+        (log.map(LogAction::Word), start),
+        (log.map(|_| LogAction::Icon), start),
+        (None, start),
+        (log.map(|_| LogAction::Icon), None),
+        (None, None),
+    ];
+    choices
+        .into_iter()
+        // An entry with one of the two meets its choices in the same order.
+        .find(|(shown, width)| {
+            let shown = shown.map(|shown| match shown {
+                LogAction::Word(width) => width,
+                LogAction::Icon => icon,
+            });
+            fits(&[shown, *width].into_iter().flatten().collect::<Vec<_>>())
+        })
+        .unwrap_or((None, None))
+}
+
+/// Draw one header action in its target.
+fn in_rect(ui: &mut egui::Ui, rect: egui::Rect, add: impl FnOnce(&mut egui::Ui) -> bool) -> bool {
+    ui.scope_builder(
+        egui::UiBuilder::new()
+            .max_rect(rect)
+            .layout(egui::Layout::left_to_right(egui::Align::Center)),
+        add,
+    )
+    .inner
+}
+
+/// Where a footer line stands: a result with a live Undo, a reason, or another notice.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum FooterRank {
+    Undo,
+    Reason,
+    Notice,
+}
+
+/// What a footer line's action does. The pane takes it after the footer draws.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(crate) enum FooterAct {
+    /// Undo the value, edit-form or row change (`Reader::undo`).
+    Change,
+    FileRename,
+    Name,
+    Identity,
+    /// Bring back the edit draft that Discard let go.
+    Discarded,
+    /// The page result's Undo: the page owns it.
+    Page,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum FooterKind {
+    Plain,
+    Undo {
+        label: &'static str,
+        act: FooterAct,
+    },
+    /// `<name> draft discarded.` with `Undo discard`, named for its draft.
+    Discarded {
+        name: String,
+        act: FooterAct,
+    },
+    /// An action's error, with `Edit in Obsidian` for this file when an editor can open it.
+    Error {
+        editor: Option<std::path::PathBuf>,
+    },
+}
+
+/// One World or Lookup message for its pane's footer (round 26): a result, reason or notice
+/// that comes and goes. It sits below the pane's scroll area, so it never moves the note.
+#[derive(Clone)]
+pub(crate) struct FooterLine {
+    /// When its result was made (`next_order`): newer results come first within a rank.
+    pub order: u64,
+    pub rank: FooterRank,
+    pub tone: Tone,
+    pub words: String,
+    pub kind: FooterKind,
+}
+
+impl FooterLine {
+    pub(crate) fn new(rank: FooterRank, tone: Tone, words: &str, kind: FooterKind) -> Self {
+        Self {
+            order: 0,
+            rank,
+            tone,
+            words: words.to_owned(),
+            kind,
+        }
+    }
+
+    /// The line, made at `order`.
+    pub(crate) fn at(mut self, order: u64) -> Self {
+        self.order = order;
+        self
+    }
+
+    pub(super) fn discarded(name: &str, act: FooterAct) -> Self {
+        Self::new(
+            FooterRank::Undo,
+            Tone::Info,
+            &format!("{name} draft discarded."),
+            FooterKind::Discarded {
+                name: name.to_owned(),
+                act,
+            },
+        )
+    }
+
+    fn draw(&self, ui: &mut egui::Ui) -> Option<FooterAct> {
+        match &self.kind {
+            FooterKind::Plain => {
+                design::message(ui, self.tone, &self.words);
+                None
+            }
+            FooterKind::Undo { label, act } => {
+                design::undo_message(ui, self.tone, &self.words, label).then_some(*act)
+            }
+            FooterKind::Discarded { name, act } => {
+                design::draft_discarded(ui, name).then_some(*act)
+            }
+            FooterKind::Error { editor } => {
+                ui.horizontal_wrapped(|ui| {
+                    design::message(ui, self.tone, &self.words);
+                    if let Some(path) = editor
+                        && design::link(ui, "Edit in Obsidian").clicked()
+                    {
+                        ui.ctx()
+                            .open_url(egui::OpenUrl::new_tab(obsidian_url(path)));
+                    }
+                });
+                None
+            }
+        }
+    }
+}
+
+/// Draw a pane's footer lines in its message footer (`design::Footer`), pinned at the bottom of
+/// what is left of `ui`, in the footer's order: results with a live Undo, then reasons, then
+/// notices. `id` is the pane instance's own. Returns the action pressed and the y where the body
+/// drawn next ends.
+pub(crate) fn draw_footer(
+    ui: &mut egui::Ui,
+    id: impl std::hash::Hash,
+    lines: &[FooterLine],
+) -> (Option<FooterAct>, f32) {
+    let pressed = std::cell::Cell::new(None);
+    let mut footer = design::Footer::new(id, ui.available_width());
+    for line in lines {
+        let pressed = &pressed;
+        let draw = move |ui: &mut egui::Ui| {
+            if let Some(act) = line.draw(ui) {
+                pressed.set(Some(act));
+            }
+        };
+        match line.rank {
+            FooterRank::Undo => footer.result(line.words.as_str(), true, draw),
+            FooterRank::Reason => footer.reason(line.words.as_str(), draw),
+            FooterRank::Notice => footer.notice(line.words.as_str(), draw),
+        };
+    }
+    let bottom = footer.show(ui);
+    (pressed.get(), bottom)
+}
+
 impl Reader {
+    /// The stamp that a change's Log line begins with: the session being played and the day,
+    /// `[[Session 1]], Day 1`. With no session, a change writes no Log line.
+    fn log_as(&self) -> Option<String> {
+        let session = self.played.as_ref()?;
+        Some(match self.day {
+            Some(day) => format!("{session}, Day {day}"),
+            None => session.clone(),
+        })
+    }
+
+    /// The stamp of an `Add to Log` line: a change's stamp, or the day alone when no session
+    /// is being played, because the DM asked for a line.
+    fn line_stamp(&self) -> Option<String> {
+        self.log_as()
+            .or_else(|| self.day.map(|day| format!("Day {day}")))
+    }
+
+    /// Open `Add to Log` for this entry of this campaign, as a done scene's `Add to Log` and the
+    /// header's do. The field starts with `words`, selected, unless the DM already typed words
+    /// there.
+    pub fn open_log(&mut self, campaign: Uuid, id: Uuid, name: &str, words: &str) {
+        let open = self.log_fields.entry((campaign, id)).or_default();
+        open.field.focus = true;
+        name.clone_into(&mut open.name);
+        if open.field.words.trim().is_empty() {
+            words.clone_into(&mut open.field.words);
+            open.select = !words.is_empty();
+        }
+    }
+
     /// Offer the same short chooser to links opened outside the World page.
     pub fn choose_link(&mut self, positions: Vec<usize>, target: &str) {
         self.many = positions;
@@ -2002,13 +2281,9 @@ impl Reader {
     }
 
     /// Draw any item: a plain note, a world entry, or an entry of another kind.
-    pub fn read(
-        &mut self,
-        ui: &mut egui::Ui,
-        item: &Item,
-        index: &ContentIndex,
-        campaign: Option<&Campaign>,
-    ) -> Option<Nav> {
+    /// A newly opened note starts with its own state: the last note's change, kept form,
+    /// error and pickers end here. Both the footer and the body call it first.
+    fn prepare(&mut self, item: &Item) {
         if self.showing != Some(item.entry.id) {
             self.undo = None;
             self.kept = None;
@@ -2026,11 +2301,22 @@ impl Reader {
             self.status_editing = self.status != status(&item.entry);
             // Only a form with changes is worth keeping. It opens again where it was left.
             self.edits.retain(|_, draft| draft.dirty());
+            self.gone_log_lines.retain(|(_, shown)| !shown);
             self.other_type.clear();
             self.adding = None;
             self.picker = None;
             self.error = None;
         }
+    }
+
+    pub fn read(
+        &mut self,
+        ui: &mut egui::Ui,
+        item: &Item,
+        index: &ContentIndex,
+        campaign: Option<&Campaign>,
+    ) -> Option<Nav> {
+        self.prepare(item);
         if self.undo.as_ref().is_some_and(|change| {
             campaign.is_none_or(|campaign| {
                 fs::read_to_string(campaign.path.join(&change.path))
@@ -2059,14 +2345,6 @@ impl Reader {
         // A request lasts one draw, so it cannot reach a heading on another page.
         crate::markdown_view::want_heading(ui.ctx(), None);
         go.and_then(|go| self.settle(go))
-    }
-
-    fn draw_page_result(&mut self, ui: &mut egui::Ui) {
-        if let Some(result) = self.page_result.take()
-            && page_result(ui, &result)
-        {
-            self.page_result_undo = true;
-        }
     }
 
     fn draw(
@@ -2175,39 +2453,67 @@ impl Reader {
             }
             // The header's quiet actions follow Edit, `XS` apart, in the room that is spare: the
             // title keeps its width and the row its line (section 1.2 of the session-cycle
-            // design). `Add to Log` comes first, next to Edit. `Start fight` keeps its word, or
-            // does not show.
-            if let Some(start) = start {
-                let name = format!("Start a fight with {}", start.name);
-                let action = Action::quiet("Start fight")
+            // design): `Start fight` next to Edit, where it is for a DM who never adds to a Log,
+            // then `Add to Log`, which gives way first: to its icon, then away. `Start fight`
+            // keeps its word, or does not show.
+            let log_action = Action::quiet("Add to Log")
+                .icon(design::icons::ADD)
+                .density(Density::Read);
+            let start_name = start
+                .as_ref()
+                .map(|start| format!("Start a fight with {}", start.name));
+            let start_action = start_name.as_deref().map(|name| {
+                Action::quiet("Start fight")
                     .icon(design::icons::RUN)
                     .density(Density::Read)
-                    .name(&name)
-                    .blocked(self.start_blocked);
-                let size = egui::vec2(action.natural_width(ui), Density::Read.control());
-                let limit = if art && edit.is_none() {
-                    cell.right() - art_width
-                } else {
-                    right
-                };
-                if next + size.x <= limit {
-                    let rect = egui::Rect::from_min_size(egui::pos2(next, top), size);
-                    let pressed = ui
-                        .scope_builder(
-                            egui::UiBuilder::new()
-                                .max_rect(rect)
-                                .layout(egui::Layout::left_to_right(egui::Align::Center)),
-                            |ui| action.show(ui).clicked(),
-                        )
-                        .inner;
-                    if pressed {
-                        self.start_fight = Some(start);
-                    }
+                    .name(name)
+                    .blocked(self.start_blocked)
+            });
+            let limit = if art && edit.is_none() {
+                cell.right() - art_width
+            } else {
+                right
+            };
+            let (log, start_width) = header_actions(
+                limit - next,
+                edit.map(|_| log_action.natural_width(ui)),
+                start_action.as_ref().map(|action| action.natural_width(ui)),
+            );
+            // Each shown action's target, in order from `next`.
+            let mut at = |width: f32| {
+                let rect = egui::Rect::from_min_size(
+                    egui::pos2(next, top),
+                    egui::vec2(width, Density::Read.control()),
+                );
+                next = rect.right() + design::XS;
+                rect
+            };
+            if let (Some(start), Some(action), Some(width)) = (start, start_action, start_width)
+                && in_rect(ui, at(width), |ui| action.show(ui).clicked())
+            {
+                self.start_fight = Some(start);
+            }
+            let log_pressed = match log {
+                Some(LogAction::Word(width)) => {
+                    in_rect(ui, at(width), |ui| log_action.show(ui).clicked())
                 }
+                Some(LogAction::Icon) => in_rect(ui, at(Density::Read.control()), |ui| {
+                    design::icon_button(ui, design::icons::ADD, "Add to Log").clicked()
+                }),
+                None => false,
+            };
+            if log_pressed && let Some(campaign) = edit {
+                self.open_log(campaign.id, id, &item.entry.name, "");
             }
         });
         self.form_focused = false;
         let editing = campaign.is_some_and(|campaign| self.editing(id, campaign));
+        if let Some(campaign) = campaign
+            && takes_log(item, index)
+            && let Some(go) = self.log_field(ui, item, campaign, editing)
+        {
+            return Some(go);
+        }
         if !editing && let Some(campaign) = campaign {
             self.refresh_group_fault(item, index.generation(), || {
                 note_path(&campaign.path, &item.entry.path)
@@ -2222,38 +2528,17 @@ impl Reader {
             .as_ref()
             .filter(|fault| !editing && fault.id == id)
             .is_some_and(|fault| fault.unread.is_some());
-        // A refused Part of write shows as the unread warning below the file line.
-        if let Some(error) = &self.error
-            && !(self.group_error && has_unread)
-        {
-            ui.horizontal_wrapped(|ui| {
-                design::message(ui, Tone::Error, error);
-                // A file that Splat cannot read, no editor can open either.
-                if self.group_error
-                    && !self.group_error_unread_file
-                    && let Some(campaign) = campaign
-                    && design::link(ui, "Edit in Obsidian").clicked()
-                {
-                    ui.ctx().open_url(egui::OpenUrl::new_tab(obsidian_url(
-                        &campaign.path.join(&item.entry.path),
-                    )));
-                }
-            });
-        }
+        // The error, the results and their Undo are in the pane's footer (`footer_lines`).
+        let _ = has_unread;
         if let Some(campaign) = campaign
             && editing
         {
-            // The form has no file line, so the result sits below the title.
-            self.draw_page_result(ui);
             if self.has_lost_edits(index) {
                 design::reader::measure(ui, |ui| self.lost_edits(ui, index));
             }
             return self.edit_form(ui, item, index, campaign);
         }
 
-        if let Some(campaign) = campaign {
-            self.discarded_notice(ui, campaign, id);
-        }
         let file_line = !self.compact
             && (item.is_world_note() || item.entry.kind == "world")
             && item.is_private();
@@ -2373,6 +2658,7 @@ impl Reader {
                         match result {
                             Ok(rename) => {
                                 self.file_undo = Some(rename);
+                                self.stamp(FooterAct::FileRename);
                                 return Some(Go::Reload(item.entry.id));
                             }
                             Err(error) => self.error = Some(error),
@@ -2403,67 +2689,12 @@ impl Reader {
                         match result {
                             Ok(change) => {
                                 self.name_undo = Some(change);
+                                self.stamp(FooterAct::Name);
                                 return Some(Go::Reload(item.entry.id));
                             }
                             Err(error) => self.error = Some(error),
                         }
                     }
-                }
-                if let Some(rename) = &self.file_undo
-                    && rename.shows_on(campaign, &item.entry.path)
-                    && design::undo_message(ui, CHANGED, &rename.message(), "Undo file rename")
-                {
-                    match rename.undo(campaign) {
-                        Ok(()) => {
-                            self.file_undo = None;
-                            return Some(Go::Reload(item.entry.id));
-                        }
-                        Err(error) => self.error = Some(error),
-                    }
-                }
-                if let Some(change) = &self.name_undo
-                    && change.shows_on(campaign, &item.entry.path)
-                    && design::undo_message(ui, CHANGED, &change.word, "Undo name change")
-                {
-                    match change.undo(campaign) {
-                        Ok(()) => {
-                            self.name_undo = None;
-                            return Some(Go::Reload(item.entry.id));
-                        }
-                        Err(error) => self.error = Some(error),
-                    }
-                }
-            }
-            if self
-                .identity_undo
-                .as_ref()
-                .is_some_and(|(id, _)| *id != campaign.id)
-            {
-                self.identity_undo = None;
-            }
-            // Every World result sits here, where the separate-note result sits.
-            self.draw_page_result(ui);
-            // The edit form's save result names no row value, so it is a page result too.
-            if edit::editable(item, index) {
-                self.kept_notice(ui, item);
-                if let Some(change) = &self.undo
-                    && change.shows_on(campaign, &item.entry.path)
-                    && change.kind == ChangeKind::Edit
-                    && Self::change_notice(ui, &change.word, change.kind)
-                {
-                    return self.undo_change(campaign, item.entry.id);
-                }
-            }
-            if let Some((_, undo)) = &self.identity_undo
-                && design::undo_message(ui, CHANGED, undo.message(), undo.identity_undo_label())
-            {
-                match undo.undo(campaign) {
-                    Ok(()) => {
-                        let id = note_id(&undo.path);
-                        self.identity_undo = None;
-                        return Some(Go::Reload(id));
-                    }
-                    Err(error) => self.error = Some(error),
                 }
             }
             if let Some(paths) = index.duplicate_world.get(&item.entry.path) {
@@ -2503,6 +2734,7 @@ impl Reader {
                     match new_identity(campaign, path) {
                         Ok((undo, id)) => {
                             self.identity_undo = Some((campaign.id, undo));
+                            self.stamp(FooterAct::Identity);
                             return Some(Go::Reload(id));
                         }
                         Err(error) => self.error = Some(error),
@@ -2786,12 +3018,16 @@ impl Reader {
             Some(at) => index.shown_name(at),
             None => edit::value_name(index, value, label),
         };
+        // `None` is a value that is not set: no words, an empty list or blank text.
         let name = |value: &Value| match value.as_sequence() {
-            Some(groups) if groups.is_empty() => "not set".into(),
+            Some(groups) if groups.is_empty() => None,
             // Each value by the name the reader shows: the note its link opens, else the words
             // written in the file.
-            Some(groups) => groups.iter().map(one_name).collect::<Vec<_>>().join(", "),
-            None => one_name(value),
+            Some(groups) => Some(groups.iter().map(one_name).collect::<Vec<_>>().join(", ")),
+            None if empty_optional(value) => None,
+            // A status is a word, not a link: the words in the file, as its row shows them.
+            None if key == "status" => value.as_str().map(|word| word.trim().to_owned()),
+            None => Some(one_name(value)),
         };
         // Choosing what is already there changes nothing, and writes no Log line.
         let current = world_field(current_entry, key).filter(|value| !value.is_null());
@@ -2809,13 +3045,15 @@ impl Reader {
             self.place_choices_open = false;
             return None;
         }
-        let before_name = world_field(current_entry, key).map_or_else(|| "not set".into(), name);
-        let after_name = name(&value);
+        let words = change_words(
+            label,
+            world_field(current_entry, key).and_then(name).as_deref(),
+            name(&value).as_deref(),
+        );
         // What play changes goes in the entry's Log, in the same write, so one Undo takes
         // both back.
         let log = self
-            .log_as
-            .as_ref()
+            .log_as()
             .filter(|_| matches!(key, "in" | "part_of" | "status"))
             .map(|stamp| {
                 let words = log_words(index, key, world_field(current_entry, key), &value);
@@ -2838,20 +3076,152 @@ impl Reader {
                 path: item.entry.path.clone(),
                 before: before.clone(),
                 after: after.clone(),
-                word: format!("{label}: {before_name} → {after_name}."),
+                word: words,
                 kind: ChangeKind::of_key(key),
             })
         })();
+        let go = self.written(result, item.entry.id);
+        if go.is_some() {
+            self.picker = None;
+            self.place_choices_open = false;
+        }
+        go
+    }
+
+    /// `Add to Log`'s field under the header, while it is open for this entry in this session:
+    /// the line's stamp in muted words, then the field. Enter adds the line and closes the
+    /// field; Escape clears and closes it. An open edit form blocks it.
+    fn log_field(
+        &mut self,
+        ui: &mut egui::Ui,
+        item: &Item,
+        campaign: &Campaign,
+        editing: bool,
+    ) -> Option<Go> {
+        let key = (campaign.id, item.entry.id);
+        if !self.log_fields.contains_key(&key) {
+            return None;
+        }
+        if editing || self.edited_elsewhere.contains(&item.entry.id) {
+            design::message(ui, Tone::Info, "Save or discard your edit first.");
+            return None;
+        }
+        let stamp = self
+            .line_stamp()
+            .map(|stamp| format!("{}:", sessions::plain_links(&stamp)));
+        let open = self.log_fields.get_mut(&key)?;
+        let select = std::mem::take(&mut open.select);
+        let field = &mut open.field;
+        let name = format!("Log line for {}", item.entry.name);
+        let draw = |ui: &mut egui::Ui, field: &mut design::AddField| {
+            design::add_field(
+                ui,
+                field,
+                &name,
+                "What happened?",
+                0.0,
+                |_| None::<()>,
+                |_| Vec::new(),
+            )
+            .field
+        };
+        let response = match &stamp {
+            None => draw(ui, field),
+            Some(stamp) => {
+                let width = ui
+                    .painter()
+                    .layout_no_wrap(stamp.clone(), Type::Small.font(ui), colors().muted)
+                    .size()
+                    .x;
+                let words = Type::Small.rich(ui, stamp).color(colors().muted);
+                // The stamp shares the field's line while the field keeps room for a sentence.
+                // One layout for both, so the field keeps its ID, and the keyboard, when the
+                // window changes size.
+                let room = ui.available_width() - width - design::S;
+                let typed = ui
+                    .painter()
+                    .layout_no_wrap(
+                        field.words.clone(),
+                        egui::TextStyle::Body.resolve(ui.style()),
+                        colors().text,
+                    )
+                    .size()
+                    .x;
+                let beside = room >= LOG_FIELD_BESIDE.max(typed + 3.0 * design::S);
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(words);
+                    if !beside {
+                        ui.end_row();
+                    }
+                    draw(ui, field)
+                })
+                .inner
+            }
+        };
+        if select {
+            design::focus_and_select(ui, response.id, &field.words);
+        }
+        // While the field has the keyboard, Escape is the field's, not Lookup's.
+        if response.has_focus() || response.lost_focus() {
+            self.form_focused = true;
+        }
+        let enter = response.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter));
+        if ui.input(|input| input.key_pressed(egui::Key::Escape))
+            && (response.has_focus() || response.lost_focus())
+        {
+            self.log_fields.remove(&key);
+        } else if enter {
+            let words = field.words.trim().to_owned();
+            if words.is_empty() {
+                self.log_fields.remove(&key);
+            } else {
+                return self.add_log_line(campaign, item, &words);
+            }
+        }
+        None
+    }
+
+    /// `Add to Log`: one line in the entry's own note, at the end of its Log, stamped as a
+    /// change is at this moment. It reads the file now, so an edit made a moment before stays,
+    /// and writes only when the file still holds what it read. A failed write keeps the field
+    /// and its words, and names the file.
+    fn add_log_line(&mut self, campaign: &Campaign, item: &Item, words: &str) -> Option<Go> {
+        let line = match self.line_stamp() {
+            Some(stamp) => format!("{stamp}: {words}"),
+            None => words.to_owned(),
+        };
+        let result = (|| {
+            let before = file_fault::read_note(&campaign.path, &item.entry.path)?;
+            let after = lines::add_log(&before, &line);
+            write_note(&campaign.path, &item.entry.path, Some(&before), &after)?;
+            Ok::<_, String>(Change {
+                campaign: campaign.id,
+                path: item.entry.path.clone(),
+                before,
+                after,
+                word: format!("Added to {}’s Log.", item.entry.name),
+                kind: ChangeKind::Log,
+            })
+        })();
+        let go = self.written(result, item.entry.id);
+        if go.is_some() {
+            self.log_fields.remove(&(campaign.id, item.entry.id));
+        }
+        go
+    }
+
+    /// A change to one World note, written or not: its result and Undo, or its error, in the
+    /// reader's one place for each.
+    fn written(&mut self, result: Result<Change, String>, id: Uuid) -> Option<Go> {
         match result {
             Ok(change) => {
                 self.error = None;
                 self.group_error = false;
                 self.group_error_unread_file = false;
                 self.undo = Some(change);
+                self.stamp(FooterAct::Change);
                 self.kept = None;
-                self.picker = None;
-                self.place_choices_open = false;
-                Some(Go::Reload(item.entry.id))
+                Some(Go::Reload(id))
             }
             Err(error) => {
                 self.error = Some(error);
@@ -2960,13 +3330,13 @@ impl Reader {
             values.push(("not read".into(), Type::Small));
         }
         let status = if status_unread(&item.entry) {
-            "not read"
+            ("not read", Type::Small)
         } else if status(&item.entry).is_empty() {
-            "not set"
+            ("not set", Type::Small)
         } else {
-            status(&item.entry)
+            (status(&item.entry), Type::Body)
         };
-        values.push((status.into(), Type::Small));
+        values.push((status.0.into(), status.1));
         // The place choices' files share the value column, so Change and each choice's action
         // stand in one column.
         let choices = index.place_choices(item.entry.id);
@@ -3078,15 +3448,14 @@ impl Reader {
         label: &str,
         width: f32,
         value: impl FnOnce(&mut egui::Ui),
-        notice: Option<(&str, ChangeKind)>,
         blocked: Option<&str>,
-    ) -> (bool, bool) {
+    ) -> bool {
         let name = format!("Change {label}");
         let change = Action::quiet("Change")
             .density(design::Density::Scan)
             .name(&name)
             .blocked(blocked);
-        Self::value_row(ui, label, width, value, notice, Some(change))
+        Self::value_row(ui, label, width, value, Some(change))
     }
 
     /// A duplicate note's values, read only until its repair is done. Each reads as every
@@ -3122,7 +3491,7 @@ impl Reader {
                 .clicked()
                 .then_some(Go::Item(at, None)),
             None if label == "Status" => {
-                ui.label(Type::Small.rich(ui, name).color(colors().muted));
+                ui.label(Type::Body.rich(ui, name).color(colors().text));
                 None
             }
             None => {
@@ -3150,7 +3519,7 @@ impl Reader {
             .map(|(label, name, target)| {
                 let (words, role) = match target {
                     Some(_) => (name.clone(), Type::Body),
-                    None if *label == "Status" => (name.clone(), Type::Small),
+                    None if *label == "Status" => (name.clone(), Type::Body),
                     None => return missing_width(ui, name, stacked),
                 };
                 design::number_width(ui, &words, &role.font(ui))
@@ -3171,7 +3540,6 @@ impl Reader {
                         }
                     },
                     None,
-                    None,
                 );
             }
         });
@@ -3185,9 +3553,8 @@ impl Reader {
         label: &str,
         width: f32,
         value: impl FnOnce(&mut egui::Ui),
-        notice: Option<(&str, ChangeKind)>,
         change: Option<Action<'_>>,
-    ) -> (bool, bool) {
+    ) -> bool {
         let stacked = Self::stacked(ui);
         let change_width = change
             .as_ref()
@@ -3198,102 +3565,38 @@ impl Reader {
             ui.add_space(design::S);
             ui.label(Type::Small.rich(ui, label).color(colors().muted));
         }
-        let mut undo = false;
-        let clicked = ui
-            .horizontal(|ui| {
-                ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
-                    if !stacked {
-                        ui.allocate_ui_with_layout(
-                            egui::vec2(
-                                design::XXL * 3.0 + design::S,
-                                design::Density::Scan.control(),
-                            ),
-                            egui::Layout::left_to_right(egui::Align::Center),
-                            |ui| {
-                                ui.set_min_width(design::XXL * 3.0 + design::S);
-                                ui.label(Type::Small.rich(ui, label).color(colors().muted));
-                            },
-                        );
-                    }
+        ui.horizontal(|ui| {
+            ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
+                if !stacked {
                     ui.allocate_ui_with_layout(
-                        egui::vec2(width, design::Density::Scan.control()),
-                        egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true),
+                        egui::vec2(
+                            design::XXL * 3.0 + design::S,
+                            design::Density::Scan.control(),
+                        ),
+                        egui::Layout::left_to_right(egui::Align::Center),
                         |ui| {
-                            ui.set_width(width);
-                            value(ui);
+                            ui.set_min_width(design::XXL * 3.0 + design::S);
+                            ui.label(Type::Small.rich(ui, label).color(colors().muted));
                         },
                     );
-                    let Some(change) = change else {
-                        return false;
-                    };
-                    ui.add_space((design::L - ui.spacing().item_spacing.x).max(0.0));
-                    let clicked = change.show(ui).clicked();
-                    if let Some((word, kind)) = notice {
-                        ui.allocate_ui_with_layout(
-                            egui::vec2(ui.available_width(), Density::Scan.control()),
-                            egui::Layout::left_to_right(egui::Align::Center),
-                            |ui| {
-                                undo = Self::change_notice(ui, word, kind);
-                            },
-                        );
-                    }
-                    clicked
-                })
-                .inner
+                }
+                ui.allocate_ui_with_layout(
+                    egui::vec2(width, design::Density::Scan.control()),
+                    egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true),
+                    |ui| {
+                        ui.set_width(width);
+                        value(ui);
+                    },
+                );
+                let Some(change) = change else {
+                    return false;
+                };
+                ui.add_space((design::L - ui.spacing().item_spacing.x).max(0.0));
+                change.show(ui).clicked()
             })
-            .inner;
-        (clicked, undo)
-    }
-
-    fn notice_fits(ui: &egui::Ui, value_width: f32, word: &str, kind: ChangeKind) -> bool {
-        // A stacked label stands above its row, so the row has no label column.
-        let label = if Self::stacked(ui) {
-            0.0
-        } else {
-            design::XXL * 3.0 + design::S
-        };
-        ui.available_width()
-            >= label
-                + value_width
-                + Action::quiet("Change")
-                    .density(Density::Scan)
-                    .natural_width(ui)
-                // The `L` gap after Change, as `value_row` draws it.
-                + design::L
-                + design::number_width(ui, word, &Type::Body.font(ui))
-                + design::S
-                + design::HAIRLINE_WIDTH
-                // The icon of `CHANGED`, the tone of the notice, and the `XS` after it.
-                + design::number_width(ui, design::icons::SUCCESS, &Type::Body.font(ui))
-                + design::XS
-                + Action::quiet(kind.undo_label())
-                    .icon(design::icons::UNDO)
-                    .density(Density::Read)
-                    .natural_width(ui)
-                + ui.spacing().item_spacing.x * 6.0
-    }
-
-    fn change_notice(ui: &mut egui::Ui, word: &str, kind: ChangeKind) -> bool {
-        design::undo_message(ui, CHANGED, word, kind.undo_label())
-    }
-
-    /// The change to show beside this row, when it is this row's and there is room.
-    fn row_notice(
-        &self,
-        ui: &egui::Ui,
-        campaign: &Campaign,
-        item: &Item,
-        kind: ChangeKind,
-        value_width: f32,
-    ) -> Option<(String, ChangeKind)> {
-        self.undo
-            .as_ref()
-            .filter(|change| {
-                change.shows_on(campaign, &item.entry.path)
-                    && change.kind == kind
-                    && Self::notice_fits(ui, value_width, &change.word, kind)
-            })
-            .map(|change| (change.word.clone(), kind))
+            .inner
+        })
+        .inner
     }
 
     /// A change result on this note. It is newer than the page's repair result, so it takes
@@ -3314,21 +3617,215 @@ impl Reader {
         self.kept = None;
     }
 
-    /// The form closed because the note already held every change. Nothing to undo.
-    fn kept_notice(&self, ui: &mut egui::Ui, item: &Item) {
-        if self
-            .kept
+    /// This reader's messages for the open note, for its pane's footer (round 26): the error
+    /// of the last action, then every result with its Undo. Each keeps its owner and its end
+    /// event: a change, a kept form and an error belong to the open note and end when another
+    /// note opens (`prepare`), a later change replaces them, and Undo ends them; a rename,
+    /// a name change and a separate note end at their Undo or the next of their kind; the
+    /// page's result is the page's (`page`). Draw them with `draw_footer`, before the
+    /// body, and take its action with `footer_act`.
+    pub(crate) fn footer_lines(
+        &mut self,
+        item: &Item,
+        index: &ContentIndex,
+        campaign: Option<&Campaign>,
+        page: Option<(&PageResult, u64)>,
+    ) -> Vec<FooterLine> {
+        self.prepare(item);
+        let id = item.entry.id;
+        let editing = campaign.is_some_and(|campaign| self.editing(id, campaign));
+        let mut lines = self.gone_log_notices();
+        let has_unread = self
+            .group_fault
             .as_ref()
-            .is_some_and(|(path, _)| *path == item.entry.path)
+            .filter(|fault| !editing && fault.id == id)
+            .is_some_and(|fault| fault.unread.is_some());
+        // A refused Part of write shows as the unread warning below the file line instead.
+        if let Some(error) = &self.error
+            && !(self.group_error && has_unread)
         {
-            design::message(ui, Tone::Info, edit::ALREADY_SAVED);
+            // A file that Splat cannot read, no editor can open either.
+            let editor = campaign
+                .filter(|_| self.group_error && !self.group_error_unread_file)
+                .map(|campaign| campaign.path.join(&item.entry.path));
+            lines.push(FooterLine::new(
+                FooterRank::Reason,
+                Tone::Error,
+                error,
+                FooterKind::Error { editor },
+            ));
         }
+        let Some(campaign) = campaign else {
+            return lines;
+        };
+        if self
+            .identity_undo
+            .as_ref()
+            .is_some_and(|(owner, _)| *owner != campaign.id)
+        {
+            self.identity_undo = None;
+        }
+        let page_order = page.map_or(0, |(_, order)| order);
+        let page = page.map(|(page, _)| page);
+        if editing {
+            lines.extend(page.map(|page| page.line()));
+            return self.newest_first(lines, page_order);
+        }
+        let undo = |words: &str, label: &'static str, act| {
+            FooterLine::new(
+                FooterRank::Undo,
+                CHANGED,
+                words,
+                FooterKind::Undo { label, act },
+            )
+        };
+        if let Some(change) = self
+            .undo
+            .as_ref()
+            .filter(|change| change.shows_on(campaign, &item.entry.path))
+        {
+            lines.push(undo(
+                &change.word,
+                change.kind.undo_label(),
+                FooterAct::Change,
+            ));
+        }
+        lines.extend(self.discarded_line(campaign, id));
+        if item.entry.kind == "world" && !index.duplicate_world.contains_key(&item.entry.path) {
+            if let Some(rename) = self
+                .file_undo
+                .as_ref()
+                .filter(|rename| rename.shows_on(campaign, &item.entry.path))
+            {
+                lines.push(undo(
+                    &rename.message(),
+                    "Undo file rename",
+                    FooterAct::FileRename,
+                ));
+            }
+            if let Some(change) = self
+                .name_undo
+                .as_ref()
+                .filter(|change| change.shows_on(campaign, &item.entry.path))
+            {
+                lines.push(undo(&change.word, "Undo name change", FooterAct::Name));
+            }
+        }
+        if let Some((_, change)) = &self.identity_undo {
+            lines.push(undo(
+                change.message(),
+                change.identity_undo_label(),
+                FooterAct::Identity,
+            ));
+        }
+        lines.extend(page.map(|page| page.line()));
+        // The form closed because the note already held every change. Nothing to undo.
+        if edit::editable(item, index)
+            && self
+                .kept
+                .as_ref()
+                .is_some_and(|(path, _)| *path == item.entry.path)
+        {
+            lines.push(FooterLine::new(
+                FooterRank::Notice,
+                Tone::Info,
+                edit::ALREADY_SAVED,
+                FooterKind::Plain,
+            ));
+        }
+        self.newest_first(lines, page_order)
+    }
+
+    /// A kept result was made now: it goes first among the results with a live Undo.
+    pub(super) fn stamp(&mut self, act: FooterAct) {
+        self.orders.insert(act, next_order());
+    }
+
+    /// Each line with the order its action was made at; then the footer's order: results with
+    /// a live Undo newest first, then reasons, then notices.
+    fn newest_first(&self, lines: Vec<FooterLine>, page: u64) -> Vec<FooterLine> {
+        let mut lines: Vec<_> = lines
+            .into_iter()
+            .map(|line| {
+                let order = match &line.kind {
+                    FooterKind::Undo { act, .. } | FooterKind::Discarded { act, .. } => match act {
+                        FooterAct::Page => page,
+                        act => self.orders.get(act).copied().unwrap_or(0),
+                    },
+                    _ if line.rank == FooterRank::Notice => page,
+                    _ => 0,
+                };
+                line.at(order)
+            })
+            .collect();
+        lines.sort_by_key(|line| (line.rank, std::cmp::Reverse(line.order)));
+        lines
+    }
+
+    /// Take a footer line's action on the open note. `FooterAct::Page` is the page's.
+    pub(crate) fn footer_act(
+        &mut self,
+        act: FooterAct,
+        item: &Item,
+        campaign: &Campaign,
+    ) -> Option<Nav> {
+        let go = match act {
+            FooterAct::Change => self.undo_change(campaign, item.entry.id),
+            FooterAct::FileRename => match self.file_undo.as_ref()?.undo(campaign) {
+                Ok(()) => {
+                    self.file_undo = None;
+                    self.error = None;
+                    Some(Go::Reload(item.entry.id))
+                }
+                Err(error) => {
+                    self.error = Some(error);
+                    None
+                }
+            },
+            FooterAct::Name => match self.name_undo.as_ref()?.undo(campaign) {
+                Ok(()) => {
+                    self.name_undo = None;
+                    self.error = None;
+                    Some(Go::Reload(item.entry.id))
+                }
+                Err(error) => {
+                    self.error = Some(error);
+                    None
+                }
+            },
+            FooterAct::Identity => {
+                let (_, undo) = self.identity_undo.as_ref()?;
+                match undo.undo(campaign) {
+                    Ok(()) => {
+                        let id = note_id(&undo.path);
+                        self.identity_undo = None;
+                        self.error = None;
+                        Some(Go::Reload(id))
+                    }
+                    Err(error) => {
+                        self.error = Some(error);
+                        None
+                    }
+                }
+            }
+            FooterAct::Discarded => {
+                if let Some((id, draft)) = self.discarded.take() {
+                    self.edits.insert(id, draft);
+                }
+                None
+            }
+            // The page takes its own result's Undo.
+            FooterAct::Page => None,
+        };
+        go.and_then(|go| self.settle(go))
     }
 
     fn undo_change(&mut self, campaign: &Campaign, id: Uuid) -> Option<Go> {
         match self.undo.as_ref()?.undo(campaign) {
             Ok(_) => {
                 self.undo = None;
+                // A finished Undo ends the reason an earlier action left.
+                self.error = None;
                 Some(Go::Reload(id))
             }
             Err(error) => {
@@ -3360,9 +3857,8 @@ impl Reader {
             if key != "creature" && reader_field(&item.entry, key).is_none_or(Value::is_null) {
                 continue;
             }
-            let notice = self.row_notice(ui, campaign, item, ChangeKind::of_key(key), value_width);
             ui.push_id(key, |ui| {
-                let (changed, undo) = Self::relationship_row(
+                let changed = Self::relationship_row(
                     ui,
                     label,
                     value_width,
@@ -3387,7 +3883,6 @@ impl Reader {
                             ui.label(Type::Small.rich(ui, "not set").color(colors().muted));
                         }
                     },
-                    notice.as_ref().map(|(word, kind)| (word.as_str(), *kind)),
                     None,
                 );
                 if changed {
@@ -3396,9 +3891,6 @@ impl Reader {
                         focus: true,
                         ..Default::default()
                     });
-                }
-                if undo {
-                    go = self.undo_change(campaign, item.entry.id);
                 }
             });
             if key == "in" && self.place_choices_open {
@@ -3411,12 +3903,11 @@ impl Reader {
             }
         }
         let groups = index.groups_of(&item.entry);
-        let notice = self.row_notice(ui, campaign, item, ChangeKind::PartOf, value_width);
         // An unread list keeps its row: `not read`, with Change blocked by the reason.
         let unread = self.unread_groups(item.entry.id);
         if !groups.is_empty() || unread.is_some() {
             ui.push_id("part_of", |ui| {
-                let (changed, undo) = Self::relationship_row(
+                let changed = Self::relationship_row(
                     ui,
                     "Part of",
                     value_width,
@@ -3442,7 +3933,6 @@ impl Reader {
                             }
                         }
                     },
-                    notice.as_ref().map(|(word, kind)| (word.as_str(), *kind)),
                     unread.as_deref(),
                 );
                 if changed {
@@ -3451,9 +3941,6 @@ impl Reader {
                         focus: true,
                         ..Default::default()
                     });
-                }
-                if undo {
-                    go = self.undo_change(campaign, item.entry.id);
                 }
             });
         }
@@ -3655,13 +4142,6 @@ impl Reader {
                     }
                 }
             }
-            if let Some(change) = &self.undo
-                && change.shows_on(campaign, &item.entry.path)
-                && change.kind != ChangeKind::Edit
-                && Self::change_notice(ui, &change.word, change.kind)
-            {
-                return self.undo_change(campaign, item.entry.id);
-            }
             if index.place_of(item.entry.id).is_none()
                 && index.place_choices(item.entry.id).is_empty()
                 && let Some(place) = reader_field(&item.entry, "in").and_then(Value::as_str)
@@ -3684,37 +4164,24 @@ impl Reader {
             {
                 let value = status(&item.entry);
                 let unread = status_unread(&item.entry);
-                let notice = self.row_notice(ui, campaign, item, ChangeKind::Status, value_width);
-                let (changed, undo) = Self::relationship_row(
+                let changed = Self::relationship_row(
                     ui,
                     "Status",
                     value_width,
                     |ui| {
-                        ui.label(
-                            Type::Small
-                                .rich(
-                                    ui,
-                                    if unread {
-                                        "not read"
-                                    } else if value.is_empty() {
-                                        "not set"
-                                    } else {
-                                        value
-                                    },
-                                )
-                                .color(if unread {
-                                    colors().result.warning
-                                } else {
-                                    colors().muted
-                                }),
-                        );
+                        // Round 26 FE5: a set value is in `Body` in the text colour, as a set
+                        // link is; only `not read` and `not set` stay `Small`.
+                        let (words, role, color) = if unread {
+                            ("not read", Type::Small, colors().result.warning)
+                        } else if value.is_empty() {
+                            ("not set", Type::Small, colors().muted)
+                        } else {
+                            (value, Type::Body, colors().text)
+                        };
+                        ui.label(role.rich(ui, words).color(color));
                     },
-                    notice.as_ref().map(|(word, kind)| (word.as_str(), *kind)),
                     None,
                 );
-                if undo {
-                    return self.undo_change(campaign, item.entry.id);
-                }
                 if changed {
                     self.status_editing = true;
                 }
@@ -3749,26 +4216,6 @@ impl Reader {
                     }
                 }
             }
-        }
-        if !self.compact
-            && let Some(change) = &self.undo
-            && change.shows_on(campaign, &item.entry.path)
-            // A change that names a row value shows beside its row when it fits, and here,
-            // below the row block, when it does not. Every other result is a page result.
-            && change.kind.has_row()
-            && (!Self::notice_fits(
-                ui,
-                self.relationship_value_width(ui, item, index),
-                &change.word,
-                change.kind,
-            ) || (change.kind == ChangeKind::Status && (self.status_editing || status(&item.entry).is_empty()))
-                || (change.kind == ChangeKind::Place && reader_field(&item.entry, "in").is_none())
-                || (change.kind == ChangeKind::PartOf && index.groups_of(&item.entry).is_empty()))
-            && ui
-                .horizontal_wrapped(|ui| Self::change_notice(ui, &change.word, change.kind))
-                .inner
-        {
-            return self.undo_change(campaign, item.entry.id);
         }
         if !fights(&item.entry) {
             return None;
@@ -3836,8 +4283,10 @@ impl Reader {
                         stored_link(stat_block).into(),
                     ) {
                         Ok(mut change) => {
-                            change.word = format!("Stat block: not set → {}.", stat_block.name);
+                            change.word = change_words("Stat block", None, Some(&stat_block.name));
                             self.undo = Some(change);
+                            // A field of its own: `adding` still borrows the form.
+                            self.orders.insert(FooterAct::Change, next_order());
                             self.kept = None;
                         }
                         Err(error) => self.error = Some(error),
@@ -4480,7 +4929,16 @@ mod tests {
         ctx.enable_accesskit();
         let output = ctx.run(Default::default(), |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
-                Reader::change_notice(ui, "In: Watch House → North Gate.", ChangeKind::Place);
+                let line = FooterLine::new(
+                    FooterRank::Undo,
+                    CHANGED,
+                    "In set to North Gate. It was Watch House.",
+                    FooterKind::Undo {
+                        label: ChangeKind::Place.undo_label(),
+                        act: FooterAct::Change,
+                    },
+                );
+                draw_footer(ui, "test_footer", &[line]);
             });
         });
         let nodes = output.platform_output.accesskit_update.unwrap().nodes;
@@ -4630,9 +5088,27 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         note(dir.path(), "Setting.md", "# Setting\n");
         note(dir.path(), "Timeline.md", "---\ntimeline_version: 2\n---\n");
+        note(
+            dir.path(),
+            "Trackers.md",
+            "---\ntrackers_version: 1\nchanges: []\n---\n",
+        );
         let scan = scan(dir.path(), dir.path());
         assert_eq!(scan.notes.len(), 1);
         assert_eq!(scan.notes[0].path, "Setting.md");
+        // The scan and the ledger's reader use one rule: a ledger with a quoted key is one.
+        let quoted = "---\n\"trackers_version\": 1\nchanges: []\n---\n";
+        assert!(crate::trackers::ledger::Ledger::parse(quoted).is_ok());
+        note(dir.path(), "Trackers.md", quoted);
+        assert_eq!(super::scan(dir.path(), dir.path()).notes.len(), 1);
+        // A note of the DM's named Trackers.md that is no ledger stays a world note.
+        note(
+            dir.path(),
+            "Trackers.md",
+            "---\ntags: [race]\n---\n\n# Trackers\n",
+        );
+        let scan = super::scan(dir.path(), dir.path());
+        assert_eq!(scan.notes.len(), 2);
     }
 
     #[test]
@@ -4820,7 +5296,6 @@ mod tests {
                                         ui.label(Type::Small.rich(ui, value));
                                     },
                                     None,
-                                    None,
                                 );
                             }
                         });
@@ -4925,7 +5400,8 @@ mod tests {
         let path = dir.path().join("NPCs/Hob.md");
         let original = fs::read_to_string(&path).unwrap();
         let mut reader = Reader {
-            log_as: Some("[[Session 1]], Day 2".into()),
+            played: Some("[[Session 1]]".into()),
+            day: Some(2),
             ..Default::default()
         };
         let mut change = |key: &str, value: Value| {
@@ -4934,7 +5410,7 @@ mod tests {
             assert!(reader.change(&campaign, item, &index, key, value).is_some());
             reader.undo.clone().unwrap()
         };
-        change("status", "dead".into());
+        let status = change("status", "dead".into());
         let place = change("in", serde_yaml_ng::to_value(EntryRef::id(arena)).unwrap());
         let group = change("part_of", Value::Sequence(vec!["[[Harvest Cart]]".into()]));
         let text = fs::read_to_string(&path).unwrap();
@@ -4944,7 +5420,10 @@ mod tests {
             ),
             "{text}"
         );
-        assert_eq!(place.word, "In: not set → The Arena.");
+        // Round 26 FE3: a result is a sentence; only the Log keeps the arrow form.
+        assert_eq!(status.word, "Status set to dead. It was alive.");
+        assert_eq!(place.word, "In set to The Arena.");
+        assert_eq!(group.word, "Part of set to Harvest Cart.");
         assert_eq!(group.kind, ChangeKind::PartOf);
 
         // The session, the place and the group each show the line. The entry holds it.
@@ -4972,6 +5451,34 @@ mod tests {
         }
         assert_eq!(index.members(cart).len(), 1);
 
+        // F6: `Add to Log` writes the DM's words as one line with the stamp a change has at
+        // that moment, and the session lists it. Its Undo takes back that line alone.
+        let before_log = fs::read_to_string(&path).unwrap();
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        let item = &index.items[index.position(hob).unwrap()];
+        assert!(
+            reader
+                .add_log_line(&campaign, item, "Gave the gate key to Iselle.")
+                .is_some()
+        );
+        let logged = fs::read_to_string(&path).unwrap();
+        assert_eq!(
+            logged,
+            format!("{before_log}- [[Session 1]], Day 2: Gave the gate key to Iselle.\n")
+        );
+        let line = reader.undo.clone().unwrap();
+        assert_eq!(line.word, "Added to Hob’s Log.");
+        assert_eq!(line.kind.undo_label(), "Undo Log line");
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        assert_eq!(
+            index
+                .world_changes(&dir.path().join("Sessions/Session 1.md"))
+                .len(),
+            4
+        );
+        line.undo(&campaign).unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), before_log);
+
         // Undo takes back the field and its Log line together.
         group.undo(&campaign).unwrap();
         let text = fs::read_to_string(&path).unwrap();
@@ -4996,11 +5503,262 @@ mod tests {
 
         // With no session, a change writes no Log line.
         fs::write(&path, &original).unwrap();
-        reader.log_as = None;
+        reader.played = None;
         let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
         let item = &index.items[index.position(hob).unwrap()];
         reader.change(&campaign, item, &index, "status", "dead".into());
         assert!(!fs::read_to_string(&path).unwrap().contains("## Log"));
+        // With no session, `Add to Log` still writes the line the DM asked for, with the day
+        // alone; with no day either, the words alone.
+        for (day, line) in [(Some(2), "- Day 2: Rode north."), (None, "- Rode north.")] {
+            reader.day = day;
+            let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+            let item = &index.items[index.position(hob).unwrap()];
+            let before = fs::read_to_string(&path).unwrap();
+            reader.add_log_line(&campaign, item, "Rode north.");
+            let after = fs::read_to_string(&path).unwrap();
+            assert!(after.ends_with(&format!("## Log\n\n{line}\n")), "{after}");
+            fs::write(&path, &before).unwrap();
+        }
+    }
+
+    /// Section 4.1 of the session-cycle design for `Add to Log`'s write, and its Undo.
+    #[test]
+    fn a_log_line_follows_the_disk_and_a_failed_write_keeps_the_words() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = sample_campaign(dir.path());
+        let hob = create_entry(&campaign, "Hob", "npc").unwrap();
+        let oren = create_entry(&campaign, "Oren", "npc").unwrap();
+        let path = dir.path().join("NPCs/Hob.md");
+        let reader = || Reader {
+            played: Some("[[Session 1]]".into()),
+            ..Default::default()
+        };
+        let mut lookup = reader();
+        let key = (campaign.id, hob);
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        let item = &index.items[index.position(hob).unwrap()];
+        lookup.open_log(campaign.id, hob, "Hob", "the ropes");
+        lookup.log_fields.get_mut(&key).unwrap().field.words = "Told who burned the ropes.".into();
+
+        // An edit in Obsidian a moment before, while the field holds typed words: the line
+        // goes after it, in the entry's new Log heading.
+        let edited = format!("{}Seen at the ford.\n", fs::read_to_string(&path).unwrap());
+        fs::write(&path, &edited).unwrap();
+        assert!(
+            lookup
+                .add_log_line(&campaign, item, "Told who burned the ropes.")
+                .is_some()
+        );
+        let a = fs::read_to_string(&path).unwrap();
+        assert_eq!(
+            a,
+            format!("{edited}\n## Log\n\n- [[Session 1]]: Told who burned the ropes.\n")
+        );
+        assert!(
+            !lookup.log_fields.contains_key(&key),
+            "Enter closes the field"
+        );
+
+        // Act A in Lookup, an unrelated act B in the World page's reader, then Undo of A: A's
+        // line goes, B's stays.
+        let mut world = reader();
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        let other = &index.items[index.position(oren).unwrap()];
+        let oren_path = dir.path().join("NPCs/Oren.md");
+        let oren_before = fs::read_to_string(&oren_path).unwrap();
+        world
+            .add_log_line(&campaign, other, "Paid the toll.")
+            .unwrap();
+        let oren_after = fs::read_to_string(&oren_path).unwrap();
+        assert_ne!(oren_before, oren_after);
+        assert!(lookup.undo_change(&campaign, hob).is_some());
+        assert_eq!(fs::read_to_string(&path).unwrap(), edited);
+        assert_eq!(fs::read_to_string(&oren_path).unwrap(), oren_after);
+
+        // A failed write names the file, writes nothing, and keeps the field with its words.
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        let item = &index.items[index.position(hob).unwrap()];
+        lookup.open_log(campaign.id, hob, "Hob", "");
+        lookup.log_fields.get_mut(&key).unwrap().field.words = "Kept.".into();
+        let folder = dir.path().join("NPCs");
+        fs::set_permissions(&folder, fs::Permissions::from_mode(0o555)).unwrap();
+        let failed = lookup.add_log_line(&campaign, item, "Kept.");
+        fs::set_permissions(&folder, fs::Permissions::from_mode(0o755)).unwrap();
+        assert!(failed.is_none());
+        assert!(
+            lookup
+                .error
+                .as_deref()
+                .is_some_and(|error| error.contains("NPCs/Hob.md"))
+        );
+        assert_eq!(fs::read_to_string(&path).unwrap(), edited);
+        assert_eq!(lookup.log_fields[&key].field.words, "Kept.");
+
+        // A note that cannot be read, and a note renamed or deleted under the open field: the
+        // act names the file and writes nothing.
+        fs::write(&path, [0xff, 0xfe, b'\n']).unwrap();
+        assert!(lookup.add_log_line(&campaign, item, "Kept.").is_none());
+        assert!(
+            lookup
+                .error
+                .as_deref()
+                .is_some_and(|error| error.contains("NPCs/Hob.md"))
+        );
+        assert_eq!(fs::read(&path).unwrap(), [0xff, 0xfe, b'\n']);
+        fs::remove_file(&path).unwrap();
+        assert!(lookup.add_log_line(&campaign, item, "Kept.").is_none());
+        assert!(
+            lookup
+                .error
+                .as_deref()
+                .is_some_and(|error| error.contains("NPCs/Hob.md"))
+        );
+        assert!(!path.exists());
+        assert_eq!(lookup.log_fields[&key].field.words, "Kept.");
+
+        // A done scene's words fill only an empty field: words the DM typed stay, and nothing
+        // selects them. Clearing Lookup's search keeps them too.
+        lookup.open_log(campaign.id, hob, "Hob", "the ropes");
+        assert_eq!(lookup.log_fields[&key].field.words, "Kept.");
+        lookup.clear();
+        assert_eq!(lookup.log_fields[&key].field.words, "Kept.");
+        // The app gives the reader the session being played again on each frame.
+        lookup.played = Some("[[Session 1]]".into());
+        // Each field keeps its own request to select its words.
+        lookup.open_log(campaign.id, oren, "Oren", "paid the toll");
+        assert!(!lookup.log_fields[&key].select);
+        assert!(lookup.log_fields[&(campaign.id, oren)].select);
+
+        // Typed Log words are unsaved work: the campaign switch's guard and the close warning
+        // count them, by the entry's name. An empty field holds nothing to lose.
+        assert!(lookup.has_unsaved_edits());
+        assert!(
+            lookup
+                .unsaved_edits()
+                .iter()
+                .any(|(id, name)| *id == hob && name == "Hob")
+        );
+        let mut empty = reader();
+        empty.open_log(campaign.id, oren, "Oren", "");
+        assert!(!empty.has_unsaved_edits() && empty.unsaved_edits().is_empty());
+
+        // A copied note in another campaign has the same ID. Its reader shows no field with
+        // this campaign's words, so Enter there cannot write them into the copy.
+        let other_dir = tempfile::tempdir().unwrap();
+        let other = sample_campaign(other_dir.path());
+        fs::create_dir_all(other_dir.path().join("NPCs")).unwrap();
+        fs::write(other_dir.path().join("NPCs/Hob.md"), &edited).unwrap();
+        let index = ContentIndex::load(&[], Some(&other)).unwrap();
+        let copy = &index.items[index.position(hob).unwrap()];
+        let ctx = egui::Context::default();
+        crate::design::theme::install(&ctx);
+        ctx.enable_accesskit();
+        let output = ctx.run(Default::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                lookup.read(ui, copy, &index, Some(&other));
+            });
+        });
+        let nodes = output.platform_output.accesskit_update.unwrap().nodes;
+        assert!(
+            nodes
+                .iter()
+                .any(|(_, node)| node.label() == Some("Edit Hob")),
+            "the copy's reader drew its header"
+        );
+        assert!(
+            !nodes.iter().any(|(_, node)| {
+                node.label() == Some("Log line for Hob")
+                    || node.value().is_some_and(|value| value.contains("Kept."))
+            }),
+            "another campaign's reader shows this campaign's typed words"
+        );
+        assert!(!lookup.log_fields.contains_key(&(other.id, hob)));
+
+        // Every draft that the guards count has a field in view. A renamed played session
+        // does not hide typed words: the stamp is the session at Enter, not the field's key.
+        fs::write(&path, &edited).unwrap();
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        let item = &index.items[index.position(hob).unwrap()];
+        lookup.played = Some("[[Renamed Session]]".into());
+        assert!(lookup.has_unsaved_edits());
+        let output = ctx.run(Default::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                lookup.read(ui, item, &index, Some(&campaign));
+            });
+        });
+        let nodes = output.platform_output.accesskit_update.unwrap().nodes;
+        assert!(
+            nodes
+                .iter()
+                .any(|(_, node)| node.label() == Some("Log line for Hob")),
+            "the guarded words have a field after the session is renamed"
+        );
+
+        // An entry that is gone: its draft waits for no guard, and the pane's footer says the
+        // words once, so nothing is lost without a word.
+        fs::remove_file(&path).unwrap();
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        assert!(index.position(hob).is_none());
+        lookup.forget_gone_log_lines(&index);
+        assert!(lookup.unsaved_edits().iter().all(|(id, _)| *id != hob));
+        let item = &index.items[index.position(oren).unwrap()];
+        let notices: Vec<_> = lookup
+            .footer_lines(item, &index, Some(&campaign), None)
+            .into_iter()
+            .map(|line| line.words)
+            .collect();
+        assert!(
+            notices.contains(
+                &"\u{201c}Hob\u{201d} was deleted. The Log line was not added: \u{201c}Kept.\u{201d}"
+                    .to_owned()
+            ),
+            "{notices:?}"
+        );
+    }
+
+    #[test]
+    fn the_header_shows_the_first_choice_that_fits() {
+        let (log, start, icon) = (108.0, 100.0, Density::Read.control());
+        let both = log + design::XS + start;
+        let cases = [
+            (both, Some(LogAction::Word(log)), Some(start)),
+            (both - 1.0, Some(LogAction::Icon), Some(start)),
+            (
+                icon + design::XS + start,
+                Some(LogAction::Icon),
+                Some(start),
+            ),
+            (icon + design::XS + start - 1.0, None, Some(start)),
+            (start, None, Some(start)),
+            (start - 1.0, Some(LogAction::Icon), None),
+            (icon, Some(LogAction::Icon), None),
+            (icon - 1.0, None, None),
+        ];
+        for (room, shown, started) in cases {
+            assert_eq!(
+                header_actions(room, Some(log), Some(start)),
+                (shown, started),
+                "{room}"
+            );
+        }
+        // An entry with only `Add to Log`: its word, then its icon, then nothing. One with only
+        // `Start fight`: its word, or nothing.
+        assert_eq!(
+            header_actions(log, Some(log), None),
+            (Some(LogAction::Word(log)), None)
+        );
+        assert_eq!(
+            header_actions(log - 1.0, Some(log), None),
+            (Some(LogAction::Icon), None)
+        );
+        assert_eq!(header_actions(icon - 1.0, Some(log), None), (None, None));
+        assert_eq!(
+            header_actions(start, None, Some(start)),
+            (None, Some(start))
+        );
+        assert_eq!(header_actions(start - 1.0, None, Some(start)), (None, None));
     }
 
     #[test]

@@ -22,7 +22,7 @@ use super::{
     fixture::{Seed, World},
     steps::*,
 };
-use eframe::egui::Key;
+use eframe::egui::{self, Key};
 use serde::{Deserialize, Serialize};
 use std::{
     fmt::Write as _,
@@ -36,6 +36,13 @@ use std::{
 const WRITE: &str = "SPLAT_DM_AUDIT_WRITE";
 /// The road table of the journey's encounter checks (F9).
 const ROAD_TABLE: &str = "# Road\n\n## On the road\n\n<!-- splat:rolls key=road dice=1d20 per=day -->\n\n| d20 | On the road |\n| --- | --- |\n| 1-14 | Nothing stirs. |\n| 15-20 | Wolves pick up the trail. |\n";
+/// A house rule note with one tracker and one quick action (F4).
+fn torch_rules(id: uuid::Uuid) -> String {
+    format!(
+        "---\nsplat_schema: 2\nsplat_id: {id}\nsplat_kind: rule\nsplat_name: Torch Rules\n---\n\n<!-- splat:yaml path=splat_members -->\n\n```yaml\ntrackers:\n  torches:\n    name: Torches\n    start: 6\n    min: 0\n    pin: true\n    quick:\n    - label: Burn a torch\n      add: -1\n```\n\n<!-- splat:yaml path=splat_rule -->\n\n```yaml\nmechanic: house:torches\nmode: augment\nimplementation: splat:house_rules\nparameters: {{}}\n```\n"
+    )
+}
+
 /// The one way a feature adds its tasks.
 const ADD_COMMAND: &str = "devenv shell -- audit-freeze add";
 /// How an author records counts that change on purpose.
@@ -320,26 +327,56 @@ fn before_the_session(a: &mut Audit<'_, '_>) {
         ));
         a.click(Find, TONIGHT);
     }
+
+    // F5: what last week left joins tonight's note in one act. The last act of prep: its result
+    // stays under the Last time line until the note changes, and the restart that starts the
+    // evening ends it, so no frozen task after it sees that line.
+    a.task("Carry over what last week left into tonight's note");
+    a.click(Do, "Carry over");
+    a.fact(format!(
+        "tonight's note holds last week's open thread: {}",
+        a.d.app()
+            .sessions
+            .selected_path()
+            .and_then(|path| std::fs::read_to_string(path).ok())
+            .is_some_and(|note| note.contains(MILLER) && note.contains("carried_from: "))
+    ));
 }
 
-/// The Last time line previews only a recap or `What happened`, and last week's words are under
-/// another heading. So the DM opens the last session from its link, reads, and comes back.
+/// Whether the Last time line itself paints last week's words whole.
+fn last_time_shows(d: &Driver<'_>, words: &str) -> bool {
+    d.place_of("Last time:").is_some_and(|label| {
+        let line = egui::Rect::from_x_y_ranges(
+            0.0..=d.window_size().0,
+            label.center().y - crate::design::XL / 2.0..=label.center().y + crate::design::XL / 2.0,
+        );
+        d.painted_in(line).contains(words)
+    })
+}
+
+/// Last week's words are under none of the recap headings, so the Last time line shows the
+/// note's first written line (F5's repair, W5-D5). When the line shows them whole, the DM reads
+/// them there; otherwise the DM opens the last session from its link, reads, and comes back.
 fn recall_last_session(a: &mut Audit<'_, '_>) {
     a.d.expect("Last time:");
+    let shown = last_time_shows(a.d, MILLER);
     a.fact(format!(
-        "the Last time line shows last week's words with no act: {}",
-        a.d.visible_text(MILLER)
+        "the Last time line shows last week's words with no act: {shown}"
     ));
-    a.act(Find, "open last session from Last time", |d| {
-        d.click_link(&format!("Session 1: {LAST_WEEK}"));
-    });
+    if !shown {
+        a.act(Find, "open last session from Last time", |d| {
+            d.click_link(&format!("Session 1: {LAST_WEEK}"));
+        });
+    }
     a.fact(format!(
         "last week's words are in view: {}",
         a.d.visible_text(MILLER)
     ));
-    a.act(Find, "back to tonight's session", |d| {
-        d.click_starting(&format!("Session 2: {TONIGHT_SESSION}"));
-    });
+    if !shown {
+        a.act(Find, "back to tonight's session", |d| {
+            d.click_starting(&format!("Session 2: {TONIGHT_SESSION}"));
+        });
+    }
 }
 
 /// One turn. The player or monster acts, and the DM records the result.
@@ -433,7 +470,18 @@ fn during_the_session(a: &mut Audit<'_, '_>) {
     ));
 
     a.task("Ambush: read the read-aloud text and start the fight");
-    a.click(Nav, &format!("Start fight: {TONIGHT}"));
+    // Review of PR 274, item 1: after the road check, the plan's one-time reveal puts the next
+    // row clear of the footer, so `Start fight` is pressed with no scroll first.
+    let start = format!("Start fight: {TONIGHT}");
+    a.act(Nav, &start, |d| {
+        assert!(
+            d.nodes()
+                .iter()
+                .any(|node| node.name == start && node.fully_in_view()),
+            "{start} is fully in view, so no scroll comes first"
+        );
+        d.click(&start);
+    });
     a.fact(format!(
         "setup shows the read-aloud text: {}",
         a.d.visible_text("Ash falls on the crossing.")
@@ -554,6 +602,38 @@ fn during_the_session(a: &mut Audit<'_, '_>) {
     }
     a.click(Do, "Add Short rest");
 
+    // F4: a house rule's number, between fights. Trackers is a view of Lookup: Ctrl+T, one
+    // press, Ctrl+T.
+    a.setup("the campaign has a house rule note in play", |d| {
+        let campaign = d.app_mut().campaigns.active_campaign().expect("a campaign");
+        let id = splat::character::stable_id("Torch Rules.md");
+        fs::write(campaign.path.join("Torch Rules.md"), torch_rules(id))
+            .expect("write the house rule note");
+        let manifest = campaign.path.join("Campaign.md");
+        let text = fs::read_to_string(&manifest).expect("read Campaign.md");
+        let list = serde_yaml_ng::to_value(vec![serde_json::json!({ "id": id })]).unwrap();
+        let text = splat::content::formats::patch_model(&text, &[("splat_in_play", Some(list))])
+            .expect("put the note in play");
+        fs::write(manifest, text).expect("write Campaign.md");
+        d.app_mut().lookup.refresh();
+        d.settle();
+    });
+    a.task("Mark a house rule's number between fights");
+    a.act(Panel, "Ctrl+T", |d| d.press_ctrl(Key::T));
+    a.click(Do, "Burn a torch");
+    a.act(Panel, "Ctrl+T", |d| d.press_ctrl(Key::T));
+    let ledger =
+        a.d.app_mut()
+            .campaigns
+            .active_campaign()
+            .map(|campaign| campaign.path.join("Trackers.md"))
+            .and_then(|path| fs::read_to_string(path).ok())
+            .unwrap_or_default();
+    a.fact(format!(
+        "the ledger holds the press: {}",
+        ledger.contains("why: Burn a torch")
+    ));
+
     a.task("Next fight: start it, with the party as it stands");
     a.click(Nav, &format!("Start fight: {SECOND}"));
     a.fact(format!(
@@ -667,6 +747,26 @@ fn after_the_session(a: &mut Audit<'_, '_>) {
             .is_some_and(|text| text.contains("[[Timeline#^") && text.contains(TONIGHT))
     ));
 
+    // F7: the fight's link, its XP and its loot in the note, in one act from its row; the last
+    // link of the opened row when the title takes the row's width.
+    a.task("Put the fight's rewards in the note");
+    a.act(Do, "Add rewards", |d| {
+        let on_row = format!("Add rewards: {TONIGHT}");
+        d.click(if d.has(&on_row) {
+            &on_row
+        } else {
+            "Add rewards"
+        });
+    });
+    a.fact(format!(
+        "the note holds the fight's rewards block: {}",
+        a.d.editor_text().is_some_and(|text| {
+            text.split("## Loot and rewards")
+                .nth(1)
+                .is_some_and(|rest| rest.contains(&format!("|{TONIGHT}]]\n  - XP ")))
+        })
+    ));
+
     a.task("Check the party's HP for next time");
     a.click(Nav, NAV_PARTY);
     a.fact(format!(
@@ -676,7 +776,68 @@ fn after_the_session(a: &mut Audit<'_, '_>) {
             .find(|node| node.name.contains("Kestrel Dunmoor ·"))
             .map_or_else(String::new, |node| node.name.clone())
     ));
+
+    // F6 of the session-cycle design: what an NPC said goes in the NPC's own Log, from the
+    // scene that the DM marked done. Counted from the plan, as the design counts it.
+    a.setup("the plan holds a done scene with Hobb the Miller, in view", |d| {
+        let campaign = d.app_mut().campaigns.active_campaign().expect("a campaign");
+        let npc = campaign.path.join(HOBB_PATH);
+        fs::create_dir_all(npc.parent().expect("a folder")).expect("make the NPC folder");
+        fs::write(
+            &npc,
+            format!(
+                "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: world\nsplat_name: {HOBB}\nsplat_world: {{type: npc, status: alive}}\n---\n\n# {HOBB}\n\nKeeps the mill at the ford.\n",
+                splat::character::stable_id(HOBB_PATH)
+            ),
+        )
+        .expect("write the NPC");
+        d.app_mut().lookup.refresh();
+        d.settle();
+        d.click(NAV_SESSIONS);
+        let body = d.editor_text().expect("tonight's note");
+        d.replace_editor_text(&body.replacen(
+            "## Plan for tonight\n",
+            &format!("## Plan for tonight\n\n- [x] [[{HOBB}]]\n"),
+            1,
+        ));
+        d.press_ctrl(Key::S);
+        show_plan(d);
+        // By now the plan holds an opened fight with its rewards, so its rows pass the pane and
+        // the scenes fold to `N scenes` (F3). The DM opens them with that link.
+        let fold = d
+            .nodes()
+            .into_iter()
+            .find(|node| {
+                node.name.split_once(' ').is_some_and(|(n, word)| {
+                    n.parse::<usize>().is_ok() && ["scene", "scenes"].contains(&word)
+                })
+            })
+            .map(|node| node.name);
+        if let Some(fold) = fold {
+            d.click(&fold);
+        }
+        d.expect(&format!("Done: {HOBB}"));
+    });
+    a.task("Put what an NPC said in the NPC's own note");
+    a.click(Panel, &format!("Add to Log: {HOBB}"));
+    a.act(Do, "type the line", |d| {
+        d.type_text("Named the informer at the ford.")
+    });
+    a.act(Do, "add it", |d| d.press(Key::Enter));
+    a.act(Panel, "close Lookup", |d| d.press(Key::Escape));
+    a.fact(format!(
+        "the NPC's note holds the line: {}",
+        a.d.app()
+            .campaigns
+            .active_campaign()
+            .and_then(|campaign| fs::read_to_string(campaign.path.join(HOBB_PATH)).ok())
+            .is_some_and(|text| text.contains(": Named the informer at the ford.\n"))
+    ));
 }
+
+/// The World NPC of F6's task, whom a done scene links.
+const HOBB: &str = "Hobb the Miller";
+const HOBB_PATH: &str = "NPCs/Hobb the Miller.md";
 
 /// Each counted task's cost, in the order played. Set-up rows count for nothing.
 fn counts(record: &Record) -> Vec<TaskCount> {
