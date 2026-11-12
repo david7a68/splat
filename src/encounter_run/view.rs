@@ -431,7 +431,6 @@ impl Run {
         match self.apply(command) {
             Err(error) => self.error = Some(error),
             Ok(()) => {
-                self.condition.clear();
                 self.note.clear();
                 // Beside a panel, every step gives the keyboard back, or words typed next
                 // would go nowhere.
@@ -511,7 +510,6 @@ impl Run {
         self.clear_targets();
         if self.selected != index {
             self.selected = index;
-            self.condition.clear();
             self.note.clear();
             self.amount.clear();
             self.scroll_to_selected = true;
@@ -1832,11 +1830,7 @@ impl Run {
             self.effect_fields.entry(key.clone()).or_default().focus = true;
             self.effect_open = Some(key);
         } else {
-            // One draft: the row's waiting words move to the Conditions tab's field.
-            let key = &self.state.participants[self.selected].key;
-            if let Some(field) = self.effect_fields.remove(key) {
-                self.condition = field.words;
-            }
+            // The Conditions tab's field shows the same draft, the participant's.
             self.open_conditions_tab();
             self.focus_other_effect = true;
         }
@@ -1874,7 +1868,9 @@ impl Run {
     /// beside the roster and needs no typing, so a mistyped name cannot lose its sync.
     fn conditions_tab(&mut self, ui: &mut egui::Ui, index: usize) {
         let mut command = None;
+        let mut added = false;
         let p = &self.state.participants[index];
+        let key = p.key.clone();
         egui::ScrollArea::vertical()
             .id_salt("run_conditions")
             .auto_shrink([false, false])
@@ -1940,7 +1936,7 @@ impl Run {
                         command = Some(if level == 0 {
                             Command::RemoveCondition(index, at)
                         } else {
-                            set_exhaustion(index, at, level as u8)
+                            set_exhaustion(index, level as u8)
                         });
                     }
                 }
@@ -1966,16 +1962,19 @@ impl Run {
                     command = Some(Command::RemoveCondition(index, custom[at].0));
                 }
                 let focus = std::mem::take(&mut self.focus_other_effect);
-                if other_effect_field(ui, &mut self.condition, width, focus) {
+                // The participant's one draft: the dock's field shows the same words.
+                let draft = self.effect_fields.entry(p.key.clone()).or_default();
+                if other_effect_field(ui, &mut draft.words, width, focus) {
                     // Typed as a level, it is still the one Exhaustion a creature has.
                     // Words with a time go through the one reader, which keeps the level.
-                    let typed = self.condition.trim();
+                    let typed = draft.words.trim().to_owned();
                     let level = typed.starts_with("Exhaustion")
-                        && !super::Condition::read(typed).is_effect();
+                        && !super::Condition::read(&typed).is_effect();
                     command = Some(match exhausted.filter(|_| level) {
-                        Some(at) => set_exhaustion(index, at, exhaustion_level(typed)),
-                        None => Command::Condition(index, self.condition.clone()),
+                        Some(_) => set_exhaustion(index, exhaustion_level(&typed)),
+                        None => Command::Condition(index, typed),
                     });
+                    added = true;
                 }
                 design::help(
                     ui,
@@ -1984,6 +1983,10 @@ impl Run {
             });
         if let Some(command) = command {
             self.run_command(command);
+            // Added words leave the draft; words the run refused stay, with the reason.
+            if added && self.error.is_none() {
+                self.effect_fields.remove(&key);
+            }
         }
     }
 
@@ -5481,11 +5484,9 @@ pub(super) struct ExhaustionDrag {
 }
 
 /// One step of undo: the old level goes, and the new one comes.
-fn set_exhaustion(index: usize, at: usize, level: u8) -> Command {
-    Command::Several(vec![
-        Command::RemoveCondition(index, at),
-        Command::Condition(index, format!("Exhaustion ({level})")),
-    ])
+/// The one Exhaustion entry at another level. Its time stays.
+fn set_exhaustion(index: usize, level: u8) -> Command {
+    Command::Condition(index, format!("Exhaustion ({level})"))
 }
 
 /// The line under a character's card. The notice above it, when it shows, already says the
@@ -10184,6 +10185,25 @@ mod tests {
         assert_eq!(
             run.borrow().state.participants[0].conditions,
             ["Exhaustion (7) 10".to_string()]
+        );
+        // One entry (review of PR 276): the stepper keeps its time, and another level typed
+        // with a time changes the one entry.
+        harness.get_by_label("Decrease Exhaustion level").click();
+        harness.run_steps(2);
+        assert_eq!(
+            run.borrow().state.participants[0].conditions,
+            ["Exhaustion (6) 10".to_string()]
+        );
+        assert_eq!(
+            run.borrow().undo_label(),
+            "Undo: exhaustion 7 → 6 on Guard 1"
+        );
+        run.borrow_mut()
+            .apply(Command::Condition(0, "Exhaustion (5) 8 rounds".into()))
+            .unwrap();
+        assert_eq!(
+            run.borrow().state.participants[0].conditions,
+            ["Exhaustion (5) 8".to_string()]
         );
     }
 

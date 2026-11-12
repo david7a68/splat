@@ -770,7 +770,6 @@ pub(crate) struct Run {
     dock_roll: Option<crate::rolls::Rolled>,
     /// Digits typed so far. Empty after each use, so a wrong number cannot repeat.
     amount: String,
-    condition: String,
     note: String,
     dice: String,
     outcome: String,
@@ -1242,7 +1241,6 @@ impl Run {
             saves: BTreeMap::new(),
             dock_roll: None,
             amount: String::new(),
-            condition: String::new(),
             note: String::new(),
             dice: String::new(),
             outcome: String::new(),
@@ -2536,17 +2534,30 @@ impl Run {
                     return Err("Enter a condition name.".into());
                 }
                 match p.conditions.iter().position(|c| c.same(condition.name())) {
-                    // Words already on the row change their time and add nothing.
-                    Some(at) if condition.is_effect() => {
-                        let mut changed = condition;
-                        if let Condition::Effect(effect) = &mut changed {
-                            effect.name = p.conditions[at].name().to_owned();
-                        }
-                        let words = changed.words();
+                    // Words already on the row change their time and add nothing. Exhaustion
+                    // at another level is the same entry: its level changes, and its time
+                    // stays unless the words give one.
+                    Some(at) => {
+                        let old = p.conditions[at].clone();
+                        let level = old.name() != condition.name()
+                            && old.name().to_lowercase().starts_with("exhaustion");
+                        let name = if level { condition.name() } else { old.name() }.to_owned();
+                        let timed = condition.is_effect();
+                        let changed = if timed {
+                            condition.renamed(name)
+                        } else if level {
+                            old.clone().renamed(name)
+                        } else {
+                            return Err("That condition is already recorded.".into());
+                        };
+                        let line = if timed {
+                            format!("Effect changed: {}.", changed.words())
+                        } else {
+                            format!("Condition changed: {} → {}.", old.words(), changed.words())
+                        };
                         p.conditions[at] = changed;
-                        format!("Effect changed: {words}.")
+                        line
                     }
-                    Some(_) => return Err("That condition is already recorded.".into()),
                     None => {
                         let line = format!("{} added: {}.", kind(&condition), condition.words());
                         p.conditions.push(condition);
@@ -2731,10 +2742,30 @@ impl Run {
                 name(i),
                 if *present { "present" } else { "absent" }
             ),
-            Command::Condition(i, typed) => match Condition::read(typed) {
-                Condition::Effect(effect) => format!("effect {} on {}", effect.name, name(i)),
-                Condition::Label(words) => format!("{words} on {}", name(i)),
-            },
+            Command::Condition(i, typed) => {
+                let read = Condition::read(typed);
+                let old = self
+                    .state
+                    .participants
+                    .get(*i)
+                    .and_then(|p| p.conditions.iter().find(|c| c.same(read.name())));
+                match (read, old) {
+                    (Condition::Label(words), Some(old))
+                        if old.name() != words && words.starts_with("Exhaustion") =>
+                    {
+                        format!(
+                            "exhaustion {} → {} on {}",
+                            view::exhaustion_level(old.name()),
+                            view::exhaustion_level(&words),
+                            name(i)
+                        )
+                    }
+                    (Condition::Effect(effect), _) => {
+                        format!("effect {} on {}", effect.name, name(i))
+                    }
+                    (Condition::Label(words), _) => format!("{words} on {}", name(i)),
+                }
+            }
             Command::RemoveCondition(i, at) => match condition(i, at) {
                 Some(old) if old.name().starts_with("Exhaustion") => format!(
                     "exhaustion {} → 0 on {}",
@@ -3155,11 +3186,12 @@ fn apply_sheet_values(
                 } else {
                     name.into()
                 };
+                // By what it is, whatever its level: Exhaustion at a new level keeps its time.
                 let kept = official
                     .iter()
-                    .position(|c| recognized_condition(c.name()) == recognized_condition(&words));
+                    .position(|c| recognized_condition(c.name()).map(|(id, _)| id) == Some(id));
                 p.conditions.push(match kept {
-                    Some(at) => official.remove(at),
+                    Some(at) => official.remove(at).renamed(words),
                     None => Condition::Label(words),
                 });
             }
@@ -4333,7 +4365,6 @@ impl Run {
             saves: BTreeMap::new(),
             dock_roll: None,
             amount: String::new(),
-            condition: String::new(),
             note: String::new(),
             dice: String::new(),
             outcome: String::new(),
@@ -7493,6 +7524,14 @@ mod tests {
                 .log
                 .iter()
                 .any(|line| line.contains("Prone, 7 rounds left removed"))
+        );
+        // A sheet that changes Exhaustion's level keeps its one entry and its time.
+        run.state.participants[0].conditions = vec![Condition::read("Exhaustion (2) 10 rounds")];
+        let values = BTreeMap::from([("conditions".into(), serde_json::json!({"4": 3}))]);
+        apply_sheet_values(&mut run.state.participants[0], &values, None);
+        assert_eq!(
+            run.state.participants[0].conditions,
+            vec!["Exhaustion (3) 10"]
         );
     }
     #[test]

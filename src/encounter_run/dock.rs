@@ -233,7 +233,13 @@ impl Run {
                 command,
                 Command::Damage(..) | Command::Heal(..) | Command::TempHp(..) | Command::Several(_)
             );
+            let added = matches!(command, Command::Condition(..));
             self.run_command(command);
+            // Added words leave the participant's draft; words the run refused stay.
+            if added && self.error.is_none() {
+                let key = &self.state.participants[index].key;
+                self.effect_fields.remove(key);
+            }
             if applied {
                 self.amount.clear();
                 self.clear_targets();
@@ -280,10 +286,12 @@ impl Run {
         let words = field.words.trim().to_owned();
         let mut command = None;
         if result.enter || (escape && result.field.lost_focus()) {
+            // Enter's words leave the draft once the run takes them (`dock`); Escape clears.
             if result.enter && !words.is_empty() {
                 command = Some(Command::Condition(index, words));
+            } else {
+                field.clear();
             }
-            field.clear();
             self.effect_open = None;
             self.focus_amount = true;
         } else if result.field.lost_focus() {
@@ -361,7 +369,6 @@ impl Run {
             match self.roll_dice(&expression) {
                 Err(error) => self.error = Some(error),
                 Ok(()) => {
-                    self.condition.clear();
                     self.note.clear();
                 }
             }
@@ -560,8 +567,9 @@ mod tests {
             harness.get_by_label(field).value().as_deref(),
             Some("Haste")
         );
-        // One draft: where Effect has no room, `E` opens the Conditions tab's field with the
-        // row's waiting words, and the dock keeps no second copy.
+        // One draft, the participant's: where Effect has no room, `E` opens the Conditions
+        // tab's field on the same words, and Next turn or another selection keeps them for
+        // that participant (review of PR 276, round 1).
         harness.key_press(egui::Key::Escape);
         harness.run_steps(2);
         harness.get_by_label("Effect: words for this row").click();
@@ -570,10 +578,14 @@ mod tests {
         harness.run_steps(1);
         run.borrow_mut().run_command(Command::Next);
         harness.run_steps(2);
-        run.borrow_mut().select(0);
-        run.borrow_mut().effect_in_dock = false;
-        run.borrow_mut().open_effect_field();
-        assert_eq!(run.borrow().condition, "Haste");
-        assert!(run.borrow().effect_fields.is_empty());
+        let draft = |run: &Run| run.effect_fields.get(&key).map(|field| field.words.clone());
+        for _ in 0..2 {
+            run.borrow_mut().select(0);
+            run.borrow_mut().effect_in_dock = false;
+            run.borrow_mut().open_effect_field();
+            assert_eq!(draft(&run.borrow()).as_deref(), Some("Haste"));
+            run.borrow_mut().run_command(Command::Next);
+            run.borrow_mut().select(1);
+        }
     }
 }

@@ -77,9 +77,22 @@ impl Condition {
         }
     }
 
-    /// Two entries for one condition: `poisoned` and `Poisoned` are one.
+    /// Two entries for one condition: `poisoned` and `Poisoned` are one, and so are
+    /// `Exhaustion (2)` and `Exhaustion (3)`, which differ only by level.
     pub(crate) fn same(&self, other: &str) -> bool {
-        same_condition(self.name(), other)
+        let identity = |name: &str| {
+            let exhaustion = name.trim().to_lowercase().starts_with("exhaustion");
+            if exhaustion { "exhaustion" } else { name }.to_owned()
+        };
+        same_condition(&identity(self.name()), &identity(other))
+    }
+
+    /// The same entry under other words, such as Exhaustion at another level: its time stays.
+    pub(crate) fn renamed(self, name: String) -> Self {
+        match self {
+            Self::Label(_) => Self::Label(name),
+            Self::Effect(effect) => Self::Effect(Effect { name, ..effect }),
+        }
     }
 
     /// The whole words, for the hover, the accessible name, the notice line and every reader
