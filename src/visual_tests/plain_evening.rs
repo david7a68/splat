@@ -2910,15 +2910,15 @@ mod allowed_classes {
                 || name == DETAIL
         }
 
+        /// A scene row: its box's place before and after, and the bottom after of its own items.
+        type SceneRow = ([f32; 4], [f32; 4], f32);
+
         /// The scene rows of the view, top down: each box's place before and after, and the
         /// bottom after of the row's own items. `None` when the rows change their order or
         /// overlap.
-        fn scene_rows_of(
-            d: &Difference,
-            rows: &[AllowedRow],
-        ) -> Option<Vec<([f32; 4], [f32; 4], f32)>> {
+        fn scene_rows_of(d: &Difference, rows: &[AllowedRow]) -> Option<Vec<SceneRow>> {
             let boxes = boxes(d, rows);
-            let mut out: Vec<([f32; 4], [f32; 4], f32)> = Vec::new();
+            let mut out: Vec<SceneRow> = Vec::new();
             for (k, (old, new)) in boxes.iter().enumerate() {
                 let next = boxes.get(k + 1);
                 let inside = |y: f32, top: f32, end: Option<f32>| {
@@ -3048,7 +3048,7 @@ mod allowed_classes {
             let Some(at) = scenes.iter().rposition(|(old, ..)| old[1] <= a[1] + 0.5) else {
                 return false;
             };
-            let moved = |(old, new, _): &([f32; 4], [f32; 4], f32)| old[1] - new[1];
+            let moved = |(old, new, _): &SceneRow| old[1] - new[1];
             if a[1] < scenes[at].0[1] + BOX + 2.0 {
                 return near(shift, moved(&scenes[at]));
             }
