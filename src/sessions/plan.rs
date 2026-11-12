@@ -1303,7 +1303,7 @@ impl Sessions {
                 );
                 let fights = played_fights(book);
                 let (xp, xp_sum, unknown) = found.xp_line();
-                let mut made = None;
+                let (mut made, mut refused) = (None, None);
                 let result = draft.apply(note, Apply::Now, |text| {
                     // Put there on disk a moment ago: the row then says `In notes`.
                     if crate::sessions::listed_references(text).contains(&event) {
@@ -1315,7 +1315,14 @@ impl Sessions {
                         crate::sessions::rewards_with_xp(notes, &|id| fights.contains(id));
                     let xp_shown = (with_xp != Some(false)).then_some(xp.as_str());
                     let block = rewards_block(&reference, xp_shown, &found.loot);
-                    let (after, written, at) = crate::sessions::add_rewards(text, &event, &block);
+                    let (after, written, at) =
+                        match crate::sessions::add_rewards(text, &event, &block) {
+                            Ok(made) => made,
+                            Err(why) => {
+                                refused = Some(why);
+                                return None;
+                            }
+                        };
                     // The note beside the plan shows the block's last line.
                     let shown = after[..at + block.len() - 1].chars().count();
                     made = Some((written, with_xp, shown));
@@ -1336,6 +1343,10 @@ impl Sessions {
                         },
                     );
                     self.caret_to_show = Some(shown);
+                }
+                if let Some(why) = refused {
+                    rewards.fault = Some((note, event, why.to_owned(), draft.revision()));
+                    return;
                 }
                 (event, result.map(drop))
             }
@@ -4043,6 +4054,41 @@ mod tests {
         harness.run_steps(2);
         assert!(shown(&harness, "In notes"));
         assert!(harness.query_by_label("Undo rewards").is_none());
+
+        // The act reads its new words again before it writes. A block that would be code in a
+        // code block that is not closed writes nothing, says so, and a second press neither.
+        let restarted = read();
+        let prefix = &restarted[..restarted.len() - crate::sessions::body_of(&restarted).len()];
+        let open_fence = format!("{prefix}# Session\n\n```\nunfinished example\n");
+        fs::write(&note.path, &open_fence).unwrap();
+        harness.state_mut().0.draft.as_mut().unwrap().follow_disk();
+        harness.run_steps(2);
+        for _ in 0..2 {
+            harness.get_by_label("Add rewards: Bridge").click();
+            harness.run_steps(2);
+            assert_eq!(read(), open_fence);
+            assert!(shown(&harness, crate::sessions::REWARDS_IN_CODE));
+        }
+        // Undo compares whole lines: a one-line block moved into a quote just before a heading
+        // is not the act's any more. The file keeps its bytes, and the row says so.
+        fs::write(
+            &note.path,
+            format!("{prefix}# Session\n\n- [[Timeline#^{a}|Bridge]]\n  - 30 gp\n"),
+        )
+        .unwrap();
+        harness.get_by_label("Add rewards: Shrine").click();
+        harness.run_steps(2);
+        let single = format!("- [[Timeline#^{b}|Shrine]]\n");
+        assert!(read().ends_with(&single));
+        let quoted = format!("{prefix}# Session\n\n> {single}## Keep this heading\nKeep this.\n");
+        fs::write(&note.path, &quoted).unwrap();
+        harness.get_by_label("Undo rewards").click();
+        harness.run_steps(2);
+        assert_eq!(read(), quoted);
+        assert!(shown(&harness, "That line changed on disk."));
+        fs::write(&note.path, &restarted).unwrap();
+        harness.state_mut().0.draft.as_mut().unwrap().follow_disk();
+        harness.run_steps(2);
 
         // A run that cannot be read: nothing is written, and the row says why.
         let before = read();

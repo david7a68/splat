@@ -1185,7 +1185,11 @@ or moves the block loses nothing. Splat reads the note's real Markdown blocks on
 `src/sessions.rs`), and the insertion, `In notes`, the XP choice and Undo all ask that one reading. **Text in a
 code fence is never a heading and never a block.** **A list item inside a callout or a quote is a block**, as
 the DM sees it: the row says `In notes`, the XP search reads it, and Undo leaves it, because it is no longer
-the item that the act wrote.
+the item that the act wrote. **The act reads its own result again before it writes:** it writes only when the
+new words hold the fight's one block, exactly as the act made it, under the heading, so `In notes` is true
+after the write. Otherwise it writes nothing and says why under the row: `A code block in the note is not
+closed, so nothing was written. Close it, then add rewards.`, or, when no reason is known, `The note would not
+show these rewards as a list, so nothing was written.`
 
 **Where it lives.** On the Session page, on the plan row of a fight that has ended. That row's action band
 holds only the menu today (`src/sessions/plan.rs:692-694`), and its title has the rest of the line.
@@ -1290,12 +1294,16 @@ The last line of the first block is one that the DM typed. An XP line is a line 
 starts with `XP`; the sum reads its first number, so `(XP 200)` is not counted.
 
 **Undo.** `Undo rewards` acts only while the block is still the complete, unchanged list item that the act
-wrote: an item that the DM typed under it, also after a blank line, is part of it, as CommonMark reads it.
+wrote: an item that the DM typed under it, also after a blank line, is part of it, as CommonMark reads it. The
+bytes from the start of the block's first line to the end of its last line must be exactly the bytes that the
+act wrote, so a quote mark, an indent or any other change refuses it.
 Then it removes that item, and the heading only when the act added the heading and nothing else is under it.
 When the block changed, Undo writes nothing: the result and its Undo end, and a press that meets the change
 on disk says `That line changed on disk.` under the row, the words of the other note acts. By the lead's
 ruling for P7 it is kept by the note's ID and the fight, not by the note's whole text: another act, an edit
-elsewhere in the note, another session or another page leaves it. **Keyboard.** Tab reaches `Add rewards` in the row or among the opened row's links, and the result's
+elsewhere in the note, another session or another page leaves it. When act A added the heading and act B
+wrote under it, Undo of A keeps the heading for B, and Undo of B keeps it too: only A's Undo knew that the
+heading was the act's, and its bytes are the same as a template's heading. **Keyboard.** Tab reaches `Add rewards` in the row or among the opened row's links, and the result's
 action after its words.
 
 **What stays with the DM.** Who earned XP, whether a creature that fled counts, how loot is shared, and when

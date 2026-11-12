@@ -1617,8 +1617,11 @@ under Loot and rewards.`, the XP choice, `XP tonight: <sum> for <n> fights.` fro
 loot rolls not made and the awards not known. `Undo rewards` takes back exactly that block while it is still the
 complete, unchanged list item that the act wrote, also after another act, an edit elsewhere in the note, another
 session or another page; it is kept by the note's ID and the fight. It takes the heading too only when the act
-added it and nothing else is under it. When the block changed, it writes nothing and says `That line changed on
-disk.` under the row. A fight whose reference starts a list item anywhere in the note, also in a callout, says
+added it and nothing else is under it. It compares whole lines: the bytes from the start of the block's first
+line to the end of its last line must be the act's. When the block changed, it writes nothing and says `That line
+changed on disk.` under the row. The act reads its new words again before it writes, and writes only when they
+hold the fight's one block under the heading; else it writes nothing and says why under the row (a code block
+that is not closed is named). A fight whose reference starts a list item anywhere in the note, also in a callout, says
 `In notes` (`design::status`, `icons::OK`, `document.saved`) in the action's place, in muted words in the opened
 row, or as the last line of the row's menu. Splat reads the note's Markdown blocks: text in a code fence is never
 a heading and never a block. The note beside the plan

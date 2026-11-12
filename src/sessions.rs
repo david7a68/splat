@@ -1835,6 +1835,8 @@ struct Outline<'a> {
     headings: Vec<(pulldown_cmark::HeadingLevel, std::ops::Range<usize>)>,
     /// Each rewards block, in the note's order.
     blocks: Vec<Block<'a>>,
+    /// Each code block, with its fences.
+    code: Vec<std::ops::Range<usize>>,
 }
 
 impl Outline<'_> {
@@ -1879,6 +1881,7 @@ fn outline(text: &str) -> Outline<'_> {
     let mut out = Outline {
         headings: Vec::new(),
         blocks: Vec::new(),
+        code: Vec::new(),
     };
     let mut items: Vec<Open> = Vec::new();
     let mut quotes = 0;
@@ -1891,6 +1894,7 @@ fn outline(text: &str) -> Outline<'_> {
                 xp: None,
             }),
             Event::Start(Tag::Paragraph) => {}
+            Event::Start(Tag::CodeBlock(_)) => out.code.push(range),
             Event::Start(Tag::BlockQuote(_)) => quotes += 1,
             Event::End(TagEnd::BlockQuote(_)) => quotes -= 1,
             Event::Start(Tag::Heading { level, .. }) if items.is_empty() && quotes == 0 => {
@@ -2016,9 +2020,22 @@ pub struct Rewarded {
     block: String,
 }
 
+/// Why `Add rewards` wrote nothing: the block would be in a code block that is not closed.
+pub const REWARDS_IN_CODE: &str =
+    "A code block in the note is not closed, so nothing was written. Close it, then add rewards.";
+/// Why `Add rewards` wrote nothing, when no other reason is known.
+pub const REWARDS_NOT_READ: &str =
+    "The note would not show these rewards as a list, so nothing was written.";
+
 /// Put a block for the fight `id` at the end of `## Loot and rewards`, after its last line,
 /// or add that heading at the end of the note. `block` is whole lines, each ending in `\n`.
-pub fn add_rewards(text: &str, id: &str, block: &str) -> (String, Rewarded, usize) {
+/// The new words are read again first: unless they hold exactly this block, as the act's
+/// one block for the fight, under that heading, nothing is written and the reason is given.
+pub fn add_rewards(
+    text: &str,
+    id: &str,
+    block: &str,
+) -> Result<(String, Rewarded, usize), &'static str> {
     let found = outline(text);
     let heading = found.headings.iter().find(|(_, range)| {
         text[range.clone()]
@@ -2062,12 +2079,35 @@ pub fn add_rewards(text: &str, id: &str, block: &str) -> (String, Rewarded, usiz
         block: block.to_owned(),
     };
     let block_at = at + written.lead.len();
-    (after, written, block_at)
+    let read = outline(&after);
+    let mut matching = read.blocks.iter().filter(|found| found.id == id);
+    let section = read.headings.iter().find(|(_, range)| {
+        after[range.clone()]
+            .trim()
+            .eq_ignore_ascii_case(REWARDS_HEADING)
+    });
+    let ours = matching.next().is_some_and(|found| {
+        found.range == (block_at..block_at + block.len())
+            && section.is_some_and(|(_, heading)| {
+                heading.end <= block_at && block_at < read.section_end(heading.end, &after)
+            })
+    }) && matching.next().is_none();
+    if !ours {
+        let in_code = read.code.iter().any(|code| code.contains(&block_at));
+        return Err(if in_code {
+            REWARDS_IN_CODE
+        } else {
+            REWARDS_NOT_READ
+        });
+    }
+    Ok((after, written, block_at))
 }
 
 /// The note with the block taken back, while it is still the complete, unchanged list item
 /// that `Add rewards` wrote: the one block with its fight's ID holds exactly those lines, and
-/// no item, also after a blank line, joined it. The heading that the act added goes too while
+/// no item, also after a blank line, joined it. The bytes from the start of its first line to
+/// the end of its last line must be the act's bytes: a quote mark or an indent before it
+/// makes them differ. The heading that the act added goes too while
 /// nothing else is under it. Another lead goes while no line follows the block before a blank
 /// line or the end, or the blank line of a block that it followed and that is gone. `None`
 /// when the block changed: then nothing is undone.
@@ -2075,7 +2115,8 @@ pub fn remove_rewards(text: &str, written: &Rewarded) -> Option<String> {
     let found = outline(text);
     let mut matching = found.blocks.iter().filter(|block| block.id == written.id);
     let block = matching.next()?;
-    if matching.next().is_some() || text[block.range.clone()] != written.block {
+    let line = text[..block.range.start].rfind('\n').map_or(0, |n| n + 1);
+    if matching.next().is_some() || text[line..block.range.end] != written.block {
         return None;
     }
     let rest = &text[block.range.end..];
@@ -2114,14 +2155,14 @@ mod tests {
         let b = "- [[Timeline#^t-b|Shrine]]\n  - Iron key\n";
         let template =
             "# Session 2\n\n## What happened\n\n## Loot and rewards\n\n## Open threads\n\n";
-        let (one, written, at) = add_rewards(template, "t-a", a);
+        let (one, written, at) = add_rewards(template, "t-a", a).unwrap();
         assert_eq!(
             one,
             "# Session 2\n\n## What happened\n\n## Loot and rewards\n\n- [[Timeline#^t-a|Bridge]]\n  - XP 200 for 1 at 0 HP\n  - 30 gp\n\n## Open threads\n\n"
         );
         assert_eq!(&one[at..at + a.len()], a);
         // The next block follows the first.
-        let (two, second, _) = add_rewards(&one, "t-b", b);
+        let (two, second, _) = add_rewards(&one, "t-b", b).unwrap();
         assert!(two.contains(&format!("\n\n{a}{b}\n## Open threads")));
         // A: add, B: another act on another line, then Undo of A. B's change stays.
         let other = two.replace("## What happened\n", "## What happened\n\nThe ford held.\n");
@@ -2159,7 +2200,7 @@ mod tests {
             "",
             "# S\n\n",
         ] {
-            let (with, written, _) = add_rewards(note, "t-a", a);
+            let (with, written, _) = add_rewards(note, "t-a", a).unwrap();
             assert!(
                 with.ends_with(&format!("{REWARDS_HEADING}\n\n{a}")),
                 "{with:?}"
@@ -2171,7 +2212,7 @@ mod tests {
             "# S\n\n## Loot and rewards",
             "# S\n\n## Loot and rewards\n\nTyped",
         ] {
-            let (with, written, _) = add_rewards(note, "t-a", a);
+            let (with, written, _) = add_rewards(note, "t-a", a).unwrap();
             assert!(with.ends_with(&format!("\n{a}")), "{with:?}");
             assert_eq!(remove_rewards(&with, &written).as_deref(), Some(note));
         }
@@ -2183,7 +2224,7 @@ mod tests {
         // Text in a code fence is never a heading and never a block.
         let fenced =
             "# Session\n\n```markdown\n## Loot and rewards\n```\n\n## Open threads\n\nKeep this.\n";
-        let (with, _, _) = add_rewards(fenced, "t-a", a);
+        let (with, _, _) = add_rewards(fenced, "t-a", a).unwrap();
         assert!(
             with.ends_with(&format!("\n{REWARDS_HEADING}\n\n{a}")),
             "a fenced heading is not the section: {with:?}"
@@ -2200,9 +2241,36 @@ mod tests {
         assert!(listed_references(&callout).contains("t-a"), "{callout:?}");
         // An item that the DM typed under the block after a blank line is the block's, as
         // CommonMark reads it: Undo takes back nothing.
-        let (alone, written, _) = add_rewards("# Session\n", "t-a", a);
+        let (alone, written, _) = add_rewards("# Session\n", "t-a", a).unwrap();
         let child = format!("{alone}\n  - Varra's signet ring\n");
         assert_eq!(remove_rewards(&child, &written), None, "{child:?}");
+        // Undo compares the bytes from the start of the block's first line to the end of its
+        // last line: a quote mark or an indent before a one-line block makes them differ.
+        let single = "- [[Timeline#^t-a|Bridge]]\n";
+        let (_, one_line, _) = add_rewards("# Session\n", "t-a", single).unwrap();
+        for moved in [
+            format!("> {single}## Keep this heading\nKeep this.\n"),
+            format!("- Parent\n  {single}\nKeep this.\n"),
+        ] {
+            assert_eq!(remove_rewards(&moved, &one_line), None, "{moved:?}");
+        }
+        // Rewards for A, then B, Undo A, Undo B: the heading that A's act added stays. Only A's
+        // Undo knew that it was the act's; its bytes are those of a template's heading.
+        let (two, second, _) = add_rewards(&alone, "t-b", &a.replace("t-a", "t-b")).unwrap();
+        let without_a = remove_rewards(&two, &written).unwrap();
+        assert_eq!(
+            remove_rewards(&without_a, &second).as_deref(),
+            Some("# Session\n\n## Loot and rewards\n")
+        );
+        // The act reads its new words again: a block that would not be the fight's block under
+        // the heading is refused, with the reason when it is known.
+        for (note, why) in [
+            ("# Session\n\n```\nunfinished example\n", REWARDS_IN_CODE),
+            ("## Loot and rewards\n\n~~~\nopen\n", REWARDS_IN_CODE),
+            ("# Session\n\n<!-- a draft\n", REWARDS_NOT_READ),
+        ] {
+            assert_eq!(add_rewards(note, "t-a", a), Err(why), "{note:?}");
+        }
         // Words typed under the act's heading keep it: Undo takes back the block alone.
         let words = format!("{alone}\nVarra's signet ring\n");
         assert_eq!(
