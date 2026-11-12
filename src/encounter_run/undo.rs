@@ -39,8 +39,9 @@ const SLOT: usize = 2 * (std::mem::size_of::<serde_yaml_ng::Value>() + 16);
 /// The most a step's text can grow when it is decoded: a few bytes of text name one slot.
 const DECODED: usize = 64;
 
-/// The state before each step, oldest first, with each step's name and whether a sheet made it.
-pub(super) type History = (Vec<State>, Vec<String>, Vec<bool>);
+/// The state before each step, oldest first, with each step's name, whether a sheet made it,
+/// and the words in its name that name the row it acted on (`Step::target`).
+pub(super) type History = (Vec<State>, Vec<String>, Vec<bool>, Vec<Option<String>>);
 
 /// The file's form. It is written from steps that are already text, and read as the newest
 /// steps, still as text.
@@ -195,6 +196,18 @@ impl Lines {
 }
 
 impl Step {
+    /// The row this step acted on, as its own data says: the one row it changed, by its
+    /// place, named as the run names that row (what a row is stays the run's, as in `before`),
+    /// when the step's name names it at its start or end (`7 damage to Guard 1`, `Guard 1
+    /// absent`). The file keeps no more; a step on no row, or on several, has none.
+    fn target(&self, after: &State) -> Option<String> {
+        let [at] = self.rows.keys().collect::<Vec<_>>()[..] else {
+            return None;
+        };
+        let name = &after.participants.get(*at)?.name;
+        (self.label.ends_with(name.as_str()) || self.label.starts_with(name.as_str()))
+            .then(|| name.clone())
+    }
     fn of(before: &State, after: &State, label: &str, from_sheet: bool) -> Self {
         // Every field is named, so that a new field of a state is a decision here. The two
         // left out are never saved: the run file does not keep them for its own state either.
@@ -400,7 +413,7 @@ pub(super) fn read(saved: &RawValue, now: &State) -> Option<History> {
     if saved.version != VERSION {
         return None;
     }
-    let mut history = (Vec::new(), Vec::new(), Vec::new());
+    let mut history = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
     let mut memory: usize = 0;
     let mut weights: Vec<usize> = now
         .participants
@@ -420,6 +433,7 @@ pub(super) fn read(saved: &RawValue, now: &State) -> Option<History> {
         if memory > MEMORY_BYTES {
             break;
         }
+        history.3.push(step.target(after));
         history.1.push(std::mem::take(&mut step.label));
         history.2.push(step.from_sheet);
         let state = step.before(after)?;
@@ -428,6 +442,7 @@ pub(super) fn read(saved: &RawValue, now: &State) -> Option<History> {
     }
     history.0.reverse();
     history.1.reverse();
+    history.3.reverse();
     history.2.reverse();
     Some(history)
 }

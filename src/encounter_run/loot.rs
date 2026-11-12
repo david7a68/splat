@@ -75,12 +75,22 @@ pub(super) fn roll(state: &mut State, rolls: Vec<LootRoll>) -> Result<Vec<String
 /// The Undo words for these rolls. Short, because the ended view's header holds them.
 pub(super) fn describe(rolls: &[LootRoll]) -> String {
     match rolls {
-        [one] if one.times == 1 => format!("loot roll on {}", one.roll.key),
-        [one] => format!("{} loot rolls on {}", one.times, one.roll.key),
-        all => format!(
-            "{} loot rolls",
-            all.iter().map(|roll| roll.times).sum::<u32>()
-        ),
+        [one] => step_words(one.times, Some(&one.roll.key)),
+        all => step_words(all.iter().map(|roll| roll.times).sum(), None),
+    }
+}
+
+/// A loot step's words: `loot roll on gems`, `2 loot rolls on gems`, or, for several lines,
+/// `3 loot rolls`.
+fn step_words(times: u32, key: Option<&str>) -> String {
+    let rolls = if times == 1 {
+        "loot roll".to_owned()
+    } else {
+        format!("{times} loot rolls")
+    };
+    match key {
+        Some(key) => format!("{rolls} on {key}"),
+        None => rolls,
     }
 }
 

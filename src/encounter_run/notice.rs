@@ -2,10 +2,7 @@
 //! and the rule for what shortens first.
 use super::{
     Command, NOBODY_PRESENT, Panel, Phase, Run, SHEET_SOURCE,
-    view::{
-        DOCK_ALL_WORDS_FROM, dock_name, header_height, keeps_names, log_link, undo_compact,
-        undo_words,
-    },
+    view::{DOCK_ALL_WORDS_FROM, dock_name, header_height, log_link, undo_forms},
 };
 use crate::design::{self, Action, Density, RunScale, Status, Tone, Type, colors, icons};
 use eframe::egui::{self, Align, Layout, vec2};
@@ -48,6 +45,42 @@ impl Run {
         Some((whole, reminders.len().to_string(), full))
     }
 
+    /// X49: whether Next turn keeps its `N` key letter. When the current turn's name, at its
+    /// least size, is cut beside it and would show more words in its room, the letter gives
+    /// way first. The Keys list still has N.
+    fn turn_name_keeps_room(
+        &self,
+        ui: &egui::Ui,
+        scale: RunScale,
+        name: &str,
+        words: bool,
+    ) -> bool {
+        let turn_size = scale.hp;
+        let least = (scale.name + design::HAIRLINE_WIDTH).min(turn_size);
+        let gap = ui.spacing().item_spacing.x;
+        let next = Action::primary("Next turn")
+            .icon(icons::NEXT)
+            .density(Density::Glance)
+            .key("N")
+            .natural_width(ui);
+        let add = self.add_to_fight(words, Density::Glance).natural_width(ui);
+        let round = design::number_width(
+            ui,
+            &self.state_words(false),
+            &Type::Round.sized(ui, turn_size),
+        );
+        let room = ui.available_width()
+            - (next + add + round + 3.0 * (gap + design::S))
+            - design::HAIRLINE_WIDTH;
+        let font = Type::Name.sized(ui, least);
+        let keyless = Action::primary("Next turn")
+            .icon(icons::NEXT)
+            .density(Density::Glance)
+            .natural_width(ui);
+        design::number_width(ui, name, &font) <= room
+            || dock_name(ui, name, &font, room) == dock_name(ui, name, &font, room + next - keyless)
+    }
+
     /// The round and the turn are the strongest things on the page, above any row, and
     /// they grow with the rows. Next up is the only name that may be off the roster's view.
     pub(super) fn live_header(&mut self, ui: &mut egui::Ui, scale: RunScale) -> bool {
@@ -59,6 +92,9 @@ impl Run {
         // As large as the largest HP, in the row's own face: nothing outweighs the header.
         let turn_size = scale.hp;
         let height = header_height(scale);
+        // A narrow roster keeps its room for the turn's name.
+        let words = ui.available_width() >= DOCK_ALL_WORDS_FROM;
+        let next_key = !self.lookup_open && self.turn_name_keeps_room(ui, scale, name, words);
         ui.allocate_ui_with_layout(
             vec2(ui.available_width(), height),
             Layout::right_to_left(Align::Center),
@@ -67,14 +103,12 @@ impl Run {
                 next_turn = Action::primary("Next turn")
                     .icon(icons::NEXT)
                     .density(Density::Glance)
-                    .key(if self.lookup_open { "" } else { "N" })
+                    .key(if next_key { "N" } else { "" })
                     .blocked(nobody_present.then_some(NOBODY_PRESENT))
                     .show(ui)
                     .clicked();
                 // As the strip pairs Back to run with Next turn: one height, one small gap.
                 ui.add_space(design::S);
-                // A narrow roster keeps its room for the turn's name.
-                let words = ui.max_rect().width() >= DOCK_ALL_WORDS_FROM;
                 if self.add_to_fight(words, Density::Glance).show(ui).clicked() {
                     self.show_arrivals();
                 }
@@ -213,27 +247,19 @@ impl Run {
                 };
                 let action_font = Type::Strong.font(ui);
                 let from_sheet = self.undo_from_sheet();
-                let fitted = undo_words(
-                    ui,
-                    &undo_label,
-                    from_sheet,
-                    &self.state.participants,
-                    &action_font,
-                    f32::INFINITY,
-                );
+                // The forms of the one rule, once a frame, from the step's own target.
+                let target = self.undo_target();
+                let forms = undo_forms(&undo_label, target, from_sheet, &self.state.participants);
+                let fitted = forms.target.first().unwrap_or(&undo_label).clone();
+                // The reserve: the target cut to `5 × L`, at its own place in the words.
                 let mut minimum = fitted.clone();
-                if let Some(target) = self
-                    .state
-                    .participants
-                    .iter()
-                    .filter(|p| minimum.contains(&p.name))
-                    .max_by_key(|p| p.name.len())
-                {
-                    minimum = minimum.replacen(
-                        &target.name,
-                        &dock_name(ui, &target.name, &action_font, design::L * 5.0),
-                        1,
-                    );
+                if let Some(name) = target {
+                    let short = dock_name(ui, name, &action_font, design::L * 5.0);
+                    if let Some(before) = minimum.strip_suffix(name) {
+                        minimum = format!("{before}{short}");
+                    } else if let Some(after) = minimum.strip_prefix(&format!("Undo: {name}")) {
+                        minimum = format!("Undo: {short}{after}");
+                    }
                 }
                 // The shortest target Undo keeps: a sheet's step also gives up its source.
                 let shortest = minimum
@@ -283,15 +309,9 @@ impl Run {
                     .as_ref()
                     .filter(|_| self.notice.is_some() && self.recording_notice.is_none())
                     .and_then(|summary| {
-                        if sheet_width(summary) <= sheet_room {
-                            return Some(summary.clone());
-                        }
-                        let compact = summary
-                            .split(", ")
-                            .next()
-                            .unwrap_or(summary)
-                            .replace(&format!("{} ", super::SHEET_CHANGED), ": ");
-                        (sheet_width(&compact) <= sheet_room).then_some(compact)
+                        header_sheet_forms(summary)
+                            .into_iter()
+                            .find(|form| sheet_width(form) <= sheet_room)
                     });
                 let sheet_width = sheet.as_ref().map_or(0.0, |summary| sheet_width(summary));
                 sheet_notice_in_header = sheet.is_some();
@@ -306,39 +326,28 @@ impl Run {
                     "Undo".to_owned()
                 } else {
                     // The key letter goes before the target does; the Keys list still has U.
-                    let mut shown = "Undo".to_owned();
-                    for drop_key in [false, true] {
-                        let width_of = |words: &str| {
-                            let action = self.undo_action(words);
-                            let action = if drop_key { action.key("") } else { action };
-                            action.natural_width(ui)
-                        };
-                        let words = undo_words(
-                            ui,
-                            &undo_label,
-                            from_sheet,
-                            &self.state.participants,
-                            &Type::Strong.font(ui),
-                            slot - width_of("") - design::XS,
-                        );
-                        if width_of(&words) <= slot && keeps_names(&words) {
-                            shown = words;
-                            keyless = drop_key;
-                            break;
-                        }
-                    }
                     // No target fits: the step's words without it, `Undo: 8 damage × 3`,
                     // before `Undo` alone. Hover keeps the whole step.
-                    if shown == "Undo"
-                        && let Some(compact) = undo_compact(&undo_label, &self.state.participants)
-                    {
+                    let strong = Type::Strong.font(ui);
+                    let width_of = |words: &str, drop_key: bool| {
+                        let action = self.undo_action(words);
+                        let action = if drop_key { action.key("") } else { action };
+                        action.natural_width(ui)
+                    };
+                    let target = |words: &str, drop_key: bool| {
+                        design::number_width(ui, words, &strong)
+                            <= slot - width_of("", drop_key) - design::XS
+                    };
+                    let mut shown = "Undo".to_owned();
+                    'fit: for (tier, measured) in [(&forms.target, true), (&forms.bare, false)] {
                         for drop_key in [false, true] {
-                            let action = self.undo_action(&compact);
-                            let action = if drop_key { action.key("") } else { action };
-                            if action.natural_width(ui) <= slot {
-                                shown = compact;
+                            if let Some(words) = tier.iter().find(|words| {
+                                width_of(words, drop_key) <= slot
+                                    && (!measured || target(words, drop_key))
+                            }) {
+                                shown.clone_from(words);
                                 keyless = drop_key;
-                                break;
+                                break 'fit;
                             }
                         }
                     }
@@ -496,6 +505,11 @@ impl Run {
                                 }
                             },
                         );
+                        // X69: `S` before the link, as `link_width` counts it, so a long
+                        // name never runs into `Review`.
+                        if fits_link {
+                            ui.add_space(design::S - ui.spacing().item_spacing.x);
+                        }
                         if !link.is_empty() && fits_link && design::small_link(ui, link).clicked() {
                             if link == "Review" {
                                 review_conflict = true;
@@ -593,6 +607,25 @@ impl Run {
         }
         sheet_notice_in_header
     }
+}
+
+/// The sheet-change notice's forms on the notice line, longest first: the whole summary,
+/// then its first changed value with the name (`Brannoch Vale: HP 58 → 54`). A count of
+/// removed Undo steps stays in both (FJ1, X47): with no room for it, the notice goes below
+/// the roster, where it keeps the count too.
+fn header_sheet_forms(summary: &str) -> [String; 2] {
+    let (changes, removed) = summary
+        .rsplit_once(" · ")
+        .filter(|(_, removed)| removed.ends_with(" removed"))
+        .map_or((summary, String::new()), |(changes, removed)| {
+            (changes, format!(" · {removed}"))
+        });
+    let compact = changes
+        .split(", ")
+        .next()
+        .unwrap_or(changes)
+        .replace(&format!("{} ", super::SHEET_CHANGED), ": ");
+    [summary.to_owned(), format!("{compact}{removed}")]
 }
 
 #[cfg(test)]
