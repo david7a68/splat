@@ -822,7 +822,26 @@ pub fn run(d: &mut Driver<'_>) {
         "",
     );
     d.state("undo-steps-unread-beside-lookup", Sizes::All);
+    // iter-26-R FI2: the warning is in the message footer below the roster, so Dismiss moves
+    // no row, at every captured size.
+    let tops = |d: &mut Driver<'_>| {
+        [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                roster_places(d)
+                    .into_iter()
+                    .map(|(name, rect)| (name, rect.top().round()))
+                    .collect::<Vec<_>>()
+            })
+        })
+    };
+    let warned = tops(d);
     d.click(DISMISS);
+    let dismissed = tops(d);
+    d.observe(
+        "iter-26-R-FI2-dismiss",
+        warned.iter().all(|rows| !rows.is_empty()) && warned == dismissed,
+        format!("Row tops with the warning {warned:?}, after Dismiss {dismissed:?}"),
+    );
     d.observe(
         "T17.5",
         !d.visible_passage(UNREAD) && lookup_keeps_its_entry(d),
