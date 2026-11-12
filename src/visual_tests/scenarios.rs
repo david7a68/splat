@@ -7558,6 +7558,18 @@ pub mod run_edge_states {
             d.click_row(name);
             d.click(MARK_PRESENT);
         }
+        // iter-26-R FI2: each row's top before the file changes, at every captured size.
+        let tops = |d: &mut Driver<'_>| {
+            [SMALL, DEFAULT, LARGE].map(|size| {
+                d.at_size(size, |d| {
+                    roster_places(d)
+                        .into_iter()
+                        .map(|(name, rect)| (name, rect.top().round()))
+                        .collect::<Vec<_>>()
+                })
+            })
+        };
+        let quiet = tops(d);
         // A second instance writes the file. Saving must stop and say so.
         let path = d
             .app_mut()
@@ -7572,6 +7584,13 @@ pub mod run_edge_states {
         d.press(Key::Enter);
         d.expect("changed on disk");
         d.expect("Not saved");
+        // iter-26-R FI2: the notice sits in the message footer below the roster: no row moves.
+        let noticed = tops(d);
+        d.observe(
+            "iter-26-R-FI2",
+            quiet.iter().all(|rows| rows.len() >= 8) && quiet == noticed,
+            format!("Row tops without the notice {quiet:?}, with it {noticed:?}"),
+        );
         // The red choice keeps an `L` gap from the safe one, which stays first on the same line.
         d.observe_both(
             "iter-12-FT2",
@@ -18022,6 +18041,17 @@ pub mod session_plan {
         let notice_top = d
             .place_of("Party HP is full after the long rest.")
             .map(|rect| rect.top());
+        // iter-26-R FI2: the offer, its result and the offer back after Undo are in the setup's
+        // message footer below the rows: no row moves through the three.
+        // Setup rows, by their initiative fields.
+        let row_tops = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .filter(|node| node.name.starts_with("Initiative for ") && node.in_view())
+                .map(|node| (node.name, node.rect.top().round()))
+                .collect::<Vec<_>>()
+        };
+        let rows_offered = row_tops(d);
         d.click("Use the saved HP");
         d.observe(
             "iter-7-S1",
@@ -18061,6 +18091,7 @@ pub mod session_plan {
             d.has(SAVED_HP_UNDO) && !d.has("Undo"),
             "The saved-HP result's Undo says Undo use saved HP, not a bare Undo",
         );
+        let rows_result = row_tops(d);
         d.state("saved-hp-restored", Sizes::All);
         // AT1: this Undo has the shape of every Undo after a message: quiet, with its icon.
         let saved_hp_undo = undo_shape(d, SAVED_HP_UNDO);
@@ -18082,6 +18113,12 @@ pub mod session_plan {
                 && !d.has_containing("full HP after long rest")
                 && !d.visible_text(SAVED_HP_SET),
             "After Undo the rest notice is back, with no Undo step of the fill, and the result is gone",
+        );
+        let rows_back = row_tops(d);
+        d.observe(
+            "iter-26-R-FI2-setup",
+            !rows_offered.is_empty() && rows_offered == rows_result && rows_result == rows_back,
+            format!("Setup row tops: offer {rows_offered:?}, result {rows_result:?}, after Undo {rows_back:?}"),
         );
         d.click("Use the saved HP");
         d.expect(SAVED_HP_SET);

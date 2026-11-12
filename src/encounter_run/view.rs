@@ -766,72 +766,165 @@ impl Run {
         ui.add(egui::Label::new(Type::Title.rich(ui, what).color(colors().text)).truncate());
     }
 
-    /// An error can be long and must be read in full. It is rare, so it may push the list.
-    fn error_line(&mut self, ui: &mut egui::Ui) {
-        if self.has_disk_conflict() {
-            self.disk_conflict_line(ui);
-            return;
-        }
-        if let Some(error) = self.error.clone() {
-            ui.horizontal_top(|ui| {
-                let width = ui.available_width() - 36.0;
-                ui.scope(|ui| {
-                    ui.set_max_width(width);
-                    design::message(ui, Tone::Error, &error);
-                });
-                if design::icon_button(ui, icons::CLOSE, "Dismiss this message").clicked() {
-                    self.error = None;
+    /// FI2: the run's one message footer. The notices that come by themselves (a changed file,
+    /// an error, Undo steps that could not be read) and, in setup, the rest and carry-over
+    /// offers and their result, sit in it, pinned below the roster, so a row the DM aims at
+    /// never moves when one comes or goes. It is drawn in a child of `ui` over `rect`, at its
+    /// bottom, and the y where the body above it ends is returned. `skip_error`: the live view
+    /// draws a stat-block error in its own band below the roster.
+    fn message_footer(
+        &mut self,
+        ui: &mut egui::Ui,
+        rect: Rect,
+        skip_error: bool,
+        setup: bool,
+        command: &mut Option<Command>,
+    ) -> f32 {
+        use std::cell::Cell;
+        let mut child = ui.new_child(
+            egui::UiBuilder::new()
+                .max_rect(rect)
+                .layout(Layout::top_down(Align::LEFT)),
+        );
+        let save_new = Cell::new(false);
+        let replace = Cell::new(false);
+        let dismiss_error = Cell::new(false);
+        let dismiss_unread = Cell::new(false);
+        let use_saved = Cell::new(false);
+        let undo_saved = Cell::new(false);
+        let use_sheets = Cell::new(false);
+        let disk = self.has_disk_conflict();
+        let error = self.error.clone().filter(|_| !disk && !skip_error);
+        let unread = !disk && self.undo_unread;
+        let carry = setup.then(|| self.carry_missing()).flatten();
+        let rest = setup && self.rest_filled_saved_hp();
+        let used = setup && !rest && self.saved_hp_used();
+        let back = (setup && !rest && !used)
+            .then(|| self.back_to_sheets())
+            .flatten();
+        let back_words = back
+            .as_ref()
+            .map(|(from, _)| format!("Party HP carries over from {from}."));
+        // After the words its messages borrow, so it is dropped first.
+        let mut footer = design::Footer::new(("run_messages", self.id), rect.width());
+        if used {
+            // The result of the DM's own press, with its Undo: it leads the footer.
+            footer.result(SAVED_HP_USED, true, |ui| {
+                if design::undo_message(ui, Tone::Success, SAVED_HP_USED, "Undo use saved HP") {
+                    undo_saved.set(true);
                 }
+            });
+        }
+        if disk {
+            // The run cannot save until the DM chooses, so this cannot be dismissed. The
+            // choices start at the message text, like every other message with choices.
+            footer.reason(super::DISK_CONFLICT, |ui| {
+                let choice =
+                    design::message_with_actions(ui, Tone::Error, super::DISK_CONFLICT, |ui| {
+                        ui.add_space(design::XS);
+                        ui.horizontal(|ui| {
+                            // Neither action is filled: the safe one comes first, and the red one
+                            // keeps an `L` gap.
+                            let save_new = Action::secondary("Save as a new run")
+                                .density(Density::Read)
+                                .hint("Keep the changed file as it is, and save this run beside it")
+                                .show(ui)
+                                .clicked();
+                            // egui adds its item spacing too, so the whole gap is exactly `L`.
+                            ui.add_space(design::L - ui.spacing().item_spacing.x);
+                            let replace = Action::destructive("Replace the file with this run")
+                                .density(Density::Read)
+                                .hint("The changes in the file on disk are lost")
+                                .show(ui)
+                                .clicked();
+                            (save_new, replace)
+                        })
+                        .inner
+                    });
+                save_new.set(choice.0);
+                replace.set(choice.1);
+            });
+        }
+        if let Some(error) = &error {
+            footer.reason(error.as_str(), |ui| {
+                ui.horizontal_top(|ui| {
+                    let width = ui.available_width() - 36.0;
+                    ui.scope(|ui| {
+                        ui.set_max_width(width);
+                        design::message(ui, Tone::Error, error);
+                    });
+                    if design::icon_button(ui, icons::CLOSE, "Dismiss this message").clicked() {
+                        dismiss_error.set(true);
+                    }
+                });
             });
         }
         // Said once: the Log keeps the line, and the next save leaves the steps out.
-        if self.undo_unread {
-            ui.horizontal_top(|ui| {
-                let width = ui.available_width() - 36.0;
-                ui.scope(|ui| {
-                    ui.set_max_width(width);
-                    design::message(ui, Tone::Warning, super::UNDO_UNREAD);
+        if unread {
+            footer.notice(super::UNDO_UNREAD, |ui| {
+                ui.horizontal_top(|ui| {
+                    let width = ui.available_width() - 36.0;
+                    ui.scope(|ui| {
+                        ui.set_max_width(width);
+                        design::message(ui, Tone::Warning, super::UNDO_UNREAD);
+                    });
+                    if design::icon_button(ui, icons::CLOSE, "Dismiss the Undo message").clicked() {
+                        dismiss_unread.set(true);
+                    }
                 });
-                if design::icon_button(ui, icons::CLOSE, "Dismiss the Undo message").clicked() {
-                    self.undo_unread = false;
+            });
+        }
+        if let Some(words) = &carry {
+            footer.notice(words.as_str(), |ui| {
+                design::message(ui, Tone::Warning, words);
+            });
+        }
+        const REST_FULL: &str = "Party HP is full after the long rest.";
+        if rest {
+            footer.notice(REST_FULL, |ui| {
+                if design::message_with_action(ui, Tone::Info, REST_FULL, "Use the saved HP") {
+                    use_saved.set(true);
                 }
             });
         }
-    }
-
-    /// The run cannot save until the DM chooses, so this cannot be dismissed.
-    fn disk_conflict_line(&mut self, ui: &mut egui::Ui) {
-        // The choices start at the message text, like every other message with choices.
-        let choice = design::message_with_actions(ui, Tone::Error, super::DISK_CONFLICT, |ui| {
-            ui.add_space(design::XS);
-            ui.horizontal(|ui| {
-                // Neither action is filled: the safe one comes first, and the red one keeps an
-                // `L` gap.
-                let save_new = Action::secondary("Save as a new run")
-                    .density(Density::Read)
-                    .hint("Keep the changed file as it is, and save this run beside it")
-                    .show(ui)
-                    .clicked();
-                // egui adds its item spacing too, so the whole gap is exactly `L`.
-                ui.add_space(design::L - ui.spacing().item_spacing.x);
-                let replace = Action::destructive("Replace the file with this run")
-                    .density(Density::Read)
-                    .hint("The changes in the file on disk are lost")
-                    .show(ui)
-                    .clicked();
-                (save_new, replace)
-            })
-            .inner
-        });
-        let outcome = match choice {
-            (true, _) => Some(self.save_as_new_run()),
-            (_, true) => Some(self.keep_this_run()),
-            _ => None,
+        if let Some(words) = &back_words {
+            footer.notice(words.as_str(), |ui| {
+                if design::message_with_action(ui, Tone::Info, words, "Use the sheets’ HP") {
+                    use_sheets.set(true);
+                }
+            });
+        }
+        let bottom = footer.show(&mut child);
+        let outcome = if save_new.get() {
+            Some(self.save_as_new_run())
+        } else if replace.get() {
+            Some(self.keep_this_run())
+        } else {
+            None
         };
         if let Some(Err(error)) = outcome {
             self.error = Some(error);
         }
-        ui.add_space(design::XS);
+        if dismiss_error.get() {
+            self.error = None;
+        }
+        if dismiss_unread.get() {
+            self.undo_unread = false;
+        }
+        if use_saved.get()
+            && let Err(e) = self.use_saved_hp()
+        {
+            self.error = Some(e);
+        }
+        if undo_saved.get() {
+            self.undo();
+        }
+        if use_sheets.get()
+            && let Some((_, back)) = back
+        {
+            *command = Some(back);
+        }
+        bottom
     }
 
     /// Beside a panel the roster reaches it, wherever the DM drags it. Alone, it keeps its cap.
@@ -884,9 +977,6 @@ impl Run {
                         .as_ref()
                         .filter(|error| error.contains("stat block could not be read"))
                         .cloned();
-                    if stat_error.is_none() {
-                        self.error_line(ui);
-                    }
                     let room = ui.available_height()
                         - DOCK_HEIGHT
                         - self.strip_height()
@@ -899,6 +989,16 @@ impl Run {
                         0.0
                     };
                     let room = room - error_room;
+                    // FI2: notices that come by themselves sit in the message footer at the
+                    // bottom of the roster's room, so the roster keeps its top.
+                    let region = Rect::from_min_size(
+                        ui.cursor().min,
+                        vec2(ui.available_width(), room.max(0.0)),
+                    );
+                    let body_bottom =
+                        self.message_footer(ui, region, stat_error.is_some(), false, &mut None);
+                    let footer_room = (region.bottom() - body_bottom).max(0.0);
+                    let room = room - footer_room;
                     // A message goes in the room under the list, so it moves no row while
                     // the DM's eye is on them. The next action clears it. A long one wraps.
                     let notice = self
@@ -968,7 +1068,7 @@ impl Run {
                         Layout::top_down(Align::LEFT),
                         |ui| {
                             ui.set_min_height(list);
-                            self.roster(ui, list, notice_height);
+                            self.roster(ui, list, notice_height, footer_room);
                         },
                     );
                     self.group_drop_zone(ui, roster.response.rect);
@@ -1072,6 +1172,8 @@ impl Run {
                             },
                         );
                     }
+                    // Past the message footer, which the roster's room left free.
+                    ui.add_space(footer_room);
                     if let Some(error) = stat_error.as_ref().filter(|_| error_room > 0.0) {
                         let first = error
                             .split_once(" Its row")
@@ -1233,7 +1335,11 @@ impl Run {
 
     /// `room` is what the list has now, and `lent` what a message under it has taken. A list
     /// that fits leaves that much free at all times, so a message moves none of its rows.
-    fn roster(&mut self, ui: &mut egui::Ui, room: f32, lent: f32) {
+    /// `hidden` is the room the message footer covers (FI2): the rows are sized as if it were
+    /// free, so a footer that comes or goes moves no row; only the list's visible height
+    /// shrinks, and the rows behind the footer scroll into view.
+    fn roster(&mut self, ui: &mut egui::Ui, visible: f32, lent: f32, hidden: f32) {
+        let room = visible + hidden;
         let current = self.current();
         let next_up = self.next_up();
         let count = self.state.order.len();
@@ -1293,7 +1399,14 @@ impl Run {
                 ))
             );
         }
-        let list_height = if overflow { room - OVERFLOW_LINE } else { room };
+        // Rows that reach behind the message footer are out of view too: the line that counts
+        // them keeps its place inside the visible list.
+        let behind = !overflow && total(&layouts, scale) > visible;
+        let list_height = (if overflow || behind {
+            room - OVERFLOW_LINE
+        } else {
+            room
+        }) - hidden;
         let mut clicked = None;
         let mut row_choice = None;
         let mut rule = None;
@@ -1313,6 +1426,13 @@ impl Run {
             .id_salt("run_roster")
             .auto_shrink([false, false])
             .max_height(list_height)
+            // A list that fits its whole room keeps its columns: rows behind the message
+            // footer scroll by wheel and by the turn's own scroll, with no bar over the HP.
+            .scroll_bar_visibility(if overflow {
+                egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded
+            } else {
+                egui::scroll_area::ScrollBarVisibility::AlwaysHidden
+            })
             .show(ui, |ui| {
                 let clip = ui.clip_rect().intersect(Rect::from_min_size(
                     ui.cursor().min,
@@ -4417,35 +4537,8 @@ impl Run {
                 });
             }
         }
-        self.error_line(ui);
-        if let Some(words) = self.carry_missing() {
-            design::message(ui, Tone::Warning, &words);
-        }
-        if self.rest_filled_saved_hp() {
-            if design::message_with_action(
-                ui,
-                Tone::Info,
-                "Party HP is full after the long rest.",
-                "Use the saved HP",
-            ) && let Err(e) = self.use_saved_hp()
-            {
-                self.error = Some(e);
-            }
-        } else if self.saved_hp_used() {
-            // The same slot, so the DM sees the result where they pressed, and can take it back.
-            if design::undo_message(ui, Tone::Success, SAVED_HP_USED, "Undo use saved HP") {
-                self.undo();
-            }
-        } else if let Some((from, back)) = self.back_to_sheets()
-            && design::message_with_action(
-                ui,
-                Tone::Info,
-                &format!("Party HP carries over from {from}."),
-                "Use the sheets’ HP",
-            )
-        {
-            command = Some(back);
-        }
+        // FI2: errors, the carry-over warning and the rest offers and their result are in the
+        // message footer below the rows (`message_footer`).
         // Opening beside a panel, the DM can be typing there, and a digit is not an initiative.
         if std::mem::take(&mut self.focus_first_missing) && !self.lookup_open {
             self.focus_field = self
@@ -4455,6 +4548,11 @@ impl Run {
                 .position(|p| p.initiative.is_none() && p.present);
         }
         let room = ui.available_height() - self.footer_height() - design::M;
+        let region =
+            Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), room.max(0.0)));
+        let body_bottom = self.message_footer(ui, region, false, true, &mut command);
+        let footer_room = (region.bottom() - body_bottom).max(0.0);
+        let room = room - footer_room;
         let rows = ui.allocate_ui_with_layout(
             vec2(ui.available_width(), room),
             Layout::top_down(Align::LEFT),
@@ -4518,6 +4616,8 @@ impl Run {
             },
         );
         self.group_drop_zone(ui, rows.response.rect);
+        // Past the message footer, which the rows' room left free.
+        ui.add_space(footer_room);
         design::rule(ui);
         ui.add_space(design::XS);
         ui.horizontal(|ui| {
@@ -5161,7 +5261,14 @@ impl Run {
             egui::Sense::hover(),
         );
         design::rule(ui);
-        self.error_line(ui);
+        // FI2: errors and a changed file sit in the message footer at the bottom of the view,
+        // below the final state and the panel, so neither moves when one comes or goes.
+        let region = ui.available_rect_before_wrap();
+        let body_bottom = self.message_footer(ui, region, false, false, &mut None);
+        if body_bottom < region.bottom() {
+            let top = ui.cursor().top();
+            ui.set_max_height((body_bottom - top).max(0.0));
+        }
         if self.closing {
             ui.horizontal(|ui| {
                 closed = self.close_confirmation(ui, "The run stays saved.");
@@ -9305,7 +9412,7 @@ mod tests {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     let mut run = shown.borrow_mut();
                     run.live_keys(ui);
-                    run.roster(ui, 600.0, 0.0);
+                    run.roster(ui, 600.0, 0.0, 0.0);
                 });
             });
         design::theme::install(&harness.ctx);
