@@ -155,16 +155,10 @@ fn recovery_action(
         if *exists {
             ui.horizontal(|ui| {
                 ui.add_space((inset - ui.spacing().item_spacing.x).max(0.0));
-                ui.add(
-                    egui::Label::new(
-                        Type::Small
-                            .rich(
-                                ui,
-                                crate::content_workspace::manifest_replace_consequence(path),
-                            )
-                            .color(colors().muted),
-                    )
-                    .wrap(),
+                // Help keeps the reader measure (round 26).
+                design::help(
+                    ui,
+                    &crate::content_workspace::manifest_replace_consequence(path),
                 );
             });
         }
@@ -395,18 +389,6 @@ impl HeadingChoice {
         }
     }
 
-    /// Draws the warning and the Undo. Returns whether the fix, then the Undo, was pressed.
-    fn show(&self, ui: &mut egui::Ui) -> (bool, bool) {
-        let fix = self.fix.as_ref().is_some_and(|(text, action, _)| {
-            design::message_with_action(ui, Tone::Warning, text, action)
-        });
-        // The fix's result is a message, so its Undo keeps its icon on the message line.
-        let undo = self.undo.as_ref().is_some_and(|result| {
-            design::undo_message(ui, Tone::Success, result, "Undo heading change")
-        });
-        (fix, undo)
-    }
-
     /// Applies a press on the fix or its Undo to the draft. Returns true when the draft changed
     /// and must be saved.
     fn apply(
@@ -432,6 +414,97 @@ impl HeadingChoice {
 
 /// The duplicate-identity warning and its repair choices. The reader draws them inside its
 /// scroll area, so the title and body scroll into view; source mode draws them above the editor.
+/// What the DM pressed in the reader's messages in the pane's message footer.
+#[derive(Default)]
+struct ReaderPress {
+    /// The heading fix, then its Undo.
+    heading: (bool, bool),
+    results: Option<ResultPress>,
+    new_identity: Option<usize>,
+    new_identities: Option<(PathBuf, Vec<String>)>,
+    /// The campaign entry to copy into the package.
+    copy_dependency: Option<Uuid>,
+    undo_dependency: bool,
+}
+
+/// The reader's messages that come and go, in the pane's message footer below the body, so the
+/// body never moves (round 26 FD2, FC4): the page's results, the heading warning and its result,
+/// the duplicate warning with its choices, and a package entry's campaign links with their copy
+/// result. Results with a live Undo lead, then the warnings. `heading` is `None` when Edit
+/// Markdown's messages already hold it.
+#[allow(clippy::too_many_arguments)]
+fn reader_messages<'a>(
+    footer: &mut design::Footer<'a>,
+    heading: Option<&'a HeadingChoice>,
+    results: &'a ReaderResults,
+    duplicates: Option<(&'a Loaded, &'a Note, &'a [usize])>,
+    draft_reason: Option<&'static str>,
+    dependencies: &'a [(Uuid, String, String)],
+    dependency_result: Option<&'a str>,
+    out: &'a mut ReaderPress,
+) {
+    let ReaderPress {
+        heading: heading_out,
+        results: results_out,
+        new_identity,
+        new_identities,
+        copy_dependency,
+        undo_dependency,
+    } = out;
+    let (heading_fix, heading_undo) = (&mut heading_out.0, &mut heading_out.1);
+    if results.any() {
+        footer.result(results.words(), results.has_undo(), |ui| {
+            *results_out = Some(show_results(ui, results));
+        });
+    }
+    if let Some(result) = heading.and_then(|heading| heading.undo.as_deref()) {
+        // The fix's result is a message, so its Undo keeps its icon on the message line.
+        footer.result(result, true, |ui| {
+            *heading_undo = design::undo_message(ui, Tone::Success, result, "Undo heading change");
+        });
+    }
+    if let Some(result) = dependency_result {
+        // Round 25 FF8: the result names the entry and the package, in the button's words.
+        footer.result(result, true, |ui| {
+            *undo_dependency = design::undo_message(ui, Tone::Success, result, "Undo copy");
+        });
+    }
+    if let Some((words, action, _)) = heading.and_then(|heading| heading.fix.as_ref()) {
+        footer.notice(words.as_str(), |ui| {
+            *heading_fix = design::message_with_action(ui, Tone::Warning, words, action);
+        });
+    }
+    if let Some((loaded, note, indices)) = duplicates.filter(|(_, _, at)| !at.is_empty()) {
+        footer.notice(crate::world::DUPLICATE_ENTRY, move |ui| {
+            duplicate_choices(
+                ui,
+                loaded,
+                note,
+                indices,
+                draft_reason,
+                new_identity,
+                new_identities,
+            );
+        });
+    }
+    if !dependencies.is_empty() {
+        let words = dependencies
+            .iter()
+            .map(|(_, words, _)| words.as_str())
+            .collect::<Vec<_>>()
+            .join(" ");
+        footer.notice(words, move |ui| {
+            for (id, words, action) in dependencies {
+                if design::locked(ui, draft_reason, |ui| {
+                    design::message_with_action(ui, Tone::Warning, words, action)
+                }) {
+                    *copy_dependency = Some(*id);
+                }
+            }
+        });
+    }
+}
+
 fn duplicate_choices(
     ui: &mut egui::Ui,
     loaded: &Loaded,
@@ -1882,8 +1955,8 @@ struct LinkResult {
 }
 
 /// The page's results that are not about the open entry: the offer to change links after a rename
-/// and its result, and a copied package's registration. They take the reader's result place, so a
-/// result never moves the columns, the tabs, the file line or the title.
+/// and its result, and a copied package's registration. They sit in the pane's message footer, so
+/// a result never moves the columns, the tabs, the file line, the title or the body.
 #[derive(Default)]
 struct PageResults {
     /// The offer's words and its action's words.
@@ -1924,9 +1997,10 @@ struct PagePress {
     unregistered: bool,
 }
 
-/// The kept results of the open entry's pane, in the order they show. With an entry open, Read
-/// draws them in the reader's warnings place, after the title; Edit Markdown draws them in the
-/// reserved slot below the save row. With no entry open, they sit above the empty reader.
+/// The kept results of the open entry's pane, in the order they show. They sit in the pane's
+/// message footer, below the reader's body or the editor, and below the empty reader or a form
+/// (round 26 FD2). Without a save row in Edit Markdown (a file changed on disk) they stay above
+/// the comparison.
 #[derive(Default)]
 struct ReaderResults {
     /// The page's results, first.
@@ -3100,7 +3174,7 @@ pub struct Library {
     renamed_links: Vec<LinkOffer>,
     /// Link updates and the names their links now say, each owned by the renamed entry.
     link_edits: Vec<LinkResult>,
-    /// This frame's page results (link update, registration), drawn in the reader's result place.
+    /// This frame's page results (link update, registration), drawn in the pane's message footer.
     page_results: PageResults,
     /// Which page result's action the reader pressed, applied after the reader is drawn.
     page_pressed: PagePress,
@@ -4286,9 +4360,9 @@ impl Library {
         if let Some(message) = &self.message {
             design::message(ui, Tone::Success, message);
         }
-        // The page's results take the reader's result place (after the title, in Edit Markdown's
-        // reserved slot, or above the empty reader), so they never move the columns, the tabs,
-        // the file line or the title. Their presses are applied after the reader is drawn.
+        // The page's results sit in the pane's message footer (below the reader, the editor, the
+        // empty reader or a form), so they never move the columns, the tabs, the file line, the
+        // title or the body. Their presses are applied after the reader is drawn.
         // A link offer and a link result show only in their own entry's reader.
         let open = self.open_entry_id();
         self.page_results = PageResults {
@@ -4322,7 +4396,7 @@ impl Library {
                 self.rosters_changed
                     .then_some(crate::content_workspace::UNDO_ENDED)
             }),
-            // Round 25 FG4: the unregister result takes the reader's result place, so the scope,
+            // Round 25 FG4: the unregister result sits in the pane's message footer, so the scope,
             // the search and the list never move when it comes or goes.
             scope_notice: self.scope_notice.clone(),
             unregistered: self.unregistered.as_ref().map(|module| {
@@ -4930,12 +5004,25 @@ impl Library {
             }))
             .show_inside(ui, |ui| {
                 if self.form || self.new_form {
-                    // A form has no reader: the page's results stay reachable above it.
+                    // A form has no reader: the page's results sit in the pane's message footer,
+                    // below the form, so they never move it (round 26).
                     let results = ReaderResults {
                         page: std::mem::take(&mut self.page_results),
                         ..Default::default()
                     };
-                    self.page_pressed = show_results(ui, &results).page;
+                    let mut pressed = ResultPress::default();
+                    let mut footer = design::Footer::new(
+                        "library_form_footer",
+                        ui.available_width().min(design::READER_MEASURE),
+                    );
+                    if results.any() {
+                        let (pressed, results) = (&mut pressed, &results);
+                        footer.result(results.words(), results.has_undo(), |ui| {
+                            *pressed = show_results(ui, results);
+                        });
+                    }
+                    footer.show(ui);
+                    self.page_pressed = pressed.page;
                 }
                 if self.form {
                     self.package_form(ui, campaigns);
@@ -6191,8 +6278,8 @@ impl Library {
         campaigns: &Campaigns,
         pane_right: Option<f32>,
     ) {
-        // The pane's kept results. With an entry open they sit in the reader's warnings place,
-        // after the title, so a result never moves the tabs, the file line or the title.
+        // The pane's kept results. They sit in the pane's message footer, so a result never moves
+        // the tabs, the file line, the title or the body.
         let mut results = ReaderResults {
             package_use: self.selection_undo.as_ref().is_some_and(|undo| {
                 campaigns
@@ -6207,24 +6294,8 @@ impl Library {
             page: std::mem::take(&mut self.page_results),
             ..Default::default()
         };
-        if self.selected.is_none() {
-            let pressed = show_results(ui, &results);
-            self.apply_package_results(&pressed);
-        }
-        let recovery = self
-            .selected
-            .and_then(|at| self.loaded.as_ref()?.notes.get(at))
-            .filter(|note| note.is_manifest() && note.error.is_some())
-            .and_then(|note| match &note.owner {
-                Owner::Package(module) => {
-                    let path = note.path.clone();
-                    let exists = note.error.as_deref()
-                        != Some(crate::content_workspace::DELETED_MANIFEST)
-                        && module.path.join(&path).exists();
-                    Some((module.clone(), path, exists))
-                }
-                _ => None,
-            });
+        // With no entry open, the results and Remove's notice sit in the pane's message footer,
+        // below the empty reader (round 26). Its id is the reader's, so one pane has one footer.
         let gone_notice = self.discarded_note.as_ref().map(|LetGo { note, .. }| {
             let names = self
                 .loaded
@@ -6241,14 +6312,43 @@ impl Library {
                 )
             }
         });
-        if self.discarded_note.is_some()
-            && !self.dirty()
-            && design::undo_message(
-                ui,
-                Tone::Info,
-                gone_notice.as_deref().unwrap(),
-                "Undo remove",
-            )
+        let mut undo_remove = false;
+        if self.selected.is_none() {
+            let mut pressed = ResultPress::default();
+            let mut footer = design::Footer::new(
+                "library_footer",
+                ui.available_width().min(design::READER_MEASURE),
+            );
+            if let Some(words) = gone_notice.as_deref().filter(|_| !self.dirty()) {
+                let undo = &mut undo_remove;
+                footer.result(words, true, move |ui| {
+                    *undo = design::undo_message(ui, Tone::Info, words, "Undo remove");
+                });
+            }
+            if results.any() {
+                let (pressed, results) = (&mut pressed, &results);
+                footer.result(results.words(), results.has_undo(), |ui| {
+                    *pressed = show_results(ui, results);
+                });
+            }
+            footer.show(ui);
+            self.apply_package_results(&pressed);
+        }
+        let recovery = self
+            .selected
+            .and_then(|at| self.loaded.as_ref()?.notes.get(at))
+            .filter(|note| note.is_manifest() && note.error.is_some())
+            .and_then(|note| match &note.owner {
+                Owner::Package(module) => {
+                    let path = note.path.clone();
+                    let exists = note.error.as_deref()
+                        != Some(crate::content_workspace::DELETED_MANIFEST)
+                        && module.path.join(&path).exists();
+                    Some((module.clone(), path, exists))
+                }
+                _ => None,
+            });
+        if undo_remove
             && let Some((_, _, draft)) = self.discarded.take()
             && let Some(LetGo {
                 note, used, chosen, ..
@@ -6347,7 +6447,7 @@ impl Library {
             self.source = false;
         }
         let conflict = self.disk_change.is_some();
-        // The reader draws the duplicate choices in its scroll area, after the title.
+        // Read: the reader's messages sit in the pane's message footer, below the body.
         let choices_in_reader = !self.source && !conflict;
         let mut duplicate_indices = self.loaded.as_ref().unwrap().duplicates(i);
         if !duplicate_indices.is_empty() {
@@ -6569,6 +6669,8 @@ impl Library {
         };
         let save_row = editable && (self.source || dirty);
         let mut step = history::take_if(ui.ctx(), |_| true);
+        // Edit Markdown's save row, with the pane's message footer below the editor.
+        let slot_row = save_row && !conflict;
         let can_copy = note
             .entry
             .as_ref()
@@ -6919,7 +7021,10 @@ impl Library {
                 );
             });
         }
-        if !duplicate_indices.is_empty() && !choices_in_reader {
+        // Round 26 FC4: with a save row, the duplicate warning and its choices sit in the pane's
+        // message footer, so Save keeps one place and the editor its top. Without one (a file
+        // changed on disk) they stay above, with the other warnings.
+        if !duplicate_indices.is_empty() && !choices_in_reader && !slot_row {
             duplicate_choices(
                 ui,
                 self.loaded.as_ref().unwrap(),
@@ -6945,16 +7050,15 @@ impl Library {
         // Edit Markdown puts the results in the pane's message footer, below the editor, so a
         // result never moves the editor. Without that row (a built-in's source, a file changed on disk)
         // they stay above the editor, with the warnings.
-        let slot_row = save_row && !conflict;
         let mut pressed = ResultPress::default();
         if !choices_in_reader && !slot_row {
             pressed = show_results(ui, &results);
         }
         let mut repair_pressed = false;
         let mut read_again = false;
-        // The heading warning and its Undo. The reader draws them after the title, directly above
-        // the duplicate warning, so one file's warnings share one place and the title never moves.
-        // Edit Markdown draws them in the pane's message footer.
+        // The heading warning and its Undo. Read and Edit Markdown both draw them in the pane's
+        // message footer, with the duplicate warning, so one file's warnings share one place and
+        // the body never moves.
         let heading = HeadingChoice::new(
             (editable && !conflict)
                 .then(|| parsed.as_ref().ok())
@@ -6964,6 +7068,40 @@ impl Library {
             &note.path,
         );
         let mut heading_pressed = (false, false);
+        // Read's messages for the pane's message footer: a package entry's links to entries in
+        // this campaign only, each with its copy action, and the copy's result.
+        let dependencies: Vec<(Uuid, String, String)> = match (&note.owner, &note.entry) {
+            (Owner::Package(package), Some(entry)) if choices_in_reader => ui
+                .ctx()
+                .data(|data| {
+                    data.get_temp::<std::sync::Arc<crate::lookup::ContentIndex>>(egui::Id::new(
+                        "reader_link_index",
+                    ))
+                })
+                .map(|index| {
+                    index
+                        .campaign_dependencies(entry)
+                        .into_iter()
+                        .map(|at| {
+                            let dependency = &index.items[at].entry;
+                            (
+                                dependency.id,
+                                format!("{} is in this campaign only.", dependency.name),
+                                format!("Copy {} to {}", dependency.name, package.name),
+                            )
+                        })
+                        .collect()
+                })
+                .unwrap_or_default(),
+            _ => Vec::new(),
+        };
+        let dependency_result = self
+            .dependency_undo
+            .as_ref()
+            .filter(|change| choices_in_reader && change.path == note.path)
+            .map(|change| change.result.clone());
+        let mut reader_press = ReaderPress::default();
+        let no_results = ReaderResults::default();
         // Where the body ends: above the message footer, when the save row has one.
         let mut body_bottom = f32::INFINITY;
         // Save and Discard are one row, as far apart as the pane allows.
@@ -7169,6 +7307,24 @@ impl Library {
                     );
                 });
             }
+            // Round 26 FC4: the duplicate warning and its choices join Edit Markdown's messages.
+            // In Read with a changed draft, the reader's results and campaign links join too
+            // (in Edit Markdown, the results are already there). The heading's warning and
+            // result are already there.
+            reader_messages(
+                &mut footer,
+                None,
+                if choices_in_reader {
+                    &results
+                } else {
+                    &no_results
+                },
+                Some((self.loaded.as_ref().unwrap(), note, &duplicate_indices)),
+                draft_reason,
+                &dependencies,
+                dependency_result.as_deref(),
+                &mut reader_press,
+            );
             body_bottom = footer.show(ui);
             if broken_taken && let Some((_, _, _, warnings)) = &mut self.broken_lines {
                 *warnings = broken_cache;
@@ -7218,7 +7374,7 @@ impl Library {
         if self.draft != note.text {
             self.discarded = None;
         }
-        // In Read, the discard result sits with the reader's other results, after the title.
+        // In Read, the discard result sits with the reader's other results, in the footer.
         if !save_row && discard_is_for(self.discarded.as_ref(), note) {
             if choices_in_reader {
                 results.discarded = Some(note.name().to_owned());
@@ -7230,6 +7386,27 @@ impl Library {
                 self.draft_revision += 1;
             }
         }
+        if choices_in_reader && !slot_row {
+            let mut footer =
+                design::Footer::new("library_footer", editor_width.min(design::READER_MEASURE));
+            reader_messages(
+                &mut footer,
+                Some(&heading),
+                &results,
+                Some((self.loaded.as_ref().unwrap(), note, &duplicate_indices)),
+                draft_reason,
+                &dependencies,
+                dependency_result.as_deref(),
+                &mut reader_press,
+            );
+            body_bottom = footer.show(ui);
+            heading_pressed = reader_press.heading;
+        }
+        if let Some(shown) = reader_press.results.take() {
+            pressed = shown;
+        }
+        new_identity = new_identity.or(reader_press.new_identity.take());
+        new_identities = new_identities.or(reader_press.new_identities.take());
         let mut reload_from_disk = false;
         let mut read_disk_again = false;
         if let Some(fault) = self
@@ -7328,8 +7505,8 @@ impl Library {
         }
         let mut open_link = None;
         let mut pressed_link = None;
-        let mut copy_dependency = None;
-        let mut undo_dependency = false;
+        let copy_dependency = reader_press.copy_dependency;
+        let undo_dependency = reader_press.undo_dependency;
         if self.source && self.disk_change.is_none() {
             egui::Frame::new()
                 .fill(colors().well)
@@ -7515,22 +7692,6 @@ impl Library {
                                                     false,
                                                 );
                                             }
-                                            if choices_in_reader {
-                                                heading_pressed = heading.show(ui);
-                                                // A result takes the warnings' place, so the title never moves.
-                                                pressed = show_results(ui, &results);
-                                            }
-                                            if choices_in_reader && !duplicate_indices.is_empty() {
-                                                duplicate_choices(
-                                                    ui,
-                                                    self.loaded.as_ref().unwrap(),
-                                                    note,
-                                                    &duplicate_indices,
-                                                    draft_reason,
-                                                    &mut new_identity,
-                                                    &mut new_identities,
-                                                );
-                                            }
                                         });
                                         open_link = view::show_with_related(
                                             ui,
@@ -7545,53 +7706,9 @@ impl Library {
                                             self.loaded.as_ref().unwrap(),
                                             // The Library draws no value block above the entry.
                                             false,
-                                            |ui| {
-                                                if let Owner::Package(package) = &note.owner
-                                                    && let Some(entry) = &note.entry
-                                                    && let Some(index) = ui.ctx().data(|data| {
-                                                        data.get_temp::<std::sync::Arc<
-                                                            crate::lookup::ContentIndex,
-                                                        >>(
-                                                            egui::Id::new("reader_link_index")
-                                                        )
-                                                    })
-                                                {
-                                                    for at in index.campaign_dependencies(entry) {
-                                                        let dependency = &index.items[at].entry;
-                                                        if design::locked(ui, draft_reason, |ui| {
-                                                            design::message_with_action(
-                                                                ui,
-                                                                Tone::Warning,
-                                                                &format!(
-                                                                    "{} is in this campaign only.",
-                                                                    dependency.name
-                                                                ),
-                                                                &format!(
-                                                                    "Copy {} to {}",
-                                                                    dependency.name, package.name
-                                                                ),
-                                                            )
-                                                        }) {
-                                                            copy_dependency = Some(dependency.id);
-                                                        }
-                                                    }
-                                                }
-                                                if let Some(change) = self
-                                                    .dependency_undo
-                                                    .as_ref()
-                                                    .filter(|change| change.path == note.path)
-                                                {
-                                                    // Round 25 FF8: the result names the entry
-                                                    // and the package, in the button's words.
-                                                    undo_dependency = design::undo_message(
-                                                        ui,
-                                                        Tone::Success,
-                                                        &change.result,
-                                                        "Undo copy",
-                                                    );
-                                                }
-                                                None
-                                            },
+                                            // A package entry's campaign links sit in the
+                                            // pane's message footer (round 26).
+                                            |_| None,
                                         );
                                     });
                                 });

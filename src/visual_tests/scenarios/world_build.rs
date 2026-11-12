@@ -6847,12 +6847,14 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
         "The original's reader title is found at each size: {plain_tops:?}"
     );
     d.click(EDIT_MARKDOWN);
-    // Must stay true with iter-14-E-FD4: Edit Markdown keeps the choices above the editor.
+    // Round 26 FC4: Edit Markdown puts the duplicate warning and its choices in the pane's
+    // message footer, below the editor. Must stay true with iter-14-E-FD4: both choices are
+    // there, in view.
     d.observe_both(
         "iter-14-E-FD4-source",
-        "Edit Markdown keeps both repair choices above the Markdown editor",
+        "Edit Markdown keeps both repair choices in the footer below the Markdown editor",
         |d| {
-            let Some(editor) = d.place_of("Markdown editor") else {
+            let Some(editor) = d.input_frame("Markdown editor").map(|(frame, _)| frame) else {
                 return false;
             };
             [
@@ -6862,11 +6864,12 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
             .iter()
             .all(|name| {
                 d.place_of(name)
-                    .is_some_and(|choice| d.in_view(name) && choice.bottom() < editor.top())
+                    .is_some_and(|choice| d.in_view(name) && choice.top() > editor.bottom())
             })
         },
     );
     d.state("duplicate-original-editor", Sizes::All);
+
     d.type_into_editor("Saved only to the original.\n");
     d.click("Save");
     d.wait_for_text("Saved");
@@ -6909,6 +6912,16 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
         format!("Both Cinder Wolf rows mark the duplicate identity as a warning: {rows:?}"),
     );
     d.click("Open in Library");
+    // The copy's footer holds its heading warning first, so at 960 the duplicate's choices are
+    // reached by scrolling the footer.
+    let heading_fix = d
+        .place_of("Use Cinder Wolf copy")
+        .expect("The heading fix is in the footer");
+    d.scroll_until(
+        heading_fix.center(),
+        "Make Cinder Wolf copy.md a separate entry",
+        12,
+    );
     d.expect("Make Cinder Wolf copy.md a separate entry");
     assert_eq!(
         d.app_mut().library.selected_name(),
@@ -7023,22 +7036,37 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
             "The title top with the heading warning ({copy_tops:?}) matches the title top without it ({plain_tops:?}) at 960, 1200 and 1920"
         ),
     );
-    // Must stay true: Edit Markdown still draws the heading warning above the editor.
+    // Must stay true: Edit Markdown draws the heading warning in the same footer, below the
+    // editor (round 26).
     d.click(EDIT_MARKDOWN);
     d.observe_both(
         "iter-16-E-FD7-source",
-        "Edit Markdown keeps the heading warning above the Markdown editor",
+        "Edit Markdown keeps the heading warning in the footer below the Markdown editor",
         |d| {
-            let Some(editor) = d.place_of("Markdown editor") else {
+            let Some(editor) = d.input_frame("Markdown editor").map(|(frame, _)| frame) else {
                 return false;
             };
             d.painted_rect_in(COPY_HEADING_WARNING, egui::Rect::EVERYTHING)
-                .is_some_and(|heading| heading.bottom() < editor.top())
+                .is_some_and(|heading| heading.top() > editor.bottom())
                 && d.place_of("Use Cinder Wolf copy").is_some_and(|fix| {
-                    d.in_view("Use Cinder Wolf copy") && fix.bottom() < editor.top()
+                    d.in_view("Use Cinder Wolf copy") && fix.top() > editor.bottom()
                 })
         },
     );
+    // Round 26 FC4: Save and the editor's top, from the Read tab, at 960, 1200 and 1920. The
+    // copy has the duplicate warning now, and none after `Make … a separate entry` below.
+    let save_and_editor = |d: &mut Driver<'_>| {
+        [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                let read = d.place_of("Read")?;
+                Some((
+                    d.place_of("Save")?.top() - read.top(),
+                    d.input_frame("Markdown editor")?.0.top() - read.top(),
+                ))
+            })
+        })
+    };
+    let with_duplicate = save_and_editor(d);
     d.click("Read");
     d.expect("Creature · CR 1");
     let title_before = title_below_file_line(d, "Cinder Wolf copy");
@@ -7104,6 +7132,22 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
         d.visible_text("1 file needs fixing") && rows.len() == 1 && warning_marked(&rows),
         format!("The copy's row marks the fault the header counts: {rows:?}"),
     );
+    // Round 26 FC4: the copy with no duplicate has Save and the editor where it had them with
+    // the duplicate warning: the warning gives Save no second place.
+    d.click(EDIT_MARKDOWN);
+    assert!(
+        !d.has_containing(crate::world::DUPLICATE_ENTRY),
+        "the copy is a separate entry now"
+    );
+    let without_duplicate = save_and_editor(d);
+    d.observe(
+        "iter-26-L-FC4",
+        with_duplicate.iter().all(Option::is_some) && with_duplicate == without_duplicate,
+        format!(
+            "Save and the editor keep their places with the duplicate warning {with_duplicate:?} and without it {without_duplicate:?}"
+        ),
+    );
+    d.click("Read");
     d.click("Undo separate entry");
     d.wait_for_text("Same entry in two files");
     assert_eq!(
@@ -8663,45 +8707,68 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     d.app_mut().campaigns.register_module(module).unwrap();
     d.settle();
     d.wait_for_text("Same entry in two files");
+    // Round 26: the choices sit in the reader's message footer, which scrolls inside when they do
+    // not fit. Each batch choice is reached by scrolling the footer, then checked.
     for size in [SMALL, DEFAULT, LARGE] {
-        let consequences = d.at_size(size, |d| {
-            [
-                (
-                    "ashen-marches-copy",
-                    "Bridge Ambush and Shrine of Cinders keep the files in ashen-marches/.",
-                ),
-                (
-                    "ashen-marches",
-                    "Bridge Ambush and Shrine of Cinders will then use the files in ashen-marches-copy/.",
-                ),
-            ]
-            .iter()
-            .all(|(folder, result)| {
-                let button = d.nodes().into_iter().find(|node| {
-                    node.name.starts_with("Make all ")
-                        && node
-                            .name
-                            .ends_with(&format!("files in {folder}/ separate entries"))
-                });
-                button.is_some_and(|button| {
-                    d.place_of(result).is_some_and(|line| {
-                        d.visible_text(result)
-                            && line.top() >= button.rect.bottom()
-                            && line.top() - button.rect.bottom() <= design::XS + 1.0
-                            && (line.left() - button.rect.left()).abs() < 1.0
-                    })
-                })
-            })
-        });
+        d.set_base(size);
+        let footer = d
+            .painted_rect_in(crate::world::DUPLICATE_ENTRY, egui::Rect::EVERYTHING)
+            .expect("the duplicate warning is in the footer")
+            .center();
+        let mut failed = Vec::new();
+        for (folder, result) in [
+            (
+                "ashen-marches-copy",
+                "Bridge Ambush and Shrine of Cinders keep the files in ashen-marches/.",
+            ),
+            (
+                "ashen-marches",
+                "Bridge Ambush and Shrine of Cinders will then use the files in ashen-marches-copy/.",
+            ),
+        ] {
+            d.scroll_until(footer, result, 12);
+            // In view can mean its first line only: scroll on until all of it shows.
+            for _ in 0..4 {
+                if d.visible_text(result) {
+                    break;
+                }
+                d.scroll_at(footer, 1);
+            }
+            let button = d.nodes().into_iter().find(|node| {
+                node.name.starts_with("Make all ")
+                    && node
+                        .name
+                        .ends_with(&format!("files in {folder}/ separate entries"))
+            });
+            let line = d.place_of(result);
+            let fits = button.as_ref().zip(line).is_some_and(|(button, line)| {
+                d.visible_text(result)
+                    && line.top() >= button.rect.bottom()
+                    && line.top() - button.rect.bottom() <= design::XS + 1.0
+                    && (line.left() - button.rect.left()).abs() < 1.0
+            });
+            if !fits {
+                failed.push(format!(
+                    "{folder}: button {:?}, line {line:?}, painted {}",
+                    button.map(|button| button.rect),
+                    d.visible_text(result)
+                ));
+            }
+        }
+        d.scroll_up_at(footer, 12);
         d.observe(
             "iter-5-D-FD5",
-            consequences,
-            format!("Each batch choice names its encounter and remaining folder at {size:?}"),
+            failed.is_empty(),
+            format!(
+                "Each batch choice names its encounter and remaining folder at {size:?}: {failed:?}"
+            ),
         );
     }
+    d.set_base(SMALL);
     d.state("manifest-only-hand-repair-keeps-both-files", Sizes::All);
-    // FD4: the four choices sit in the reader's scroll area after the title, so a scroll over the
-    // reader moves them with the title and brings the body into view. Checked at 960x640.
+    // FD4, round 26: the four choices sit in the reader's message footer, at most a third of the
+    // pane, so the body above stays in reach: a scroll over the body moves the title and brings
+    // the body into view, and the choices stay where they are. Checked at 960x640.
     {
         let single = "Make Cinder Wolf.md in ashen-marches-copy/ a separate entry";
         let last_choice = |d: &Driver<'_>| {
@@ -8735,11 +8802,11 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
             title >= 0.0
                 && title < choice.top()
                 && moved > 0.0
-                && (choice_moved - moved).abs() < 1.0
-                && (last_moved - moved).abs() < 1.0
+                && choice_moved.abs() < 1.0
+                && last_moved.abs() < 1.0
                 && restored,
             format!(
-                "The copied-folder choices scroll with the reader title: title {title:.0} moved {moved:.0}, single choice moved {choice_moved:.0}, last folder choice moved {last_moved:.0}, restored {restored}"
+                "A scroll over the body moves the reader title and not the copied-folder choices in the footer: title {title:.0} moved {moved:.0}, single choice moved {choice_moved:.0}, last folder choice moved {last_moved:.0}, restored {restored}"
             ),
         );
         // Must stay true: the choices still start at the message text edge.
