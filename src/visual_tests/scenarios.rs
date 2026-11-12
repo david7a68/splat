@@ -19278,7 +19278,9 @@ pub mod run_rolls {
         let finished = |d: &Driver<'_>| {
             let rows_show_ac = [ATTACKER, TARGET].map(|row| {
                 d.row_node(row).is_some_and(|node| {
-                    !node.name.contains(" save ")
+                    // A save's result where AC is, such as `DEX save 14`. A Conc row that took
+                    // the damage names its own save's DC (F2, row 5), which is not that.
+                    !node.name.replace("Conc save DC", "").contains(" save ")
                         && d.painted_word_rect("AC", node.shown).is_some()
                         && d.painted_word_rect("DEX", node.shown).is_none()
                 })
