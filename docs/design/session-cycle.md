@@ -1397,7 +1397,8 @@ first.` So a wrong `Roll for encounters` can go at any time.
   menu, as every field's label is; `· 1d20 each day` follows the menu on its line, and dice words that move
   to a line of their own start with the words, never with `·`.
 - **An act's result has one kept line** under the table's line: `2 travel checks rolled.` with `Undo roll`,
-  and the other acts' results there too. The line is reserved while the block shows, so a result coming or
+  and the results of `Roll for encounters` and `Clear` there too. The plan line's message (`Undo plan line`)
+  is the note's act and stays at the block's end. The line is reserved while the block shows, so a result coming or
   going moves nothing below it, and at 960x640 it is in view where the DM pressed `Roll`. Words that do not
   fit beside Undo end in `…`; the hover keeps them whole.
 
