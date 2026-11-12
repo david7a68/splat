@@ -1539,6 +1539,12 @@ pub mod library_navigation {
                 "Open in Library from Lookup, then Back returns to Ashfall ({back_to_link}) and Back again to Ash Exposure"
             ),
         );
+        // A fault that loses the trail fails the observation above, not the steps below.
+        if !d.has("Read Captain Varra") {
+            d.open_combo_at(LIBRARY_PACKAGE_DROPDOWN);
+            d.click(MODULE);
+            d.click_starting("Ash Exposure · ");
+        }
         d.click("Read Captain Varra");
         d.wait_for_text("The last commander of the Emberfall watch.");
         d.state("reference-outside-package", Sizes::All);
