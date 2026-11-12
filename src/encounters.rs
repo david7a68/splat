@@ -1270,7 +1270,7 @@ fn roster_heading(ui: &mut egui::Ui, count: usize, rating: Option<&crate::diffic
     let numbers = format!(" · {} · ", rating.numbers());
     crate::difficulty::append(&mut job, ui, Type::Label, &numbers, c.muted);
     crate::difficulty::append(&mut job, ui, Type::Label, rating.word.text(), c.text);
-    if ui.fonts_mut(|fonts| fonts.layout_job(job.clone()).size().x) > ui.available_width() {
+    if crate::difficulty::width(ui, &job) > ui.available_width() {
         ui.label(plain);
         return;
     }
@@ -1291,7 +1291,7 @@ fn narrow_difficulty(ui: &mut egui::Ui, rating: &crate::difficulty::Rating) {
         &format!(" · {}", rating.numbers()),
         c.muted,
     );
-    let width = ui.fonts_mut(|fonts| fonts.layout_job(job.clone()).size().x);
+    let width = crate::difficulty::width(ui, &job);
     if width + design::L > ui.available_width() {
         return;
     }

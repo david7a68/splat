@@ -107,9 +107,6 @@ pub struct Rating {
 }
 
 impl Scale {
-    /// The one computation. `party` is the level of each character on the party's side; with
-    /// none, the campaign's party stands in. `foes` is the XP of each creature that is not on
-    /// the party's side, `None` where it is not known.
     /// A character's level from the saved sheet now, by the ID of its copy's entry. A run keeps
     /// a copy of each sheet from when it started; the saved one wins while the campaign has it.
     pub fn level(&self, character: &Entry) -> Option<Option<u64>> {
@@ -117,6 +114,9 @@ impl Scale {
         Some(self.party.get(&character.id).copied().unwrap_or(kept))
     }
 
+    /// The one computation. `party` is the level of each character on the party's side; with
+    /// none, the campaign's party stands in. `foes` is the XP of each creature that is not on
+    /// the party's side, `None` where it is not known.
     pub fn weigh(
         &self,
         party: &[Option<u64>],
@@ -138,40 +138,45 @@ impl Scale {
         } else {
             party
         };
-        let rating = (|| {
-            if !any || unknown > 0 || party.is_empty() {
-                return None;
-            }
-            let table = &self.budgets.as_ref()?.0;
-            let mut budgets = [0_u64; 3];
-            let (mut low, mut high) = (u64::MAX, 0);
-            for level in party {
-                let level = (*level)?;
-                for (sum, each) in budgets.iter_mut().zip(table.get(&level)?) {
-                    *sum = sum.saturating_add(*each);
-                }
-                (low, high) = (low.min(level), high.max(level));
-            }
-            let word = match budgets.iter().position(|budget| xp <= *budget) {
-                Some(0) => Word::Low,
-                Some(1) => Word::Moderate,
-                Some(_) => Word::High,
-                None => Word::AboveHigh,
-            };
-            Some(Rating {
-                word,
-                budgets,
-                xp,
-                characters: party.len(),
-                levels: (low, high),
-                campaign_party,
-            })
-        })();
         Difficulty {
             xp,
             unknown,
-            rating,
+            rating: (any && unknown == 0)
+                .then(|| self.rate(party, xp, campaign_party))
+                .flatten(),
         }
+    }
+
+    /// The word for a fight whose XP is all known. `None` when the party is empty, a level is
+    /// not known or not in the table, or there is no table.
+    fn rate(&self, party: &[Option<u64>], xp: u64, campaign_party: bool) -> Option<Rating> {
+        if party.is_empty() {
+            return None;
+        }
+        let table = &self.budgets.as_ref()?.0;
+        let mut budgets = [0_u64; 3];
+        let (mut low, mut high) = (u64::MAX, 0);
+        for level in party {
+            let level = (*level)?;
+            for (sum, each) in budgets.iter_mut().zip(table.get(&level)?) {
+                *sum = sum.saturating_add(*each);
+            }
+            (low, high) = (low.min(level), high.max(level));
+        }
+        let word = match budgets.iter().position(|budget| xp <= *budget) {
+            Some(0) => Word::Low,
+            Some(1) => Word::Moderate,
+            Some(_) => Word::High,
+            None => Word::AboveHigh,
+        };
+        Some(Rating {
+            word,
+            budgets,
+            xp,
+            characters: party.len(),
+            levels: (low, high),
+            campaign_party,
+        })
     }
 }
 
@@ -226,6 +231,11 @@ pub(crate) fn append(
     );
 }
 
+/// The width of a job on one line.
+pub(crate) fn width(ui: &egui::Ui, job: &egui::text::LayoutJob) -> f32 {
+    ui.fonts_mut(|fonts| fonts.layout_job(job.clone()).size().x)
+}
+
 /// The word's hover and accessible description: the party's budgets.
 pub(crate) fn describe(ui: &egui::Ui, response: egui::Response, rating: &Rating) -> egui::Response {
     let line = rating.budget_line();
@@ -244,6 +254,19 @@ pub(crate) fn builtin_budgets() -> Budgets {
     .unwrap();
     let entry = Entry::parse("rule.md", &text).unwrap();
     Budgets::of_rule(&entry.fields["splat_rule"]).expect("the table in the package reads")
+}
+
+/// Mill Road's answer in the scenario's numbers: Above High for 5 at level 3, XP 6,300.
+#[cfg(test)]
+pub(crate) fn above_high() -> Rating {
+    Rating {
+        word: Word::AboveHigh,
+        budgets: [750, 1125, 2000],
+        xp: 6300,
+        characters: 5,
+        levels: (3, 3),
+        campaign_party: false,
+    }
 }
 
 #[cfg(test)]

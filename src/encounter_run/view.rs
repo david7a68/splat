@@ -2739,8 +2739,8 @@ impl Run {
                     if added.is_empty() {
                         return None;
                     }
-                    let fight = scale.weigh(&party, foes.iter().copied().chain(added.clone()));
-                    let adds = added.into_iter().map(|xp| xp.unwrap_or(0)).sum();
+                    let adds = added.iter().map(|xp| xp.unwrap_or(0)).sum();
+                    let fight = scale.weigh(&party, foes.iter().copied().chain(added));
                     Some((group.id, (fight.rating?, adds)))
                 })
                 .collect();

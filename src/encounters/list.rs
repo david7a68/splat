@@ -893,14 +893,7 @@ mod iter_2_c_tests {
     fn the_difficulty_word_never_costs_a_detail_word() {
         let ctx = egui::Context::default();
         design::theme::install(&ctx);
-        let rating = crate::difficulty::Rating {
-            word: crate::difficulty::Word::AboveHigh,
-            budgets: [750, 1125, 2000],
-            xp: 6300,
-            characters: 5,
-            levels: (3, 3),
-            campaign_party: false,
-        };
+        let rating = crate::difficulty::above_high();
         let detail = "5 party · Cinder Tyrant · 2 × Ember Cultist";
         let widths: Vec<f32> = (200..=520).step_by(4).map(|width| width as f32).collect();
         let lines = |rating: Option<&crate::difficulty::Rating>| {

@@ -747,9 +747,8 @@ pub(crate) struct Run {
     /// `Loot copied.`: the copy action, at the `revision` it was made. Undo and any new step
     /// (a roll among them) end it. Never saved.
     loot_copied: Option<u64>,
-    /// What each group in Arrivals would make the fight, worked out for one `revision`, one
-    /// read of the groups and one scale. Never saved.
-    /// Each with the XP its members on the other side add.
+    /// What each group in Arrivals would make the fight, with the XP its members on the other
+    /// side add, worked out for one `revision`, one read of the groups and one scale. Never saved.
     arrival_words: Option<(ArrivalKey, ArrivalWords)>,
     /// How often frames asked for the Arrivals words, and how often they were worked out.
     #[cfg(test)]

@@ -40,12 +40,20 @@ fn write_creature(d: &Driver<'_>, name: &str, cr: Option<&str>) -> uuid::Uuid {
     id
 }
 
+/// The fixture's encounter with the party and two Ember Cultists, as saved.
+fn shrine(d: &Driver<'_>) -> Value {
+    let path = d
+        .root
+        .join(format!("campaigns/emberfall/Encounters/{LOW}.md"));
+    let shrine = std::fs::read_to_string(path).unwrap();
+    let shrine = splat::content::Entry::parse("Encounters/Shrine.md", &shrine).unwrap();
+    shrine.fields["splat_encounter"].clone()
+}
+
 /// An encounter with the fixture's party, or with none, and these creatures against it.
 fn write_encounter(d: &Driver<'_>, name: &str, party: bool, foes: &[uuid::Uuid]) {
     let folder = d.root.join("campaigns/emberfall/Encounters");
-    let shrine = std::fs::read_to_string(folder.join(format!("{LOW}.md"))).unwrap();
-    let shrine = splat::content::Entry::parse("Encounters/Shrine.md", &shrine).unwrap();
-    let mut setup = shrine.fields["splat_encounter"].clone();
+    let mut setup = shrine(d);
     let roster = setup["roster"].as_sequence_mut().unwrap();
     roster.retain(|slot| party && slot["side"] == "party");
     for (at, foe) in foes.iter().enumerate() {
@@ -141,19 +149,13 @@ pub fn run(d: &mut Driver<'_>) {
     let tyrant = write_creature(d, "Cinder Tyrant", Some("10"));
     let nameless = write_creature(d, "Nameless Thing", None);
     let cultist = {
-        let shrine = std::fs::read_to_string(
-            d.root
-                .join(format!("campaigns/emberfall/Encounters/{LOW}.md")),
-        )
-        .unwrap();
-        let shrine = splat::content::Entry::parse("Encounters/Shrine.md", &shrine).unwrap();
-        let slot = shrine.fields["splat_encounter"]["roster"]
+        let shrine = shrine(d);
+        let slot = shrine["roster"]
             .as_sequence()
             .unwrap()
             .iter()
             .find(|slot| slot["side"] == "enemies")
-            .unwrap()
-            .clone();
+            .unwrap();
         slot["creature"]["id"].as_str().unwrap().parse().unwrap()
     };
     write_encounter(d, HIGH, true, &[tyrant, cultist, cultist]);
@@ -207,7 +209,7 @@ pub fn run(d: &mut Driver<'_>) {
     editor_says(
         d,
         "T5.7-editor",
-        &format!("ROSTER 8 · {HIGH_NUMBERS} · High"),
+        &heading,
         &format!("High · {HIGH_NUMBERS}"),
     );
     d.state("editor-high", Sizes::All);
@@ -221,7 +223,7 @@ pub fn run(d: &mut Driver<'_>) {
     editor_says(
         d,
         "T5.7-editor-lookup",
-        &format!("ROSTER 8 · {HIGH_NUMBERS} · High"),
+        &heading,
         &format!("High · {HIGH_NUMBERS}"),
     );
     d.state("editor-high-beside-lookup", Sizes::Small);

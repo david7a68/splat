@@ -417,7 +417,6 @@ fn chosen_inspiration(
     rules.iter().any(|rule| rule.id == id).then_some(id)
 }
 
-/// The inspiration rules a campaign can use: its own notes, and its packages' entries.
 /// The rule entries the campaign uses, its own notes and its packages': each with its ID,
 /// whether it is the campaign's own note, the entry, and its rule.
 fn rules_in_use<'a>(
@@ -457,6 +456,7 @@ pub fn xp_budgets(
     only(false).or_else(|| only(true))
 }
 
+/// The inspiration rules a campaign can use: its own notes, and its packages' entries.
 fn inspiration_rules(
     campaign: &Campaign,
     catalogue: &Catalogue,

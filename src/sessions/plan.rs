@@ -410,7 +410,7 @@ fn read_encounter(ui: &mut egui::Ui, rating: Option<&crate::difficulty::Rating>)
             &format!(" · {}", rating.numbers()),
             c.muted,
         );
-        let width = ui.fonts_mut(|fonts| fonts.layout_job(job.clone()).size().x);
+        let width = crate::difficulty::width(ui, &job);
         let room = ui.max_rect().right() - link.rect.right();
         if width <= room {
             let rect = egui::Rect::from_min_size(
@@ -1638,14 +1638,7 @@ mod tests {
     fn the_difficulty_word_joins_a_summary_only_when_the_summary_keeps_its_lines() {
         let ctx = egui::Context::default();
         design::theme::install(&ctx);
-        let rating = crate::difficulty::Rating {
-            word: crate::difficulty::Word::AboveHigh,
-            budgets: [750, 1125, 2000],
-            xp: 6300,
-            characters: 5,
-            levels: (3, 3),
-            campaign_party: false,
-        };
+        let rating = crate::difficulty::above_high();
         let summary = "5 party · Cinder Tyrant · 2 × Ember Cultist";
         let widths: Vec<f32> = (120..=360).map(|width| width as f32).collect();
         let output = ctx.run(Default::default(), |ctx| {
