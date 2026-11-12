@@ -307,7 +307,7 @@ impl Run {
                             break;
                         }
                     }
-                    // No target fits: the step's words without it, `Undo: 8 damage to 3`,
+                    // No target fits: the step's words without it, `Undo: 8 damage × 3`,
                     // before `Undo` alone. Hover keeps the whole step.
                     if shown == "Undo"
                         && let Some(compact) = undo_compact(&undo_label, &self.state.participants)

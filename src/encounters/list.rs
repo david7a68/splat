@@ -562,39 +562,6 @@ pub(super) fn in_progress_list(
     ui.add_space(design::L);
 }
 
-impl Encounters {
-    /// `Remove…` on a Ready to run row: its result, with the words and the pattern of a saved
-    /// group's removal.
-    pub(super) fn encounter_remove_undo(
-        &mut self,
-        ui: &mut egui::Ui,
-        active: &Campaign,
-        modules: &[Module],
-    ) {
-        let Some(removed) = &self.removed_encounter else {
-            return;
-        };
-        // A finished change has the success tone, as a deleted run's result has.
-        if design::undo_message(
-            ui,
-            Tone::Success,
-            &format!("Removed encounter {}.", removed.name),
-            "Undo remove encounter",
-        ) {
-            match removed.restore() {
-                Ok(()) => {
-                    self.removed_encounter = None;
-                    self.reload_snapshot(active, modules);
-                    self.saved = true;
-                }
-                Err(error) => {
-                    self.error = Some(format!("The encounter did not come back: {error}"));
-                }
-            }
-        }
-    }
-}
-
 /// Whether a run of this encounter is saved: unfinished, ended, or in a file that cannot be read
 /// but names it. Only an encounter with none can be removed.
 fn has_saved_run(page: &history::Arranged<'_>, row: &history::ReadyRow<'_>) -> bool {
@@ -920,9 +887,12 @@ fn history_summary(
         }
         ui.add_space(design::M - spacing);
         design::group_label(ui, "Final state");
-        // AI1: one name column, so every HP starts at one x and the DM can scan down it. The
-        // column is as wide as the longest name, up to half the room; a longer name wraps.
+        // AI1, FI6, SI1: shared columns. The name column is as wide as the longest name, up to
+        // half the room (a longer name wraps); then HP and temporary HP, each as wide as its
+        // widest value, kept where a row has none; then Absent and the conditions, which wrap
+        // inside the last column. Every value sits on its name's baseline.
         let strong = Type::Strong.font(ui);
+        let small = Type::Small.font(ui);
         let gap = ui.spacing().item_spacing.x;
         let names = summary
             .rows
@@ -930,6 +900,40 @@ fn history_summary(
             .map(|row| design::number_width(ui, &row.name, &strong))
             .fold(0.0, f32::max)
             .min(ui.available_width() / 2.0);
+        let hp_words = |row: &crate::encounter_run::FightRow| {
+            let hp = row.hp.map_or_else(|| "?".to_owned(), |hp| hp.to_string());
+            let max = row
+                .max_hp
+                .map_or_else(|| "?".to_owned(), |hp| hp.to_string());
+            format!("HP {hp}/{max}")
+        };
+        let temp_words = |row: &crate::encounter_run::FightRow| {
+            (row.temporary_hp > 0).then(|| format!("{} +{}", icons::TEMP_HP, row.temporary_hp))
+        };
+        let hp_width = summary
+            .rows
+            .iter()
+            .map(|row| design::number_width(ui, &hp_words(row), &small))
+            .fold(0.0, f32::max);
+        let temp_width = summary
+            .rows
+            .iter()
+            .filter_map(&temp_words)
+            .map(|words| design::number_width(ui, &words, &small))
+            .fold(0.0, f32::max);
+        // A fixed cell: its words at the cell's left, the cell as wide as its column.
+        let cell = |ui: &mut egui::Ui, width: f32, words: Option<egui::RichText>| {
+            ui.allocate_ui_with_layout(
+                egui::vec2(width, 0.0),
+                egui::Layout::top_down(egui::Align::Min),
+                |ui| {
+                    ui.set_width(width);
+                    if let Some(words) = words {
+                        ui.add(egui::Label::new(words).extend());
+                    }
+                },
+            );
+        };
         for row in &summary.rows {
             ui.horizontal_top(|ui| {
                 ui.allocate_ui_with_layout(
@@ -944,29 +948,33 @@ fn history_summary(
                     },
                 );
                 ui.add_space(design::M - gap);
-                ui.horizontal_wrapped(|ui| {
-                    let hp = row.hp.map_or_else(|| "?".to_owned(), |hp| hp.to_string());
-                    let max = row
-                        .max_hp
-                        .map_or_else(|| "?".to_owned(), |hp| hp.to_string());
-                    ui.label(
-                        Type::Small
-                            .rich(ui, format!("HP {hp}/{max}"))
-                            .color(colors().text),
-                    );
-                    if row.temporary_hp > 0 {
-                        ui.label(
-                            Type::Small
-                                .rich(ui, format!("{} +{}", icons::TEMP_HP, row.temporary_hp))
-                                .color(colors().hp.temp),
-                        );
-                    }
-                    if !row.present {
-                        blocked_reason(ui, Some("Absent"));
-                    }
-                    if !row.conditions.is_empty() {
-                        blocked_reason(ui, Some(&row.conditions.join(", ")));
-                    }
+                // The values are one line of cells, each a top-down block, so they share the
+                // name's first line (a wrapping flow put them 4 px below it).
+                ui.vertical(|ui| {
+                    ui.horizontal_top(|ui| {
+                        let hp = Type::Small.rich(ui, hp_words(row)).color(colors().text);
+                        cell(ui, hp_width, Some(hp));
+                        if temp_width > 0.0 {
+                            let temp = temp_words(row)
+                                .map(|words| Type::Small.rich(ui, words).color(colors().hp.temp));
+                            cell(ui, temp_width, temp);
+                        }
+                        // The last column: one paragraph that wraps inside it, on the line's
+                        // baseline.
+                        let rest: Vec<String> = (!row.present)
+                            .then(|| "Absent".to_owned())
+                            .into_iter()
+                            .chain((!row.conditions.is_empty()).then(|| row.conditions.join(", ")))
+                            .collect();
+                        if !rest.is_empty() {
+                            let width = ui.available_width();
+                            ui.allocate_ui_with_layout(
+                                egui::vec2(width, 0.0),
+                                egui::Layout::top_down(egui::Align::Min),
+                                |ui| blocked_reason(ui, Some(&rest.join(" · "))),
+                            );
+                        }
+                    });
                 });
             });
         }

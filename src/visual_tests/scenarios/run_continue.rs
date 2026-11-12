@@ -154,39 +154,6 @@ fn history_line_gaps(d: &mut Driver<'_>, line: &str) {
     }
 }
 
-/// V24: the unread-steps warning has `S` above and below: it touches neither the header's
-/// hairline nor the first roster row.
-fn unread_warning_gaps(d: &mut Driver<'_>, what: &str) {
-    for size in [SMALL, DEFAULT] {
-        let gaps = d.at_size(size, |d| {
-            let warning = painted_paragraph(d, UNREAD)?;
-            let hairline = d
-                .hairlines_in(egui::Rect::EVERYTHING)
-                .into_iter()
-                .filter(|line| {
-                    line.center().y < warning.top() && line.x_range().contains(warning.left())
-                })
-                .map(|line| line.center().y)
-                .max_by(f32::total_cmp)?;
-            let row = d
-                .nodes()
-                .into_iter()
-                .filter(|node| node.name.contains(", HP ") && node.name.contains(", AC "))
-                .map(|node| node.rect.top())
-                .filter(|top| *top > warning.top())
-                .min_by(f32::total_cmp)?;
-            Some((warning.top() - hairline, row - warning.bottom()))
-        });
-        d.observe(
-            "V24-unread-gaps",
-            gaps.is_some_and(|(above, below)| {
-                (above - crate::design::S).abs() <= 1.0 && (below - crate::design::S).abs() <= 1.0
-            }),
-            format!("{what} at {size:?}: the gaps above and below the warning: {gaps:?}"),
-        );
-    }
-}
-
 pub fn run(d: &mut Driver<'_>) {
     // The fight belongs to a session, so the plan and Timeline have it.
     d.click(NAV_SESSIONS);
@@ -687,24 +654,91 @@ pub fn run(d: &mut Driver<'_>) {
     history_line_gaps(d, CONTINUE);
     d.state("history-continue-fight", Sizes::All);
     // AI1: Final state keeps one HP column: every row's HP starts at one x, at every size.
+    // iter-26-B AI1, FI6, SI1: temporary HP has a column of its own, the conditions start after
+    // it also on a row with no temporary HP, and each row's values sit on its name's baseline.
     for size in [SMALL, DEFAULT, LARGE] {
-        let xs = d.at_size(size, |d| {
-            let mut xs = Vec::new();
+        let (xs, temps, conditions, baselines) = d.at_size(size, |d| {
+            let (mut xs, mut temps, mut conditions, mut texts) =
+                (Vec::new(), Vec::new(), Vec::new(), Vec::new());
             d.each_painted_text(|text, clip| {
                 let words = &text.galley.job.text;
-                if words.starts_with("HP ")
-                    && words.contains('/')
-                    && clip.intersects(text.visual_bounding_rect())
-                {
+                if !clip.intersects(text.visual_bounding_rect()) {
+                    return;
+                }
+                let Some(row) = text.galley.rows.first() else {
+                    return;
+                };
+                let Some(glyph) = row.glyphs.first() else {
+                    return;
+                };
+                let baseline = text.pos.y + row.pos.y + glyph.pos.y;
+                let size = text
+                    .galley
+                    .job
+                    .sections
+                    .first()
+                    .map(|s| s.format.font_id.size);
+                texts.push((words.clone(), text.pos.x, baseline, size));
+                if words.starts_with("HP ") && words.contains('/') {
                     xs.push(text.pos.x);
+                } else if words.starts_with(crate::design::icons::TEMP_HP) {
+                    temps.push(text.pos.x + text.galley.size().x);
                 }
             });
-            xs
+            // A condition on a Final state row: on an HP's line, after it (the log has the words too).
+            for (words, x, base, _) in &texts {
+                if ["Prone", "Poisoned"]
+                    .iter()
+                    .any(|word| words.contains(word))
+                    && texts.iter().any(|(hp, hx, hbase, _)| {
+                        hp.starts_with("HP ") && hx < x && (hbase - base).abs() < 6.0
+                    })
+                {
+                    conditions.push(*x);
+                }
+            }
+            // Each HP's baseline beside the nearest larger text at its left on its line: the name.
+            let strong = crate::design::Type::Strong.size();
+            let baselines: Vec<(f32, Option<f32>)> = texts
+                .iter()
+                .filter(|(words, ..)| words.starts_with("HP ") && words.contains('/'))
+                .map(|(_, x, base, _)| {
+                    let name = texts
+                        .iter()
+                        .filter(|(_, nx, nbase, nsize)| {
+                            *nx < *x && (nbase - base).abs() < 8.0 && *nsize == Some(strong)
+                        })
+                        .max_by(|a, b| a.1.total_cmp(&b.1))
+                        .map(|(_, _, nbase, _)| *nbase);
+                    (*base, name)
+                })
+                .collect();
+            (xs, temps, conditions, baselines)
         });
+        let temp_end = temps.iter().copied().fold(f32::MIN, f32::max);
         d.observe(
             "iter-25-B-AI1",
             xs.len() >= 3 && xs.iter().all(|x| (x - xs[0]).abs() <= 0.5),
             format!("At {size:?}, the Final state HP x: {xs:?}"),
+        );
+        d.observe(
+            "iter-26-B-SI1",
+            !temps.is_empty()
+                && !conditions.is_empty()
+                && conditions
+                    .iter()
+                    .all(|x| (x - conditions[0]).abs() <= 0.5 && *x > temp_end),
+            format!(
+                "At {size:?}, temporary HP ends at {temps:?}; conditions start at {conditions:?}"
+            ),
+        );
+        d.observe(
+            "iter-26-B-FI6",
+            baselines.len() >= 3
+                && baselines
+                    .iter()
+                    .all(|(hp, name)| name.is_some_and(|name| (name - hp).abs() <= 1.0)),
+            format!("At {size:?}, each HP baseline with its name's: {baselines:?}"),
         );
     }
     d.click(CONTINUE);
@@ -860,7 +894,6 @@ pub fn run(d: &mut Driver<'_>) {
         short,
         "While the warning shows, Undo's reason says only Nothing to undo",
     );
-    unread_warning_gaps(d, "The unread-steps warning");
     d.state("undo-steps-unread", Sizes::All);
     open_lookup(d);
     whole_at_every_size(
@@ -870,9 +903,27 @@ pub fn run(d: &mut Driver<'_>) {
         &[DISMISS, NEXT_TURN],
         "",
     );
-    unread_warning_gaps(d, "The unread-steps warning beside Lookup");
     d.state("undo-steps-unread-beside-lookup", Sizes::All);
+    // iter-26-R FI2: the warning is in the message footer below the roster, so Dismiss moves
+    // no row, at every captured size.
+    let tops = |d: &mut Driver<'_>| {
+        [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                roster_places(d)
+                    .into_iter()
+                    .map(|(name, rect)| (name, rect.top().round()))
+                    .collect::<Vec<_>>()
+            })
+        })
+    };
+    let warned = tops(d);
     d.click(DISMISS);
+    let dismissed = tops(d);
+    d.observe(
+        "iter-26-R-FI2-dismiss",
+        warned.iter().all(|rows| !rows.is_empty()) && warned == dismissed,
+        format!("Row tops with the warning {warned:?}, after Dismiss {dismissed:?}"),
+    );
     d.observe(
         "T17.5",
         !d.visible_passage(UNREAD) && lookup_keeps_its_entry(d),

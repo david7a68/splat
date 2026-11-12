@@ -13,7 +13,15 @@ const ROW: f32 = 40.0;
 const LIST_WIDTH: f32 = 260.0;
 /// More rows than this in one check are counted, not shown.
 const CHECK_ROWS: usize = 40;
-/// What the Problems page lists, in the words of its sections.
+/// The line above the World card while Lookup holds a second unsaved NPC (round 26 FB8).
+pub(crate) fn kept_in_lookup(lookup: &str, card: &str) -> String {
+    format!("{lookup} is not saved. It is in Lookup. Save or discard {card} to show {lookup} here.")
+}
+
+/// The advice page's row and title: what to check, not what is broken (round 26 FF3, FH1).
+pub(crate) const PROBLEMS_TITLE: &str = "Things to check";
+
+/// What the Things to check page lists, in the words of its sections.
 const PROBLEMS_INTRO: &str = "These lists show notes with a date outside an event, a link to no note, no summary, no links, or a name or sentence on two notes. Splat only lists them. You change the notes.";
 /// The words for a held NPC, in the rail and in the row above another view. The rail's link
 /// is found by this constant.
@@ -146,6 +154,8 @@ pub struct WorldPage {
     generated_shown: bool,
     /// The NPC that Discard let go, with its table facts, for one `Undo discard`.
     discarded_npc: Option<Held>,
+    /// When the page's result (`Note repaired.` or the NPC's discard) was made.
+    result_order: u64,
     generator_problems: Vec<crate::npc_generator::TableProblem>,
     generator_sources: Vec<String>,
     error: Option<PageError>,
@@ -605,6 +615,7 @@ impl WorldPage {
                         self.view = View::Reader;
                         self.selected = repair.entry_id();
                         self.repaired = self.selected;
+                        self.result_order = super::next_order();
                         // The repair is the newer result. A change result kept from before the
                         // note broke has nothing left to undo, and would hide `Note repaired.`.
                         // Another note's rename keeps its Undo.
@@ -650,6 +661,12 @@ impl WorldPage {
                     .and_then(|id| index.position(id))
                     .map(|position| &index.items[position])
                 else {
+                    // The result sits in the pane's footer, as it does below a note (round 26
+                    // FF1), so the empty state's advice keeps its place.
+                    let lines: Vec<_> = self.result(None).iter().map(|(r, _)| r.line()).collect();
+                    if super::draw_footer(ui, "world_footer", &lines).0.is_some() {
+                        self.undo_discard();
+                    }
                     design::empty_state(
                         ui,
                         icons::WORLD,
@@ -657,33 +674,38 @@ impl WorldPage {
                         "Choose one from the list, or make a new one.",
                         |_| {},
                     );
-                    // With no file line, the result sits below the empty state's words, near
-                    // the height it has below a note's file line.
-                    if let Some(result) = self.result(None)
-                        && super::page_result(ui, &result)
-                    {
-                        self.undo_discard();
-                    }
                     return;
                 };
+                // A later result on the repaired note replaces `Note repaired.`.
+                if self.repaired == Some(item.entry.id)
+                    && self.reader.has_change_result(campaign, &item.entry.path)
+                {
+                    self.repaired = None;
+                }
+                // Every result, reason and Undo of the open note sits in the pane's footer,
+                // pinned below the reader, so none of them moves the note (round 26).
+                let page = self.result(Some(item.entry.id));
+                let lines = self.reader.footer_lines(
+                    item,
+                    index,
+                    Some(campaign),
+                    page.as_ref().map(|(page, order)| (page, *order)),
+                );
+                let (pressed, bottom) = super::draw_footer(ui, "world_footer", &lines);
+                match pressed {
+                    Some(super::FooterAct::Page) => self.undo_discard(),
+                    Some(act) => nav = self.reader.footer_act(act, item, campaign),
+                    None => {}
+                }
                 // As in Library, a wide table may use the pane; prose keeps its measure.
                 crate::markdown_view::with_wide_tables(ui, |ui| {
                     egui::ScrollArea::vertical()
                         .id_salt(("world_reader", item.entry.id))
+                        // The reader ends `S` above the footer, so the footer never covers it.
+                        .max_height((bottom - ui.cursor().top()).max(0.0))
                         .auto_shrink([false, false])
                         .show(ui, |ui| {
-                            // A later result on the repaired note replaces `Note repaired.`.
-                            if self.repaired == Some(item.entry.id)
-                                && self.reader.has_change_result(campaign, &item.entry.path)
-                            {
-                                self.repaired = None;
-                            }
-                            self.reader.page_result = self.result(Some(item.entry.id));
                             let read = self.reader.read(ui, item, index, Some(campaign));
-                            self.reader.page_result = None;
-                            if std::mem::take(&mut self.reader.page_result_undo) {
-                                self.undo_discard();
-                            }
                             nav = nav.take().or(read);
                         });
                 });
@@ -744,7 +766,7 @@ impl WorldPage {
     }
 
     /// Above another view: the held NPC's one row. The Undo for a discarded NPC is a result, so
-    /// it sits below the file line.
+    /// it sits in the pane footer.
     fn held_row(&mut self, ui: &mut egui::Ui) {
         if let Some(npc) = self.generated.as_ref().filter(|_| !self.generated_shown)
             && unsaved_npc_row(ui, &npc.name)
@@ -753,15 +775,18 @@ impl WorldPage {
         }
     }
 
-    /// The result this page shows below the file line: the NPC Discard let go, or the repair
-    /// that made the open note readable.
-    fn result(&self, open: Option<Uuid>) -> Option<super::PageResult> {
+    /// The result this page shows in the footer: the NPC Discard let go, or the repair that made
+    /// the open note readable, with when it was made (`world::next_order`).
+    fn result(&self, open: Option<Uuid>) -> Option<(super::PageResult, u64)> {
         if let Some((npc, _, _)) = self.discarded_npc.as_ref()
             && self.generated.is_none()
         {
-            Some(super::PageResult::Discarded(npc.name.clone()))
+            Some((
+                super::PageResult::Discarded(npc.name.clone()),
+                self.result_order,
+            ))
         } else if open.is_some() && self.repaired == open {
-            Some(super::PageResult::Repaired)
+            Some((super::PageResult::Repaired, self.result_order))
         } else {
             None
         }
@@ -832,7 +857,7 @@ impl WorldPage {
                         .show(ui)
                         .clicked();
                     ui.add_space(design::L - ui.spacing().item_spacing.x);
-                    let cancel = design::Action::secondary("Cancel")
+                    let cancel = design::Action::secondary("Close note")
                         .density(design::Density::Read)
                         .show(ui)
                         .clicked();
@@ -923,19 +948,10 @@ impl WorldPage {
         }
         if let Some(npc) = self.generated.as_ref().filter(|_| self.generated_shown) {
             if let Some(name) = self.lookup_npc.as_ref().filter(|_| self.lookup_kept) {
-                ui.label(
-                    Type::Small
-                        .rich(
-                            ui,
-                            // Two NPCs: the one Lookup keeps and the one on this card. Each is
-                            // named, so the DM knows which to save and which moves here.
-                            format!(
-                                "Lookup keeps {name}. Save or discard {} to move {name} here.",
-                                npc.name
-                            ),
-                        )
-                        .color(colors().muted),
-                );
+                // Two NPCs: the one Lookup keeps and the one on this card. Each is named, so the
+                // DM knows which to save and which moves here. It is a state, so it is an info
+                // message with its icon (round 26 FB8).
+                design::small_message(ui, design::Tone::Info, &kept_in_lookup(name, &npc.name));
             }
             let choice = crate::lookup::generator_card(
                 ui,
@@ -955,6 +971,7 @@ impl WorldPage {
             if choice.discard
                 && let Some(npc) = self.generated.take()
             {
+                self.result_order = super::next_order();
                 self.discarded_npc = Some((
                     npc,
                     std::mem::take(&mut self.generator_problems),
@@ -1015,8 +1032,10 @@ impl WorldPage {
             ),
             (
                 View::Problems,
-                "Problems",
-                design::count(checks.problems(), "thing to check", "things to check"),
+                // Round 26 FF3, FH1: advice, not faults. The header's `needs fixing` is the
+                // only fault count, so this row names suggestions.
+                PROBLEMS_TITLE,
+                design::count(checks.problems(), "suggestion", "suggestions"),
                 checks.problems(),
             ),
         ];
@@ -1050,18 +1069,26 @@ impl WorldPage {
                 note(ui, &design::count(count - CHECK_ROWS, "more", "more"));
             }
         };
-        // One page's lines under its name, as the reader lists lines from other pages.
+        // One page's lines, then its name. The page answers "which questions are open?", so
+        // each line is `Body` first and opens the note at its heading; the note that holds them
+        // follows in `Small` (round 26 FE4).
         let mut by_page = |ui: &mut egui::Ui, found: &[super::checks::Found]| {
             for group in found.chunk_by(|a, b| a.page == b.page).take(CHECK_ROWS) {
                 ui.push_id(group[0].page, |ui| {
-                    if design::link(ui, &index.items[group[0].page].entry.name).clicked() {
-                        open = Some((group[0].page, None));
-                    }
                     for line in group {
-                        if design::line_link(ui, "", &line.words).clicked() {
+                        if design::wrapped_link(ui, &line.words).clicked() {
                             open = Some((line.page, line.heading.clone()));
                         }
                     }
+                    ui.horizontal_wrapped(|ui| {
+                        ui.spacing_mut().item_spacing.x = 0.0;
+                        note(ui, "In ");
+                        if design::small_link(ui, &index.items[group[0].page].entry.name).clicked()
+                        {
+                            open = Some((group[0].page, None));
+                        }
+                    });
+                    ui.add_space(design::S);
                 });
             }
             more(ui, found.chunk_by(|a, b| a.page == b.page).count());
@@ -1076,7 +1103,7 @@ impl WorldPage {
             by_page(ui, &checks.questions);
             return open;
         }
-        design::reader::title(ui, "Problems");
+        design::reader::title(ui, PROBLEMS_TITLE);
         design::reader::subtitle(ui, PROBLEMS_INTRO);
         if !checks.loose_dates.is_empty() {
             design::reader::section_heading(ui, "Dates outside events");
@@ -1418,7 +1445,7 @@ mod tests {
             (
                 "AD1-problems",
                 Box::new(|harness| {
-                    click_starting(harness, "Problems · ");
+                    click_starting(harness, "Things to check · ");
                     harness.state().view == View::Problems
                         && harness.query_by_label(PROBLEMS_INTRO).is_some()
                 }),
@@ -1534,7 +1561,7 @@ mod tests {
                 page.begin_new("generate", None)
             }),
         ] {
-            click_starting(&mut harness, "Problems · ");
+            click_starting(&mut harness, "Things to check · ");
             open(harness.state_mut());
             harness.run_steps(2);
             if held(harness.state()).as_deref() != Some(npc.as_str())
@@ -1580,12 +1607,13 @@ mod tests {
         let npc = held(harness.state()).unwrap();
         let attributes = harness.state().generated.clone().unwrap().attributes;
         let notice = format!("{npc} draft discarded.");
+        // The message and its footer both carry these words (round 26), so count either.
         harness.get_by_label("Discard").click();
         harness.run_steps(2);
         assert!(held(harness.state()).is_none(), "Discard lets the NPC go");
         assert!(harness.query_by_label("Save NPC").is_none());
         assert!(
-            harness.query_by_label(&notice).is_some(),
+            harness.query_all_by_label(&notice).next().is_some(),
             "AD1-discard-notice"
         );
         harness
@@ -1602,14 +1630,14 @@ mod tests {
             "AD1-undo-discard: the same NPC comes back"
         );
         assert!(harness.query_by_label("Save NPC").is_some());
-        assert!(harness.query_by_label(&notice).is_none());
+        assert!(harness.query_all_by_label(&notice).next().is_none());
 
         // Moving on ends the Undo. The NPC is then gone and nothing was written.
         harness.get_by_label("Discard").click();
         harness.run_steps(2);
-        assert!(harness.query_by_label(&notice).is_some());
+        assert!(harness.query_all_by_label(&notice).next().is_some());
         let problems = harness
-            .query_all_by_label_contains("Problems · ")
+            .query_all_by_label_contains("Things to check · ")
             .next()
             .unwrap()
             .accesskit_node()
@@ -1618,7 +1646,8 @@ mod tests {
         harness.get_by_label(&problems).click();
         harness.run_steps(2);
         assert!(
-            harness.query_by_label(&notice).is_none() && harness.state().discarded_npc.is_none(),
+            harness.query_all_by_label(&notice).next().is_none()
+                && harness.state().discarded_npc.is_none(),
             "AD1-undo-ends: another view ends the Undo"
         );
         assert!(npc_files(dir.path()).is_empty(), "Discard writes nothing");
@@ -1657,7 +1686,7 @@ mod tests {
             )))
         });
         let detail = &page.broken_details["Notes/Broken.md"];
-        assert_eq!(detail.cause, "Text format cannot be read", "AD2-row-cause");
+        assert_eq!(detail.cause, "Not a text file", "AD2-row-cause");
         assert_eq!(
             detail.hover, "Splat cannot read Notes/Broken.md as text.",
             "AD2-row-hover"

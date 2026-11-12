@@ -221,4 +221,69 @@ pub fn run(d: &mut Driver<'_>) {
         note(d) == after,
         "Undo remove puts the scene's line back where it was",
     );
+
+    // Round 26 FL1 contract: the plan's footer keeps every live Undo. A scene (A), then an
+    // unrelated Long rest (B), then Undo scene: A's line goes, B's event and its Undo stay.
+    d.click("More Add actions");
+    d.click("Add Scene");
+    d.type_text("ash");
+    d.click(&format!("{KEEP} · Location"));
+    d.expect("Scene added to tonight.");
+    d.press(Key::Escape);
+    let events = |d: &mut Driver<'_>| {
+        d.app_mut()
+            .timeline
+            .events
+            .iter()
+            .filter(|event| event.title == "Long rest")
+            .count()
+    };
+    let rests = events(d);
+    d.click("Add Long rest");
+    d.expect("Undo add");
+    let added = events(d) == rests + 1;
+    let both = d.in_view("Undo scene") && d.in_view("Undo add") && added;
+    // Review of PR 274, item 2: live Undo results go newest first, whatever their kind.
+    let top = |d: &Driver<'_>, name: &str| d.place_of(name).map(|rect| rect.top());
+    let (rest_top, scene_top) = (top(d, "Undo add"), top(d, "Undo scene"));
+    d.observe(
+        "review-274-2-rest-newest",
+        rest_top
+            .zip(scene_top)
+            .is_some_and(|(rest, scene)| rest < scene),
+        format!("The newer Long rest's Undo {rest_top:?} is above the older scene's {scene_top:?}"),
+    );
+    d.click("Undo scene");
+    let kept = events(d) == rests + 1;
+    let undone = !note(d).contains(KEEP);
+    d.observe(
+        "iter-26-S-FL1-undo",
+        both && undone && kept && d.in_view("Undo add"),
+        "Both results stay listed; Undo scene takes A's line out, and B's event and Undo stay",
+    );
+
+    // The other order: the Long rest (now the older) and then a scene (C). C's Undo is above;
+    // Undo of the older Long rest keeps C's line and its Undo.
+    d.click("More Add actions");
+    d.click("Add Scene");
+    d.type_text("ash");
+    d.click(&format!("{KEEP} · Location"));
+    d.expect("Scene added to tonight.");
+    d.press(Key::Escape);
+    let (rest_top, scene_top) = (top(d, "Undo add"), top(d, "Undo scene"));
+    d.observe(
+        "review-274-2-scene-newest",
+        rest_top
+            .zip(scene_top)
+            .is_some_and(|(rest, scene)| scene < rest),
+        format!("The newer scene's Undo {scene_top:?} is above the older Long rest's {rest_top:?}"),
+    );
+    d.click("Undo add");
+    let rest_gone = events(d) == rests;
+    let scene_kept = note(d).contains(KEEP) && d.in_view("Undo scene");
+    d.observe(
+        "review-274-2-undo-older",
+        rest_gone && scene_kept,
+        format!("Undo of the older Long rest: its event gone {rest_gone}, the newer scene and its Undo kept {scene_kept}"),
+    );
 }

@@ -682,6 +682,8 @@ The **Edit** action beside a campaign entry's name, in World or Lookup, opens on
 **In**, **Part of** and the entry's text, without its title line. This form includes empty fields. If **Part of** could not be read, its **Change** action is blocked
 with a message that quotes the value it could not read, gives its line, and says to write each group as a link, such as `[[Arena Guild]]`. Other fields stay editable, and saving them keeps the stored group text unchanged. **Save changes** (Ctrl+S) writes them together and offers
 **Undo changes**. During a live fight, **Save changes** uses a secondary border so **Next turn** stays the primary action.
+Results and their Undo, such as **Stat block set to Guard.**, sit at the bottom of the World or Lookup pane, so the note
+you read does not move when a result comes or goes.
 The form keeps its state and quiet **Discard** at the left, with **Save changes** at the right edge of both text fields.
 **Discard** writes nothing and offers **Undo discard**. The rail shows **World draft** for an unsaved edit,
 or **World repair draft** once if a repair is also unsaved. If the note changed on disk, Splat writes
@@ -706,7 +708,7 @@ says to add a table of names to a note and paste the marker on the line above th
 the marker line for you; then change `1d6` in it to the number of names.
 
 On the World page, an unsaved NPC stays until you save it or choose **Discard**, and **Undo discard** brings it back.
-While you look at other notes, Problems or a repair, one row above them says **Unsaved NPC: <name> · Show**.
+While you look at other notes, Things to check or a repair, one row above them says **Unsaved NPC: <name> · Show**.
 The rail says **Unsaved NPC** on every page; select it to see the NPC's card on World.
 
 The built-in lists suit no world in particular, so a campaign can replace any of the four. Mark a table with the key

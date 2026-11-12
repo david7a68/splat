@@ -2539,12 +2539,20 @@ fn scroll_part<R>(
             }
             let out = add(ui);
             // A control inside that gains keyboard focus scrolls into view, once: Tab to an Undo
-            // the part has scrolled away shows it. A later wheel is not pulled back.
+            // the part has scrolled away shows it. A later wheel is not pulled back. A change of
+            // focus in a pass with a pointer press, hold or release is not looked up: egui's
+            // `read_response` drops the focus of a widget that such a press is not on, so a click
+            // elsewhere (Lookup in the rail) would lose the focus it just gave its search field.
             let focused = ui.ctx().memory(|memory| memory.focused());
             let seen = id.with("seen_focus");
+            let pointer = ui.input(|input| {
+                let pointer = &input.pointer;
+                pointer.any_down() || pointer.any_pressed() || pointer.any_released()
+            });
             if ui.ctx().data(|data| data.get_temp::<Option<Id>>(seen)) != Some(focused) {
                 ui.ctx().data_mut(|data| data.insert_temp(seen, focused));
                 if let Some(rect) = focused
+                    .filter(|_| !pointer)
                     .filter(|focused| *focused != focus)
                     .and_then(|focused| ui.ctx().read_response(focused))
                     .map(|response| response.rect)

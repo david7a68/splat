@@ -10,7 +10,8 @@ use serde_yaml_ng::{Mapping, Value};
 
 /// Five characters, the Cinder Tyrant (CR 10, XP 5,900) and two Ember Cultists (XP 200 each).
 const HIGH: &str = "Mill Road";
-const HIGH_SUMMARY: &str = "5 party · Cinder Tyrant · 2 × Ember Cultist";
+// iter-26-B FL2: the members in the group's form, each with its count, joined by commas.
+const HIGH_SUMMARY: &str = "5 party · 1 × Cinder Tyrant, 2 × Ember Cultist";
 const HIGH_NUMBERS: &str = "XP 6,300 of 6,400";
 /// Two Cinder Tyrants and no character: the campaign's party stands in.
 const ABOVE: &str = "Court of Cinders";
@@ -107,7 +108,7 @@ fn ready_rows_say_their_word(d: &mut Driver<'_>, id: &str) {
             *high == format!("{HIGH} · {HIGH_SUMMARY} · High")
                 && above == &format!("{ABOVE} · 2 × Cinder Tyrant · Above High")
                 && low == &format!("{LOW} · 5 party · 2 × Ember Cultist · Low")
-                && unknown == &format!("{UNKNOWN} · 5 party · Nameless Thing"),
+                && unknown == &format!("{UNKNOWN} · 5 party · 1 × Nameless Thing"),
             format!("At {size:?}, the Ready to run rows read {lines:?}"),
         );
     }
@@ -188,7 +189,13 @@ fn editor_says(d: &mut Driver<'_>, id: &str, wide: &str, narrow: &str) {
 fn plan_summary_line(d: &Driver<'_>, summary: &str) -> Option<String> {
     let mut found = None;
     d.each_painted_text(|text, clip| {
-        let words = text.galley.job.text.replace('\u{a0}', " ");
+        // A line break stands for the separator it dropped (FI7).
+        let words = text
+            .galley
+            .job
+            .text
+            .replace('\u{a0}', " ")
+            .replace('\n', " · ");
         if found.is_none()
             && clip.intersects(text.visual_bounding_rect())
             && words.starts_with(summary)
@@ -357,7 +364,7 @@ pub fn run(d: &mut Driver<'_>) {
             let [low, unknown, high] = d.at_size(size, |d| {
                 [
                     "5 party · 2 × Ember Cultist",
-                    "5 party · Nameless Thing",
+                    "5 party · 1 × Nameless Thing",
                     HIGH_SUMMARY,
                 ]
                 .map(|summary| plan_summary_line(d, summary))
@@ -366,7 +373,7 @@ pub fn run(d: &mut Driver<'_>) {
             d.observe(
                 "T12.1-difficulty",
                 low.as_deref() == Some("5 party · 2 × Ember Cultist · Low")
-                    && unknown.as_deref() == Some("5 party · Nameless Thing")
+                    && unknown.as_deref() == Some("5 party · 1 × Nameless Thing")
                     && high.as_deref().is_some_and(|high| {
                         high == HIGH_SUMMARY || high == format!("{HIGH_SUMMARY} · High")
                     }),
