@@ -1072,8 +1072,7 @@ fn blocked(rows: &[Row]) -> Vec<String> {
 
 /// What differs between the frozen counts and this journey's, one line each.
 fn differences(frozen: &[TaskCount], measured: &[TaskCount], rows: &[Row]) -> Vec<String> {
-    let name =
-        |task: &TaskCount| format!("the task \"{}\" ({})", task.task, task.phase);
+    let name = |task: &TaskCount| format!("the task \"{}\" ({})", task.task, task.phase);
     let mut out = blocked(rows);
     for old in frozen {
         match measured
