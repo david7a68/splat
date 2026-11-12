@@ -16265,6 +16265,25 @@ pub mod session_plan_groups {
                 .is_some_and(|words| d.has_tone_bar(words, crate::design::colors().result.success)),
             "Removing a group from the plan uses the tone a removed fight uses",
         );
+        // Lead ruling, round 26 (one pane, one footer): the group's removal result is in the
+        // plan's message footer, below the rows, not in the removed row's place.
+        let removed = format!("Removed “{GROUP_RIVALS}” from tonight.");
+        let footer = d
+            .nodes()
+            .into_iter()
+            .find(|node| node.role == egui::accesskit::Role::GenericContainer && node.name.contains(&removed))
+            .map(|node| node.rect);
+        let rows_end = d
+            .nodes()
+            .into_iter()
+            .filter(|node| node.name.starts_with("More actions for ") && node.in_view())
+            .map(|node| node.rect.bottom())
+            .fold(f32::MIN, f32::max);
+        d.observe(
+            "iter-26-S-group-removed-footer",
+            footer.is_some_and(|footer| footer.top() > rows_end),
+            format!("The removal result is in the plan's footer {footer:?}, below the rows ending at {rows_end}"),
+        );
         d.observe(
             "P17",
             !d.has(&format!("Edit group {GROUP_RIVALS}")),

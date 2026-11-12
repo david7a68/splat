@@ -1634,8 +1634,8 @@ from (its place and its whole text): what it cannot do shows, in a warning, wher
 words change or, for `Notes not saved`, until the note saves. An act whose save failed keeps its Undo.
 
 Remove from tonight removes one fight or group link, retaining surrounding words, with Undo remove below that
-row after `S`. Removed groups leave message and Undo in their old place, keeping other rows still, until the
-next note or plan edit. Removing a timeline event names it by its state or result, `Removed “Bridge Ambush”
+row after `S`. A removed group's message and Undo sit in the plan's message footer until the next note or plan
+edit. Removing a timeline event names it by its state or result, `Removed “Bridge Ambush”
 (Round 2 · Paused).`, and, when another row of that name stays in the session, says so: `The other “Bridge
 Ambush” and its result stay.` The book owns that message and its Undo remove, on the plan and on Timeline,
 and they belong to the removed event's session. They end at an edit of that session's note, plan or Timeline

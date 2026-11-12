@@ -36,6 +36,7 @@ const UNDO_ADD_FOR: Duration = Duration::from_secs(30);
 enum FooterAct {
     GoToGroup,
     UndoGroupDiscard,
+    UndoGroupRemove,
     UndoDeletedRun,
     UndoAdd(String),
     UndoRemove,
@@ -1216,28 +1217,26 @@ impl Sessions {
         }
     }
 
-    fn removed_group_message(
+    /// Lead ruling, round 26 (one pane, one footer): a plan group's removal result and its Undo
+    /// sit in the plan's message footer, not in the removed row's place.
+    fn removed_group_message<'a>(
         &self,
-        ui: &mut egui::Ui,
+        footer: &mut design::Footer<'a>,
+        act: &'a std::cell::Cell<Option<FooterAct>>,
         session: Option<Uuid>,
-        position: usize,
-    ) -> bool {
-        let Some((id, at, _, _, height, name)) = &self.removed_group else {
-            return false;
+    ) {
+        let Some((id, _, _, _, _, name)) = &self.removed_group else {
+            return;
         };
-        if *id != session || *at != position {
-            return false;
+        if *id != session {
+            return;
         }
-        ui.allocate_ui(egui::vec2(ui.available_width(), *height), |ui| {
-            ui.set_min_height(*height);
-            design::undo_message(
-                ui,
-                Tone::Success,
-                &format!("Removed “{name}” from tonight."),
-                "Undo remove",
-            )
-        })
-        .inner
+        let words = format!("Removed “{name}” from tonight.");
+        footer.result(words.clone(), true, move |ui| {
+            if design::undo_message(ui, Tone::Success, &words, "Undo remove") {
+                act.set(Some(FooterAct::UndoGroupRemove));
+            }
+        });
     }
 
     /// The session as a list, top to bottom: what happened, then what is still to come. It
@@ -1382,6 +1381,7 @@ impl Sessions {
         // Round 26 FL1: the plan's results, reasons and notices sit in its message footer, pinned
         // below the rows, so a result never moves a row or the Add strip.
         let footer_act = std::cell::Cell::new(None);
+        let mut group_undo_in_footer = false;
         let mut footer =
             design::Footer::new(("session_plan_footer", session), ui.available_width());
         if plan.group_open && self.not_being_played().is_none() {
@@ -1427,12 +1427,14 @@ impl Sessions {
             &planned_results,
         );
         self.scene_messages(&mut footer, &footer_act, folded);
+        self.removed_group_message(&mut footer, &footer_act, session);
         let body_bottom = footer.show(ui);
         match footer_act.take() {
             Some(FooterAct::GoToGroup) => {
                 self.select(self.group_session);
             }
             Some(FooterAct::UndoGroupDiscard) => self.wants_group_undo = true,
+            Some(FooterAct::UndoGroupRemove) => group_undo_in_footer = true,
             Some(FooterAct::UndoDeletedRun) => self.undo_deleted_run(),
             Some(FooterAct::UndoAdd(id)) => {
                 book.undo_add(&id);
@@ -1463,7 +1465,7 @@ impl Sessions {
         let mut insert = None;
         let mut remove = None;
         let mut remove_group = None;
-        let mut undo_group_remove = false;
+        let undo_group_remove = group_undo_in_footer;
         let mut remove_fight = None;
         let mut delete_run = None;
         let mut toggle = None;
@@ -1725,7 +1727,6 @@ impl Sessions {
                 }
                 any |= scenes.iter().any(|scenes| !scenes.is_empty());
                 for (position, group) in planned_groups.iter().enumerate() {
-                    undo_group_remove |= self.removed_group_message(ui, session, position);
                     any = true;
                     let row = ui.push_id(group.id, |ui| {
                         let mut read_group = false;
@@ -1781,8 +1782,7 @@ impl Sessions {
                     });
                     if let Some((at, _, height)) = &mut remove_group && *at == position { *height = row.response.rect.height(); }
                 }
-                undo_group_remove |= self.removed_group_message(ui, session, planned_groups.len());
-                if !any && self.removed_group.is_none() {
+                if !any {
                     design::empty_state(ui, icons::SESSIONS, "Nothing planned yet",
                         "Use Add to plan a fight, a group, or an event.", |_| {});
                 }
