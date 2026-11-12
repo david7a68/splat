@@ -1080,13 +1080,22 @@ pub(super) struct PlanModelCache {
     pub(super) builds: usize,
 }
 
-/// Where a scene act's words show: under the scene's row, under the Scene field, or below the
-/// Add strip.
+/// Where a scene act's words show: under the scene's row, under the Scene field, or in the
+/// plan's message footer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Place {
     Row(Slot),
     Field,
-    Strip,
+    Footer,
+}
+
+/// Where each scene result shows in this frame, decided once before anything is drawn
+/// (`Sessions::shown_at`).
+#[derive(Clone, Copy, Default)]
+struct Shown {
+    added: Option<Place>,
+    removed: Option<Place>,
+    fault: Option<Place>,
 }
 
 /// What a scene act could not do, while the note's words are the words it met.
@@ -2164,8 +2173,15 @@ impl Sessions {
         let hold =
             self.scenes.typing || self.scenes.field.as_ref().is_some_and(|field| field.focus);
         let (folded, fold_line) = self.scenes.fold.state(scene_count, hold);
-        // The removed scene's words and Undo show at its row's place while that place is drawn.
-        let removed_slot = removed_slot.filter(|_| !folded);
+        // Each scene result's place in this frame: its own while that is drawn, else the footer.
+        let rows = (!folded).then_some(scenes.as_slice());
+        let shown = Shown {
+            added: self.scenes.added.as_ref().map(|_| self.shown_at(Place::Field, rows)),
+            removed: self.scenes.removed.as_ref().map(|_| {
+                self.shown_at(removed_slot.map_or(Place::Footer, Place::Row), rows)
+            }),
+            fault: self.scenes.fault.as_ref().map(|fault| self.shown_at(fault.place, rows)),
+        };
         let mut scene_act = None;
         // The closed rows' heights, without and with the scenes, for the next frame's fold.
         let mut closed = 0.0;
@@ -2287,10 +2303,14 @@ impl Sessions {
             plan,
             &planned_results,
         );
-        self.scene_messages(&mut footer, &mut undos, &footer_act, folded, removed_slot);
+        self.scene_messages(&mut footer, &mut undos, &footer_act, shown);
         self.removed_group_message(&mut undos, &footer_act, session);
         undos.into_footer(&mut footer);
+        // The fold measures the room the rows have with an empty footer, so that a result coming
+        // or going never folds or unfolds the scenes.
+        let pane_bottom = ui.available_rect_before_wrap().bottom();
         let body_bottom = footer.show(ui);
+        let footer_height = pane_bottom - body_bottom;
         match footer_act.take() {
             Some(FooterAct::GoToGroup) => {
                 self.select(self.group_session);
@@ -2590,7 +2610,7 @@ impl Sessions {
                 for (position, fight) in planned.iter().enumerate() {
                     self.removed_fight_message(ui, session, position);
                     if !folded {
-                        closed_scenes += self.scene_rows(ui, width, &scenes[position], position, removed_slot, plan, &mut scene_act);
+                        closed_scenes += self.scene_rows(ui, width, &scenes[position], position, shown, plan, &mut scene_act);
                     }
                     any = true;
                     let running = plan.open_run.is_some() && plan.open_encounter == Some(fight.name.as_str());
@@ -2668,7 +2688,7 @@ impl Sessions {
                 }
                 self.removed_fight_message(ui, session, planned.len());
                 if !folded {
-                    closed_scenes += self.scene_rows(ui, width, &scenes[planned.len()], planned.len(), removed_slot, plan, &mut scene_act);
+                    closed_scenes += self.scene_rows(ui, width, &scenes[planned.len()], planned.len(), shown, plan, &mut scene_act);
                 }
                 any |= scenes.iter().any(|scenes| !scenes.is_empty());
                 for (position, group) in planned_groups.iter().enumerate() {
@@ -2735,12 +2755,12 @@ impl Sessions {
                         "Use Add to plan a fight, a group, or an event.", |_| {});
                 }
                 reveal.finish(ui);
-                self.scene_field(ui, index.as_deref(), &mut scene_act);
+                self.scene_field(ui, index.as_deref(), shown, &mut scene_act);
                 let drawn = ui.min_rect();
                 outer.advance_cursor_after_rect(drawn);
             });
             ui.advance_cursor_after_rect(area.min_rect());
-            pane = Some(output.inner_rect.height());
+            pane = Some(output.inner_rect.height() + footer_height);
         });
         // The reveal ends when the row after the target is in view, or after at most
         // `REVEAL_DRAWS` tries (a draw that the footer discards to measure itself does not show).
@@ -2899,31 +2919,47 @@ impl Sessions {
         width: f32,
         scenes: &[(usize, &Scene)],
         position: usize,
-        removed: Option<Slot>,
+        shown: Shown,
         plan: &Plan<'_>,
         act: &mut Option<SceneAct>,
     ) -> f32 {
         let mut height = 0.0;
         for (at, (line, scene)) in scenes.iter().enumerate() {
-            if removed == Some((position, at)) {
-                self.removed_scene_message(ui, Place::Row((position, at)), act);
+            let place = Place::Row((position, at));
+            if shown.removed == Some(place) {
+                self.removed_scene_message(ui, place, act);
             }
             height += scene_row(ui, width, scene, ((position, at), *line), plan, act);
-            self.row_fault(ui, Place::Row((position, at)));
+            self.row_fault(ui, place, shown);
         }
-        let end = (position, scenes.len());
-        if removed == Some(end) {
-            self.removed_scene_message(ui, Place::Row(end), act);
+        let end = Place::Row((position, scenes.len()));
+        if shown.removed == Some(end) {
+            self.removed_scene_message(ui, end, act);
         }
         // An Undo pressed at the end of these scenes says here what it could not do.
-        self.row_fault(ui, Place::Row(end));
+        self.row_fault(ui, end, shown);
         height
     }
 
-    /// The scene act's words under the place where the DM acted.
-    fn row_fault(&self, ui: &mut egui::Ui, place: Place) {
+    /// Where a scene act's words show, decided as they are shown: at the act's own place while
+    /// that place is drawn (the open Scene field, or a row's place among the shown scenes), else
+    /// in the plan's footer. Words never go to a place that is not drawn. `rows` are the scenes
+    /// at each place, or `None` while they fold.
+    fn shown_at(&self, place: Place, rows: Option<&[Vec<(usize, &Scene)>]>) -> Place {
+        let drawn = match place {
+            Place::Field => self.scenes.field.is_some(),
+            Place::Row((position, at)) => {
+                rows.is_some_and(|rows| rows.get(position).is_some_and(|row| at <= row.len()))
+            }
+            Place::Footer => true,
+        };
+        if drawn { place } else { Place::Footer }
+    }
+
+    /// The scene act's words under the place where the DM acted, while they show there.
+    fn row_fault(&self, ui: &mut egui::Ui, place: Place, shown: Shown) {
         if let Some(fault) = &self.scenes.fault
-            && fault.place == place
+            && shown.fault == Some(place)
         {
             ui.add_space(design::XS);
             design::message(ui, Tone::Warning, &fault.words);
@@ -3038,28 +3074,25 @@ impl Sessions {
         }
     }
 
-    /// The scenes' results in the plan's message footer: a row's words when the scenes fold, and
-    /// a removal whose row's place is not drawn (folded, or no longer among the rows, as when
-    /// the fight before it was played). The Undo stays the note's, so it stays in reach. A
-    /// drawn row's words show under that row, and the Scene field's under the field.
+    /// The scenes' results whose own place is not drawn, in the plan's message footer
+    /// (`shown_at`): the Scene field's once it closes, a row's while the scenes fold, and a
+    /// removal whose row's place is gone. The Undo stays the note's, so it stays in reach.
     fn scene_messages<'a>(
         &self,
         footer: &mut design::Footer<'a>,
         undos: &mut LiveUndos<'a>,
         act: &'a std::cell::Cell<Option<FooterAct>>,
-        folded: bool,
-        removed: Option<Slot>,
+        shown: Shown,
     ) {
         if let Some(fault) = &self.scenes.fault
-            && (fault.place == Place::Strip || folded && matches!(fault.place, Place::Row(_)))
+            && shown.fault == Some(Place::Footer)
         {
             let words = fault.words.clone();
             footer.reason(words.clone(), move |ui| {
                 design::message(ui, Tone::Warning, &words);
             });
         }
-        // The Scene field's result shows under the open field; once it closes, here.
-        if self.scenes.field.is_none()
+        if shown.added == Some(Place::Footer)
             && let Some(undo) = &self.scenes.added
             && self.draft.as_ref().is_some_and(|draft| undo.live(draft))
         {
@@ -3074,7 +3107,7 @@ impl Sessions {
                 }
             });
         }
-        if removed.is_none()
+        if shown.removed == Some(Place::Footer)
             && let Some((_, words, undo)) = &self.scenes.removed
             && self.draft.as_ref().is_some_and(|draft| undo.live(draft))
         {
@@ -3085,7 +3118,7 @@ impl Sessions {
                 .of("scene-removed", (self.selected, undo.after().len()));
             undos.push(order, words.clone(), move |ui| {
                 if design::undo_message(ui, Tone::Success, &words, "Undo remove") {
-                    act.set(Some(FooterAct::Scene(SceneAct::UndoRemove(Place::Strip))));
+                    act.set(Some(FooterAct::Scene(SceneAct::UndoRemove(Place::Footer))));
                 }
             });
         }
@@ -3098,6 +3131,7 @@ impl Sessions {
         &mut self,
         ui: &mut egui::Ui,
         index: Option<&ContentIndex>,
+        shown: Shown,
         act: &mut Option<SceneAct>,
     ) {
         let Some(state) = &mut self.scenes.field else {
@@ -3139,7 +3173,7 @@ impl Sessions {
         let typed = state.words.trim().to_owned();
         let emptied = state.words.is_empty();
         self.scenes.typing = result.field.has_focus();
-        self.field_result(ui, reveal.then_some(result.field.rect), act);
+        self.field_result(ui, reveal.then_some(result.field.rect), shown, act);
         if let Some(link) = result.chosen {
             *act = Some(SceneAct::Add(link));
         } else if result.enter && !typed.is_empty() {
@@ -3160,10 +3194,12 @@ impl Sessions {
         &self,
         ui: &mut egui::Ui,
         reveal: Option<egui::Rect>,
+        shown: Shown,
         act: &mut Option<SceneAct>,
     ) {
-        self.row_fault(ui, Place::Field);
-        if let Some(undo) = &self.scenes.added
+        self.row_fault(ui, Place::Field, shown);
+        if shown.added == Some(Place::Field)
+            && let Some(undo) = &self.scenes.added
             && self.draft.as_ref().is_some_and(|draft| undo.live(draft))
         {
             ui.add_space(design::XS);
@@ -4505,7 +4541,7 @@ mod tests {
         );
         harness.state_mut().1.events.retain(|e| e.id != fight);
         harness.run_steps(2);
-        // The same Undo while the scenes fold shows in one place below the Add strip.
+        // The same Undo while the scenes fold shows in the plan's footer.
         harness
             .get_by_label("More actions for Captain Varra")
             .click();
@@ -4526,6 +4562,30 @@ mod tests {
         harness.get_by_label("Undo remove").click();
         harness.run_steps(2);
         assert_eq!(read(), outside);
+        // Review of PR 280: the closed rows decide the fold, and a result in the footer never
+        // does. At the least height that shows the scenes, the day's `Undo add` comes into the
+        // footer and no row changes: the scenes stay.
+        let mut height = 200.0;
+        while harness.query_by_label("Open: Pay the toll").is_none() {
+            height += 8.0;
+            assert!(height < 800.0, "the scenes show at some height");
+            harness.set_size(egui::vec2(design::FORM_WIDTH, height));
+            harness.run_steps(4);
+        }
+        let (id, label, count) = {
+            let book = &harness.state().1;
+            let event = book.events.last().unwrap();
+            let day = *timeline::day_numbers(&book.events).last().unwrap();
+            (event.id.clone(), event.label(day), book.events.len())
+        };
+        harness.state_mut().0.added = Some(Added { id, label, at: Instant::now(), count });
+        harness.run_steps(4);
+        assert!(harness.query_by_label("Undo add").is_some(), "the footer holds a result");
+        assert!(
+            harness.query_by_label("Open: Pay the toll").is_some(),
+            "a result in the footer does not fold the scenes"
+        );
+        harness.state_mut().0.added = None;
         harness.set_size(egui::vec2(design::FORM_WIDTH, 800.0));
         harness.run_steps(4);
         // An act that changes the note's words ends that Undo.
@@ -4601,6 +4661,25 @@ mod tests {
         harness.run_steps(2);
         assert!(harness.query_by_label("Undo scene").is_none());
         assert!(read().contains("- [ ] Cross at dawn\n- [ ] Rest at the ford\n"));
+        // Review of PR 280: a refused Undo says why where the DM sees it. With the field closed,
+        // `Undo scene` is in the footer; Obsidian changes the note just before the DM presses
+        // it. The outside words stay, and the reason shows in the footer.
+        let kept = read();
+        assert!(harness.state().0.scenes.field.is_none(), "the field is closed");
+        harness.state_mut().0.scene_act(SceneAct::Add("Wait for the tide".into()), Some(note.id));
+        harness.run_steps(3);
+        let obsidian = format!("{}\nObsidian added this just before Undo.\n", read());
+        fs::write(&note.path, &obsidian).unwrap();
+        harness.get_by_label("Undo scene").click();
+        harness.run_steps(3);
+        assert_eq!(read(), obsidian, "the outside edit stays");
+        assert!(
+            harness.query_all_by_label("That line changed on disk.").next().is_some(),
+            "a refused Undo scene says why after the field closed"
+        );
+        fs::write(&note.path, &kept).unwrap();
+        harness.state_mut().0.draft.as_mut().unwrap().follow_disk();
+        harness.run_steps(2);
 
         // Unsaved typed words and a changed file: the act changes nothing and says why.
         {
