@@ -1787,7 +1787,7 @@ beside Undo end in `…` and keep their whole text on hover. It is kept by its j
 lasts while that event is as the act left it, until the DM leaves the page, and an act on another journey
 leaves it. The length being typed has one owner, the Timeline book, whichever page shows the field; leaving
 the page gives it to the journey, as a loss of focus does. `Plan “<name>”` is a note act through `Draft::apply`: it writes
-`- [[<name>]]` before the first plan line still to come, says `“<name>” is in tonight’s plan.` and offers `Undo
+`- [[<name>]]` with the hidden mark of the journey and the check (`<!-- splat:check … -->`, F9) before the first plan line still to come, says `“<name>” is in tonight’s plan.` and offers `Undo
 plan line`, which is the note's: it lasts while the note's words are what the act left, also through a page
 change, and ends when they change or another session is selected. The message and its Undo take the place of
 the `Plan “<name>”` line of the check the DM clicked, and `In the plan` takes that place after them. Each offer
@@ -2026,7 +2026,14 @@ conflict. Completed link updates use success.
 
 A Travel event's checks are lines of the event: `- Checks table: road` (no key while none is chosen) and
 `- Check at 24h: "16 · …"`, one for each result, its words in quotes so that the reader of the format before
-them keeps each as one string. A check's identity is its offset in hours, never a day's name.
+them keeps each as one string. A check's identity is its offset in hours, never a day's name. A fight begun from a
+plan line with that mark carries `journey=<event> at=<hours>` in its `%% splat … %%` line: it follows the
+journey, and the clock starts it at the check while the journey still covers it (W5-D1). Its planned row ends
+its second line with `· Day 2 of <journey>`; the journey's name goes, then the day, so the row keeps its lines. The mark is one whole
+comment; the words before and after it are the line's own. The clock places the fight while it is a fight and its
+journey covers the check (`checks::covers`), and the clock after the journey is the later of the journey's end and
+each such fight's end. A road fight's removal takes the line break its insertion wrote, so its Undo gives back the
+file to the byte; every other removal is as before.
 
 Version 2 stores event lists and day IDs in comments below headings. Every write renumbers days to the
 displayed clock. File items use Fight and Major event; accept Encounter and Event in any case, with or without

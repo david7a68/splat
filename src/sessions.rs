@@ -1149,7 +1149,8 @@ pub struct TaskLine {
     /// The whole line, as the note holds it.
     pub line: String,
     pub done: bool,
-    /// The words after the box.
+    /// The words after the box, as readers show them: a travel check's mark is not among them.
+    /// Acts that change the line use `line`.
     pub words: String,
 }
 
@@ -1185,7 +1186,11 @@ pub fn plan_lines(body: &str) -> Vec<PlanLine> {
                 at,
                 line: line.trim_end_matches('\r').to_owned(),
                 done,
-                words: words.to_owned(),
+                // What a reader shows and copies: the mark of a travel check is no word.
+                words: crate::timeline::checks::marked(words)
+                    .words
+                    .trim_end()
+                    .to_owned(),
             }),
             None => PlanLine::Links(each_linked_name(line)),
         })
