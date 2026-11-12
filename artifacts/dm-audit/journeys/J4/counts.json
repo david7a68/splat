@@ -73,9 +73,37 @@
     },
     {
       "phase": "the fight",
+      "task": "Round 1",
+      "transitions": 0,
+      "interactions": 7,
+      "path": "Run"
+    },
+    {
+      "phase": "the fight",
       "task": "The crowd loves a move in the fight: mark Crowd Favor",
       "transitions": 0,
       "interactions": 3,
+      "path": "Run"
+    },
+    {
+      "phase": "the fight",
+      "task": "The seal's notice is due: the Old Guard's group joins the fight",
+      "transitions": 0,
+      "interactions": 2,
+      "path": "Run"
+    },
+    {
+      "phase": "the fight",
+      "task": "Round 2",
+      "transitions": 0,
+      "interactions": 10,
+      "path": "Run"
+    },
+    {
+      "phase": "the fight",
+      "task": "Round 3",
+      "transitions": 0,
+      "interactions": 9,
       "path": "Run"
     },
     {

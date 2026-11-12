@@ -45,6 +45,13 @@
     },
     {
       "phase": "during",
+      "task": "A sync conflict on Kestrel Dunmoor: review it and choose",
+      "transitions": 0,
+      "interactions": 5,
+      "path": "Run"
+    },
+    {
+      "phase": "during",
       "task": "The note changed in Obsidian: see it in Splat",
       "transitions": 0,
       "interactions": 0,
@@ -59,9 +66,23 @@
     },
     {
       "phase": "after the fight",
-      "task": "Take a scene off tonight's plan",
+      "task": "Add the Wolf Pack's rewards while the note has unsaved words and changed on disk",
+      "transitions": 0,
+      "interactions": 1,
+      "path": "Session"
+    },
+    {
+      "phase": "after the fight",
+      "task": "The note changed on disk: choose a version, and add the rewards again",
       "transitions": 0,
       "interactions": 2,
+      "path": "Session"
+    },
+    {
+      "phase": "after the fight",
+      "task": "Take a scene off tonight's plan",
+      "transitions": 0,
+      "interactions": 3,
       "path": "Session"
     },
     {
@@ -75,7 +96,7 @@
       "phase": "after the fight",
       "task": "The scene is wanted after all: take the removal back",
       "transitions": 1,
-      "interactions": 2,
+      "interactions": 3,
       "path": "Run > Session"
     }
   ]

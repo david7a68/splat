@@ -1,7 +1,9 @@
 phase	task	kind	what	interactions	from	pages	blocked
 before	Set-up	Setup	the Tournament's note is in play	0	Encounters		false
+before	Set-up	Setup	prep: the Old Guard's 1-2 seals group, and the Tournament's prize day on Day 2	0	Encounters		false
 before	Set-up	Setup	open the app on it	0	Encounters		false
-before	Set-up	Setup	prep: tonight's plan holds the arena fight	9	Encounters	Session	false
+before	Set-up	Setup	the race is on Day 1	2	Encounters	Timeline	false
+before	Set-up	Setup	prep: tonight's plan holds the arena fight	9	Timeline	Session	false
 before	Set-up	Setup	save, quit and open the app at the table	0	Session		false
 before	Set-up	Setup	the race so far: the clock at 30, Favor 2, no seals	7	Session		false
 between fights	Open the numbers	Panel	Ctrl+T	1	Session		false
@@ -27,9 +29,37 @@ the fight	Roll and begin the arena fight	Do	type Oren Thistlewick's initiative	1
 the fight	Roll and begin the arena fight	Do	next field with Enter	1	Run		false
 the fight	Roll and begin the arena fight	Do	type Sable Harrowgate's initiative	1	Run		false
 the fight	Roll and begin the arena fight	Do	Begin combat	1	Run		false
+the fight	Round 1	Do	Next turn	1	Run		false
+the fight	Round 1	Do	Next turn	1	Run		false
+the fight	Round 1	Do	Next turn	1	Run		false
+the fight	Round 1	Do	Next turn	1	Run		false
+the fight	Round 1	Do	Next turn	1	Run		false
+the fight	Round 1	Do	Next turn	1	Run		false
+the fight	Round 1	Do	Next turn	1	Run		false
 the fight	The crowd loves a move in the fight: mark Crowd Favor	Panel	Ctrl+T	1	Run		false
 the fight	The crowd loves a move in the fight: mark Crowd Favor	Do	Crowd loves it	1	Run		false
 the fight	The crowd loves a move in the fight: mark Crowd Favor	Panel	Ctrl+T	1	Run		false
+the fight	The seal's notice is due: the Old Guard's group joins the fight	Find	Add to fight	1	Run		false
+the fight	The seal's notice is due: the Old Guard's group joins the fight	Do	Add Old Guard, 1-2 seals to the initiative list	1	Run		false
+the fight	Round 2	Do	Next turn	1	Run		false
+the fight	Round 2	Do	Next turn	1	Run		false
+the fight	Round 2	Do	Next turn	1	Run		false
+the fight	Round 2	Do	Next turn	1	Run		false
+the fight	Round 2	Do	Next turn	1	Run		false
+the fight	Round 2	Do	Next turn	1	Run		false
+the fight	Round 2	Do	Next turn	1	Run		false
+the fight	Round 2	Do	Next turn	1	Run		false
+the fight	Round 2	Do	Next turn	1	Run		false
+the fight	Round 2	Do	Next turn	1	Run		false
+the fight	Round 3	Do	Next turn	1	Run		false
+the fight	Round 3	Do	Next turn	1	Run		false
+the fight	Round 3	Do	Next turn	1	Run		false
+the fight	Round 3	Do	Next turn	1	Run		false
+the fight	Round 3	Do	Next turn	1	Run		false
+the fight	Round 3	Do	Next turn	1	Run		false
+the fight	Round 3	Do	Next turn	1	Run		false
+the fight	Round 3	Do	Next turn	1	Run		false
+the fight	Round 3	Do	Next turn	1	Run		false
 the fight	End the arena fight	Do	End encounter…	1	Run		false
 the fight	End the arena fight	Do	End encounter	1	Run		false
 the fight	End the arena fight	Nav	Close run	1	Run	Session	false
@@ -49,10 +79,9 @@ after the fight	The second bell	Do	Roll Rival Track	1	Session		false
 after the fight	The second bell	Do	Roll Rival Track	1	Session		false
 after the fight	The second bell	Do	Roll Wandering, 0:40 to 1:19	1	Session		false
 after the fight	The second bell	Do	Done: Bell	1	Session		false
-after the fight	Set-up	Setup	the Tournament's note has a day mark on the next day	0	Session		false
 after the fight	Set-up	Setup	save, quit and open the app after the session	0	Session		false
 between sessions	A new day between sessions: the prize day comes due	Nav	Timeline	1	Session	Timeline	false
 between sessions	A new day between sessions: the prize day comes due	Do	Add Day	1	Timeline		false
 between sessions	A new day between sessions: the prize day comes due	Panel	Ctrl+T	1	Timeline		false
-between sessions	A new day between sessions: the prize day comes due	Do	Done: Prize day, Day 1	1	Timeline		false
+between sessions	A new day between sessions: the prize day comes due	Do	Done: Prize day, Day 2	1	Timeline		false
 between sessions	A new day between sessions: the prize day comes due	Panel	Ctrl+T	1	Timeline		false

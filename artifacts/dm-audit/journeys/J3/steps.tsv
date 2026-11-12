@@ -1,9 +1,11 @@
 phase	task	kind	what	interactions	from	pages	blocked
-before	Set-up	Setup	prep: the Wolf Pack and Ember Watch encounters	0	Encounters		false
+before	Set-up	Setup	prep: the encounters, and the Tournament's trackers in play	0	Encounters		false
 before	Set-up	Setup	play last week's session, then quit and open the app	12	Encounters	Session>Timeline>Encounters	false
 before	Set-up	Setup	work at 960x640	0	Encounters		false
-before	Set-up	Setup	prep: tonight's plan holds three fights and a scene	10	Encounters	Session	false
+before	Set-up	Setup	prep: tonight's plan holds three fights and two scenes	10	Encounters	Session	false
 before	Set-up	Setup	save, quit and open the app at the table	0	Session		false
+before	Set-up	Setup	a notice is due from before the fight: the first bell	3	Session		false
+before	Set-up	Setup	sync with D&D Beyond is on	0	Session		false
 before	Set-up	Setup	play the first fight	16	Session	Run>Session	false
 before	Set-up	Setup	the second fight, in round 2	21	Session	Run	false
 before	Set-up	Setup	Lookup shows last week's note, found by `miller`	3	Run		false
@@ -25,12 +27,25 @@ during	Play on into round 3	Do	Next turn	1	Run		false
 during	Set-up	Setup	the app stops in round 3, and opens again	0	Run		false
 during	Lookup is closed after the restart: find the note again	Panel	open Lookup	1	Run		false
 during	Lookup is closed after the restart: find the note again	Find	search: miller	1	Run		false
-during	Set-up	Setup	in Obsidian, the DM adds a line to tonight's plan	0	Run		false
+during	Set-up	Setup	D&D Beyond: Kestrel Dunmoor's sheet changed, on the wolf's turn	0	Run		false
+during	A sync conflict on Kestrel Dunmoor: review it and choose	Do	Review	1	Run		false
+during	A sync conflict on Kestrel Dunmoor: review it and choose	Do	Use D&D Beyond values	1	Run		false
+during	A sync conflict on Kestrel Dunmoor: review it and choose	Find	select the wolf again	1	Run		false
+during	A sync conflict on Kestrel Dunmoor: review it and choose	Panel	open Lookup	1	Run		false
+during	A sync conflict on Kestrel Dunmoor: review it and choose	Find	open the found note again	1	Run		false
+during	Set-up	Setup	in Obsidian, the DM ticks a scene and adds a plan line	0	Run		false
+during	Set-up	Setup	the DM types a line in the note; it is not saved yet	6	Run		false
+during	Set-up	Setup	in Obsidian, the DM adds another plan line	0	Run		false
 during	End the second fight	Do	End encounter…	1	Run		false
 during	End the second fight	Do	End encounter	1	Run		false
 during	End the second fight	Nav	Close run	1	Run	Session	false
+after the fight	Add the Wolf Pack's rewards while the note has unsaved words and changed on disk	Do	Add rewards: Wolf Pack	1	Session		false
+after the fight	Set-up	Setup	Splat's save after a pause meets the changed file	0	Session		false
+after the fight	The note changed on disk: choose a version, and add the rewards again	Do	Overwrite with my draft	1	Session		false
+after the fight	The note changed on disk: choose a version, and add the rewards again	Do	Add rewards: Wolf Pack	1	Session		false
+after the fight	Take a scene off tonight's plan	Find	3 scenes	1	Session		false
 after the fight	Take a scene off tonight's plan	Find	More actions for Ask the watch about the ropes	1	Session		false
 after the fight	Take a scene off tonight's plan	Do	Remove from tonight	1	Session		false
 after the fight	Begin the fight before it	Nav	Start fight: Ember Watch	1	Session	Run	false
 after the fight	The scene is wanted after all: take the removal back	Nav	Session	1	Run	Session	false
-after the fight	The scene is wanted after all: take the removal back	Do	Undo remove	1	Session		false
+after the fight	The scene is wanted after all: take the removal back	Do	Undo remove	2	Session		false

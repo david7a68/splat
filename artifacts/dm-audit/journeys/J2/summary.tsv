@@ -31,8 +31,13 @@ Blocked
 Facts
 during / Play the planned NPC: read Warden Ostrel: the planned fight stays on the plan, skipped: true
 during / The party attacks Warden Ostrel: start the fight: the run of Fight with Warden Ostrel is open: true
-during / He gave up, and the party holds him: a line in his Log: his note holds the line: true
-during / Close the fight, keep the rewards, and add loot nobody planned: the ring is under the fight's block: true
+during / He gave up, and the party holds him: a line in his Log: his Log holds the line once, stamped with tonight's session and Day 1: holds
+during / Close the fight, keep the rewards, and add loot nobody planned: the note holds one block for the fight, its XP line, and the ring under it: holds
+during / Close the fight, keep the rewards, and add loot nobody planned: Timeline.md holds the fight with Ostrel on Day 1, with the outcome: holds
 during / Two days overland: roll for encounters on the road: after Roll for encounters, the focus is in Some("How long")
-during / Two days overland: roll for encounters on the road: Timeline.md holds the length: true; the checks: ["  - Checks table: road", "  - Check at 0h: \"14 · Nothing stirs.\"", "  - Check at 24h: \"6 · [[Wolf Pack]] picks up the trail.\""]
-during / The second day names the Wolf Pack: plan it and start it: the note plans the Wolf Pack above the skipped fight: true
+during / Two days overland: roll for encounters on the road: Timeline.md holds the journey on Day 1: 2 days, the road table, and one check for each day, the second naming the Wolf Pack: holds
+during / The second day names the Wolf Pack: plan it and start it: the plan holds the Wolf Pack once, above the skipped fight: holds
+during / End the Wolf Pack fight: the Wolf Pack fight is on Day Some(3); the design says Day 2 (J2-2, recorded, not checked)
+after / Put the Wolf Pack fight's rewards in the note: the note holds one block for each fight, Ostrel's first, each with its XP line: holds
+after / Mark the talk with Warden Ostrel done, and log what happened: his Log holds both lines once each, in order, both stamped: holds
+after / Mark the talk with Warden Ostrel done, and log what happened: the talk with Ostrel is ticked done once in the plan: holds

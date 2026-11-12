@@ -2,7 +2,7 @@ phase	task	kind	what	interactions	from	pages	blocked
 before	Set-up	Setup	prep: the encounters, the treasure table and Verori	0	Encounters		false
 before	Set-up	Setup	play last week's session, then quit and open the app	12	Encounters	Session>Timeline>Encounters	false
 before	Set-up	Setup	work at 1200x800	0	Encounters		false
-before	Set-up	Setup	prep: the session's plan holds five fights	13	Encounters	Session	false
+before	Set-up	Setup	prep: the session's plan holds five fights and a scene, and two open threads	13	Encounters	Session	false
 before	Set-up	Setup	save, quit and open the app at the table	0	Session		false
 before	Set-up	Setup	play two fights, and the third to its end	47	Session	Run>Session>Run>Session>Run	false
 after the last fight	The party searches the last fight	Do	Roll 2 × gems for Ember Watch	1	Run		false
