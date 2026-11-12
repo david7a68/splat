@@ -195,7 +195,12 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
 
 Session Read and Write views keep the same left-aligned prose width of at most 75 characters per line.
 The Write frame is no wider than the reader measure plus its padding and stays at the left edge. Read and Write sit at its top right edge.
-Spare width stays outside it; stored line breaks stay unchanged. Read omits plan links already shown beside the note, including group links.
+Spare width stays outside it; stored line breaks stay unchanged. Read omits plan links already shown beside the note, including group links and scenes.
+A task line under the plan heading is a scene: a row with a done box, whose tick writes the note at once.
+When the plan's rows do not fit, the scenes fold to `N scenes` on the Tonight line, so the next fight stays in view.
+`Scene`, the last line of the Add strip's More menu, adds one. With no run open, a creature's or an NPC's
+reader, and a scene that links one, has `Start fight`, which saves and starts `Fight with <name>`. A Ready to
+run encounter with no saved run has `Remove…` in its menu, with `Undo remove encounter`.
 A group editor stays beside the note when both fit at their width limits. Smaller pages use the Note tab.
 A paused fight on the plan offers Resume even when it came from a timeline event.
 The Add strip stays directly below Tonight, above messages and plan rows. Fight,
