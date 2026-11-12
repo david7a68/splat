@@ -81,6 +81,112 @@ fn whole_at_every_size(d: &mut Driver<'_>, id: &str, what: &str, controls: &[&st
     }
 }
 
+/// V26, V27: beside Continue fight or its reason, the ended header's Undo keeps its whole
+/// target at every size, and touches neither the control beside it nor the title. Where the
+/// title's line has no room, the actions take the header's second line.
+fn undo_keeps_its_target(d: &mut Driver<'_>, what: &str, beside: &str) {
+    for size in [SMALL, DEFAULT] {
+        let (shown, apart) = d.at_size(size, |d| {
+            let undo = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name == LOOT_STEP && node.fully_in_view())
+                .map(|node| node.rect);
+            let beside = d.place_of(beside).or_else(|| painted_paragraph(d, beside));
+            let title = painted_paragraph(d, "Ended · Round 2");
+            let apart = match (undo, beside, title) {
+                (Some(undo), Some(beside), Some(title)) => {
+                    !undo.intersects(beside) && !undo.intersects(title)
+                }
+                _ => false,
+            };
+            (d.visible_text(LOOT_STEP), apart)
+        });
+        d.observe(
+            "V26-V27-undo-target",
+            shown && apart,
+            format!("{what} at {size:?}: Undo shows {LOOT_STEP:?} {shown}, apart from {beside:?} and the title {apart}"),
+        );
+    }
+}
+
+/// V11: in History, the line under Read-only (Continue fight, or the reason) is `S` below the
+/// Read-only line and `M` above `FINAL STATE`, at every size.
+fn history_line_gaps(d: &mut Driver<'_>, line: &str) {
+    for size in [SMALL, DEFAULT, LARGE] {
+        let gaps = d.at_size(size, |d| {
+            let middle = d.place_of(line).or_else(|| painted_paragraph(d, line))?;
+            let mut read_only = None;
+            let mut label = None;
+            d.each_painted_text(|text, clip| {
+                let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                let words = &text.galley.job.text;
+                if clip.intersects(rect) && words.ends_with("Read-only") {
+                    read_only = Some(rect);
+                }
+                if clip.intersects(rect) && words == "FINAL STATE" && rect.top() > middle.top() {
+                    label = label.or(Some(rect));
+                }
+            });
+            let (read_only, label) = (read_only?, label?);
+            // The Read-only line ends with its end reason, which can wrap.
+            let mut bottom = read_only.bottom();
+            d.each_painted_text(|text, clip| {
+                let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                if clip.intersects(rect)
+                    && rect.top() >= read_only.top() - 1.0
+                    && rect.bottom() <= middle.top() + 1.0
+                    && rect.left() >= read_only.left()
+                    && rect.left() < middle.right().max(read_only.right()) + 400.0
+                {
+                    bottom = bottom.max(rect.bottom());
+                }
+            });
+            Some((middle.top() - bottom, label.top() - middle.bottom()))
+        });
+        d.observe(
+            "V11-history-gaps",
+            gaps.is_some_and(|(after, before)| {
+                (after - crate::design::S).abs() <= 0.5 && (before - crate::design::M).abs() <= 0.5
+            }),
+            format!("At {size:?}, {line:?} is S below Read-only and M above FINAL STATE: {gaps:?}"),
+        );
+    }
+}
+
+/// V24: the unread-steps warning has `S` above and below: it touches neither the header's
+/// hairline nor the first roster row.
+fn unread_warning_gaps(d: &mut Driver<'_>, what: &str) {
+    for size in [SMALL, DEFAULT] {
+        let gaps = d.at_size(size, |d| {
+            let warning = painted_paragraph(d, UNREAD)?;
+            let hairline = d
+                .hairlines_in(egui::Rect::EVERYTHING)
+                .into_iter()
+                .filter(|line| {
+                    line.center().y < warning.top() && line.x_range().contains(warning.left())
+                })
+                .map(|line| line.center().y)
+                .max_by(f32::total_cmp)?;
+            let row = d
+                .nodes()
+                .into_iter()
+                .filter(|node| node.name.contains(", HP ") && node.name.contains(", AC "))
+                .map(|node| node.rect.top())
+                .filter(|top| *top > warning.top())
+                .min_by(f32::total_cmp)?;
+            Some((warning.top() - hairline, row - warning.bottom()))
+        });
+        d.observe(
+            "V24-unread-gaps",
+            gaps.is_some_and(|(above, below)| {
+                (above - crate::design::S).abs() <= 1.0 && (below - crate::design::S).abs() <= 1.0
+            }),
+            format!("{what} at {size:?}: the gaps above and below the warning: {gaps:?}"),
+        );
+    }
+}
+
 pub fn run(d: &mut Driver<'_>) {
     // The fight belongs to a session, so the plan and Timeline have it.
     d.click(NAV_SESSIONS);
@@ -286,6 +392,7 @@ pub fn run(d: &mut Driver<'_>) {
             format!("At {size:?} every Final state row is in view above the loot: {rows:?}"),
         );
     }
+    undo_keeps_its_target(d, "The ended view with loot beside Lookup", CONTINUE);
     d.state("ended-with-loot-beside-lookup", Sizes::All);
     close_lookup(d);
     whole_at_every_size(
@@ -295,6 +402,7 @@ pub fn run(d: &mut Driver<'_>) {
         &[CONTINUE, CLOSE_RUN],
         "Ended · Round 2",
     );
+    undo_keeps_its_target(d, "The ended view with loot", CONTINUE);
     d.state("ended-continue-fight", Sizes::All);
 
     // Continue fight is for the fight that was played last. A long rest ruled after the
@@ -316,6 +424,7 @@ pub fn run(d: &mut Driver<'_>) {
         &[CLOSE_RUN, LATER],
         "Ended · Round 2",
     );
+    undo_keeps_its_target(d, "The ended view of a fight that is not the last", LATER);
     d.state("ended-not-the-last-fight", Sizes::All);
     open_lookup(d);
     whole_at_every_size(
@@ -324,6 +433,11 @@ pub fn run(d: &mut Driver<'_>) {
         "The ended view of a fight that is not the last, beside Lookup",
         &[CLOSE_RUN, LATER],
         "Ended · Round 2",
+    );
+    undo_keeps_its_target(
+        d,
+        "The ended view of a fight that is not the last, beside Lookup",
+        LATER,
     );
     d.state("ended-not-the-last-fight-beside-lookup", Sizes::All);
     close_lookup(d);
@@ -570,6 +684,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.click("Whole run");
     d.expect("Read-only");
     whole_at_every_size(d, "T17.6", "The ended run in History", &[CONTINUE], "");
+    history_line_gaps(d, CONTINUE);
     d.state("history-continue-fight", Sizes::All);
     // AI1: Final state keeps one HP column: every row's HP starts at one x, at every size.
     for size in [SMALL, DEFAULT, LARGE] {
@@ -745,6 +860,7 @@ pub fn run(d: &mut Driver<'_>) {
         short,
         "While the warning shows, Undo's reason says only Nothing to undo",
     );
+    unread_warning_gaps(d, "The unread-steps warning");
     d.state("undo-steps-unread", Sizes::All);
     open_lookup(d);
     whole_at_every_size(
@@ -754,6 +870,7 @@ pub fn run(d: &mut Driver<'_>) {
         &[DISMISS, NEXT_TURN],
         "",
     );
+    unread_warning_gaps(d, "The unread-steps warning beside Lookup");
     d.state("undo-steps-unread-beside-lookup", Sizes::All);
     d.click(DISMISS);
     d.observe(
@@ -805,6 +922,7 @@ pub fn run(d: &mut Driver<'_>) {
         &[LATER_GONE],
         "",
     );
+    history_line_gaps(d, LATER_GONE);
     d.state("history-not-the-last-fight", Sizes::All);
     open_lookup(d);
     whole_at_every_size(

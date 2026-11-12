@@ -87,11 +87,63 @@ impl Word {
 pub struct Difficulty {
     /// The sum of the XP that is known.
     pub xp: u64,
-    /// How many creatures against the party have no XP and no CR.
-    pub unknown: u64,
     /// The word and the budgets. `None` when a creature's XP, a level or the table is not
     /// known, or when nothing stands against the party.
     pub rating: Option<Rating>,
+    /// Which input takes the word away, when it is one that is not known: the creatures with
+    /// no XP and no CR, or else the characters with no level. `None` when the word shows, or
+    /// when nothing the DM could fill in would bring it (no party, no table, no creature).
+    pub missing: Option<Missing>,
+}
+
+/// The inputs that are not known, so that an opened row can say why it has no word (W1-D2).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Missing {
+    pub what: Unknown,
+    /// Each one by its place in what `Scale::weigh` was given: among the foes, or in the party
+    /// (with no character in the roster, the campaign's party in `Scale::party`'s order).
+    pub at: Vec<usize>,
+    /// Their names, each once, from the caller that knows them (`Difficulty::named`).
+    pub names: Vec<String>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Unknown {
+    Xp,
+    Level,
+}
+
+impl Missing {
+    /// `XP not known: Nameless Thing`, or with more names, the first and `and 2 more`. `None`
+    /// before the names are known.
+    pub fn words(&self) -> Option<String> {
+        let first = self.names.first()?;
+        let what = match self.what {
+            Unknown::Xp => "XP",
+            Unknown::Level => "Level",
+        };
+        Some(match self.names.len() - 1 {
+            0 => format!("{what} not known: {first}"),
+            more => format!("{what} not known: {first} and {more} more"),
+        })
+    }
+}
+
+impl Difficulty {
+    /// The names of the inputs that are not known, from their places. A name that is not
+    /// found is left out, and each name is said once.
+    pub fn named(mut self, name: impl Fn(Unknown, usize) -> Option<String>) -> Self {
+        if let Some(missing) = &mut self.missing {
+            for at in &missing.at {
+                if let Some(name) = name(missing.what, *at)
+                    && !missing.names.contains(&name)
+                {
+                    missing.names.push(name);
+                }
+            }
+        }
+        self
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -125,12 +177,12 @@ impl Scale {
         party: &[Option<u64>],
         foes: impl IntoIterator<Item = Option<u64>>,
     ) -> Difficulty {
-        let (mut xp, mut unknown, mut any) = (0_u64, 0_u64, false);
-        for foe in foes {
+        let (mut xp, mut unknown, mut any) = (0_u64, Vec::new(), false);
+        for (at, foe) in foes.into_iter().enumerate() {
             any = true;
             match foe {
                 Some(each) => xp = xp.saturating_add(each),
-                None => unknown += 1,
+                None => unknown.push(at),
             }
         }
         let campaign_party = party.is_empty();
@@ -141,12 +193,30 @@ impl Scale {
         } else {
             party
         };
+        let rating = (any && unknown.is_empty())
+            .then(|| self.rate(party, xp, campaign_party))
+            .flatten();
+        // Only an input that the DM could fill in to bring the word: with a party and a table.
+        let levels = || {
+            (0..party.len())
+                .filter(|at| party[*at].is_none())
+                .collect::<Vec<_>>()
+        };
+        let missing = (any && rating.is_none() && !party.is_empty() && self.budgets.is_some())
+            .then(|| match unknown.is_empty() {
+                false => (Unknown::Xp, unknown),
+                true => (Unknown::Level, levels()),
+            })
+            .filter(|(_, at)| !at.is_empty())
+            .map(|(what, at)| Missing {
+                what,
+                at,
+                names: Vec::new(),
+            });
         Difficulty {
             xp,
-            unknown,
-            rating: (any && unknown == 0)
-                .then(|| self.rate(party, xp, campaign_party))
-                .flatten(),
+            rating,
+            missing,
         }
     }
 
@@ -339,15 +409,42 @@ mod tests {
             party: BTreeMap::new(),
         };
         let five = [Some(3); 5];
-        // A creature with no XP and no CR keeps its count and the XP that is known.
-        let unknown = scale.weigh(&five, [Some(100), None]);
+        // A creature with no XP and no CR keeps its place and the XP that is known.
+        let unknown = scale.weigh(&five, [Some(100), None, None]);
+        let missing = |what, at: &[usize]| {
+            Some(Missing {
+                what,
+                at: at.to_vec(),
+                names: Vec::new(),
+            })
+        };
         assert_eq!(
-            (unknown.xp, unknown.unknown, unknown.rating),
-            (100, 1, None)
+            (unknown.xp, unknown.rating, unknown.missing),
+            (100, None, missing(Unknown::Xp, &[1, 2]))
+        );
+        // W1-D2: the opened row names whose input is not known, each name once.
+        let named = scale
+            .weigh(&five, [Some(100), None, None, None])
+            .named(|_, at| Some(["Ox", "Nameless Thing", "Nameless Thing", "Wisp"][at].into()));
+        assert_eq!(
+            named.missing.and_then(|missing| missing.words()).as_deref(),
+            Some("XP not known: Nameless Thing and 1 more")
         );
         // A level that is not known, or not in the table.
-        assert_eq!(scale.weigh(&[Some(3), None], [Some(100)]).rating, None);
+        let level = scale.weigh(&[Some(3), None], [Some(100)]);
+        assert_eq!(
+            (level.rating.clone(), level.missing.clone()),
+            (None, missing(Unknown::Level, &[1]))
+        );
+        let named =
+            level.named(|what, at| (what == Unknown::Level && at == 1).then(|| "Mira".into()));
+        assert_eq!(
+            named.missing.and_then(|missing| missing.words()).as_deref(),
+            Some("Level not known: Mira")
+        );
         assert_eq!(scale.weigh(&[Some(21)], [Some(100)]).rating, None);
+        // A level outside the table is not a level that is not known: no reason to give.
+        assert_eq!(scale.weigh(&[Some(21)], [Some(100)]).missing, None);
         // No character in the roster and no saved party.
         assert_eq!(scale.weigh(&[], [Some(100)]).rating, None);
         // Nothing stands against the party.
@@ -358,6 +455,8 @@ mod tests {
             party: party_of(&[3]),
         };
         assert_eq!(no_table.weigh(&five, [Some(100)]).rating, None);
+        // No word could show without the table, so no input is named as the reason.
+        assert_eq!(no_table.weigh(&[None], [None]).missing, None);
         assert_eq!(
             Budgets::of_rule(
                 &serde_yaml_ng::from_str("{implementation: dnd2024:other, parameters: {}}")

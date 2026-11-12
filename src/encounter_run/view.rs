@@ -784,19 +784,28 @@ impl Run {
                 }
             });
         }
-        // Said once: the Log keeps the line, and the next save leaves the steps out.
-        if self.undo_unread {
-            ui.horizontal_top(|ui| {
-                let width = ui.available_width() - 36.0;
-                ui.scope(|ui| {
-                    ui.set_max_width(width);
-                    design::message(ui, Tone::Warning, super::UNDO_UNREAD);
-                });
-                if design::icon_button(ui, icons::CLOSE, "Dismiss the Undo message").clicked() {
-                    self.undo_unread = false;
-                }
-            });
+        self.undo_unread_line(ui);
+    }
+
+    /// Said once: the Log keeps the line, and the next save leaves the steps out. It has `S`
+    /// above and below, so it touches neither the header's hairline nor the first row.
+    fn undo_unread_line(&mut self, ui: &mut egui::Ui) {
+        if !self.undo_unread {
+            return;
         }
+        let gap = design::S - ui.spacing().item_spacing.y;
+        ui.add_space(gap);
+        ui.horizontal_top(|ui| {
+            let width = ui.available_width() - 36.0;
+            ui.scope(|ui| {
+                ui.set_max_width(width);
+                design::message(ui, Tone::Warning, super::UNDO_UNREAD);
+            });
+            if design::icon_button(ui, icons::CLOSE, "Dismiss the Undo message").clicked() {
+                self.undo_unread = false;
+            }
+        });
+        ui.add_space(gap);
     }
 
     /// The run cannot save until the DM chooses, so this cannot be dismissed.
@@ -5030,22 +5039,7 @@ impl Run {
         // line, as beside Lookup in a small window, Undo and Continue fight take a line below.
         let gap = ui.spacing().item_spacing.x;
         let title_width = self.ended_title_width(ui, &outcome);
-        let glance = |action: Action<'_>| action.density(Density::Glance).natural_width(ui) + gap;
-        let mut actions = glance(Action::primary(if self.close_block().is_some() {
-            "Close after sync"
-        } else {
-            "Close run"
-        }));
-        if !self.undo_continues() || self.undo_blocked().is_some() {
-            actions += match self.continue_words() {
-                Some(reason) => continue_reason_width(ui, reason) + gap,
-                None => glance(continue_action()),
-            };
-        }
-        if !self.history.is_empty() && self.undo_blocked().is_none() {
-            actions += glance(self.undo_action("Undo"));
-        }
-        let one_line = title_width + actions <= ui.available_width();
+        let one_line = title_width + self.ended_actions_width(ui) <= ui.available_width();
         let first_line = design::L * 4.0;
         let (header_rect, _) = ui.allocate_exact_size(
             vec2(
@@ -5235,9 +5229,15 @@ impl Run {
             );
             if one_line {
                 self.ended_continue(ui);
-                ui.add_space((ui.available_rect_before_wrap().right() - roster_right).max(0.0));
                 let room = ui.available_width() - title_width - gap;
-                self.ended_undo(ui, room);
+                // Undo stays at the roster's right edge, but never gives its target to it.
+                let align = (ui.available_rect_before_wrap().right() - roster_right).max(0.0);
+                let align = match self.ended_undo_whole(ui) {
+                    Some(whole) => align.min((room - whole).max(0.0)),
+                    None => align,
+                };
+                ui.add_space(align);
+                self.ended_undo(ui, room - align);
             }
             self.save_status(ui);
             ui.with_layout(Layout::top_down(Align::LEFT), |ui| {
@@ -5282,6 +5282,50 @@ impl Run {
             + design::number_width(ui, &saved, &small)
     }
 
+    /// The width of the ended header's actions on the title's line. Beside Continue fight or
+    /// its reason, Undo keeps its target, so the actions take the second line when the whole
+    /// target does not fit (V26, V27). Undo is at the roster's right edge, so beside the log
+    /// panel the actions to its right take at least the panel's width.
+    fn ended_actions_width(&self, ui: &egui::Ui) -> f32 {
+        let gap = ui.spacing().item_spacing.x;
+        let glance = |action: Action<'_>| action.density(Density::Glance).natural_width(ui) + gap;
+        let mut actions = glance(Action::primary(if self.close_block().is_some() {
+            "Close after sync"
+        } else {
+            "Close run"
+        }));
+        if !self.undo_continues() || self.undo_blocked().is_some() {
+            actions += match self.continue_words() {
+                Some(reason) => continue_reason_width(ui, reason) + gap,
+                None => glance(continue_action()),
+            };
+        }
+        match self.ended_undo_whole(ui) {
+            Some(whole) => {
+                if !self.hide_panel {
+                    let panel = design::side_panel_width(ui.ctx().content_rect().width());
+                    actions = actions.max(panel + design::S);
+                }
+                actions + whole + gap
+            }
+            None if !self.history.is_empty() && self.undo_blocked().is_none() => {
+                actions + glance(self.undo_action("Undo"))
+            }
+            None => actions,
+        }
+    }
+
+    /// The width of Undo with its whole target, when the ended header shows it beside
+    /// Continue fight or its reason. Then Undo never gives up its target.
+    fn ended_undo_whole(&self, ui: &egui::Ui) -> Option<f32> {
+        let continues = !self.undo_continues() || self.undo_blocked().is_some();
+        (continues && !self.history.is_empty() && self.undo_blocked().is_none()).then(|| {
+            self.undo_action(&self.undo_label())
+                .density(Density::Glance)
+                .natural_width(ui)
+        })
+    }
+
     /// One control takes the ending away. While the ending is the newest step, that is Undo.
     /// After a loot roll, or with no steps, it is Continue fight, beside Close run: the two
     /// ways out of an ended fight, with the one that changes nothing last.
@@ -5319,11 +5363,12 @@ impl Run {
             return;
         }
         let full = self.undo_label();
-        let fits = self
-            .undo_action(&full)
-            .density(Density::Glance)
-            .natural_width(ui)
-            <= room;
+        let fits = self.ended_undo_whole(ui).is_some()
+            || self
+                .undo_action(&full)
+                .density(Density::Glance)
+                .natural_width(ui)
+                <= room;
         let action = if fits {
             self.undo_action(&full)
         } else {
