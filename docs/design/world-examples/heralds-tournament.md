@@ -1,8 +1,10 @@
 # Example: the Heralds of the End Tournament
 
-This is the acceptance test for part 3 of [World and house rules](../world-and-house-rules.md). The
-trackers slice between fights reads it: a unit test (`src/trackers.rs`) loads this note as it is written here. To use it, put the properties below at
-the top of the vault's `Tournament.md` and the Splat data callout at its end. The note's own text stays between them.
+This is the acceptance test for part 3 of [World and house rules](../world-and-house-rules.md). The trackers
+slice between fights reads it: a unit test (`src/trackers.rs`) and the `trackers` visual scenario load this note
+as it is written here. To use it, put the properties below at the top of the vault's `Tournament.md` and the Splat
+data callout at its end. The note's own text stays between them. Each bell rolls the Rival Track once for each
+rival (`for:`).
 
 Times, bells and rewards come from `Undercroft.md` and `Tournament.md`. Those notes are early drafts, so tune the
 numbers there and here together.

@@ -384,7 +384,7 @@ fn check(def: &Definition, rules: &Rules) -> Result<(), String> {
         for c in &mark.changes {
             change(c, false)?;
             if matches!(c.add.as_ref().map(Amount::read), Some(Ok(Add::Ask { .. }))) {
-                return Err("A mark's change cannot ask.".into());
+                return Err("A mark’s change cannot ask.".into());
             }
         }
     }
@@ -1490,7 +1490,7 @@ mod tests {
         assert_eq!(t.newest(), a.as_slice());
         t.undo(&a);
         assert_eq!(value(&race, "favor", None), 1);
-        assert_eq!(value(&race, "race_clock", None), 10, "B's change stays");
+        assert_eq!(value(&race, "race_clock", None), 10, "B’s change stays");
 
         // A failed save writes nothing and waits; a retry adds the entry once.
         let entries = race.trackers.ledger.changes.len();

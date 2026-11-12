@@ -226,10 +226,39 @@ _Avoid_: Timeline event, which is a thing that happened in play.
 
 **Log**:
 The last heading of a world entry, with one line for each thing that play changed.
-_Avoid_: Ledger, which is the proposed history of trackers.
+_Avoid_: Ledger, which is the history of trackers.
 
 **Open question**:
 An unticked task line in a world note: a fact the DM has not decided.
+
+**House rule note**:
+A rule entry with `implementation: splat:house_rules` whose `splat_members` hold trackers. It counts nothing until
+it is in play.
+
+**In play**:
+The campaign's list of active house rule notes (`splat_in_play` in `Campaign.md`), with a switch for each note in
+Campaign → Rules and runs. A note that is not in play keeps its history and raises no notice.
+
+**Tracker**:
+A named number, defined in a house rule note, with its history in the ledger. A tracker with `per` has one value
+for each of its words, its **instances**.
+
+**Quick action**:
+A named press that makes one or more linked changes, which undo as one.
+
+**Mark**:
+A value that raises a notice when a tracker's value rises past it. A mark never acts.
+
+**Due list**:
+The open notices: what a mark raised and the DM has not yet finished with `Done` or `Dismiss`.
+
+**Ledger**:
+`Trackers.md` in the campaign's root: one ordered list of tracker acts. It is the trackers' history and their
+Undo, also after a restart.
+
+**Trackers**:
+The view of the Lookup panel that holds the trackers and the Due list. Ctrl+T shows it and goes back.
+_Avoid_: Tracker panel, which would be a third panel beside Lookup and Notes.
 
 **Roll table**:
 An existing Markdown table that a marker makes rollable. The marker can say how often a journey rolls it (`per`).
