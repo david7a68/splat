@@ -1168,11 +1168,15 @@ back only where no file has its path. A plan line that linked it gets no row, an
 hover `Not found in this campaign`.
 
 History opens read-only final state and log in place, outside the live-run slot. When a run opens there, by `Open`
-or by `Whole run` from the plan, the list scrolls once, at that act, so the run's row is at its top and the outcome,
-the line under Read-only and the whole Final state are in view below it; the log follows. Final state has one name column, as
+or by `Whole run` from the plan, the list scrolls at that act so the run's row is at its top and the outcome,
+the line under Read-only and the whole Final state are in view below it; the log follows. The top is a clean edge: the
+row's top less its own gap, so no letters of the line above show cut. While the run is open, the list keeps room
+below its end, so the row reaches the top also when little follows it, and stays there when the list's visible height
+changes (a smaller window, a run opened beside it). After the DM scrolls, the DM's scroll wins. `COMBAT LOG` is `M` below the last Final state row, as `FINAL STATE` is below the
+line above it. Final state has one name column, as
 wide as the longest name up to half the room, so every HP starts at one x. HP and temporary HP follow in columns of
-their own, each as wide as its widest value, kept where a row has none; Absent and the conditions start after them and
-wrap inside the last column. Each row's values sit on its name's baseline. Rows put outcome before ended
+their own, each as wide as its widest value, kept where a row has none; Absent, a saved concentration (its icon and
+`Conc` in its colour, the mark of the run's rows) and the conditions start after them and wrap inside the last column. Each row's values sit on its name's baseline. Rows put outcome before ended
 state and retain outcome and round. The detail header shows only Read-only and end reason. History rows keep
 Open or Close and their menu; Start and Edit stay in that menu.
 
@@ -1225,7 +1229,8 @@ Notes retain their own width cap. Resizing keeps unsent notes, focus and scroll.
 creature` ends its Name field where Save creature ends. Rules and runs puts its save state, Discard and reasons at
 the start of one row with `Save run settings` at its end; without room, the state's words wrap before Save.
 
-The editor header keeps Save and Start on line one; the name field gives up width. While Save would refuse a
+The editor header keeps Save and Start on line one; the name field gives up width, also beside Lookup at the
+minimum window. They take a line of their own only when no name field fits beside them. While Save would refuse a
 changed draft (a roster row with no creature, or the refusal of the last Save while it still holds), the save row
 says `Invalid` and Save and Ctrl+S are blocked with the cause; otherwise a changed draft says `Unsaved`. A draft whose
 rows match the file again, as after `Undo replacement`, says `No changes`. A Save, also the one a start makes, ends the
@@ -1836,7 +1841,11 @@ line has room for the whole; so a row whose summary had no room gives its word t
 at the link's right edge, so each `·` has the same blank on each side. A fight with no word because an input is not
 known says why on that line, in `muted`: `Read encounter · XP not known: Nameless Thing`, or `Level not known:
 <name>`; with more names, the first and `and 2 more`. The names come from `Scale::weigh`'s typed answer
-(`Difficulty::missing`). Its closed row is as before. A running or played fight's row shows its status, not a word.
+(`Difficulty::missing`). Its closed row is as before. The encounter editor, where the DM can repair the cause, ends
+its line the same way: `ROSTER 6 · XP not known: Nameless Thing`, or in the tab row below 760 px, where the word
+would be. Without room the names shorten from their end (`XP not known: Nameless Th…`) and go only when no letter
+fits; hover and the accessible name keep the whole reason. A roster member whose sheet cannot be read is named by its
+file, and a reason with no name known still shows (`· Level not known`). A running or played fight's row shows its status, not a word.
 
 The first upcoming fight gets primary Start fight when no run is open; later fights use secondary. Use Start
 fight here and in Encounters. Saved unfinished fights offer Resume, including timeline rows whose run

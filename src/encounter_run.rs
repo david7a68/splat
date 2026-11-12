@@ -4836,6 +4836,8 @@ pub struct FightRow {
     pub temporary_hp: i64,
     pub conditions: Vec<Condition>,
     pub present: bool,
+    /// Concentration was marked when the run was saved.
+    pub concentration: bool,
 }
 
 /// A player's character, rather than a creature.
@@ -4854,6 +4856,7 @@ impl From<&Participant> for FightRow {
             temporary_hp: p.temporary_hp,
             conditions: p.conditions.clone(),
             present: p.present,
+            concentration: p.concentration,
         }
     }
 }

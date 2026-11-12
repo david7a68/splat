@@ -364,13 +364,6 @@
       "transitions": 1,
       "interactions": 5,
       "path": "Session > Timeline"
-    },
-    {
-      "phase": "after",
-      "task": "The table settles an open question: tick it",
-      "transitions": 1,
-      "interactions": 3,
-      "path": "Timeline > World"
     }
   ]
 }

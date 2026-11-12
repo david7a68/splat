@@ -15868,6 +15868,57 @@ pub mod encounter_history {
                 format!("{what}, opened at {size:?}: the row and Final state in view: {shown:?}"),
             );
         }
+        // X36: opened at 1200x800, then seen at 960x640: the run's row is still at the list's
+        // top, so the party's final HP is still in view.
+        let smaller = d.at_size(SMALL, |d| {
+            opened_run_in_view(d)?;
+            // The row's name, at most the row's own gap and padding below the list's top.
+            let mut below = None;
+            d.each_painted_text(|text, clip| {
+                if text.galley.job.text == "Old Mill Raid"
+                    && clip.intersects(text.visual_bounding_rect())
+                {
+                    below = Some(text.pos.y - clip.top());
+                }
+            });
+            below
+                .filter(|below| (0.0..=crate::design::L).contains(below))
+                .ok_or_else(|| vec![format!("Old Mill Raid's top below the list's: {below:?}")])
+        });
+        d.observe(
+            "X36-history-follows-resize",
+            smaller.is_ok(),
+            format!("{what}, opened at {DEFAULT:?} and seen at {SMALL:?}: {smaller:?}"),
+        );
+        // X37: also where little follows the run, its row reaches the top at a clean edge.
+        super::run_continue::history_edges(d);
+    }
+
+    /// X36: after the DM scrolls History, a resize does not pull the list back to the run.
+    /// The scenario's window is 960x640, where the list keeps the run; at 1200x800 the whole
+    /// list fits, so the way back to 960x640 is where a kept run would pull it again.
+    fn a_scroll_wins_over_a_resize(d: &mut Driver<'_>) {
+        let row = |d: &Driver<'_>| d.place_of(&d.name_starting(&OPEN_OLD.replace("Open", "Close")));
+        let Some(at) = row(d) else {
+            d.observe(
+                "X36-scroll-wins",
+                false,
+                "The opened run's row is not shown",
+            );
+            return;
+        };
+        let before = row(d);
+        // To the list's top, so that no size can hold the DM's offset in a shorter list.
+        d.scroll_up_at(at.center(), 10);
+        let scrolled = row(d);
+        let larger = d.at_size(DEFAULT, row);
+        let back = row(d);
+        d.observe(
+            "X36-scroll-wins",
+            scrolled.zip(before).is_some_and(|(scrolled, before)| scrolled.top() > before.top())
+                && back.map(|r| r.top().round()) == scrolled.map(|r| r.top().round()),
+            format!("The row before {before:?}, after the DM's scroll {scrolled:?}, at {DEFAULT:?} {larger:?}, back {back:?}"),
+        );
     }
 
     pub fn run(d: &mut Driver<'_>) {
@@ -15946,6 +15997,8 @@ pub mod encounter_history {
             "Reading History changes no story and leaves the live-run slot free",
         );
         d.state("ended-run-open", Sizes::All);
+        // The opened run stays at the list's top; the DM closes it to reach In progress.
+        d.click_starting(OPEN_OLD.replace("Open", "Close").as_str());
         resume_run(d, RUN);
         let live = d
             .app_mut()
@@ -15956,7 +16009,6 @@ pub mod encounter_history {
             .unwrap()
             .id;
         go_encounters(d);
-        d.click_starting(OPEN_OLD.replace("Open", "Close").as_str());
         d.click_starting(OPEN_OLD);
         d.expect("Read-only");
         let still_open = d
@@ -15976,6 +16028,7 @@ pub mod encounter_history {
             "An open unfinished run has one row; the strip keeps Next turn primary and Back to run secondary",
         );
         d.state("history-beside-open-run", Sizes::All);
+        a_scroll_wins_over_a_resize(d);
 
         open_saved_encounter(d, RUN);
         d.click("Keep in Ready during a run");

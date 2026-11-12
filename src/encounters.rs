@@ -1456,11 +1456,21 @@ fn slot_sheet<'a>(
     party.sheet(creature.character.as_deref()?)
 }
 /// `ROSTER 8 · XP 1,050 of 1,125 · Moderate`: the editor's roster heading, with the difficulty
-/// at its end while the line has room for it (F1).
-fn roster_heading(ui: &mut egui::Ui, count: usize, rating: Option<&crate::difficulty::Rating>) {
+/// at its end while the line has room for it (F1). A fight with no word because an input is
+/// not known says whose (X2).
+fn roster_heading(
+    ui: &mut egui::Ui,
+    count: usize,
+    difficulty: Option<&crate::difficulty::Difficulty>,
+) {
     let mut job = design::group_heading_text(ui, "Roster", count);
-    let Some(rating) = rating else {
-        ui.label(job);
+    let Some(rating) = difficulty.and_then(|difficulty| difficulty.rating.as_ref()) else {
+        match difficulty.and_then(|difficulty| difficulty.missing.as_ref()) {
+            Some(missing) => heading_reason(ui, job, missing),
+            None => {
+                ui.label(job);
+            }
+        }
         return;
     };
     let plain = job.clone();
@@ -1477,8 +1487,14 @@ fn roster_heading(ui: &mut egui::Ui, count: usize, rating: Option<&crate::diffic
 }
 
 /// `Moderate · XP 1,050 of 1,125` at the right of the narrow editor's tab row, while the row has
-/// room for it (F1).
-fn narrow_difficulty(ui: &mut egui::Ui, rating: &crate::difficulty::Rating) {
+/// room for it (F1). A fight with no word because an input is not known says whose (X2).
+fn narrow_difficulty(ui: &mut egui::Ui, difficulty: &crate::difficulty::Difficulty) {
+    let Some(rating) = &difficulty.rating else {
+        if let Some(missing) = &difficulty.missing {
+            narrow_reason(ui, missing);
+        }
+        return;
+    };
     let c = colors();
     let mut job = egui::text::LayoutJob::default();
     crate::difficulty::append(&mut job, ui, Type::Small, rating.word.text(), c.text);
@@ -1497,6 +1513,91 @@ fn narrow_difficulty(ui: &mut egui::Ui, rating: &crate::difficulty::Rating) {
         let response = ui.label(job);
         crate::difficulty::describe(ui, response, rating);
     });
+}
+
+/// X2: `ROSTER 6 · XP not known: Nameless Thing`, the heading of a fight with no word because
+/// an input is not known. The editor is where the DM can repair it.
+fn heading_reason(
+    ui: &mut egui::Ui,
+    mut job: egui::text::LayoutJob,
+    missing: &crate::difficulty::Missing,
+) {
+    let muted = colors().muted;
+    let mut lead = job.clone();
+    crate::difficulty::append(&mut lead, ui, Type::Label, " · ", muted);
+    let room = ui.available_width() - crate::difficulty::width(ui, &lead);
+    let Some((words, cut)) = reason_that_fits(ui, missing, Type::Label, room) else {
+        ui.label(job);
+        return;
+    };
+    let heading = job.text.clone();
+    job = lead;
+    crate::difficulty::append(&mut job, ui, Type::Label, &words, muted);
+    let response = ui.label(job);
+    if cut && let Some(whole) = missing.words() {
+        design::named(ui, &response, &format!("{heading} · {whole}"));
+        response.on_hover_text(whole);
+    }
+}
+
+/// X2: `XP not known: Nameless Thing` at the right of the narrow editor's tab row, as the word
+/// would be.
+fn narrow_reason(ui: &mut egui::Ui, missing: &crate::difficulty::Missing) {
+    let room = ui.available_width() - design::L;
+    let Some((words, cut)) = reason_that_fits(ui, missing, Type::Small, room) else {
+        return;
+    };
+    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+        let response = ui.label(Type::Small.rich(ui, &words).color(colors().muted));
+        if cut && let Some(whole) = missing.words() {
+            design::named(ui, &response, &whole);
+            response.on_hover_text(whole);
+        }
+    });
+}
+
+/// Why a fight has no word, in `room`, and whether it was cut: `XP not known: Nameless Thing`.
+/// The names shorten from their end, to `XP not known: Nameless Th…`; with no room for one of
+/// their letters, or with no name known, they go, and `XP not known` stays while it fits.
+fn reason_that_fits(
+    ui: &egui::Ui,
+    missing: &crate::difficulty::Missing,
+    kind: Type,
+    room: f32,
+) -> Option<(String, bool)> {
+    let width = |words: &str| {
+        let mut job = egui::text::LayoutJob::default();
+        crate::difficulty::append(&mut job, ui, kind, words, colors().muted);
+        crate::difficulty::width(ui, &job)
+    };
+    let short = missing.short();
+    // With no name known, the reason still says what is not known.
+    let Some(whole) = missing.words() else {
+        return (width(short) <= room).then(|| (short.to_owned(), false));
+    };
+    if width(&whole) <= room {
+        return Some((whole, false));
+    }
+    let lead = format!("{}: ", missing.short());
+    let names: Vec<char> = whole.strip_prefix(&lead)?.chars().collect();
+    let cut = |count: usize| {
+        let kept: String = names[..count].iter().collect();
+        format!("{lead}{}…", kept.trim_end())
+    };
+    // The most letters that fit, by halves, so a long name costs a few layouts.
+    let (mut fits, mut over) = (0, names.len());
+    while over - fits > 1 {
+        let middle = (fits + over) / 2;
+        if width(&cut(middle)) <= room {
+            fits = middle;
+        } else {
+            over = middle;
+        }
+    }
+    if names[..fits].iter().any(|c| c.is_alphanumeric()) {
+        return Some((cut(fits), true));
+    }
+    (width(short) <= room).then(|| (short.to_owned(), true))
 }
 
 /// The campaign's party for F1, by the ID of each copy's note, with its level from the saved
@@ -1555,9 +1656,18 @@ fn roster_difficulty(
                         party_names.push(Some(entry.name.clone()));
                     }
                 }
+                // A sheet that cannot be read keeps its file's name, as the campaign's party
+                // does, so the reason can say whose level is not known.
                 None => {
                     party.push(None);
-                    party_names.push(None);
+                    party_names.push(
+                        slot.creature
+                            .as_ref()
+                            .and_then(|reference| catalogue.unreadable_ref(reference))
+                            .and_then(|note| {
+                                Some(note.path.file_stem()?.to_string_lossy().into_owned())
+                            }),
+                    );
                 }
             }
         } else {
@@ -2492,7 +2602,7 @@ pub struct Encounters {
     validation_reached: usize,
     /// The open draft's difficulty, with the snapshot revision, edit epoch and draft it was
     /// worked out for.
-    difficulty: Option<((Uuid, u64, Uuid), crate::difficulty::Difficulty)>,
+    difficulty: Option<((Uuid, u64, Uuid), Arc<crate::difficulty::Difficulty>)>,
     /// How often frames asked for the draft's difficulty, and how often it was worked out.
     #[cfg(test)]
     difficulty_counts: (usize, usize),
@@ -2842,7 +2952,7 @@ impl Encounters {
     }
     /// The open draft's difficulty. Worked out again only when the draft, an edit or the
     /// campaign's read changes.
-    fn draft_difficulty(&mut self) -> Option<&crate::difficulty::Difficulty> {
+    fn draft_difficulty(&mut self) -> Option<Arc<crate::difficulty::Difficulty>> {
         let (snapshot, draft) = (self.snapshot.as_ref()?, self.draft.as_ref()?);
         let key = (snapshot.revision, self.edit_epoch, draft.id);
         #[cfg(test)]
@@ -2855,9 +2965,11 @@ impl Encounters {
                 self.difficulty_counts.1 += 1;
             }
             let difficulty = roster_difficulty(&draft.setup, &snapshot.catalogue, &snapshot.scale);
-            self.difficulty = Some((key, difficulty));
+            self.difficulty = Some((key, Arc::new(difficulty)));
         }
-        self.difficulty.as_ref().map(|(_, difficulty)| difficulty)
+        self.difficulty
+            .as_ref()
+            .map(|(_, difficulty)| Arc::clone(difficulty))
     }
     /// How often frames asked for the open draft's difficulty, and how often it was worked out.
     #[cfg(test)]
@@ -2924,6 +3036,30 @@ impl Encounters {
             .pending
             .is_some()
             .then_some("Still reading this campaign."))
+    }
+    /// X36, X37: when a run opens in History, the list scrolls once so that the run's row is at
+    /// its top, at a clean edge. `list.inner` is the top of the row's gap on screen. The list
+    /// keeps room below its end while the run is open, so the row stays at the top when the
+    /// list's visible height changes, until the DM scrolls it.
+    fn reveal_history_run(
+        &mut self,
+        ui: &egui::Ui,
+        list: &egui::scroll_area::ScrollAreaOutput<Option<f32>>,
+    ) {
+        if !std::mem::take(&mut self.history_reveal) {
+            return;
+        }
+        let Some(top) = list.inner else {
+            return;
+        };
+        // The list paints `clip_rect_margin` above its top; the row's gap starts there, so no
+        // letter of the line above shows cut (X37).
+        let margin = ui.visuals().clip_rect_margin;
+        let most = (list.content_size.y - list.inner_rect.height()).max(0.0);
+        let mut state = list.state;
+        state.offset.y = (top + margin - list.inner_rect.top() + state.offset.y).clamp(0.0, most);
+        state.store(ui.ctx(), list.id);
+        ui.ctx().request_repaint();
     }
     /// Reopen a saved run, to read it or go on with it.
     pub fn open_saved_run(&mut self, path: &std::path::Path, active: &Campaign) {
@@ -4622,7 +4758,7 @@ impl Encounters {
         // FB2: the list keeps the scroll bar's lane whether or not the bar shows, so opening
         // Groups moves no row action.
         let lane = scroll_lane(ui);
-        egui::ScrollArea::vertical()
+        let list = egui::ScrollArea::vertical()
             .id_salt("encounter_list")
             .auto_shrink([false, false])
             .max_height((bottom - ui.cursor().top()).max(0.0))
@@ -4651,13 +4787,11 @@ impl Encounters {
                             path,
                             summary,
                             not_last: self.history_blocked,
-                            reveal: self.history_reveal,
                         }),
                     &mut action,
-                );
+                )
             });
-        // The scroll to a run that opened in History is made once, by the frame that drew it.
-        self.history_reveal = false;
+        self.reveal_history_run(ui, &list);
         let Some(action) = action else {
             return;
         };
@@ -4858,7 +4992,6 @@ impl Encounters {
         let focus_name = &mut self.focus_name;
         let focus_search_after_name = &mut self.focus_search;
         let from_session = self.from_session;
-        let stack_actions = ui.available_rect_before_wrap().width() < design::READER_MEASURE;
         // FA9, FI9: in a wide window the name field ends at the roster column's edge and the
         // header's actions at the Add participants column's edge, so neither stretches to the
         // window's edge. The roster's edge is the one its pane drew last.
@@ -4886,19 +5019,22 @@ impl Encounters {
                 )
                 .show(ui)
                 .clicked();
+            // X51: Save and Start keep their width on line one, and the name field takes the
+            // rest. They take a line of their own only when no field fits beside them.
+            let rest = ui.available_rect_before_wrap().width()
+                - design::S * if unfinished.is_some() { 38.0 } else { 33.0 }
+                - if has_run {
+                    design::number_width(ui, "Close the open run first", &Type::Small.font(ui))
+                        + design::L
+                } else {
+                    0.0
+                };
+            let stack_actions = rest < Density::Scan.control();
             let width = if stack_actions {
                 (ui.available_rect_before_wrap().width() - 2.0 * design::S)
                     .max(Density::Scan.control())
             } else {
-                (ui.available_rect_before_wrap().width()
-                    - design::S * if unfinished.is_some() { 38.0 } else { 33.0 }
-                    - if has_run {
-                        design::number_width(ui, "Close the open run first", &Type::Small.font(ui))
-                            + design::L
-                    } else {
-                        0.0
-                    })
-                .max(Density::Scan.control())
+                rest
             }
             // The field's margins are outside its desired width.
             .min(
@@ -5124,9 +5260,8 @@ impl Encounters {
             self.error = Some(e);
         }
         self.refresh_validation_error(false, edit_input(ui.ctx()));
-        let rating = self
-            .draft_difficulty()
-            .and_then(|difficulty| difficulty.rating.clone());
+        // Shared, so an unchanged frame copies no list of names.
+        let difficulty = self.draft_difficulty();
         // FA2, AB1: the editor's results, Save's reason and the unread rows' warning sit in one
         // footer pinned below the panes, so none of them moves the roster, its rows or the
         // search. Results with a live Undo come first, then reasons.
@@ -5208,8 +5343,8 @@ impl Encounters {
                         },
                     )],
                 );
-                if let Some(rating) = &rating {
-                    narrow_difficulty(ui, rating);
+                if let Some(difficulty) = &difficulty {
+                    narrow_difficulty(ui, difficulty);
                 }
             });
             self.editor_pane = pane;
@@ -5311,7 +5446,7 @@ impl Encounters {
                             expanded,
                             linked.then_some(party),
                             &mut make_yours,
-                            Some(rating.as_ref()),
+                            Some(difficulty.as_deref()),
                         );
                     });
                 ui.advance_cursor_after_rect(roster_ui.min_rect());
@@ -5627,7 +5762,7 @@ impl Encounters {
         make_yours: &mut Option<usize>,
         // The heading, with the roster's difficulty when it is known. None when the tab row
         // holds the heading's place.
-        heading: Option<Option<&crate::difficulty::Rating>>,
+        heading: Option<Option<&crate::difficulty::Difficulty>>,
     ) -> bool {
         // All of it scrolls, so that the settings give up their room to a group being built.
         // A line-start quiet action reaches `S` into the page's
@@ -5649,7 +5784,7 @@ impl Encounters {
                     .inner_margin(egui::Margin { left: design::S as i8, ..egui::Margin::ZERO })
                     .show(ui, |ui| {
                 ui.set_width(ui.available_width().min(design::LIST_MEASURE).min(lane));
-                if let Some(rating) = heading { roster_heading(ui, draft.setup.roster.len(), rating); }
+                if let Some(difficulty) = heading { roster_heading(ui, draft.setup.roster.len(), difficulty); }
                 // Without a link there is no sheet to sync with, whatever the note says.
                 let live = linked_party.filter(|_| draft.setup.combat_sync);
                 if draft.setup.roster.is_empty() {
@@ -8026,6 +8161,27 @@ mod tests {
             (250, None),
             "{unreadable:?}"
         );
+    }
+    /// X2, review 290: a typed reason with no name known still says what is not known.
+    #[test]
+    fn review290_unnamed_missing_level_still_has_a_reason() {
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let _ = ctx.run(Default::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                let missing = crate::difficulty::Missing {
+                    what: crate::difficulty::Unknown::Level,
+                    at: vec![0],
+                    names: Vec::new(),
+                };
+                let shown = reason_that_fits(ui, &missing, Type::Label, 400.0);
+                assert_eq!(
+                    shown.as_ref().map(|(words, _)| words.as_str()),
+                    Some("Level not known"),
+                    "A typed missing-level result must not disappear when its name is unavailable"
+                );
+            });
+        });
     }
     #[test]
     fn editing_preserves_notes_unknown_fields_and_detects_external_changes() {
