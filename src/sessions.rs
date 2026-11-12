@@ -2689,11 +2689,15 @@ mod tests {
         );
         assert_eq!(list_notes(dir.path()), [note]);
         // An idle scan writes nothing: the index of note paths keeps its file (W9-D2).
-        let index = dir.path().join(NOTE_PATHS);
-        let file = |path: &Path| std::os::unix::fs::MetadataExt::ino(&fs::metadata(path).unwrap());
-        let written = file(&index);
-        remember_notes(dir.path(), &list_notes(dir.path())).unwrap();
-        assert_eq!(file(&index), written, "an idle scan replaced the index");
+        #[cfg(unix)]
+        {
+            let index = dir.path().join(NOTE_PATHS);
+            let file =
+                |path: &Path| std::os::unix::fs::MetadataExt::ino(&fs::metadata(path).unwrap());
+            let written = file(&index);
+            remember_notes(dir.path(), &list_notes(dir.path())).unwrap();
+            assert_eq!(file(&index), written, "an idle scan replaced the index");
+        }
     }
 
     #[test]

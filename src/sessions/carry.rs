@@ -865,12 +865,11 @@ fn preview_that_fits(ui: &egui::Ui, preview: &str, room: f32) -> String {
 }
 
 /// Whether a link names this file: the link's whole path, by whole folder names, ends the
-/// file's path, as Obsidian reads `Archive/Same`. `Deleted/Same` does not name `Same.md`.
+/// file's path, as Obsidian reads `Archive/Same`. `Deleted/Same` does not name `Same.md`. A
+/// link's separator is `/` only, as the index reads it.
 fn names_file(path: &Path, link: &str) -> bool {
-    let link = link
-        .trim_end_matches(".md")
-        .replace('\\', "/")
-        .to_lowercase();
+    let link = link.to_lowercase();
+    let link = link.trim_start_matches('/').trim_end_matches(".md");
     let file = path
         .with_extension("")
         .to_string_lossy()
@@ -972,14 +971,27 @@ impl Sessions {
                 ))
             };
             let shown = match index.resolve_link(name, None) {
-                // A session note is at the link's whole path: the index has not read it yet
-                // (`refresh`), or the link names part of its path. It is not gone.
-                crate::world::Go::Missing(_)
-                    if self.notes.iter().any(|note| names_file(&note.path, name)) =>
-                {
-                    continue;
+                // A session note at the link's whole path keeps it a link while it has the
+                // heading: the index has not read the note yet (`refresh`), or the link names
+                // part of its path. Without such a note, or without the heading, it is gone.
+                crate::world::Go::Missing(_) => {
+                    let mut at = self
+                        .notes
+                        .iter()
+                        .filter(|note| names_file(&note.path, name));
+                    match (at.next(), at.next()) {
+                        (None, _) => gone(),
+                        (Some(note), None)
+                            if fs::read_to_string(&note.path)
+                                .ok()
+                                .and_then(|text| section_text(body_of(&text), heading))
+                                .is_none() =>
+                        {
+                            gone()
+                        }
+                        _ => continue,
+                    }
                 }
-                crate::world::Go::Missing(_) => gone(),
                 crate::world::Go::Item(at, _) => {
                     let item = &index.items[at];
                     if item.note_role() != Some(crate::world::Role::Session) {
@@ -1691,7 +1703,7 @@ mod tests {
             &format!(
                 "{own}## Notes\n\n![[{}#What happened]]\n\n![[Sessions/Archive/Same#What happened]]\n\n\
                  ![[Archive/Same#What happened]]\n\n![[Same#What happened]]\n\n\
-                 ![[Sessions/Deleted/Same#What happened]]\n\n{}",
+                 ![[Sessions/Deleted/Same#What happened]]\n\n![[Recent/Same#No such part]]\n\n{}",
                 last.link(),
                 "Some written words.\n".repeat(200)
             ),
@@ -1757,6 +1769,23 @@ mod tests {
             &harness,
             "The recap’s source is gone: Sessions/Deleted/Same › What happened. Link the session again in Write."
         ));
+        // A part of a path whose note lacks the heading is gone too (review of R3d).
+        assert!(has(
+            &harness,
+            "The recap’s source is gone: Recent/Same › No such part."
+        ));
+        for (link, names) in [
+            ("Archive/SAME.MD", true),
+            ("/Sessions/Archive/Same", true),
+            ("chive/Same", false),
+            ("Archive\\Same", false),
+        ] {
+            assert_eq!(
+                names_file(&dir.join("Archive/Same.md"), link),
+                names,
+                "{link}"
+            );
+        }
         // The DM's kept recap names nothing: Read says so, and nothing offers to rewrite it.
         assert!(has(
             &harness,

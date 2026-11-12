@@ -1714,8 +1714,8 @@ found, and any other change of the note's text ends it. A refusal shows in the s
 and so does an embed inside a callout or a list item. A target that names nothing, also after a rename outside
 Obsidian, is a warning `small_message`, `The recap’s source is gone: <target> › <heading>. Link the session
 again in Write.`, and the line stays in the note. A session note at the target's whole path (as Obsidian reads
-`Archive/Same`) keeps it a link: the index has not read that note yet, or the target names part of its path. A
-note with only the same last name in another folder does not; Splat never rewrites an embed, and the DM links again by hand. Read's words are prepared
+`Archive/Same`) that has the heading keeps it a link: the index has not read that note yet, or the target names
+part of its path. A note with only the same last name in another folder does not; Splat never rewrites an embed, and the DM links again by hand. Read's words are prepared
 when the note's words, the content, the plan or the folder change, not on a quiet frame. An older session warns once and links the session being played, which the list marks
 Playing. The action says Return to the session being played. When the two session numbers match, the warning
 names both note files. Reading old notes changes neither the destination for new events nor runs: use the newest session

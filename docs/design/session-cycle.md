@@ -1118,7 +1118,7 @@ your notes.` `Undo carry over`.
 | The last note cannot be read | The action is blocked: `Splat cannot read Session 1’s note.` |
 | This note changed on disk and Splat holds unsaved words | The act does nothing and says `The note changed on disk. Choose in the note first.` |
 | The embed's note was renamed outside Obsidian | As the next row. Splat never rewrites an embed: the DM links again by hand. (P8 cut `Update the link` and `Undo link`: a sole recap embed that the DM kept could not be told from the one `Carry over` wrote, so the repair could rewrite the DM's own link; review of PR 277) |
-| The embed's note or its heading is gone | Read says `The recap’s source is gone: Session 1 The Road › What happened. Link the session again in Write.` in the embed's place. The line stays in the note. Only a session note at the target's whole path keeps it a link (the index has not read that note yet, or the target names part of its path); a note with the same last name in another folder does not (review of PR 277, round 2) |
+| The embed's note or its heading is gone | Read says `The recap’s source is gone: Session 1 The Road › What happened. Link the session again in Write.` in the embed's place. The line stays in the note. Only a session note at the target's whole path that has the heading keeps it a link (the index has not read that note yet, or the target names part of its path); a note with the same last name in another folder does not (review of PR 277, round 2) |
 
 **What the note stores.** The lines, and two flat properties in the same save. Obsidian's Properties view
 shows both as it shows `session_id`.
