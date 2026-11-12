@@ -1835,6 +1835,14 @@ impl Sessions {
             || self.folder.as_ref().is_some_and(|folder| !folder.is_dir())
     }
 
+    /// The plan that assembles a group, on its Plan tab: where the rail's `Group draft` link
+    /// takes a group that the plan owns (FF2), so that its Save still links it there.
+    pub fn show_group_plan(&mut self) {
+        if self.group_session.is_some() {
+            self.select(self.group_session);
+            self.tab = Tab::Plan;
+        }
+    }
     pub fn select(&mut self, session: Option<Uuid>) {
         self.flush();
         self.list_only = false;
@@ -5818,7 +5826,6 @@ impl Sessions {
     }
 
     fn templates_view(&mut self, ui: &mut egui::Ui) {
-        let c = colors();
         if self.template.is_none()
             && let Some(first) = self.templates.first().map(|t| t.name.clone())
         {
@@ -5859,17 +5866,12 @@ impl Sessions {
                 ..Default::default()
             }))
             .show_inside(ui, |ui| {
-                if self.new_template.is_none() { ui.add(
-                    egui::Label::new(
-                        Type::Small
-                            .rich(
-                                ui,
-                                "Splat fills {{number}}, {{title}}, {{date}} and {{campaign}}. Obsidian’s core Templates plugin also fills {{date}} and {{title}}.",
-                            )
-                            .color(c.muted),
-                    )
-                    .wrap(),
-                ); }
+                if self.new_template.is_none() {
+                    design::help(
+                        ui,
+                        "Splat fills {{number}}, {{title}}, {{date}} and {{campaign}}. Obsidian’s core Templates plugin also fills {{date}} and {{title}}.",
+                    );
+                }
                 if let Some(error) = &self.template_error {
                     design::message(ui, Tone::Error, error);
                 }
@@ -6164,7 +6166,10 @@ impl Sessions {
                 response
             })
             .inner;
-        ui.label(Type::Small.rich(ui, "Inside the campaign folder, unless the path is absolute. A name such as 30 Sessions is fine.").color(c.muted));
+        design::help(
+            ui,
+            "Inside the campaign folder, unless the path is absolute. A name such as 30 Sessions is fine.",
+        );
         if let Some(error) = &self.folder_error {
             design::message(ui, Tone::Error, error);
         }

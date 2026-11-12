@@ -212,6 +212,25 @@ enum Page {
     Settings,
 }
 
+/// FF2: the page (and Campaign tab) that holds the draft a rail status names. The rail's draft
+/// list and this table share one constant for each draft, so a new draft names its page here.
+fn draft_page(word: &str) -> Option<(Page, Option<CampaignTab>)> {
+    Some(match word {
+        LIBRARY_DRAFT => (Page::Library, None),
+        WORLD_DRAFT | WORLD_REPAIR_DRAFT => (Page::World, None),
+        encounters::ENCOUNTER_DRAFT | encounters::GROUP_DRAFT | encounters::CREATURE_DRAFT => {
+            (Page::Encounters, None)
+        }
+        CAMPAIGN_DRAFT => (Page::Campaign, Some(CampaignTab::Packages)),
+        encounters::RUN_SETTINGS_DRAFT => (Page::Campaign, Some(CampaignTab::RunSettings)),
+        _ => return None,
+    })
+}
+const LIBRARY_DRAFT: &str = "Library draft";
+const WORLD_DRAFT: &str = "World draft";
+const WORLD_REPAIR_DRAFT: &str = "World repair draft";
+const CAMPAIGN_DRAFT: &str = "Campaign draft";
+
 impl Page {
     fn name(self) -> &'static str {
         match self {
@@ -1096,6 +1115,27 @@ impl Splat {
                 let rect = response.rect;
                 (response, rect)
             }
+        } else if let Some((page, tab)) = draft_page(state.word) {
+            // FF2: every unsaved draft in the rail opens the page that holds it, as the held NPC
+            // does: each page keeps its draft open while it has changes.
+            let response = design::status_link(ui, state);
+            if response.clicked() {
+                if state.word == encounters::GROUP_DRAFT && self.encounters.group_open_in_plan() {
+                    // A group the plan assembles goes back to that plan, which keeps owning
+                    // it: Encounters would take it, and its Save would link nothing.
+                    self.page = Page::Sessions;
+                    self.sessions.show_group_plan();
+                } else {
+                    self.page = page;
+                    if let Some(tab) = tab {
+                        self.campaign_tab = tab;
+                    }
+                }
+            }
+            {
+                let rect = response.rect;
+                (response, rect)
+            }
         } else if detail {
             design::rail_status_detail(
                 ui,
@@ -1230,12 +1270,11 @@ impl Splat {
             self.start_fight_with(&fight);
         }
         if let Some(roll) = roll_table::take_roll(ctx) {
-            let key = roll.key.clone();
             let result = match self.encounters.run_mut() {
                 Some(run) if !run.ended() => run.roll_table(roll),
                 _ => roll_table::roll_alone(&roll),
             };
-            roll_table::settle_roll(ctx, &key, result.unwrap_or_else(|error| error));
+            roll_table::settle_roll(ctx, result.unwrap_or_else(|error| error));
         }
     }
 
@@ -1279,13 +1318,13 @@ impl Splat {
         }
         let mut statuses = vec![account];
         for (dirty, word) in [
-            (self.library.dirty(), "Library draft"),
+            (self.library.dirty(), LIBRARY_DRAFT),
             (
                 self.world_page.dirty() || self.any_unsaved_edits(),
                 if self.world_page.dirty() {
-                    "World repair draft"
+                    WORLD_REPAIR_DRAFT
                 } else {
-                    "World draft"
+                    WORLD_DRAFT
                 },
             ),
             // A held NPC locks the campaign switcher, so the rail names it like other drafts.
@@ -1294,9 +1333,12 @@ impl Splat {
                 self.encounters.encounter_dirty(),
                 self.encounters.draft_word(),
             ),
-            (self.encounters.creature_dirty(), "Creature draft"),
-            (self.campaign_content.dirty(), "Campaign draft"),
-            (self.encounters.settings_unsaved(), "Run settings draft"),
+            (self.encounters.creature_dirty(), encounters::CREATURE_DRAFT),
+            (self.campaign_content.dirty(), CAMPAIGN_DRAFT),
+            (
+                self.encounters.settings_unsaved(),
+                encounters::RUN_SETTINGS_DRAFT,
+            ),
         ] {
             if dirty {
                 statuses.push(Status {

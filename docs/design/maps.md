@@ -924,7 +924,7 @@ front matter has decoded as YAML. A note whose front matter does not decode has 
   when it has one. The line of an image fault is the line of the embed.
 - In a message, `{…}` stands for a value, and a value in `“ ”` is quoted as other schema-2 messages quote it.
 - `splat check` prints `{path}:{line}: {message}`, so each report names the note and the line. In the app, the
-  fault shows on the note's page with its line, and in the **Problems** row of the World page. That row opens
+  fault shows on the note's page with its line, and in the **Things to check** row of the World page. That row opens
   the note.
 
 **The order of the checks.** Splat tests in the order of the tables below. A rule is tested only on a value
@@ -1724,7 +1724,7 @@ Each step is useful alone. No step needs a later step.
    of a page that a pin shows has the pin's Line, and it lists its maps. The pointer's position shows as
    `[x, y]` beside the image, rounded as Splat writes a coordinate, and a click on an empty place copies it,
    so that the DM can paste it into `at`.
-   `splat check` and the World page's Problems row report M1 to M5, I1 to I3, P1 to P6, L1 to L3, and X1 to X5
+   `splat check` and the World page's Things to check row report M1 to M5, I1 to I3, P1 to P6, L1 to L3, and X1 to X5
    for `splat_map_of` and `shows`. Splat registers `splat_map_width` and `splat_map_routes` as known
    properties, keeps them, and does not read them yet. It keeps `opens` and shows it as a plain link.
    *Changes:* `WORLD_FIELDS`, the World note reader and the reach of `model_reference` in
