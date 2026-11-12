@@ -237,17 +237,14 @@ pub(super) fn list_row(
                                 .truncate(),
                         )
                         .on_hover_text(name);
-                        // The run icon, and a leading warning's icon after it. The line keeps
-                        // the reader measure, as muted words do; past it, it shortens and hover
-                        // keeps the whole.
-                        let room = (ui.available_width()
+                        // The run icon, and a leading warning's icon after it.
+                        let room = ui.available_width()
                             - if status { design::L } else { 0.0 }
                             - if status && detail.starts_with("Changed on disk") {
                                 design::L
                             } else {
                                 0.0
-                            })
-                        .min(design::READER_MEASURE);
+                            };
                         let visible_detail = fit_detail(ui, detail, &Type::Small.font(ui), room);
                         // F1: the word ends the line only when the detail stays whole with it.
                         let rating = rating.filter(|rating| {
