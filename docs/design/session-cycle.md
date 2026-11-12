@@ -124,6 +124,12 @@ cell, with `Edit` after it, so beside a portrait no room is spare and `Start fig
 with its type's art (the plain campaign's creatures, `Cinder Wolf`) therefore has no `Start fight` in any reader;
 its routes are a scene row's menu and the encounter editor.
 
+**Measured in P6** (`log-from-play`, `session-plan-scenes`, `npc-in-lookup` and the plain evening): `Add to Log`
+is 103.5 px wide with its word and 28 as its icon. In Lookup at case B a 13-letter title (`Warden Ostrel`) shows
+`Start fight` and the icon, as the table says; `Captain Varra Black` shows `Start fight` alone, and at case D
+neither. Beside a 10-letter title (`Rook Ambry`) at case D, `Start fight` shows alone. On the World page at 960x640
+and 1200x800, `Captain Varra Black` shows both words.
+
 **The routes that stay** when the header does not show an action. `Start fight` is a line of the menu of a
 scene row that links that NPC or creature: 2, at any width, on the Session page (F3). For any other NPC or
 creature the World page's reader is wider: `World`, the entry, `Start fight` is 3 or 4, **T T**. `Add to Log`
@@ -746,7 +752,9 @@ Add  ⚔ Fight  ⚇ Group  ⌂ Long rest  ⋯⌄    │
 - **The second line** shows only when the words link exactly one World entry: its kind, status and place
   (`NPC · alive · Ashfall Keep`).
 - **The action place** is empty until the scene is done. Then, when the words link exactly one World entry, it
-  holds the quiet `Add to Log` of F6.
+  holds the quiet `Add to Log` of F6, by the fit rule: while the words keep their rows beside it. Else
+  `Add to Log` is the last line of the scene's menu (built in P6: a done scene with long words, and the plain
+  campaign's `Meet [[Hobb the Miller]] at the mill` at 960x640, keep their rows).
 - **The menu** holds `Remove from tonight`, with `Undo remove` under the row, as for a fight. A scene that
   links exactly one NPC or creature also has `Start fight` there while no run is open (section 1.2): 2.
 
