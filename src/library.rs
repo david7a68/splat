@@ -6239,7 +6239,10 @@ impl Library {
                             .and_then(|path| ReadOnly::of(&root, &path)),
                     });
                 }
-                Ok(_) => self.error = Some(e),
+                // Save refused the draft before the write: the refusal is the draft's own reason,
+                // shown with its state while that draft lives. A page error would outlive the
+                // draft (round 26: it now shows in the same footer).
+                Ok(_) => {}
             },
         }
     }
