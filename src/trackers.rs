@@ -225,6 +225,14 @@ impl DayMark {
             .as_deref()
             .unwrap_or_else(|| first_sentence(&self.say))
     }
+
+    pub fn says(&self) -> Says<'_> {
+        Says {
+            say: &self.say,
+            tables: &self.tables,
+            changes: &self.changes,
+        }
+    }
 }
 
 /// What a notice says and offers: a mark at a value's, or a day mark's.
@@ -236,16 +244,6 @@ pub struct Says<'a> {
 }
 
 impl Mark {
-    pub fn says(&self) -> Says<'_> {
-        Says {
-            say: &self.say,
-            tables: &self.tables,
-            changes: &self.changes,
-        }
-    }
-}
-
-impl DayMark {
     pub fn says(&self) -> Says<'_> {
         Says {
             say: &self.say,
@@ -353,6 +351,11 @@ impl Rules {
             .iter()
             .find(|mark| mark.key == key)
             .and_then(|mark| mark.def.as_ref().ok())
+    }
+
+    /// A day mark's name for reading, or its key when the mark cannot be used.
+    pub fn day_title<'a>(&'a self, key: &'a str) -> &'a str {
+        self.day_mark(key).map_or(key, DayMark::title)
     }
 
     /// A member that cannot be used, with its key and why.
@@ -702,7 +705,7 @@ impl Default for Today {
 }
 
 /// The day count of this Timeline.
-pub fn today(book: &crate::timeline::Book) -> Today {
+fn today(book: &crate::timeline::Book) -> Today {
     match &book.unreadable {
         Some(why) => Today::NotRead(why.clone()),
         None => Today::Day(crate::timeline::day_now(&book.events).unwrap_or(0)),
@@ -916,9 +919,8 @@ pub fn short_name(rules: &Rules, tracker: &str, instance: Option<&str>, at: i64)
 }
 
 /// A day notice's short name: the mark's name and the day it is for.
-pub fn day_name(rules: &Rules, mark: &str, day: u64) -> String {
-    let name = rules.day_mark(mark).map_or(mark, DayMark::title);
-    format!("{name}, Day {day}")
+fn day_name(rules: &Rules, mark: &str, day: u64) -> String {
+    format!("{}, Day {day}", rules.day_title(mark))
 }
 
 impl Notice {
@@ -1019,8 +1021,7 @@ pub fn label(rules: &Rules, ledger: &Ledger, entries: &[Entry]) -> String {
         // `Dismiss all` ends a day mark's open days in one press: it names the mark and the count.
         let ends = entries.iter().filter(|e| e.dismissed).count();
         if let (NoticeRef::Day { mark, .. }, true) = (notice, ends > 1) {
-            let name = rules.day_mark(mark).map_or(mark.as_str(), DayMark::title);
-            return format!("{name} ×{ends} dismissed");
+            return format!("{} ×{ends} dismissed", rules.day_title(mark));
         }
         let short = notice_name(rules, ledger, notice);
         return if entry.done {
