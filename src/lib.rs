@@ -1641,12 +1641,19 @@ impl Splat {
                         if ui.ctx().content_rect().width() >= 1000.0 {
                             // A clear gutter, so that the left column's text does not run on.
                             // Not `ui.columns`, whose justified layout stretches the words in a paragraph.
-                            let width = (ui.available_width() - design::XL) / 2.0;
+                            let half = (ui.available_width() - design::XL) / 2.0;
+                            // Round 26 AG1: the account column starts an `XL` gap after the
+                            // campaign list, which is as wide as its rows need.
+                            let widths = [
+                                self.campaigns.list_width(half),
+                                ui.available_width() - design::XL - self.campaigns.list_width(half),
+                            ];
                             ui.horizontal_top(|ui| {
                                 ui.spacing_mut().item_spacing.x = design::XL;
-                                let column = egui::vec2(width, 0.0);
                                 let layout = egui::Layout::top_down(egui::Align::Min);
                                 for place in 0..2 {
+                                    let width = widths[place];
+                                    let column = egui::vec2(width, 0.0);
                                     ui.allocate_ui_with_layout(column, layout, |ui| {
                                         // Both ways, so the second column starts in one place.
                                         ui.set_width(width);

@@ -71,7 +71,7 @@ pub fn run(d: &mut Driver<'_>) {
         "An Obsidian task toggle removes the package from the active campaign selection.",
     );
     d.expect("No changes");
-    d.expect("None chosen · 3 needed");
+    d.expect("None chosen · 3 still needed");
     d.expect("Arena Final, Bridge Ambush, Lost Patrol, Rival Team and Shrine of Cinders use its creatures.");
     // Round 22 FD4: a fault count is a status, the warning icon and colour before the words,
     // and it keeps its name and collapse.

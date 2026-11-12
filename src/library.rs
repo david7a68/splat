@@ -5274,9 +5274,9 @@ impl Library {
                             Err(error) => self.error = Some(error),
                         }
                     }
-                    design::blocked_reason(ui, add_reason);
-                    ui.add_space(design::L);
                 });
+                // Round 26 FB6: the reason sits on its own line below the action.
+                crate::campaigns::creation_reason(ui, add_reason);
 
                 if let Some(copy) = self.copied_package.clone() {
                     if Path::new(self.path.trim()).canonicalize().ok().as_ref() != Some(&copy.path)
@@ -5505,8 +5505,7 @@ impl Library {
                                 Err(error) => self.error = Some(error),
                             }
                         }
-                        design::blocked_reason(ui, reason);
-                        ui.add_space(design::L);
+                        ui.add_space(design::L - ui.spacing().item_spacing.x);
                         if (!self.name.is_empty() || self.package_folder_changed)
                             && Action::quiet("Clear")
                                 .name("Clear the new package fields")
@@ -5518,6 +5517,7 @@ impl Library {
                             self.package_folder_changed = false;
                         }
                     });
+                    crate::campaigns::creation_reason(ui, reason);
                 }
                 form_heading(ui, "Registered packages");
                 design::rule(ui);
@@ -5712,8 +5712,7 @@ impl Library {
                         .blocked(blocked)
                         .show(ui)
                         .clicked();
-                    design::blocked_reason(ui, blocked);
-                    ui.add_space(design::L);
+                    ui.add_space(design::L - ui.spacing().item_spacing.x);
                     if Action::quiet("Cancel").show(ui).clicked() {
                         self.new_form = false;
                     }
@@ -5797,6 +5796,8 @@ impl Library {
                         }
                     }
                 });
+                // Round 26 FB6: the reason sits on its own line below the action.
+                crate::campaigns::creation_reason(ui, blocked);
             });
         });
         self.new_place = (place != default_place).then_some(place);

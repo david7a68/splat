@@ -1791,14 +1791,10 @@ impl CombatSync {
             }
         });
         if self.desired.contains_key("hp_bonus") {
-            use crate::design::{Type, colors};
-            ui.label(
-                Type::Small
-                    .rich(
-                        ui,
-                        "The maximum HP modifier raises or lowers maximum HP, as Aid does.",
-                    )
-                    .color(colors().muted),
+            // Round 26 AM2: every help line keeps the reader measure.
+            crate::design::help(
+                ui,
+                "The maximum HP modifier raises or lowers maximum HP, as Aid does.",
             );
         }
     }
@@ -1854,10 +1850,10 @@ impl CombatSync {
                         }
                     }
                 });
-                ui.label(
-                    Type::Small
-                        .rich(ui, "A rest goes to D&D Beyond once, when you take it. D&D Beyond resets the resources by its own rules.")
-                        .color(colors().muted),
+                // Round 26 AM2: help keeps the reader measure.
+                design::help(
+                    ui,
+                    "A rest goes to D&D Beyond once, when you take it. D&D Beyond resets the resources by its own rules.",
                 );
             }
             Some(mut form) => {
@@ -2015,7 +2011,7 @@ impl CombatSync {
     }
     /// Each item's quantity, and the charges spent where it has charges.
     fn inventory(&mut self, ui: &mut egui::Ui, wells: Wells) {
-        use crate::design::{self, Type, colors};
+        use crate::design;
         let Some(remote) = &self.remote else {
             return;
         };
@@ -2062,13 +2058,9 @@ impl CombatSync {
                     });
                     ui.add_space(design::XS);
                 }
-                ui.label(
-                    Type::Small
-                        .rich(
-                            ui,
-                            "Party inventory and the coins in containers stay on D&D Beyond.",
-                        )
-                        .color(colors().muted),
+                design::help(
+                    ui,
+                    "Party inventory and the coins in containers stay on D&D Beyond.",
                 );
             },
         );

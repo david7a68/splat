@@ -358,9 +358,11 @@ fn removed_suffix(names: usize) -> &'static str {
 }
 
 /// A package row's count, in one form: `All chosen · 2,065 entries`, `None chosen · 6 entries`,
-/// `3 of 6 chosen`, `5 of 6 chosen · 1 needed`, `None chosen · 3 needed`. `chosen` counts only
-/// the DM's own choices, as the page header does; `needed` counts the entries that other choices
-/// need and the DM did not choose, and is left out when it is 0 (round 25 FA2).
+/// `3 of 6 chosen`, `5 of 6 chosen · 1 still needed`, `None chosen · 3 still needed`. `chosen`
+/// counts only the DM's own choices, as the page header does; `still needed` counts the entries
+/// that other choices need and the DM did not choose, and is left out when it is 0 (round 25
+/// FA2). Round 26 FD5/FA7: `still` keeps it apart from the list `Needed by your entries`, which
+/// counts every needed entry.
 fn package_count(
     count: usize,
     required: usize,
@@ -377,10 +379,10 @@ fn package_count(
         }
     };
     if count == 0 && required > 0 {
-        format!("None chosen · {} needed", number(required))
+        format!("None chosen · {} still needed", number(required))
     } else if required > 0 {
         format!(
-            "{} of {} chosen · {} needed",
+            "{} of {} chosen · {} still needed",
             number(count),
             number(total),
             number(required)
@@ -525,7 +527,7 @@ impl CampaignContent {
             if needed == 0 {
                 chosen
             } else {
-                format!("{chosen} · {needed} needed")
+                format!("{chosen} · {needed} still needed")
             }
         })
     }
@@ -2426,7 +2428,14 @@ impl CampaignContent {
                     .is_some_and(|i| document.selections[i].selection == Selection::All);
                 ui.horizontal_wrapped(|ui| {
                     ui.set_min_height(Density::Read.control());
-                    design::group_heading(ui, &module.name, entry_ids.len());
+                    // Round 26 FA8: a wrapping row places a text job at the bottom of its first
+                    // line unless the job says otherwise, so the heading sat 7 px below the
+                    // mode and the actions. Centre it on the row's centre line.
+                    let mut heading = design::group_heading_text(ui, &module.name, entry_ids.len());
+                    for section in &mut heading.sections {
+                        section.format.valign = egui::Align::Center;
+                    }
+                    ui.label(heading);
                     ui.label(
                         Type::Small
                             .rich(
@@ -2446,7 +2455,7 @@ impl CampaignContent {
                             }) {
                                 "Include future additions"
                             } else {
-                                "Use all"
+                                "Choose all"
                             },
                         )
                         .density(Density::Read)
@@ -2465,7 +2474,7 @@ impl CampaignContent {
                             });
                         }
                     }
-                    if Action::quiet("Use none")
+                    if Action::quiet("Choose none")
                         .density(Density::Read)
                         .blocked_if(selection_index.is_none(), "Nothing here is chosen.")
                         .show(ui)
@@ -2772,17 +2781,17 @@ mod tests {
         );
         assert_eq!(
             package_count(4, 1, 6, true, true),
-            "4 of 6 chosen · 1 needed"
+            "4 of 6 chosen · 1 still needed"
         );
         // Round 25 FA2: a needed entry is never also counted as chosen, so a package whose
         // other five entries are chosen does not read as `6 of 6 chosen`.
         assert_eq!(
             package_count(5, 1, 6, false, true),
-            "5 of 6 chosen · 1 needed"
+            "5 of 6 chosen · 1 still needed"
         );
         assert_eq!(
             package_count(0, 3, 6, false, false),
-            "None chosen · 3 needed"
+            "None chosen · 3 still needed"
         );
         assert_eq!(package_count(3, 0, 6, true, true), "3 of 6 chosen");
         assert_eq!(package_count(0, 0, 0, false, false), "None chosen");

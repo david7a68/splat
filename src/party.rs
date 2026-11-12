@@ -369,6 +369,9 @@ impl Party {
                 }
             }
         });
+        // Round 26 AE3: the stopped-sync notice is a notice like the others, so it shares their
+        // `L` gap before the list and the sheet.
+        let mut noticed = self.sync_stopped;
         if self.sync_stopped
             && dismissable(ui, |ui| {
                 design::message(ui, Tone::Warning, SYNC_STOPPED);
@@ -383,6 +386,9 @@ impl Party {
             self.reader.refresh_by_hand(session, ui.ctx());
         }
         if !linked {
+            if noticed {
+                ui.add_space(design::L);
+            }
             design::empty_state(
                 ui,
                 icons::PARTY,
@@ -421,7 +427,6 @@ impl Party {
             self.wants_link_page = open_link;
             return;
         }
-        let mut noticed = false;
         if let Some(e) = &self.reader.error {
             design::message(ui, Tone::Error, e);
             noticed = true;

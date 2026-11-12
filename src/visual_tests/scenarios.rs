@@ -1677,8 +1677,8 @@ pub mod campaign_content {
     const MODULE_ROW: &str = "Ashen Marches · ";
     // Round 25 FA2: `chosen` counts the DM's own choices; the entry the other choices need is
     // counted once, as needed.
-    const PARTIAL: &str = "4 of 6 chosen · 1 needed";
-    const CHANGED: &str = "5 of 6 chosen · 1 needed";
+    const PARTIAL: &str = "4 of 6 chosen · 1 still needed";
+    const CHANGED: &str = "5 of 6 chosen · 1 still needed";
     const UNSELECTED_ENTRY: &str = "Ash Wraith";
     const DISCARD_SELECTION: &str = "Discard";
     const CAMPAIGN_ENTRY: &str = "Captain Varra";
@@ -1696,7 +1696,7 @@ pub mod campaign_content {
     pub fn run(d: &mut Driver<'_>) {
         go_campaign(d);
         d.expect(PAGE_TITLE);
-        d.expect("2,069 entries chosen · 1 needed");
+        d.expect("2,069 entries chosen · 1 still needed");
         d.click_starting("D&D 2024 · SRD");
         d.expect("Whole package, with future additions");
         d.state("packages-tab", Sizes::Default);
@@ -1721,12 +1721,45 @@ pub mod campaign_content {
             "Package mode comes before the selection actions",
             |d| {
                 d.place_of("Chosen entries only")
-                    .zip(d.place_of("Use all"))
+                    .zip(d.place_of("Choose all"))
                     .is_some_and(|(mode, action)| {
                         mode.left() < action.left() && mode.center().y < action.bottom()
                     })
             },
         );
+        // Round 26 FA8: the package's heading sits on the line of its mode and its actions.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let centres = d.at_size(size, |d| {
+                // The ink of the first letter, not the galley: a wrapping row pads a text's
+                // first line to the row height, so the galley's centre is right even when the
+                // words sit at its bottom.
+                let ink = |words: &str| {
+                    let mut found = None;
+                    d.each_painted_text(|text, _| {
+                        if text.galley.job.text.starts_with(words)
+                            && let Some(row) = text.galley.rows.first()
+                            && let Some(glyph) = row.glyphs.first()
+                        {
+                            found = Some(text.pos.y + row.pos.y + glyph.logical_rect().center().y);
+                        }
+                    });
+                    found
+                };
+                let none = d.painted_rect_in("Choose none", egui::Rect::EVERYTHING)?;
+                Some((
+                    ink("ASHEN MARCHES")?,
+                    ink("Chosen entries only")?,
+                    none.center().y,
+                ))
+            });
+            d.observe(
+                "iter-26-C-FA8",
+                centres.is_some_and(|(heading, mode, none)| {
+                    (heading - mode).abs() <= 1.0 && (heading - none).abs() <= 1.0
+                }),
+                format!("At {size:?}, heading, mode and Choose none centres: {centres:?}"),
+            );
+        }
         d.state("packages-partial-selection", Sizes::All);
         d.goal("see a partial package selection");
 
@@ -1757,7 +1790,7 @@ pub mod campaign_content {
             "A needed entry is not counted as chosen as well",
         );
         d.expect("Include future additions");
-        d.expect("2,070 entries chosen · 1 needed");
+        d.expect("2,070 entries chosen · 1 still needed");
         d.observe_both(
             "iter-18-A-lock",
             "A package draft states the campaign switch lock",
@@ -4202,6 +4235,57 @@ pub mod settings {
         d.expect_same(
             "The rail's status slot gains Sync stopped; Lookup, Notes, Settings and the account line stay where they were.",
         );
+        // Round 26 AG1: the actions follow the widest name and link block after an `L` gap,
+        // in one column for every row, and the account column starts `XL` after the list.
+        for size in [DEFAULT, (1920.0, 1080.0)] {
+            let placed = d.at_size(size, |d| {
+                let nodes = d.nodes();
+                let block_right = nodes
+                    .iter()
+                    .filter(|node| {
+                        node.name.contains("Linked to ") || node.name.ends_with("Not linked")
+                    })
+                    .map(|node| node.rect.right())
+                    .reduce(f32::max)?;
+                let opens: Vec<f32> = nodes
+                    .iter()
+                    .filter(|node| {
+                        node.name.starts_with("Make ")
+                            && node.name.ends_with(" the active campaign")
+                    })
+                    .map(|node| node.rect.left())
+                    .collect();
+                let edits: Vec<f32> = nodes
+                    .iter()
+                    .filter(|node| node.name == EDIT_DETAILS && node.rect.left() < 1200.0)
+                    .map(|node| node.rect.left())
+                    .collect();
+                let reload = nodes
+                    .iter()
+                    .find(|node| node.name.contains("Reload from disk"))?
+                    .rect;
+                let account = d.painted_rect_in("D&D BEYOND ACCOUNT", egui::Rect::EVERYTHING)?;
+                Some((block_right, opens, edits, reload.right(), account.left()))
+            });
+            d.observe(
+                "iter-26-C-AG1",
+                placed
+                    .as_ref()
+                    .is_some_and(|(block, opens, edits, reload, account)| {
+                        opens.len() >= 2
+                            && edits.len() >= 3
+                            && opens
+                                .iter()
+                                .all(|open| (open - block - crate::design::L).abs() <= 1.5)
+                            && edits.iter().all(|edit| (edit - edits[0]).abs() <= 0.5)
+                            && (account - reload - crate::design::XL).abs() <= 1.5
+                    }),
+                format!(
+                    "At {size:?}: widest block right, Open lefts, Edit details lefts, list right, \
+                     account left: {placed:?}"
+                ),
+            );
+        }
         d.state("campaign-list", Sizes::All);
         d.goal("find campaign management");
 
@@ -4319,7 +4403,9 @@ pub mod settings {
                 .iter()
                 .find(|node| node.name == "Add campaign")
                 .unwrap();
-            assert!(cancel.rect.right() < add.rect.left());
+            // Round 26 FB6: a creation form commits first, at its left edge, then quiet Cancel
+            // an `L` gap after it.
+            assert!((cancel.rect.left() - add.rect.right() - crate::design::L).abs() <= 1.0);
             assert!((cancel.rect.center().y - add.rect.center().y).abs() <= 1.0);
             assert!(cancel.fully_in_view() && add.fully_in_view());
         });
@@ -4353,14 +4439,34 @@ pub mod settings {
                     .max_by(|a, b| a.rect.left().total_cmp(&b.rect.left())).unwrap().rect;
                 let notice = d.place_of("Combat sync stopped when the connection to D&D Beyond ended. Changes not yet sent did not reach D&D Beyond. Connect in Settings, and sync starts again.").unwrap();
                 let dismiss = d.place_of("Dismiss this message").unwrap();
-                notice.left() < header.left() + crate::design::L * 3.0
-                    && dismiss.left() > notice.left()
-                    && dismiss.top() < notice.top() + crate::design::L
+                // Round 26 AE3: an `L` gap ends the notice, as it ends every Party notice,
+                // before the list and the sheet.
+                let next = d
+                    .nodes()
+                    .iter()
+                    .filter(|node| node.rect.top() > notice.bottom() - 0.5 && node.in_view())
+                    .map(|node| node.rect.top())
+                    .reduce(f32::min);
+                let gap = next.map(|next| next - notice.bottom());
+                (
+                    notice.left() < header.left() + crate::design::L * 3.0
+                        && dismiss.left() > notice.left()
+                        && dismiss.top() < notice.top() + crate::design::L,
+                    gap,
+                )
             });
             d.observe(
                 "iter6-B-FD9",
-                aligned,
+                aligned.0,
                 format!("Party notice starts at the page edge with a trailing dismiss at {size:?}"),
+            );
+            d.observe(
+                "iter-26-C-AE3",
+                aligned.1.is_some_and(|gap| gap >= crate::design::L - 0.5),
+                format!(
+                    "At {size:?}, the stopped-sync notice's words end {:?} px above what follows",
+                    aligned.1
+                ),
             );
         }
         d.state("sync-stopped-recovery", Sizes::All);
@@ -4579,10 +4685,65 @@ pub mod empty {
         go_settings(d);
         d.expect(ADD_CAMPAIGN);
         d.state("settings-no-campaigns", Sizes::All);
+        // Round 26 FB6: an inline creation form commits at its left edge, right after its
+        // fields, and its reason sits on a line below that stays when the reason goes.
+        const ADD_REASON: &str = "Enter a campaign name and a folder first.";
+        let field_left = |d: &Driver<'_>| {
+            d.nodes()
+                .iter()
+                .find(|node| {
+                    node.name == NAME_FIELD && node.role == egui::accesskit::Role::TextInput
+                })
+                .map(|node| node.rect.left())
+        };
+        for size in [SMALL, DEFAULT, LARGE] {
+            let placed = d.at_size(size, |d| {
+                let add = d.place_of(ADD_CAMPAIGN)?;
+                let reason = d.place_of(ADD_REASON)?;
+                Some((field_left(d)?, add, reason))
+            });
+            d.observe(
+                "iter-26-C-FB6",
+                placed.is_some_and(|(field, add, reason)| {
+                    (add.left() - field).abs() <= 1.0
+                        && (reason.left() - field).abs() <= 1.0
+                        && reason.top() >= add.bottom() - 0.5
+                }),
+                format!(
+                    "At {size:?}, Add campaign starts at the field's left edge and its reason is \
+                     on the line below it: {placed:?}"
+                ),
+            );
+        }
+        // Must stay true: what follows the form keeps its y when the reason goes away. At 960
+        // the account section is below the form.
+        let below = |d: &Driver<'_>| {
+            let add = d.place_of(ADD_CAMPAIGN).expect("Add campaign is on screen");
+            let mut tops: Vec<(String, i32)> = d
+                .nodes()
+                .iter()
+                .filter(|node| node.rect.top() > add.bottom() + crate::design::L)
+                .filter(|node| !node.name.is_empty() && node.name != ADD_REASON)
+                .map(|node| (node.name.clone(), node.rect.top().round() as i32))
+                .collect();
+            tops.sort();
+            (add.top().round() as i32, tops)
+        };
+        let reason_shown = d.at_size(SMALL, below);
         let folder = d.root.join(NEW_FOLDER);
         std::fs::create_dir_all(&folder).expect("create campaign folder");
         d.type_into(NAME_FIELD, NEW_CAMPAIGN);
         d.type_into(FOLDER_FIELD, &folder.display().to_string());
+        assert!(!d.has(ADD_REASON), "A filled form has no reason");
+        let reason_gone = d.at_size(SMALL, below);
+        d.observe(
+            "iter-26-C-FB6-steady",
+            !reason_shown.1.is_empty() && reason_shown == reason_gone,
+            format!(
+                "At 960, the form's reason going away moves nothing below Add campaign: \
+                 {reason_shown:?} then {reason_gone:?}"
+            ),
+        );
         d.click_below(FOLDER_FIELD, OPEN_CAMPAIGN);
         d.expect(NEW_CAMPAIGN);
         d.state_prepared("campaign-added", Sizes::Default, |d| {
@@ -8310,22 +8471,23 @@ pub mod signed_in {
             "An added remote campaign has a status; an available campaign has an Add action",
         );
         d.click("Add Salt Road from D&D Beyond");
-        // Round 23 AM2/FM7: quiet Cancel starts the form's last row at the labels' text edge.
-        let (cancel, labels) = d.at_size(DEFAULT, |d| {
+        // Round 23 AM2/FM7: the form's last row starts at the labels' text edge. Round 26 FB6:
+        // that row is a creation form's, so bordered Add campaign starts it and quiet Cancel
+        // follows.
+        let (add, labels) = d.at_size(DEFAULT, |d| {
             (
-                d.place_of("Cancel")
-                    .and_then(|cancel| words_left_in(d, cancel)),
+                d.place_of("Add campaign").map(|add| add.left()),
                 [d.painted_left("Campaign name"), d.painted_left("Folder")],
             )
         });
         d.observe(
             "iter-23-C-AM2",
-            cancel.is_some_and(|cancel| {
+            add.is_some_and(|add| {
                 labels
                     .iter()
-                    .all(|label| label.is_some_and(|label| (cancel - label).abs() <= 1.0))
+                    .all(|label| label.is_some_and(|label| (add - label).abs() <= 1.0))
             }),
-            format!("Cancel’s words start at {cancel:?}; the field labels at {labels:?}"),
+            format!("Add campaign starts at {add:?}; the field labels at {labels:?}"),
         );
         d.state("import-remote-campaign", Sizes::Default);
         d.observe(
@@ -8467,6 +8629,8 @@ pub mod signed_in {
             let widths = [
                 "are editable. Splat sends a change",
                 "Concentration, custom effects",
+                // Round 26 AM2: the rest help too.
+                "A rest goes to D&D Beyond once",
             ]
             .map(|words| {
                 d.scroll_up_at(sheet_at, 30);
@@ -8756,6 +8920,19 @@ pub mod signed_in {
                 && d.is_disabled(EDIT_DETAILS)
                 && d.is_disabled("Folder"),
             "With a run open, the link tab states why it is locked, and its controls are",
+        );
+        // Round 26 FN6: the locked picker keeps the form's width, so it ends with the session
+        // folder field, as it does unlocked.
+        let edges = d.place_of("D&D Beyond campaign link").zip(
+            d.nodes()
+                .iter()
+                .find(|node| node.name == "Folder" && node.role == egui::accesskit::Role::TextInput)
+                .map(|node| node.rect),
+        );
+        d.observe(
+            "iter-26-C-FN6",
+            edges.is_some_and(|(picker, folder)| (picker.right() - folder.right()).abs() <= 1.0),
+            format!("Locked picker and session folder field: {edges:?}"),
         );
         d.state("link-tab-during-run", Sizes::Default);
         d.begin_task();

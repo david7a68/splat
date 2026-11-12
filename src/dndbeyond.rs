@@ -397,11 +397,9 @@ impl DndBeyond {
             let dropdown = crate::design::locked(ui, blocked, |ui| {
                 egui::ComboBox::from_id_salt(("ddb_link", campaign.id))
                     .icon(crate::design::combo_icon)
-                    .width(ui.available_width().min(if blocked.is_some() {
-                        crate::design::FORM_WIDTH / 2.0
-                    } else {
-                        crate::design::FORM_WIDTH
-                    }))
+                    // Round 26 FN6: one width in every state. A lock keeps the form's width,
+                    // so the picker ends with the Session folder field; its reason is above.
+                    .width(ui.available_width().min(crate::design::FORM_WIDTH))
                     .selected_text(crate::design::Type::Body.rich(ui, label).color(
                         if ui.is_enabled() {
                             crate::design::colors().text

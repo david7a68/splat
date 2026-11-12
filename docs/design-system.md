@@ -270,9 +270,11 @@ offers another action stays, and its Undo is blocked with the reason. The change
 result's words keep the text colour: only Undo greys, on the message line, and the reason follows in `Small`
 muted words at the message words (`library::kept_undo_message`). An Undo that waits for an open draft keeps its
 words in the text colour too; the draft's reason is the save row's. Discard recovery is an Undo message too: info icon, bar,
-`Body` text that names the draft, and quiet `Undo discard`, whose accessible name also names the draft. Inline creation uses a Label title, fields, a named Create
-action, its `Small` blocked reason, an `L` gap and quiet Cancel. Creation and copy fields share one
-right edge.
+`Body` text that names the draft, and quiet `Undo discard`, whose accessible name also names the draft. Inline creation uses a Label title, fields, then the named Create
+action at the form's left edge right after the fields, an `L` gap and quiet Cancel on its line, and its `Small`
+blocked reason on its own line below (`campaigns::creation_reason`). That line stays when the reason is empty, so
+typing moves nothing. Settings' Add campaign, Manage packages and New entry have this one order; save rows keep
+their commit at the right edge. Creation and copy fields share one right edge.
 
 Several safe choices after a message share one line when they fit. Put a destructive choice at the end
 after an `L` gap, or on its own line below after an `M` gap.
@@ -682,13 +684,16 @@ first edit in the repair moves nothing.
 
 Needed by your entries sits below packages in the left column. Its right pane has one search and list; rows
 open Lookup. Short package lists fit their rows. A package row's count has one form: `All chosen · 2,065 entries`,
-`None chosen · 6 entries`, `3 of 6 chosen`, `5 of 6 chosen · 1 needed`. `chosen` counts only the DM's own
-choices, as the page header does; `· N needed` counts the entries that other choices need and the DM did not
+`None chosen · 6 entries`, `3 of 6 chosen`, `5 of 6 chosen · 1 still needed`. `chosen` counts only the DM's own
+choices, as the page header does (`2,069 entries chosen · 1 still needed`); `· N still needed` counts the entries that
+other choices need and the DM did not
 choose, and is left out when it is 0. An off package with required entries shows
-`None chosen · 3 needed`, an indeterminate checkbox and encounters that use its creatures. A package whose manifest
+`None chosen · 3 still needed`, an indeterminate checkbox and encounters that use its creatures. A package whose manifest
 has a fault leads its count with the fault's icon in its tone (amber warning for a deleted manifest, red error for
 one that cannot be read), as the About row does; the message above names the fault, and the row's accessible name
-says it in words (`Manifest deleted · 5 of 6 chosen · 1 needed`).
+says it in words (`Manifest deleted · 5 of 6 chosen · 1 still needed`). `still` keeps the short count apart from
+the list `Needed by your entries`, which counts every needed entry, chosen or not. A package's heading shares the
+centre line of its mode and its `Choose all` (or `Include future additions`) and `Choose none` actions.
 
 A missing Campaign.md states whether Splat holds the last read copy and counts its packages and rules. Writing
 held text requires an explicit action. With no copy, `Write a new Campaign.md` sits beside the explanation
@@ -751,7 +756,8 @@ written text, the message and its Undo go away.
 ### Link and folder
 
 Name the campaign folder, session folder and link. The session folder has one heading and no repeated visible
-Folder label; keep its accessible field name. Fields and save actions end at `FORM_WIDTH`. A clean folder form
+Folder label; keep its accessible field name. Fields and save actions end at `FORM_WIDTH`; the D&D Beyond campaign picker
+has the same width when a run locks it. A clean folder form
 shows the check icon and No changes. Locked controls have no clean-state reason. Folder help names its files
 and permits a folder in an Obsidian vault. Disconnected campaign-link help opens Settings from an inline link.
 Its state says Not connected · showing the name saved on this computer.
@@ -1819,8 +1825,11 @@ own Connect again. Put quiet Disconnect after trust text. Settings and rail shar
 Rail shortens Signed out of D&D Beyond to Signed out, retaining full hover text. Wrap Connected · not
 remembered on two lines with full hover and accessible text. Settings states recovery once.
 
-Campaign add forms close on success; messages follow campaign rows below their heading. Add/edit forms put
-Cancel at the left and commit at the right. An unchanged form blocks Save details with No changes to save.
+The campaign list is as wide as its widest name and link block, an `L` gap and one action column that every row
+shares, and never narrower than `FORM_WIDTH`; the account column starts an `XL` gap after it.
+Campaign add forms close on success; messages follow campaign rows below their heading. The add form is an inline
+creation form: Add campaign at its left edge, quiet Cancel after it, the reason below. The edit form is a save
+row, with Cancel or Discard at the left and the commit at the right. An unchanged form blocks Save details with No changes to save.
 Details hides Edit details, uses a plain Details heading, and puts state and Discard at the left, Save details
 at the right. Discard restores saved details with Undo discard; clean forms use Cancel. Below the save row, the
 form keeps the one message space, two text lines high whatever it holds: the discard result with its live Undo
