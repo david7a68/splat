@@ -724,7 +724,10 @@ impl<'a> Action<'a> {
                 .align_size_within_rect(size, allocated)
                 .translate(vec2(-padding, 0.0));
             let rect = rect.with_min_x(rect.min.x - icon_width);
-            (rect, ui.interact(rect, id, Sense::click()))
+            // The hang never leaves the pane: where the text edge is the clip's own (Lookup's
+            // reader), the target ends at the clip. The icon and the words keep their places.
+            let target = rect.with_min_x(rect.min.x.max(ui.clip_rect().left()));
+            (rect, ui.interact(target, id, Sense::click()))
         } else {
             ui.allocate_exact_size(vec2(width, self.height), Sense::click())
         };

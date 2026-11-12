@@ -2575,16 +2575,7 @@ impl Reader {
                 if let Some(change) = &self.undo
                     && change.shows_on(campaign, &item.entry.path)
                     && matches!(change.kind, ChangeKind::Edit | ChangeKind::Log)
-                    && ui
-                        .scope(|ui| {
-                            // A long name puts Undo on a line of its own, and its target hangs
-                            // `S` left of the text edge (`line_start`). In Lookup that edge is
-                            // the scroll area's own, so the hang shows in the pane's margin.
-                            let clip = ui.clip_rect();
-                            ui.set_clip_rect(clip.with_min_x(clip.min.x - design::S));
-                            Self::change_notice(ui, &change.word, change.kind)
-                        })
-                        .inner
+                    && Self::change_notice(ui, &change.word, change.kind)
                 {
                     return self.undo_change(campaign, item.entry.id);
                 }
