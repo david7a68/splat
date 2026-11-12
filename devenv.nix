@@ -130,15 +130,20 @@
     frozen_sums() {
       find artifacts/dm-audit src/visual_tests/plain_evening -type f -print0 | sort -z | xargs -0 sha256sum
     }
-    # A freeze of several scenarios writes all its files or none. Each scenario writes into a
+    # A freeze of several scenarios writes nothing when one refuses. Each scenario writes into a
     # staging folder; only when every one passed are they copied into the tree. A refusal must
-    # leave every frozen file byte-equal, and this checks it.
+    # leave every frozen file byte-equal, and this checks it. A copy that fails stops the
+    # command and keeps the staged files.
     staged() {
       stage="$PWD/artifacts/screenshots/$label/freeze-stage"
       rm -rf "$stage"
       before="$(frozen_sums)"
       if env SPLAT_FREEZE_STAGE="$stage" "$@"; then
-        if [ -d "$stage" ]; then cp -a "$stage"/. "$PWD"/; fi
+        if [ -d "$stage" ] && ! cp -a "$stage"/. "$PWD"/; then
+          echo "audit-freeze $what: copying the staged files into the tree failed, so the tree may be mixed." >&2
+          echo "The staged files stay in $stage; copy them again, or restore the tree with git." >&2
+          exit 4
+        fi
         rm -rf "$stage"
         return 0
       fi

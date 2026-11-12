@@ -252,15 +252,44 @@ fn run_file(d: &mut Driver<'_>, fight: &str) -> String {
         .1
 }
 
-/// The run's set-up as the audit's evening counts it: roll the NPCs, type each player's
-/// initiative, and begin.
-fn counted_roll_and_begin(a: &mut Audit<'_, '_>) {
-    setup_fight(a);
-    a.click(Do, "Begin combat");
+/// `Start fight` saved this fight's run, before its first round, and opened it.
+fn started(a: &mut Audit<'_, '_>, fight: &str) {
+    let run = run_file(a.d, fight);
+    a.outcome(
+        &format!("the run file of {fight} is saved in set-up, and the Run page shows it"),
+        run_phase(&run) == "Setup" && a.d.current_page() == "Run",
+        run_state(&run)["phase"].clone(),
+    );
 }
 
-/// A fight's own ending as the run costs it today, with an outcome in the DM's words.
-fn counted_end(a: &mut Audit<'_, '_>, outcome: Option<&str>) {
+/// The run's set-up as the audit's evening counts it: roll the NPCs, type each player's
+/// initiative, and begin. The run file then runs in round 1, with each initiative as typed.
+fn counted_roll_and_begin(a: &mut Audit<'_, '_>, fight: &str) {
+    setup_fight(a);
+    a.click(Do, "Begin combat");
+    let run = run_file(a.d, fight);
+    let typed: Vec<_> = PLAYERS
+        .iter()
+        .map(|(name, total)| {
+            let saved =
+                run_participant(&run, name).and_then(|player| player["initiative"].as_i64());
+            (*name, saved, total.parse::<i64>().ok())
+        })
+        .collect();
+    a.outcome(
+        "the run file runs in round 1, with each player's initiative as typed",
+        run_phase(&run) == "Running"
+            && run_round(&run) == Some(1)
+            && typed
+                .iter()
+                .all(|(_, saved, total)| saved.is_some() && saved == total),
+        &typed,
+    );
+}
+
+/// A fight's own ending as the run costs it today, with an outcome in the DM's words. The run
+/// file is then ended with those words, or `Undecided`.
+fn counted_end(a: &mut Audit<'_, '_>, fight: &str, outcome: Option<&str>) {
     a.click(Do, "End encounter…");
     match outcome {
         Some(words) => {
@@ -269,6 +298,13 @@ fn counted_end(a: &mut Audit<'_, '_>, outcome: Option<&str>) {
         }
         None => a.click(Do, "End encounter"),
     }
+    let run = run_file(a.d, fight);
+    let saved = run_state(&run)["phase"]["Ended"]["outcome"].clone();
+    a.outcome(
+        "the run file is ended, with the outcome",
+        saved == outcome.unwrap_or("Undecided"),
+        &saved,
+    );
 }
 
 /// `Add rewards` for this played fight, where the fit rule puts it: on the row, else the last
@@ -360,16 +396,20 @@ fn improvised_evening(a: &mut Audit<'_, '_>) {
     a.act(Panel, "close Lookup, to see his stat block", |d| {
         d.press(Key::Escape);
     });
-    a.fact(format!(
-        "the run of Fight with {OSTREL} is open: {}",
-        a.d.has_containing(&format!("{RUN_HEADING}Fight with {OSTREL}"))
-    ));
+    let encounter = file(a.d, &format!("Encounters/Fight with {OSTREL}.md"));
+    a.outcome(
+        "an encounter note `Fight with Warden Ostrel` holds him in its roster",
+        encounter.contains(&format!("splat_name: Fight with {OSTREL}"))
+            && section(&encounter, "Roster").contains(OSTREL),
+        &encounter,
+    );
+    started(a, &format!("Fight with {OSTREL}"));
 
     a.task("Roll and begin the fight with Warden Ostrel");
-    counted_roll_and_begin(a);
+    counted_roll_and_begin(a, &format!("Fight with {OSTREL}"));
 
     a.task("Warden Ostrel gives up: end the fight");
-    counted_end(a, Some("Ostrel gave up"));
+    counted_end(a, &format!("Fight with {OSTREL}"), Some("Ostrel gave up"));
 
     a.task("He gave up, and the party holds him: a line in his Log");
     a.act(Panel, "Ctrl+K shows his page again", |d| {
@@ -456,6 +496,7 @@ fn improvised_evening(a: &mut Audit<'_, '_>) {
     a.task("The second day names the Wolf Pack: plan it and start it");
     a.click(Do, &format!("Plan “{WOLVES}”"));
     a.click(Nav, &format!("Start fight: {WOLVES}"));
+    started(a, WOLVES);
     let plan = section(&note_on_disk(a.d), "Plan for tonight").to_owned();
     a.outcome(
         "the plan holds the Wolf Pack once, above the skipped fight",
@@ -465,10 +506,10 @@ fn improvised_evening(a: &mut Audit<'_, '_>) {
     );
 
     a.task("Roll and begin the Wolf Pack fight");
-    counted_roll_and_begin(a);
+    counted_roll_and_begin(a, WOLVES);
 
     a.task("End the Wolf Pack fight");
-    counted_end(a, None);
+    counted_end(a, WOLVES, None);
     a.act(Nav, CLOSE_RUN, close_run);
 
     // The Wolf Pack came from the check at 24h, the second day of the journey, so its fight is
@@ -610,6 +651,12 @@ fn broken_evening(a: &mut Audit<'_, '_>) {
     a.task("End the fight by mistake");
     a.click(Do, "End encounter…");
     a.click(Do, "End encounter");
+    let run = run_file(a.d, WOLVES);
+    a.outcome(
+        "the run file is ended in round 2",
+        run_ended(&run) && run_round(&run) == Some(2),
+        run_state(&run)["phase"].clone(),
+    );
 
     a.task("Take the ending back");
     a.click(Do, "Undo: end encounter");
@@ -634,12 +681,28 @@ fn broken_evening(a: &mut Audit<'_, '_>) {
         });
     }
     a.act(Do, "add with Enter", |d| d.press(Key::Enter));
+    let poisoned = wolf_conditions(a.d);
+    a.outcome(
+        "the run file holds Poisoned on the wolf, 3 rounds with 3 left",
+        poisoned == serde_json::json!([{"name": "Poisoned", "rounds": 3, "left": 3}]),
+        &poisoned,
+    );
 
     a.task("Play on into round 3");
     for _ in 0..8 {
         a.click(Do, NEXT_TURN);
     }
     let undo_before = a.d.name_starting("Undo");
+    let run = run_file(a.d, WOLVES);
+    let before_crash = (run_round(&run), wolf_conditions(a.d), last_change(&run));
+    a.outcome(
+        "the run file is in round 3, the wolf's Poisoned has 2 left, and its Undo step is the \
+         one the Undo button names",
+        before_crash.0 == Some(3)
+            && before_crash.1 == serde_json::json!([{"name": "Poisoned", "rounds": 3, "left": 2}])
+            && undo_before == format!("Undo: {}", before_crash.2),
+        (&before_crash, &undo_before),
+    );
 
     a.setup("the app stops in round 3, and opens again", |d| {
         d.restart();
@@ -653,22 +716,23 @@ fn broken_evening(a: &mut Audit<'_, '_>) {
         a.click(Nav, BACK_TO_RUN);
     }
     let run = run_file(a.d, WOLVES);
-    let wolf = run_participant(&run, "Cinder Wolf 2").map(|wolf| wolf.to_string());
+    let wolf = wolf_conditions(a.d);
     let after = (
         run_round(&run),
         a.d.row_words("Cinder Wolf 2"),
         a.d.name_starting("Undo"),
         a.d.rail_words(),
+        last_change(&run),
     );
     a.outcome(
-        "the run file holds round 3 and the effect; the wolf's row says Poisoned 2; Undo names \
-         the last saved step; the rail still says Due 1, read from Trackers.md",
+        "the run file holds round 3, the wolf's Poisoned with 3 rounds and 2 left, and the Undo \
+         step that Undo names; the wolf's row says Poisoned 2; the rail still says Due 1, read \
+         from Trackers.md",
         after.0 == Some(3)
-            && wolf
-                .as_deref()
-                .is_some_and(|wolf| wolf.contains("Poisoned"))
+            && wolf == serde_json::json!([{"name": "Poisoned", "rounds": 3, "left": 2}])
             && after.1.contains("Poisoned 2")
             && after.2 == undo_before
+            && after.2 == format!("Undo: {}", after.4)
             && after.3.contains("Due 1")
             && bell_due(a.d),
         (&after, &undo_before, &wolf),
@@ -679,6 +743,11 @@ fn broken_evening(a: &mut Audit<'_, '_>) {
     if !a.d.visible_text(MILLER) {
         a.act(Find, "search: miller", |d| d.type_text("miller"));
     }
+    a.outcome(
+        "no file: Lookup is open on the search `miller`, and a result names last week's note",
+        a.d.app().lookup.open && a.d.has_containing(&format!("Session 1: {LAST_WEEK}")),
+        a.d.app().lookup.open,
+    );
 
     a.setup(
         "D&D Beyond: Kestrel Dunmoor's sheet changed, on the wolf's turn",
@@ -763,7 +832,7 @@ fn broken_evening(a: &mut Audit<'_, '_>) {
     });
 
     a.task("End the second fight");
-    counted_end(a, None);
+    counted_end(a, WOLVES, None);
     a.act(Nav, CLOSE_RUN, close_run);
 
     a.phase = "after the fight";
@@ -812,9 +881,16 @@ fn broken_evening(a: &mut Audit<'_, '_>) {
     unfold_scenes(a, &format!("More actions for {ROPES}"));
     a.click(Find, &format!("More actions for {ROPES}"));
     a.click(Do, "Remove from tonight");
+    let plan = section(&note_on_disk(a.d), "Plan for tonight").to_owned();
+    a.outcome(
+        "the scene's line is gone from the saved plan, and nothing else changed",
+        plan == plan_before.replacen(&format!("- [ ] {ROPES}\n"), "", 1) && plan != plan_before,
+        &plan,
+    );
 
     a.task("Begin the fight before it");
     a.click(Nav, &format!("Start fight: {WATCH}"));
+    started(a, WATCH);
 
     a.task("The scene is wanted after all: take the removal back");
     a.click(Nav, NAV_SESSIONS);
@@ -870,7 +946,31 @@ fn run_round(run: &str) -> Option<u64> {
 
 /// The saved run is ended.
 fn run_ended(run: &str) -> bool {
-    run_state(run)["phase"].get("Ended").is_some()
+    run_phase(run) == "Ended"
+}
+
+/// What the saved Wolf Pack run holds on Cinder Wolf 2: its conditions, each with its count.
+fn wolf_conditions(d: &mut Driver<'_>) -> serde_json::Value {
+    let run = run_file(d, WOLVES);
+    run_participant(&run, "Cinder Wolf 2")
+        .map_or(serde_json::Value::Null, |wolf| wolf["conditions"].clone())
+}
+
+/// The saved run's last change, which its Undo takes back.
+fn last_change(run: &str) -> String {
+    run_state(run)["last_change"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned()
+}
+
+/// A saved run's phase: `Setup`, `Running` or `Ended`.
+fn run_phase(run: &str) -> String {
+    match &run_state(run)["phase"] {
+        serde_json::Value::String(phase) => phase.clone(),
+        serde_json::Value::Object(phase) => phase.keys().next().cloned().unwrap_or_default(),
+        _ => String::new(),
+    }
 }
 
 /// A participant of a saved run, by name.
@@ -960,15 +1060,41 @@ fn the_race(a: &mut Audit<'_, '_>) {
 
     a.task("The party enters a room: the clock reaches 40, and a bell is due");
     a.click(Do, "Enter room");
+    clock_at(a, 40, "Enter room");
 
     a.task("The bell: roll each rival and the wandering table");
     for _ in 0..3 {
         a.click(Do, "Roll Rival Track");
     }
     a.click(Do, "Roll Wandering, 0:40 to 1:19");
+    let values = ledger(a.d);
+    let rivals: Vec<_> = values
+        .iter()
+        .filter_map(|entry| match &entry.roll {
+            Some(Roll::Table(roll)) if roll.table == "rival_track" => roll.name.clone(),
+            _ => None,
+        })
+        .collect();
+    a.outcome(
+        "the ledger holds a Rival Track roll for each rival and one wandering roll, on the bell at 40",
+        rivals == ["Old Guard", "Keyring", "Convicts"]
+            && rolls_on(&values, "wander_middle") == 1
+            && values
+                .iter()
+                .filter(|entry| entry.roll.is_some())
+                .all(|entry| matches!(&entry.notice, Some(NoticeRef::Value { at: 40, .. }))),
+        &values,
+    );
 
     a.task("The Old Guard takes its first seal");
     a.click(Do, "Take seal: Old Guard");
+    let values = ledger(a.d);
+    a.outcome(
+        "the ledger holds one seal, the Old Guard's",
+        old_guard_seal(&values).is_some_and(|seal| seal.add == Some(1))
+            && sum(&values, "seals") == 1,
+        &values,
+    );
 
     a.task("Put the seal on the Timeline");
     a.click(Do, "Add to Timeline");
@@ -981,6 +1107,17 @@ fn the_race(a: &mut Audit<'_, '_>) {
 
     a.task("Finish the bell");
     a.click(Do, "Done: Bell");
+    let values = ledger(a.d);
+    let bell = values.iter().find_map(|entry| match &entry.notice {
+        Some(NoticeRef::Value { change, at: 40 }) => Some(change.clone()),
+        _ => None,
+    });
+    a.outcome(
+        "the ledger holds the bell at 40 done",
+        bell.as_deref()
+            .is_some_and(|bell| notice_done(&values, bell)),
+        &values,
+    );
 
     a.task("Keep the seal's notice in mind for the next fight");
     let values = ledger(a.d);
@@ -997,6 +1134,7 @@ fn the_race(a: &mut Audit<'_, '_>) {
 
     a.task("The party enters the arena");
     a.click(Do, "Enter room");
+    clock_at(a, 50, "Enter room");
 
     a.phase = "the fight";
     a.task("Start the arena fight");
@@ -1012,11 +1150,14 @@ fn the_race(a: &mut Audit<'_, '_>) {
         });
     }
 
+    started(a, SHRINE);
+
     a.task("Roll and begin the arena fight");
-    counted_roll_and_begin(a);
+    counted_roll_and_begin(a, SHRINE);
 
     a.task("Round 1");
     let first = turns_to_round(a, 2);
+    round_saved(a, 2);
 
     a.task("The crowd loves a move in the fight: mark Crowd Favor");
     a.act(Panel, "Ctrl+T", |d| d.press_ctrl(Key::T));
@@ -1027,6 +1168,13 @@ fn the_race(a: &mut Audit<'_, '_>) {
     }
     a.click(Do, "Crowd loves it");
     a.act(Panel, "Ctrl+T", |d| d.press_ctrl(Key::T));
+    let values = ledger(a.d);
+    a.outcome(
+        "the ledger holds the press in the fight: Favor at 3",
+        sum(&values, "favor") == 3
+            && values.last().and_then(|entry| entry.why.as_deref()) == Some("Crowd loves it"),
+        &values,
+    );
 
     a.task("The seal's notice is due: the Old Guard's group joins the fight");
     a.outcome(
@@ -1036,9 +1184,18 @@ fn the_race(a: &mut Audit<'_, '_>) {
     );
     a.click(Find, "Add to fight");
     a.click(Do, &add_group(OLD_GUARD));
+    let joined = rival_group(a.d);
+    let run = run_file(a.d, SHRINE);
+    a.outcome(
+        "the run file holds the whole group, active in the order of play: Goblin Warrior 1, 2 and \
+         3, side rivals, added in round 2, each at the group's shared roll",
+        joined_whole(&run, &joined),
+        &joined,
+    );
 
     a.task("Round 2");
     let second = turns_to_round(a, 3);
+    round_saved(a, 3);
 
     a.task("Round 3");
     for _ in 1..second {
@@ -1046,14 +1203,16 @@ fn the_race(a: &mut Audit<'_, '_>) {
     }
 
     a.task("End the arena fight");
-    counted_end(a, None);
+    counted_end(a, SHRINE, None);
     let run = run_file(a.d, SHRINE);
     let fight = saved_event(a.d, SHRINE);
+    let members = rival_group(a.d);
     a.outcome(
-        "the saved run ended in round 3 with the Old Guard's group in it; Timeline.md says round 3 \
-         on Day 1",
+        "the saved run ended in round 3 with the Old Guard's whole group in it; Timeline.md says \
+         round 3 on Day 1",
         run_round(&run) == Some(3)
-            && run.contains("Goblin Warrior")
+            && run_ended(&run)
+            && joined_whole(&run, &members)
             && fight
                 .as_ref()
                 .is_some_and(|(event, day)| *day == 1 && event.result.contains("round 3")),
@@ -1089,6 +1248,16 @@ fn the_race(a: &mut Audit<'_, '_>) {
     a.task("The crowd loved a move, then threw a gift");
     a.click(Do, "Crowd loves it");
     a.click(Do, "Throw a gift");
+    let values = ledger(a.d);
+    a.outcome(
+        "the ledger holds both presses, the gift with its roll: Favor at 3",
+        sum(&values, "favor") == 3
+            && values.last().is_some_and(|gift| {
+                gift.why.as_deref() == Some("Throw a gift")
+                    && matches!(gift.roll, Some(Roll::Dice(_)))
+            }),
+        &values,
+    );
 
     a.task("A wrong press on Throw a gift, seen after the next right press");
     a.click(Do, "Throw a gift");
@@ -1123,6 +1292,12 @@ fn the_race(a: &mut Audit<'_, '_>) {
 
     a.task("A soul is collected: the clock passes 60");
     a.click(Do, "Collect soul");
+    let values = ledger(a.d);
+    a.outcome(
+        "one press changed two trackers: the clock at 63 and one soul in the jar",
+        sum(&values, "race_clock") == 63 && sum(&values, "souls") == 1,
+        &values,
+    );
 
     a.task("The second bell");
     for _ in 0..3 {
@@ -1184,6 +1359,84 @@ fn turns_to_round(a: &mut Audit<'_, '_>, round: u32) -> u32 {
 }
 
 use crate::trackers::ledger::{Entry, NoticeRef, Roll};
+
+/// The ledger puts the race clock at `value`, after a change for this press.
+fn clock_at(a: &mut Audit<'_, '_>, value: i64, why: &str) {
+    let values = ledger(a.d);
+    a.outcome(
+        &format!("the ledger puts the clock at {value}, by {why}"),
+        sum(&values, "race_clock") == value
+            && values
+                .iter()
+                .rev()
+                .find(|entry| entry.tracker.as_deref() == Some("race_clock"))
+                .is_some_and(|entry| entry.why.as_deref() == Some(why)),
+        &values,
+    );
+}
+
+/// The arena run file is in this round.
+fn round_saved(a: &mut Audit<'_, '_>, round: u64) {
+    let run = run_file(a.d, SHRINE);
+    a.outcome(
+        &format!("the run file is in round {round}"),
+        run_round(&run) == Some(round),
+        run_round(&run),
+    );
+}
+
+/// The saved arena run's members of the Old Guard's group, by their own fields.
+fn rival_group(d: &mut Driver<'_>) -> Vec<serde_json::Value> {
+    let run = run_file(d, SHRINE);
+    run_state(&run)["participants"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|member| member["added_from"]["group"] == OLD_GUARD)
+        .cloned()
+        .collect()
+}
+
+/// The group is whole and active: three goblin warriors, side `rivals`, added in round 2,
+/// present, in the order of play, each at the shared roll that the run's log names.
+fn joined_whole(run: &str, members: &[serde_json::Value]) -> bool {
+    let state = run_state(run);
+    let shared = state["log"].as_array().into_iter().flatten().find_map(|line| {
+        line.as_str()?
+            .strip_prefix(&format!(
+                "Encounter group {OLD_GUARD} added: Goblin Warrior 1, Goblin Warrior 2, Goblin Warrior 3. Shared roll "
+            ))?
+            .rsplit_once("= ")?
+            .1
+            .trim_end_matches('.')
+            .parse::<i64>()
+            .ok()
+    });
+    let order: Vec<i64> = state["order"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(serde_json::Value::as_i64)
+        .collect();
+    let participants = state["participants"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    let names: Vec<_> = members
+        .iter()
+        .map(|member| member["name"].clone())
+        .collect();
+    names == ["Goblin Warrior 1", "Goblin Warrior 2", "Goblin Warrior 3"]
+        && shared.is_some()
+        && members.iter().all(|member| {
+            let at = participants.iter().position(|p| p == member);
+            member["side"] == "rivals"
+                && member["added_from"]["round"] == 2
+                && member["present"] == true
+                && member["initiative"].as_i64() == shared
+                && at.is_some_and(|at| order.contains(&(at as i64)))
+        })
+}
 
 /// The entries of the saved tracker ledger, `Trackers.md`, in order, read as the app reads them.
 fn ledger(d: &Driver<'_>) -> Vec<Entry> {
@@ -1298,6 +1551,12 @@ fn week_between(a: &mut Audit<'_, '_>) {
 
     a.task("The party searches the last fight");
     a.click(Do, &format!("Roll 2 × gems for {WATCH}"));
+    let found = found_loot(a.d);
+    a.outcome(
+        "the Ember Watch run file holds two rolls on the gems table, each a row of the table",
+        found.len() == 2 && found.iter().all(|gem| GEMS.contains(&gem.as_str())),
+        &found,
+    );
 
     a.task("Verori died here");
     a.act(Panel, "open Lookup", |d| d.press_ctrl(Key::K));
@@ -1353,15 +1612,26 @@ fn week_between(a: &mut Audit<'_, '_>) {
         add_rewards(a, fight);
     }
     let rewards = section(&saved_note(a.d), "Loot and rewards").to_owned();
+    let blocks: Vec<Vec<&str>> = [SHRINE, WOLVES, WATCH]
+        .iter()
+        .map(|fight| block(&rewards, fight))
+        .collect();
+    let loot: Vec<String> = std::iter::once("  - 120 gp in a locked coffer".to_owned())
+        .chain(found.iter().map(|gem| format!("  - {gem}")))
+        .collect();
     a.outcome(
-        "the note holds one block for each of the three fights, each with its XP line, and the \
-         searched loot",
-        [SHRINE, WOLVES, WATCH]
+        "the note holds one block for each of the three fights, in order: its link, its XP line, \
+         and for the Ember Watch the coffer and each rolled gem as the run saved it, each once",
+        blocks
             .iter()
-            .all(|fight| rewards.matches(&format!("|{fight}]]\n  - XP ")).count() == 1)
-            && rewards.matches("\n  - XP ").count() == 3
-            && rewards.contains("120 gp in a locked coffer"),
-        &rewards,
+            .all(|lines| lines.get(1).is_some_and(|xp| xp.starts_with("  - XP ")))
+            && blocks[0].len() == 2
+            && blocks[1].len() == 2
+            && blocks[2][2..] == loot
+            && rewards.matches("\n- [[Timeline#^").count() == 3
+            && rewards.find(SHRINE) < rewards.find(WOLVES)
+            && rewards.find(WOLVES) < rewards.find(WATCH),
+        (&blocks, &loot),
     );
 
     a.setup("a week passes: save, quit and open the app", restart);
@@ -1371,6 +1641,15 @@ fn week_between(a: &mut Audit<'_, '_>) {
     a.click(Do, "New session");
     a.act(Do, "type the title", |d| d.type_text("The North Gate"));
     a.click(Do, "Create session");
+    let note = note_on_disk(a.d);
+    a.outcome(
+        "a new note, Session 3: The North Gate, with nothing carried yet",
+        note.contains("\nsession_number: 3\n")
+            && note.contains("\nsession_title: The North Gate\n")
+            && !note.contains("carried_from")
+            && section(&note, "Plan for tonight").trim().is_empty(),
+        &note,
+    );
 
     a.task("Carry over what the last session left");
     a.click(Do, "Carry over");
@@ -1498,6 +1777,40 @@ fn week_between(a: &mut Audit<'_, '_>) {
         a.d.current_page() == "Run" && run.contains("Oni"),
         &run,
     );
+}
+
+/// The gems table's rows.
+const GEMS: [&str; 4] = [
+    "A cracked garnet (10 gp)",
+    "A river pearl (50 gp)",
+    "A smoky quartz (50 gp)",
+    "A star ruby (100 gp)",
+];
+
+/// What the Ember Watch run saved for its loot rolls, in order.
+fn found_loot(d: &mut Driver<'_>) -> Vec<String> {
+    let run = run_file(d, WATCH);
+    run_state(&run)["loot"]
+        .as_object()
+        .into_iter()
+        .flat_map(|places| places.values())
+        .filter_map(serde_json::Value::as_array)
+        .flatten()
+        .filter_map(|found| found["text"].as_str().map(str::to_owned))
+        .collect()
+}
+
+/// The lines of one fight's rewards block: its link line, then each line under it.
+fn block<'t>(rewards: &'t str, fight: &str) -> Vec<&'t str> {
+    let mut lines = rewards.lines().skip_while(|line| {
+        !(line.starts_with("- [[Timeline#^") && line.ends_with(&format!("|{fight}]]")))
+    });
+    let Some(link) = lines.next() else {
+        return Vec::new();
+    };
+    std::iter::once(link)
+        .chain(lines.take_while(|line| line.starts_with("  ")))
+        .collect()
 }
 
 const KEY_SCENE: &str = "Ask Iselle about the gate key";

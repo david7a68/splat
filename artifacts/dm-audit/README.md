@@ -186,9 +186,10 @@ the app is saved, closed and opened at the table.
 totals. The same code compares them in every gate (`measure` in `src/visual_tests/dm_audit.rs`), so a change
 that makes a journey's task cost more or less fails it. `devenv shell -- audit-freeze journeys` writes every row
 of the four; `devenv shell -- audit-freeze add` adds new tasks to J1 and to each journey and refuses when a frozen
-task changed. A freeze writes all its files or none: each scenario writes into a staging folder, the command
+task changed. A refused freeze writes nothing: each scenario writes into a staging folder, the command
 copies it into the tree only when every scenario passed, and on a refusal it checks that no file under
-`artifacts/dm-audit/` or `src/visual_tests/plain_evening/` changed. `journeys/FINDINGS.md` lists what the
+`artifacts/dm-audit/` or `src/visual_tests/plain_evening/` changed. The copy itself is file by file: when it
+fails, the command fails and keeps the staged files, and git restores the tree. `journeys/FINDINGS.md` lists what the
 scripts found, as app faults, limits the design accepts, and tasks the design does not walk.
 
 **Each outcome is checked on the saved files.** After the act, the script reads what Obsidian and the next
