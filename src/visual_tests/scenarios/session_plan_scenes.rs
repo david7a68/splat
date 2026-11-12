@@ -242,10 +242,12 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     d.click(NAV_SESSIONS);
     new_session(d, "The Crossing");
     let body = d.editor_text().expect("a new session has a note");
+    // Two done scenes with her: her link alone, and her link with long words. One scene still
+    // to come, with a place.
     d.replace_editor_text(&body.replace(
         "## Plan for tonight\n",
         &format!(
-            "## Plan for tonight\n\n- [x] [[{VARRA_BLACK}]]: {WORDS}\n- [ ] [[{VARRA_BLACK}]]\n"
+            "## Plan for tonight\n\n- [x] [[{VARRA_BLACK}]]\n- [x] [[{VARRA_BLACK}]]: {WORDS}\n- [ ] [[{KEEP}]]\n"
         ),
     ));
     d.press_ctrl(Key::S);
@@ -265,20 +267,18 @@ pub fn log_from_play(d: &mut Driver<'_>) {
         None => session.clone(),
     };
 
-    // A done scene that links one World entry has `Add to Log` in its action place; a scene
-    // still to come has none.
-    let add = format!("Add to Log: {VARRA_BLACK}: {WORDS}");
+    // A done scene that links one World entry has `Add to Log` in its action place, left of its
+    // menu, while its words keep their rows; else in its menu. A scene still to come has none.
+    let short = format!("Add to Log: {VARRA_BLACK}");
+    let long = format!("Add to Log: {VARRA_BLACK}: {WORDS}");
+    let long_menu = format!("More actions for {VARRA_BLACK}: {WORDS}");
     for size in [SMALL, DEFAULT, LARGE] {
         let (placed, detail) = d.at_size(size, |d| {
-            let action = d.place_of(&add);
-            let menu = d.place_of(&format!("More actions for {VARRA_BLACK}: {WORDS}"));
-            let others = d
-                .nodes()
-                .iter()
-                .filter(|node| node.name.starts_with("Add to Log: ") && node.name != add)
-                .count();
+            let action = d.place_of(&short);
+            let menu = d.place_of(&format!("More actions for {VARRA_BLACK}"));
+            let open = d.has(&format!("Add to Log: {KEEP}"));
             (
-                others == 0
+                !open
                     && (size != DEFAULT || action.is_some())
                     && action.is_none_or(|action| {
                         menu.is_some_and(|menu| {
@@ -286,40 +286,45 @@ pub fn log_from_play(d: &mut Driver<'_>) {
                                 && (action.top() - menu.top()).abs() <= 0.5
                         })
                     }),
-                format!("Add to Log {action:?}, menu {menu:?}, on other rows {others}"),
+                format!("Add to Log {action:?}, menu {menu:?}, on the scene to come {open}"),
             )
         });
         d.observe(
             "T18.2",
             placed,
             format!(
-                "At {size:?}, only the done scene has Add to Log, left of its menu, and at 1200x800 on its row: {detail}"
+                "At {size:?}, a done scene has Add to Log left of its menu, and at 1200x800 on its row; the scene to come has none: {detail}"
             ),
         );
     }
+    // The fit rule: beside the long words the action would move a word, so it is a line of
+    // that scene's menu, and the row is as a scene's row with no action.
+    d.click(&long_menu);
+    d.observe(
+        "T18.2",
+        d.has(&long) && d.place_of(&long).is_some_and(|line| {
+            d.place_of(&long_menu).is_some_and(|menu| line.top() > menu.bottom())
+        }),
+        "Beside long words, Add to Log is a line of the scene's menu, not on its row",
+    );
     d.state("done-scene-add-to-log", Sizes::All);
+    d.press(Key::Escape);
 
-    // From the done scene: Lookup opens on the entry with the field, its stamp, and the scene's
-    // words outside its link, selected, so typing replaces them. Panel 2, Do 2.
+    // From a done scene on the row: Lookup opens on the entry with the field and its stamp,
+    // empty, for the scene has no words outside its link. Panel 2, Do 2.
     d.set_base(DEFAULT);
     d.begin_task();
-    d.click(&add);
+    d.click(&short);
     d.expect(&field);
     d.observe(
         "T18.2",
         d.has("Close Lookup")
             && d.focused_name().as_deref() == Some(field.as_str())
-            && d.field_text(&field).as_deref() == Some(WORDS)
+            && d.field_text(&field).as_deref() == Some("")
             && d.visible_text(&format!("{stamp}:")),
-        "A done scene's Add to Log opens Lookup on its entry with the Log field, the stamp and the scene's words",
+        "A done scene's Add to Log opens Lookup on its entry with the Log field and the stamp",
     );
-    d.state("log-field-from-scene", Sizes::All);
     d.type_text(TYPED);
-    d.observe(
-        "T18.2",
-        d.field_text(&field).as_deref() == Some(TYPED),
-        "The scene's words were selected, so typing replaced them",
-    );
     d.press(Key::Enter);
     d.expect(&added);
     d.click("Close Lookup");
@@ -336,7 +341,9 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     d.observe(
         "T18.2",
         logged == expected && !note(d).contains(TYPED),
-        format!("The entry's note gains one line under a new Log heading, and the session note none: {logged:?}"),
+        format!(
+            "The entry's note gains one line under a new Log heading, and the session note none: {logged:?}"
+        ),
     );
 
     // The result and its Undo stay with the entry: Lookup shows them again.
@@ -348,6 +355,33 @@ pub fn log_from_play(d: &mut Driver<'_>) {
         "T18.2",
         fs::read_to_string(&path).unwrap() == before && !d.has("Undo Log line"),
         "Undo Log line takes back that one line, and the note is as before",
+    );
+
+    // From the long scene's menu: the field starts with the scene's words outside its link,
+    // selected, so typing replaces them.
+    d.click("Close Lookup");
+    d.click(&long_menu);
+    d.click(&long);
+    d.expect(&field);
+    d.observe(
+        "T18.2",
+        d.focused_name().as_deref() == Some(field.as_str())
+            && d.field_text(&field).as_deref() == Some(WORDS),
+        "The menu's Add to Log fills the field with the scene's words outside its link",
+    );
+    d.state("log-field-from-scene", Sizes::All);
+    d.type_text(TYPED);
+    d.observe(
+        "T18.2",
+        d.field_text(&field).as_deref() == Some(TYPED),
+        "The scene's words were selected, so typing replaced them",
+    );
+    // Escape clears and closes the field, and writes nothing.
+    d.press(Key::Escape);
+    d.observe(
+        "T18.2",
+        !d.has(&field) && fs::read_to_string(&path).unwrap() == before,
+        "Escape closes the field and writes nothing",
     );
 
     // The reader's header, with a 19-letter title: `Add to Log` next to Edit gives way first, to
@@ -375,7 +409,8 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     d.click(&format!("Edit {VARRA_BLACK}"));
     d.type_into_editor(" Draft.");
     d.click("Close Lookup");
-    d.click(&add);
+    d.click(&long_menu);
+    d.click(&long);
     d.observe(
         "T18.2",
         d.visible_text("Save or discard your edit first.") && !d.has(&field),
@@ -389,13 +424,5 @@ pub fn log_from_play(d: &mut Driver<'_>) {
         d.field_text(&field).as_deref() == Some(WORDS)
             && fs::read_to_string(&path).unwrap() == before,
         "After Discard the field opens with the scene's words, and the note is as before",
-    );
-    // Escape clears and closes the field, and writes nothing.
-    d.click(&field);
-    d.press(Key::Escape);
-    d.observe(
-        "T18.2",
-        !d.has(&field) && fs::read_to_string(&path).unwrap() == before,
-        "Escape closes the field and writes nothing",
     );
 }

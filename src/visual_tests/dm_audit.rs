@@ -687,20 +687,16 @@ fn after_the_session(a: &mut Audit<'_, '_>) {
             ),
         )
         .expect("write the NPC");
-        let note = d.app().sessions.selected_path().expect("tonight's note").to_owned();
-        let text = fs::read_to_string(&note).expect("read tonight's note");
-        fs::write(
-            &note,
-            text.replacen(
-                "## Plan for tonight\n",
-                &format!("## Plan for tonight\n\n- [x] [[{HOBB}]]\n"),
-                1,
-            ),
-        )
-        .expect("write tonight's note");
         d.app_mut().lookup.refresh();
-        d.app_mut().sessions.refresh();
+        d.settle();
         d.click(NAV_SESSIONS);
+        let body = d.editor_text().expect("tonight's note");
+        d.replace_editor_text(&body.replacen(
+            "## Plan for tonight\n",
+            &format!("## Plan for tonight\n\n- [x] [[{HOBB}]]\n"),
+            1,
+        ));
+        d.press_ctrl(Key::S);
         show_plan(d);
         d.expect(&format!("Done: {HOBB}"));
     });
