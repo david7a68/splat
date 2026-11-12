@@ -15,13 +15,6 @@ pub struct Settings {
     focus_cookie: bool,
     /// The request in progress is the DM's Connect.
     connecting: bool,
-    /// A Connect failed. The next frame of the form scrolls its error, cookie and Connect into
-    /// view together; a new request ends it.
-    reveal_retry: bool,
-    /// Drawn passes left in which Connect is brought into view after a failed Connect.
-    reveal_passes: u8,
-    /// Where Connect is, for the page to bring into view (`take_reveal`).
-    reveal_rect: Option<egui::Rect>,
     pub campaign_form_open: bool,
     sign_in_again: bool,
     session: Option<Session>,
@@ -75,9 +68,6 @@ impl Default for Settings {
             cookie_input: String::new(),
             focus_cookie: false,
             connecting: false,
-            reveal_retry: false,
-            reveal_passes: 0,
-            reveal_rect: None,
             campaign_form_open: false,
             sign_in_again: false,
             session: None,
@@ -205,7 +195,6 @@ impl Settings {
     fn send(&mut self, action: Action, ctx: &egui::Context) {
         self.restoring = matches!(&action, Action::Restore);
         self.connecting = matches!(&action, Action::Connect { .. });
-        self.reveal_retry = false;
         self.forgetting = matches!(&action, Action::Forget);
         self.refreshing = matches!(&action, Action::Refresh(_));
         if !matches!(&action, Action::Refresh(_)) {
@@ -267,7 +256,6 @@ impl Settings {
                             Err(error) => {
                                 self.session = None;
                                 self.error = Some(error);
-                                self.reveal_retry = self.connecting;
                                 // A failed removal says to select Disconnect again.
                                 self.saved_session = self.restoring || self.forgetting;
                             }
@@ -395,11 +383,6 @@ impl Settings {
                 design::message(ui, Tone::Error, error);
             });
         }
-    }
-
-    /// Where Connect is, while a failed Connect asks the page to bring it into view.
-    pub fn take_reveal(&mut self) -> Option<egui::Rect> {
-        self.reveal_rect.take()
     }
 
     fn show_account(&mut self, ui: &mut egui::Ui, heading: bool) {
@@ -530,18 +513,8 @@ impl Settings {
                 let clicked = ui
                     .with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let connect = action.blocked(reason).show(ui);
-                        // After a failed Connect, show the kept cookie and the retry; the
-                        // cause is in the footer, always in view. The footer comes a pass after
-                        // the failure and shortens the page, so the reveal runs on the next few
-                        // drawn passes (not on one egui draws again); it scrolls only when
-                        // Connect is out of view.
-                        if std::mem::take(&mut self.reveal_retry) {
-                            self.reveal_passes = 3;
-                        }
-                        if self.reveal_passes > 0 {
-                            self.reveal_passes -= 1;
-                            self.reveal_rect = Some(connect.rect);
-                        }
+                        // After a failed Connect, its cause comes in the footer; the footer's
+                        // rule brings this primary Connect back into view whole above it.
                         ui.spacing_mut().item_spacing.x = design::S;
                         design::blocked_reason(ui, reason);
                         connect.clicked()
@@ -631,8 +604,6 @@ mod tests {
             .unwrap();
         settings.poll(&ctx);
         assert!(settings.saved_session, "the message says to select it");
-        // Round 23 SF1: only a failed Connect scrolls its retry into view.
-        assert!(!settings.reveal_retry, "a failed removal is not a retry");
         settings.send(
             Action::Connect {
                 cookie: Zeroizing::new("test-cookie".into()),
@@ -648,10 +619,7 @@ mod tests {
             })
             .unwrap();
         settings.poll(&ctx);
-        assert!(settings.reveal_retry, "a failed Connect shows its retry");
-        // A new request ends it, before its reply.
         settings.disconnect(&ctx);
-        assert!(!settings.reveal_retry);
         let (id, _) = commands.recv().unwrap();
         results
             .send(Reply {
@@ -660,7 +628,6 @@ mod tests {
             })
             .unwrap();
         settings.poll(&ctx);
-        assert!(!settings.reveal_retry, "a failed removal is not a retry");
         settings.disconnect(&ctx);
         let (id, _) = commands.recv().unwrap();
         results

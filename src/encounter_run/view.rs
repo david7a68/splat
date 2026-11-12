@@ -1445,7 +1445,9 @@ impl Run {
                     let whole_row = row_top >= original_clip.top() - design::HAIRLINE_WIDTH
                         && row_top + layout.height(scale)
                             <= original_clip.bottom() + design::HAIRLINE_WIDTH;
-                    if overflow && !whole_row {
+                    // A row cut by the list's edge or by the message footer is not drawn: the
+                    // list ends at a whole row, and `1 below` counts the rest.
+                    if (overflow || behind) && !whole_row {
                         ui.set_clip_rect(Rect::NOTHING);
                     }
                     let selected = self.selected == index || self.also.contains(&index);

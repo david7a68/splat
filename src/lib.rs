@@ -1812,7 +1812,7 @@ impl Splat {
                         self.dndbeyond.footer_messages(&mut footer, false);
                         footer.show(ui)
                     };
-                    let page = egui::ScrollArea::vertical()
+                    egui::ScrollArea::vertical()
                         .id_salt("settings_page")
                         .max_height((bottom - ui.cursor().top()).max(0.0))
                         .auto_shrink([false, false])
@@ -1871,20 +1871,6 @@ impl Splat {
                                 }
                             }
                         });
-                    // After a failed Connect, Connect comes into view above the footer.
-                    let reveal = self.settings.take_reveal();
-                    if let Some(connect) = reveal
-                        && connect.bottom() > page.inner_rect.bottom()
-                    {
-                        let mut state = page.state;
-                        let most = (page.content_size.y - page.inner_rect.height()).max(0.0);
-                        state.offset.y = (state.offset.y + connect.bottom()
-                            - page.inner_rect.bottom()
-                            + design::S)
-                            .min(most);
-                        state.store(ui.ctx(), page.id);
-                        ui.ctx().request_repaint();
-                    }
                 });
             }
             Page::Sessions => {

@@ -649,6 +649,8 @@ impl<'a> Action<'a> {
     }
 
     pub fn show(mut self, ui: &mut Ui) -> Response {
+        // The pane's next action, also where a live run reserves the accent fill.
+        let next = self.kind == Kind::Primary;
         if self.kind == Kind::Primary
             && (self.selected
                 || ui.ctx().data(|data| {
@@ -671,6 +673,9 @@ impl<'a> Action<'a> {
             response = response.on_hover_text(hint);
         }
         locked_control(ui, &response);
+        if next {
+            keep_above_footer(ui, response.rect);
+        }
         response
     }
 
@@ -2723,6 +2728,7 @@ impl<'a> Footer<'a> {
                 ui.ctx().data_mut(|data| data.remove::<f32>(key));
                 ui.ctx().request_discard("the message footer emptied");
             }
+            FooterRooms::forget(ui, self.id);
             return pane.bottom();
         }
         // A stable sort keeps the caller's order inside each rank.
@@ -2756,12 +2762,104 @@ impl<'a> Footer<'a> {
         if height == 0.0 {
             return pane.bottom();
         }
+        FooterRooms::record(ui, self.id, pane, rect, height);
         // egui's `set_max_height` also moves the cursor back to the top of `ui`, so it goes
         // back to where the body starts.
         let top = ui.cursor().top();
         ui.set_max_height((rect.top() - S - top).max(0.0));
         ui.add_space(top - ui.cursor().top());
         rect.top() - S
+    }
+}
+
+/// The room each message footer took from its pane in this pass: the band from `S` above the
+/// footer to the pane's bottom, across the whole pane, and whether that room is new in this pass
+/// (the footer came, changed height, or its pane changed size). A pane's content ends at the
+/// band's top; `keep_above_footer` uses a new band to bring a primary action it cut back into
+/// view whole.
+#[derive(Clone, Default)]
+struct FooterRooms {
+    pass: u64,
+    rooms: Vec<FooterRoom>,
+}
+
+#[derive(Clone, Copy)]
+struct FooterRoom {
+    band: Rect,
+    footer: Rect,
+    new: bool,
+}
+
+impl FooterRooms {
+    fn key() -> Id {
+        Id::new("message_footer_rooms")
+    }
+
+    fn record(ui: &Ui, id: Id, pane: Rect, footer: Rect, height: f32) {
+        let ctx = ui.ctx();
+        let pass = ctx.cumulative_pass_nr();
+        let applied = (height, pane.size());
+        let new = ctx.data_mut(|data| {
+            let last = data.get_temp::<(f32, Vec2)>(id.with("applied"));
+            data.insert_temp(id.with("applied"), applied);
+            last != Some(applied)
+        });
+        let band = Rect::from_min_max(pos2(pane.left(), footer.top() - S), pane.right_bottom());
+        ctx.data_mut(|data| {
+            let rooms = data.get_temp_mut_or_default::<Self>(Self::key());
+            if rooms.pass != pass {
+                *rooms = Self {
+                    pass,
+                    rooms: Vec::new(),
+                };
+            }
+            rooms.rooms.push(FooterRoom { band, footer, new });
+        });
+    }
+
+    /// An empty footer: the next message that comes takes new room.
+    fn forget(ui: &Ui, id: Id) {
+        ui.ctx()
+            .data_mut(|data| data.remove::<(f32, Vec2)>(id.with("applied")));
+    }
+
+    fn this_pass(ctx: &egui::Context) -> Vec<FooterRoom> {
+        let pass = ctx.cumulative_pass_nr();
+        ctx.data(|data| data.get_temp::<Self>(Self::key()))
+            .filter(|rooms| rooms.pass == pass)
+            .map(|rooms| rooms.rooms)
+            .unwrap_or_default()
+    }
+}
+
+/// The bands that the message footers of the last finished pass took from their panes, for
+/// checks: a pane's content ends above each.
+#[cfg(test)]
+pub(crate) fn footer_bands(ctx: &egui::Context) -> Vec<Rect> {
+    let last = ctx.cumulative_pass_nr().saturating_sub(1);
+    ctx.data(|data| data.get_temp::<FooterRooms>(FooterRooms::key()))
+        .filter(|rooms| rooms.pass == last)
+        .map(|rooms| rooms.rooms.iter().map(|room| room.band).collect())
+        .unwrap_or_default()
+}
+
+/// A pane's content ends above its message footer. When a footer's room is new (it came, grew,
+/// or the pane was resized) and it cuts or covers the pane's primary action, the pane's scroll
+/// area scrolls up by as little as it takes to show that action whole above the footer: the row
+/// that holds the action the DM needs next stays in reach. An action inside the footer, or wholly
+/// above it, moves nothing.
+fn keep_above_footer(ui: &Ui, rect: Rect) {
+    let cut = FooterRooms::this_pass(ui.ctx()).into_iter().any(|room| {
+        room.new
+            && !room.footer.contains_rect(ui.clip_rect())
+            && room.band.x_range().intersects(rect.x_range())
+            && rect.bottom() > room.band.top()
+            && rect.top() < room.band.bottom()
+    });
+    if cut {
+        ui.scroll_to_rect_animation(rect, None, egui::style::ScrollAnimation::none());
+        ui.ctx()
+            .request_discard("a primary action came into view above its footer");
     }
 }
 

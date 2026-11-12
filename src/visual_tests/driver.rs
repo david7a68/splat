@@ -1073,6 +1073,16 @@ impl<'a> Driver<'a> {
         self.nodes().iter().any(|node| node.name.contains(name))
     }
 
+    /// The room each message footer takes from its pane now (the footer and the `S` above it,
+    /// across the pane), in AccessKit's pixels like `nodes`.
+    pub fn footer_bands(&self) -> Vec<egui::Rect> {
+        let scale = self.harness.ctx.pixels_per_point();
+        crate::design::footer_bands(&self.harness.ctx)
+            .into_iter()
+            .map(|band| band * scale)
+            .collect()
+    }
+
     /// Can a person see this text or control right now?
     pub fn in_view(&self, name: &str) -> bool {
         self.nodes()
@@ -1444,6 +1454,22 @@ impl<'a> Driver<'a> {
             }
         });
         out.join(" ")
+    }
+
+    /// Each text painted across `area` that its pane's clip cuts: part of its letters show and
+    /// part do not. A list that ends at a whole row has none.
+    pub fn cut_texts_in(&self, area: egui::Rect) -> Vec<String> {
+        let mut out = Vec::new();
+        self.each_painted_text(|text, clip| {
+            let bounds = text.visual_bounding_rect();
+            if area.intersects(bounds)
+                && clip.intersects(bounds)
+                && !clip.expand(1.0).contains_rect(bounds)
+            {
+                out.push(text.galley.job.text.clone());
+            }
+        });
+        out
     }
 
     /// Visible laid-out lines inside an AccessKit control's pixel bounds.

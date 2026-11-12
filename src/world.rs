@@ -3668,6 +3668,9 @@ impl Reader {
         let page_order = page.map_or(0, |(_, order)| order);
         let page = page.map(|(page, _)| page);
         if editing {
+            // A draft let go whose note is gone keeps its Undo while another entry is edited
+            // (the next Edit ends the Undo of its own entry).
+            lines.extend(self.discarded_line(campaign, id, index));
             lines.extend(page.map(|page| page.line()));
             return self.newest_first(lines, page_order);
         }
@@ -3690,7 +3693,7 @@ impl Reader {
                 FooterAct::Change,
             ));
         }
-        lines.extend(self.discarded_line(campaign, id));
+        lines.extend(self.discarded_line(campaign, id, index));
         if item.entry.kind == "world" && !index.duplicate_world.contains_key(&item.entry.path) {
             if let Some(rename) = self
                 .file_undo

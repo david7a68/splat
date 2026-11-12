@@ -903,7 +903,20 @@ pub fn run(d: &mut Driver<'_>) {
         &[DISMISS, NEXT_TURN],
         "",
     );
-    d.state("undo-steps-unread-beside-lookup", Sizes::All);
+    // R3f X39: with the warning in the footer, the roster ends at a whole row; a row it would
+    // cut is out of view and counted below, never half a row of letters.
+    d.state_prepared("undo-steps-unread-beside-lookup", Sizes::All, |d| {
+        let rows = roster_places(d);
+        let area = rows
+            .iter()
+            .fold(egui::Rect::NOTHING, |area, (_, rect)| area.union(*rect));
+        let cut = d.cut_texts_in(area);
+        d.observe(
+            "r3f-X39-whole-rows",
+            !rows.is_empty() && cut.is_empty(),
+            format!("Roster texts cut by the list's edge: {cut:?}"),
+        );
+    });
     // iter-26-R FI2: the warning is in the message footer below the roster, so Dismiss moves
     // no row, at every captured size.
     let tops = |d: &mut Driver<'_>| {

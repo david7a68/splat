@@ -5,7 +5,7 @@
 //! its first lines, and the labels several share are in `steps.rs`, so a script
 //! says what the user does and a rename changes one line.
 use super::{
-    driver::{DEFAULT, Driver, LARGE, SMALL, Sizes},
+    driver::{DEFAULT, Driver, Found, LARGE, SMALL, Sizes},
     fixture::{
         CAMPAIGN, GROUP_ARENA, GROUP_GOBLINS, GROUP_LOST, GROUP_ORPHAN, GROUP_RIVALS, GROUP_SHRINE,
         GROUP_WATCH, MODULE, PAST_SESSION, QUIET_CAMPAIGN, RUN, RUN_12, RUN_20, RUN_ARENA, RUN_OLD,
@@ -355,6 +355,31 @@ fn click_by_focus(d: &mut Driver<'_>, name: &str) {
 }
 
 /// Round 26: the pane footer whose words hold `words`: the smallest named group that holds them.
+/// R3f X43, X44: a footer's button below a message starts at the message's words, and is whole
+/// inside the footer: its label shortens by whole words, with the whole words on hover.
+fn move_at_words(d: &mut Driver<'_>, words: &str, name: &str) {
+    let text = d.painted_rect_in(words, egui::Rect::EVERYTHING);
+    let footer = footer_with(d, words);
+    let button = d
+        .nodes()
+        .into_iter()
+        .find(|node| node.name == name && node.role == egui::accesskit::Role::Button);
+    d.observe(
+        "r3f-X43-X44-move-at-words",
+        text.zip(footer)
+            .zip(button.as_ref())
+            .is_some_and(|((text, footer), button)| {
+                (button.rect.left() - text.left()).abs() < 1.0
+                    && button.fully_in_view()
+                    && footer.contains_rect(button.rect)
+            }),
+        format!(
+            "{name} {:?} starts at \"{words}\" {text:?}, whole in the footer {footer:?}",
+            button.as_ref().map(|button| (button.rect, button.shown))
+        ),
+    );
+}
+
 fn footer_with(d: &Driver<'_>, words: &str) -> Option<egui::Rect> {
     d.nodes()
         .into_iter()
@@ -4727,7 +4752,11 @@ pub mod settings {
             d.visible_text("Connect failed") && rail.contains("Connect failed"),
             format!("After a failed Connect, the page and the rail say Connect failed: {rail}"),
         );
-        d.state("connect-failed", Sizes::All);
+        // R3f X41: at each size, also after the resizes above, the retry is whole above the
+        // footer that holds the failure's cause.
+        d.state_prepared("connect-failed", Sizes::All, |d| {
+            super::session_recording::check_row_clear_of_footer(d, CONNECT, "r3f-X41-connect");
+        });
         d.goal("try to connect without a network");
         // The cookie stays for a retry. There is nothing saved, so nothing to disconnect.
         let retry = !d.is_disabled(CONNECT) && !d.has(DISCONNECT);
@@ -11561,6 +11590,13 @@ pub mod session_notes {
                 .map(|node| node.rect.top())
         };
         let row_clean = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, save_row));
+        // The height of the room the footer takes (the footer and `S` above it).
+        let footer_room = |d: &Driver<'_>| {
+            d.footer_bands()
+                .iter()
+                .map(|band| band.height())
+                .fold(0.0, f32::max)
+        };
         d.app_mut().timeline.save();
         d.replace_text_in("Folder", "30 Sessions");
         d.expect("Move files and save");
@@ -11582,7 +11618,7 @@ pub mod session_notes {
                         .into_iter()
                         .find(|node| node.name.contains(KEEPS) && node.in_view())
                         .map(|node| node.rect.top());
-                    (save_row(d), warning)
+                    (save_row(d), warning, footer_room(d))
                 })
             })
         });
@@ -11657,18 +11693,30 @@ pub mod session_notes {
                     .into_iter()
                     .find(|node| node.name.starts_with("Moved 1 note") && node.in_view())
                     .map(|node| node.rect.top());
-                (save_row(d), result)
+                (save_row(d), result, footer_room(d))
             })
         });
+        // R3f: where the footer's room would cover the save row (960x640), the pane scrolls the
+        // row up, by no more than that room, so it is whole above the footer
+        // (`iter-16-C-FT4-clear`); where the window has room, the row keeps its y.
+        let kept = |clean: Option<f32>, now: Option<f32>, room: f32| {
+            clean.zip(now).is_some_and(|(clean, now)| {
+                clean == now || (now < clean && clean - now <= room + 0.5)
+            })
+        };
         d.observe(
             "iter-26-S-FN2",
-            row_clean.iter().zip(&row_typed).zip(&row_moved).all(
-                |((clean, (typed, warning)), (moved, result))| {
+            row_clean.iter().zip(&row_typed).zip(&row_moved).enumerate().all(
+                |(at, ((clean, (typed, warning, typed_room)), (moved, result, moved_room)))| {
+                    let small = at == 0;
                     clean.is_some()
-                        && clean == typed
-                        && clean == moved
-                        && warning.zip(*clean).is_some_and(|(warning, row)| warning > row)
-                        && result.zip(*clean).is_some_and(|(result, row)| result > row)
+                        && (if small {
+                            kept(*clean, *typed, *typed_room) && kept(*clean, *moved, *moved_room)
+                        } else {
+                            clean == typed && clean == moved
+                        })
+                        && warning.zip(*typed).is_some_and(|(warning, row)| warning > row)
+                        && result.zip(*moved).is_some_and(|(result, row)| result > row)
                 },
             ),
             format!(
@@ -12680,6 +12728,57 @@ pub mod session_recording {
             id,
             primary == [expected],
             format!("Exactly one accent-filled control is visible, {expected}: {primary:?}"),
+        );
+        check_row_clear_of_footer(d, expected, &format!("{id}-clear"));
+    }
+
+    /// R3f: a pane's content ends above its message footer. The action the DM needs next
+    /// (`action`) and every control on its row are whole on screen, and none lies in the room a
+    /// footer takes (the footer and the `S` above it).
+    pub(super) fn check_row_clear_of_footer(d: &mut Driver<'_>, action: &str, id: &str) {
+        let nodes = d.nodes();
+        let bands = d.footer_bands();
+        let detail = |rows: &[&Found]| {
+            rows.iter()
+                .map(|node| format!("{} {:?} shown {:?}", node.name, node.rect, node.shown))
+                .collect::<Vec<_>>()
+                .join("; ")
+        };
+        let Some(target) = nodes
+            .iter()
+            .find(|node| node.name == action && node.role != egui::accesskit::Role::Label)
+        else {
+            d.observe(id, false, format!("{action} is not drawn"));
+            return;
+        };
+        // The row: every control whose middle is on the action's line, in the action's pane.
+        let pane = bands
+            .iter()
+            .find(|band| band.x_range().intersects(target.rect.x_range()))
+            .map_or(target.rect.x_range(), |band| band.x_range());
+        let row: Vec<&Found> = nodes
+            .iter()
+            .filter(|node| {
+                node.role != egui::accesskit::Role::Label
+                    && node.role != egui::accesskit::Role::GenericContainer
+                    && node.rect.is_positive()
+                    && target.rect.y_range().contains(node.rect.center().y)
+                    && pane.intersects(node.rect.x_range())
+            })
+            .collect();
+        let clear = |node: &Found| {
+            bands.iter().all(|band| {
+                !band.x_range().intersects(node.rect.x_range())
+                    || node.rect.bottom() <= band.top() + 0.5
+            })
+        };
+        d.observe(
+            id,
+            row.iter().all(|node| node.fully_in_view() && clear(node)),
+            format!(
+                "{action}'s row is whole and above every footer band {bands:?}: {}",
+                detail(&row)
+            ),
         );
     }
 
@@ -15526,7 +15625,14 @@ pub mod encounter_groups {
             roster_places(d).len() == before + 1,
             "The valid member joins while the two unavailable members stay out",
         );
-        d.state("available-member-added", Sizes::All);
+        // R3f X43, X44: the footer's Move button starts at the message's words and is whole.
+        d.state_prepared("available-member-added", Sizes::All, |d| {
+            move_at_words(
+                d,
+                "Lost Patrol joined at",
+                "Move Lost Patrol before Ember Cultist",
+            );
+        });
         // FH1: a tied arrival is a finished change, so its message has the success bar.
         // FH6: its Move button names the group, as the message does, not one member.
         let tied = painted_paragraph(d, "Lost Patrol joined at");
@@ -15621,7 +15727,13 @@ pub mod encounter_groups {
             words.contains(" more") && counted,
             format!("{RIVAL_NAME}'s row at 1200: {words}"),
         );
-        d.state("group-added-with-a-total", Sizes::All);
+        d.state_prepared("group-added-with-a-total", Sizes::All, |d| {
+            move_at_words(
+                d,
+                "Rival Team joined at",
+                "Move Rival Team before Kestrel Dunmoor",
+            );
+        });
         d.observe(
             "T13.2",
             d.has_containing("Undo: add Rival Team")
