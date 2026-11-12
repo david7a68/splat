@@ -7644,12 +7644,15 @@ mod tests {
             })
             .collect();
             let bad = groups[1].id;
+            // Two faults at once: a second bad total, on the group below it.
+            let also_bad = groups[2].id;
             // The whole Arrivals tab, so its footer is drawn too. `clean` has no bad total.
             let edge = std::rc::Rc::new(std::cell::Cell::new(0.0));
             let build = |mut run: Run, bad_total: bool| {
                 run.groups = Some(Arc::new(groups.clone()));
                 if bad_total {
                     run.group_totals.insert(bad, "1-2".into());
+                    run.group_totals.insert(also_bad, "2-5".into());
                 }
                 let seen = edge.clone();
                 let mut harness = egui_kittest::Harness::builder()
@@ -7718,29 +7721,30 @@ mod tests {
                     _ => None,
                 })
                 .collect();
-            assert_eq!(texts.len(), 1, "iter10-B-FT4-once at {width}");
-            // FI5: in the footer, the reason names its group.
+            // Once for each bad total: two groups, two reasons.
+            assert_eq!(texts.len(), 2, "iter10-B-FT4-once at {width}");
+            // FI5: in the footer, each reason names its group, in list order.
+            let named: Vec<_> = texts.iter().map(|text| text.galley.text()).collect();
             assert!(
-                texts[0]
-                    .galley
-                    .text()
-                    .starts_with("Shrine Reserve: Enter a whole number"),
-                "iter-26-R-FI5-named at {width}: {}",
-                texts[0].galley.text()
+                named[0].starts_with("Shrine Reserve: Enter a whole number")
+                    && named[1].starts_with("Lost Patrol: Enter a whole number")
+                    && texts[0].pos.y < texts[1].pos.y,
+                "iter-26-R-FI5-named at {width}: {named:?}"
             );
-            assert!(
-                texts[0]
-                    .galley
-                    .job
-                    .sections
-                    .iter()
-                    .all(|section| section.format.color == colors().text),
-                "iter10-B-FT4-text-colour at {width}"
-            );
-            assert!(
-                !texts[0].galley.text().contains(icons::WARN),
-                "iter10-B-FT4-mark-apart at {width}"
-            );
+            for text in &texts {
+                assert!(
+                    text.galley
+                        .job
+                        .sections
+                        .iter()
+                        .all(|section| section.format.color == colors().text),
+                    "iter10-B-FT4-text-colour at {width}"
+                );
+                assert!(
+                    !text.galley.text().contains(icons::WARN),
+                    "iter10-B-FT4-mark-apart at {width}"
+                );
+            }
         }
         // AH1: the block is as wide as its groups need, not the pane: in a pane wider than that,
         // Add stays where it was.
