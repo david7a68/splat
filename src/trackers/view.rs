@@ -62,6 +62,17 @@ impl ViewState {
         self.focus_asking = true;
     }
 
+    /// Hold this quick action in place on screen for the passes after its press.
+    fn hold(&mut self, ui: &egui::Ui, key: &str, instance: &Option<String>, label: &str, top: f32) {
+        self.keep = Some(Keep {
+            place: (key.to_owned(), instance.clone(), label.to_owned()),
+            top,
+            pass: ui.ctx().cumulative_pass_nr(),
+            now: None,
+            content: None,
+        });
+    }
+
     /// The words in the amount field, while it is open.
     #[cfg(test)]
     pub(super) fn typed(&self) -> Option<&str> {
@@ -625,7 +636,11 @@ fn tracker_lines(
                     *k == place.0 && *i == place.1 && *l == quick.label
                 });
                 if here {
-                    amount_field(ui, view, &quick.label, act);
+                    // The field takes exactly its action's column, so nothing after it moves.
+                    let width = Action::secondary(&quick.label)
+                        .density(Density::Read)
+                        .natural_width(ui);
+                    amount_field(ui, view, &quick.label, width, act);
                     continue;
                 }
                 let response = Action::secondary(&quick.label)
@@ -642,13 +657,7 @@ fn tracker_lines(
                     keep.now = Some(response.rect.top());
                 }
                 if response.clicked() {
-                    view.keep = Some(Keep {
-                        place: (place.0.clone(), place.1.clone(), quick.label.clone()),
-                        top: response.rect.top(),
-                        pass: ui.ctx().cumulative_pass_nr(),
-                        now: None,
-                        content: None,
-                    });
+                    view.hold(ui, &place.0, &place.1, &quick.label, response.rect.top());
                     // Read on the click only: a dice amount is parsed to tell it from `ask`.
                     if quick.asks() {
                         view.asking = Some((
@@ -715,13 +724,20 @@ fn name_cell(ui: &mut egui::Ui, view: &mut ViewState, name: &str, size: egui::Ve
 }
 
 /// `add: ask` puts a number field in the action's place. It holds focus until Enter or Escape.
-fn amount_field(ui: &mut egui::Ui, view: &mut ViewState, label: &str, act: &mut Option<Act>) {
+fn amount_field(
+    ui: &mut egui::Ui,
+    view: &mut ViewState,
+    label: &str,
+    width: f32,
+    act: &mut Option<Act>,
+) {
     let Some((key, instance, _, typed)) = view.asking.as_mut() else {
         return;
     };
-    let response = ui.add(
+    let response = ui.add_sized(
+        egui::vec2(width, Density::Read.control()),
         egui::TextEdit::singleline(typed)
-            .desired_width(design::XL * 3.0)
+            .min_size(egui::vec2(0.0, Density::Read.control()))
             .hint_text("Amount"),
     );
     design::named(ui, &response, label);
@@ -731,9 +747,12 @@ fn amount_field(ui: &mut egui::Ui, view: &mut ViewState, label: &str, act: &mut 
     if response.lost_focus() {
         let enter = ui.input(|i| i.key_pressed(egui::Key::Enter));
         if enter && let Ok(amount) = typed.trim().parse::<i64>() {
+            let (key, instance) = (key.clone(), instance.clone());
+            // Enter is the press: the action keeps its place as a click's does.
+            view.hold(ui, &key, &instance, label, response.rect.top());
             *act = Some(Act::Press {
-                key: key.clone(),
-                instance: instance.clone(),
+                key,
+                instance,
                 label: label.to_owned(),
                 asked: Some(amount),
             });

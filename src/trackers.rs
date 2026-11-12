@@ -754,9 +754,6 @@ pub struct State {
     raised: HashMap<String, Vec<i64>>,
     /// The notices each change entry ended by taking the value back below their marks, by mark.
     lowered: HashMap<String, Vec<i64>>,
-    /// The entries about a notice at a value that is not open where they stand: they count for
-    /// nothing. A Remove or an Undo that would add one writes nothing.
-    stray: std::collections::HashSet<String>,
     /// How many entries name each tracker that no note in play has, in the file's order. They
     /// count for nothing, and the view names them.
     pub unknown: Vec<(String, usize)>,
@@ -805,8 +802,14 @@ pub fn replay(rules: &Rules, ledger: &Ledger, today: &Today) -> State {
     // The entries about day notices: which days ended, and the rolls on each.
     let mut ended = std::collections::HashSet::new();
     let mut day_rolls: HashMap<NoticeRef, Vec<TableRoll>> = HashMap::new();
-    // The notices at a value that an entry names: a roll on one, its Done or its Dismiss.
-    let mut acted_on = std::collections::HashSet::new();
+    // The notices at a value that an entry anywhere in the ledger names: a roll on one, its
+    // Done or its Dismiss. A fall never ends one of them, whatever act or edit put the fall
+    // before the entry.
+    let acted_on: std::collections::HashSet<&NoticeRef> = ledger
+        .changes
+        .iter()
+        .filter_map(|entry| entry.notice.as_ref())
+        .collect();
     for entry in &ledger.changes {
         if let Some(id @ NoticeRef::Day { mark, .. }) = &entry.notice {
             if rules.day_mark(mark).is_none() {
@@ -822,10 +825,8 @@ pub fn replay(rules: &Rules, ledger: &Ledger, today: &Today) -> State {
         }
         if let Some(id) = &entry.notice {
             let Some(at) = state.due.iter().position(|notice| notice.id == *id) else {
-                state.stray.insert(entry.id.clone());
                 continue;
             };
-            acted_on.insert(id.clone());
             if entry.done || entry.dismissed {
                 state.due.remove(at);
             } else if let Some(Roll::Table(roll)) = &entry.roll {
@@ -916,12 +917,13 @@ pub fn replay(rules: &Rules, ledger: &Ledger, today: &Today) -> State {
 }
 
 /// A notice at a value is due because the value is at or past its mark. A change that takes the
-/// value back below the mark ends each such notice of its line that nothing was recorded on (no
-/// roll, `Done` or `Dismiss`): a wrong press and its opposite leave nothing due. A notice the
-/// DM acted on stays. Nothing is written; Undo of the change brings the notice back.
+/// value back below the mark ends each such notice of its line that no entry of the ledger
+/// names (no roll, `Done` or `Dismiss`, before or after the fall): a wrong press and its
+/// opposite leave nothing due. A notice the DM acted on stays. Nothing is written; Undo of the
+/// change brings the notice back.
 fn end_below_marks(
     state: &mut State,
-    acted_on: &std::collections::HashSet<NoticeRef>,
+    acted_on: &std::collections::HashSet<&NoticeRef>,
     entry: &Entry,
     after: i64,
 ) {
@@ -1147,6 +1149,25 @@ fn rolled(text: &str) -> String {
 /// The result line's words for one act, from the entries alone, so they read the same after a
 /// restart.
 pub fn result_words(rules: &Rules, ledger: &Ledger, state: &State, entries: &[Entry]) -> String {
+    let mut words = act_words(rules, ledger, state, entries);
+    // Every way a notice leaves the Due list by a fall says so once: a press, a linked change,
+    // or a ticked change of `Done`.
+    for entry in entries {
+        for at in state.lowered.get(&entry.id).into_iter().flatten() {
+            let name = short_name(
+                rules,
+                entry.tracker.as_deref().unwrap_or_default(),
+                entry.instance.as_deref(),
+                *at,
+            );
+            words.push_str(&format!(" {name} is no longer due."));
+        }
+    }
+    words
+}
+
+/// The act's own words: the notice it ended or rolled on, or the values it left.
+fn act_words(rules: &Rules, ledger: &Ledger, state: &State, entries: &[Entry]) -> String {
     let label = label(rules, ledger, entries);
     if let Some(entry) = head(entries).filter(|e| e.notice.is_some()) {
         if entry.done || entry.dismissed {
@@ -1199,17 +1220,6 @@ pub fn result_words(rules: &Rules, ledger: &Ledger, state: &State, entries: &[En
         .collect();
     if !due.is_empty() {
         words.push_str(&format!(" Due: {}.", due.join(", ")));
-    }
-    for entry in entries {
-        for at in state.lowered.get(&entry.id).into_iter().flatten() {
-            let name = short_name(
-                rules,
-                entry.tracker.as_deref().unwrap_or_default(),
-                entry.instance.as_deref(),
-                *at,
-            );
-            words.push_str(&format!(" {name} is no longer due."));
-        }
     }
     words
 }
@@ -2591,6 +2601,59 @@ mod tests {
         assert_eq!(month.days_until(91), [32, 62]);
         let plain = serde_yaml_ng::from_str::<DayMark>("{every: 30, say: x}").unwrap();
         assert_eq!(plain.days_until(31), [31]);
+        // `Done` whose ticked change takes a value back below a mark says that notice is no
+        // longer due, as a press does.
+        let rules = Rules {
+            notes: vec!["Rules".into()],
+            trackers: vec![Tracker {
+                key: "rivals".into(),
+                note: Uuid::nil(),
+                def: Ok(def(
+                    "name: Rivals\nper: [Old Guard]\nmarks: [{at: 1, say: First.}]",
+                )),
+            }],
+            day_marks: vec![Dated {
+                key: "rest".into(),
+                def: Ok(serde_yaml_ng::from_str(
+                    "{at: 7, say: Rest., changes: [{tracker: rivals, for: Old Guard, add: -1}]}",
+                )
+                .unwrap()),
+                note: Uuid::nil(),
+            }],
+            ..Rules::default()
+        };
+        let change = |id: &str, add: i64| Entry {
+            id: id.into(),
+            tracker: Some("rivals".into()),
+            instance: Some("Old Guard".into()),
+            add: Some(add),
+            ..Entry::default()
+        };
+        let done = vec![
+            change("c-00000002", -1),
+            Entry {
+                id: "c-00000003".into(),
+                notice: Some(NoticeRef::Day {
+                    mark: "rest".into(),
+                    day: 7,
+                }),
+                done: true,
+                ..Entry::default()
+            },
+        ];
+        let ledger = Ledger {
+            changes: [vec![change("c-00000001", 1)], done.clone()].concat(),
+            ..Ledger::default()
+        };
+        let state = replay(&rules, &ledger, &Today::Day(7));
+        assert!(state.due.is_empty(), "{:?}", state.due);
+        assert_eq!(
+            result_words(&rules, &ledger, &state, &done),
+            format!(
+                "{}. First for Old Guard is no longer due.",
+                label(&rules, &ledger, &done)
+            )
+        );
     }
 
     #[test]
@@ -2711,10 +2774,9 @@ mod tests {
         );
         assert_eq!(file(&race), before);
 
-        // A roll on a notice must keep counting. Rooms of an older session: A to 20 raises the
-        // bell, B to 30, C back to 20, then a roll on A's bell. Without B, C would end the bell
-        // before the roll, so Remove of B writes nothing and names the roll; so does Undo of B
-        // when B is tonight's newest act.
+        // A notice with a roll on it stays, whatever puts a fall before the roll: a Remove, an
+        // Undo, an `Undo remove` or an edit in Obsidian. Rooms of an older session: A to 20
+        // raises the bell, B to 30, C back to 20, then a roll on A's bell.
         let path = ledger::path(&race.campaign.path);
         let older = Some(Uuid::from_u128(1));
         let room = |id: &str, add: i64, session| Entry {
@@ -2724,14 +2786,14 @@ mod tests {
             session,
             ..Entry::default()
         };
-        let roll = Entry {
-            id: "c-0000000d".into(),
+        let rolled = |id: &str, change: &str, at: i64, table: &str| Entry {
+            id: id.into(),
             notice: Some(NoticeRef::Value {
-                change: "c-0000000a".into(),
-                at: 20,
+                change: change.into(),
+                at,
             }),
             roll: Some(Roll::Table(TableRoll {
-                table: "wander_early".into(),
+                table: table.into(),
                 name: None,
                 value: 3,
                 row: "Nothing comes.".into(),
@@ -2739,23 +2801,28 @@ mod tests {
             session: older,
             ..Entry::default()
         };
-        let write = |b_session| {
+        let write = |entries: Vec<Entry>| {
             fs::remove_file(&path).ok();
-            ledger::commit(&path, |_| {
-                Ok(Op::Append(vec![
-                    room("c-0000000a", 20, older),
-                    room("c-0000000b", 10, b_session),
-                    room("c-0000000c", -10, older),
-                    roll.clone(),
-                ]))
-            })
-            .unwrap();
+            ledger::commit(&path, |_| Ok(Op::Append(entries))).unwrap();
             fs::read_to_string(&path).unwrap()
         };
-        let before = write(older);
+        let bell_with_roll = |t: &Trackers| {
+            t.state
+                .due
+                .iter()
+                .any(|n| n.id.change() == Some("c-0000000a") && n.rolls.len() == 1)
+        };
+        let rooms = |b_session| {
+            vec![
+                room("c-0000000a", 20, older),
+                room("c-0000000b", 10, b_session),
+                room("c-0000000c", -10, older),
+                rolled("c-0000000d", "c-0000000a", 20, "wander_early"),
+            ]
+        };
+        write(rooms(older));
         let t = &mut race.trackers;
         t.read_disk();
-        assert_eq!(t.state.due.len(), 1, "the bell, with its roll");
         let b = t.history["race_clock"]
             .iter()
             .find(|row| row.entry.id == "c-0000000b")
@@ -2763,27 +2830,62 @@ mod tests {
             .entry
             .clone();
         t.remove(note, &b);
-        assert_eq!(
-            t.history_reason,
-            Some((
-                note,
-                Unrecorded::Refused(
-                    "Wandering, 0:00 to 0:39 roll depends on this entry. Remove that first. Nothing was removed."
-                        .into()
-                )
-            ))
+        assert_eq!(t.history_reason, None);
+        assert_eq!(value(&race, "race_clock", None), 10);
+        assert!(
+            bell_with_roll(&race.trackers),
+            "Remove of B keeps the bell and its roll"
         );
-        assert_eq!(fs::read_to_string(&path).unwrap(), before);
-        let before = write(Some(TONIGHT));
+        write(rooms(Some(TONIGHT)));
         let t = &mut race.trackers;
         t.read_disk();
         let newest = t.newest().to_vec();
         assert_eq!(newest.len(), 1, "B is tonight's newest act");
         t.undo(&newest);
+        assert_eq!(t.reason, None);
+        assert!(
+            bell_with_roll(&race.trackers),
+            "Undo of B keeps the bell and its roll"
+        );
+        // A correction that took the clock back to 0 is removed, the bell is rolled, and then
+        // `Undo remove` puts the correction back before the roll: the bell stays, with its roll,
+        // also as the saved file rebuilds it.
+        write(vec![
+            room("c-0000000a", 20, older),
+            room("c-0000000e", -20, older),
+        ]);
+        let t = &mut race.trackers;
+        t.read_disk();
+        let correction = t.history["race_clock"][1].entry.clone();
+        t.remove(note, &correction);
+        let bell = t.state.due[0].clone();
+        t.roll_notice(&bell, "wander_early");
+        t.undo_remove();
+        assert_eq!(t.history_reason, None);
+        assert_eq!(value(&race, "race_clock", None), 0);
+        assert!(
+            bell_with_roll(&race.trackers),
+            "Undo remove keeps the bell and its roll"
+        );
+        let t = &race.trackers;
+        let saved = ledger::parse_bytes(Some(&fs::read(&path).unwrap())).unwrap();
+        assert_eq!(replay(&t.rules, &saved, &t.today).due, t.state.due);
+        // An Undo that would leave a roll with no notice writes nothing and names it: D crosses
+        // 40 only because of tonight's B.
+        let before = write(vec![
+            room("c-0000000a", 20, older),
+            room("c-0000000b", 10, Some(TONIGHT)),
+            room("c-0000000f", 10, older),
+            rolled("c-00000010", "c-0000000f", 40, "wander_middle"),
+        ]);
+        let t = &mut race.trackers;
+        t.read_disk();
+        let newest = t.newest().to_vec();
+        t.undo(&newest);
         assert_eq!(
             t.reason,
             Some(Unrecorded::Refused(
-                "Wandering, 0:00 to 0:39 roll depends on this act. Nothing was undone.".into()
+                "Wandering, 0:40 to 1:19 roll depends on this act. Nothing was undone.".into()
             ))
         );
         assert_eq!(fs::read_to_string(&path).unwrap(), before);

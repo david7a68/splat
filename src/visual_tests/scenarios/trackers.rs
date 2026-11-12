@@ -122,6 +122,42 @@ fn notice_line_tops(d: &Driver<'_>, words: &str, done: &str) -> (Vec<f32>, f32) 
     (tops, line)
 }
 
+/// A tracker with an amount the DM types, on two lines, and a mark that the amount can pass.
+const PURSES: &str = "> trackers:\n>   purses:\n>     name: Purses\n>     pin: true\n>     per: [Ann, Bo]\n>     quick:\n>     - {label: Pay, add: ask}\n>     - {label: Tip, add: 1}\n>     marks:\n>     - {at: 3, say: Paid.}\n";
+
+/// Open the amount field of `Pay` on Ann's line: it has the action's place and width and is at
+/// least 24 px high, and `Tip` on both lines stays. Then 3 and Enter raise `Paid` above, and
+/// `Pay` keeps its place. Undo takes the act back.
+fn amount_in_its_column(d: &mut Driver<'_>) -> (bool, String) {
+    let place = |d: &Driver<'_>, name: &str| d.place_of(name).unwrap_or(egui::Rect::NOTHING);
+    let same = |a: egui::Rect, b: egui::Rect| (a.min - b.min).length() < 0.5;
+    let (pay, tip, bo) = (
+        place(d, "Pay: Ann"),
+        place(d, "Tip: Ann"),
+        place(d, "Tip: Bo"),
+    );
+    d.click("Pay: Ann");
+    let field = place(d, "Pay");
+    let (tip_now, bo_now) = (place(d, "Tip: Ann"), place(d, "Tip: Bo"));
+    d.type_text("3");
+    d.press(Key::Enter);
+    d.expect("Due: Paid for Ann.");
+    let pay_now = place(d, "Pay: Ann");
+    d.click("Undo: Pay");
+    let held = same(field, pay)
+        && (field.width() - pay.width()).abs() < 0.5
+        && field.height() >= 24.0
+        && same(tip_now, tip)
+        && same(bo_now, bo)
+        && same(pay_now, pay);
+    (
+        held,
+        format!(
+            "Pay {pay:?}, field {field:?}, Tip {tip:?} then {tip_now:?}, Bo's Tip {bo:?} then {bo_now:?}, Pay after Enter {pay_now:?}"
+        ),
+    )
+}
+
 /// A day mark, as a DM writes one in the note's Splat data: the month's end, every 30 days from
 /// Day 2, with one proposed change.
 const MONTH_END: &str = "> day_marks:\n>   month_end:\n>     name: End of month\n>     every: 30\n>     from: 2\n>     say: Move the rival powers. Pay each team its prize money, and roll Instability if chaos has begun.\n>     changes:\n>     - {tracker: favor, add: 1}\n";
@@ -640,6 +676,33 @@ pub fn run(d: &mut Driver<'_>) {
     d.settle();
     d.press(Key::Escape);
     d.press_ctrl(Key::T);
+
+    // An amount field takes exactly its action's column at a target's height, so no action
+    // moves; Enter is the press, and the action keeps its place when that raises a Due row.
+    let note = root(d).join("Tournament.md");
+    let text = fs::read_to_string(&note).unwrap();
+    fs::write(&note, text.replacen("> trackers:\n", PURSES, 1)).unwrap();
+    d.app_mut().lookup.refresh();
+    d.app_mut().lookup.files_changed = true;
+    d.settle();
+    let shown = d.has_containing("Elapsed race time");
+    if !shown {
+        d.press_ctrl(Key::T);
+    }
+    let (held, detail) = amount_in_its_column(d);
+    let (wide_held, wide_detail) = d.act_at_size(DEFAULT, amount_in_its_column);
+    d.observe(
+        "T19.2",
+        held && wide_held,
+        format!("An amount field keeps its action's column and the place of every action: {detail} at 960x640; {wide_detail} at 1200x800"),
+    );
+    if !shown {
+        d.press_ctrl(Key::T);
+    }
+    fs::write(&note, text).unwrap();
+    d.app_mut().lookup.refresh();
+    d.app_mut().lookup.files_changed = true;
+    d.settle();
 
     // A fight starts beside the view; the run shows no tracker part, only the rail's count.
     d.click(&format!("Start fight: {SHRINE}"));

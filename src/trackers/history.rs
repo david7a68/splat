@@ -158,9 +158,7 @@ fn in_play(rules: &Rules, note: Uuid) -> bool {
 }
 
 /// The act whose entries about a notice would be left with nothing to name, when the ledger
-/// becomes `next`: a notice that a change raised in `ledger` and raises no more in `next`, or an
-/// entry on a notice that a later change would now end before it (a roll that counts for
-/// nothing).
+/// becomes `next`: a notice that a change raised in `ledger` and raises no more in `next`.
 pub(super) fn orphaned(
     rules: &Rules,
     today: &Today,
@@ -169,10 +167,10 @@ pub(super) fn orphaned(
 ) -> Option<String> {
     let (before, after) = (replay(rules, ledger, today), replay(rules, next, today));
     let orphan = next.changes.iter().find(|entry| {
-        entry.notice.as_ref().is_some_and(|notice| {
-            (before.raised(notice) && !after.raised(notice))
-                || (after.stray.contains(&entry.id) && !before.stray.contains(&entry.id))
-        })
+        entry
+            .notice
+            .as_ref()
+            .is_some_and(|notice| before.raised(notice) && !after.raised(notice))
     })?;
     let press: Vec<Entry> = next
         .changes
