@@ -298,7 +298,7 @@ pub fn rules_on_disk(campaign: &Campaign, manifest: &str, index: &ContentIndex) 
             .map_err(|error| format!("{error}."))?;
         let entry = splat::content::Entry::parse(manifest, &text)?;
         if entry.kind != "campaign" || entry.id != campaign.id {
-            return Err("it is not this campaign's manifest.".into());
+            return Err("it is not this campaign’s manifest.".into());
         }
         read_in_play(entry.fields.get("splat_in_play"))
     };
