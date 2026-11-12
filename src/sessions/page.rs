@@ -6956,6 +6956,28 @@ mod tests {
         );
     }
 
+    /// Round 26 FM5: a moved or gone note is a warning in the header and the rail, as its
+    /// banner is. A failed write, which looks the same in words, stays an error.
+    #[test]
+    fn a_moved_note_warns_and_a_failed_write_stays_an_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("Session 1.md");
+        fs::write(&path, "# Session 1\n").unwrap();
+        let mut draft = Draft::open(&path).unwrap();
+        draft.state = DraftState::Missing;
+        let moved = Sessions::note_save_status(&draft);
+        assert_eq!(
+            (moved.icon, moved.word, moved.color),
+            (icons::WARN, "Notes not saved", colors().document.external)
+        );
+        draft.state = DraftState::Failed("This file is read only.".into());
+        let failed = Sessions::note_save_status(&draft);
+        assert_eq!(
+            (failed.icon, failed.word, failed.color),
+            (icons::ERROR, "Notes not saved", colors().document.invalid)
+        );
+    }
+
     /// Round 13 FT4: the plan column has wider item spacing than other callers. A message's words
     /// still start `XS` after its icon, and a wrapped Undo still lines up with the words.
     #[test]

@@ -2198,7 +2198,10 @@ mod tests {
         // Round 26 FG4, FD7: the part is a warning with its icon, not a muted fact.
         assert_eq!(
             event(Kind::Travel, "a few hours").summary(Some("Session 8")),
-            "a few hours · ⚠ Not counted in the day’s time · Session 8"
+            format!(
+                "a few hours · {} Not counted in the day’s time · Session 8",
+                icons::WARN
+            )
         );
         assert!(!event(Kind::Travel, "half a day").time_not_read());
         assert_eq!(event(Kind::Travel, "half a day").time_warning(), None);

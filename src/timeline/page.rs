@@ -525,8 +525,9 @@ impl TimelinePage {
         }
         // Round 26 FG4, FD7: a length the clock cannot count is a warning part, in its colour.
         let mut spans = Vec::new();
-        if let Some(warning) = event.time_warning()
-            && let Some(start) = detail.find(&warning)
+        let warning = event.time_warning();
+        if let Some(warning) = &warning
+            && let Some(start) = detail.find(warning.as_str())
         {
             spans.push((start..start + warning.len(), c.result.warning));
         }
@@ -657,7 +658,7 @@ impl TimelinePage {
                 },
             );
         }
-        let response = if event.time_not_read() {
+        let response = if warning.is_some() {
             response.on_hover_text(format!("{}. {}", super::TIME_NOT_COUNTED, super::TIME_REPAIR))
         } else {
             response
