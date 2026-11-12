@@ -1,9 +1,9 @@
 Phase totals
 phase	tasks	transitions	interactions	nav	sub	panel	find	do
 before	8	5	36	5	0	1	9	21
-during	30	9	193	10	2	13	46	122
+during	30	9	192	9	2	13	46	122
 after	7	5	21	5	4	0	1	11
-total	45	19	250	20	6	14	56	154
+total	45	19	249	19	6	14	56	154
 
 Tasks
 phase	task	transitions	interactions	overhead	path
@@ -21,7 +21,7 @@ during	A player asks who Captain Varra is	0	3	3	Session
 during	Note what the party decides	0	2	1	Session
 during	The party travels for half a day: record it	0	2	1	Session
 during	Check the road for encounters	0	3	1	Session
-during	Ambush: read the read-aloud text and start the fight	1	13	2	Session > Run
+during	Ambush: read the read-aloud text and start the fight	1	12	1	Session > Run
 during	Combat: round 1	0	32	8	Run
 during	A player casts Fireball: read the spell	0	3	3	Run
 during	Fireball hits three enemies: apply half to one, full to two	0	6	3	Run

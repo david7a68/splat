@@ -48,7 +48,7 @@ during	Set-up	Setup	the campaign has a marked road table	0	Session		false
 during	Check the road for encounters	Find	More actions for Travel	1	Session		false
 during	Check the road for encounters	Do	Roll for encounters	1	Session		false
 during	Check the road for encounters	Do	Roll for This journey	1	Session		false
-during	Ambush: read the read-aloud text and start the fight	Nav	Start fight: Ashfall Crossing	2	Session	Run	false
+during	Ambush: read the read-aloud text and start the fight	Nav	Start fight: Ashfall Crossing	1	Session	Run	false
 during	Ambush: read the read-aloud text and start the fight	Do	Roll NPC initiative	1	Run		false
 during	Ambush: read the read-aloud text and start the fight	Do	type Brannoch Vale's initiative	1	Run		false
 during	Ambush: read the read-aloud text and start the fight	Do	next field with Enter	1	Run		false

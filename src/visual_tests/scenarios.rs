@@ -10542,6 +10542,20 @@ pub mod session_notes {
         });
         d.replace_text_in("Folder", "30 Sessions");
         d.expect("Save without moving");
+        // Review of PR 274, item 3: the footer and the form share one scan of the current folder,
+        // so an unchanged frame lists its files at most once, as before the footer. The count is
+        // kept inside `storage_files`.
+        let scans = || crate::sessions::storage_scans();
+        let (passes, before) = (d.passes(), scans());
+        for size in [SMALL, DEFAULT, LARGE] {
+            d.at_size(size, |_| ());
+        }
+        let (frames, done) = (d.passes() - passes, scans() - before);
+        d.observe(
+            "review-274-3",
+            frames > 0 && done > 0 && done <= frames,
+            format!("{frames} unchanged frames scanned the session folder {done} times"),
+        );
         // FT4 (round 16): with no run and no other form, moving the files is the one primary,
         // as Move runs and save is on Rules and runs.
         d.state_prepared("session-folder-move-offered", Sizes::All, |d| {

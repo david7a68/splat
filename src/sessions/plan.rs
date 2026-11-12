@@ -13,7 +13,7 @@ use crate::{
     timeline::{
         self, Book, Kind, checks,
         page::{
-            added_message, file_act, file_notices_in_footer, long_rest_status, problems,
+            LiveUndos, added_message, file_act, file_notices_in_footer, long_rest_status, problems,
             quick_add_with, rest_ruling,
         },
         removed_event_words,
@@ -29,6 +29,52 @@ use std::{
 use uuid::Uuid;
 
 const UNDO_ADD_FOR: Duration = Duration::from_secs(30);
+
+/// One draw of the plan's one-time reveal: after the DM adds a row or acts on one, the row after
+/// it scrolls into view above the message footer, so its action needs no extra gesture.
+struct Reveal {
+    target: Option<String>,
+    /// The target row's rect, until the next row is drawn.
+    armed: Option<egui::Rect>,
+    shown: bool,
+}
+
+impl Reveal {
+    fn new(target: Option<String>) -> Self {
+        Self {
+            target,
+            armed: None,
+            shown: false,
+        }
+    }
+
+    /// After each row: the row after the target scrolls into view when it is not.
+    fn after(&mut self, ui: &egui::Ui, id: Option<&str>, rect: egui::Rect) {
+        if self.armed.take().is_some() {
+            self.show(ui, rect);
+        }
+        if id.is_some() && id == self.target.as_deref() {
+            self.armed = Some(rect);
+        }
+    }
+
+    /// After the last row: with no row after it, the target itself.
+    fn finish(&mut self, ui: &egui::Ui) {
+        if let Some(rect) = self.armed.take() {
+            self.show(ui, rect);
+        }
+    }
+
+    fn show(&mut self, ui: &egui::Ui, rect: egui::Rect) {
+        self.shown = ui.clip_rect().contains_rect(rect);
+        if !self.shown {
+            ui.scroll_to_rect(rect, None);
+        }
+    }
+}
+
+/// How many draws a reveal may take before it gives up.
+const REVEAL_DRAWS: u8 = 3;
 
 /// What the DM chose in the plan's message footer. It is done after the footer is drawn, so
 /// the footer's messages borrow nothing that the plan's rows change.
@@ -1221,18 +1267,21 @@ impl Sessions {
     /// sit in the plan's message footer, not in the removed row's place.
     fn removed_group_message<'a>(
         &self,
-        footer: &mut design::Footer<'a>,
+        undos: &mut LiveUndos<'a>,
         act: &'a std::cell::Cell<Option<FooterAct>>,
         session: Option<Uuid>,
     ) {
-        let Some((id, _, _, _, _, name)) = &self.removed_group else {
+        let Some((id, _, _, after, _, name)) = &self.removed_group else {
             return;
         };
         if *id != session {
             return;
         }
         let words = format!("Removed “{name}” from tonight.");
-        footer.result(words.clone(), true, move |ui| {
+        let order = self
+            .result_orders
+            .of("group remove", (session, name, after.len()));
+        undos.push(order, words.clone(), move |ui| {
             if design::undo_message(ui, Tone::Success, &words, "Undo remove") {
                 act.set(Some(FooterAct::UndoGroupRemove));
             }
@@ -1401,10 +1450,12 @@ impl Sessions {
                 }
             });
         }
+        let mut undos = LiveUndos::new();
         if plan.group_discarded && here {
             let name = plan.group_discarded_name.clone();
             let act = &footer_act;
-            footer.result(format!("{name} draft discarded."), true, move |ui| {
+            let order = self.result_orders.of("group discard", (session, &name));
+            undos.push(order, format!("{name} draft discarded."), move |ui| {
                 if design::draft_discarded(ui, &name) {
                     act.set(Some(FooterAct::UndoGroupDiscard));
                 }
@@ -1416,18 +1467,19 @@ impl Sessions {
             });
         }
         let file = std::cell::Cell::new(None);
-        file_notices_in_footer(&mut footer, book, &file);
+        file_notices_in_footer(&mut footer, &mut undos, &self.result_orders, book, &file);
         self.plan_messages(
             ui,
-            &mut footer,
+            &mut undos,
             &footer_act,
             book,
             session,
             plan,
             &planned_results,
         );
-        self.scene_messages(&mut footer, &footer_act, folded);
-        self.removed_group_message(&mut footer, &footer_act, session);
+        self.scene_messages(&mut footer, &mut undos, &footer_act, folded);
+        self.removed_group_message(&mut undos, &footer_act, session);
+        undos.into_footer(&mut footer);
         let body_bottom = footer.show(ui);
         match footer_act.take() {
             Some(FooterAct::GoToGroup) => {
@@ -1453,6 +1505,8 @@ impl Sessions {
             }
             let days = timeline::day_numbers(&book.events);
             let index = book.events.iter().position(|event| event.id == *id);
+            self.row_reveal = Some((id.clone(), 0));
+            self.result_orders.renew("add");
             self.added = Some(Added {
                 id: id.clone(),
                 label: index.map_or_else(String::new, |at| book.events[at].label(days[at])),
@@ -1518,6 +1572,7 @@ impl Sessions {
                         .any(|group| group.name.eq_ignore_ascii_case(name))
             })
         };
+        let mut reveal = Reveal::new(self.row_reveal.as_ref().map(|(id, _)| id.clone()));
         egui::CentralPanel::default().frame(egui::Frame::new()).show_inside(ui, |ui| {
             // The rows leave the scroll bar's lane free whether or not the bar shows, so a row's
             // actions keep their x when the plan grows long enough to scroll.
@@ -1649,6 +1704,7 @@ impl Sessions {
                     });
                     // The opened row and the next row stay in reach.
                     if is_open && std::mem::take(&mut self.reveal_event) { row.response.scroll_to_me(Some(egui::Align::TOP)); }
+                    reveal.after(ui, Some(&event.id), row.response.rect);
                 }
                 if let Some((at, words)) = &removed_row && *at >= event_count {
                     ui.add_space(design::S);
@@ -1662,7 +1718,7 @@ impl Sessions {
                     any = true;
                     let running = plan.open_run.is_some() && plan.open_encounter == Some(fight.name.as_str());
                     let saved = planned_saved_run(fight, plan.fights, plan.saved_runs);
-                    ui.push_id((&fight.path, position), |ui| {
+                    let fight_row = ui.push_id((&fight.path, position), |ui| {
                         let row_widths = if running {
                             [width - Density::Read.control() - design::S, Density::Read.control()]
                         } else { widths };
@@ -1720,6 +1776,7 @@ impl Sessions {
                         }
                         plan_rule(ui);
                     });
+                    reveal.after(ui, None, fight_row.response.rect);
                 }
                 self.removed_fight_message(ui, session, planned.len());
                 if !folded {
@@ -1781,15 +1838,25 @@ impl Sessions {
                         plan_rule(ui);
                     });
                     if let Some((at, _, height)) = &mut remove_group && *at == position { *height = row.response.rect.height(); }
+                    reveal.after(ui, None, row.response.rect);
                 }
                 if !any {
                     design::empty_state(ui, icons::SESSIONS, "Nothing planned yet",
                         "Use Add to plan a fight, a group, or an event.", |_| {});
                 }
+                reveal.finish(ui);
                 self.scene_field(ui, index.as_deref(), &mut scene_act);
             });
             pane = Some((output.inner_rect.height(), output.content_size.y));
         });
+        // The reveal ends when the row after the target is in view, or after a few draws (a
+        // draw that the footer discards to measure itself does not count as shown).
+        if let Some((_, draws)) = &mut self.row_reveal {
+            *draws += 1;
+            if reveal.shown || *draws > REVEAL_DRAWS {
+                self.row_reveal = None;
+            }
+        }
         if let Some((viewport, content)) = pane {
             self.measure_fold(ui.ctx(), scene_count, folded, viewport, content);
         }
@@ -1839,6 +1906,7 @@ impl Sessions {
             let before = draft.body.clone();
             unlink_group(&mut draft.body, &name);
             draft.edited();
+            self.result_orders.renew("group remove");
             self.removed_group =
                 Some((session, position, before, draft.body.clone(), height, name));
             self.plan_notice_state = Some((draft.body.clone(), book.events.clone()));
@@ -1848,6 +1916,7 @@ impl Sessions {
         }
         checks::note_taken(book, length_taken);
         if let Some((id, act)) = travel_act {
+            self.row_reveal = Some((id.clone(), 0));
             self.travel_act(book, session, &id, act, plan);
         }
         match travel_undo {
@@ -2054,6 +2123,7 @@ impl Sessions {
     fn scene_messages<'a>(
         &self,
         footer: &mut design::Footer<'a>,
+        undos: &mut LiveUndos<'a>,
         act: &'a std::cell::Cell<Option<FooterAct>>,
         folded: bool,
     ) {
@@ -2069,7 +2139,11 @@ impl Sessions {
             && self.draft.as_ref().is_some_and(|draft| undo.live(draft))
         {
             const ADDED: &str = "Scene added to tonight.";
-            footer.result(ADDED, true, move |ui| {
+            // A cheap identity: the session and the length the act left, never the words.
+            let order = self
+                .result_orders
+                .of("scene", (self.selected, undo.after().len()));
+            undos.push(order, ADDED.to_owned(), move |ui| {
                 if design::undo_message(ui, Tone::Success, ADDED, "Undo scene") {
                     act.set(Some(FooterAct::Scene(SceneAct::UndoAdd)));
                 }
@@ -2158,6 +2232,7 @@ impl Sessions {
                 let result = draft.apply(note, Apply::Now, |text| Some(add_scene(text, &words)));
                 if let Ok(undo) | Err(ActFault::NotSaved(_, undo)) = &result {
                     scenes.added = Some(undo.clone());
+                    self.result_orders.renew("scene");
                     if let Some(field) = &mut scenes.field {
                         field.clear();
                         field.focus = true;
@@ -2254,6 +2329,7 @@ impl Sessions {
         deleted: crate::encounter_run::DeletedRun,
         run: Option<Uuid>,
     ) {
+        self.result_orders.renew("deleted run");
         self.deleted_run = Some((deleted, removal_replaced_by(book, run)));
         self.wants_runs_refresh = true;
     }
@@ -2308,11 +2384,12 @@ impl Sessions {
 
     fn deleted_run_message<'a>(
         &self,
-        footer: &mut design::Footer<'a>,
+        undos: &mut LiveUndos<'a>,
         act: &'a std::cell::Cell<Option<FooterAct>>,
     ) {
         if let Some((tone, words)) = self.deleted_run_words() {
-            footer.result(words.clone(), true, move |ui| {
+            let order = self.result_orders.of("deleted run", &words);
+            undos.push(order, words.clone(), move |ui| {
                 if design::undo_message(
                     ui,
                     tone,
@@ -2333,7 +2410,7 @@ impl Sessions {
     fn plan_messages<'a>(
         &mut self,
         ui: &egui::Ui,
-        footer: &mut design::Footer<'a>,
+        undos: &mut LiveUndos<'a>,
         act: &'a std::cell::Cell<Option<FooterAct>>,
         book: &Book,
         session: Option<Uuid>,
@@ -2341,7 +2418,7 @@ impl Sessions {
         planned: &[(String, bool)],
     ) {
         if self.row_notice.is_none() {
-            self.deleted_run_message(footer, act);
+            self.deleted_run_message(undos, act);
         }
         let days = timeline::day_numbers(&book.events);
         // It goes at the DM's next edit, or soon, so that it cannot undo the wrong thing.
@@ -2371,7 +2448,8 @@ impl Sessions {
                 just.id.clone(),
                 added_message(&just.label, to.as_deref(), restores),
             );
-            footer.result(words.clone(), true, move |ui| {
+            let order = self.result_orders.of("add", &id);
+            undos.push(order, words.clone(), move |ui| {
                 if design::undo_message(ui, Tone::Success, &words, "Undo add") {
                     act.set(Some(FooterAct::UndoAdd(id)));
                 }
@@ -2381,7 +2459,8 @@ impl Sessions {
             && let Some(label) = book.removed().map(str::to_owned)
         {
             let words = removed_event_words(book, session, &days, &label, planned);
-            footer.result(words.clone(), true, move |ui| {
+            let order = self.result_orders.of("remove", book.removal_action());
+            undos.push(order, words.clone(), move |ui| {
                 if design::undo_message(ui, Tone::Success, &words, "Undo remove") {
                     act.set(Some(FooterAct::UndoRemove));
                 }

@@ -409,8 +409,22 @@ pub(crate) fn note_path(folder: &Path, number: u32, title: &str) -> PathBuf {
     free_path(folder, &stem, "md")
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Scans of a session folder by `storage_files`, counted inside the scan.
+    static STORAGE_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How often `storage_files` scanned a folder on this thread.
+#[cfg(test)]
+pub(crate) fn storage_scans() -> usize {
+    STORAGE_SCANS.with(std::cell::Cell::get)
+}
+
 /// Files owned by session storage. Other campaign notes stay where they are.
 pub(crate) fn storage_files(folder: &Path) -> Result<Vec<PathBuf>, String> {
+    #[cfg(test)]
+    STORAGE_SCANS.with(|scans| scans.set(scans.get() + 1));
     fn files(root: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
         if !root.exists() {
             return Ok(());

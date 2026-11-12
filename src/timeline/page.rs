@@ -48,6 +48,8 @@ pub struct SessionLink {
 
 #[derive(Default)]
 pub struct TimelinePage {
+    /// When each kept result in the list's footer was made, so live Undo results go newest first.
+    orders: ResultOrder,
     removed_mentions: usize,
     filter: Filter,
     search: String,
@@ -147,6 +149,80 @@ pub fn quick_add_with(
             book.add(kind, session)
         })
     })
+}
+
+/// When a kept result was first shown, by its identity (its kind and what makes this one
+/// result), so a footer lists its results with a live Undo newest first, whatever their kind
+/// (review of PR 274, item 2). The first show is the draw after its action, so it gives the
+/// action's order. A result that ends and comes back with the same identity keeps its place.
+#[derive(Default)]
+pub(crate) struct ResultOrder {
+    seen: std::cell::RefCell<std::collections::HashMap<(String, u64), u64>>,
+}
+
+/// The one count behind every `ResultOrder`.
+fn next_result_order() -> u64 {
+    static ORDER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    ORDER.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1
+}
+
+/// How many results a `ResultOrder` remembers; the oldest go first.
+const KEPT_ORDERS: usize = 64;
+
+impl ResultOrder {
+    /// The order of the result `kind` with identity `of`, given the first time it is asked.
+    pub(crate) fn of(&self, kind: &str, of: impl std::hash::Hash) -> u64 {
+        use std::hash::{BuildHasher, BuildHasherDefault, DefaultHasher};
+        let key = (
+            kind.to_owned(),
+            BuildHasherDefault::<DefaultHasher>::default().hash_one(of),
+        );
+        let mut seen = self.seen.borrow_mut();
+        if seen.len() >= KEPT_ORDERS && !seen.contains_key(&key) {
+            let oldest = seen
+                .iter()
+                .min_by_key(|(_, order)| **order)
+                .map(|(key, _)| key.clone());
+            if let Some(oldest) = oldest {
+                seen.remove(&oldest);
+            }
+        }
+        *seen.entry(key).or_insert_with(next_result_order)
+    }
+
+    /// A new result of `kind` was just made: its next `of` gives it a new, newest order, even
+    /// when it looks like the one before (the same words added again after an Undo).
+    pub(crate) fn renew(&self, kind: &str) {
+        self.seen.borrow_mut().retain(|(seen, _), _| seen != kind);
+    }
+}
+
+/// A footer's results with a live Undo, gathered with their order and added newest first.
+pub(crate) struct LiveUndos<'a> {
+    items: Vec<(u64, String, Box<dyn FnOnce(&mut egui::Ui) + 'a>)>,
+}
+
+impl<'a> LiveUndos<'a> {
+    pub(crate) fn new() -> Self {
+        Self { items: Vec::new() }
+    }
+
+    pub(crate) fn push(
+        &mut self,
+        order: u64,
+        words: String,
+        draw: impl FnOnce(&mut egui::Ui) + 'a,
+    ) {
+        self.items.push((order, words, Box::new(draw)));
+    }
+
+    /// Add them to `footer`, newest first.
+    pub(crate) fn into_footer(mut self, footer: &mut design::Footer<'a>) {
+        self.items.sort_by(|a, b| b.0.cmp(&a.0));
+        for (_, words, draw) in self.items {
+            footer.result(words, true, draw);
+        }
+    }
 }
 
 /// A pane's body between the cursor and `bottom`, the top of its message footer: an editor or
@@ -357,6 +433,8 @@ pub enum FileAct {
 /// reason), then the flags and the duplicate (notices). The choice lands in `act`.
 pub fn file_notices_in_footer<'a>(
     footer: &mut design::Footer<'a>,
+    undos: &mut LiveUndos<'a>,
+    orders: &ResultOrder,
     book: &Book,
     act: &'a std::cell::Cell<Option<FileAct>>,
 ) {
@@ -365,7 +443,8 @@ pub fn file_notices_in_footer<'a>(
             "Reloaded. Your version, with {}, is gone unless you undo.",
             design::count(count, "event", "events")
         );
-        footer.result(words.clone(), true, move |ui| {
+        let order = orders.of("reload", (&book.path, count));
+        undos.push(order, words.clone(), move |ui| {
             if design::undo_message(ui, Tone::Info, &words, "Undo reload") {
                 act.set(Some(FileAct::UndoReload));
             }
@@ -848,9 +927,10 @@ impl TimelinePage {
         let act = std::cell::Cell::new(None);
         let file = std::cell::Cell::new(None);
         let mut footer = design::Footer::new("timeline_list_footer", ui.available_width());
+        let mut undos = LiveUndos::new();
         if let Some(words) = notes.event_link_result() {
             let act = &act;
-            footer.result(words.clone(), true, move |ui| {
+            undos.push(self.orders.of("links", &words), words.clone(), move |ui| {
                 if design::undo_message(ui, Tone::Success, &words, "Undo link update") {
                     act.set(Some(ListAct::UndoLinks));
                 }
@@ -886,13 +966,14 @@ impl TimelinePage {
                 "The next fight starts from the HP the party has now."
             };
             let act = &act;
-            footer.result(words, true, move |ui| {
+            let order = self.orders.of("ruling", (id, event.restores));
+            undos.push(order, words.to_owned(), move |ui| {
                 if design::undo_message(ui, Tone::Success, words, "Undo ruling") {
                     act.set(Some(ListAct::UndoRuling));
                 }
             });
         }
-        file_notices_in_footer(&mut footer, book, &file);
+        file_notices_in_footer(&mut footer, &mut undos, &self.orders, book, &file);
         if let Some(label) = book.removed().map(str::to_owned) {
             let mentions = self.removed_mentions;
             let words = timeline_removal_words(book, &label, mentions);
@@ -903,7 +984,8 @@ impl TimelinePage {
                 Tone::Success
             };
             let act = &act;
-            footer.result(words.clone(), true, move |ui| {
+            let order = self.orders.of("remove", book.removal_action());
+            undos.push(order, words.clone(), move |ui| {
                 if design::undo_message(ui, tone, &words, "Undo remove") {
                     act.set(Some(ListAct::UndoRemove));
                 }
@@ -931,7 +1013,8 @@ impl TimelinePage {
             // Timeline lists every session, so its result names only the event.
             let words = added_message(&label, None, restores);
             let act = &act;
-            footer.result(words.clone(), true, move |ui| {
+            let order = self.orders.of("add", &id);
+            undos.push(order, words.clone(), move |ui| {
                 if design::undo_message(ui, Tone::Success, &words, "Undo add") {
                     act.set(Some(ListAct::UndoAdd(id)));
                 }
@@ -944,6 +1027,7 @@ impl TimelinePage {
                 design::message(ui, Tone::Info, MERGED);
             });
         }
+        undos.into_footer(&mut footer);
         let bottom = footer.show(ui);
         file_act(book, file.take());
         match act.take() {
@@ -1622,6 +1706,7 @@ impl TimelinePage {
         ) {
             self.reveal(&id, book);
             self.focus_title = true;
+            self.orders.renew("add");
             self.just_added = Some((id, Instant::now()));
         }
         if let Some(words) = self.dated.clone()
@@ -1655,6 +1740,7 @@ impl TimelinePage {
                 let id = book.add(Kind::Day, current);
                 self.reveal(&id, book);
                 self.focus_title = true;
+                self.orders.renew("add");
                 self.just_added = Some((id, Instant::now()));
             }
             return;

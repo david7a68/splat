@@ -20,7 +20,7 @@ use crate::{
     recording::{Health, Recorder},
     timeline::{
         self, Book,
-        page::{SessionLink, added_message, body_above},
+        page::{LiveUndos, ResultOrder, SessionLink, added_message, body_above},
     },
 };
 use eframe::egui::{self, Color32};
@@ -56,6 +56,9 @@ enum View {
     Notes,
     Templates,
 }
+
+/// The current session folder's files, or why they could not be listed.
+type FolderFiles = Result<Option<Vec<PathBuf>>, String>;
 
 /// What the DM chose in the session page's message footer, done after the footer is drawn.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -264,8 +267,15 @@ pub struct Sessions {
     campaign: Option<Campaign>,
     folder: Option<PathBuf>,
     folder_error: Option<String>,
-    /// What `folder_messages` found to move this frame, for the form drawn after it.
-    folder_counts: Option<Option<String>>,
+    /// The current folder's files as `folder_messages` scanned them this frame, with the scan's
+    /// error, for the form drawn after it: one scan a frame, as before the footer.
+    folder_files: Option<FolderFiles>,
+    /// Review of PR 274, item 1: the plan row the DM just added or acted on, until the row
+    /// after it is in view above the footer (or a few draws pass), and the draws it took.
+    pub(super) row_reveal: Option<(String, u8)>,
+    /// When each kept result in this page's footers was made, so live Undo results go newest
+    /// first whatever their kind (review of PR 274, item 2).
+    pub(super) result_orders: crate::timeline::page::ResultOrder,
     folder_text: String,
     folder_notice: Option<String>,
     view: View,
@@ -900,20 +910,28 @@ fn missing_note_words(moved_to: Option<String>) -> String {
 /// A draft's own result (Discard or Reload, with its Undo) in a pane's message footer. The
 /// draft owns it until an edit or the file's next change; `undo` says the DM pressed its Undo.
 fn draft_result_in<'a>(
-    footer: &mut design::Footer<'a>,
+    undos: &mut LiveUndos<'a>,
+    orders: &ResultOrder,
     draft: &Draft,
     undo: &'a std::cell::Cell<bool>,
 ) {
+    // A cheap identity: the file and the kind of drop. Never the words, which are the note.
+    let kind = match draft.dropped {
+        Some(Dropped::Reloaded(_)) => 1u8,
+        Some(Dropped::Discarded(_)) => 2,
+        None => 0,
+    };
+    let order = || orders.of("draft", (&draft.path, kind));
     match draft.dropped {
         Some(Dropped::Reloaded(_)) => {
-            footer.result("Reloaded from disk.", true, move |ui| {
+            undos.push(order(), "Reloaded from disk.".to_owned(), move |ui| {
                 if design::reloaded_draft(ui) {
                     undo.set(true);
                 }
             });
         }
         Some(Dropped::Discarded(_)) => {
-            footer.result("Draft discarded.", true, move |ui| {
+            undos.push(order(), "Draft discarded.".to_owned(), move |ui| {
                 if design::undo_message(ui, Tone::Info, "Draft discarded.", "Undo discard") {
                     undo.set(true);
                 }
@@ -1346,6 +1364,7 @@ impl Sessions {
                 ) {
                     match super::new_identity(copy) {
                         Ok(undo) => {
+                            self.result_orders.renew("identity");
                             self.identity_undo = Some(undo);
                             self.refresh();
                         }
@@ -3039,7 +3058,9 @@ impl Sessions {
             self.draft.as_ref()
         };
         if let Some(draft) = draft {
-            draft_result_in(&mut footer, draft, &undo);
+            let mut undos = LiveUndos::new();
+            draft_result_in(&mut undos, &self.result_orders, draft, &undo);
+            undos.into_footer(&mut footer);
         }
         if template && let Some(error) = self.template_error.clone() {
             footer.reason(error.clone(), move |ui| {
@@ -3319,6 +3340,7 @@ impl Sessions {
         let words = format!("{name} moved to Session {number}.");
         self.notice = Some((Tone::Success, words.clone()));
         self.notice_session = Some(session);
+        self.result_orders.renew("move");
         self.moved_run = Some(MovedRun {
             before,
             open_run,
@@ -3959,7 +3981,9 @@ impl Sessions {
                 let undo = std::cell::Cell::new(false);
                 let mut footer = design::Footer::new("notes_panel_footer", ui.available_width());
                 if let Some(draft) = &self.draft {
-                    draft_result_in(&mut footer, draft, &undo);
+                    let mut undos = LiveUndos::new();
+            draft_result_in(&mut undos, &self.result_orders, draft, &undo);
+            undos.into_footer(&mut footer);
                 }
                 if let Some(words) = note.and_then(|note| dated_before_today(note, &today)) {
                     let choice = &choice;
@@ -5496,8 +5520,9 @@ impl Sessions {
         let undo_dropped = std::cell::Cell::new(false);
         let mut footer =
             design::Footer::new(("session_footer", self.selected), ui.available_width());
+        let mut undos = LiveUndos::new();
         if let Some(draft) = &self.draft {
-            draft_result_in(&mut footer, draft, &undo_dropped);
+            draft_result_in(&mut undos, &self.result_orders, draft, &undo_dropped);
         }
         if let Some((tone, words)) = self
             .notice
@@ -5519,7 +5544,8 @@ impl Sessions {
                     }
                 });
             } else if self.moved_run.is_some() {
-                footer.result(words.clone(), true, move |ui| {
+                let order = self.result_orders.of("move", &words);
+                undos.push(order, words.clone(), move |ui| {
                     if design::undo_message(ui, tone, &words, "Undo move") {
                         act.set(Some(SessionAct::UndoMove));
                     }
@@ -5557,7 +5583,8 @@ impl Sessions {
             let filename = undo.path.file_name().unwrap_or_default().to_string_lossy();
             let words = format!("{filename} is now a separate session.");
             let act = &act;
-            footer.result(words.clone(), true, move |ui| {
+            let order = self.result_orders.of("identity", &undo.path);
+            undos.push(order, words.clone(), move |ui| {
                 if design::undo_message(ui, Tone::Success, &words, "Undo separate session") {
                     act.set(Some(SessionAct::UndoIdentity));
                 }
@@ -5648,6 +5675,7 @@ impl Sessions {
                 }
             });
         }
+        undos.into_footer(&mut footer);
         let bottom = footer.show(ui);
         if undo_dropped.get()
             && let Some(draft) = &mut self.draft
@@ -6367,17 +6395,12 @@ impl Sessions {
             );
         }
         let changed = super::resolve(&campaign, &self.folder_text).ok() != self.folder.clone();
+        // `folder_messages` scanned the folder this frame, before the pane's body.
         let files = self
-            .folder
-            .as_ref()
-            .map(|folder| super::storage_files(folder))
-            .transpose();
-        // `folder_messages` worked them out this frame, before the pane's body.
-        let move_counts = self
-            .folder_counts
+            .folder_files
             .take()
-            .unwrap_or_else(|| self.folder_move_counts(book));
-        let move_counts = move_counts.unwrap_or_default();
+            .unwrap_or_else(|| self.scan_folder_files());
+        let move_counts = self.folder_move_counts(book, &files).unwrap_or_default();
         let has_files = !move_counts.is_empty();
         ui.add_space(design::XS);
         let blocked = if self.live.is_some() {
@@ -6488,13 +6511,21 @@ impl Sessions {
         }
     }
 
+    /// The current folder's files, or why they could not be listed. One scan.
+    fn scan_folder_files(&self) -> FolderFiles {
+        self.folder
+            .as_ref()
+            .map(|folder| super::storage_files(folder))
+            .transpose()
+    }
+
     /// What a Move files and save would move from the current folder, in words, when the typed
     /// folder differs and the current one keeps files. The form's warning and its result say it.
-    fn folder_move_counts(&self, book: &Book) -> Option<String> {
+    fn folder_move_counts(&self, book: &Book, files: &FolderFiles) -> Option<String> {
         let campaign = self.campaign.as_ref()?;
         let changed = super::resolve(campaign, &self.folder_text).ok() != self.folder.clone();
         let folder = self.folder.as_ref().filter(|_| changed)?;
-        let files = super::storage_files(folder).ok()?;
+        let files = files.as_ref().ok()?.as_ref()?;
         if files.is_empty() {
             return None;
         }
@@ -6532,8 +6563,9 @@ impl Sessions {
     /// Round 26 FN2, FN5: the Session folder form's messages, in the message footer of the pane
     /// that holds the form, so a typed letter, a refusal or a result never moves its save row.
     pub fn folder_messages<'a>(&mut self, footer: &mut design::Footer<'a>, book: &Book) {
-        let counts = self.folder_move_counts(book);
-        self.folder_counts = Some(counts.clone());
+        let files = self.scan_folder_files();
+        let counts = self.folder_move_counts(book, &files);
+        self.folder_files = Some(files);
         if let Some(error) = self.folder_error.clone() {
             footer.reason(error.clone(), move |ui| {
                 design::message(ui, Tone::Error, &error);
