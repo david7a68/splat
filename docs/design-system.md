@@ -205,7 +205,9 @@ state. An on toggle uses `selected`, its word and an icon or check, without acce
 action that loses something. Keep Delete and Remove in row menus.
 
 A save row keeps its state and quiet `Discard` at the left and `Save` at the right. A draft that Save's own check
-refuses says `Invalid`, changed or not: validity comes before whether the text changed. Other clean rows say `No
+refuses says `Invalid`, changed or not: validity comes before whether the text changed. An encounter draft is
+the exception: it says `Invalid` only while it has changes, because a clean one has nothing for Save to refuse, and
+its rows' warnings name the faults. Other clean rows say `No
 changes`, unless Save is enabled to repair something the file holds: then the state names the write with the warning
 icon (`Save replaces the unread choice on line 23 with these settings`), and `Ctrl+S` saves exactly when the button
 can. `No changes to save.` belongs only to blocked Save's hover text and accessible description. A save row
@@ -988,10 +990,15 @@ run icon, also when its first part is a warning (`▷ ⚠ Changed on disk · …
 2, with only saved time on line two. One paused run uses Paused run in the rail, then the fitted encounter
 name; full hover and accessible text includes name and state. It resumes in one click. With several, Paused
 runs and `2 fights` open Encounters. An open run keeps Run and its round or Setup. Rail details never end on a
-separator; a short rail shows Ended or Paused with full state on hover.
+separator; a short rail shows Ended or Paused with full state on hover. Every unsaved-draft status in the rail
+(`Encounter draft`, `Group draft`, `Creature draft`, `Run settings draft`, `Library draft`, `World draft`, `World repair
+draft`, `Campaign draft`) is a `status_link`, as `Unsaved NPC` is: it opens the page, and the Campaign tab, that holds the
+draft.
 
 History opens read-only final state and log in place, outside the live-run slot. Final state has one name column, as
-wide as the longest name up to half the room, so every HP starts at one x. Rows put outcome before ended
+wide as the longest name up to half the room, so every HP starts at one x. HP and temporary HP follow in columns of
+their own, each as wide as its widest value, kept where a row has none; Absent and the conditions start after them and
+wrap inside the last column. Each row's values sit on its name's baseline. Rows put outcome before ended
 state and retain outcome and round. The detail header shows only Read-only and end reason. History rows keep
 Open or Close and their menu; Start and Edit stay in that menu.
 
@@ -1046,7 +1053,9 @@ the start of one row with `Save run settings` at its end; without room, the stat
 
 The editor header keeps Save and Start on line one; the name field gives up width. While Save would refuse a
 changed draft (a roster row with no creature, or the refusal of the last Save while it still holds), the save row
-says `Invalid` and Save and Ctrl+S are blocked with the cause; otherwise a changed draft says `Unsaved`. Save encounter
+says `Invalid` and Save and Ctrl+S are blocked with the cause; otherwise a changed draft says `Unsaved`. A draft whose
+rows match the file again, as after `Undo replacement`, says `No changes`. A Save, also the one a start makes, ends the
+replacement's result and its Undo. Save encounter
 also gives the open fight from that encounter its new read-aloud text and notes for Prep; its roster and combat
 state stay, and other changes wait for the next fight. An unfinished encounter
 offers Resume, moves Start another fight into its menu and keeps run state in the save row. Blocked Start

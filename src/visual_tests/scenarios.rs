@@ -3527,7 +3527,28 @@ pub mod encounter_build {
                 "With sync on, the roster has the option: {option}. It says what the party has now, together: {together}. And for each row: {row}"
             ),
         );
+        // iter-26-B FB5: the run state keeps its x in the save row when the first edit brings
+        // `Unsaved`, Discard and the campaign-switch reason, at 960, 1200 and 1920.
+        let run_state_x = |d: &mut Driver<'_>| {
+            [SMALL, DEFAULT, LARGE].map(|size| {
+                d.at_size(size, |d| {
+                    d.nodes()
+                        .into_iter()
+                        .filter(|node| node.name.contains("Round 2 · Paused"))
+                        .map(|node| node.rect.left().round())
+                        .collect::<Vec<_>>()
+                })
+            })
+        };
+        let clean_x = run_state_x(d);
         d.click(SYNC_OPTION);
+        d.expect("Unsaved");
+        let edited_x = run_state_x(d);
+        d.observe(
+            "iter-26-B-FB5",
+            clean_x.iter().all(|x| !x.is_empty()) && clean_x == edited_x,
+            format!("The run state's x, clean {clean_x:?} and after the first edit {edited_x:?}"),
+        );
         d.state("saved-roster-sync-off", Sizes::Default);
         d.observe(
             "T5.6",
@@ -6499,6 +6520,20 @@ pub mod library_to_encounter {
         d.type_text(DRAFT_NAME);
         d.expect(SEEDED_ROW);
         d.state("draft-open", Sizes::Default);
+        // iter-26-B FF2: on another page, the rail's `Encounter draft` is a link that opens the
+        // draft, as `Unsaved NPC` opens its card.
+        go_library(d);
+        let link = d
+            .nodes()
+            .into_iter()
+            .any(|node| node.name.ends_with("Encounter draft") && node.is_link());
+        d.click_containing("Encounter draft");
+        d.expect(&format!("Encounter name: {DRAFT_NAME}"));
+        d.observe(
+            "iter-26-B-FF2",
+            link && d.current_page() == "Encounters",
+            format!("The rail's Encounter draft is a link ({link}) to the draft, on {}", d.current_page()),
+        );
         d.begin_task();
 
         go_library(d);
@@ -13265,7 +13300,7 @@ pub mod encounter_groups {
         d.expect("Unknown creature");
         let (found, invalid) = d.at_size(SMALL, |d| {
             (
-                d.in_view_containing("Unknown creature: not in this campaign’s packages."),
+                d.in_view_containing("Unknown creature · line\u{a0}13: not in this campaign’s packages."),
                 d.in_view_containing("would become −28"),
             )
         });
@@ -13276,13 +13311,14 @@ pub mod encounter_groups {
         );
         let tones = (
             tones_beside(d, "would become −28"),
-            tones_beside(d, "Unknown creature: not in this campaign’s packages."),
+            tones_beside(d, "Unknown creature · line\u{a0}13: not in this campaign’s packages."),
         );
         // FA1 (Astra review of PR 259): the editor names the missing member in the one form,
-        // and its help follows on a line of its own.
+        // and its help follows on a line of its own. iter-26-B FJ6: the saved member's form
+        // names its line, as Arrivals does.
         d.observe(
             "iter-25-B-FA1-missing",
-            d.has("Unknown creature: not in this campaign’s packages.")
+            d.has("Unknown creature · line\u{a0}13: not in this campaign’s packages.")
                 && d.has(
                     "Choose a replacement, check the packages it uses, or remove this member.",
                 )
@@ -13305,7 +13341,7 @@ pub mod encounter_groups {
         for size in [SMALL, DEFAULT, LARGE] {
             let (aligned, detail) = d.at_size(size, |d| {
                 let text = d.painted_rect_in(
-                    "Unknown creature: not in this campaign’s packages.",
+                    "Unknown creature · line\u{a0}13: not in this campaign’s packages.",
                     egui::Rect::EVERYTHING,
                 );
                 let words = d.painted_rect_in("Campaign → Packages", egui::Rect::EVERYTHING);
@@ -13957,7 +13993,27 @@ pub mod encounter_groups {
             "Edit group opens the broken group and keeps the run open",
         );
         d.expect("Replace Unknown creature");
+        // iter-26-B FJ6: the editor writes the saved member's fault in the one form, with its
+        // line, as Arrivals does; never the short `<name>: <cause>` form.
+        d.observe(
+            "iter-26-B-FJ6",
+            d.has_containing("Unknown creature · line\u{a0}13: not in this campaign’s packages.")
+                && !d.has_containing("Unknown creature: not in this campaign’s packages."),
+            "The group editor names a saved missing member with its line, in the one fault form",
+        );
         d.state("broken-group-open-for-repair", Sizes::All);
+        // Outside the rule's scope: once the members change, a line may no longer be the
+        // member's, so the fault names none, as Save's check does. Discard brings the line back.
+        d.click("More actions for Unknown creature");
+        d.click("Move down");
+        d.expect("Unsaved");
+        let changed = d.has("Unknown creature: not in this campaign’s packages.");
+        d.click("Discard");
+        d.observe(
+            "iter-26-B-FJ6-changed",
+            changed && !d.has("Unknown creature: not in this campaign’s packages."),
+            "A changed group's missing member names no line; Discard gives back the saved form",
+        );
     }
 }
 
@@ -14278,6 +14334,23 @@ pub mod encounter_owned_groups {
                 d.visible_text("Deleted encounter"),
                 "Belongs to still shows Deleted encounter",
             );
+            // iter-26-B FB4: the two choices with a label at their left start at one x.
+            let left_of = |d: &Driver<'_>, start: &str| {
+                d.nodes()
+                    .into_iter()
+                    .find(|node| node.name.starts_with(start))
+                    .map(|node| node.rect.left())
+            };
+            let (side, belongs) = (
+                left_of(d, "Default side for "),
+                left_of(d, "Belongs to: "),
+            );
+            d.observe(
+                "iter-26-B-FB4",
+                side.zip(belongs)
+                    .is_some_and(|(side, belongs)| (side - belongs).abs() < 0.5),
+                format!("Default side starts at {side:?}, Belongs to at {belongs:?}"),
+            );
             // A group no fight can offer says so as a warning, not as field help.
             let tones = tones_beside(d, "No fight offers this group now.");
             d.observe(
@@ -14336,16 +14409,57 @@ pub mod encounter_owned_groups {
             "A section shows the group's name and its members",
         );
 
+        // iter-26-B FB2: a change of Add target moves neither the search nor the line above it.
+        const SEARCH: &str = "Find a creature or party member";
+        let search_tops = |d: &mut Driver<'_>| {
+            [SMALL, DEFAULT, LARGE].map(|size| {
+                d.at_size(size, |d| {
+                    (
+                        d.place_of(SEARCH).map(|rect| rect.top().round()),
+                        d.nodes()
+                            .into_iter()
+                            .find(|node| node.name.starts_with("Adding to "))
+                            .map(|node| node.rect.top().round()),
+                    )
+                })
+            })
+        };
+        let roster_target = search_tops(d);
+
         // A new group is built right here, and saved with the encounter.
         d.begin_task();
         d.click(NEW_FOR_ENCOUNTER);
         d.type_text(NEW_NAME);
+        d.expect(&format!("Adding to {NEW_NAME}"));
+        let group_target = search_tops(d);
+        d.observe(
+            "iter-26-B-FB2",
+            roster_target
+                .iter()
+                .all(|(search, line)| search.is_some() && line.is_some())
+                && roster_target == group_target,
+            format!(
+                "Search and `Adding to` tops, adding to the roster {roster_target:?} and to the new group {group_target:?}"
+            ),
+        );
         d.observe(
             "T13.6",
             d.has(&format!("Adding to {NEW_NAME}"))
                 && !d.has(&format!("Belongs to: {SHRINE}"))
                 && d.has_containing("No members yet. Add creatures from the search."),
             "A new group belongs to this encounter, and takes what the search adds",
+        );
+        // iter-26-B AB1: Save checks the new group too, and refuses it empty, so the draft says
+        // Invalid now and Save and Ctrl+S are blocked: nothing is written.
+        let invalid = d.visible_text("Invalid")
+            && !d.visible_text("Unsaved")
+            && d.is_disabled(SAVE_ENCOUNTER);
+        d.press_ctrl(Key::S);
+        let kept = d.app_mut().encounters.draft_dirty() && d.visible_text("Invalid");
+        d.observe(
+            "iter-26-B-AB1",
+            invalid && kept,
+            format!("With an empty new group, Invalid and Save blocked: {invalid}; Ctrl+S writes nothing: {kept}"),
         );
         d.state("new-group-in-the-encounter", Sizes::All);
         // Two frames, one adding and one not: both name fields end at one edge at every size.
@@ -14442,6 +14556,16 @@ pub mod encounter_owned_groups {
         d.expect("Undo move");
         let notice = format!("{NEW_NAME} moves to any encounter when you save.");
         d.expect(&notice);
+        // iter-26-B FB7: a move that waits for Save is info, never success.
+        let words = d.place_of(&notice);
+        let tones = crate::design::colors().result;
+        d.observe(
+            "iter-26-B-FB7",
+            words.is_some_and(|words| {
+                d.has_tone_bar(words, tones.info) && !d.has_tone_bar(words, tones.success)
+            }),
+            "A group move that waits for Save is an info message, not a success",
+        );
         d.state_prepared("saved-group-removed", Sizes::All, |d| {
             d.scroll_until(egui::pos2(400.0, 400.0), "Undo move", 20);
             assert!(d.in_view_containing(&notice));
@@ -14785,6 +14909,13 @@ pub mod encounter_owned_groups {
             "T13.5",
             d.has(&add_group(GROUP_ARENA)) && d.has_containing("For Arena Final"),
             "A run from an older save lists every group, and says who each is for",
+        );
+        // iter-26-B FB10: a group whose encounter is gone says the Groups list's heading words,
+        // short enough to sit beside its name as `For Arena Final` does.
+        d.observe(
+            "iter-26-B-FB10",
+            d.has_containing("Encounter deleted") && !d.has_containing("For a deleted encounter"),
+            "Arrivals says Encounter deleted for a group whose encounter is gone",
         );
     }
 }
@@ -17953,6 +18084,39 @@ pub mod session_plan {
                 name.zip(save)
                     .is_some_and(|(name, save)| (name.right() - save.right()).abs() <= 0.5),
                 format!("At {size:?}: Name {name:?}, Save creature {save:?}"),
+            );
+        }
+        // iter-26-B FA9, FI9: in a wide window the encounter's name field ends at the roster
+        // column's edge (where its rows' rules end), and the header's last action at the Add
+        // column's edge, where Save creature ends; at 960 the panes are tabs.
+        for size in [DEFAULT, LARGE] {
+            let (name, rule, start, creature) = d.at_size(size, |d| {
+                let name = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| node.name.starts_with("Encounter name: "))
+                    .map(|node| node.rect);
+                let rule = d.place_of("More actions for Werewolf copy").and_then(|menu| {
+                    d.hairlines_in(egui::Rect::from_min_max(
+                        egui::pos2(0.0, menu.bottom()),
+                        egui::pos2(menu.right() + 60.0, menu.bottom() + 24.0),
+                    ))
+                    .into_iter()
+                    .map(|line| line.right())
+                    .reduce(f32::max)
+                });
+                (name, rule, d.place_of("Start fight"), d.place_of("Save creature"))
+            });
+            d.observe(
+                "iter-26-B-FA9",
+                name.zip(rule)
+                    .is_some_and(|(name, rule)| (name.right() - rule).abs() <= 1.0)
+                    && start.zip(creature).is_some_and(|(start, creature)| {
+                        (start.right() - creature.right()).abs() <= 1.0
+                    }),
+                format!(
+                    "At {size:?}: name field {name:?}, roster rule ends at {rule:?}; Start fight {start:?}, Save creature {creature:?}"
+                ),
             );
         }
         d.observe(

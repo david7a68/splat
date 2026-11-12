@@ -30,6 +30,9 @@ const BELONGS_TO: &str = "Belongs to";
 const ROSTER: &str = "Roster";
 const ANY_ENCOUNTER: &str = "Any encounter";
 const MISSING_ENCOUNTER: &str = "Deleted encounter";
+/// The Groups list's heading for groups whose encounter is gone; Arrivals says the same words
+/// beside such a group's name (FB10).
+pub(crate) const ENCOUNTER_DELETED: &str = "Encounter deleted";
 const NOTES_FIELD: &str = "Group notes";
 const LABEL_WIDTH: f32 = 120.0;
 /// The name of a roster slot's button, for the form it opens.
@@ -68,6 +71,9 @@ pub(super) struct GroupDraft {
     path: String,
     baseline: Option<String>,
     source: String,
+    /// The line of each readable member in `source`, read when `source` or `flags` change (never
+    /// per frame). A fault names its line only while the members match the saved ones (FJ6).
+    member_lines: Vec<usize>,
     name: String,
     setup: GroupSetup,
     notes: String,
@@ -110,6 +116,7 @@ impl GroupDraft {
             source: format!(
                 "---\nsplat_schema: 2\nsplat_id: {id}\nsplat_kind: encounter_group\nsplat_name: New group\nsplat_side: enemies\n---\n\n## Members\n\n| Count | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n"
             ),
+            member_lines: Vec::new(),
             name: name.clone(),
             saved_name: name,
             setup: setup.clone(),
@@ -147,6 +154,7 @@ impl GroupDraft {
             recovery: Default::default(),
             path: path.into(),
             baseline: Some(text.clone()),
+            member_lines: splat::content::list_formats::group_member_lines(&text, &entry.flags),
             source: text,
             flags: entry.flags.clone(),
             repair: None,
@@ -165,6 +173,15 @@ impl GroupDraft {
     pub(super) fn name(&self) -> String {
         self.name.clone()
     }
+    /// No member that Save would write: Save refuses the group.
+    pub(super) fn is_empty(&self) -> bool {
+        self.setup.members.is_empty()
+    }
+    fn reread_lines(&mut self) {
+        self.member_lines =
+            splat::content::list_formats::group_member_lines(&self.source, &self.flags);
+    }
+
     pub(super) fn set_new_path(&mut self, path: String) {
         self.path = path;
     }
@@ -313,6 +330,7 @@ impl GroupDraft {
         }
         self.source = source;
         self.flags = entry.flags;
+        self.reread_lines();
         self.repair = None;
         self.repair_error = None;
         Ok(())
@@ -523,6 +541,7 @@ impl GroupDraft {
                     self.baseline = change.text.clone();
                     if let Some(text) = change.text {
                         self.source = text;
+                        self.reread_lines();
                     }
                 }
             } else if !self.recovery.file_gone() {
@@ -558,6 +577,7 @@ impl GroupDraft {
         if let Ok(entry) = Entry::parse(&self.path, text) {
             self.flags = entry.flags;
         }
+        self.reread_lines();
         self.baseline = Some(text.to_owned());
         self.saved_name = self.name.clone();
         self.saved_setup = self.setup.clone();
@@ -917,7 +937,7 @@ pub(super) fn list(
         .filter(|group| group.encounter.is_some() && group.encounter_name.is_none())
         .collect();
     if !orphans.is_empty() {
-        design::group_heading(ui, "Encounter deleted", orphans.len());
+        design::group_heading(ui, ENCOUNTER_DELETED, orphans.len());
         for group in orphans {
             list_row(ui, group, blocked, action);
         }
@@ -986,6 +1006,7 @@ impl Encounters {
                     draft.baseline = change.text.clone();
                     if let Some(text) = change.text {
                         draft.source = text;
+                        draft.reread_lines();
                     }
                     self.save_group_draft(ui.ctx(), campaign, modules);
                 }
@@ -1220,8 +1241,9 @@ pub(super) fn of_encounter(
         } else {
             "Undo move"
         };
-        let tone = if gone { Tone::Info } else { Tone::Success };
-        if design::undo_message(ui, tone, &words, undo) {
+        // FB7: nothing is on disk until Save, so each of these says so in the info tone, as a
+        // discarded draft does; success belongs to a change that is written.
+        if design::undo_message(ui, Tone::Info, &words, undo) {
             let (index, removed, delete) = removed_group.take().expect("a removed group");
             if delete {
                 deleted_groups.retain(|group| group.path != removed.path);
@@ -1273,7 +1295,7 @@ fn belongs_to(
             .map_or(MISSING_ENCOUNTER, |(_, name)| name)
     });
     ui.horizontal(|ui| {
-        ui.label(Type::Small.rich(ui, BELONGS_TO).color(colors().muted));
+        choice_label(ui, BELONGS_TO);
         // The choice ends where the name field ends, inside the column.
         let right = name_right.min(ui.max_rect().right());
         let width = (right - ui.cursor().left()).max(Density::Scan.control());
@@ -2386,6 +2408,29 @@ fn members_pane(
         });
 }
 
+/// FB4: `Default side` and `Belongs to` share one label column, the wider label plus `S`, so
+/// their controls start at one x.
+fn choice_label(ui: &mut egui::Ui, text: &str) {
+    let font = Type::Small.font(ui);
+    let widest = [SIDE_FIELD, BELONGS_TO]
+        .map(|label| {
+            ui.fonts_mut(|fonts| {
+                fonts
+                    .layout_no_wrap(label.to_owned(), font.clone(), colors().muted)
+                    .size()
+                    .x
+            })
+        })
+        .into_iter()
+        .fold(0.0, f32::max);
+    let column_end = ui.cursor().left() + widest + design::S.max(ui.spacing().item_spacing.x);
+    ui.label(Type::Small.rich(ui, text).color(colors().muted));
+    let gap = column_end - ui.cursor().left();
+    if gap > 0.0 {
+        ui.add_space(gap);
+    }
+}
+
 /// What a group is, in its own editor and in the frame an encounter's editor gives it. There,
 /// `open` is that encounter, and the frame needs less weight and room.
 fn group_fields(
@@ -2399,7 +2444,7 @@ fn group_fields(
 ) {
     ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
     ui.horizontal(|ui| {
-        ui.label(Type::Small.rich(ui, SIDE_FIELD).color(colors().muted));
+        choice_label(ui, SIDE_FIELD);
         let name = format!("{SIDE_FIELD} for {}", draft.name);
         super::side_control(ui, &name, &mut draft.setup.side, &[]);
     });
@@ -2517,6 +2562,9 @@ fn members(
     let side = draft.setup.side.clone();
     let path = draft.path.clone();
     let unread = splat::content::list_formats::unread_group_members(&draft.source, &draft.flags);
+    // FJ6: a fault names its line only while no member has moved, been added, changed or removed
+    // since the note was read, so the line is still that member's.
+    let saved_members = draft.setup.members == draft.saved_setup.members;
     for index in 0..=total {
         let preceding = unread.iter().filter(|member| member.before < index).count();
         for (offset, member) in unread
@@ -2642,8 +2690,12 @@ fn members(
             if entry.is_none() {
                 // The reference is on hover: it is what a repair needs, and not a word to read.
                 // The repair link is a notice action, so its words start at the warning text.
-                // FA1: the fault in the one member-fault form (no line: a draft's lines can
-                // move), then its help, then the repair at the words.
+                // FA1, FJ6: the fault in the one member-fault form, with its line while the
+                // members are the saved ones (a draft's lines can move), then its help, then the
+                // repair at the words.
+                let line = saved_members
+                    .then(|| draft.member_lines.get(index).copied())
+                    .flatten();
                 let changed = member
                     .overrides
                     .get("name")
@@ -2653,7 +2705,7 @@ fn members(
                 let words = member_fault(
                     changed.unwrap_or(&name),
                     member.creature.link.is_some().then_some(name.as_str()),
-                    None,
+                    line,
                     "not in this campaign’s packages",
                 );
                 let repair = ui.scope(|ui| {

@@ -126,15 +126,79 @@ fn plan_summary_text(ui: &egui::Ui, group: &crate::encounter_run::RunGroup) -> S
     }
 }
 
+/// The separator between a summary's facts: it wraps with the words after it.
+const FACT_SEPARATOR: &str = " ·\u{a0}";
+
+/// FI7: `text` with its facts joined by `FACT_SEPARATOR`, laid out at `width` so that no line
+/// ends or starts with a loose `·`: where a line would start at a separator, the separator goes
+/// and the line starts with the next fact. Each cut can only let later lines hold more, so it
+/// stops after at most one layout per separator; the galleys come from egui's cache.
+fn without_loose_separators(
+    ui: &egui::Ui,
+    text: String,
+    font: &egui::FontId,
+    width: f32,
+) -> String {
+    let mut text = text;
+    for _ in 0..text.matches(FACT_SEPARATOR).count() {
+        let galley = ui.fonts_mut(|fonts| {
+            fonts.layout(text.clone(), font.clone(), colors().muted, width)
+        });
+        let mut start = 0;
+        let mut dot = None;
+        for (index, row) in galley.rows.iter().enumerate() {
+            let lead = row.glyphs.iter().take_while(|glyph| glyph.chr == ' ').count();
+            if index > 0 && row.glyphs.get(lead).is_some_and(|glyph| glyph.chr == '·') {
+                dot = Some(start + lead);
+                break;
+            }
+            start += row.char_count_including_newline();
+        }
+        let Some(byte) = dot.and_then(|at| text.char_indices().nth(at).map(|(byte, _)| byte))
+        else {
+            break;
+        };
+        let Some(from) = text[..byte].strip_suffix(' ').map(str::len) else {
+            break;
+        };
+        let to = byte + '·'.len_utf8() + text[byte + '·'.len_utf8()..].chars().next().map_or(0, char::len_utf8);
+        text.replace_range(from..to, "\n");
+    }
+    text
+}
+
+/// FL2, FI7: a planned fight's summary. Each fact keeps its words together, the members wrap
+/// between members and never inside one, and no line starts or ends with `·`.
+fn plan_fight_summary(ui: &mut egui::Ui, summary: &str) {
+    let text = summary
+        .split(" · ")
+        .map(|part| {
+            if part.contains(" × ") {
+                part.split(", ")
+                    .map(|member| member.replace(' ', "\u{a0}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            } else {
+                part.replace(' ', "\u{a0}")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(FACT_SEPARATOR);
+    let font = Type::Small.font(ui);
+    let text = without_loose_separators(ui, text, &font, ui.available_width());
+    let response = ui.add(egui::Label::new(Type::Small.rich(ui, text).color(colors().muted)).wrap());
+    // The breaks only steer the wrap; the name keeps the summary's words.
+    design::named(ui, &response, summary);
+}
+
 /// A plan group's summary. Each separator wraps with the words after it, so no line ends with
-/// `·`. A flagged group keeps every fact (`max_rows` of `usize::MAX`).
+/// `·`, and a line that would start at a separator starts with the next fact (FI7). A flagged
+/// group keeps every fact (`max_rows` of `usize::MAX`).
 fn plan_group_summary(ui: &mut egui::Ui, summary: &str, max_rows: usize) {
-    let mut job = egui::text::LayoutJob::simple(
-        summary.replace(" · ", " ·\u{a0}"),
-        Type::Small.font(ui),
-        colors().muted,
-        ui.available_width(),
-    );
+    let font = Type::Small.font(ui);
+    let width = ui.available_width();
+    let text = without_loose_separators(ui, summary.replace(" · ", FACT_SEPARATOR), &font, width);
+    let mut job = egui::text::LayoutJob::simple(text, font, colors().muted, width);
     job.wrap.max_rows = max_rows;
     let plain = summary.replace('\u{a0}', " ");
     let response = ui.add(egui::Label::new(job).wrap());
@@ -798,7 +862,7 @@ impl Sessions {
                                 }
                             } else if let Some(saved) = saved {
                                 design::status(ui, Status { icon: icons::RUN, word: &plan_saved_status(saved), color: c.muted });
-                            } else { wrapped_words(ui, Type::Small, plan_summary(&fight.summary), c.muted); }
+                            } else { plan_fight_summary(ui, &fight.summary); }
                         }, |ui| {
                             design::row_menu(ui, &fight.name, |ui| {
                                 if Action::quiet("Remove from tonight").show(ui).clicked() {
@@ -1344,6 +1408,53 @@ mod tests {
     use super::*;
     use crate::sessions::Draft;
     use std::{fs, path::PathBuf};
+
+    /// iter-26-B FI7, FL2: at every width, no summary line starts or ends with `·`, and no
+    /// member breaks inside its `N × name`.
+    #[test]
+    fn plan_summaries_never_start_a_line_with_a_separator() {
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                let font = Type::Small.font(ui);
+                let summary = "5 party · 2 × Cinder Wolf, 1 × Ember Cultist · Changed";
+                let mut cuts = 0;
+                for width in [90.0, 120.0, 140.0, 180.0, 220.0, 260.0, 330.0, 600.0] {
+                    let text = summary
+                        .split(" · ")
+                        .map(|part| {
+                            part.split(", ")
+                                .map(|member| member.replace(' ', "\u{a0}"))
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        })
+                        .collect::<Vec<_>>()
+                        .join(FACT_SEPARATOR);
+                    let kept = without_loose_separators(ui, text.clone(), &font, width);
+                    cuts += usize::from(kept != text);
+                    let galley = ui.painter().layout(kept, font.clone(), colors().muted, width);
+                    let rows: Vec<String> = galley
+                        .rows
+                        .iter()
+                        .map(|row| row.glyphs.iter().map(|glyph| glyph.chr).collect())
+                        .collect();
+                    for row in &rows {
+                        assert!(!row.trim().starts_with('·'), "{width}: {rows:?}");
+                        assert!(!row.trim_end().ends_with('·'), "{width}: {rows:?}");
+                    }
+                    for member in ["2\u{a0}×\u{a0}Cinder\u{a0}Wolf", "1\u{a0}×\u{a0}Ember\u{a0}Cultist"] {
+                        assert!(
+                            width < 120.0 || rows.iter().any(|row| row.contains(member)),
+                            "{width}: {member} is split in {rows:?}"
+                        );
+                    }
+                }
+                // The check can fail: some width wraps at a separator, which the cut removed.
+                assert!(cuts > 0, "no width wrapped at a separator");
+            });
+        });
+    }
 
     #[test]
     fn iter23_s_fk4_final_hp_follows_the_party_order() {

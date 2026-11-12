@@ -211,6 +211,19 @@ enum Page {
     Settings,
 }
 
+/// FF2: the page (and Campaign tab) that holds the draft a rail status names. The words are the
+/// ones the rail's draft list gives, so a new draft names its page here.
+fn draft_page(word: &str) -> Option<(Page, Option<CampaignTab>)> {
+    Some(match word {
+        "Library draft" => (Page::Library, None),
+        "World draft" | "World repair draft" => (Page::World, None),
+        "Encounter draft" | "Group draft" | "Creature draft" => (Page::Encounters, None),
+        "Campaign draft" => (Page::Campaign, Some(CampaignTab::Packages)),
+        "Run settings draft" => (Page::Campaign, Some(CampaignTab::RunSettings)),
+        _ => return None,
+    })
+}
+
 impl Page {
     fn name(self) -> &'static str {
         match self {
@@ -1090,6 +1103,20 @@ impl Splat {
             if response.clicked() {
                 self.world_page.open_held();
                 self.page = Page::World;
+            }
+            {
+                let rect = response.rect;
+                (response, rect)
+            }
+        } else if let Some((page, tab)) = draft_page(state.word) {
+            // FF2: every unsaved draft in the rail opens the page that holds it, as the held NPC
+            // does: each page keeps its draft open while it has changes.
+            let response = design::status_link(ui, state);
+            if response.clicked() {
+                self.page = page;
+                if let Some(tab) = tab {
+                    self.campaign_tab = tab;
+                }
             }
             {
                 let rect = response.rect;

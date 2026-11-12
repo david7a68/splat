@@ -113,7 +113,7 @@ mod groups;
 mod history;
 // The one member-fault form and its row, for Arrivals in the run (Contract B, R).
 use groups::GroupDraft;
-pub(crate) use groups::{NO_MAX_HP_CAUSE, member_fault, member_fault_row};
+pub(crate) use groups::{ENCOUNTER_DELETED, NO_MAX_HP_CAUSE, member_fault, member_fault_row};
 pub(crate) use history::{Template, template_of};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -208,22 +208,19 @@ fn unread_roster_row(ui: &mut egui::Ui, fault: &RosterFault) {
                     egui::Label::new(Type::Strong.rich(ui, &fault.name).color(colors().text))
                         .truncate(),
                 );
-                let mut job = egui::text::LayoutJob::default();
-                for (text, color) in [
-                    (format!("{} ", icons::WARN), colors().result.warning),
-                    (roster_row_fault_words(fault.line), colors().muted),
-                ] {
-                    job.append(
-                        &text,
-                        0.0,
-                        egui::TextFormat {
-                            font_id: Type::Small.font(ui),
-                            color,
-                            ..Default::default()
-                        },
-                    );
-                }
-                ui.add(egui::Label::new(job).wrap());
+                // FA5, AA2: the whole mark, icon and words, in the warning tone, as run setup
+                // marks the same row; the name keeps the text colour.
+                ui.add(
+                    egui::Label::new(
+                        Type::Small
+                            .rich(
+                                ui,
+                                format!("{} {}", icons::WARN, roster_row_fault_words(fault.line)),
+                            )
+                            .color(colors().result.warning),
+                    )
+                    .wrap(),
+                );
             });
         });
         design::rule(ui);
@@ -444,6 +441,10 @@ struct Draft {
     groups_written: bool,
     /// One group detached from this draft, until the next save.
     removed_group: Option<(usize, GroupDraft, bool)>,
+    /// The last replacement of missing roster rows, for its result and Undo. A later edit of
+    /// those rows, or a Save (a start that saves too), ends it (FC3): after a Save its Undo
+    /// would make a draft that differs from the file while it looks like it.
+    replacement: Option<ReplacementUndo>,
 }
 impl Draft {
     fn new() -> Self {
@@ -477,6 +478,7 @@ impl Draft {
             reveal_group: false,
             groups_written: false,
             removed_group: None,
+            replacement: None,
         }
     }
     fn open(root: &std::path::Path, path: &str) -> Result<Self, String> {
@@ -527,6 +529,7 @@ impl Draft {
             reveal_group: false,
             groups_written: false,
             removed_group: None,
+            replacement: None,
         })
     }
     fn dirty(&self) -> bool {
@@ -537,6 +540,17 @@ impl Draft {
             || self.loot != self.saved_loot
             || self.groups.iter().any(GroupDraft::dirty)
             || !self.deleted_groups.is_empty()
+    }
+    /// AB1: Save's reason while one of this encounter's changed groups has no members: Save
+    /// checks every changed group, and refuses an empty one.
+    fn empty_group_reason(&self) -> Option<String> {
+        self.groups
+            .iter()
+            .find(|group| group.is_empty() && group.dirty())
+            .map(|group| match group.name().trim() {
+                "" => "Add a creature to the new group first.".to_owned(),
+                name => format!("Add a creature to {name} first."),
+            })
     }
     /// Read this encounter's own groups, once the campaign has been read.
     fn read_groups(&mut self, root: &std::path::Path, snapshot: &Snapshot) -> Result<(), String> {
@@ -757,6 +771,7 @@ impl Draft {
         let id = self.id;
         self.groups.retain(|group| group.belongs_to(id));
         self.removed_group = None;
+        self.replacement = None;
         Ok(())
     }
     fn validate(&self, snapshot: &Snapshot) -> Result<(), Invalid> {
@@ -1135,6 +1150,56 @@ pub(crate) fn detail_columns(
     });
 }
 
+/// Where a pane of this draft's editor ends, as the pane drew it last: the header's name field
+/// ends at the roster's edge, and its actions at the Add column's edge (FA9, FI9).
+fn pane_right_id(draft: Uuid, pane: &str) -> egui::Id {
+    egui::Id::new(("encounter_pane_right", draft, pane))
+}
+const ROSTER_PANE: &str = "roster";
+
+/// The roster and Add participants side by side: the roster at most `ROSTER_MAX_WIDTH`, then
+/// the Add column at its own or dragged width.
+fn editor_panes_width(ui: &egui::Ui) -> f32 {
+    let add_width = if design::column_dragged(ui.ctx(), ADD_PANE) {
+        design::column_widths(ui.ctx())
+            .get(ADD_PANE)
+            .copied()
+            .unwrap_or(ADD_PANE_MAX_WIDTH)
+    } else {
+        ADD_PANE_MAX_WIDTH
+    };
+    ui.available_width()
+        .min(ROSTER_MAX_WIDTH + add_width + design::S)
+}
+
+/// The width of the save state and Discard together: the widest state word with Discard. What
+/// follows them in the save row keeps its x when the first edit changes the word and brings
+/// Discard (FB5).
+fn save_state_slot(ui: &mut egui::Ui) -> f32 {
+    let font = Type::Small.font(ui);
+    let widest = [
+        (icons::ERROR, "Invalid"),
+        (icons::DRAFT, "Unsaved"),
+        (icons::OK, "Saved"),
+        (icons::OK, "No changes"),
+    ]
+    .into_iter()
+    .map(|(icon, word)| {
+        ui.fonts_mut(|fonts| {
+            fonts
+                .layout_no_wrap(format!("{icon} {word}"), font.clone(), colors().text)
+                .size()
+                .x
+        })
+    })
+    .fold(0.0, f32::max);
+    widest
+        + ui.spacing().item_spacing.x
+        + Action::quiet("Discard")
+            .density(Density::Read)
+            .natural_width(ui)
+}
+
 fn editor_save_state(
     ui: &mut egui::Ui,
     state: Status<'_>,
@@ -1278,22 +1343,29 @@ fn roster_summary(setup: &Setup, catalogue: &Catalogue) -> String {
                     || "Unknown creature".to_owned(),
                     |entry| entry.entry.name.clone(),
                 );
-            *creatures
-                .entry(groups::shown_name(&slot.overrides, name))
-                .or_default() += 1;
+            // FL2: a renamed creature names its base, as a group's member summary does.
+            let shown = groups::shown_name(&slot.overrides, name.clone());
+            let shown = if shown == name {
+                shown
+            } else {
+                format!("{shown} (as {name})")
+            };
+            *creatures.entry(shown).or_default() += 1;
         }
     }
     let mut parts = Vec::new();
     if party > 0 {
         parts.push(design::count(party, "party", "party"));
     }
-    parts.extend(creatures.into_iter().map(|(name, count)| {
-        if count == 1 {
-            name
-        } else {
-            format!("{} × {name}", design::count(count, "", "").trim())
-        }
-    }));
+    // FL2: the members in a group's form, `2 × Cinder Wolf, 1 × Ember Cultist`: every member
+    // with its count, joined by commas, so ` · ` separates facts only.
+    let members: Vec<String> = creatures
+        .into_iter()
+        .map(|(name, count)| format!("{} × {name}", design::count(count, "", "").trim()))
+        .collect();
+    if !members.is_empty() {
+        parts.push(members.join(", "));
+    }
     // Loot alone does not change a creature.
     if setup.roster.iter().any(|slot| {
         Overrides::parse(&slot.overrides)
@@ -4098,13 +4170,27 @@ impl Encounters {
                 .ok()
                 .and_then(|entry| roster_fault_reason(&draft.path, &roster_faults(&entry, names)))
         });
-        let refusal = roster_reason.clone().or(refusal);
+        // AB1: Save checks every changed group too, so an empty one makes the draft Invalid now,
+        // not after a refused Save. It is the frame's own state, read without parsing.
+        let empty_group = self.draft.as_ref().and_then(Draft::empty_group_reason);
+        let refusal = roster_reason.clone().or(empty_group.clone()).or(refusal);
         self.save_refused = dirty && refusal.is_some();
         let draft_ref = self.draft.as_mut().expect("the editor has a draft");
         let focus_name = &mut self.focus_name;
         let focus_search_after_name = &mut self.focus_search;
         let from_session = self.from_session;
         let stack_actions = ui.available_rect_before_wrap().width() < design::READER_MEASURE;
+        // FA9, FI9: in a wide window the name field ends at the roster column's edge and the
+        // header's actions at the Add participants column's edge, so neither stretches to the
+        // window's edge. The roster's edge is the one its pane drew last.
+        // The edges the panes drew last; with the panes as tabs, the header takes the line.
+        let edge = |pane: &str| {
+            ui.ctx()
+                .data(|data| data.get_temp::<f32>(pane_right_id(draft_ref.id, pane)))
+                .filter(|_| !compact)
+                .unwrap_or(f32::INFINITY)
+        };
+        let (roster_right, header_right) = (edge(ROSTER_PANE), edge(ADD_PANE));
         ui.horizontal_wrapped(|ui| {
             let back_name = if from_session {
                 "Back to session"
@@ -4134,7 +4220,9 @@ impl Encounters {
                         0.0
                     })
                 .max(Density::Scan.control())
-            };
+            }
+            // The field's margins are outside its desired width.
+            .min((roster_right - ui.cursor().left() - 2.0 * design::S).max(Density::Scan.control()));
             let response = ui.add(
                 egui::TextEdit::singleline(&mut draft_ref.name)
                     .id(design::focus_id(NAME_FIELD))
@@ -4153,13 +4241,15 @@ impl Encounters {
             let action_width = if stack_actions {
                 ui.max_rect().width()
             } else {
-                ui.available_rect_before_wrap().width()
+                ui.available_rect_before_wrap()
+                    .width()
+                    .min(header_right - ui.cursor().left())
             };
             ui.allocate_ui_with_layout(
                 egui::vec2(action_width, Density::Scan.control()),
                 egui::Layout::right_to_left(egui::Align::Center),
                 |ui| {
-                    let start_blocked = roster_reason.as_deref().or(has_run
+                    let start_blocked = roster_reason.as_deref().or(empty_group.as_deref()).or(has_run
                         .then_some(BLOCKED_BY_RUN)
                         .or(creature_dirty.then_some(BLOCKED_BY_CREATURE))
                         .or(loading.then_some("Still reading this campaign."))
@@ -4231,6 +4321,7 @@ impl Encounters {
             } else {
                 (icons::OK, "No changes", colors().muted)
             };
+            let slot_end = ui.cursor().left() + save_state_slot(ui) + ui.spacing().item_spacing.x;
             {
                 discard = editor_save_state(
                     ui,
@@ -4239,18 +4330,13 @@ impl Encounters {
                     creature_dirty.then_some(BLOCKED_BY_CREATURE),
                 );
             }
-            // FB6: while Save is blocked, Discard is the one way out.
-            if dirty {
-                blocked_reason(
-                    ui,
-                    Some(if refusal.is_some() {
-                        blocked_draft_switch_reason()
-                    } else {
-                        draft_switch_reason()
-                    }),
-                );
-            }
             if let Some(run) = &unfinished {
+                // FB5: the run state follows the state's slot, so the first edit (a new word,
+                // Discard and the reason) does not move it.
+                let gap = slot_end - ui.cursor().left();
+                if gap > 0.0 {
+                    ui.add_space(gap);
+                }
                 design::status(
                     ui,
                     Status {
@@ -4264,6 +4350,17 @@ impl Encounters {
                         ),
                         color: colors().muted,
                     },
+                );
+            }
+            // FB6: while Save is blocked, Discard is the one way out.
+            if dirty {
+                blocked_reason(
+                    ui,
+                    Some(if refusal.is_some() {
+                        blocked_draft_switch_reason()
+                    } else {
+                        draft_switch_reason()
+                    }),
                 );
             }
             blocked_reason(
@@ -4421,17 +4518,7 @@ impl Encounters {
         }
         // In a wide window the roster keeps a name near its controls, and the two panes
         // stay together at the left.
-        let add_width = if design::column_dragged(ui.ctx(), ADD_PANE) {
-            design::column_widths(ui.ctx())
-                .get(ADD_PANE)
-                .copied()
-                .unwrap_or(ADD_PANE_MAX_WIDTH)
-        } else {
-            ADD_PANE_MAX_WIDTH
-        };
-        let panes_width = ui
-            .available_width()
-            .min(ROSTER_MAX_WIDTH + add_width + design::S);
+        let panes_width = editor_panes_width(ui);
         ui.allocate_ui_with_layout(
             egui::vec2(panes_width, ui.available_height()),
             egui::Layout::top_down(egui::Align::LEFT),
@@ -4453,12 +4540,17 @@ impl Encounters {
                     top: design::S as i8,
                     bottom: 0,
                 }))
-                .show_inside(ui, |ui| match creature {
+                .show_inside(ui, |ui| {
+                    // The header's actions end here (FA9).
+                    let right = ui.max_rect().right();
+                    ui.ctx()
+                        .data_mut(|data| data.insert_temp(pane_right_id(draft.id, ADD_PANE), right));
+                    match creature {
                     Some(editor) => creature_step = Self::creature_pane(ui, editor),
                     None => {
                         Self::add_pane(ui, draft, snapshot, search, focus_search, peek, compact)
                     }
-                });
+                }});
                 // A panel clips to its own rect. It starts `S` before the roster's text edge, so
                 // a line-start quiet action there keeps its whole press area.
                 let rest = ui.available_rect_before_wrap();
@@ -4506,26 +4598,10 @@ impl Encounters {
         if !compact {
             design::group_heading(ui, "Add participants", 0);
         }
-        if draft.add_to.is_none() {
-            design::help(ui, PARTY_SOURCE);
-        }
-        groups::add_target(ui, draft, snapshot);
-        if draft.target_group().is_some() {
-            let chosen = Self::creature_search(
-                ui,
-                snapshot.creatures.iter().filter(|c| !c.linked),
-                search,
-                focus_search,
-                peek,
-                SearchRoster {
-                    already: &|_| false,
-                },
-            );
-            if let Some((id, party)) = chosen {
-                draft.add_selected(id, party, snapshot);
-            }
-            return;
-        }
+        // FB2: the party lines stay whatever the search adds to (the party always joins the
+        // roster), and `Adding to …` has one place directly above the search, so a change of
+        // target moves neither the search nor its results.
+        design::help(ui, PARTY_SOURCE);
         // Who is still to come: a party member belongs on a roster once.
         let on_roster = |draft: &Draft, id: Uuid| {
             draft
@@ -4574,6 +4650,23 @@ impl Encounters {
                 ui,
                 Some("No saved party copies yet. Connect to D&D Beyond in Settings."),
             );
+        }
+        groups::add_target(ui, draft, snapshot);
+        if draft.target_group().is_some() {
+            let chosen = Self::creature_search(
+                ui,
+                snapshot.creatures.iter().filter(|c| !c.linked),
+                search,
+                focus_search,
+                peek,
+                SearchRoster {
+                    already: &|_| false,
+                },
+            );
+            if let Some((id, party)) = chosen {
+                draft.add_selected(id, party, snapshot);
+            }
+            return;
         }
         let chosen = Self::creature_search(
             ui,
@@ -4827,6 +4920,9 @@ impl Encounters {
                     blocked_reason(ui, Some("No participants yet. Add the party and creatures from Add participants."));
                 }
                 Self::roster(ui, draft, snapshot, focus_search, expanded, live, make_yours);
+                // The header's name field ends where the roster's rows and rules end (FA9, FI9).
+                let right = ui.available_rect_before_wrap().right();
+                ui.ctx().data_mut(|data| data.insert_temp(pane_right_id(draft.id, ROSTER_PANE), right));
                 ui.add_space(design::M);
                 if let Some(party) = linked_party {
                     Self::sync_option(ui, draft, snapshot, party);
@@ -4939,20 +5035,18 @@ impl Encounters {
         let fault_rows = ui
             .data(|data| data.get_temp::<Arc<Vec<RosterFault>>>(roster_fault_rows_id(draft.id)))
             .unwrap_or_default();
-        let undo_key = ui.id().with(("replacement_undo", draft.id));
-        let undo = ui
-            .ctx()
-            .data_mut(|data| data.get_temp::<ReplacementUndo>(undo_key));
-        if let Some(undo) = undo {
-            if undo.after == draft.setup.roster {
-                // The result is a message, so its Undo keeps the undo icon as every other
-                // Undo does.
-                if design::undo_message(ui, Tone::Success, &undo.words, "Undo replacement") {
-                    draft.setup.roster = undo.before;
-                }
-            } else {
-                ui.ctx()
-                    .data_mut(|data| data.remove::<ReplacementUndo>(undo_key));
+        // An edit of the replaced rows ends the result and its Undo.
+        if draft
+            .replacement
+            .as_ref()
+            .is_some_and(|undo| undo.after != draft.setup.roster)
+        {
+            draft.replacement = None;
+        }
+        if let Some(undo) = &draft.replacement {
+            // The result is a message, so its Undo keeps the undo icon as every other Undo does.
+            if design::undo_message(ui, Tone::Success, &undo.words, "Undo replacement") {
+                draft.setup.roster = draft.replacement.take().expect("the result").before;
             }
         }
         for (i, slot) in draft.setup.roster.iter_mut().enumerate() {
@@ -5355,15 +5449,10 @@ impl Encounters {
                 .entries
                 .get(&creature)
                 .map_or_else(|| "the new creature".to_owned(), |e| e.entry.name.clone());
-            ui.ctx().data_mut(|data| {
-                data.insert_temp(
-                    undo_key,
-                    ReplacementUndo {
-                        before,
-                        after: draft.setup.roster.clone(),
-                        words: replacement_words(&old, rows, &new),
-                    },
-                )
+            draft.replacement = Some(ReplacementUndo {
+                before,
+                after: draft.setup.roster.clone(),
+                words: replacement_words(&old, rows, &new),
             });
         }
         for side in draft.setup.roster.iter().flat_map(|slot| {
@@ -5443,9 +5532,10 @@ impl Encounters {
                 }
             }
             design::small_field(ui, "Roll NPC initiative", None, None, |ui| {
+                // The menu ends at the form's edge, where Run folder and Save end.
                 let combo = egui::ComboBox::from_id_salt("campaign_initiative")
                     .icon(design::combo_icon)
-                    .width(ui.available_width().min(320.0))
+                    .width(ui.available_width())
                     .selected_text(snapshot.options.initiative.grouping.label())
                     .show_ui(ui, |ui| {
                         for mode in crate::encounter_settings::Grouping::ALL {
@@ -5458,7 +5548,7 @@ impl Encounters {
                     });
                 design::named(ui, &combo.response, "Roll NPC initiative");
             });
-            ui.label(Type::Small.rich(ui, "Run setup starts with this choice. You can change it there for one roll. Groups that arrive later use it too.").color(colors().muted));
+            design::help(ui, "Run setup starts with this choice. You can change it there for one roll. Groups that arrive later use it too.");
             ui.checkbox(
                 &mut snapshot.options.initiative.roster_ties,
                 "Break initiative ties in roster order",
@@ -5476,7 +5566,7 @@ impl Encounters {
                 design::small_field(ui, "Inspiration rule", None, None, |ui| {
                     let combo = egui::ComboBox::from_id_salt("campaign_inspiration")
                         .icon(design::combo_icon)
-                        .width(ui.available_width().min(320.0))
+                        .width(ui.available_width())
                         .selected_text(selected)
                         .show_ui(ui, |ui| {
                             for rule in &rules {
@@ -8084,6 +8174,19 @@ mod tests {
             roster_summary(&d.setup, &Snapshot::load(&campaign, &[]).unwrap().catalogue),
             "1 party · Changed"
         );
+        // iter-26-B FL2: the members in a group's form: each with its count, also one, joined
+        // by commas, so ` · ` separates facts only; a renamed member names its base.
+        let wolf = stat_creature(dir.path(), "Wolf", 11);
+        d.add(wolf, false);
+        d.add(wolf, false);
+        d.add(id, false);
+        d.add(wolf, false);
+        slot_override(&mut d, 4, "{name: Alpha}");
+        assert_eq!(
+            roster_summary(&d.setup, &Snapshot::load(&campaign, &[]).unwrap().catalogue),
+            "1 party · 1 × Alpha (as Wolf), 1 × Rival, 2 × Wolf · Changed"
+        );
+        d.setup.roster.truncate(1);
         slot_override(&mut d, 0, "{side: party}");
         let editor = Encounters {
             active: Some(campaign.clone()),
