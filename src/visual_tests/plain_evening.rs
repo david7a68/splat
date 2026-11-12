@@ -100,8 +100,9 @@ const ADD_COMMAND: &str = "devenv shell -- audit-freeze add";
 const SCENARIO: &str = "plain-evening";
 const WIDE: (f32, f32) = (1200.0, 800.0);
 const NARROW: (f32, f32) = (960.0, 640.0);
-/// Section 2.5 numbers its rows 1 to 22.
-const CONTRACT_ROWS: std::ops::RangeInclusive<u32> = 1..=26;
+/// Section 2.5 numbers its rows 1 to 31; the rows between 24 and 30 come with the pull requests
+/// of the same batch that land before R3b.
+const CONTRACT_ROWS: std::ops::RangeInclusive<u32> = 1..=31;
 /// What the test folder becomes in a run's `splat_run_source_path`.
 const WORLD: &str = "<world>";
 const SAME: &str = "the same as at the start";
@@ -1914,50 +1915,50 @@ mod allowed_classes {
             name: "P4 c: an act shows or hides only `Effect`'s words",
             fits: |d, _| effect::act_words(d),
         },
-        // R3b, rows 25 and 26 (by the lead's ruling after app round 2).
+        // R3b, rows 30 and 31 (by the lead's ruling after app round 2).
         Class {
-            row: 25,
+            row: 30,
             name: "R3b a: Next turn gives up `N`, its right edge kept",
             fits: run_header::next_turn,
         },
         Class {
-            row: 25,
+            row: 30,
             name: "R3b b: `N` gone inside the old Next turn",
             fits: run_header::key_gone,
         },
         Class {
-            row: 25,
+            row: 30,
             name: "R3b c: an item of the header's line up to Next turn's edge, right by its narrowing",
             fits: run_header::shifted,
         },
         Class {
-            row: 25,
+            row: 30,
             name: "R3b d: the turn's heading wider to its right",
             fits: run_header::heading,
         },
         Class {
-            row: 25,
+            row: 30,
             name: "R3b e: the turn's name shows more of its words where it was",
             fits: run_header::name_form,
         },
         Class {
-            row: 26,
+            row: 31,
             name: "R3b f: a tile's bare digit becomes `Ctrl+<digit>` on its line and right edge",
             fits: run_header::tile_digit,
         },
         Class {
-            row: 26,
+            row: 31,
             name: "R3b g: an act shows or hides only tiles' digits with their `Ctrl+` forms",
             fits: |d, _| run_header::act_words(d),
         },
     ];
 
-    /// R3b, by the lead's ruling after app round 2. Row 25, X49, at 960x640 with Lookup closed:
+    /// R3b, by the lead's ruling after app round 2. Row 30, X49, at 960x640 with Lookup closed:
     /// where the current turn's name is cut and shows more words without it, Next turn gives
     /// up its `N` key letter. Next turn keeps its right edge and narrows by exactly that letter
     /// and its gap; its icon and words and `Add to fight` move right by exactly that; the
     /// heading keeps its place and grows to its right, clear of `Add to fight`, with more of the
-    /// participant's own name. Row 26, X54: a stat block tile's bare key digit becomes
+    /// participant's own name. Row 31, X54: a stat block tile's bare key digit becomes
     /// `Ctrl+<digit>` on its line and right edge, in the side panel. Nothing else moves,
     /// narrows, goes or is cut. Each class proves itself from the whole evidence of its view.
     mod run_header {
@@ -1985,7 +1986,7 @@ mod allowed_classes {
             d.screen.starts_with("run-")
         }
 
-        /// Row 25's views: 960x640, with Lookup closed (a hover's view names no Lookup).
+        /// Row 30's views: 960x640, with Lookup closed (a hover's view names no Lookup).
         fn small_closed(d: &Difference) -> bool {
             run_view(d) && d.view.starts_with("960x640") && !d.view.contains("Lookup open")
         }
@@ -2003,7 +2004,7 @@ mod allowed_classes {
             (d.what.as_str(), d.change.as_str()) == (what, change)
         }
 
-        /// What one view of row 25 must show, all of it: Next turn narrowed from its left by
+        /// What one view of row 30 must show, all of it: Next turn narrowed from its left by
         /// exactly the gone `N` and its gap; `Add to fight` right by exactly that; the heading
         /// wider to its right and clear of `Add to fight`.
         struct Evidence {
@@ -4758,7 +4759,7 @@ mod allowed_classes {
                 row.difference
             );
         }
-        // R3b's classes, rows 25 and 26: each passes on its own evidence, and refuses a Next
+        // R3b's classes, rows 30 and 31: each passes on its own evidence, and refuses a Next
         // turn that moved its right edge, an item that moved further or down, a name cut
         // shorter, a digit without its `Ctrl+` form or in another place, and another word.
         let view = |what: &str, change: &str, name: &str, detail: &str| Difference {
@@ -4807,10 +4808,10 @@ mod allowed_classes {
         };
         let header: Vec<_> = [&next, &key, &add, &heading, &old, &new]
             .into_iter()
-            .map(|d| r3b(25, d))
-            .chain([r3b(26, &digit), r3b(26, &ctrl)])
+            .map(|d| r3b(30, d))
+            .chain([r3b(31, &digit), r3b(31, &ctrl)])
             .collect();
-        for row in header.iter().chain([&r3b(26, &act)]) {
+        for row in header.iter().chain([&r3b(31, &act)]) {
             assert!(
                 class_of(row, &header).is_some(),
                 "R3b refuses {}",
@@ -4901,11 +4902,11 @@ mod allowed_classes {
             ..act.clone()
         };
         let with = |extra: &Difference| {
-            let mut rows: Vec<_> = header.iter().filter(|row| row.row == 25).cloned().collect();
+            let mut rows: Vec<_> = header.iter().filter(|row| row.row == 30).cloned().collect();
             rows.retain(|row| {
                 row.difference.name != extra.name || row.difference.change != extra.change
             });
-            rows.push(r3b(25, extra));
+            rows.push(r3b(30, extra));
             rows
         };
         // Next turn and `Add to fight` by one amount, but not the key letter's: 30 px.
@@ -4923,7 +4924,7 @@ mod allowed_classes {
         );
         let mut wider = with(&wide_next);
         wider.retain(|row| row.difference.name != wide_add.name);
-        wider.push(r3b(25, &wide_add));
+        wider.push(r3b(30, &wide_add));
         let at_1200: Vec<_> = header
             .iter()
             .map(|row| AllowedRow {
@@ -4935,20 +4936,20 @@ mod allowed_classes {
             })
             .collect();
         for (fault, rows) in [
-            (r3b(25, &narrow), with(&narrow)),
-            (r3b(25, &wide_next), wider.clone()),
-            (r3b(25, &wide_add), wider.clone()),
-            (r3b(25, &key), vec![r3b(25, &next), r3b(25, &key)]),
-            (r3b(25, &round_text), header.clone()),
-            (r3b(25, &far), with(&far)),
-            (r3b(25, &huge), with(&huge)),
-            (r3b(25, &wrong), with(&wrong)),
+            (r3b(30, &narrow), with(&narrow)),
+            (r3b(30, &wide_next), wider.clone()),
+            (r3b(30, &wide_add), wider.clone()),
+            (r3b(30, &key), vec![r3b(30, &next), r3b(30, &key)]),
+            (r3b(30, &round_text), header.clone()),
+            (r3b(30, &far), with(&far)),
+            (r3b(30, &huge), with(&huge)),
+            (r3b(30, &wrong), with(&wrong)),
             (
-                r3b(26, &initiative),
-                vec![r3b(26, &initiative), r3b(26, &initiative_key)],
+                r3b(31, &initiative),
+                vec![r3b(31, &initiative), r3b(31, &initiative_key)],
             ),
-            (r3b(26, &n_act), vec![]),
-            (r3b(25, &n_act), vec![]),
+            (r3b(31, &n_act), vec![]),
+            (r3b(30, &n_act), vec![]),
             (at_1200[0].clone(), at_1200.clone()),
             (at_1200[3].clone(), at_1200.clone()),
         ] {
@@ -4959,23 +4960,23 @@ mod allowed_classes {
             );
         }
         for (fault, rows) in [
-            (r3b(25, &edge), vec![r3b(25, &edge), r3b(25, &key)]),
-            (r3b(25, &further), header.clone()),
-            (r3b(25, &down), header.clone()),
-            (r3b(25, &row_below), header.clone()),
-            (r3b(25, &shorter), header.clone()),
-            (r3b(25, &dock_gone), header.clone()),
-            (r3b(25, &thrown), header.clone()),
-            (r3b(25, &round), header.clone()),
-            (r3b(25, &add), vec![r3b(25, &add), r3b(25, &next)]),
+            (r3b(30, &edge), vec![r3b(30, &edge), r3b(30, &key)]),
+            (r3b(30, &further), header.clone()),
+            (r3b(30, &down), header.clone()),
+            (r3b(30, &row_below), header.clone()),
+            (r3b(30, &shorter), header.clone()),
+            (r3b(30, &dock_gone), header.clone()),
+            (r3b(30, &thrown), header.clone()),
+            (r3b(30, &round), header.clone()),
+            (r3b(30, &add), vec![r3b(30, &add), r3b(30, &next)]),
             (
-                r3b(26, &other_digit),
-                vec![r3b(26, &digit), r3b(26, &other_digit)],
+                r3b(31, &other_digit),
+                vec![r3b(31, &digit), r3b(31, &other_digit)],
             ),
-            (r3b(26, &lower), vec![r3b(26, &digit), r3b(26, &lower)]),
-            (r3b(26, &digit), vec![r3b(26, &digit)]),
-            (r3b(25, &other_word), vec![]),
-            (r3b(26, &lone_digit), vec![]),
+            (r3b(31, &lower), vec![r3b(31, &digit), r3b(31, &lower)]),
+            (r3b(31, &digit), vec![r3b(31, &digit)]),
+            (r3b(30, &other_word), vec![]),
+            (r3b(31, &lone_digit), vec![]),
         ] {
             assert!(
                 class_of(&fault, &rows).is_none(),

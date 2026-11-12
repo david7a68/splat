@@ -2,8 +2,8 @@
   "about": "G7's allowed differences from reference.json. Each row names its row of docs/design/session-cycle.md section 2.5 and one difference, whole, as the G7 failure prints it. A row that matches nothing fails. Add rows only for a change that section 2.5 lists.",
   "rows": [
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X54): an action tile's key hint says Ctrl+<digit> in place of the bare digit, on its line, with its right edge",
+      "row": 31,
+      "why": "Row 31 (by the lead's ruling after app round 2, X54): an action tile's key hint says Ctrl+<digit> in place of the bare digit, on its line, with its right edge",
       "difference": {
         "screen": "act 53",
         "view": "",
@@ -14,8 +14,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X54): an action tile's key hint says Ctrl+<digit> in place of the bare digit, on its line, with its right edge",
+      "row": 31,
+      "why": "Row 31 (by the lead's ruling after app round 2, X54): an action tile's key hint says Ctrl+<digit> in place of the bare digit, on its line, with its right edge",
       "difference": {
         "screen": "act 54",
         "view": "",
@@ -26,8 +26,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X54): an action tile's key hint says Ctrl+<digit> in place of the bare digit, on its line, with its right edge",
+      "row": 31,
+      "why": "Row 31 (by the lead's ruling after app round 2, X54): an action tile's key hint says Ctrl+<digit> in place of the bare digit, on its line, with its right edge",
       "difference": {
         "screen": "act 55",
         "view": "",
@@ -38,8 +38,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X54): an action tile's key hint says Ctrl+<digit> in place of the bare digit, on its line, with its right edge",
+      "row": 31,
+      "why": "Row 31 (by the lead's ruling after app round 2, X54): an action tile's key hint says Ctrl+<digit> in place of the bare digit, on its line, with its right edge",
       "difference": {
         "screen": "act 56",
         "view": "",
@@ -50,8 +50,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X54): an action tile's key hint says Ctrl+<digit> in place of the bare digit, on its line, with its right edge",
+      "row": 31,
+      "why": "Row 31 (by the lead's ruling after app round 2, X54): an action tile's key hint says Ctrl+<digit> in place of the bare digit, on its line, with its right edge",
       "difference": {
         "screen": "act 59",
         "view": "",
@@ -62,8 +62,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X54): an action tile's key hint says Ctrl+<digit> in place of the bare digit, on its line, with its right edge",
+      "row": 31,
+      "why": "Row 31 (by the lead's ruling after app round 2, X54): an action tile's key hint says Ctrl+<digit> in place of the bare digit, on its line, with its right edge",
       "difference": {
         "screen": "act 60",
         "view": "",
@@ -74,8 +74,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-arrivals",
         "view": "960x640 Lookup closed",
@@ -86,8 +86,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-arrivals",
         "view": "960x640 Lookup closed",
@@ -98,8 +98,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-arrivals",
         "view": "960x640 Lookup closed",
@@ -110,8 +110,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-arrivals",
         "view": "960x640 Lookup closed",
@@ -122,8 +122,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-arrivals",
         "view": "960x640 Lookup closed",
@@ -134,8 +134,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-arrivals",
         "view": "960x640 Lookup closed",
@@ -146,8 +146,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-arrivals",
         "view": "960x640 Lookup closed",
@@ -158,8 +158,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-arrivals",
         "view": "960x640 Lookup closed",
@@ -170,8 +170,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-arrivals",
         "view": "960x640 Lookup closed",
@@ -182,8 +182,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-arrivals",
         "view": "960x640 Lookup closed",
@@ -194,8 +194,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-arrivals",
         "view": "960x640 Lookup closed",
@@ -206,8 +206,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-arrivals",
         "view": "960x640 Lookup closed",
@@ -218,8 +218,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-conditions",
         "view": "960x640 Lookup closed",
@@ -230,8 +230,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-conditions",
         "view": "960x640 Lookup closed",
@@ -242,8 +242,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-conditions",
         "view": "960x640 Lookup closed",
@@ -254,8 +254,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-conditions",
         "view": "960x640 Lookup closed",
@@ -266,8 +266,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-conditions",
         "view": "960x640 Lookup closed",
@@ -278,8 +278,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-conditions",
         "view": "960x640 Lookup closed",
@@ -290,8 +290,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-conditions",
         "view": "960x640 Lookup closed",
@@ -302,8 +302,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-conditions",
         "view": "960x640 Lookup closed",
@@ -314,8 +314,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-conditions",
         "view": "960x640 Lookup closed",
@@ -326,8 +326,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-conditions",
         "view": "960x640 Lookup closed",
@@ -338,8 +338,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-conditions",
         "view": "960x640 Lookup closed",
@@ -350,8 +350,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-conditions",
         "view": "960x640 Lookup closed",
@@ -362,8 +362,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-conditions: Conditions hover",
         "view": "960x640",
@@ -374,8 +374,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-conditions: Conditions hover",
         "view": "960x640",
@@ -386,8 +386,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-conditions: Conditions hover",
         "view": "960x640",
@@ -398,8 +398,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-conditions: Conditions hover",
         "view": "960x640",
@@ -410,8 +410,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-conditions: Conditions hover",
         "view": "960x640",
@@ -422,8 +422,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-conditions: Conditions hover",
         "view": "960x640",
@@ -434,8 +434,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-conditions: Conditions hover",
         "view": "960x640",
@@ -446,8 +446,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-conditions: Conditions hover",
         "view": "960x640",
@@ -458,8 +458,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-conditions: Conditions hover",
         "view": "960x640",
@@ -470,8 +470,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-conditions: Conditions hover",
         "view": "960x640",
@@ -482,8 +482,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-conditions: Conditions hover",
         "view": "960x640",
@@ -494,8 +494,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-conditions: Conditions hover",
         "view": "960x640",
@@ -506,8 +506,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-keys",
         "view": "960x640 Lookup closed",
@@ -518,8 +518,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-keys",
         "view": "960x640 Lookup closed",
@@ -530,8 +530,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-keys",
         "view": "960x640 Lookup closed",
@@ -542,8 +542,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-keys",
         "view": "960x640 Lookup closed",
@@ -554,8 +554,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-keys",
         "view": "960x640 Lookup closed",
@@ -566,8 +566,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-keys",
         "view": "960x640 Lookup closed",
@@ -578,8 +578,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-keys",
         "view": "960x640 Lookup closed",
@@ -590,8 +590,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-keys",
         "view": "960x640 Lookup closed",
@@ -602,8 +602,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-keys",
         "view": "960x640 Lookup closed",
@@ -614,8 +614,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-keys",
         "view": "960x640 Lookup closed",
@@ -626,8 +626,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-keys",
         "view": "960x640 Lookup closed",
@@ -638,8 +638,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-keys",
         "view": "960x640 Lookup closed",
@@ -650,8 +650,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-keys",
         "view": "960x640 Lookup closed",
@@ -662,8 +662,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-keys",
         "view": "960x640 Lookup closed",
@@ -674,8 +674,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-next-round",
         "view": "960x640 Lookup closed",
@@ -686,8 +686,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-next-round",
         "view": "960x640 Lookup closed",
@@ -698,8 +698,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-next-round",
         "view": "960x640 Lookup closed",
@@ -710,8 +710,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-next-round",
         "view": "960x640 Lookup closed",
@@ -722,8 +722,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-next-round",
         "view": "960x640 Lookup closed",
@@ -734,8 +734,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-next-round",
         "view": "960x640 Lookup closed",
@@ -746,8 +746,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-next-round",
         "view": "960x640 Lookup closed",
@@ -758,8 +758,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-next-round",
         "view": "960x640 Lookup closed",
@@ -770,8 +770,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-next-round",
         "view": "960x640 Lookup closed",
@@ -782,8 +782,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-next-round",
         "view": "960x640 Lookup closed",
@@ -794,8 +794,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-next-round",
         "view": "960x640 Lookup closed",
@@ -806,8 +806,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-next-round",
         "view": "960x640 Lookup closed",
@@ -818,8 +818,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-next-round",
         "view": "960x640 Lookup closed",
@@ -830,8 +830,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-next-round",
         "view": "960x640 Lookup closed",
@@ -842,8 +842,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-next-round: Undo hover",
         "view": "960x640",
@@ -854,8 +854,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-next-round: Undo hover",
         "view": "960x640",
@@ -866,8 +866,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-next-round: Undo hover",
         "view": "960x640",
@@ -878,8 +878,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-next-round: Undo hover",
         "view": "960x640",
@@ -890,8 +890,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-next-round: Undo hover",
         "view": "960x640",
@@ -902,8 +902,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-next-round: Undo hover",
         "view": "960x640",
@@ -914,8 +914,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-next-round: Undo hover",
         "view": "960x640",
@@ -926,8 +926,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-next-round: Undo hover",
         "view": "960x640",
@@ -938,8 +938,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-next-round: Undo hover",
         "view": "960x640",
@@ -950,8 +950,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-next-round: Undo hover",
         "view": "960x640",
@@ -962,8 +962,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-next-round: Undo hover",
         "view": "960x640",
@@ -974,8 +974,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-next-round: Undo hover",
         "view": "960x640",
@@ -986,8 +986,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-next-round: Undo hover",
         "view": "960x640",
@@ -998,8 +998,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-next-round: Undo hover",
         "view": "960x640",
@@ -1010,8 +1010,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X54): an action tile's key hint says Ctrl+<digit> in place of the bare digit, on its line, with its right edge",
+      "row": 31,
+      "why": "Row 31 (by the lead's ruling after app round 2, X54): an action tile's key hint says Ctrl+<digit> in place of the bare digit, on its line, with its right edge",
       "difference": {
         "screen": "run-twelve",
         "view": "1200x800 Lookup closed",
@@ -1022,8 +1022,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X54): an action tile's key hint says Ctrl+<digit> in place of the bare digit, on its line, with its right edge",
+      "row": 31,
+      "why": "Row 31 (by the lead's ruling after app round 2, X54): an action tile's key hint says Ctrl+<digit> in place of the bare digit, on its line, with its right edge",
       "difference": {
         "screen": "run-twelve",
         "view": "1200x800 Lookup closed",
@@ -1034,8 +1034,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-twelve",
         "view": "960x640 Lookup closed",
@@ -1046,8 +1046,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-twelve",
         "view": "960x640 Lookup closed",
@@ -1058,8 +1058,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-twelve",
         "view": "960x640 Lookup closed",
@@ -1070,8 +1070,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-twelve",
         "view": "960x640 Lookup closed",
@@ -1082,8 +1082,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-twelve",
         "view": "960x640 Lookup closed",
@@ -1094,8 +1094,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-twelve",
         "view": "960x640 Lookup closed",
@@ -1106,8 +1106,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X54): an action tile's key hint says Ctrl+<digit> in place of the bare digit, on its line, with its right edge",
+      "row": 31,
+      "why": "Row 31 (by the lead's ruling after app round 2, X54): an action tile's key hint says Ctrl+<digit> in place of the bare digit, on its line, with its right edge",
       "difference": {
         "screen": "run-twelve",
         "view": "960x640 Lookup closed",
@@ -1118,8 +1118,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-twelve",
         "view": "960x640 Lookup closed",
@@ -1130,8 +1130,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-twelve",
         "view": "960x640 Lookup closed",
@@ -1142,8 +1142,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-twelve",
         "view": "960x640 Lookup closed",
@@ -1154,8 +1154,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-twelve",
         "view": "960x640 Lookup closed",
@@ -1166,8 +1166,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-twelve",
         "view": "960x640 Lookup closed",
@@ -1178,8 +1178,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-twelve",
         "view": "960x640 Lookup closed",
@@ -1190,8 +1190,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-twelve",
         "view": "960x640 Lookup closed",
@@ -1202,8 +1202,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X54): an action tile's key hint says Ctrl+<digit> in place of the bare digit, on its line, with its right edge",
+      "row": 31,
+      "why": "Row 31 (by the lead's ruling after app round 2, X54): an action tile's key hint says Ctrl+<digit> in place of the bare digit, on its line, with its right edge",
       "difference": {
         "screen": "run-twelve",
         "view": "960x640 Lookup closed",
@@ -1214,8 +1214,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-twelve",
         "view": "960x640 Lookup closed",
@@ -1226,8 +1226,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-twelve: Brannoch selected",
         "view": "960x640",
@@ -1238,8 +1238,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-twelve: Brannoch selected",
         "view": "960x640",
@@ -1250,8 +1250,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-twelve: Brannoch selected",
         "view": "960x640",
@@ -1262,8 +1262,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-twelve: Brannoch selected",
         "view": "960x640",
@@ -1274,8 +1274,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-twelve: Brannoch selected",
         "view": "960x640",
@@ -1286,8 +1286,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-twelve: Brannoch selected",
         "view": "960x640",
@@ -1298,8 +1298,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-twelve: Brannoch selected",
         "view": "960x640",
@@ -1310,8 +1310,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-twelve: Brannoch selected",
         "view": "960x640",
@@ -1322,8 +1322,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-twelve: Brannoch selected",
         "view": "960x640",
@@ -1334,8 +1334,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-twelve: Brannoch selected",
         "view": "960x640",
@@ -1346,8 +1346,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-twelve: Brannoch selected",
         "view": "960x640",
@@ -1358,8 +1358,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-twelve: Brannoch selected",
         "view": "960x640",
@@ -1370,8 +1370,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X54): an action tile's key hint says Ctrl+<digit> in place of the bare digit, on its line, with its right edge",
+      "row": 31,
+      "why": "Row 31 (by the lead's ruling after app round 2, X54): an action tile's key hint says Ctrl+<digit> in place of the bare digit, on its line, with its right edge",
       "difference": {
         "screen": "run-twelve: row hover",
         "view": "1200x800",
@@ -1382,8 +1382,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X54): an action tile's key hint says Ctrl+<digit> in place of the bare digit, on its line, with its right edge",
+      "row": 31,
+      "why": "Row 31 (by the lead's ruling after app round 2, X54): an action tile's key hint says Ctrl+<digit> in place of the bare digit, on its line, with its right edge",
       "difference": {
         "screen": "run-twelve: row hover",
         "view": "1200x800",
@@ -1394,8 +1394,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-twelve: row hover",
         "view": "960x640",
@@ -1406,8 +1406,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-twelve: row hover",
         "view": "960x640",
@@ -1418,8 +1418,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-twelve: row hover",
         "view": "960x640",
@@ -1430,8 +1430,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-twelve: row hover",
         "view": "960x640",
@@ -1442,8 +1442,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-twelve: row hover",
         "view": "960x640",
@@ -1454,8 +1454,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-twelve: row hover",
         "view": "960x640",
@@ -1466,8 +1466,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X54): an action tile's key hint says Ctrl+<digit> in place of the bare digit, on its line, with its right edge",
+      "row": 31,
+      "why": "Row 31 (by the lead's ruling after app round 2, X54): an action tile's key hint says Ctrl+<digit> in place of the bare digit, on its line, with its right edge",
       "difference": {
         "screen": "run-twelve: row hover",
         "view": "960x640",
@@ -1478,8 +1478,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-twelve: row hover",
         "view": "960x640",
@@ -1490,8 +1490,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-twelve: row hover",
         "view": "960x640",
@@ -1502,8 +1502,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-twelve: row hover",
         "view": "960x640",
@@ -1514,8 +1514,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-twelve: row hover",
         "view": "960x640",
@@ -1526,8 +1526,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-twelve: row hover",
         "view": "960x640",
@@ -1538,8 +1538,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-twelve: row hover",
         "view": "960x640",
@@ -1550,8 +1550,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-twelve: row hover",
         "view": "960x640",
@@ -1562,8 +1562,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X54): an action tile's key hint says Ctrl+<digit> in place of the bare digit, on its line, with its right edge",
+      "row": 31,
+      "why": "Row 31 (by the lead's ruling after app round 2, X54): an action tile's key hint says Ctrl+<digit> in place of the bare digit, on its line, with its right edge",
       "difference": {
         "screen": "run-twelve: row hover",
         "view": "960x640",
@@ -1574,8 +1574,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
+      "row": 30,
+      "why": "Row 30 (by the lead's ruling after app round 2, X49): where the turn's name is cut and would show more words, Next turn gives up its N; Next turn keeps its right edge, the header's line left of it moves right by that narrowing, and the name shows more of its words where it was",
       "difference": {
         "screen": "run-twelve: row hover",
         "view": "960x640",

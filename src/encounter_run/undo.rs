@@ -431,9 +431,9 @@ pub(super) fn read(saved: &RawValue, now: &State) -> Option<History> {
         if memory > MEMORY_BYTES {
             break;
         }
+        history.3.push(step.target());
         history.1.push(std::mem::take(&mut step.label));
         history.2.push(step.from_sheet);
-        history.3.push(step.target());
         let state = step.before(after)?;
         history.0.push(state);
         weights = rows;
