@@ -130,8 +130,8 @@ impl Run {
                     "E"
                 };
                 let running = self.state.phase == super::Phase::Running;
-                let effect_word = Self::effect_action(effect_key).natural_width(ui) + gap;
-                let effect_icon = Density::Read.control() + gap;
+                let effect_word = Self::effect_action(effect_key).natural_width(ui);
+                let effect_icon = Density::Read.control();
                 let mut effect = EffectFit::None;
                 // Left to right: the name, then exactly `L`, then its controls. The controls'
                 // width only limits how long a name may be.
@@ -142,40 +142,14 @@ impl Run {
                             .on_hover_text(line);
                     }
                     let room = ui.available_width() - controls - design::L;
-                    // `Effect` shows with its word while the name keeps its size and its
-                    // words; with its icon while the name keeps both beside the icon; and
-                    // not at all otherwise.
-                    let keeps = |room: f32| {
-                        dock_name_shown(ui, &p.name, room) == (Type::Heading, p.name.clone())
-                    };
-                    if running && keeps(room - effect_word) {
-                        effect = EffectFit::Word;
-                    } else if running && keeps(room - effect_icon) {
-                        effect = EffectFit::Icon;
-                    }
-                    let room = room
-                        - match effect {
-                            EffectFit::Word => effect_word,
-                            EffectFit::Icon => effect_icon,
-                            EffectFit::None => 0.0,
-                        };
                     let (role, shown) = dock_name_shown(ui, &p.name, room);
+                    // A name that lost a word or its size has no room to give.
+                    let whole = role == Type::Heading && shown == p.name;
                     let response = ui
                         .label(role.rich(ui, shown).color(c.text))
                         .on_hover_text(&p.name);
                     design::named(ui, &response, &format!("Selected: {}", p.name));
                     ui.add_space(design::L - gap);
-                    let pressed = match effect {
-                        EffectFit::Word => Self::effect_action(effect_key).show(ui).clicked(),
-                        EffectFit::Icon => {
-                            design::icon_button(ui, icons::PIN, "Effect: words for this row")
-                                .clicked()
-                        }
-                        EffectFit::None => false,
-                    };
-                    if pressed {
-                        open_effect = true;
-                    }
                     if Action::quiet("Conditions")
                         .density(Density::Read)
                         .name("Conditions for this participant")
@@ -220,6 +194,29 @@ impl Run {
                     .clicked()
                     {
                         command = Some(Command::Presence(index, !p.present));
+                    }
+                    // `Effect` takes only the room that is spare after Absent, `L` after it, so
+                    // no control of the line moves and the name keeps all its room: with its
+                    // word, else with its icon, else not at all.
+                    let spare = ui.available_width() - design::L + gap;
+                    if running && whole && spare >= effect_word {
+                        effect = EffectFit::Word;
+                    } else if running && whole && spare >= effect_icon {
+                        effect = EffectFit::Icon;
+                    }
+                    if effect != EffectFit::None {
+                        ui.add_space(design::L - gap);
+                    }
+                    let pressed = match effect {
+                        EffectFit::Word => Self::effect_action(effect_key).show(ui).clicked(),
+                        EffectFit::Icon => {
+                            design::icon_button(ui, icons::PIN, "Effect: words for this row")
+                                .clicked()
+                        }
+                        EffectFit::None => false,
+                    };
+                    if pressed {
+                        open_effect = true;
                     }
                 });
                 in_dock = effect != EffectFit::None;
@@ -456,8 +453,8 @@ mod tests {
             })
     }
 
-    /// F2: `Effect` shows with its word while the selected name keeps its size and its words,
-    /// with its icon while the name keeps both beside the icon, and not at all otherwise.
+    /// F2: `Effect` takes only the room after Absent: with its word, else its icon, else not
+    /// at all. The name and today's controls keep their places at every width.
     #[test]
     fn effect_gives_up_its_place_before_the_name_loses_a_word_or_its_size() {
         let name = "Oren Thistlewick of the Southern Road";
@@ -484,6 +481,14 @@ mod tests {
                     "{width} {form}: the name keeps its size and its words"
                 );
             }
+            // Conditions, Conc and Absent stay where they are without Effect: in Setup.
+            let absent = harness.get_by_label("Absent").rect();
+            let (setup, harness) = dock(name, width as f32);
+            setup.borrow_mut().state.phase = crate::encounter_run::Phase::Setup;
+            let mut harness = harness;
+            harness.run_steps(2);
+            assert!(harness.query_by_label("Effect: words for this row").is_none());
+            assert_eq!(harness.get_by_label("Absent").rect(), absent, "{width} {form}");
         }
         assert_eq!(
             forms,
