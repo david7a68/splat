@@ -4596,6 +4596,15 @@ pub fn package_rename(d: &mut Driver<'_>) {
         !d.has_containing("Links now say") && !d.has("Undo link update"),
         "After Undo link update, its result message goes away",
     );
+    // Round 26 FD6: the links say the old name again, so the rename's offer comes back in the
+    // result's place. B's update stays on disk (checked above).
+    d.settle();
+    d.observe(
+        "iter-26-L-FD6-offer",
+        d.has_containing("Change links from “Cinder Wolf” to “Ash Wolf”.")
+            && d.has("Update 1 link"),
+        "After Undo link update, the rename's offer comes back",
+    );
     let without = reader_frame(d, "Ash Wolf");
     d.observe(
         "iter-24-L-FC4-links",
@@ -4604,7 +4613,27 @@ pub fn package_rename(d: &mut Driver<'_>) {
             "The tabs, the file line and the title keep their y with the link offer {with_offer:?}, its result {with_result:?} and neither {without:?}"
         ),
     );
-    d.state("renamed-creature-link-update-undone", Sizes::All);
+    d.assert_state_matches(
+        "renamed-creature-link-update-undone",
+        "renamed-creature-offers-link-update",
+    );
+    // Round 26 FD6: the offer after an Undo is a new action. It writes again, and its own Undo
+    // gives the offer back again. B's update stays throughout.
+    d.click("Update 1 link");
+    d.wait_for_text("Undo link update");
+    let again = fs::read_to_string(&path).unwrap().contains("[[Ash Wolf]]");
+    d.click("Undo link update");
+    d.settle();
+    d.observe(
+        "iter-26-L-FD6-again",
+        again
+            && fs::read_to_string(&path).unwrap().contains("[[Cinder Wolf]]")
+            && fs::read_to_string(&wraith)
+                .unwrap()
+                .contains(&format!("[[{LAMP}]]"))
+            && d.has("Update 1 link"),
+        format!("The offer writes again ({again}), its Undo restores A's links and gives the offer back, and B's links stay"),
+    );
 
     // Astra re-check: a stale offer goes. B is renamed (offer), then renamed again to a name
     // another entry has: the earlier offer ends with that save, though the new rename gives no

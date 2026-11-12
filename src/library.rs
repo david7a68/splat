@@ -1871,10 +1871,13 @@ struct LinkOffer {
 
 /// A link update's result and its Undo. It belongs to the renamed entry and shows only in its
 /// reader: while another entry is open it is hidden, not ended. It ends on its owner's next link
-/// update or saved edit, its Undo, or a change on disk to a file it wrote.
+/// update or saved edit, its Undo, or a change on disk to a file it wrote. Its Undo gives back
+/// the rename's offer, so the links that say the old name again can be changed again (round 26
+/// FD6).
 struct LinkResult {
     owner: Uuid,
     edits: crate::content_workspace::ContentEdits,
+    old: String,
     new: String,
 }
 
@@ -4162,45 +4165,71 @@ impl Library {
                             },
                         },
                     );
-                    egui::Popup::menu(&response).show(|ui| {
-                        ui.set_max_width(design::READER_MEASURE);
-                        egui::ScrollArea::vertical()
-                            .max_height(design::XXL * 6.0)
-                            .show(ui, |ui| {
-                                for message in loaded
-                                    .diagnostics
-                                    .iter()
-                                    .map(|message| message.text.as_str())
-                                    .chain(stopped_reading.as_ref().map(|(_, text)| text.as_str()))
-                                {
-                                    ui.add(
-                                        egui::Label::new(
-                                            Type::Small.rich(ui, message).color(colors().muted),
+                    // Round 26 FB1: the menu is as wide as its content, up to the reader
+                    // measure, and ends at the count's right edge, so it stays clear of the
+                    // splitter between the list and the reader.
+                    egui::Popup::menu(&response)
+                        .align(egui::RectAlign::BOTTOM_END)
+                        .show(|ui| {
+                            let link_label = |at: usize, count: usize| {
+                                format!(
+                                    "{}: {}",
+                                    loaded.file_label(&loaded.notes[at]),
+                                    design::count(count, "broken link", "broken links")
+                                )
+                            };
+                            let font = Type::Small.font(ui);
+                            let natural = |text: &str| {
+                                ui.painter()
+                                    .layout_no_wrap(text.to_owned(), font.clone(), colors().text)
+                                    .size()
+                                    .x
+                            };
+                            let width = loaded
+                                .diagnostics
+                                .iter()
+                                .map(|message| natural(&message.text))
+                                .chain(stopped_reading.as_ref().map(|(_, text)| natural(text)))
+                                .chain(
+                                    broken
+                                        .iter()
+                                        .map(|&(at, count)| natural(&link_label(at, count))),
+                                )
+                                .fold(design::XL, f32::max)
+                                .min(design::READER_MEASURE)
+                                .ceil();
+                            ui.set_width(width);
+                            egui::ScrollArea::vertical()
+                                .max_height(design::XXL * 6.0)
+                                .show(ui, |ui| {
+                                    for message in loaded
+                                        .diagnostics
+                                        .iter()
+                                        .map(|message| message.text.as_str())
+                                        .chain(
+                                            stopped_reading.as_ref().map(|(_, text)| text.as_str()),
                                         )
-                                        .wrap(),
-                                    );
-                                }
-                                // As in World, each entry with a broken link opens from here.
-                                design::locked(ui, draft_reason, |ui| {
-                                    for &(at, count) in &broken {
-                                        let note = &loaded.notes[at];
-                                        if design::small_link(
-                                            ui,
-                                            &format!(
-                                                "{}: {}",
-                                                loaded.file_label(note),
-                                                design::count(count, "broken link", "broken links")
-                                            ),
-                                        )
-                                        .clicked()
-                                        {
-                                            open_broken = Some(at);
-                                            ui.close();
-                                        }
+                                    {
+                                        ui.add(
+                                            egui::Label::new(
+                                                Type::Small.rich(ui, message).color(colors().muted),
+                                            )
+                                            .wrap(),
+                                        );
                                     }
+                                    // As in World, each entry with a broken link opens from here.
+                                    design::locked(ui, draft_reason, |ui| {
+                                        for &(at, count) in &broken {
+                                            if design::small_link(ui, &link_label(at, count))
+                                                .clicked()
+                                            {
+                                                open_broken = Some(at);
+                                                ui.close();
+                                            }
+                                        }
+                                    });
                                 });
-                            });
-                    });
+                        });
                 }
             },
         );
@@ -4995,12 +5024,17 @@ impl Library {
                         Err(LINKS_NOT_CHANGED.into())
                     }
                 });
-                let LinkOffer { owner, new, .. } = offer;
+                let LinkOffer { owner, old, new } = offer;
                 match written {
                     Ok(edits) => {
                         // The owner's new update ends its earlier result.
                         self.link_edits.retain(|result| result.owner != owner);
-                        self.link_edits.push(LinkResult { owner, edits, new });
+                        self.link_edits.push(LinkResult {
+                            owner,
+                            edits,
+                            old,
+                            new,
+                        });
                         self.stale = true;
                         self.content_changed =
                             campaigns.active_campaign().map(|campaign| campaign.path);
@@ -5019,7 +5053,13 @@ impl Library {
             // wrote, so another entry's link update stays.
             match self.link_edits[at].edits.undo() {
                 Ok(()) => {
-                    self.link_edits.remove(at);
+                    // The links say the old name again: the rename's offer comes back in the
+                    // result's place. The reload checks it again, as every offer.
+                    let LinkResult {
+                        owner, old, new, ..
+                    } = self.link_edits.remove(at);
+                    self.renamed_links.retain(|offer| offer.owner != owner);
+                    self.renamed_links.push(LinkOffer { owner, old, new });
                     self.stale = true;
                     self.content_changed =
                         campaigns.active_campaign().map(|campaign| campaign.path);
@@ -10549,6 +10589,7 @@ mod tests {
         library.link_edits = vec![LinkResult {
             owner: Uuid::nil(),
             edits: edit("links"),
+            old: "Cinder Wolf".into(),
             new: "Ash Wolf".into(),
         }];
         library.forget_changed_undos();

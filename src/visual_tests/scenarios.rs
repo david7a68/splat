@@ -1414,7 +1414,37 @@ pub mod library_navigation {
         );
         d.click("1 file needs fixing");
         d.expect("Rules/Ash Exposure.md: 1 broken link");
-        d.state("broken-link-menu", Sizes::Default);
+        d.state_prepared("broken-link-menu", Sizes::All, |d| {
+            if !d.has("Rules/Ash Exposure.md: 1 broken link") {
+                d.click("1 file needs fixing");
+            }
+            // Round 26 FB1: the menu is as wide as its content and ends at the count's right
+            // edge, so its frame and its link keep `S` from every splitter and scroll bar.
+            // Must stay true: the whole link label fits on one line in the menu.
+            let count = d.place_of("1 file needs fixing");
+            let link = d.place_of("Rules/Ash Exposure.md: 1 broken link");
+            let words = d.painted_rect_in("Rules/Ash Exposure.md: 1 broken link", egui::Rect::EVERYTHING);
+            let frame = link.and_then(|link| d.painted_frame_around(link));
+            let lanes = d.chrome_lanes();
+            let clear = |rect: egui::Rect| {
+                lanes.iter().all(|lane| {
+                    !lane.y_range().intersects(rect.y_range())
+                        || !lane.x_range().intersects(rect.expand(crate::design::S).x_range())
+                })
+            };
+            d.observe(
+                "iter-26-L-FB1",
+                count.zip(frame).zip(words).is_some_and(|((count, frame), words)| {
+                    clear(frame)
+                        && (frame.right() - count.right()).abs() <= crate::design::S
+                        && frame.width() <= crate::design::READER_MEASURE + 2.0 * crate::design::M
+                        && words.height() <= crate::design::Type::Small.line() + 0.5
+                }),
+                format!(
+                    "The menu {frame:?} ends at the count {count:?}, its words {words:?} keep one line, and it is clear of the lanes {lanes:?}"
+                ),
+            );
+        });
         d.click("Rules/Ash Exposure.md: 1 broken link");
         d.wait_for_text("Captain Varra knows the road through the ash fields.");
         d.observe(
