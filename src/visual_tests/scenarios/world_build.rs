@@ -2624,7 +2624,11 @@ pub fn round_trip(d: &mut Driver<'_>) {
             let statuses: Vec<_> = d
                 .nodes()
                 .into_iter()
-                .filter(|node| node.role == Role::Label && node.name.contains("World repair draft"))
+                // iter-26-B FF2: a rail draft status is a link to its draft.
+                .filter(|node| {
+                    matches!(node.role, Role::Label | Role::Link)
+                        && node.name.contains("World repair draft")
+                })
                 .collect();
             !statuses.is_empty()
                 && statuses.len() == 1
@@ -6761,9 +6765,31 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     d.type_into("Replacement creature", "Guard");
     d.expect("Use Guard");
     d.state("deleted-package-entry-choose-replacement", Sizes::All);
+    // iter-26-B FA2: the replacement's result sits in the editor's footer, so the roster's
+    // heading and its first row keep their y with the result, at 960, 1200 and 1920.
+    let roster_tops = |d: &mut Driver<'_>| {
+        [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                // The heading, or the roster's tab where the panes are tabs.
+                ["ROSTER", "1. "].map(|start| {
+                    d.nodes()
+                        .into_iter()
+                        .find(|node| node.name.to_uppercase().starts_with(start))
+                        .map(|node| node.rect.top().round())
+                })
+            })
+        })
+    };
+    let before_result = roster_tops(d);
     d.click("Use Guard");
     d.expect("as\u{a0}Guard");
     d.expect("Undo replacement");
+    let with_result = roster_tops(d);
+    d.observe(
+        "iter-26-B-FA2",
+        before_result.iter().flatten().all(Option::is_some) && with_result == before_result,
+        format!("Roster heading and row 1 tops before {before_result:?} and with the result {with_result:?}"),
+    );
     assert!(!d.has_containing("Not found. Its package entry was deleted."));
     assert!(
         !d.has_containing("have no creature")
@@ -6892,17 +6918,8 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
         (top("7. Cinder Wolf") - top("6. Cinder Wolf") - pitch).abs() < 1.0
             && (top("8. Ember Cultist") - top("7. Cinder Wolf") - pitch).abs() < 1.0
     });
-    d.click("More actions for Bridge Ambush");
-    d.click("Start another fight");
-    d.expect("Begin combat");
-    d.state("replacement-starts-another-fight", Sizes::All);
-    close_run(d);
-    go_encounters(d);
-    d.click("Undo replacement");
-    d.expect("Not found. Its package entry was deleted.");
-    d.expect_same("Undo replacement restores the original missing-creature rows and warning.");
-    // iter-24-B FC1: Save would refuse this changed draft (2 rows have no creature), so it says
-    // Invalid, not Unsaved, and Save and Ctrl+S are blocked: the file keeps its bytes.
+    // iter-26-B FC3: Undo before any Save gives back the file's rows, so the draft is clean:
+    // `No changes`, no Discard, and the campaign switch is open.
     let bridge = d
         .app_mut()
         .campaigns
@@ -6911,6 +6928,32 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
         .path
         .join("Encounters/Bridge Ambush.md");
     let on_disk = fs::read(&bridge).unwrap();
+    let replaced_dirty = d.app_mut().encounters.draft_dirty();
+    d.click("Undo replacement");
+    d.expect("Not found. Its package entry was deleted.");
+    let clean = !d.app_mut().encounters.draft_dirty();
+    d.observe(
+        "iter-26-B-FC3",
+        replaced_dirty
+            && clean
+            && d.visible_text("No changes")
+            && !d.visible_text("Invalid")
+            && !d.visible_text("Unsaved")
+            && !d.has("Discard")
+            && fs::read(&bridge).unwrap() == on_disk,
+        format!(
+            "Undo replacement before Save: dirty before {replaced_dirty}, clean after {clean}; the save row says No changes"
+        ),
+    );
+    // The same roster in the same state as before the replacement: one roster, one state.
+    d.assert_state_matches(
+        "deleted-package-entry-replacement-undone",
+        "deleted-package-blocks-new-fight",
+    );
+    // iter-24-B FC1: Save would refuse a changed draft with these rows (2 rows have no
+    // creature), so it says Invalid, not Unsaved, and Save and Ctrl+S are blocked: the file keeps
+    // its bytes. Putting the name back makes the draft clean again.
+    d.type_into("Encounter name", " at dusk");
     let invalid =
         d.visible_text("Invalid") && !d.visible_text("Unsaved") && d.is_disabled(SAVE_ENCOUNTER);
     d.press_ctrl(Key::S);
@@ -6922,7 +6965,38 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
             && d.has_containing("2 Cinder Wolf rows have no creature."),
         format!("Invalid before Ctrl+S: {invalid}; the file and the state stay after it"),
     );
-    d.state("deleted-package-entry-replacement-undone", Sizes::All);
+    d.replace_text_in("Encounter name", "Bridge Ambush");
+    d.expect("No changes");
+    // A start saves the replacement, and that Save ends the replacement's result and Undo: after
+    // it, Undo would give a draft that differs from the file while it looks like it.
+    d.click_beside(
+        "6. Cinder Wolf",
+        "Options: starting HP, temporary HP, initiative group and changes",
+    );
+    d.expect("Replacement creature");
+    d.replace_text_in("Replacement creature", "Guard");
+    d.click("Use Guard");
+    d.expect("Undo replacement");
+    d.click("More actions for Bridge Ambush");
+    d.click("Start another fight");
+    d.expect("Begin combat");
+    d.state("replacement-starts-another-fight", Sizes::All);
+    close_run(d);
+    go_encounters(d);
+    d.expect("as\u{a0}Guard");
+    let written = fs::read_to_string(&bridge).unwrap();
+    let (changed, undo, clean) = (
+        written != String::from_utf8_lossy(&on_disk),
+        d.has("Undo replacement"),
+        d.visible_text("Saved") && !d.visible_text("Unsaved") && !d.visible_text("Invalid"),
+    );
+    d.observe(
+        "iter-26-B-FC3-save-ends",
+        changed && !undo && clean,
+        format!(
+            "The start saved the replacement ({changed}), and the Save ended its result and Undo (Undo shown: {undo}; Saved and clean: {clean})"
+        ),
+    );
     go_library(d);
     search_library(d, "Ash Exposure");
     d.click_starting("Ash Exposure · ");

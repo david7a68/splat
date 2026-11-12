@@ -206,7 +206,9 @@ state. An on toggle uses `selected`, its word and an icon or check, without acce
 action that loses something. Keep Delete and Remove in row menus.
 
 A save row keeps its state and quiet `Discard` at the left and `Save` at the right. A draft that Save's own check
-refuses says `Invalid`, changed or not: validity comes before whether the text changed. Other clean rows say `No
+refuses says `Invalid`, changed or not: validity comes before whether the text changed. An encounter draft is
+the exception: it says `Invalid` only while it has changes, because a clean one has nothing for Save to refuse, and
+its rows' warnings name the faults. Other clean rows say `No
 changes`, unless Save is enabled to repair something the file holds: then the state names the write with the warning
 icon (`Save replaces the unread choice on line 23 with these settings`), and `Ctrl+S` saves exactly when the button
 can. `No changes to save.` belongs only to blocked Save's hover text and accessible description. A save row
@@ -1001,6 +1003,15 @@ want; hover keeps the marker key.
 
 ## The encounter ledger and editor
 
+The Encounters page, the encounter editor, the group editor, the creature pane and Rules and runs each have one message
+footer (`Footer`). The page's footer holds its kept results with their Undo (a discarded draft, a deleted run, a removed
+group or encounter), newest first, then its errors, then the run folder's warning. The editor's footer holds the
+discard's result, a group taken from the encounter, the roster replacement's result, then Save's reason (the last
+refusal, an empty group, the unread rows' warning). The group editor's footer holds the discard's result and the
+newest member result, then Save's reason, then the file's warnings. Rules and runs draws its footer below the form, at
+the tab's bottom: the discard's result, the reasons (an error, the unread choice's warning with its file line), then
+the folder move's warning. Faults that belong to one row, member or field stay there.
+
 Encounters uses one column, at most `LIST_MEASURE` (880 px), with IN PROGRESS, READY TO RUN, GROUPS and
 HISTORY in that order. Groups and History start closed when they have rows. The list keeps the scroll bar's lane
 whether or not the bar shows, so opening Groups moves no row action; the creature results and the encounter
@@ -1021,7 +1032,10 @@ run icon, also when its first part is a warning (`▷ ⚠ Changed on disk · …
 2, with only saved time on line two. One paused run uses Paused run in the rail, then the fitted encounter
 name; full hover and accessible text includes name and state. It resumes in one click. With several, Paused
 runs and `2 fights` open Encounters. An open run keeps Run and its round or Setup. Rail details never end on a
-separator; a short rail shows Ended or Paused with full state on hover.
+separator; a short rail shows Ended or Paused with full state on hover. Every unsaved-draft status in the rail
+(`Encounter draft`, `Group draft`, `Creature draft`, `Run settings draft`, `Library draft`, `World draft`, `World repair
+draft`, `Campaign draft`) is a `status_link`, as `Unsaved NPC` is: it opens the page, and the Campaign tab, that holds the
+draft.
 
 **Encounter difficulty** (F1) is passive words at the end of a line that exists: `Low`, `Moderate`, `High` or
 `Above High`, from `difficulty::Scale::weigh`, the one computation. It compares the XP of every creature against
@@ -1043,7 +1057,9 @@ back only where no file has its path. A plan line that linked it gets no row, an
 hover `Not found in this campaign`.
 
 History opens read-only final state and log in place, outside the live-run slot. Final state has one name column, as
-wide as the longest name up to half the room, so every HP starts at one x. Rows put outcome before ended
+wide as the longest name up to half the room, so every HP starts at one x. HP and temporary HP follow in columns of
+their own, each as wide as its widest value, kept where a row has none; Absent and the conditions start after them and
+wrap inside the last column. Each row's values sit on its name's baseline. Rows put outcome before ended
 state and retain outcome and round. The detail header shows only Read-only and end reason. History rows keep
 Open or Close and their menu; Start and Edit stay in that menu.
 
@@ -1070,7 +1086,7 @@ check that finds the fault records its kind, and the message takes its tone from
 words. A roster fault names the row as the DM sees it, `Row 2 (Cinder Wolf): …`, never its stored key or a
 stored field name. Replace… uses the shared creature row with CR, HP, AC and Use. Replace all matching rows defaults to
 on and retains names and starting values, with one Undo. In a group's editor, Use says `Replaced Unknown creature
-with Ember Cultist.` with `Undo replacement` on the member result line that Remove uses; the newest member result owns
+with Ember Cultist.` with `Undo replacement` in the editor's footer, where Remove's result goes; the newest member result owns
 that line. Undo puts back only the creature, so later edits stay; a move or a removal ends it.
 
 Roster rows have name and detail, quiet Edit and a row menu. Sides sit on the second line and change in Edit.
@@ -1086,7 +1102,7 @@ the full change link, removing source before base creature. Remove a source whol
 hover keeps the full detail. The ` · ` before the link has the same blank on each side as the separators between
 the stats: no item spacing is added around it.
 
-An unread roster row stays visible by participant name and line, with its file line (path, Edit in Obsidian and Show file). The roster also shows that row in its place among the rows that read: its name with no number (the run will not add it) and `⚠ Line 20 not read` in the warning tone, so two rows of one name stay apart. The warning sits below the editor header and its save row, so a fault does not move the name field, Save encounter or Start fight. The last warning ends with what to do, and its file line starts at its words. Start fight is blocked until the DM repairs or explicitly removes that row. Plan starts use the same check. A resumed setup keeps the warning and blocks Begin combat while its source has unread rows. Saved run participants stay intact.
+An unread roster row stays visible by participant name and line, with its file line (path, Edit in Obsidian and Show file). The roster also shows that row in its place among the rows that read: its name with no number (the run will not add it) and `⚠ Line 20 not read` in the warning tone, so two rows of one name stay apart. The warning is a reason in the editor's footer, so a fault that comes or goes moves no roster row, field, Save encounter or Start fight. The last warning ends with what to do, and its file line starts at its words. Start fight is blocked until the DM repairs or explicitly removes that row. Plan starts use the same check. A resumed setup keeps the warning and blocks Begin combat while its source has unread rows. Saved run participants stay intact.
 
 The encounter editor keeps roster rows, loot and notes within `LIST_MEASURE`, including the scroll content
 and row actions. Add participants sits directly beside that column; extra space stays at the far right.
@@ -1098,7 +1114,9 @@ the start of one row with `Save run settings` at its end; without room, the stat
 
 The editor header keeps Save and Start on line one; the name field gives up width. While Save would refuse a
 changed draft (a roster row with no creature, or the refusal of the last Save while it still holds), the save row
-says `Invalid` and Save and Ctrl+S are blocked with the cause; otherwise a changed draft says `Unsaved`. Save encounter
+says `Invalid` and Save and Ctrl+S are blocked with the cause; otherwise a changed draft says `Unsaved`. A draft whose
+rows match the file again, as after `Undo replacement`, says `No changes`. A Save, also the one a start makes, ends the
+replacement's result and its Undo. Save encounter
 also gives the open fight from that encounter its new read-aloud text and notes for Prep; its roster and combat
 state stay, and other changes wait for the next fight. An unfinished encounter
 offers Resume, moves Start another fight into its menu and keeps run state in the save row. Blocked Start
@@ -1120,7 +1138,7 @@ edge: the name on line one, then the save row with the state and Discard at its 
 column's edge. A reason without room on the save row takes its own line below it. The group name field and Belongs to end at one edge: the column's edge, or
 `FORM_WIDTH` when that comes first by at least `XL`. So the edges are the same or clearly apart. In an
 encounter's group frame, the name starts at the frame's left edge and ends at `FORM_WIDTH` or before its
-actions. Removing any member shows `Removed <name>.` and `Undo remove member` on a result line. Undo restores the full member at its place and keeps other draft edits.
+actions. Removing any member shows `Removed <name>.` and `Undo remove member` in the editor's footer. Undo restores the full member at its place and keeps other draft edits.
 
 A plan group editor stays beside the note when `LIST_MEASURE`, an `L` gap and `READER_MEASURE` fit.
 Bound the editor at `LIST_MEASURE`, anchored left. Below that width, the note stays behind its tab. Plan summaries start directly
@@ -1141,7 +1159,7 @@ Add, and the Loot field end at one x. `Roll on a table` follows the Loot field.
 Groups has one level of headings: For any encounter, each encounter, then Encounter deleted. Rows keep Edit
 and a Remove menu action with Undo. Planned groups use Remove from tonight and Undo remove. Remove isolated
 plan links; retain words inside sentences. Moving an encounter group to any encounter says `<name> moves to
-any encounter when you save.`, with Undo move until save. Move to… lists named encounters only. Make available
+any encounter when you save.`, with Undo move until save, in the info tone in the editor's footer: nothing is written until Save. Move to… lists named encounters only. Make available
 to any encounter is the direct way to remove ownership; keep it distinct from Delete group, with Undo before
 saving.
 

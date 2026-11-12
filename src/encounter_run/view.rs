@@ -3097,7 +3097,8 @@ impl Run {
         {
             format!("For {name}")
         } else if group.encounter.is_some() && group.encounter != self.source {
-            "For a deleted encounter".to_owned()
+            // FB10: the Groups list's words, short enough to sit beside the name.
+            crate::encounters::ENCOUNTER_DELETED.to_owned()
         } else {
             String::new()
         };
