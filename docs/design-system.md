@@ -1828,12 +1828,14 @@ Scenes fold first, so that the next fight's row and its primary action stay in v
 when closed: when the closed rows, with the scenes, do not fit the pane, every scene folds. An opened row
 folds the scenes only when its details would push the next fight's primary action out of view and the scenes
 sit above that fight; the Scene field, its suggestions and the plan's results never fold them, and the fold
-does not change while the Scene field has focus. With the scenes folded, the Tonight line says `N scenes`, a
+does not change while the Scene field has focus. The fold measures the room the rows have with an empty
+message footer, so a result coming or going never folds or unfolds the scenes. With the scenes folded, the Tonight line says `N scenes`, a
 link with the expanded state after the section caret of a folded section (`icons::NEXT`, `icons::DOWN` when
 open, `muted`), `L` after its count. It takes no line of its own, so no other row moves or narrows because
 scenes exist. `N scenes` opens them in place and closes them again; the choice holds
-for the session. A scene act's words show under its row, or under the Scene field, or in the plan's message footer
-when that place is not drawn.
+for the session. A scene act's result or refusal has one place, decided each time it is shown
+(`shown_at`): under its row while the scenes show, under the Scene field while it is open, else in the plan's
+message footer. Words never go to a place that is not drawn.
 `Scene` (`icons::CHECK_SQUARE`) is a line of the Add strip's More menu only: the fit of the strip is measured
 without it, so no visible action moves, and a strip with no More has no `Scene`. It opens one `add_field` at
 the end of the plan, `Plan a scene: words, a person or a place`, with at most four World entries as

@@ -818,14 +818,19 @@ first. Each row counts as it is when closed: when the closed rows, with the scen
 scene folds. An opened row folds the scenes only when its details would push the next fight's primary action
 out of view and the scenes sit above that fight; in a plan with no fight still to come (an older session), when
 the rows with its details do not fit, as before. The Scene field, its suggestions and the plan's results never
-fold the scenes, and the fold does not change while the Scene field has focus. With scenes folded, the
+fold the scenes, and the fold does not change while the Scene field has focus: the fold measures the room the
+rows have with an empty message footer. With scenes folded, the
 **Tonight** line says `N scenes` after its count, a link after the section caret of a folded section (as
 `HISTORY` has on the Encounters page, V14), in room that is spare there today. The
 fold takes no line of its own, so with scenes folded every other row has the place and the width that it has
 in a note with no scene. `N scenes` opens them in place and closes them again; the DM's choice holds
 for that session. Nothing else folds: a plan whose rows do not fit without scenes scrolls as today. When the
 rows fit again, the scenes show again. A stated limit: when the DM opens a row above the next fight and the
-scenes sit above that fight, the scenes still fold; the caret before `N scenes` is the DM's sign.
+scenes sit above that fight, the scenes still fold; the caret before `N scenes` is the DM's sign. A second
+stated limit: the footer takes its height from the rows' room. One line of it leaves the next fight in view in
+the plan at 960x640 (measured with one to nine rests above it), but a footer that grows toward its third of the
+pane can cover the next fight's row; the DM then sees the plan's scroll bar and scrolls the rows to reach
+`Start fight`. The scenes do not fold for it.
 
 **Cases B, C and D.** The plan has its own tab and the full page width; the row is the same. The note is
 behind its tab, so the typed route costs the tab changes.
@@ -856,7 +861,10 @@ still to come with the events of the session, as today; a done scene does not co
 ```
 
 **Undo.** `Undo scene` after the field adds one, directly under the field while it is open, so the field does
-not move for it; once the field closes, in the plan's message footer (app round 1, W8-D7). A tick is
+not move for it; once the field closes, in the plan's message footer (app round 1, W8-D7). A refused
+Undo says why in the same way: under the field while it is open, else in the footer. Each scene result has one
+place, decided as it is shown: its own (the row's place, the open field) while that place is drawn, else the
+plan's message footer. A tick is
 its own Undo: click again. Removing gives `Undo remove`. `Remove…` on an encounter gives `Undo remove
 encounter`.
 Section 4.1 says
