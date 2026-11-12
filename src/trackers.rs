@@ -4,6 +4,7 @@
 //!
 //! One owner for each fact: a definition is in its house rule note, a value and a notice are
 //! entries of `Trackers.md`, and nothing else remembers an act.
+pub mod history;
 pub mod ledger;
 pub mod view;
 
@@ -290,6 +291,8 @@ impl Definition {
 pub struct Tracker {
     pub key: String,
     pub def: Result<Definition, String>,
+    /// The house rule note that defines it.
+    pub note: Uuid,
 }
 
 /// A day mark of a note in play, or why its definition cannot be used.
@@ -297,6 +300,8 @@ pub struct Tracker {
 pub struct Dated {
     pub key: String,
     pub def: Result<DayMark, String>,
+    /// The house rule note that defines it.
+    pub note: Uuid,
 }
 
 /// The house rule notes in play and what they define. Read again when the content changes.
@@ -308,8 +313,9 @@ pub struct Rules {
     pub trackers: Vec<Tracker>,
     /// Every day mark of those notes, in the notes' order.
     pub day_marks: Vec<Dated>,
-    /// A note in play that cannot be used, with the reason.
-    pub problems: Vec<String>,
+    /// A note in play that cannot be used, with the reason, and the note when it is known: a note
+    /// in play whose file is gone or moved keeps its problem in its own reader.
+    pub problems: Vec<(Option<Uuid>, String)>,
     /// `Campaign.md` or a note in play that cannot be read, with the reason. It is no empty
     /// list: no value shows and no act is made until the file can be read.
     pub unreadable: Option<String>,
@@ -356,19 +362,6 @@ impl Rules {
     /// A day mark's name for reading, or its key when the mark cannot be used.
     pub fn day_title<'a>(&'a self, key: &'a str) -> &'a str {
         self.day_mark(key).map_or(key, DayMark::title)
-    }
-
-    /// A member that cannot be used, with its key and why.
-    pub fn member_problems(&self) -> impl Iterator<Item = String> + '_ {
-        let trackers = self
-            .trackers
-            .iter()
-            .filter_map(|t| t.def.as_ref().err().map(|e| format!("{}: {e}", t.key)));
-        let days = self
-            .day_marks
-            .iter()
-            .filter_map(|m| m.def.as_ref().err().map(|e| format!("{}: {e}", m.key)));
-        trackers.chain(days)
     }
 
     /// A table's name for reading: its heading, never its key.
@@ -424,7 +417,7 @@ pub fn rules_on_disk(campaign: &Campaign, manifest: &str, index: &ContentIndex) 
         Ok(ids) => ids,
         Err(error) if error.starts_with("splat_in_play") => {
             return Rules {
-                problems: vec![error],
+                problems: vec![(None, error)],
                 ..Rules::default()
             };
         }
@@ -436,8 +429,11 @@ pub fn rules_on_disk(campaign: &Campaign, manifest: &str, index: &ContentIndex) 
     let mut notes = Vec::new();
     for id in ids {
         let Some(item) = index.items.iter().find(|item| item.entry.id == id) else {
-            notes.push(Err(format!(
-                "A house rule note in play is not found: {id}. Switch it off in Campaign → Rules and runs."
+            notes.push(Err((
+                id,
+                format!(
+                    "A house rule note in play is not found: {id}. Switch it off in Campaign → Rules and runs."
+                ),
             )));
             continue;
         };
@@ -453,10 +449,12 @@ pub fn rules_on_disk(campaign: &Campaign, manifest: &str, index: &ContentIndex) 
         match std::fs::read_to_string(campaign.path.join(path)) {
             Ok(text) => match splat::content::Entry::parse(path, &text) {
                 Ok(entry) if entry.id == id => notes.push(Ok(entry)),
-                Ok(_) => notes.push(Err(moved)),
+                Ok(_) => notes.push(Err((id, moved))),
                 Err(error) => return Rules::cannot_read(format!("{path} cannot be read: {error}")),
             },
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => notes.push(Err(moved)),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                notes.push(Err((id, moved)))
+            }
             Err(error) => return Rules::cannot_read(format!("{path} cannot be read: {error}.")),
         }
     }
@@ -474,7 +472,10 @@ impl Rules {
 
 /// Read the notes in play, or why each cannot be used. Each member is checked alone, so a bad
 /// one is reported and the others still work.
-fn read_rules(tables: Arc<Sources>, notes: Vec<Result<splat::content::Entry, String>>) -> Rules {
+fn read_rules(
+    tables: Arc<Sources>,
+    notes: Vec<Result<splat::content::Entry, (Uuid, String)>>,
+) -> Rules {
     let mut rules = Rules {
         tables: Some(tables),
         ..Rules::default()
@@ -483,16 +484,19 @@ fn read_rules(tables: Arc<Sources>, notes: Vec<Result<splat::content::Entry, Str
     for note in notes {
         let entry = match note {
             Ok(entry) => entry,
-            Err(problem) => {
-                rules.problems.push(problem);
+            Err((id, problem)) => {
+                rules.problems.push((Some(id), problem));
                 continue;
             }
         };
         let entry = &entry;
         if !is_house_rule_note(entry) {
-            rules.problems.push(format!(
-                "{} is in play, but it is not a house rule note.",
-                entry.name
+            rules.problems.push((
+                Some(entry.id),
+                format!(
+                    "{} is in play, but it is not a house rule note.",
+                    entry.name
+                ),
             ));
             continue;
         }
@@ -515,12 +519,14 @@ fn read_rules(tables: Arc<Sources>, notes: Vec<Result<splat::content::Entry, Str
                 key,
                 def: serde_yaml_ng::from_value::<Definition>(value)
                     .map_err(|error| error.to_string()),
+                note: entry.id,
             });
         }
         for (key, value) in members("day_marks") {
             rules.day_marks.push(Dated {
                 key,
                 def: serde_yaml_ng::from_value::<DayMark>(value).map_err(|error| error.to_string()),
+                note: entry.id,
             });
         }
     }
@@ -766,6 +772,18 @@ impl State {
         self.due.iter().find(|notice| notice.id == *id)
     }
 
+    /// Did a change raise this notice, open or ended? A day notice comes from the day count,
+    /// which no entry of the ledger moves.
+    fn raised(&self, id: &NoticeRef) -> bool {
+        match id {
+            NoticeRef::Value { change, at } => self
+                .raised
+                .get(change)
+                .is_some_and(|marks| marks.contains(at)),
+            NoticeRef::Day { .. } => true,
+        }
+    }
+
     fn count_unknown(&mut self, key: &str) {
         match self.unknown.iter_mut().find(|(known, _)| known == key) {
             Some((_, count)) => *count += 1,
@@ -958,18 +976,21 @@ fn place_name(rules: &Rules, key: &str, instance: Option<&str>) -> String {
 /// The entries that one Undo removes: the newest entry of this session with the others of its
 /// press, and every entry about a notice that those changes raised.
 pub fn undo_target(ledger: &Ledger, session: Option<Uuid>) -> Vec<Entry> {
-    let Some(newest) = ledger
+    ledger
         .changes
         .iter()
         .rev()
         .find(|entry| entry.session == session)
-    else {
-        return Vec::new();
-    };
+        .map_or_else(Vec::new, |newest| with_dependents(ledger, newest))
+}
+
+/// The entries that leave with this one, by Undo or by `Remove`: the others of its press, and
+/// every entry about a notice that those changes raised, in the ledger's order.
+fn with_dependents(ledger: &Ledger, seed: &Entry) -> Vec<Entry> {
     let mut out: Vec<&Entry> = ledger
         .changes
         .iter()
-        .filter(|entry| entry.same_press(newest))
+        .filter(|entry| entry.same_press(seed))
         .collect();
     loop {
         let more: Vec<&Entry> = ledger
@@ -1350,6 +1371,15 @@ pub struct Trackers {
     /// `Undo add` of this event.
     pub wants_undo_add: Option<String>,
     pub(crate) view: view::ViewState,
+    /// Each tracker's history, by key: worked out when the ledger or the definitions change.
+    history: HashMap<String, Vec<history::Row>>,
+    /// The problems list, each with the house rule note it belongs to: worked out with the
+    /// history.
+    problems: Vec<(Option<Uuid>, String)>,
+    /// The last `Remove` in a tracker's history, for its one Undo, by its entries' IDs.
+    removed: Option<history::Removed>,
+    /// Why the last `Remove` or its Undo wrote nothing, for the reader of that note.
+    history_reason: Option<(Uuid, Unrecorded)>,
 }
 
 impl Trackers {
@@ -1447,6 +1477,7 @@ impl Trackers {
         }
         // The file changed: the words of the last act that wrote nothing are old.
         self.reason = None;
+        self.history_reason = None;
         match ledger::parse_bytes(bytes.as_deref()) {
             Ok(ledger) => {
                 self.ledger = ledger;
@@ -1480,9 +1511,11 @@ impl Trackers {
         &self.newest
     }
 
-    /// Work the values, the notices and the newest act out of the ledger again.
+    /// Work the values, the notices, the histories and the newest act out of the ledger again.
     fn settle(&mut self) {
         self.state = replay(&self.rules, &self.ledger, &self.today);
+        self.history = history::rows(&self.rules, &self.ledger, &self.state);
+        self.problems = history::problems(&self.rules, &self.state);
         self.settle_result();
     }
 
@@ -1497,10 +1530,15 @@ impl Trackers {
         });
     }
 
-    /// An act built from the values and notices of the file on disk.
+    /// An act built from the values and notices of the file on disk. Why it wrote nothing
+    /// shows on the view's result line.
     fn act(&mut self, build: impl FnOnce(&Rules, &State) -> Result<Op, String>) {
         let today = self.today.clone();
-        self.commit(|rules, ledger| build(rules, &replay(rules, ledger, &today)));
+        if let Err(Some(reason)) =
+            self.commit(|rules, ledger| build(rules, &replay(rules, ledger, &today)))
+        {
+            self.reason = Some(reason);
+        }
     }
 
     /// The definitions in play as the files hold them now.
@@ -1518,10 +1556,14 @@ impl Trackers {
 
     /// Every act passes here. It reads the definitions in play and the ledger as the files hold
     /// them now. When a definition changed since the view drew it, or cannot be read, the act
-    /// writes nothing and says so, and the view draws what the files hold.
-    fn commit(&mut self, build: impl FnOnce(&Rules, &Ledger) -> Result<Op, String>) {
+    /// writes nothing and says why, and the view draws what the files hold. `Err(None)`: the
+    /// ledger cannot be read, which the view and the reader say in place of the history.
+    fn commit(
+        &mut self,
+        build: impl FnOnce(&Rules, &Ledger) -> Result<Op, String>,
+    ) -> Result<(), Option<Unrecorded>> {
         let Some(campaign) = self.campaign.clone() else {
-            return;
+            return Err(None);
         };
         let rules = self.rules_now();
         let changed = !rules.same_definitions(&self.rules);
@@ -1534,36 +1576,44 @@ impl Trackers {
             }
             build(&rules, ledger)
         });
-        self.finish(result);
+        let done = self.finish(result);
         if changed {
             self.rules = rules;
             self.settle();
         }
+        done
     }
 
-    fn finish(&mut self, result: Result<(Vec<u8>, Ledger, Op), Fault>) {
+    fn finish(
+        &mut self,
+        result: Result<(Vec<u8>, Ledger, Op), Fault>,
+    ) -> Result<(), Option<Unrecorded>> {
         match result {
             Ok((bytes, ledger, _)) => {
                 self.baseline = Some(Some(bytes));
                 self.ledger = ledger;
                 self.unreadable = None;
                 self.settle();
+                // The newest act's words replace why an older one wrote nothing.
                 self.reason = None;
+                self.history_reason = None;
+                Ok(())
             }
             Err(Fault::NotRead(error)) => {
                 self.unreadable = Some(error);
                 self.baseline = None;
+                Err(None)
             }
             Err(Fault::Refused(reason)) => {
                 // The view draws again from the file, and says why nothing was recorded.
                 self.read_disk();
-                self.reason = Some(Unrecorded::Refused(reason));
+                Err(Some(Unrecorded::Refused(reason)))
             }
             // Nothing waits: the value, the Due rows and the result line show what the file
             // holds now, also an edit made in Obsidian a moment before.
             Err(Fault::NotSaved(error)) => {
                 self.read_disk();
-                self.reason = Some(Unrecorded::NotSaved(error));
+                Err(Some(Unrecorded::NotSaved(error)))
             }
         }
     }
@@ -1691,13 +1741,15 @@ impl Trackers {
     /// `Undo: <label>`: these entries, exactly as the line named them, leave the ledger.
     pub fn undo(&mut self, expected: &[Entry]) {
         let session = self.played;
-        self.commit(|_, ledger| {
+        if let Err(Some(reason)) = self.commit(|_, ledger| {
             let target = undo_target(ledger, session);
             if target != expected {
                 return Err("The ledger changed on disk. Nothing was undone.".into());
             }
             Ok(Op::Remove(target))
-        });
+        }) {
+            self.reason = Some(reason);
+        }
     }
 }
 
@@ -2149,6 +2201,52 @@ mod tests {
         let rows: Vec<_> = t.state.due.iter().map(|n| n.id.clone()).collect();
         assert_eq!(rows[0], day("month_end", 62), "{rows:?}");
 
+        // Remove in a day mark's history, from the note's reader. The change that a Done applied
+        // takes its Done with it, so the day is due again; Undo remove puts both back.
+        let note = t.rules.day_marks[0].note;
+        let applied = t.history["favor"].last().unwrap().entry.clone();
+        assert!(t.history["month_end"].iter().any(|row| row.entry.done
+            && row.entry.press.is_some()
+            && row.entry.press == applied.press));
+        race.trackers.remove(note, &applied);
+        let t = &race.trackers;
+        assert_eq!(
+            t.removed.as_ref().map(|r| r.words.as_str()),
+            Some("Removed: End of month, Day 32 done.")
+        );
+        assert_eq!(
+            t.state
+                .due
+                .iter()
+                .find(|n| n.key == "month_end")
+                .map(|n| n.days.clone()),
+            Some(vec![32, 62])
+        );
+        assert_eq!(value(&race, "favor", None), 0);
+        race.trackers.undo_remove();
+        assert_eq!(value(&race, "favor", None), 1);
+        assert_eq!(race.trackers.state.due[0].id, day("month_end", 62));
+        // A day notice comes from the day count, so no entry raises it: the wagon's Done goes
+        // with the seal it applied and the seal's notice, and Day 3 is due again.
+        let t = &race.trackers;
+        let wagon = t.history["wagon"]
+            .iter()
+            .find(|row| row.entry.done)
+            .unwrap()
+            .entry
+            .clone();
+        race.trackers.remove(note, &wagon);
+        let t = &race.trackers;
+        assert_eq!(t.history_reason, None);
+        assert_eq!(value(&race, "seals", Some("Party")), 0);
+        assert!(t.state.due.iter().any(|n| n.id == day("wagon", 3)));
+        assert!(!t.state.due.iter().any(|n| n.key == "seals"));
+        race.trackers.undo_remove();
+        assert_eq!(value(&race, "seals", Some("Party")), 1);
+        let t = &race.trackers;
+        let rows: Vec<_> = t.state.due.iter().map(|n| n.id.clone()).collect();
+        assert_eq!(rows[0], day("month_end", 62), "{rows:?}");
+
         // The clock goes back by the Timeline's Undo: a day no longer reached goes away, and a
         // Done stays in the ledger. Forward again, a done day stays done.
         race.timeline.undo_add(&travel);
@@ -2376,12 +2474,14 @@ mod tests {
             trackers: vec![
                 Tracker {
                     key: "teams".into(),
+                    note: Uuid::nil(),
                     def: Ok(def(
                         "name: Teams\nper: [Party]\nquick:\n- label: Score\n  changes: [{tracker: rivals, add: 1}]\n- label: Score for Old Guard\n  changes: [{tracker: rivals, for: Old Guard, add: 1}]",
                     )),
                 },
                 Tracker {
                     key: "rivals".into(),
+                    note: Uuid::nil(),
                     def: Ok(def("name: Rivals\nper: [Old Guard]")),
                 },
             ],
@@ -2454,7 +2554,7 @@ mod tests {
     }
 
     #[test]
-    fn undo_of_a_change_that_raised_a_notice_takes_the_notice_and_its_entries() {
+    fn undo_and_remove_of_a_change_that_raised_a_notice_take_the_notice_and_its_entries() {
         let mut race = race();
         let t = &mut race.trackers;
         t.press("race_clock", None, "Cistern or Sands", None);
@@ -2472,6 +2572,96 @@ mod tests {
         t.undo(&target);
         assert!(t.ledger.changes.is_empty());
         assert_eq!(t.due(), 0);
+
+        // An older session: two rooms, the bell they raised, its roll and its Done.
+        let note = t.rules.trackers[0].note;
+        t.played = Some(Uuid::from_u128(1));
+        t.press("race_clock", None, "Enter room", None);
+        t.press("race_clock", None, "Enter room", None);
+        let bell = t.state.due[0].clone();
+        t.roll_notice(&bell, "wander_early");
+        t.done(&bell, &[]);
+        t.played = Some(TONIGHT);
+        t.settle();
+        let rows: Vec<&str> = t.history["race_clock"]
+            .iter()
+            .map(|row| row.words.as_str())
+            .collect();
+        assert_eq!(rows[..2], ["Enter room: +10", "Enter room: +10"]);
+        assert!(rows[2].starts_with("Wandering, 0:00 to 0:39 roll: "));
+        assert_eq!(rows[3], "Bell done.");
+        assert_eq!(t.history["race_clock"][1].value, Some(20));
+        // The first room is what the second room's crossing depends on: Remove of it would
+        // leave the roll and the Done with no notice, so it writes nothing and names them.
+        let before = file(&race);
+        let t = &mut race.trackers;
+        let first = t.history["race_clock"][0].entry.clone();
+        t.remove(note, &first);
+        assert_eq!(
+            t.history_reason,
+            Some((
+                note,
+                Unrecorded::Refused(
+                    "Wandering, 0:00 to 0:39 roll depends on this entry. Remove that first. Nothing was removed."
+                        .into()
+                )
+            ))
+        );
+        assert_eq!((file(&race), race.trackers.removed.clone()), (before, None));
+        // The crossing itself leaves with its notice's roll and Done, as Undo of it would.
+        let t = &mut race.trackers;
+        let second = t.history["race_clock"][1].entry.clone();
+        let kept = t.ledger.clone();
+        t.remove(note, &second);
+        assert_eq!(t.history_reason, None);
+        assert_eq!(
+            t.removed.as_ref().map(|r| r.words.as_str()),
+            Some("Removed: Enter room. With it: Wandering, 0:00 to 0:39 roll; Bell done.")
+        );
+        assert_eq!(t.ledger.changes, kept.changes[..1]);
+        assert_eq!(
+            (value(&race, "race_clock", None), race.trackers.due()),
+            (10, 0)
+        );
+        // A notice raised since needs the removal: its bell crosses 20 only while the room is
+        // out. Undo remove would leave its roll with no notice, so it writes nothing.
+        let t = &mut race.trackers;
+        t.press("race_clock", None, "Cistern or Sands", None);
+        let bell = t.state.due[0].clone();
+        t.roll_notice(&bell, "wander_early");
+        let before = file(&race);
+        let t = &mut race.trackers;
+        t.undo_remove();
+        assert_eq!(
+            t.history_reason,
+            Some((
+                note,
+                Unrecorded::Refused(
+                    "Wandering, 0:00 to 0:39 roll depends on the removal. Remove that first. Nothing was put back."
+                        .into()
+                )
+            ))
+        );
+        assert!(
+            t.removed.is_some(),
+            "the Undo stays for when that roll is gone"
+        );
+        assert_eq!(file(&race), before);
+
+        // A value that an edit in Obsidian forced below its `min` counts as written, and joins
+        // the problems list of its note; Splat changes nothing.
+        let path = ledger::path(&race.campaign.path);
+        let forced = "---\ntrackers_version: 1\nchanges:\n- id: c-0b51de01\n  tracker: favor\n  add: -2\n---\n";
+        fs::write(&path, forced).unwrap();
+        let t = &mut race.trackers;
+        t.read_disk();
+        assert_eq!(value(&race, "favor", None), -2);
+        assert!(
+            race.trackers
+                .problems
+                .contains(&(Some(note), "Crowd Favor is -2, below its min of 0.".into()))
+        );
+        assert_eq!(fs::read_to_string(&path).unwrap(), forced);
     }
 
     #[test]
@@ -2505,6 +2695,105 @@ mod tests {
         assert_eq!(value(&race, "favor", None), 1);
         assert_eq!(value(&race, "race_clock", None), 10, "B’s change stays");
 
+        // `Remove` on a row with another stamp, in the reader of its note. The entry it was
+        // drawn from must be on disk as it was read; its words stay in that reader, not on the
+        // view's result line.
+        let t = &mut race.trackers;
+        let note = t.rules.trackers[0].note;
+        let older = t.history["favor"][0].entry.clone();
+        assert_eq!(older.id, "c-0b51de00");
+        let text = fs::read_to_string(&path).unwrap();
+        let edited = text.replace("why: Typed in Obsidian", "why: Typed again");
+        fs::write(&path, &edited).unwrap();
+        t.remove(note, &older);
+        assert_eq!(
+            t.history_reason,
+            Some((
+                note,
+                Unrecorded::Refused("That entry changed on disk. Nothing was removed.".into())
+            ))
+        );
+        assert_eq!(t.reason, None);
+        assert_eq!(fs::read_to_string(&path).unwrap(), edited);
+        fs::write(&path, &text).unwrap();
+        // Remove A, an unrelated act B, then Undo of A: A goes back where it was, and B stays.
+        let t = &mut race.trackers;
+        t.read_disk();
+        t.remove(note, &older);
+        assert_eq!(
+            t.removed.as_ref().map(|r| r.words.as_str()),
+            Some("Removed: Typed in Obsidian.")
+        );
+        assert_eq!(value(&race, "favor", None), -1, "Splat clamps nothing");
+        let t = &mut race.trackers;
+        assert!(
+            t.problems
+                .contains(&(Some(note), "Crowd Favor is -1, below its min of 0.".into()))
+        );
+        t.press("race_clock", None, "Enter room", None);
+        let b = t.newest().to_vec();
+        t.undo_remove();
+        assert_eq!(t.removed, None);
+        assert_eq!(t.ledger.changes[0], older);
+        assert_eq!(t.ledger.changes.last(), b.last());
+        assert_eq!(value(&race, "favor", None), 1);
+        let t = &mut race.trackers;
+        t.undo(&b);
+        // An Undo whose entry changed on disk puts nothing back, says so, and ends.
+        t.remove(note, &older);
+        ledger::commit(&path, |_| {
+            Ok(Op::Append(vec![Entry {
+                add: Some(5),
+                ..older.clone()
+            }]))
+        })
+        .unwrap();
+        let outside = fs::read_to_string(&path).unwrap();
+        let t = &mut race.trackers;
+        t.read_disk();
+        t.undo_remove();
+        assert_eq!(
+            t.history_reason,
+            Some((
+                note,
+                Unrecorded::Refused("That entry changed on disk. Nothing was put back.".into())
+            ))
+        );
+        assert_eq!(
+            (t.removed.is_none(), fs::read_to_string(&path).unwrap()),
+            (true, outside)
+        );
+        fs::write(&path, &text).unwrap();
+        race.trackers.read_disk();
+        assert_eq!(value(&race, "favor", None), 1);
+        // An Undo whose place changed on disk: the entry before the removed one was edited in
+        // Obsidian. It puts nothing back, says so, and ends.
+        let t = &mut race.trackers;
+        let clock = t.history["race_clock"][0].entry.clone();
+        t.remove(note, &clock);
+        assert!(t.removed.is_some());
+        let edited = fs::read_to_string(&path)
+            .unwrap()
+            .replace("row: A healing potion.", "row: A healing potion, edited.");
+        fs::write(&path, &edited).unwrap();
+        t.read_disk();
+        t.undo_remove();
+        assert_eq!(
+            t.history_reason,
+            Some((
+                note,
+                Unrecorded::Refused(
+                    "The entry before it changed on disk. Nothing was put back.".into()
+                )
+            ))
+        );
+        assert_eq!(
+            (t.removed.is_none(), fs::read_to_string(&path).unwrap()),
+            (true, edited)
+        );
+        fs::write(&path, &text).unwrap();
+        race.trackers.read_disk();
+
         // A failed save writes nothing and keeps nothing: the file stays byte for byte, and the
         // value and the result line stay as the file gives them. The result line says why.
         let entries = race.trackers.ledger.changes.len();
@@ -2528,6 +2817,17 @@ mod tests {
         );
         assert_eq!(t.result, shown);
         assert_eq!(value(&race, "favor", None), 1);
+        // A `Remove` whose save fails records nothing, and nothing waits.
+        let t = &mut race.trackers;
+        t.remove(note, &older);
+        assert!(matches!(
+            t.history_reason,
+            Some((_, Unrecorded::NotSaved(_)))
+        ));
+        assert_eq!(
+            (t.removed.clone(), fs::read(&path).unwrap()),
+            (None, before.clone())
+        );
         // An edit in Obsidian a moment before a failed save: the view shows what the file holds.
         let outside = String::from_utf8(before.clone()).unwrap().replace(
             "  add: 2\n  why: Typed in Obsidian",
@@ -2673,8 +2973,135 @@ mod tests {
     }
 
     #[test]
+    fn an_open_history_prepares_its_rows_once_and_draws_only_those_in_view() {
+        use crate::test_support::{CachedWork, Counts};
+        use egui_kittest::{Harness, kittest::Queryable};
+        let mut race = race();
+        let note = race
+            .index
+            .items
+            .iter()
+            .find(|item| item.entry.name == "Tournament")
+            .unwrap()
+            .entry
+            .clone();
+        let mut t = std::mem::take(&mut race.trackers);
+        t.ledger.changes = (0..5000)
+            .map(|n| Entry {
+                id: format!("c-{n:08x}"),
+                tracker: Some("favor".into()),
+                add: Some(1),
+                why: Some("Crowd loves it".into()),
+                ..Entry::default()
+            })
+            .collect();
+        t.settle();
+        let mut h = Harness::builder()
+            .with_size(eframe::egui::vec2(346.0, 640.0))
+            .build_ui_state(
+                move |ui, t: &mut Trackers| {
+                    eframe::egui::ScrollArea::vertical().show(ui, |ui| history::show(ui, t, &note));
+                },
+                t,
+            );
+        crate::design::theme::install(&h.ctx);
+        let counts = |_: &mut Harness<'_, Trackers>| {
+            let (reached, _) = history::DRAWN.with(std::cell::Cell::get);
+            Counts {
+                reached,
+                work: history::PREPARED.with(std::cell::Cell::get),
+            }
+        };
+        let drawn = || history::DRAWN.with(std::cell::Cell::get).1;
+        // Folded, the section draws no row.
+        h.run_steps(3);
+        let folded = drawn();
+        h.run_steps(3);
+        assert_eq!(drawn(), folded, "a folded history draws no row");
+        let work = CachedWork::start("Open history rows", &mut h, counts);
+        h.get_by_label("CROWD FAVOR HISTORY 5,000").click();
+        h.run_steps(3);
+        let shown = h.query_all_by_label("Crowd loves it: +1").next().is_some();
+        work.warm(&mut h, shown, 0)
+            .expect("the open history shows its rows");
+        // Unchanged frames and a resize prepare no row again, and each frame draws only the
+        // rows in view: at 640 px, some 20 rows of 5,000.
+        let before = drawn();
+        work.steady(&mut h, |h| {
+            h.run_steps(3);
+            h.set_size(eframe::egui::vec2(400.0, 640.0));
+            h.run_steps(2);
+            h.query_all_by_label("Crowd loves it: +1").next().is_some()
+        })
+        .expect("unchanged frames prepare no row");
+        let per_frame = (drawn() - before) / 5;
+        assert!(
+            (1..=30).contains(&per_frame),
+            "an open history of 5,000 rows drew {per_frame} rows a frame"
+        );
+        // A change of the ledger prepares the rows again, once.
+        work.refresh(&mut h, 5001, |h| {
+            let t = h.state_mut();
+            t.ledger.changes.push(Entry {
+                id: "c-ffffffff".into(),
+                tracker: Some("favor".into()),
+                add: Some(1),
+                why: Some("Crowd loves it".into()),
+                ..Entry::default()
+            });
+            t.settle();
+            h.run_steps(2);
+            h.query_by_label("CROWD FAVOR HISTORY 5,001").is_some()
+        })
+        .expect("a changed ledger prepares its rows again");
+    }
+
+    #[test]
     fn no_note_in_play_reads_no_ledger_and_shows_nothing() {
-        let race = race();
+        let mut race = race();
+        // A Remove's result and its Undo are in the note's reader while the note is in play.
+        let t = &mut race.trackers;
+        let note = t.rules.trackers[0].note;
+        t.played = None;
+        t.press("favor", None, "Crowd loves it", None);
+        t.played = Some(TONIGHT);
+        t.settle();
+        let older = t.history["favor"][0].entry.clone();
+        t.remove(note, &older);
+        assert_eq!(history::footer_lines(t, note).len(), 1);
+        // The note is renamed outside Splat before the next click. The note is still in play, so
+        // its reader keeps the click's refusal and says what became of the note.
+        t.played = None;
+        t.press("favor", None, "Crowd loves it", None);
+        t.played = Some(TONIGHT);
+        t.settle();
+        let other = t.history["favor"][0].entry.clone();
+        let (file_now, renamed) = (
+            race.campaign.path.join("Tournament.md"),
+            race.campaign.path.join("Renamed.md"),
+        );
+        let ledger_before = fs::read(ledger::path(&race.campaign.path)).unwrap();
+        fs::rename(&file_now, &renamed).unwrap();
+        let t = &mut race.trackers;
+        t.remove(note, &other);
+        assert_eq!(
+            fs::read(ledger::path(&race.campaign.path)).unwrap(),
+            ledger_before
+        );
+        let words: Vec<String> = history::footer_lines(t, note)
+            .into_iter()
+            .map(|line| line.words)
+            .collect();
+        assert!(
+            words.contains(&"A house rule note changed on disk. Nothing was recorded.".to_owned()),
+            "{words:?}"
+        );
+        assert!(t.problems.contains(&(
+            Some(note),
+            "Tournament is not where it was. Splat reads the notes again when its window gets focus."
+                .into()
+        )));
+        fs::rename(&renamed, &file_now).unwrap();
         // A note in play that was deleted keeps its row in Campaign → Rules and runs, so that the
         // DM can switch it off.
         fs::remove_file(race.campaign.path.join("Tournament.md")).unwrap();
@@ -2693,8 +3120,18 @@ mod tests {
                 .unwrap()
                 .contains("splat_in_play")
         );
-        fs::write(ledger::path(&race.campaign.path), "not a ledger").unwrap();
         let index = Arc::new(ContentIndex::load(&[], Some(&race.campaign)).unwrap());
+        race.trackers.poll(
+            Some(index.clone()),
+            Some(&race.campaign),
+            Some(TONIGHT),
+            &race.timeline,
+        );
+        assert!(
+            history::footer_lines(&race.trackers, note).is_empty(),
+            "a note out of play shows no Undo remove"
+        );
+        fs::write(ledger::path(&race.campaign.path), "not a ledger").unwrap();
         let mut trackers = Trackers::default();
         trackers.poll(Some(index), Some(&race.campaign), None, &race.timeline);
         assert!(!trackers.in_play());

@@ -248,6 +248,13 @@
     },
     {
       "phase": "during",
+      "task": "Correct a wrong press of last session from the house rule note",
+      "transitions": 0,
+      "interactions": 6,
+      "path": "Session"
+    },
+    {
+      "phase": "during",
       "task": "Next fight: start it, with the party as it stands",
       "transitions": 1,
       "interactions": 1,

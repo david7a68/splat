@@ -2048,7 +2048,8 @@ impl Splat {
             Page::World => {
                 if let Some(campaign) = &active {
                     let index = self.lookup.index();
-                    self.world_page.show(ui, index.as_ref(), campaign);
+                    self.world_page
+                        .show(ui, index.as_ref(), campaign, &mut self.trackers);
                 } else {
                     self.no_campaign(ui);
                 }

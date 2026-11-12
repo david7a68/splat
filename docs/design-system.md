@@ -619,8 +619,27 @@ is drawn before anything else of the view, so these words stay in view when the 
 waits after a failed save: the DM presses again, and a number typed for `add: ask` stays in its field. When
 `Campaign.md` or a house rule note in play cannot be read, the view names the file and shows no tracker. At the end of the scroll area each problem is a small error message: a note in play that is missing
 or no house rule note, a definition that cannot be used, and the count of `Trackers.md` entries that name a tracker
-no note in play has, with its key, which are not counted. With no house rule note in play the view says `No house rules are in play.` and `Turn one
+no note in play has, with its key, which are not counted, and a value below its `min` (`Crowd Favor is -2, below its
+min of 0.`), which an edit in Obsidian can force and Splat never changes. With no house rule note in play the view says `No house rules are in play.` and `Turn one
 on in Campaign → Rules and runs.`; the rail then says nothing about trackers.
+
+**A tracker's history** is in the reader of its house rule note in Lookup (a house rule note is no World entry),
+after the note's text, while the note is in play (F4). First the note's own problems, as small error messages (a
+definition that cannot be used, a value below its `min`, a note in play whose file is gone or moved); then, for each
+tracker and each day mark of the note, a collapsed section `<NAME> HISTORY N` (`section_with_id` with
+`group_heading_text`, N entries). Open, a tracker's shows `Start <value>` (or each name's start value) in `Small`
+muted; then each section has one row for each entry in the ledger's order, one control high: its words (`Take
+seal: Keyring +1`, `Bell done.`, `End of month, Day 32 done.`), cut with `…` when they do not fit and whole on hover,
+the value it left as a right-aligned `Numeral` (`number`), and the row's menu (`row_menu`) with a quiet `Remove`
+only on an entry with another session's stamp; every row keeps the menu's place, so the values stand in one column.
+Only the rows inside the reader's clip are laid out and drawn. `Remove` takes the entry, the others of its press, and the entries of the notices
+it raised, and the reader's footer says `Removed: <label>.` (with `With it: …` for what went with it) and offers
+`Undo remove`, one step, as the Timeline's removal; it shows only while the note is in play. A refusal (the entry
+changed or is gone on disk, or a notice depends on it) and a failed save are the footer's reason line. When `Trackers.md` cannot be read the
+reader names it and shows no history and no value; when `Campaign.md` or a note in play cannot be read it says
+so. A note in play whose file is gone or moved keeps its problem and a click's refusal in its reader. A note not in
+play, and a campaign with none, show nothing here. The rows are worked out when the ledger or a
+definition changes, and a collapsed section draws nothing.
 
 A copy starts with the original name selected. Destination and dependency preview update with its fields. Copy
 to… requires a campaign or package destination and states that reason on hover. Create copy saves in one step.
@@ -1696,8 +1715,10 @@ Recap, the one source that carry-over reads too; then the note's first written l
 `Recap of last time` and `Plan for tonight`; with none of these, show the session link alone. While the
 session is the current one and has no event, no run and no live recording, and the last session holds a part
 to carry, a quiet `Carry over` (`Action::in_line`, 24 px, so the line keeps its height) ends the line, `L` after
-the preview, with what it adds on hover. The preview gives it room first, to nothing, then the link's words
-shorten; nothing wraps. The preview stops at `READER_MEASURE`, as muted help does. A last note that cannot be read blocks it: `Splat cannot read Session 1’s note.` It
+the line's last word (the preview's, or the link's when no word of the preview fits) at every width, never at
+the pane's edge, with what it adds on hover. The preview gives it room first, to nothing, then the link's words
+shorten; nothing wraps. The preview is the longest run of whole words that fits; when no word fits, no dash and
+no ellipsis show. The preview stops at `READER_MEASURE`, as muted help does. A last note that cannot be read blocks it: `Splat cannot read Session 1’s note.` It
 adds, through `Draft::apply_with_properties` and in one save, the recap as one embed line
 `![[<note>#What happened]]` (or the processed recap under `> This draft was written automatically. Check it
 against your memory.`, which the embed replaces once What happened has prose), the plan lines still to come
@@ -1707,11 +1728,13 @@ every result of that page, so the Last time line, the tabs and the plan never mo
 what it added, with `Undo carry over`, which puts back the exact text and properties. The result belongs to
 the new note by its ID: another session or page leaves it, it shows also when the last session can no longer be
 found, and any other change of the note's text ends it. A refusal shows in the same footer, in a warning. Read draws an embed of a session note's heading as that heading's words under a
-`Type::Small` muted `From` and a small link to the session. Its target is resolved as every campaign link is
+`Type::Small` muted `From` and, one `S` after it in every layout, a small link to the session. Its target is resolved as every campaign link is
 (`ContentIndex::resolve_link`), with its folder when it has one: a target that two notes share stays a link,
 and so does an embed inside a callout or a list item. A target that names nothing, also after a rename outside
-Obsidian, is a warning `small_message`, `The recap’s source is gone: <target> › <heading>.`, and the line
-stays in the note; Splat never rewrites an embed, and the DM links again by hand. Read's words are prepared
+Obsidian, is a warning `small_message`, `The recap’s source is gone: <target> › <heading>. Link the session
+again in Write.`, and the line stays in the note. A session note at the target's whole path (as Obsidian reads
+`Archive/Same`) that has the heading keeps it a link: the index has not read that note yet, or the target names
+part of its path. A note with only the same last name in another folder does not; Splat never rewrites an embed, and the DM links again by hand. Read's words are prepared
 when the note's words, the content, the plan or the folder change, not on a quiet frame. An older session warns once and links the session being played, which the list marks
 Playing. The action says Return to the session being played. When the two session numbers match, the warning
 names both note files. Reading old notes changes neither the destination for new events nor runs: use the newest session

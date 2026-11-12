@@ -374,8 +374,10 @@ a mark raises a Due row and the rail's `Due N` on every page; `Done` finishes it
 rules. In a fight the DM opens Trackers with Ctrl+T, presses, and goes back; the run shows no other tracker part.
 A day mark raises its Due row when the Timeline's day count reaches its day, with the same words, rolls, `Done`
 and `Dismiss`.
+A wrong press of an older session, or one with no opposite action, is removed from the tracker's history in the
+house rule note's reader.
 
-**Done well:** T19.1 to T19.5.
+**Done well:** T19.1 to T19.6.
 
 ## 3. Information architecture
 
@@ -722,6 +724,7 @@ reading the code, not from a test run.
 | T19.3 | A value that passes a mark raises a Due row above the trackers and the rail's count, on every page. The Run page shows no tracker part except the rail's count. With no house rule note in play the rail says nothing | trackers, run-lookup | state | New |
 | T19.4 | Case D, beside the Session page: three notices with four rolls and the result line are in view with no scroll | trackers | view | New |
 | T19.5 | The Timeline's day count raises a day mark's Due row and the rail's count, and raising it writes nothing. Days that pass in one step are one row that says how many, with `Next`. A clock that goes back takes the row away and keeps what was done. At 960x640 with Lookup narrow, the row, its `Next` and the result line are in view | trackers | view, state | New |
+| T19.6 | The house rule note's reader lists the note's problems, also a value below its `min`, and each tracker's history, folded, with its start value. Only a row with another session's stamp has `Remove` in its menu; Remove takes the entry with its press and the notice it raised, and `Undo remove` puts them back in their places after an unrelated act. An entry changed on disk, a later notice that depends on it, a failed save and an unreadable `Trackers.md` write nothing and say so. Costs 6 from the session page (audit) | trackers, dm-audit | cost, state | New |
 | G1 | Every disabled control states why, in text or a working tooltip | all | state | Fail |
 | G2 | Go through every top-level page and back: each page restores section 3 state | nav-state **new** | state | Fail |
 | G3 | No dead nav items | nav-state **new** | state | Fail |
