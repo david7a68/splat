@@ -6658,11 +6658,13 @@ pub mod run_folder_defect {
                         widths.push(text.galley.size().x);
                     }
                 });
+                // The menu, not its label: the node of that name that reaches furthest.
                 let menu = d
                     .nodes()
                     .into_iter()
-                    .find(|node| node.name.starts_with("Roll NPC initiative"))
-                    .map(|node| node.rect.right());
+                    .filter(|node| node.name.starts_with("Roll NPC initiative"))
+                    .map(|node| node.rect.right())
+                    .reduce(f32::max);
                 let folder = d
                     .nodes()
                     .into_iter()
@@ -14486,8 +14488,11 @@ pub mod encounter_owned_groups {
         let invalid = d.visible_text("Invalid")
             && !d.visible_text("Unsaved")
             && d.is_disabled(SAVE_ENCOUNTER);
-        d.press_ctrl(Key::S);
-        let kept = d.app_mut().encounters.draft_dirty() && d.visible_text("Invalid");
+        // A proof step that ends where it started: not part of the DM's task.
+        let kept = d.aside(|d| {
+            d.press_ctrl(Key::S);
+            d.app_mut().encounters.draft_dirty() && d.visible_text("Invalid")
+        });
         d.observe(
             "iter-26-B-AB1",
             invalid && kept,
