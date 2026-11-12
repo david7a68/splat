@@ -11644,6 +11644,29 @@ pub mod session_notes {
         d.click("Campaign");
         d.click("Link and folder");
         d.expect("SESSION FOLDER");
+        let scroll_whole = |d: &mut Driver<'_>, name: &str| {
+            for _ in 0..15 {
+                let whole = d.nodes().iter().any(|node| {
+                    (node.name == name || node.name.ends_with(name)) && node.fully_in_view()
+                });
+                if whole {
+                    break;
+                }
+                d.scroll_points_at(pos2(600.0, 300.0), 40.0);
+            }
+            d.pointer_away();
+        };
+        let save_row_whole = |d: &mut Driver<'_>| {
+            let row = if d.has_containing("Unsaved") {
+                "Unsaved"
+            } else {
+                "No changes"
+            };
+            scroll_whole(d, row);
+        };
+        // A long folder path (a deep checkout) puts the save row below a 960x640 window; the
+        // DM scrolls to it, and so does the scenario, so no check depends on the path.
+        save_row_whole(d);
         d.observe_both(
             "iter-2-C-FT11",
             "The clean session folder has a No changes status",
@@ -11681,26 +11704,6 @@ pub mod session_notes {
         // The save row whole in view before a letter brings the warning, as the DM sees it with
         // a short folder path. A long path (a deep checkout) puts it lower; the reveal never pulls
         // back a row that was already cut, so the scenario scrolls it whole first.
-        let scroll_whole = |d: &mut Driver<'_>, name: &str| {
-            for _ in 0..15 {
-                let whole = d.nodes().iter().any(|node| {
-                    (node.name == name || node.name.ends_with(name)) && node.fully_in_view()
-                });
-                if whole {
-                    break;
-                }
-                d.scroll_points_at(pos2(600.0, 300.0), 40.0);
-            }
-            d.pointer_away();
-        };
-        let save_row_whole = |d: &mut Driver<'_>| {
-            let row = if d.has_containing("Unsaved") {
-                "Unsaved"
-            } else {
-                "No changes"
-            };
-            scroll_whole(d, row);
-        };
         d.app_mut().timeline.save();
         save_row_whole(d);
         d.replace_text_in("Folder", "30 Sessions");

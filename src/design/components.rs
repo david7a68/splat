@@ -2856,8 +2856,9 @@ struct NextAction {
     capped: bool,
     /// For checks: the room lost, what the row needed and the scroll, at the last reveal.
     last: (f32, f32, f32),
-    /// Where the row's top must be in the pass after a reveal; there, the promise is kept.
-    expect: Option<f32>,
+    /// The row's top before the last reveal: a row still there in the next pass did not move,
+    /// so the scroll did not take.
+    from: Option<f32>,
 }
 
 /// A next action as the reveal saw it in the last finished pass, for checks.
@@ -2928,10 +2929,10 @@ pub fn keep_above_footer(ui: &Ui, response: &Response) {
             input.pointer.any_down() || input.pointer.any_pressed() || input.pointer.any_released();
         (pointer, over && acts, pressing)
     });
-    // A reveal that put the row where it meant to keeps its promise; a row that did not move
-    // (another scroll area took the delta) stays promised, for the checks to see.
-    if let Some(expect) = next.expect.take()
-        && (rect.top() - expect).abs() < 0.5
+    // A reveal ends its promise in the next pass, unless the row did not move at all (the scroll
+    // did not take); a later move of the layout is not the reveal's.
+    if let Some(from) = next.from.take()
+        && (rect.top() - from).abs() >= 0.5
     {
         next.promised = false;
     }
@@ -2984,7 +2985,7 @@ pub fn keep_above_footer(ui: &Ui, response: &Response) {
         top -= by;
         next.capped = by < need;
         next.last = (next.owed, need, by);
-        next.expect = Some(top);
+        next.from = Some(rect.top());
         next.owed = 0.0;
         None
     };
