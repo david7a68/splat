@@ -227,18 +227,6 @@ fn before_the_session(a: &mut Audit<'_, '_>) {
     a.task("Recall what happened last session, and where the story stands");
     recall_last_session(a);
 
-    // F5: what last week left joins tonight's note in one act.
-    a.task("Carry over what last week left into tonight's note");
-    a.click(Do, "Carry over");
-    a.fact(format!(
-        "tonight's note holds last week's open thread: {}",
-        a.d.app()
-            .sessions
-            .selected_path()
-            .and_then(|path| std::fs::read_to_string(path).ok())
-            .is_some_and(|note| note.contains(MILLER) && note.contains("carried_from: "))
-    ));
-
     a.task("Compare the party's passive Perception, to plan an ambush");
     a.click(Nav, NAV_PARTY);
     a.fact(format!(
@@ -332,6 +320,20 @@ fn before_the_session(a: &mut Audit<'_, '_>) {
         ));
         a.click(Find, TONIGHT);
     }
+
+    // F5: what last week left joins tonight's note in one act. The last act of prep: its result
+    // stays under the Last time line until the note changes, and the restart that starts the
+    // evening ends it, so no frozen task after it sees that line.
+    a.task("Carry over what last week left into tonight's note");
+    a.click(Do, "Carry over");
+    a.fact(format!(
+        "tonight's note holds last week's open thread: {}",
+        a.d.app()
+            .sessions
+            .selected_path()
+            .and_then(|path| std::fs::read_to_string(path).ok())
+            .is_some_and(|note| note.contains(MILLER) && note.contains("carried_from: "))
+    ));
 }
 
 /// Whether the Last time line itself paints last week's words whole.
