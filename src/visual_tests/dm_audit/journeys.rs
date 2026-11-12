@@ -525,8 +525,10 @@ fn broken_evening(a: &mut Audit<'_, '_>) {
     a.phase = "after the fight";
     a.task("Take a scene off tonight's plan");
     a.fact(format!(
-        "the plan holds the line added in Obsidian, as a row or in the fold `2 scenes`: {}",
-        a.d.has_containing("Pay the ferryman") || a.d.has("2 scenes")
+        "the plan holds the line added in Obsidian, as a row or in the fold `2 scenes`: {}; the \
+         note on disk holds it: {}",
+        a.d.has_containing("Pay the ferryman") || a.d.has("2 scenes"),
+        note_on_disk(a.d).contains("- [ ] Pay the ferryman\n")
     ));
     a.click(Find, "More actions for Ask the watch about the ropes");
     a.click(Do, "Remove from tonight");
@@ -538,8 +540,9 @@ fn broken_evening(a: &mut Audit<'_, '_>) {
     a.click(Nav, NAV_SESSIONS);
     a.click(Do, "Undo remove");
     a.fact(format!(
-        "the scene's line is back in the note: {}",
-        note_on_disk(a.d).contains("- [ ] Ask the watch about the ropes\n")
+        "the scene's line is back in the note: {}; the line added in Obsidian is still there: {}",
+        note_on_disk(a.d).contains("- [ ] Ask the watch about the ropes\n"),
+        note_on_disk(a.d).contains("- [ ] Pay the ferryman\n")
     ));
 }
 

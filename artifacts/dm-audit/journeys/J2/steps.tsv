@@ -35,7 +35,7 @@ during	Two days overland: roll for encounters on the road	Find	More Add actions	
 during	Two days overland: roll for encounters on the road	Do	Add Travel	1	Session		false
 during	Two days overland: roll for encounters on the road	Find	More actions for Travel	1	Session		false
 during	Two days overland: roll for encounters on the road	Do	Roll for encounters	1	Session		false
-during	Two days overland: roll for encounters on the road	Do	click How long, and type the length	2	Session		false
+during	Two days overland: roll for encounters on the road	Do	type the length	1	Session		false
 during	Two days overland: roll for encounters on the road	Do	Roll all 2	1	Session		false
 during	The second day names the Wolf Pack: plan it and start it	Do	Plan “Wolf Pack”	1	Session		false
 during	The second day names the Wolf Pack: plan it and start it	Nav	Start fight: Wolf Pack	1	Session	Run	false
@@ -54,7 +54,6 @@ during	End the Wolf Pack fight	Do	End encounter…	1	Run		false
 during	End the Wolf Pack fight	Do	End encounter	1	Run		false
 during	End the Wolf Pack fight	Nav	Close run	1	Run	Session	false
 after	Put the Wolf Pack fight's rewards in the note	Do	Add rewards: Wolf Pack	1	Session		false
-after	Mark the talk with Warden Ostrel done, and log what happened	Find	1 scene	1	Session		false
 after	Mark the talk with Warden Ostrel done, and log what happened	Do	Open: Warden Ostrel	2	Session		false
 after	Mark the talk with Warden Ostrel done, and log what happened	Panel	Add to Log: Warden Ostrel	1	Session		false
 after	Mark the talk with Warden Ostrel done, and log what happened	Do	type the line	1	Session		false

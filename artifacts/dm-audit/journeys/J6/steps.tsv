@@ -38,6 +38,6 @@ a week later	Prepare the road: a Travel row with its checks	Find	More Add action
 a week later	Prepare the road: a Travel row with its checks	Do	Add Travel	1	Session		false
 a week later	Prepare the road: a Travel row with its checks	Find	More actions for Travel	1	Session		false
 a week later	Prepare the road: a Travel row with its checks	Do	Roll for encounters	1	Session		false
-a week later	Prepare the road: a Travel row with its checks	Do	click How long, and type the length	2	Session		false
+a week later	Prepare the road: a Travel row with its checks	Do	type the length	1	Session		false
 a week later	Prepare the road: a Travel row with its checks	Do	keep it with Enter	1	Session		false
 a week later	Start the first fight	Nav	Start fight: Gate Watch	1	Session	Run	false

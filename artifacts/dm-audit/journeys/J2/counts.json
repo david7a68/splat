@@ -47,7 +47,7 @@
       "phase": "during",
       "task": "Two days overland: roll for encounters on the road",
       "transitions": 0,
-      "interactions": 7,
+      "interactions": 6,
       "path": "Session"
     },
     {
@@ -82,7 +82,7 @@
       "phase": "after",
       "task": "Mark the talk with Warden Ostrel done, and log what happened",
       "transitions": 0,
-      "interactions": 7,
+      "interactions": 6,
       "path": "Session"
     }
   ]

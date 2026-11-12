@@ -75,7 +75,7 @@
       "phase": "a week later",
       "task": "Prepare the road: a Travel row with its checks",
       "transitions": 0,
-      "interactions": 7,
+      "interactions": 6,
       "path": "Session"
     },
     {

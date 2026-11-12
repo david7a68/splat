@@ -1,0 +1,43 @@
+Phase totals
+phase	tasks	transitions	interactions	nav	sub	panel	find	do
+during	8	1	21	1	1	1	2	16
+after the fight	3	2	5	2	0	0	1	2
+total	11	3	26	3	1	1	3	18
+
+Tasks
+phase	task	transitions	interactions	overhead	nav	sub	panel	find	do	path
+during	End the fight by mistake	0	2	0	0	0	0	0	2	Run
+during	Take the ending back	0	1	0	0	0	0	0	1	Run
+during	Pin Poisoned 3 rounds to a wolf	0	5	2	0	1	0	1	3	Run
+during	Play on into round 3	0	8	0	0	0	0	0	8	Run
+during	After the crash: back to the fight	0	0	0	0	0	0	0	0	Run
+during	Lookup is closed after the restart: find the note again	0	2	2	0	0	1	1	0	Run
+during	The note changed in Obsidian: see it in Splat	0	0	0	0	0	0	0	0	Run
+during	End the second fight	1	3	1	1	0	0	0	2	Run > Session
+after the fight	Take a scene off tonight's plan	0	2	1	0	0	0	1	1	Session
+after the fight	Begin the fight before it	1	1	1	1	0	0	0	0	Session > Run
+after the fight	The scene is wanted after all: take the removal back	1	2	1	1	0	0	0	1	Run > Session
+
+Set-up, not counted
+before	prep: the Wolf Pack and Ember Watch encounters
+before	play last week's session, then quit and open the app
+before	work at 960x640
+before	prep: tonight's plan holds three fights and a scene
+before	save, quit and open the app at the table
+before	play the first fight
+before	the second fight, in round 2
+before	Lookup shows last week's note, found by `miller`
+during	the app stops in round 3, and opens again
+during	in Obsidian, the DM adds a line to tonight's plan
+
+Blocked
+
+Facts
+during / Take the ending back: play is back in round 2: true
+during / Pin Poisoned 3 rounds to a wolf: Lookup is open after the effect: false
+during / After the crash: back to the fight: the app opened on Run
+during / After the crash: back to the fight: the wolf's row holds the effect with its count: true
+during / After the crash: back to the fight: Undo names the last saved step: Undo: next turn
+during / Lookup is closed after the restart: find the note again: last week's words are in view: true
+after the fight / Take a scene off tonight's plan: the plan holds the line added in Obsidian, as a row or in the fold `2 scenes`: false
+after the fight / The scene is wanted after all: take the removal back: the scene's line is back in the note: true
