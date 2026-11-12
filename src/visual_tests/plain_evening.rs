@@ -100,8 +100,8 @@ const ADD_COMMAND: &str = "devenv shell -- audit-freeze add";
 const SCENARIO: &str = "plain-evening";
 const WIDE: (f32, f32) = (1200.0, 800.0);
 const NARROW: (f32, f32) = (960.0, 640.0);
-/// Section 2.5 numbers its rows 1 to 22.
-const CONTRACT_ROWS: std::ops::RangeInclusive<u32> = 1..=26;
+/// Section 2.5 numbers its rows 1 to 27.
+const CONTRACT_ROWS: std::ops::RangeInclusive<u32> = 1..=27;
 /// What the test folder becomes in a run's `splat_run_source_path`.
 const WORLD: &str = "<world>";
 const SAME: &str = "the same as at the start";
@@ -1860,19 +1860,19 @@ mod allowed_classes {
             name: "R1c b: an act's words that scrolled out of or into History's view",
             fits: history::act_words,
         },
-        // R3g, rows 25 and 26 (by the lead's ruling after app round 2).
+        // R3g, rows 26 and 27 (by the lead's ruling after app round 2).
         Class {
-            row: 25,
+            row: 26,
             name: "R3g a: History kept the opened run in view: one scroll, the log 6 px lower",
             fits: kept::history,
         },
         Class {
-            row: 25,
+            row: 26,
             name: "R3g b: an act's words that scrolled out of or into History's view",
             fits: history::act_words,
         },
         Class {
-            row: 26,
+            row: 27,
             name: "R3g c: the editor's actions on the name's line beside Lookup, the rest one line up",
             fits: kept::editor,
         },
@@ -2790,7 +2790,7 @@ mod allowed_classes {
         }
     }
 
-    /// R3g's classes, rows 25 and 26 (by the lead's ruling after app round 2), measured
+    /// R3g's classes, rows 26 and 27 (by the lead's ruling after app round 2), measured
     /// against the reference this pull request froze at bd7ff4b0. Each proves itself from all
     /// the rows of its view, as R1c's do, because G7 pairs the items of one name by their order.
     mod kept {
@@ -2933,7 +2933,7 @@ mod allowed_classes {
                 && (!cut_bottom || (shown[1] + shown[3] - bottom).abs() < 0.5)
         }
 
-        /// Row 25: History keeps the opened run at the list's top (X36, X37). The list scrolled
+        /// Row 26: History keeps the opened run at the list's top (X36, X37). The list scrolled
         /// by one offset, the run's own row's, down the content; `COMBAT LOG` and everything
         /// below it in the frozen view moved by `LOG` more (X66). Each item of today that stays
         /// in view is one to one an item after of its name, with its place across and its size
@@ -3026,7 +3026,7 @@ mod allowed_classes {
             })
         }
 
-        /// Row 26: beside Lookup at 960x640, `Save encounter` and `Start fight` moved up to the
+        /// Row 27: beside Lookup at 960x640, `Save encounter` and `Start fight` moved up to the
         /// name field's line, with their place across and their size (X51); the field kept its
         /// place and height and ends before them; every other item moved straight up by the
         /// line they left, and only what was below the pane's bottom comes into view there.
@@ -3168,7 +3168,7 @@ mod allowed_classes {
             // History at 960x640: the run's row at the list's top, the log 6 px lower.
             let history = |change: &str, name: &str, detail: &str| {
                 row(
-                    25,
+                    26,
                     "run-ended: played last",
                     "960x640 Lookup closed",
                     change,
@@ -3245,7 +3245,7 @@ mod allowed_classes {
             // The editor beside Lookup at 960x640: the actions on the name's line.
             let editor = |change: &str, name: &str, detail: &str| {
                 row(
-                    26,
+                    27,
                     "encounter-editor",
                     "960x640 Lookup open",
                     change,
@@ -3346,7 +3346,7 @@ mod allowed_classes {
                 let mut changed = 0;
                 for row in &mut rows {
                     let d = &mut row.difference;
-                    if row.row == 25
+                    if row.row == 26
                         && d.view == "960x640 Lookup closed"
                         && d.screen == "run-ended: played last"
                         && d.change == "new"
@@ -3415,7 +3415,7 @@ mod allowed_classes {
             let mut changed = 0;
             for row in &mut rows {
                 let d = &mut row.difference;
-                if row.row != 26 || d.what != "text" {
+                if row.row != 27 || d.what != "text" {
                     continue;
                 }
                 let (a, Some(mut b)) = places(d) else {
