@@ -8,6 +8,7 @@ use crate::{
     campaigns::Campaigns,
     content_workspace::{CampaignDocument, Catalogue, EntryRef},
     design::{self, Action, Density, Status, Tone, Type, colors, icons},
+    difficulty::creature_xp,
     encounter_run::{FaultKind, GroupMember, MemberFault, RunGroup, change_rows},
     library::{note_path, write_note},
     persistence::{Campaign, Module},
@@ -566,12 +567,6 @@ impl GroupDraft {
     }
 }
 
-/// Explicit XP wins; a bare CR supplies its standard reward.
-fn creature_xp(entry: &Entry) -> Option<u64> {
-    crate::library::presentation::challenge_text(entry)
-        .and_then(splat::content::stat_blocks::challenge_xp)
-}
-
 /// A creature's name in an editor: the one it will have. Its changes say which entry it is.
 pub(super) fn shown_name(block: &Mapping, name: String) -> String {
     Overrides::parse(block)
@@ -844,6 +839,7 @@ fn list_row(
             summary
         ),
         false,
+        None,
         |ui| {
             super::row_menu(ui, &group.name, |ui| {
                 if super::menu_action(ui, "Remove…", blocked) {
@@ -924,19 +920,25 @@ pub(super) fn list(
     }
 }
 
-/// A removed note stays in memory until the DM leaves this campaign or removes another.
-pub(super) struct RemovedGroup {
+/// A removed note stays in memory until the DM leaves this campaign or removes another. A saved
+/// group and an encounter are removed alike.
+pub(super) struct RemovedNote {
     path: std::path::PathBuf,
     text: String,
-    name: String,
+    pub(super) name: String,
 }
-impl RemovedGroup {
-    pub(super) fn remove(campaign: &Campaign, path: &str) -> Result<Self, String> {
+impl RemovedNote {
+    /// Remove the note at `path`, when it is of `kind`: `encounter_group` or `encounter`.
+    pub(super) fn remove(campaign: &Campaign, path: &str, kind: &str) -> Result<Self, String> {
         let path = note_path(&campaign.path, path)?;
         let text = fs::read_to_string(&path).map_err(|error| error.to_string())?;
-        let entry = Entry::parse(path.to_str().ok_or("Invalid group path")?, &text)?;
-        if entry.kind != "encounter_group" {
-            return Err("This note is not a group.".to_owned());
+        let entry = Entry::parse(path.to_str().ok_or("Invalid note path")?, &text)?;
+        if entry.kind != kind {
+            return Err(if kind == "encounter" {
+                "This note is not an encounter.".to_owned()
+            } else {
+                "This note is not a group.".to_owned()
+            });
         }
         fs::remove_file(&path).map_err(|error| error.to_string())?;
         Ok(Self {
@@ -945,10 +947,11 @@ impl RemovedGroup {
             name: entry.name,
         })
     }
-    fn restore(&self) -> Result<(), String> {
+    /// Write the note back, only where no file has its path now.
+    pub(super) fn restore(&self) -> Result<(), String> {
         use std::io::Write;
         let mut copy =
-            tempfile::NamedTempFile::new_in(self.path.parent().ok_or("Invalid group folder")?)
+            tempfile::NamedTempFile::new_in(self.path.parent().ok_or("Invalid note folder")?)
                 .map_err(|error| error.to_string())?;
         copy.write_all(self.text.as_bytes())
             .and_then(|_| copy.as_file().sync_all())
@@ -3191,13 +3194,30 @@ mod tests {
         group.save(&active, &[]).unwrap();
         let path = note_path(dir.path(), &group.path).unwrap();
         let text = fs::read_to_string(&path).unwrap();
-        let removed = RemovedGroup::remove(&active, &group.path).unwrap();
+        // A group is not an encounter, so an encounter's Remove… leaves it.
+        assert!(RemovedNote::remove(&active, &group.path, "encounter").is_err());
+        assert!(path.exists());
+        let removed = RemovedNote::remove(&active, &group.path, "encounter_group").unwrap();
         assert!(!path.exists());
         removed.restore().unwrap();
         assert_eq!(fs::read_to_string(&path).unwrap(), text);
         fs::write(&path, "A new note").unwrap();
         assert!(removed.restore().is_err());
         assert_eq!(fs::read_to_string(&path).unwrap(), "A new note");
+
+        // An encounter is removed and comes back the same way (T12.12).
+        let mut fight = Draft::new();
+        fight.name = "Fight with Scout".into();
+        fight.add(id, false);
+        fight.save(&active, &[]).unwrap();
+        let fight_path = note_path(dir.path(), &fight.path).unwrap();
+        let fight_text = fs::read_to_string(&fight_path).unwrap();
+        assert!(RemovedNote::remove(&active, &fight.path, "encounter_group").is_err());
+        let removed = RemovedNote::remove(&active, &fight.path, "encounter").unwrap();
+        assert_eq!(removed.name, "Fight with Scout");
+        assert!(!fight_path.exists());
+        removed.restore().unwrap();
+        assert_eq!(fs::read_to_string(&fight_path).unwrap(), fight_text);
     }
 
     /// The draft closes on save, so that the plan shows again with its new link.

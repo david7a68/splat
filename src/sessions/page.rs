@@ -89,6 +89,8 @@ pub struct Plan<'a> {
     pub open_encounter: Option<&'a str>,
     /// The party's identities in the party bar's order.
     pub party: &'a [Uuid],
+    /// The campaign's marked tables, for a journey's encounter checks.
+    pub tables: &'a [crate::roll_table::Table],
 }
 
 /// What the previous session left, for the top of this one.
@@ -267,6 +269,8 @@ pub struct Sessions {
     /// and its error stay through the usual expiry until Undo puts them back or a new update.
     link_partial: bool,
     removed_fight: Option<(Option<Uuid>, usize, String, NoteUndo)>,
+    /// A journey's encounter checks in the plan.
+    travel: plan::Travel,
     plan_notice_state: Option<(String, Vec<timeline::Event>)>,
     removed_event_in_plan: bool,
     /// What the removal's owner note looked like; a later edit of it ends the removal.
@@ -275,6 +279,10 @@ pub struct Sessions {
     #[cfg(test)]
     removal_scans: usize,
     removed_group: Option<(Option<Uuid>, usize, String, String, f32, String)>,
+    /// The plan's scenes: the Scene field and the results of scene acts.
+    scenes: plan::Scenes,
+    /// The note's plan as rows, built when the note, the content or the encounters change.
+    plan_model: plan::PlanModelCache,
     /// The fight behind the open event, read once.
     fight: Option<(Uuid, Result<FightSummary, String>)>,
     /// What the session before the selected one left, read once for each selection.
@@ -384,6 +392,8 @@ pub struct Sessions {
     pub wants_saved_run: Option<PathBuf>,
     /// A name in a note's link to read in Lookup.
     pub wants_lookup: Option<String>,
+    /// A scene's NPC or creature, by its ID, to start a fight that nobody planned with.
+    pub wants_start_fight: Option<crate::world::StartFight>,
     /// The `/` menu in the note, and what its command has open.
     slash: super::slash::Slash,
     /// A command wrote a file, so Lookup must read the campaign again.
@@ -580,11 +590,22 @@ fn recap_preview(body: &str) -> Option<String> {
     None
 }
 
-/// Keep plan links in the file, but do not repeat fights and groups in Read.
+/// The campaign's content index, as every reader of the page finds it.
+fn reader_index(ui: &egui::Ui) -> Option<std::sync::Arc<crate::lookup::ContentIndex>> {
+    ui.ctx().data(|data| {
+        data.get_temp::<std::sync::Arc<crate::lookup::ContentIndex>>(egui::Id::new(
+            "reader_link_index",
+        ))
+    })
+}
+
+/// Keep plan links in the file, but do not repeat fights, groups and scenes in Read. `scenes`
+/// are the scenes' whole lines, as the plan model found them.
 fn compact_plan_for_reading(
     body: &str,
     fights: &[PlanFight],
     groups: &[std::sync::Arc<crate::encounter_run::RunGroup>],
+    scenes: &[&str],
     beside: bool,
 ) -> String {
     let Some(plan) = section_text(body, "Plan for tonight") else {
@@ -596,6 +617,10 @@ fn compact_plan_for_reading(
         .collect();
     let only_planned_links = !lines.is_empty()
         && lines.iter().all(|line| {
+            // A scene's line starts at the line's start; a nested copy of it is note text.
+            if scenes.iter().any(|scene| *scene == line.trim_end()) {
+                return true;
+            }
             let link = line
                 .trim()
                 .strip_prefix("- ")
@@ -637,20 +662,29 @@ fn compact_plan_for_reading(
     let group_count = linked_names(&plan)
         .iter()
         .filter(|name| {
-            !fights
+            groups
                 .iter()
-                .any(|fight| fight.name.eq_ignore_ascii_case(name))
+                .any(|group| group.name.eq_ignore_ascii_case(name))
+                && !fights
+                    .iter()
+                    .any(|fight| fight.name.eq_ignore_ascii_case(name))
         })
         .count();
-    let counts = [
+    let mut counts = [
         (fight_count, "fight", "fights"),
         (group_count, "group", "groups"),
+        (scenes.len(), "scene", "scenes"),
     ]
     .into_iter()
     .filter(|(count, _, _)| *count > 0)
     .map(|(count, one, many)| design::count(count, one, many))
     .collect::<Vec<_>>();
-    let words = format!("{}, in the plan", counts.join(" and "));
+    let last = counts.pop().unwrap_or_default();
+    let words = if counts.is_empty() {
+        format!("{last}, in the plan")
+    } else {
+        format!("{} and {last}, in the plan", counts.join(", "))
+    };
     let heading = body
         .split_inclusive('\n')
         .scan(0, |offset, line| {
@@ -1590,10 +1624,11 @@ impl Sessions {
                             .then(|| (draft.path.clone(), note.path.clone()));
                         self.draft = None;
                         self.select(Some(id));
-                        if let (Some((from, to)), Some((.., undo))) =
-                            (moved, &mut self.removed_fight)
-                        {
-                            undo.moved(&from, &to);
+                        if let Some((from, to)) = moved {
+                            if let Some((.., undo)) = &mut self.removed_fight {
+                                undo.moved(&from, &to);
+                            }
+                            self.scenes.moved(&from, &to);
                         }
                     }
                     None => {
@@ -1707,6 +1742,7 @@ impl Sessions {
         self.updated_links = None;
         self.link_undo_state = None;
         self.removed_fight = None;
+        self.scenes = plan::Scenes::default();
         self.campaign = active.cloned();
         self.folder_error = None;
         match active {
@@ -1815,6 +1851,10 @@ impl Sessions {
         // older note, or the next words typed at the table go there.
         if self.notes_open && session != self.current() {
             self.notes_open = false;
+        }
+        // The plan's scene results are the session's: another session ends them.
+        if self.selected != session {
+            self.scenes = plan::Scenes::default();
         }
         self.selected = session;
         self.caret_to_show = None;
@@ -3910,7 +3950,14 @@ impl Sessions {
             return;
         }
         let body = self.note_body();
-        let compact = compact_plan_for_reading(&body, plan.fights, plan.groups, beside);
+        let model = self.plan_model(reader_index(ui).as_deref(), plan);
+        let compact = compact_plan_for_reading(
+            &body,
+            plan.fights,
+            plan.groups,
+            &model.scene_lines(),
+            beside,
+        );
         let summary = (!beside && compact != body)
             .then(|| section_text(&compact, "Plan for tonight"))
             .flatten();
@@ -5585,6 +5632,7 @@ impl Sessions {
                 self.tab = shown;
                 self.clear_success();
             }
+            let model = self.plan_model(reader_index(ui).as_deref(), plan);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if (shown == Tab::Note || (shown == Tab::Plan && beside))
                     && (!self.reading_note
@@ -5592,6 +5640,7 @@ impl Sessions {
                             &self.note_body(),
                             plan.fights,
                             plan.groups,
+                            &model.scene_lines(),
                             beside,
                         )))
                 {
@@ -6479,6 +6528,11 @@ impl Sessions {
         fs::rename(&draft.path, new).expect("the note");
     }
 
+    /// The open note's file, for a scenario that reads what an act wrote.
+    pub fn selected_path(&self) -> Option<&std::path::Path> {
+        self.draft.as_ref().map(|draft| draft.path.as_path())
+    }
+
     /// The open note changes outside Splat, as when Obsidian edits the same file.
     pub fn simulate_disk_change(&mut self) {
         let draft = self.draft.as_ref().expect("an open note");
@@ -6617,6 +6671,8 @@ mod tests {
             restores: false,
             continued_in: None,
             played_order: 0,
+            checks_table: None,
+            checks: Vec::new(),
             extra: Default::default(),
         };
         let mut book = Book::default();
@@ -7306,14 +7362,27 @@ mod tests {
             name: "Bridge Ambush".into(),
             path: String::new(),
             summary: String::new(),
+            difficulty: Default::default(),
         }];
         let source = "## Plan for tonight\n\n- [[Bridge Ambush]]\n- [[Bridge Ambush]]\n\n## What happened\n\nWe crossed the bridge.\n";
-        let compact = compact_plan_for_reading(source, &fights, &[], true);
+        let compact = compact_plan_for_reading(
+            source,
+            &fights,
+            &[],
+            &plan::PlanModel::build(source, &fights, &[], None).scene_lines(),
+            true,
+        );
         assert!(!compact.contains("Plan for tonight"));
         assert!(!compact.contains("[[Bridge Ambush]]"));
         assert!(compact.contains("We crossed the bridge."));
         assert_eq!(source.matches("[[Bridge Ambush]]").count(), 2);
-        let tab = compact_plan_for_reading(source, &fights, &[], false);
+        let tab = compact_plan_for_reading(
+            source,
+            &fights,
+            &[],
+            &plan::PlanModel::build(source, &fights, &[], None).scene_lines(),
+            false,
+        );
         assert!(tab.contains("2 fights, in the plan"));
         assert!(!tab.contains("at left"));
         let empty = source.replace("We crossed the bridge.", "");
@@ -7321,16 +7390,32 @@ mod tests {
             &empty,
             &fights,
             &[],
+            &plan::PlanModel::build(&empty, &fights, &[], None).scene_lines(),
             true
         )));
         let repeated = format!(
             "## Recap of last time\n\n- [[Bridge Ambush]]\n- [[Bridge Ambush]]\n\n{source}"
         );
-        let compact = compact_plan_for_reading(&repeated, &fights, &[], true);
+        let compact = compact_plan_for_reading(
+            &repeated,
+            &fights,
+            &[],
+            &plan::PlanModel::build(&repeated, &fights, &[], None).scene_lines(),
+            true,
+        );
         assert_eq!(compact.matches("[[Bridge Ambush]]").count(), 2);
         assert!(compact.starts_with("## Recap of last time\n\n- [[Bridge Ambush]]"));
         let mixed = source.replace("- [[Bridge Ambush]]\n\n##", "- Ask the ferryman.\n\n##");
-        assert_eq!(compact_plan_for_reading(&mixed, &fights, &[], true), mixed);
+        assert_eq!(
+            compact_plan_for_reading(
+                &mixed,
+                &fights,
+                &[],
+                &plan::PlanModel::build(&mixed, &fights, &[], None).scene_lines(),
+                true
+            ),
+            mixed
+        );
     }
 
     #[test]
@@ -7356,22 +7441,41 @@ mod tests {
             name: "Bridge Ambush".into(),
             path: String::new(),
             summary: String::new(),
+            difficulty: Default::default(),
         }];
         for (links, count) in [
             ("- [[ash pack|The wolves]]", "1 group"),
             ("- [[Ash Pack]]\n- [[Bridge Ambush]]", "1 fight and 1 group"),
             ("- [[Ash Pack]]\n- [[Ash Pack]]", "1 group"),
+            // A scene is a row beside the note too (T12.10).
+            (
+                "- [[Bridge Ambush]]\n- [ ] [[Captain Varra]]\n- [x] The miller is the informer\n- [[Ash Pack]]",
+                "1 fight, 1 group and 2 scenes",
+            ),
+            ("- [ ] Meet Hobb", "1 scene"),
         ] {
             let source = format!(
                 "## Plan for tonight\n\n{links}\n\n## What happened\n\nWe reached the mill.\n"
             );
             let before = source.clone();
-            let compact = compact_plan_for_reading(&source, &fights, &groups, true);
+            let compact = compact_plan_for_reading(
+                &source,
+                &fights,
+                &groups,
+                &plan::PlanModel::build(&source, &fights, &groups, None).scene_lines(),
+                true,
+            );
             assert!(!compact.contains("Plan for tonight"));
             assert!(compact.contains("We reached the mill."));
             assert!(
-                compact_plan_for_reading(&source, &fights, &groups, false)
-                    .contains(&format!("{count}, in the plan"))
+                compact_plan_for_reading(
+                    &source,
+                    &fights,
+                    &groups,
+                    &plan::PlanModel::build(&source, &fights, &groups, None).scene_lines(),
+                    false
+                )
+                .contains(&format!("{count}, in the plan"))
             );
             assert_eq!(source, before);
         }
@@ -7379,10 +7483,20 @@ mod tests {
             "- [[Ash Pack]]\nAsk the ferryman.",
             "- [[Unknown group]]",
             "- [[Ash Pack]] extra words",
+            // A nested task line is not a scene, and a task line with a fight is not hidden.
+            "- [ ] Meet Hobb\n  - [ ] Bring the coin",
+            "- [ ] Meet Hobb\n  - [ ] Meet Hobb",
+            "- [ ] [[Bridge Ambush]]",
         ] {
             let source = format!("## Plan for tonight\n\n{lines}\n");
             assert_eq!(
-                compact_plan_for_reading(&source, &fights, &groups, true),
+                compact_plan_for_reading(
+                    &source,
+                    &fights,
+                    &groups,
+                    &plan::PlanModel::build(&source, &fights, &groups, None).scene_lines(),
+                    true
+                ),
                 source
             );
         }

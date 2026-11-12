@@ -116,6 +116,14 @@ art and `Edit` (`src/world.rs:1750-1753`) has about 72 px less; the plain campai
 | Lookup at case B (measured) | 406 | 177: `Start fight`, and the icon | 140: `Start fight`, and the icon, with 0.4 px to spare | 107: the icon |
 | The World page at 960x640 (estimate) | 512 | 272: both words | 237: both words | 202: `Start fight`, and the icon |
 
+**Measured in P3** (the plain evening and `session-plan-scenes`): `Start fight` is 100 px wide. In Lookup at case
+B it shows beside a 13-letter title and also beside `Captain Varra Black` (19 letters), so the estimate above is
+low for wide titles; at case D it does not show beside a 13-letter title, and shows beside `Rook Ambry` (10). On
+the World page at 960x640 it shows beside `Captain Varra Black`. A portrait sits at the right end of the title's
+cell, with `Edit` after it, so beside a portrait no room is spare and `Start fight` does not show. A creature
+with its type's art (the plain campaign's creatures, `Cinder Wolf`) therefore has no `Start fight` in any reader;
+its routes are a scene row's menu and the encounter editor.
+
 **The routes that stay** when the header does not show an action. `Start fight` is a line of the menu of a
 scene row that links that NPC or creature: 2, at any width, on the Session page (F3). For any other NPC or
 creature the World page's reader is wider: `World`, the entry, `Start fight` is 3 or 4, **T T**. `Add to Log`
@@ -368,7 +376,7 @@ today and its fit rule. No row adds a line, changes a row's height or takes widt
 | # | Screen | What differs | Band today | Fit rule |
 |---|---|---|---|---|
 | 1 | A planned fight's row, on the plan and in **Ready to run** | The summary ends with one word, such as `· Low` (F1), when the XP, the levels and the budget table are known | The summary: `src/sessions/plan.rs:795`; `src/encounters/list.rs:553-558` | Only when the summary keeps its lines and words |
-| 2 | An opened planned fight | The line of `Read encounter` ends with `· Low · XP 550 of 750` (F1) | `plan.rs:832-835` | The line holds one link today. The numbers go first, then the word |
+| 2 | An opened planned fight | The line of `Read encounter` ends with `· Low · XP 550 of 750` (F1) | `plan.rs:832-835` | The line holds one link today. The word goes first, then the numbers, as F1's table says; the words show only when the whole fits on the line |
 | 3 | The encounter editor | `· XP 550 of 2,500 · Low` (F1) at the end of the `Roster` heading, or of the tab row below 760 px | `src/encounters.rs:4381`; `:3932-3955` | One line. The numbers go first, then the word |
 | 4 | Arrivals | A group's XP is followed by `→ Moderate` (F1) | `src/encounter_run/view.rs:3468-3520` | Only where the totals and the status words are in the heading today (`:3479-3492`) and stay there |
 | 5 | A row marked `Conc` that takes damage | The row's second line ends with `Conc save DC 10` until the next step (F2) | `view.rs:6476-6486` | Only when the line keeps its lines and folds nothing that shows today. Else in the hover and accessible name only |
@@ -386,7 +394,7 @@ that G7 allows.
 | # | Screen | What differs | From |
 |---|---|---|---|
 | 11 | The **Last time** line | `Carry over` at its end, while the session has no event and no run and the last session holds a part to carry (F5). The preview is cut to its room today (`page.rs:4106-4115`), so the action takes about 90 px from it. The preview shortens first, to nothing; then the link's words shorten; nothing wraps | Round 3: the one ruled exception to rule J |
-| 14 | The plan, when the DM's note has a task line under `## Plan for tonight` | The line is a scene: a row with a box, counted in **Tonight**, and not repeated in Read (F3). The measured evening has none | The ruling on scenes: it is the DM's own plan |
+| 14 | The plan, when the DM's note has a task line under `## Plan for tonight` | The line is a scene: a row with a box, counted in **Tonight**, and not repeated in Read (F3). When the plan's rows do not fit its pane, the scenes fold to `N scenes` on the **Tonight** line, so no other row moves or narrows and the next fight's action stays whole and in view (F3, the fold). The measured evening has none | The ruling on scenes: it is the DM's own plan |
 | 15 | The **Conditions** tab's `Other effect…` field | Words that end with a time, a count of uses or a recharge are read as F2 says: `Bless 10 rounds` counts down, and `Frightened 10 rounds` becomes that condition with a count. The field, its label, its `Add` button and its place are as today | Round 3: the field stays, so `Effect` has a way when the dock has no room |
 | 16 | The **Last time** line | Its preview reads the last session's `What happened`. Today it reads that note's own recap first (`page.rs:915`) | Rule H: the preview and the carry-over read one source |
 | 17 | Lookup, while it holds an unsaved generated NPC | An entry that opens shows under one row, `Unsaved NPC: <name> · Show`. Today the card hides it (`src/lookup.rs:2167-2169`) | The accepted repair of Lookup |
@@ -441,17 +449,23 @@ The examples of F1 use one party: 5 characters at level 3. Their budgets are Low
 **Where the numbers come from.** The rule entry
 `dnd2024:rules/combat_encounters_step_2_determine_your_xp_budget` has a typed table at
 `splat_rule/parameters/per_character_xp`, with `level`, `low`, `moderate` and `high` for levels 1 to 20. Splat
-reads it from the rules that the campaign uses, as it reads the inspiration rule
-(`src/encounter_settings.rs:421`). No table is written in Rust.
+reads it from the rules that the campaign uses, as it reads the inspiration rule (`xp_budgets` and
+`rules_in_use` in `src/encounter_settings.rs`): the only table, or of several the only one in the campaign's own
+notes, so a house rule's copy takes the package's place. No table is written in Rust.
 
 **One computation** (new module `src/difficulty.rs`, one function, every screen calls it).
 
-- **The party:** the characters on the party's side in the roster; in a run, those who are not absent. A
-  roster with no character uses the campaign's party. A level comes from the saved sheet.
+- **The party:** the characters on the party's side in the roster; in a run, those who are not absent. Only a
+  roster with no character at all uses the campaign's party, which is every party copy of the campaign,
+  also one whose note cannot be read; a run whose characters are all absent has no party, and shows no word.
+  An ally on the party's side counts for neither side.
+- **A level:** only from the saved sheet now (`splat_character.level` in the party copy's note, by its ID). A
+  sheet that is gone, cannot be read or has no level is a level not known, and the word does not show. A
+  run's copy of a sheet from when it started says who is a character, never their level.
 - **The budget:** for each difficulty, the sum of the table's value for each character's level.
-- **The XP:** the sum for every creature that is not on the party's side, from the function that groups use
-  today (`creature_xp`, `src/encounters/groups.rs:535`, which P2 moves into the shared module). It can have
-  no answer for a creature.
+- **The XP:** the sum for every creature that is not on the party's side (in a run, every present one), from
+  the function that groups use (`creature_xp`, now in `src/difficulty.rs`). It can have no answer for a
+  creature.
 - **The word:** `Low`, `Moderate` or `High` when the XP is at most that budget, and `Above High` for more.
 - **When.** The answer is kept with the revisions it came from (the encounter note, the saved sheets, the rule
   entry) and is computed again when one of them changes, never each frame.
@@ -472,8 +486,9 @@ Rows 1 to 4 of section 2.5 name each band in the source and its fit rule.
 - **Hover** on the word, and its accessible description, give the rest: `Budget for 5 at level 3: Low 750 ·
   Moderate 1,125 · High 2,000`. For mixed levels: `for 5 at levels 3 to 4`. With no character in the roster:
   `for the party of 5 at level 3`.
-- In Arrivals the word is what the fight becomes when the group joins. Its accessible name says `adds 400 XP;
-  the fight becomes Moderate`.
+- In Arrivals the word is what the fight becomes when the group joins. The group's drag handle keeps its
+  accessible name, and its accessible description says `Adds 400 XP; the fight becomes Moderate`: the word is
+  painted text, and a scenario finds the handle by its name.
 - **A summary whose last line has no room** shows no word. The DM opens the row, by a click or Enter on its
   title, and the word ends the line of `Read encounter`. That is 1 `Find`, with the keyboard.
 - It does not show on a running or played fight's row, on Setup's roster, in History or on Timeline.
@@ -763,6 +778,14 @@ adds a creature. It is blocked as the editor's `Start fight` is, with the same r
   no row, and in the note its link has the hover `Not found in this campaign`, as every link to nothing has
   today.
   Cost from the Session page: `Encounters`, the menu, `Remove…`, `Session` = 4, **T T**.
+
+**The fold** (ruled after review, built in P3). The next fight's row and its primary action are always in view
+in the plan. Scenes give way first: when the plan's rows, with the scenes, do not fit its pane, every scene
+folds, and the **Tonight** line says `N scenes` after its count, a link, in room that is spare there today. The
+fold takes no line of its own, so with scenes folded every other row has the place and the width that it has
+in a note with no scene. `N scenes` opens them in place and closes them again; the DM's choice holds
+for that session. Nothing else folds: a plan whose rows do not fit without scenes scrolls as today. When the
+rows fit again, the scenes show again.
 
 **Cases B, C and D.** The plan has its own tab and the full page width; the row is the same. The note is
 behind its tab, so the typed route costs the tab changes.
@@ -1370,8 +1393,9 @@ first.` So a wrong `Roll for encounters` can go at any time.
 
 - **How long** is the Timeline's field. It is part of the block, so a plain Travel row does not gain a line.
 - **One check at each whole interval from the start, and none at the journey's end.** Two days give two
-  checks, at 0 and 24 hours. An empty length, or one that the clock cannot read, gives one line, `This
-  journey`. `Roll all 2` shows under the lines while two or more are not rolled.
+  checks, at 0 and 24 hours. A length of zero gives none, because its only check would be at its end; its
+  results stay, under `Outside this journey now`. An empty length, or one that the clock cannot read, gives
+  one line, `This journey`. `Roll all 2` shows under the lines while two or more are not rolled.
 - **The lines on screen follow the length as the DM types it.** New in P5, on Timeline and on the
   Session page: the file takes the length on Enter or when the field loses focus. Today each key changes the
   event (`src/timeline/page.rs:1011-1019`). An outside change to the event meets the Timeline's choices of
@@ -1395,9 +1419,12 @@ first.` So a wrong `Roll for encounters` can go at any time.
   journeys to roll them here.`
 - **Cases B, C and D.** The plan has the page's width, which is wider than 330 px, so nothing more gives.
 - **On Timeline** the event's menu has the same `Roll for encounters`, and the detail column shows the same
-  block under its own **How long**.
+  block under its own **How long**, with no `Plan “…”` (section 7).
+- **The length being typed has one owner,** whichever page shows the field. Leaving the page gives it to the
+  journey, as the field's loss of focus does, so a length typed on one page never outlives a newer one typed
+  on the other.
 
-**Lookup.** The table's name is a link. It opens the table's note at its heading in Lookup, beside the page.
+**Lookup.** The table's name is the table menu's button, and opens nothing else (section 7).
 
 
 **Exact words.** Menu: `Roll for encounters`. Label: `Encounter checks`. `<table’s name> · 1d20 each day`, or
@@ -1474,8 +1501,9 @@ new, and one save is new; the table says which.
 **What `Draft::apply` does with an outside edit.** It calls `follow_disk` first, so an edit made in Obsidian a
 moment before is in the text that it changes. With unsaved typed words and a changed file, a new act is not
 applied, and its place says `The note changed on disk. Choose in the note first.` An act on a line that
-exists finds the line by its whole text, nearest its old place; when the line is gone or changed, it writes
-nothing and says `That line changed on disk.`
+exists names the line it was drawn from: its place and its whole text as read. When the line at that place
+holds other words now, it writes nothing, says `That line changed on disk.` where the DM acted, and the row
+draws again from the file. It never looks for another line that reads the same (built in P3).
 
 **When an Undo ends.**
 
@@ -1741,6 +1769,12 @@ Each is a limit that this design keeps and states, with its count.
   change, and change back, across two files. The DM starts a new run.
 - **Where the note is behind its tab** (cases B, C and D), a typed line costs the tab changes: 2 in J2 and in
   J6.
+- **Timeline offers no `Plan “…”`** (F9, P5). The offer needs the session's plan and its open note, which
+  Timeline does not hold. The route that is left: `Open this session` in the event's detail, open the Travel
+  row, `Plan “…”`: Nav 1, Find 1, Do 1 = 3, **T**.
+- **A journey's table name does not open its note** (F9, P5). It is the button of the table menu, and one
+  control does one thing. The route that is left: Ctrl+K, type the table's name, choose its heading: Panel 1,
+  Find 2 = 3, with no page transition.
 
 **Two rulings of the owner** (2026-11-11).
 

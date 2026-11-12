@@ -187,7 +187,9 @@ name (2), `Add all cached party members`, search (2), `Add`, `Duplicate`, search
   button is enabled and calls `unwrap` on a missing draft (`:522-528`). The app should
   panic. From code reading only; not run.
 
-**Done well:** T5.1 to T5.5.
+The editor says how the roster compares with the party's XP budget.
+
+**Done well:** T5.1 to T5.5, and T5.7.
 
 ### W6. Read rules and content
 **Trigger:** the DM studies a monster, a class, or a rule. **Goal:** find it, read it
@@ -276,7 +278,10 @@ switching (`src/main.rs:164`), which is correct and must stay.
 campaign's folder, and each encounter, rest, journey, day and major event is on one timeline that any note
 can refer to. **Context:** desk and table. **Frequency:** every session.
 
-**Done well:** T11.1 to T11.4, and T11.8.
+A journey that the DM asks to check rolls its encounter checks in its own row, and a result becomes a planned
+fight in one step.
+
+**Done well:** T11.1 to T11.4, T11.8 to T11.10.
 
 ### W12. Record a session and process it later
 **Trigger:** the table agrees to be recorded. **Goal:** the audio is safe, its state is plain, and later it
@@ -319,7 +324,9 @@ which. A session is played when a fight is open, a recording is live, or the cur
 before today. The DM can hide or show the bar, and Splat remembers it. The Run page has no bar: its rows
 already show the party.
 
-**Done well:** T12.0 to T12.9, T14.1 to T14.5, T14.7 and T14.8.
+The plan also holds scenes, with a done mark. A creature's or an NPC's page starts a fight that nobody planned.
+
+**Done well:** T12.0 to T12.12, T14.1 to T14.5, T14.7 and T14.8.
 
 ## 3. Information architecture
 
@@ -560,6 +567,7 @@ reading the code, not from a test run.
 | T5.4 | Creature results stay smooth at about 340 rows | encounter-build | state | Not virtualised |
 | T5.5 | Edit `Run folder` with no draft, click every enabled button: no panic | encounter-build | state | Panic expected |
 | T5.6 | With sync on, the roster shows what the party has now. With it off, the roster says nothing reaches D&D Beyond | encounter-build | state | Fail |
+| T5.7 | The editor's roster line ends with the XP and a word from the rules data, wide and narrow; so do a Ready to run row, a planned fight's row or its opened line, and a group's XP in Arrivals. With no table, sheets or XP it is as today | encounter-build, encounter-difficulty, encounter-groups | state | No route |
 | T6.1 | Prose line length ≤ 75 characters at 1200x800 and 1920x1080; reader usable at 960x640 | library-browse | view, look | 760 px cap |
 | T6.2 | Back after a link returns to the prior entry and scroll in 1 | library-browse | cost, state | Fail |
 | T6.3 | List scroll at 2,065 rows stays at or below today's median | library-browse | state | 2.3 ms debug |
@@ -584,6 +592,8 @@ reading the code, not from a test run.
 | T11.6 | Process states what is missing, and where audio and words go, before anything is sent. A failure stays in view on every page | session-recording | state | New |
 | T11.7 | A marker reaches the timeline only when the DM adds it. What the second pass changed can be read | session-recording | state | New |
 | T11.8 | A note during a run in ≤ 2, beside the roster, in the session being played | session-notes | cost, view | New |
+| T11.9 | A two-day journey rolls two checks in 1; each is a quoted line of the event in `Timeline.md`, and an older reader keeps a line whose words hold `: `. A shorter length deletes none. A result edited in Obsidian shows its words, and `Clear` removes it | travel-checks **new**, roll-table-author | cost, state | New |
+| T11.10 | A result that names an encounter is planned in 1, and its `Start fight` is next; `In the plan` shows only while that row is to come. With several tables and no earlier choice, `Roll` waits, and the event holds `Checks table:` through a restart. `No checks` takes the block off. With no marked table, the row's menu is as before | travel-checks **new**, session-notes | cost, state | New |
 | T14.1 | A plain note reads in Splat, with no change to the file | world | state | New |
 | T14.2 | A link in a note opens the note it names, as in Obsidian | world | state | New |
 | T14.3 | A marked table rolls, with a typed result as well, and its row shows | world | state | New |
@@ -622,6 +632,9 @@ reading the code, not from a test run.
 | T12.7 | Setup and Prep show the read-aloud text. Technical details are closed | session-plan | state | New |
 | T12.8 | A condition's rule opens from its word on the row, and is gone again, in 2 | session-plan | cost | New |
 | T12.9 | Lookup finds words in a session note and keeps the run in view | session-plan | state, view | New |
+| T12.10 | A task line is a scene with a box. A tick changes one character. A plain list line gets no row. The empty plan is as today | session-plan-scenes | cost, state | New |
+| T12.11 | A scene's link opens its entry in Lookup in 1, and `Back` returns to an earlier entry | session-plan-scenes | cost | New |
+| T12.12 | A reader starts a fight in 1, and a scene row's menu in 2. An NPC with no stat block opens the made-up form with its name and focus in HP. After `Close run`, also after a restart, a second `Start fight` starts the same encounter. `Remove…` and `Undo remove encounter` remove and restore an encounter with no saved run | session-plan-scenes, npc-in-lookup, encounter-build | cost, state | New |
 | T12.0 | A creature made the campaign's own in ≤ 7, with no page change. Party compares passive scores with no sheet open. A Library save after an encounter save is not a conflict | session-plan | cost, state | New |
 | T14.2 | A wrong initiative is corrected during combat, as one step of undo, and the current turn stays | session-plan | state | New |
 | T14.3 | Exhaustion is one level with a control, and each step replaces the last | session-plan | state | New |

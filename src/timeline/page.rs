@@ -1,5 +1,5 @@
 //! The Timeline page: the whole campaign in story order, apart from any one session.
-use super::{Book, Event, Kind, clock, clock_now, clock_words, day_numbers, reference};
+use super::{Book, Event, Kind, checks, clock, clock_now, clock_words, day_numbers, reference};
 use crate::design::{self, Action, Density, Status, Tone, Type, colors, icons};
 use eframe::egui;
 use std::time::{Duration, Instant};
@@ -85,6 +85,12 @@ pub struct TimelinePage {
     pub places: Vec<(Uuid, Vec<String>)>,
     /// The DM asked to read this location.
     pub open_place: Option<Uuid>,
+    /// The campaign's marked tables, for a journey's encounter checks.
+    pub tables: Option<std::sync::Arc<crate::loot_editor::Sources>>,
+    focus_length: bool,
+    /// What the DM typed in a journey's checks, and each journey's last result with its Undo.
+    checks: checks::State,
+    checks_done: checks::Results,
 }
 
 /// One button for each of these kinds of event. Returns the new event's ID.
@@ -95,6 +101,19 @@ pub fn quick_add(
     kinds: &[Kind],
     first: impl FnOnce(&mut egui::Ui),
 ) -> Option<String> {
+    quick_add_with(ui, book, session, kinds, Vec::new(), first).and_then(|chosen| chosen.ok())
+}
+
+/// `quick_add`, with lines of the strip's More menu alone, after the kinds. A new event's ID
+/// comes back as `Ok`, and a chosen line of `more` as `Err` with its index there.
+pub fn quick_add_with(
+    ui: &mut egui::Ui,
+    book: &mut Book,
+    session: Option<Uuid>,
+    kinds: &[Kind],
+    more: Vec<Action<'_>>,
+    first: impl FnOnce(&mut egui::Ui),
+) -> Option<Result<String, usize>> {
     let blocked = book.unreadable.is_some();
     let names: Vec<_> = kinds
         .iter()
@@ -118,13 +137,15 @@ pub fn quick_add(
         .filter(|(_, kind)| matches!(kind, Kind::Encounter | Kind::LongRest))
         .map(|(index, _)| index)
         .collect();
-    design::hanging_add_strip(ui, first, actions, &always_visible).map(|index| {
-        let kind = kinds[index];
-        if kind == Kind::LongRest {
+    design::hanging_add_strip(ui, first, actions, &always_visible, more).map(|index| {
+        let Some(&kind) = kinds.get(index) else {
+            return Err(index - kinds.len());
+        };
+        Ok(if kind == Kind::LongRest {
             book.add_long_rest(session)
         } else {
             book.add(kind, session)
-        }
+        })
     })
 }
 
@@ -476,6 +497,8 @@ impl TimelinePage {
 
     pub fn reopen(&mut self) {
         self.reset_detail = true;
+        // The journeys' results and their Undo end when the DM leaves the page.
+        self.checks_done.clear();
     }
 
     fn row(
@@ -832,6 +855,7 @@ impl TimelinePage {
         notes: &mut crate::sessions::page::Sessions,
     ) {
         let c = colors();
+        checks::settle_length(book, self.selected.as_deref());
         let Some(id) = self
             .selected
             .clone()
@@ -871,6 +895,12 @@ impl TimelinePage {
         let mut changed = false;
         let mut removed = false;
         let mut placed: Option<Option<String>> = None;
+        let sources = self.tables.clone();
+        let tables = sources.as_ref().map_or(&[][..], |sources| &sources.tables);
+        let mut checks_act = None;
+        let mut undo_checks = false;
+        let mut length_taken = checks::Taken::Nothing;
+        self.checks_done.follow(book);
         let labels: Vec<String> = book
             .events
             .iter()
@@ -942,6 +972,12 @@ impl TimelinePage {
                 &format!("More actions for {}", event.label(days[index])),
             );
             egui::Popup::menu(&more).show(|ui| {
+                if checks::offered(event, tables)
+                    && Action::quiet("Roll for encounters").show(ui).clicked()
+                {
+                    checks_act = Some(checks::Act::Start);
+                    ui.close();
+                }
                 let open_run = event.run.is_some() && event.run == self.open_run;
                 removed = Action::quiet("Remove")
                     .name("Remove this event")
@@ -1042,6 +1078,7 @@ impl TimelinePage {
             }
             ui.set_max_width(form_width);
             let event = &mut book.events[index];
+            let mut length = event.duration.clone();
             ui.add_space(design::M);
             let day_start = starts
                 .filter(|_| event.kind == Kind::Day)
@@ -1073,14 +1110,11 @@ impl TimelinePage {
                             Kind::ShortRest => "1 hour",
                             _ => "",
                         };
-                        changed |= design::text_input(
-                            ui,
-                            "How long",
-                            &mut event.duration,
-                            hint,
-                            ui.available_width(),
-                        )
-                        .changed();
+                        let focus = std::mem::take(&mut self.focus_length);
+                        let (words, taken) =
+                            checks::length_input(ui, &mut book.length, event, hint, focus);
+                        length = words;
+                        length_taken = taken;
                     },
                 );
             }
@@ -1106,6 +1140,23 @@ impl TimelinePage {
                         );
                     }
                 });
+            }
+            // A journey's encounter checks, under its own **How long**.
+            if checks::shown(event) {
+                ui.add_space(design::M);
+                let view = checks::View {
+                    event,
+                    start: starts,
+                    length: &length,
+                    tables,
+                    planned: &|_| None,
+                };
+                checks_act = checks::header(ui, &view, &mut self.checks).or(checks_act.take());
+                checks_act = checks::lines(ui, &view, &mut self.checks).or(checks_act.take());
+                if let Some(done) = self.checks_done.get(&id) {
+                    ui.add_space(design::S);
+                    undo_checks |= design::undo_message(ui, Tone::Success, &done.words, done.undo);
+                }
             }
             ui.add_space(design::M);
             changed |= design::text_field(ui, "Where", &mut event.place, None, None).changed();
@@ -1240,6 +1291,21 @@ impl TimelinePage {
         });
         if changed {
             book.touch();
+        }
+        checks::note_taken(book, length_taken);
+        if let Some(act) = checks_act {
+            self.checks.clear_problem();
+            if act == checks::Act::Start {
+                self.focus_length = book.events[index].duration.trim().is_empty();
+            }
+            match checks::apply(book, &id, &act, tables) {
+                Ok(Some(done)) => self.checks_done.keep(done),
+                Ok(None) => {}
+                Err(error) => self.checks.failed(&act, error),
+            }
+        }
+        if undo_checks {
+            self.checks_done.undo(&id, book);
         }
         if let Some(action) = ruling {
             action.apply(book, &id);
@@ -1631,6 +1697,84 @@ mod tests {
     #[test]
     fn long_rest_added_on_timeline_restores_and_undo_removes_its_ruling() {
         check_long_rest_add(&Kind::ALL);
+    }
+
+    /// Row 7 of the plain evening's contract: a line of More alone moves no action of the strip.
+    /// A strip that needs no More has none of those lines; one that has More lists them last.
+    #[test]
+    fn a_line_of_more_alone_moves_no_action() {
+        use egui_kittest::kittest::Queryable;
+        const KINDS: [Kind; 5] = [
+            Kind::Day,
+            Kind::LongRest,
+            Kind::ShortRest,
+            Kind::Travel,
+            Kind::Event,
+        ];
+        let draw = |width: f32, scene: bool| {
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(egui::vec2(width, 300.0))
+                .build_state(
+                    move |ctx, (book, chosen): &mut (Book, Option<Result<String, usize>>)| {
+                        egui::CentralPanel::default().show(ctx, |ui| {
+                            let more = if scene {
+                                vec![
+                                    Action::quiet("Scene")
+                                        .icon(icons::CHECK_SQUARE)
+                                        .name("Add Scene"),
+                                ]
+                            } else {
+                                Vec::new()
+                            };
+                            if let Some(picked) =
+                                quick_add_with(ui, book, None, &KINDS, more, |ui| {
+                                    let _ = Action::quiet("Fight").icon(icons::ENCOUNTERS).show(ui);
+                                })
+                            {
+                                *chosen = Some(picked);
+                            }
+                        });
+                    },
+                    (Book::default(), None),
+                );
+            design::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            harness
+        };
+        let shown = |harness: &egui_kittest::Harness<'_, _>| {
+            [
+                "Add Day",
+                "Add Long rest",
+                "Add Short rest",
+                "Add Travel",
+                "Add Major event",
+                "More Add actions",
+                "Add Scene",
+            ]
+            .map(|name| harness.query_by_label(name).map(|node| node.rect()))
+        };
+        for width in [360.0, 1200.0] {
+            let without = draw(width, false);
+            let mut with = draw(width, true);
+            assert_eq!(shown(&without), shown(&with), "at {width} px");
+            let more = with.query_by_label("More Add actions").is_some();
+            assert_eq!(more, width < 1000.0, "at {width} px");
+            if more {
+                with.get_by_label("More Add actions").click();
+                with.run_steps(2);
+                let scene = with.get_by_label("Add Scene").rect();
+                for name in ["Add Day", "Add Short rest", "Add Travel", "Add Major event"] {
+                    assert!(
+                        with.get_by_label(name).rect().bottom() <= scene.top(),
+                        "{name}"
+                    );
+                }
+                with.get_by_label("Add Scene").click();
+                with.run_steps(2);
+                assert_eq!(with.state().1, Some(Err(0)));
+                assert!(with.state().0.events.is_empty());
+            }
+        }
     }
 
     #[test]

@@ -2677,7 +2677,7 @@ pub fn round_trip(d: &mut Driver<'_>) {
 }
 
 pub fn tables(d: &mut Driver<'_>) {
-    let body = "# Table Workshop\n\n<!-- splat:rolls key=valid dice=1d6 -->\n\n| d6 | Result |\n|---|---|\n| 1 | Rain |\n| 2-5 | Fog |\n| 6 | Sun |\n\n<!-- splat:rolls key=gap dice=1d4 -->\n\n| d4 | Gap |\n|---|---|\n| 1 | One |\n| 3-4 | Later |\n\n<!-- splat:rolls key=overlap dice=1d4 -->\n\n| d4 | Overlap |\n|---|---|\n| 1-3 | First |\n| 3-4 | Second |\n\n<!-- splat:rolls key=words dice=1d6 -->\n\n| d6 | Words |\n|---|---|\n| 1 | One |\n| 2 to 5 | Fog |\n| 6 | Six |\n";
+    let body = "# Table Workshop\n\n<!-- splat:rolls key=valid dice=1d6 per=fortnight -->\n\n| d6 | Result |\n|---|---|\n| 1 | Rain |\n| 2-5 | Fog |\n| 6 | Sun |\n\n<!-- splat:rolls key=gap dice=1d4 -->\n\n| d4 | Gap |\n|---|---|\n| 1 | One |\n| 3-4 | Later |\n\n<!-- splat:rolls key=overlap dice=1d4 -->\n\n| d4 | Overlap |\n|---|---|\n| 1-3 | First |\n| 3-4 | Second |\n\n<!-- splat:rolls key=words dice=1d6 -->\n\n| d6 | Words |\n|---|---|\n| 1 | One |\n| 2 to 5 | Fog |\n| 6 | Six |\n";
     let body = body.replace(
         "<!-- splat:rolls key=words",
         &format!(
@@ -2693,6 +2693,12 @@ pub fn tables(d: &mut Driver<'_>) {
         "W6",
         "Table faults appear in the World list and warning count",
         |d| d.has_containing("3 table faults") && d.visible_text("1 note needs fixing"),
+    );
+    // F9: a `per` word that Splat cannot read warns on its table, and the table still rolls.
+    d.observe(
+        "T11.9",
+        d.visible_text(crate::roll_table::PER_NOT_READ) && d.has("Roll 1d6"),
+        "An interval that cannot be read warns on its table",
     );
     d.state("authored-table-validation", Sizes::All);
     d.observe_both(
@@ -2798,6 +2804,20 @@ pub fn tables(d: &mut Driver<'_>) {
             )
         })
     };
+    // F9: the descriptor holds the interval. With no `per`, a journey checks each day; a word
+    // that cannot be read also checks each day.
+    let per = |key: &str| {
+        tables
+            .iter()
+            .find(|table| table.key == key)
+            .map(|table| table.per.clone())
+    };
+    d.observe(
+        "P5-table-interval",
+        per("forced_trip") == Some(crate::roll_table::Per::Day)
+            && per("valid") == Some(crate::roll_table::Per::NotRead("fortnight".into())),
+        format!("Each table names how often a journey rolls it: {tables:?}"),
+    );
     // A note's title is its name, not a heading above the table; a `##` heading is one.
     d.observe(
         "P1c-table-descriptor",
@@ -4226,6 +4246,83 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
             && !d.visible_text("Location · Campaign"),
         "After a restart, Lookup opens with no entry, no trail and no held NPC",
     );
+
+    // F3 of the session-cycle design, rows 9 and 21 of its section 2.5: with no run open, an
+    // NPC's and a package creature's reader has a quiet Start fight after Edit, in the room the
+    // title leaves. It starts `Fight with <name>`, and after an untouched Setup is closed, the
+    // same click starts that encounter again.
+    if d.app().encounters.run().is_some() {
+        if !d.has(CLOSE_RUN) {
+            d.click(BACK_TO_RUN);
+        }
+        close_run(d);
+    }
+    let start = "Start a fight with Rook Ambry";
+    let show = |d: &mut Driver<'_>, name: &str| {
+        if !d.has(SEARCH_LOOKUP) {
+            d.click(NAV_LOOKUP);
+        }
+        look_up_again(d, name);
+    };
+    show(d, "Rook Ambry");
+    d.wait_for_text("Watch House");
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (placed, detail) = d.at_size(size, |d| {
+            let start = d.place_of(start);
+            let edit = d.place_of("Edit Rook Ambry");
+            (
+                (size == SMALL || start.is_some())
+                    && start.zip(edit).is_none_or(|(start, edit)| {
+                        (start.left() - edit.right() - design::XS).abs() <= 0.5
+                            && (start.top() - edit.top()).abs() <= 0.5
+                    }),
+                format!("Start fight {start:?}, Edit {edit:?}"),
+            )
+        });
+        d.observe(
+            "T12.12",
+            placed,
+            format!("At {size:?}, the NPC's Start fight follows Edit by XS: {detail}"),
+        );
+    }
+    d.state("npc-start-fight-in-lookup", Sizes::All);
+    show(d, "Guard");
+    d.click("Guard · Creature · CR 1/8");
+    d.wait_for_text("ARMOR CLASS");
+    let package = d.at_size(DEFAULT, |d| {
+        d.has("Start a fight with Guard") && !d.has_containing("Edit Guard")
+    });
+    d.observe(
+        "T12.12",
+        package,
+        "A package creature's reader, which has no Edit, has Start fight",
+    );
+    d.state("package-creature-start-fight", Sizes::All);
+    show(d, "Rook Ambry");
+    d.wait_for_text("Watch House");
+    d.set_base(DEFAULT);
+    d.begin_task();
+    d.click(start);
+    d.expect(&format!("{RUN_HEADING}Fight with Rook Ambry"));
+    d.audit_goal_within(
+        "T12.12",
+        "start a fight that nobody planned from a reader",
+        1,
+    );
+    let encounters = root(d).join("Encounters");
+    let count = || fs::read_dir(&encounters).unwrap().count();
+    let before = count();
+    close_run(d);
+    show(d, "Rook Ambry");
+    d.wait_for_text("Watch House");
+    d.click(start);
+    d.expect(&format!("{RUN_HEADING}Fight with Rook Ambry"));
+    d.observe(
+        "T12.12",
+        count() == before && !encounters.join("Fight with Rook Ambry 2.md").exists(),
+        "After Close run, Start fight starts the same encounter, and no second one is saved",
+    );
+    close_run(d);
 }
 
 /// AD3: a result's Undo follows its message, drawn by `undo_message`, at each size. It has the
