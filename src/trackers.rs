@@ -1787,6 +1787,30 @@ mod tests {
             (value(&race, "race_clock", None), race.trackers.due()),
             (10, 0)
         );
+        // A notice raised since needs the removal: its bell crosses 20 only while the room is
+        // out. Undo remove would leave its roll with no notice, so it writes nothing.
+        let t = &mut race.trackers;
+        t.press("race_clock", None, "Cistern or Sands", None);
+        let bell = t.state.due[0].clone();
+        t.roll_notice(&bell, "wander_early");
+        let before = file(&race);
+        let t = &mut race.trackers;
+        t.undo_remove();
+        assert_eq!(
+            t.history_reason,
+            Some((
+                note,
+                Unrecorded::Refused(
+                    "Wandering, 0:00 to 0:39 roll depends on the removal. Remove that first. Nothing was put back."
+                        .into()
+                )
+            ))
+        );
+        assert!(
+            t.removed.is_some(),
+            "the Undo stays for when that roll is gone"
+        );
+        assert_eq!(file(&race), before);
 
         // A value that an edit in Obsidian forced below its `min` counts as written, and joins
         // the problems list of its note; Splat changes nothing.
@@ -2081,7 +2105,17 @@ mod tests {
 
     #[test]
     fn no_note_in_play_reads_no_ledger_and_shows_nothing() {
-        let race = race();
+        let mut race = race();
+        // A Remove's result and its Undo are in the note's reader while the note is in play.
+        let t = &mut race.trackers;
+        let note = t.rules.trackers[0].note;
+        t.played = None;
+        t.press("favor", None, "Crowd loves it", None);
+        t.played = Some(TONIGHT);
+        t.settle();
+        let older = t.history["favor"][0].entry.clone();
+        t.remove(note, &older);
+        assert_eq!(history::footer_lines(t, note).len(), 1);
         // A note in play that was deleted keeps its row in Campaign → Rules and runs, so that the
         // DM can switch it off.
         fs::remove_file(race.campaign.path.join("Tournament.md")).unwrap();
@@ -2100,8 +2134,14 @@ mod tests {
                 .unwrap()
                 .contains("splat_in_play")
         );
-        fs::write(ledger::path(&race.campaign.path), "not a ledger").unwrap();
         let index = Arc::new(ContentIndex::load(&[], Some(&race.campaign)).unwrap());
+        race.trackers
+            .poll(Some(index.clone()), Some(&race.campaign), Some(TONIGHT));
+        assert!(
+            history::footer_lines(&race.trackers, note).is_empty(),
+            "a note out of play shows no Undo remove"
+        );
+        fs::write(ledger::path(&race.campaign.path), "not a ledger").unwrap();
         let mut trackers = Trackers::default();
         trackers.poll(Some(index), Some(&race.campaign), None);
         assert!(!trackers.in_play());

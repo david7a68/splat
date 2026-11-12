@@ -124,6 +124,25 @@ pub fn problems(rules: &Rules, state: &State) -> Vec<(Option<Uuid>, String)> {
     out
 }
 
+/// The act whose entries about a notice would be left with nothing to name, when the ledger
+/// becomes `next`: a notice that a change raised in `ledger` and raises no more in `next`.
+fn orphaned(rules: &Rules, ledger: &Ledger, next: &Ledger) -> Option<String> {
+    let (before, after) = (replay(rules, ledger), replay(rules, next));
+    let orphan = next.changes.iter().find(|entry| {
+        entry
+            .notice
+            .as_ref()
+            .is_some_and(|notice| before.raised(notice) && !after.raised(notice))
+    })?;
+    let press: Vec<Entry> = next
+        .changes
+        .iter()
+        .filter(|entry| entry.same_press(orphan))
+        .cloned()
+        .collect();
+    Some(label(rules, next, &press))
+}
+
 /// Each entry a `Remove` took, with the ID of the entry it followed then.
 type Placed = Vec<(Option<String>, Entry)>;
 
@@ -140,24 +159,10 @@ fn removal(rules: &Rules, ledger: &Ledger, drawn: &Entry) -> Result<(Placed, Str
     }
     let target = with_dependents(ledger, found);
     let next = ledger.apply(&Op::Remove(target.clone()))?;
-    // A later change can cross a mark only because of this entry's value. Its notice would go,
-    // and the notice's own entries would be left with nothing to name.
-    let (before, after) = (replay(rules, ledger), replay(rules, &next));
-    if let Some(orphan) = next.changes.iter().find(|entry| {
-        entry
-            .notice
-            .as_ref()
-            .is_some_and(|notice| before.raised(notice) && !after.raised(notice))
-    }) {
-        let press: Vec<Entry> = next
-            .changes
-            .iter()
-            .filter(|entry| entry.same_press(orphan))
-            .cloned()
-            .collect();
+    // A later change can cross a mark only because of this entry's value.
+    if let Some(name) = orphaned(rules, ledger, &next) {
         return Err(format!(
-            "{} depends on this entry. Remove that first. Nothing was removed.",
-            label(rules, ledger, &press)
+            "{name} depends on this entry. Remove that first. Nothing was removed."
         ));
     }
     let placed = target
@@ -218,15 +223,21 @@ impl Trackers {
     }
 
     /// `Undo remove`: the entries go back where they were. When one of them, or the entry
-    /// before it, changed on disk, it writes nothing, says so, and the Undo ends.
+    /// before it, changed on disk, it writes nothing, says so, and the Undo ends. When a notice
+    /// raised since then needs the entries to stay out, it writes nothing and names it.
     pub fn undo_remove(&mut self) {
         let Some(removed) = self.removed.clone() else {
             return;
         };
         let mut stale = false;
-        let done = self.commit(|_, ledger| {
+        let done = self.commit(|rules, ledger| {
             let op = Op::Restore(removed.placed.clone());
-            ledger.apply(&op).inspect_err(|_| stale = true)?;
+            let next = ledger.apply(&op).inspect_err(|_| stale = true)?;
+            if let Some(name) = orphaned(rules, ledger, &next) {
+                return Err(format!(
+                    "{name} depends on the removal. Remove that first. Nothing was put back."
+                ));
+            }
             Ok(op)
         });
         match done {
@@ -246,6 +257,10 @@ impl Trackers {
 /// Undo wrote nothing, and the last `Remove` with `Undo remove`.
 pub(crate) fn footer_lines(trackers: &Trackers, note: Uuid) -> Vec<FooterLine> {
     let mut lines = Vec::new();
+    // A note that is no longer in play shows nothing of its trackers, also no Undo.
+    if !trackers.rules.trackers.iter().any(|t| t.note == note) {
+        return lines;
+    }
     if let Some((_, reason)) = trackers
         .history_reason
         .as_ref()
@@ -334,8 +349,12 @@ pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, note: &splat::content::E
             design::group_heading_text(ui, &format!("{} history", def.name), count),
             |ui| {
                 ui.label(Type::Small.rich(ui, start_words(def)).color(colors().muted));
+                // Each row's controls are kept by its entry's ID: a menu open on a row that an
+                // edit on disk took away never opens on the row that takes its place.
                 for row in rows.into_iter().flatten() {
-                    history_row(ui, row, row.entry.session != played, &mut pressed);
+                    ui.push_id(&row.entry.id, |ui| {
+                        history_row(ui, row, row.entry.session != played, &mut pressed);
+                    });
                 }
             },
         );

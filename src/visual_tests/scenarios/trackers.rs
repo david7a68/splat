@@ -386,6 +386,24 @@ pub fn run(d: &mut Driver<'_>) {
             && !d.has_containing("Take seal: Old Guard +1"),
         "An unreadable ledger shows its name and no history in the reader",
     );
+    fs::write(&path, &good).unwrap();
+    d.app_mut().trackers.read_disk();
+    d.settle();
+    // A row's menu is kept by its entry: when an edit on disk puts another entry in that row's
+    // place, the open menu does not offer Remove for it.
+    ledger::commit(&path, |_| Ok(Op::Restore(vec![(None, wrong.clone())]))).unwrap();
+    d.app_mut().trackers.read_disk();
+    d.settle();
+    d.click(keyring);
+    d.expect("Remove");
+    fs::write(&path, ledger(d).replace("c-01de5ea1", "c-01de5ea2")).unwrap();
+    d.app_mut().trackers.read_disk();
+    d.settle();
+    d.observe(
+        "T19.5",
+        d.has(keyring) && !d.has("Remove"),
+        "A menu open on a row that an edit took away does not open on the entry in its place",
+    );
     fs::write(&path, good).unwrap();
     d.app_mut().trackers.read_disk();
     d.settle();

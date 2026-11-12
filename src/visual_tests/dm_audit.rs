@@ -686,10 +686,15 @@ fn during_the_session(a: &mut Audit<'_, '_>) {
             .map(|campaign| campaign.path.join("Trackers.md"))
             .and_then(|path| fs::read_to_string(path).ok())
             .unwrap_or_default();
+    let corrected = !ledger.contains("c-1a57ee00") && ledger.contains("why: Burn a torch");
     a.fact(format!(
-        "last session's press is gone and tonight's stays: {}",
-        !ledger.contains("c-1a57ee00") && ledger.contains("why: Burn a torch")
+        "last session's press is gone and tonight's stays: {corrected}"
     ));
+    a.d.observe(
+        "T19.5",
+        corrected,
+        "Remove in the house rule note's history takes last session's press, and tonight's stays",
+    );
 
     a.task("Next fight: start it, with the party as it stands");
     a.click(Nav, &format!("Start fight: {SECOND}"));
