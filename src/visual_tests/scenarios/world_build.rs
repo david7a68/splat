@@ -2244,6 +2244,22 @@ pub fn facts(d: &mut Driver<'_>) {
             && !d.has("Undo tick"),
         "A question whose line changed on disk is not ticked, and the footer says why",
     );
+    // Another note took the file's place outside Splat, with the same question on the same
+    // line: the tick writes nothing to it (Astra's review of PR 287).
+    let id = open
+        .lines()
+        .find(|line| line.starts_with("splat_id: "))
+        .unwrap();
+    let other = open.replace(id, "splat_id: 00000000-0000-4000-8000-0000000000aa");
+    fs::write(&horn, &other).unwrap();
+    d.click(question);
+    d.observe(
+        "T15.5",
+        fs::read_to_string(&horn).unwrap() == other
+            && d.visible_text("Horn Rings changed on disk. Nothing was written.")
+            && !d.has("Undo tick"),
+        "A note that took the question's file is not ticked",
+    );
     fs::write(&horn, &open).unwrap();
     reload(d);
     d.click("Can a horn ring be sold?");

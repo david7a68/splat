@@ -684,12 +684,19 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     );
     // The measured journeys of app round 2 (J6 step 2): Lookup's reader of a campaign World
     // entry has `Change` on Status, as the World page's reader has. One act writes the value
-    // and its Log line, its Undo is in Lookup's footer, and Lookup keeps the entry.
+    // and its Log line, its Undo is in Lookup's footer, and Lookup keeps the entry. The field
+    // starts from the status on disk, also when another reader or Obsidian changed it after
+    // Lookup opened the entry (Astra's review of PR 287).
+    let away = before.replacen("status: alive", "status: away", 1);
+    fs::write(&path, &away).unwrap();
+    d.app_mut().lookup.refresh();
+    d.settle();
     d.click("Change Status");
     d.observe(
         "T15.4",
-        d.focused_name().as_deref() == Some("Status"),
-        "Change on Status in Lookup puts the keyboard in the field",
+        d.focused_name().as_deref() == Some("Status")
+            && d.field_text("Status").as_deref() == Some("away"),
+        "Change on Status in Lookup puts the keyboard in the field, with the status on disk",
     );
     d.type_text("missing");
     d.press(Key::Enter);
@@ -698,7 +705,7 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     d.observe(
         "T15.4",
         changed.contains("status: missing")
-            && changed.contains(": Status alive → missing.\n")
+            && changed.contains(": Status away → missing.\n")
             && d.has(&format!("Edit {VARRA_BLACK}"))
             && d.has("Close Lookup"),
         format!("Change on Status in Lookup writes the value and its Log line: {changed:?}"),
@@ -707,9 +714,12 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     d.click("Undo status change");
     d.observe(
         "T15.4",
-        fs::read_to_string(&path).unwrap() == before && d.has(&format!("Edit {VARRA_BLACK}")),
+        fs::read_to_string(&path).unwrap() == away && d.has(&format!("Edit {VARRA_BLACK}")),
         "Undo status change in Lookup takes back the value and its Log line",
     );
+    fs::write(&path, &before).unwrap();
+    d.app_mut().lookup.refresh();
+    d.settle();
 
     // From the long scene's menu: the field starts with the scene's words outside its link,
     // selected, so typing replaces them.

@@ -712,7 +712,7 @@ impl WorldPage {
                     // A Log line whose entry is gone says its words here too.
                     lines.extend(self.reader.gone_log_notices());
                     match super::draw_footer(ui, "world_footer", &lines).0 {
-                        Some(super::FooterAct::GoneLog(key)) => self.reader.end_gone_log(key),
+                        Some(super::FooterAct::GoneLog(id)) => self.reader.end_gone_log(id),
                         Some(_) => self.undo_discard(),
                         None => {}
                     }
@@ -1323,6 +1323,10 @@ impl WorldPage {
             return Err(format!("Save or discard your edit of {name} first."));
         }
         let before = super::file_fault::read_note(&campaign.path, &item.entry.path)?;
+        // Another note that took this file's place outside Splat is not this question's note.
+        if splat::content::note_id(&before) != Some(item.entry.id) {
+            return Err(format!("{name} changed on disk. Nothing was written."));
+        }
         let after = tick_file(&before, at, line, done)
             .ok_or_else(|| format!("This question changed in {name}. Nothing was written."))?;
         crate::library::write_note(&campaign.path, &item.entry.path, Some(&before), &after)

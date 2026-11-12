@@ -2543,10 +2543,10 @@ impl Lookup {
         if lines.is_empty() {
             return;
         }
-        if let (Some(world::FooterAct::GoneLog(key)), _) =
+        if let (Some(world::FooterAct::GoneLog(id)), _) =
             world::draw_footer(ui, "lookup_footer", &lines)
         {
-            self.reader.end_gone_log(key);
+            self.reader.end_gone_log(id);
         }
     }
 

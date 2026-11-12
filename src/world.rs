@@ -1988,7 +1988,8 @@ pub(crate) type LogKey = (Uuid, Uuid);
 /// until the DM copies or dismisses them.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct GoneLog {
-    key: LogKey,
+    /// This notice's own number, so two drafts lost from one entry stay two notices.
+    id: u64,
     name: String,
     words: String,
 }
@@ -2082,8 +2083,8 @@ pub(crate) enum FooterAct {
     Discarded,
     /// The page result's Undo: the page owns it.
     Page,
-    /// The DM copied or dismissed the words of a Log line whose entry is gone.
-    GoneLog(LogKey),
+    /// The DM copied or dismissed the words of a Log line whose entry is gone, by its notice.
+    GoneLog(u64),
     /// `Undo tick` of an open question, by its note and its line: the World page's.
     Untick(Uuid, usize),
 }
@@ -3848,8 +3849,8 @@ impl Reader {
             }
             // The page takes its own result's Undo.
             FooterAct::Page => None,
-            FooterAct::GoneLog(key) => {
-                self.end_gone_log(key);
+            FooterAct::GoneLog(id) => {
+                self.end_gone_log(id);
                 None
             }
             // The World page takes a tick's Undo.
@@ -4222,6 +4223,9 @@ impl Reader {
                 None,
             );
             if changed {
+                // The field starts from the value the reader shows now, not a copy from when
+                // the entry opened: the other reader or Obsidian may have changed it since.
+                status(&item.entry).clone_into(&mut self.status);
                 self.status_editing = true;
                 self.status_select = true;
             }
@@ -5749,6 +5753,7 @@ mod tests {
 
         // An entry that is gone: its draft waits for no guard, and the pane's footer says the
         // words, so nothing is lost without a word.
+        let hob_text = fs::read_to_string(&path).unwrap();
         fs::remove_file(&path).unwrap();
         let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
         assert!(index.position(hob).is_none());
@@ -5779,8 +5784,26 @@ mod tests {
         };
         assert_eq!(notices(&mut lookup), 1);
         assert_eq!(notices(&mut lookup), 1);
-        lookup.footer_act(FooterAct::GoneLog(key), item, &campaign);
-        assert_eq!(notices(&mut lookup), 0);
+        // The entry comes back with its ID, the DM types again, and it goes again: both lost
+        // drafts keep their notice (Astra's review of PR 287).
+        fs::write(&path, &hob_text).unwrap();
+        let again = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        lookup.forget_gone_log_lines(&again);
+        lookup.open_log(campaign.id, hob, "Hob", "");
+        lookup.log_fields.get_mut(&key).unwrap().field.words = "Again.".into();
+        fs::remove_file(&path).unwrap();
+        lookup.forget_gone_log_lines(&ContentIndex::load(&[], Some(&campaign)).unwrap());
+        assert_eq!(notices(&mut lookup), 2);
+        let first = lookup
+            .footer_lines(item, &index, Some(&campaign), None)
+            .into_iter()
+            .find_map(|line| match line.kind {
+                FooterKind::GoneLog(gone) if gone.words == "Kept." => Some(gone.id),
+                _ => None,
+            })
+            .unwrap();
+        lookup.footer_act(FooterAct::GoneLog(first), item, &campaign);
+        assert_eq!(notices(&mut lookup), 1);
     }
 
     #[test]

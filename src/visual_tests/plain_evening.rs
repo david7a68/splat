@@ -1973,14 +1973,20 @@ mod allowed_classes {
                 .filter(move |other| other.screen == d.screen && other.view == d.view)
         }
 
-        /// The view's one downward shift, and the old top and left of the first item it moves,
-        /// when the view has the new Change and every move in it is that one straight shift.
+        /// The view's one downward shift, and the new Status label's left and top, when the
+        /// view has the new Change and Status label and every move in it is that one straight
+        /// shift of an item that stood at or below the label's top, in the reader's column (not
+        /// left of the label): so the title, the kind line and the page beside Lookup never
+        /// move under this class (Astra's review of PR 287).
         fn shift(d: &Difference, rows: &[AllowedRow]) -> Option<(f32, f32, f32)> {
             if !d.screen.starts_with("lookup-reader ")
                 || !same_view(d, rows).any(|o| o.change == "new" && o.name == CHANGE)
             {
                 return None;
             }
+            let [left, top, ..] = same_view(d, rows)
+                .find(|o| o.what == "control" && o.change == "new" && o.name == "Label: Status")
+                .and_then(|o| rect_of(&o.detail, "at "))?;
             let moves: Vec<_> = same_view(d, rows)
                 .filter(|o| o.change == "moved")
                 .map(|o| rects(&o.detail))
@@ -1992,9 +1998,9 @@ mod allowed_classes {
                     && (new[2] - old[2]).abs() < 0.05
                     && (new[3] - old[3]).abs() < 0.05
                     && (new[1] - old[1] - dy).abs() < 0.05
+                    && old[1] >= top - 0.5
+                    && old[0] >= left - 0.5
             });
-            let top = moves.iter().map(|(old, _)| old[1]).fold(f32::MAX, f32::min);
-            let left = moves.iter().map(|(old, _)| old[0]).fold(f32::MAX, f32::min);
             (straight && dy > 0.0 && dy <= 64.0).then_some((dy, top, left))
         }
 
@@ -2004,7 +2010,8 @@ mod allowed_classes {
                 && shift(d, rows).is_some()
         }
 
-        /// A word of the Status row, new, inside the band that the shift opened.
+        /// A word of the Status row, new, in the band that the shift opened from the label's
+        /// line: a control's target may start `S` above the label's words.
         pub(super) fn part(d: &Difference, rows: &[AllowedRow]) -> bool {
             let Some((dy, top, left)) = shift(d, rows) else {
                 return false;
@@ -2013,7 +2020,7 @@ mod allowed_classes {
                 && d.change == "new"
                 && PARTS.contains(&d.name.as_str())
                 && rect_of(&d.detail, "at ").is_some_and(|[x, y, _, h]| {
-                    x >= left - 0.5 && y >= top - dy - 0.5 && y + h <= top + dy + 0.5
+                    x >= left - 0.5 && y >= top - crate::design::S - 0.5 && y + h <= top + dy + 0.5
                 })
         }
 
@@ -2039,11 +2046,35 @@ mod allowed_classes {
     /// places that the `+` glyphs leave, less those they take, are exactly the new glyph's one
     /// place, at one size. So every other `+` keeps its place.
     mod log_glyph {
-        use super::super::{AllowedRow, Difference};
+        use super::super::{AllowedRow, Difference, Reference, folder, read};
         use super::{rect_of, rects};
 
         const ADD: &str = "\u{e3d4}";
         const ADD_TO_LOG: &str = "\u{e2f8}";
+
+        /// The frozen reference, read once.
+        fn reference() -> &'static Reference {
+            static REFERENCE: std::sync::OnceLock<Reference> = std::sync::OnceLock::new();
+            REFERENCE.get_or_init(|| read(&folder().join("reference.json")))
+        }
+
+        /// The reference's `Add to Log` in this view holds this place: the glyph is that
+        /// action's, not another action's `+` (Astra's review of PR 287).
+        fn in_add_to_log(screen: &str, view: &str, at: &[f32; 4]) -> bool {
+            reference()
+                .views
+                .iter()
+                .filter(|v| v.screen == screen && v.view == view)
+                .flat_map(|v| &v.controls)
+                .any(|control| {
+                    control.0 == "Button: Add to Log"
+                        && control.1.len() >= 4
+                        && at[0] >= control.1[0] - 0.05
+                        && at[1] >= control.1[1] - 0.05
+                        && at[0] + at[2] <= control.1[0] + control.1[2] + 0.05
+                        && at[1] + at[3] <= control.1[1] + control.1[3] + 0.05
+                })
+        }
 
         pub(super) fn glyph(d: &Difference, rows: &[AllowedRow]) -> bool {
             let ours = |o: &Difference| {
@@ -2093,7 +2124,10 @@ mod allowed_classes {
                     None => return false,
                 }
             }
-            new.len() == 1 && left.len() == 1 && near(&left[0], &new[0])
+            new.len() == 1
+                && left.len() == 1
+                && near(&left[0], &new[0])
+                && in_add_to_log(&d.screen, &d.view, &new[0])
         }
 
         pub(super) fn act_words(d: &Difference) -> bool {
@@ -4692,6 +4726,22 @@ mod allowed_classes {
                 view("new", "Label: Status", "at 781 400 33.8x16"),
                 "a word below the band",
             ),
+            (
+                view(
+                    "moved",
+                    "Label: Oren Thistlewick",
+                    "781 126 200x36 -> 781 162 200x36",
+                ),
+                "the title moved",
+            ),
+            (
+                view(
+                    "moved",
+                    "Button: New session",
+                    "631.9 44 124.1x30 -> 631.9 80 124.1x30",
+                ),
+                "a control left of the reader moved",
+            ),
         ] {
             let mut rows = status_rows.clone();
             rows.push(fault);
@@ -4735,6 +4785,13 @@ mod allowed_classes {
                     glyph("new", "\u{e2f8}", "at 1125.3 131 14x18"),
                 ],
                 "a `+` that moved to a new place",
+            ),
+            (
+                vec![
+                    glyph("gone", "\u{e3d4}", "was 643.9 50 14x18"),
+                    glyph("new", "\u{e2f8}", "at 643.9 50 14x18"),
+                ],
+                "another action's `+` (`New session`) became the glyph",
             ),
         ] {
             assert!(

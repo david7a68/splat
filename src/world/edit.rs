@@ -610,7 +610,7 @@ impl super::GoneLog {
         if copied {
             ui.ctx().copy_text(self.words.clone());
         }
-        (copied || dismissed).then_some(super::FooterAct::GoneLog(self.key))
+        (copied || dismissed).then_some(super::FooterAct::GoneLog(self.id))
     }
 }
 
@@ -709,10 +709,9 @@ impl Reader {
             if let Some(open) = self.log_fields.remove(&key)
                 && !open.field.words.trim().is_empty()
             {
-                // The entry's newest words replace its older notice: one notice for each entry.
-                self.gone_log_lines.retain(|gone| gone.key != key);
+                // Each lost draft keeps its own notice, also a second one from the same entry.
                 self.gone_log_lines.push(super::GoneLog {
-                    key,
+                    id: super::next_order(),
                     name: open.name,
                     words: open.field.words.trim().to_owned(),
                 });
@@ -739,9 +738,9 @@ impl Reader {
             .collect()
     }
 
-    /// The DM copied or dismissed the words of this gone entry's Log line.
-    pub(crate) fn end_gone_log(&mut self, key: super::LogKey) {
-        self.gone_log_lines.retain(|gone| gone.key != key);
+    /// The DM copied or dismissed the words of this notice.
+    pub(crate) fn end_gone_log(&mut self, id: u64) {
+        self.gone_log_lines.retain(|gone| gone.id != id);
     }
 
     /// Put the entries whose edit form is open in this reader in `out`, with no new
