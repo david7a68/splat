@@ -18093,6 +18093,33 @@ pub mod session_plan {
         );
         let rows_result = row_tops(d);
         d.state("saved-hp-restored", Sizes::All);
+        // Revision 18: A (use saved HP), then an unrelated step B (an initiative typed), then
+        // Undo B and Undo A. B ends A's result and empties the footer, and no row moves; Undo B
+        // gives A's result back with its Undo; Undo A still restores the full HP.
+        let field = rows_result
+            .first()
+            .map(|(name, _)| name.clone())
+            .expect("setup rows have initiative fields");
+        d.type_into(&field, "12");
+        d.press(Key::Enter);
+        let rows_b = row_tops(d);
+        d.observe(
+            "iter-26-R-FI2-setup-b",
+            d.field_text(&field).as_deref() == Some("12")
+                && !d.visible_text(SAVED_HP_SET)
+                && rows_b == rows_result,
+            format!("B ends A's result and moves no row: {rows_result:?} then {rows_b:?}"),
+        );
+        d.click_containing("Undo: initiative");
+        d.observe(
+            "iter-26-R-FI2-setup-undo-b",
+            d.field_text(&field).as_deref() != Some("12")
+                && d.visible_text(SAVED_HP_SET)
+                && d.in_view(SAVED_HP_UNDO)
+                && kestrel(d).contains("HP 11/41")
+                && row_tops(d) == rows_result,
+            "Undo of B gives back A's result and its Undo, with A's HP",
+        );
         // AT1: this Undo has the shape of every Undo after a message: quiet, with its icon.
         let saved_hp_undo = undo_shape(d, SAVED_HP_UNDO);
         d.observe(

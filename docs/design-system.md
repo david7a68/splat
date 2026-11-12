@@ -1491,8 +1491,14 @@ line. In History it is the line under Read-only. Neither is modal, and Undo name
 footer's End step starts its outcome field with the outcome of the ending that went. Whenever that field opens
 with text, the text is selected, so that Enter keeps it and typing replaces it.
 
-A run whose saved Undo steps cannot be read says so once, as a warning `message` in the error line's place with a
-Dismiss button. It wraps beside Lookup and pushes the roster down by its lines. The Log keeps the line.
+The run has one message footer, pinned below the roster in the live, setup and ended views (`design::Footer`). The
+notices that come by themselves sit in it: the changed-on-disk choices, an error, and the warning that the saved Undo
+steps cannot be read; in setup also the carry-over warning and the long-rest offer, whose result (`Party HP set to the
+saved values.` with `Undo use saved HP`) leads the footer while its step is the newest. The roster sizes its rows from
+its whole room, so the footer moves no row when it comes or goes: it only covers the bottom of the list, and the
+overflow line counts the rows behind it, which scroll into view. A stat-block error keeps its one-line band below the
+roster. A run whose saved Undo steps cannot be read says so once, as a warning `message` with a Dismiss button. The
+Log keeps the line.
 
 Footer and strip Close run close at once only when saved with nothing unsent; otherwise ask for a choice. List
 lost changes on separate lines, up to three, then the remaining count. Deleted runs with unsent changes use
