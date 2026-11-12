@@ -308,6 +308,25 @@ pub fn run(d: &mut Driver<'_>) {
         &heading,
         &format!("High · {HIGH_NUMBERS}"),
     );
+    // X51: beside Lookup at the minimum window, Save encounter and Start fight keep their
+    // place on the name field's line; the field gives up width.
+    let line_one = d.at_size(SMALL, |d| {
+        let field = d
+            .nodes()
+            .into_iter()
+            .find(|node| node.name.starts_with("Encounter name"))?
+            .rect;
+        let on_line = |name: &str| {
+            d.place_of(name)
+                .map(|action| field.y_range().contains(action.center().y))
+        };
+        Some((on_line(SAVE_ENCOUNTER)?, on_line(RUN_ENCOUNTER)?))
+    });
+    d.observe(
+        "X51-editor-actions-line-one",
+        line_one == Some((true, true)),
+        format!("Beside Lookup at 960x640, Save encounter and Start fight on the name's line: {line_one:?}"),
+    );
     d.state("editor-high-beside-lookup", Sizes::Small);
     d.press_ctrl(Key::K);
     // One more Ember Cultist takes the fight past High: the line follows the draft at once.
@@ -335,20 +354,28 @@ pub fn run(d: &mut Driver<'_>) {
     d.click("Back to encounters");
     open_saved_encounter(d, UNKNOWN);
     d.expect(SAVE_ENCOUNTER);
+    // X2 (by the lead's ruling after app round 2): the editor is where the DM can repair the
+    // cause, so its line ends with whose XP is not known, and shows no word.
     for size in [SMALL, DEFAULT] {
         let words = d.at_size(size, |d| d.painted_in(egui::Rect::EVERYTHING));
         d.observe(
             "T5.7-editor-unknown",
-            words.contains("ROSTER 6") || words.contains("Roster"),
-            format!("At {size:?} the roster's line is there: {words}"),
-        );
-        d.observe(
-            "T5.7-editor-unknown",
-            !words.contains("XP ") && !words.contains("Low"),
-            format!("At {size:?}, with an XP not known, the line is as today: {words}"),
+            words.contains("ROSTER 6 · XP not known: Nameless Thing") && !words.contains("Low"),
+            format!("At {size:?}, with an XP not known, the heading says whose: {words}"),
         );
     }
     d.state("editor-unknown", Sizes::Default);
+    // Below 760 px the tab row says it, where the word would be; the name shortens from its
+    // end before it goes.
+    look_up(d, "wolf");
+    editor_says(
+        d,
+        "X2-editor-unknown-lookup",
+        "ROSTER 6 · XP not known: Nameless Thing",
+        "XP not known: Nameless",
+    );
+    d.state("editor-unknown-beside-lookup", Sizes::Small);
+    d.press_ctrl(Key::K);
     d.click("Back to encounters");
 
     // The session's plan: each planned fight's summary, or its opened row.

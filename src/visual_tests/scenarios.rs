@@ -15867,6 +15867,35 @@ pub mod encounter_history {
                 format!("{what}, opened at {size:?}: the row and Final state in view: {shown:?}"),
             );
         }
+        // X36: opened at 1200x800, then seen at 960x640: the list follows the run when its
+        // visible height changes, so the party's final HP is still in view.
+        let smaller = d.at_size(SMALL, opened_run_in_view);
+        d.observe(
+            "X36-history-follows-resize",
+            smaller.is_ok(),
+            format!("{what}, opened at {DEFAULT:?} and seen at {SMALL:?}: {smaller:?}"),
+        );
+    }
+
+    /// X36: after the DM scrolls History, a resize does not pull the list back to the run.
+    fn a_scroll_wins_over_a_resize(d: &mut Driver<'_>) {
+        let row = |d: &Driver<'_>| d.place_of(&d.name_starting(&OPEN_OLD.replace("Open", "Close")));
+        let Some(at) = d.place_of("Read-only") else {
+            d.observe("X36-scroll-wins", false, "Read-only is not shown");
+            return;
+        };
+        let before = row(d);
+        d.scroll_up_at(at.center(), 1);
+        let scrolled = row(d);
+        let smaller = d.at_size(SMALL, row);
+        let back = row(d);
+        d.observe(
+            "X36-scroll-wins",
+            scrolled.zip(before).is_some_and(|(scrolled, before)| scrolled.top() > before.top())
+                && smaller.map(|r| r.top().round()) == scrolled.map(|r| r.top().round())
+                && back.map(|r| r.top().round()) == scrolled.map(|r| r.top().round()),
+            format!("The row before {before:?}, after the DM's scroll {scrolled:?}, at {SMALL:?} {smaller:?}, back {back:?}"),
+        );
     }
 
     pub fn run(d: &mut Driver<'_>) {
@@ -15975,6 +16004,7 @@ pub mod encounter_history {
             "An open unfinished run has one row; the strip keeps Next turn primary and Back to run secondary",
         );
         d.state("history-beside-open-run", Sizes::All);
+        a_scroll_wins_over_a_resize(d);
 
         open_saved_encounter(d, RUN);
         d.click("Keep in Ready during a run");

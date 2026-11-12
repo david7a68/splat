@@ -152,6 +152,59 @@ fn history_line_gaps(d: &mut Driver<'_>, line: &str) {
             format!("At {size:?}, {line:?} is S below Read-only and M above FINAL STATE: {gaps:?}"),
         );
     }
+    history_edges(d);
+}
+
+/// X37, X66: the opened run's list starts at a clean edge, with no line above it cut at the
+/// list's top; and `COMBAT LOG` is `M` below the last Final state row, as `FINAL STATE` is `M`
+/// below the line above it.
+fn history_edges(d: &mut Driver<'_>) {
+    for size in [SMALL, DEFAULT, LARGE] {
+        let edges = d.at_size(size, |d| {
+            let (mut list, mut state, mut log) = (None, None, None);
+            d.each_painted_text(|text, clip| {
+                let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                let words = text.galley.job.text.as_str();
+                if words == "FINAL STATE" && clip.intersects(rect) {
+                    (list, state) = (Some(clip), Some(rect));
+                }
+                if words == "COMBAT LOG" && clip.intersects(rect) {
+                    log = Some(rect);
+                }
+            });
+            let (list, state) = (list?, state?);
+            let (mut cut, mut above_log) = (Vec::new(), f32::MIN);
+            d.each_painted_text(|text, clip| {
+                let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                let ink = text.visual_bounding_rect();
+                if (clip.top() - list.top()).abs() < 0.5
+                    && ink.top() < list.top() - 0.5
+                    && ink.bottom() > list.top() + 0.5
+                {
+                    cut.push(text.galley.job.text.clone());
+                }
+                if log.is_some_and(|log| {
+                    clip.intersects(rect)
+                        && rect.top() > state.bottom()
+                        && rect.bottom() <= log.top() + 0.5
+                }) {
+                    above_log = above_log.max(rect.bottom());
+                }
+            });
+            Some((cut, log.map(|log| log.top() - above_log)))
+        });
+        d.observe(
+            "X37-history-clean-edge",
+            edges.as_ref().is_some_and(|(cut, _)| cut.is_empty()),
+            format!("At {size:?}, the texts cut at the list's top: {edges:?}"),
+        );
+        let gap = edges.and_then(|(_, gap)| gap);
+        d.observe(
+            "X66-combat-log-gap",
+            gap.map_or(size == SMALL, |gap| (gap - crate::design::M).abs() <= 0.5),
+            format!("At {size:?}, COMBAT LOG is M below the last Final state row: {gap:?}"),
+        );
+    }
 }
 
 pub fn run(d: &mut Driver<'_>) {
@@ -653,6 +706,36 @@ pub fn run(d: &mut Driver<'_>) {
     whole_at_every_size(d, "T17.6", "The ended run in History", &[CONTINUE], "");
     history_line_gaps(d, CONTINUE);
     d.state("history-continue-fight", Sizes::All);
+    // X70: Final state shows the Vault Guard's saved concentration, in the mark the run's rows
+    // use, on its HP's line.
+    let (mark, _) = crate::encounter_run::view::concentration_mark();
+    for size in [SMALL, DEFAULT, LARGE] {
+        let marked = d.at_size(size, |d| {
+            let (mut name, mut marks) = (None, Vec::new());
+            d.each_painted_text(|text, clip| {
+                let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                if !clip.intersects(rect) {
+                    return;
+                }
+                if text.galley.job.text == "Vault Guard" {
+                    name = Some(rect);
+                }
+                if text.galley.job.text.contains(&mark) {
+                    marks.push(rect);
+                }
+            });
+            let name = name?;
+            Some(marks.iter().any(|mark| {
+                mark.left() > name.right()
+                    && (mark.center().y - name.center().y).abs() < name.height() / 2.0
+            }))
+        });
+        d.observe(
+            "X70-final-state-concentration",
+            marked == Some(true),
+            format!("At {size:?}, the Vault Guard's Final state row says {mark:?}: {marked:?}"),
+        );
+    }
     // AI1: Final state keeps one HP column: every row's HP starts at one x, at every size.
     // iter-26-B AI1, FI6, SI1: temporary HP has a column of its own, the conditions start after
     // it also on a row with no temporary HP, and each row's values sit on its name's baseline.
