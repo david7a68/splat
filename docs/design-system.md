@@ -943,7 +943,8 @@ tone (`In` `⚠ Watch House · Not found`).
 A campaign world entry has a quiet Edit action, with a pencil icon and the word Edit, on its title line in Lookup and World. Its icon sits one `L` after the measured title at every title width, so a kind line wider than a short title does not push it away; a title with art keeps Edit after the art. With no run open, a creature's or an NPC's reader (a campaign
 entry, or a package creature, whose header has no Edit) has a quiet `Start fight` with the run icon after Edit,
 `XS` apart (after the measured title, one `L` on, when there is no Edit), named `Start a fight with <name>` and
-blocked as the encounter editor's `Start fight` is. A campaign world entry also has a quiet `Add to Log`
+blocked as the encounter editor's `Start fight` is. While the encounter editor is the page, Lookup's reader has
+no `Start fight`: the editor's own primary `Start fight` is the one there. A campaign world entry also has a quiet `Add to Log`
 (`icons::ADD`) `XS` after `Start fight`, or after Edit when there is no `Start fight`, so `Start fight` keeps
 its place whether or not the DM ever adds to a Log. They take only the room after the
 title on the title's line: the title keeps its width and the row gains no line and no menu. The header shows
@@ -1401,7 +1402,10 @@ an `L` gap, not at the roster's far edge. The slot has one width for the whole f
 `Heading`, at most `12 × L`), so the toggles keep one x whichever row is selected. The selected name keeps `Heading`; it
 uses `Small` only when that shows the name whole. The selected name starts the line. In a dock too narrow for the dice
 total beside the dice, the total (the dice icon and the number, named `Rolled 4`) has a reserved place at the end of the name's line, under
-the dice, never before the name. Fit whole words, retain a distinguishing last word or copy number or
+the dice, never before the name. In a wider dock the total (`= 4`, named `Rolled 4`) has a fixed place after Roll at
+the block's edge, and a total of three digits gives up `=` there. Each place holds three digits whole; a longer total
+ends in `…`, and hover keeps the roll's whole line. No control of the dock moves when a total comes, changes or goes.
+Fit whole words, retain a distinguishing last word or copy number or
 letter, end shortened names with an ellipsis and drop trailing joining words. Hover and accessibility keep
 full names.
 
@@ -1838,30 +1842,49 @@ tonight, join the draft as typed words do and save with them after the pause.
 
 A task line under `## Plan for tonight` that links no encounter and no group is a **scene**: a plan row in the
 note's order among the fights still to come, also a line that the DM typed before scenes existed. A nested or
-plain list line gets no row. A scene's row starts with the theme's checkbox, 24 px, where a fight has its caret;
+plain list line gets no row. Every plan row has one leading slot, `Type::Body` wide: a fight's caret, a group's
+icon, a scene's box. A scene's box is the theme's checkbox with a 24 px target that ends where the words start,
+so it reaches 2 px into the margin before the rows and the scene's words start at the fights' title column;
 its accessible name is `Open: <words>` or `Done: <words>`, and a click or Space ticks it, one character of the
-note. Its words are the Reader's inline text, and a link opens its entry in Lookup; a done scene's words are
-`muted`. When the words link exactly one World entry, the second line gives its kind, status and place
+note. Every plan row has one leading slot, `Type::Body` wide: a fight's caret, a group's icon, a scene's box.
+A scene's box is the theme's checkbox with a 24 px target that ends where the words start, so it reaches 2 px
+into the margin before the rows (the plan's scroll area starts there) and the scene's words start at the
+fights' title column. Its words are drawn at a plan row title's size, `Type::Body`, at every window size, with
+the Reader's links and emphasis (`markdown_view::show_row_words`), one `XL` line each, so the second line sits
+at a fight row's pitch; a link opens its entry in Lookup. A done scene's words and links are `muted`, and a
+link keeps its underline. No row changes height for a state. When the words link exactly one World entry, the
+second line gives its kind, status and place
 (`NPC · alive · Ashfall Keep`) in `Type::Small` `muted`. The action place is empty until the scene is done; then,
 when its words link exactly one World entry of the campaign, it holds a quiet `Add to Log` left of the menu
-(accessible name `Add to Log: <words>`) while the words keep their lines beside it; else `Add to Log` is the
-last line of the scene's menu, so the row keeps its words and its height. It opens Lookup on that entry with
+(accessible name `Add to Log: <words>`) while the words keep their lines beside it; else `Add to Log` is a
+line of the scene's menu, so the row keeps its words and its height. It opens Lookup on that entry with
 the Log field open, filled with the scene's words outside its link and selected, so typing replaces them and
-Enter keeps them; a field that already holds typed words keeps them. The menu holds Remove
-from tonight, with `Removed “<words>” from tonight.` and Undo remove in the scene's place, and for a scene that
-links exactly one NPC or creature, while no run is open, `Start fight` (accessible name `Start a fight with
-<name>`), blocked as the editor's is. A done scene does not count in Tonight. Read leaves scenes out as it
+Enter keeps them; a field that already holds typed words keeps them. The menu holds, for a scene that links
+exactly one NPC or creature while no run is open, `Start fight` first (`icons::RUN`, accessible name `Start a
+fight with <name>`), blocked as the editor's is; then `Add to Log` when it is not on the row; and Remove from
+tonight last (`icons::REMOVE`). Remove from tonight says `Removed “<words>” from tonight.` with Undo remove, in
+the success tone, at the removed row's place while that place is drawn. The Undo is the note's: when that
+place is folded, or no longer among the rows (the fight before it was played), the result and its Undo show in
+the plan's message footer. A done scene does not count in Tonight. Read leaves scenes out as it
 leaves out link-only plan lines, and its count line names them: `1 fight, 1 group and 2 scenes, in the plan`.
-Scenes fold first: when the plan's rows, with the scenes, do not fit its pane, every scene folds, and the Tonight
-line says `N scenes`, a link with the expanded state, `L` after its count. It takes no line of its own, so no other row moves or narrows because scenes exist, and the next fight's
-`Start fight` stays whole and in view. `N scenes` opens them in place and closes them again; the choice holds
-for the session. A scene act's words show under its row, or under the Scene field, or in the plan's message footer
-when the scenes are folded.
+Scenes fold first, so that the next fight's row and its primary action stay in view. Each row counts as it is
+when closed: when the closed rows, with the scenes, do not fit the pane, every scene folds. An opened row
+folds the scenes only when its details would push the next fight's primary action out of view and the scenes
+sit above that fight; the Scene field, its suggestions and the plan's results never fold them, and the fold
+does not change while the Scene field has focus. The fold measures the room the rows have with an empty
+message footer, so a result coming or going never folds or unfolds the scenes. With the scenes folded, the Tonight line says `N scenes`, a
+link with the expanded state after the section caret of a folded section (`icons::NEXT`, `icons::DOWN` when
+open, `muted`), `L` after its count. It takes no line of its own, so no other row moves or narrows because
+scenes exist. `N scenes` opens them in place and closes them again; the choice holds
+for the session. A scene act's result or refusal has one place, decided each time it is shown
+(`shown_at`): under its row while the scenes show, under the Scene field while it is open, else in the plan's
+message footer. Words never go to a place that is not drawn.
 `Scene` (`icons::CHECK_SQUARE`) is a line of the Add strip's More menu only: the fit of the strip is measured
 without it, so no visible action moves, and a strip with no More has no `Scene`. It opens one `add_field` at
 the end of the plan, `Plan a scene: words, a person or a place`, with at most four World entries as
 suggestions. Enter adds `- [ ] <words>` at the end of the plan (a note with no plan gets the heading at its
-end), keeps the field open, and shows `Scene added to tonight.` with Undo scene in the plan's message footer; Escape
+end), keeps the field open, and shows `Scene added to tonight.` with Undo scene directly under the field, so
+the field does not move for it; once the field closes, the result is in the plan's message footer. Escape
 clears and closes it. Every scene act goes through `Draft::apply` with `Apply::Now`, on the one line its row was drawn
 from (its place and its whole text): what it cannot do shows, in a warning, where the DM acted, until the note's
 words change or, for `Notes not saved`, until the note saves. An act whose save failed keeps its Undo.

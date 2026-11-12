@@ -531,6 +531,30 @@ impl<'a> Driver<'a> {
         found
     }
 
+    /// The colour of each horizontal line segment painted across an area, such as a link's
+    /// underline.
+    pub fn line_colors_in(&self, area: egui::Rect) -> Vec<egui::Color32> {
+        fn visit(shape: &egui::Shape, area: egui::Rect, found: &mut Vec<egui::Color32>) {
+            match shape {
+                egui::Shape::Vec(shapes) => {
+                    shapes.iter().for_each(|shape| visit(shape, area, found));
+                }
+                egui::Shape::LineSegment { points, stroke }
+                    if (points[0].y - points[1].y).abs() < 0.5
+                        && area.intersects(egui::Rect::from_two_pos(points[0], points[1])) =>
+                {
+                    found.push(stroke.color);
+                }
+                _ => {}
+            }
+        }
+        let mut found = Vec::new();
+        for shape in &self.harness.output().shapes {
+            visit(&shape.shape, area, &mut found);
+        }
+        found
+    }
+
     /// Every horizontal line segment painted across an area, whatever its colour, such as an
     /// underline that a link paints apart from its text.
     pub fn line_segments_in(&self, area: egui::Rect) -> Vec<egui::Rect> {
