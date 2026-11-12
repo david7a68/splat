@@ -454,6 +454,8 @@ impl Splat {
             Some("Wait for processing to finish, or cancel it, to change campaigns.")
         } else if self.sessions.busy_with_edit() || self.timeline.not_saved() {
             Some("Resolve the unsaved session file to change campaigns.")
+        } else if self.trackers.pending.is_some() {
+            Some("Save the tracker act that waits to change campaigns.")
         } else if self.world_page.dirty()
             || self.world_page.has_generated()
             || self.any_unsaved_edits()
@@ -565,6 +567,9 @@ impl Splat {
         }
         if self.timeline.not_saved() {
             items.push(("The timeline is not saved.".to_owned(), Page::Timeline));
+        }
+        if self.trackers.pending.is_some() {
+            items.push(("A tracker act is not saved.".to_owned(), self.page));
         }
         if self.sessions.recording_label().is_some() {
             items.push((
@@ -2562,9 +2567,14 @@ impl eframe::App for Splat {
                 self.sessions.notes_open = false;
             }
             // A dialog takes Escape first, and a form elsewhere has nothing to do with it.
+            // Only the view in sight takes Escape: Trackers hides the reader and its fields.
+            let view_takes_escape = if self.lookup.on_trackers() {
+                self.trackers.takes_escape()
+            } else {
+                self.lookup.reader.takes_escape()
+            };
             if self.lookup.open
-                && !self.lookup.reader.takes_escape()
-                && !(self.lookup.on_trackers() && self.trackers.takes_escape())
+                && !view_takes_escape
                 && ctx.memory(|memory| memory.top_modal_layer()).is_none()
                 && !egui::Popup::is_any_open(ctx)
                 && !(self.page == Page::Library && self.library.form_open())

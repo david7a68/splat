@@ -406,6 +406,13 @@ fn note_items(
     items
 }
 
+impl Item {
+    /// Is this a note of the campaign's own, read from its folder, not a package's entry?
+    pub fn is_campaign_note(&self) -> bool {
+        self.private
+    }
+}
+
 impl ContentIndex {
     pub(crate) fn load(modules: &[Module], campaign: Option<&Campaign>) -> Result<Self, String> {
         let catalogue = Catalogue::load(modules, campaign)?;
@@ -1736,9 +1743,11 @@ impl Lookup {
                 self.open = false;
             }
         } else {
+            // An open Lookup keeps what it shows under Trackers, also a found note. A closed one
+            // reads the notes again as it opens.
+            self.written_stale |= !self.open;
             self.trackers_closes = !self.open;
             self.open = true;
-            self.written_stale = true;
             self.trackers_shown = true;
             self.trackers_from_top = true;
         }
@@ -3193,6 +3202,24 @@ mod tests {
         lookup.set_written(Vec::new());
         assert_eq!((lookup.current, lookup.reading_written), (Some(2), None));
         assert!(lookup.trail.peek(Step::Forward).is_some() && lookup.generated.is_some());
+        // Ctrl+T and Ctrl+T again, with Lookup open, give back the found note. The shell passes
+        // the notes in when Lookup asks for them, in the same frame.
+        let notes = || {
+            vec![Written {
+                title: "Tonight".into(),
+                detail: "Session".into(),
+                text: "The missing captain".into(),
+                place: WrittenIn::Session(Uuid::from_u128(1)),
+            }]
+        };
+        lookup.set_written(notes());
+        lookup.reading_written = Some(0);
+        lookup.toggle_trackers();
+        if lookup.wants_written() {
+            lookup.set_written(notes());
+        }
+        lookup.toggle_trackers();
+        assert_eq!((lookup.current, lookup.reading_written), (Some(2), Some(0)));
     }
 
     /// Beside the Library, Lookup takes a side button only under the pointer, and leaves

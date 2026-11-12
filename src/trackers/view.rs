@@ -1,10 +1,7 @@
 //! The Trackers view of the Lookup panel: the Due rows, then the pinned trackers in the note's
 //! order, then `More trackers`, in one scroll area; the result line keeps its place at the
 //! panel's bottom edge. The view draws from the ledger as read, and every press is one act.
-use super::{
-    Place, Rules, State, Trackers, label, ledger::Entry, ledger::NoticeRef, mark_of, result_words,
-    short_name,
-};
+use super::{Place, Rules, State, Trackers, ledger::Entry, ledger::NoticeRef, mark_of, short_name};
 use crate::design::{self, Action, Density, Tone, Type, colors, icons};
 use eframe::egui;
 use std::collections::HashSet;
@@ -190,13 +187,32 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
             },
         );
     }
-    // A member that cannot be used is reported, and the others still work.
-    for problem in rules.problems.iter().cloned().chain(
-        rules
-            .trackers
-            .iter()
-            .filter_map(|t| t.def.as_ref().err().map(|e| format!("{}: {e}", t.key))),
-    ) {
+    // A member that cannot be used is reported, and the others still work. So is a row of the
+    // ledger that counts for nothing.
+    let unknown = state.unknown.iter().map(|(key, count)| {
+        let (names, are) = if *count == 1 {
+            ("names", "It is")
+        } else {
+            ("name", "They are")
+        };
+        format!(
+            "{} in {} {names} {key}, which no house rule note in play has. {are} not counted.",
+            design::count(*count, "entry", "entries"),
+            super::ledger::FILE
+        )
+    });
+    for problem in rules
+        .problems
+        .iter()
+        .cloned()
+        .chain(
+            rules
+                .trackers
+                .iter()
+                .filter_map(|t| t.def.as_ref().err().map(|e| format!("{}: {e}", t.key))),
+        )
+        .chain(unknown)
+    {
         design::small_message(ui, Tone::Error, &problem);
     }
 }
@@ -487,11 +503,7 @@ fn tracker_lines(
                     .show(ui);
                 if response.clicked() {
                     // Read on the click only: a dice amount is parsed to tell it from `ask`.
-                    let asks = matches!(
-                        quick.add.as_ref().map(super::Amount::read),
-                        Some(Ok(super::Add::Ask { .. }))
-                    );
-                    if asks {
+                    if quick.asks() {
                         view.asking = Some((
                             place.0.clone(),
                             place.1.clone(),
@@ -550,7 +562,7 @@ fn amount_field(ui: &mut egui::Ui, view: &mut ViewState, label: &str, act: &mut 
 /// The last act of the session being played, with `Undo: <label>` and `Add to Timeline`; or the
 /// save that waits; or why the last act wrote nothing.
 fn result_line(ui: &mut egui::Ui, trackers: &Trackers, act: &mut Option<Act>) {
-    if let Some((_, error)) = &trackers.pending {
+    if let Some((_, error, _)) = &trackers.pending {
         design::message_with_actions(
             ui,
             Tone::Error,
@@ -570,11 +582,10 @@ fn result_line(ui: &mut egui::Ui, trackers: &Trackers, act: &mut Option<Act>) {
     if let Some((Place::Result, why)) = &trackers.reason {
         design::message(ui, Tone::Warning, why);
     }
-    let entries = trackers.newest().to_vec();
-    let Some(first) = entries.first() else {
+    let entries = trackers.newest();
+    let (Some(first), Some((label, words))) = (entries.first(), &trackers.result) else {
         return;
     };
-    let label = label(&trackers.rules, &trackers.ledger, &entries);
     if let Some(added) = trackers
         .added
         .as_ref()
@@ -585,8 +596,7 @@ fn result_line(ui: &mut egui::Ui, trackers: &Trackers, act: &mut Option<Act>) {
         }
         return;
     }
-    let words = result_words(&trackers.rules, &trackers.ledger, &trackers.state, &entries);
-    let message = design::message(ui, Tone::Success, &words);
+    let message = design::message(ui, Tone::Success, words);
     let inset = message.rect.left() - ui.cursor().left();
     let undo_label = format!("Undo: {label}");
     let undo = Action::quiet(&undo_label)
@@ -618,7 +628,7 @@ fn result_line(ui: &mut egui::Ui, trackers: &Trackers, act: &mut Option<Act>) {
         });
     }
     if undo_clicked {
-        *act = Some(Act::Undo(entries.clone()));
+        *act = Some(Act::Undo(entries.to_vec()));
     }
     if add_clicked {
         *act = Some(Act::AddToTimeline(first.id.clone(), label.clone()));

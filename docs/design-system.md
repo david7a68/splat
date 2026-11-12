@@ -594,7 +594,10 @@ A refused act says why under the line it was pressed on. The result line keeps i
 edge above a hairline: the last act of the session being played as a success message, then `Undo: <label>` at the
 words and `Add to Timeline` at the right end, or each on its own line when both do not fit. After `Add to
 Timeline` it says `Added to the Timeline.` with `Undo add` for 30 seconds. A save that failed shows `Trackers not
-saved.` with `Try again`. With no house rule note in play the view says `No house rules are in play.` and `Turn one
+saved.` with `Try again`; the act that waits is unsaved work, so a campaign switch waits for it and the close
+warning names it. At the end of the scroll area each problem is a small error message: a note in play that is missing
+or no house rule note, a definition that cannot be used, and the count of `Trackers.md` entries that name a tracker
+no note in play has, with its key, which are not counted. With no house rule note in play the view says `No house rules are in play.` and `Turn one
 on in Campaign → Rules and runs.`; the rail then says nothing about trackers.
 
 A copy starts with the original name selected. Destination and dependency preview update with its fields. Copy

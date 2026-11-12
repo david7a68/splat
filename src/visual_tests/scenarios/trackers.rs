@@ -298,4 +298,68 @@ pub fn run(d: &mut Driver<'_>) {
         "In a fight the rail's count is the only tracker sign",
     );
     d.state("run-with-notices-due", Sizes::All);
+
+    d.act_at_size(DEFAULT, |d| {
+        // Trackers over a reader's unsaved draft: Escape acts on the view in sight, and the
+        // hidden draft keeps its words.
+        d.click(NAV_SESSIONS);
+        let id = splat::character::stable_id("Clerk.md");
+        let text = splat::content::formats::fixture(
+            "Clerk.md",
+            &format!("splat_id: {id}\nsplat_kind: world\nsplat_name: Clerk\nsplat_world:\n  type: npc\n"),
+            "\n# Clerk\n\nThe clerk keeps the lists.\n",
+        )
+        .unwrap();
+        fs::write(root(d).join("Clerk.md"), text).unwrap();
+        d.app_mut().lookup.refresh();
+        d.settle();
+        d.app_mut().lookup.open_id(id);
+        d.settle();
+        d.wait_for_text("The clerk keeps the lists.");
+        d.click("Edit Clerk");
+        let draft = "The clerk's draft: keep these unsaved words.";
+        d.replace_text_in("Text", draft);
+        assert!(d.app().lookup.reader.takes_escape(), "the field has focus");
+        d.press_ctrl(Key::T);
+        d.expect("Trackers");
+        d.press(Key::Escape);
+        d.observe(
+            "T19.1",
+            !d.has(SEARCH_LOOKUP),
+            "Escape closes Lookup from Trackers while a reader's unsaved draft is behind it",
+        );
+        if d.app().lookup.open {
+            d.press_ctrl(Key::K);
+        }
+        d.press_ctrl(Key::K);
+        d.press_ctrl(Key::T);
+        d.observe(
+            "T19.1",
+            d.editor_text().as_deref() == Some(draft),
+            "The unsaved draft keeps its words through Trackers, Escape and Ctrl+K",
+        );
+
+        // A ledger row for a tracker that no note in play has, with another session's stamp,
+        // is named at the end of the view.
+        use crate::trackers::ledger::{self, Entry, Op};
+        ledger::commit(&root(d).join(ledger::FILE), |_| {
+            Ok(Op::Append(vec![Entry {
+                id: "c-0b5e1e7e".into(),
+                tracker: Some("old_rivalry".into()),
+                add: Some(7),
+                session: Some(uuid::Uuid::from_u128(42)),
+                ..Entry::default()
+            }]))
+        })
+        .unwrap();
+        d.app_mut().trackers.read_disk();
+        d.press_ctrl(Key::T);
+        d.observe(
+            "T19.2",
+            d.has_containing(
+                "1 entry in Trackers.md names old_rivalry, which no house rule note in play has. It is not counted.",
+            ),
+            "The view's problems name a ledger row that counts for nothing",
+        );
+    });
 }

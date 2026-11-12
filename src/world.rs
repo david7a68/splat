@@ -4638,6 +4638,11 @@ mod tests {
         let scan = scan(dir.path(), dir.path());
         assert_eq!(scan.notes.len(), 1);
         assert_eq!(scan.notes[0].path, "Setting.md");
+        // The scan and the ledger's reader use one rule: a ledger with a quoted key is one.
+        let quoted = "---\n\"trackers_version\": 1\nchanges: []\n---\n";
+        assert!(crate::trackers::ledger::Ledger::parse(quoted).is_ok());
+        note(dir.path(), "Trackers.md", quoted);
+        assert_eq!(super::scan(dir.path(), dir.path()).notes.len(), 1);
         // A note of the DM's named Trackers.md that is no ledger stays a world note.
         note(
             dir.path(),

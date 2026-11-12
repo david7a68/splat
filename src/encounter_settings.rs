@@ -185,6 +185,12 @@ impl Options {
         result.inspiration_rules = inspiration_rules(campaign, catalogue, document);
         result.house_rules = house_rule_notes(campaign, catalogue, document);
         result.in_play = crate::trackers::read_in_play(entry.fields.get("splat_in_play"))?;
+        // A note in play that is gone keeps its row, so that the DM can switch it off.
+        for id in &result.in_play {
+            if !result.house_rules.iter().any(|(note, _)| note == id) {
+                result.house_rules.push((*id, format!("{id} (not found)")));
+            }
+        }
         result.inspiration_choice = chosen_inspiration(
             entry
                 .fields

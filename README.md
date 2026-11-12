@@ -635,7 +635,8 @@ A **house rule note** counts a house rule's numbers: a race clock, a crowd's fav
 `rule` note with `implementation: splat:house_rules` and its trackers in a `splat:yaml path=splat_members` block;
 [the Tournament example](docs/design/world-examples/heralds-tournament.md) shows every field. Turn it on under
 **Campaign → Rules and runs**, in **House rules in play**, and save; that writes `splat_in_play` in `Campaign.md`.
-A note that is not in play shows nothing anywhere.
+A note that is not in play shows nothing anywhere. A note in play that is gone keeps its row there, with its ID and
+`not found`, so that you can switch it off.
 
 **Ctrl+T** shows **Trackers** in the Lookup panel, beside any page, and Ctrl+T again goes back to what Lookup
 showed. Each tracker has its value and its quick actions; a tracker with `per` has a line for each name. One press
@@ -647,10 +648,12 @@ shows; it never applies a rule by itself.
 Every act is one entry in `Trackers.md` in the campaign's root folder, written at once. The result line names the
 last act of the session being played, with **Undo: <label>**, which steps back newest first, also after a
 restart, and **Add to Timeline**, which makes a Major event with the act's label. A wrong press seen late is
-corrected by the opposite quick action. An act reads the file as it is on disk when you press, so an entry you edit
-in Obsidian counts at once and is never written over; Undo of an entry that changed on disk writes nothing and says
-so. A file that cannot be read blocks every act and shows `Trackers not read`; a save that fails keeps the act
-waiting under **Try again**, which adds it once. In a fight the run shows no tracker part: use Ctrl+T, press, and
+corrected by the opposite quick action. An act reads the file and the house rule notes as they are on disk when you press, so an entry you edit
+in Obsidian counts at once and is never written over; an act on a definition or an entry that changed on disk writes
+nothing and says so. A file that cannot be read blocks every act and shows `Trackers not read`; a save that fails
+keeps the act waiting under **Try again**, which checks it again against the files and adds it once. Until then a
+campaign switch waits, and closing Splat names it. Entries for a tracker that no note in play has are kept and not
+counted; the end of Trackers names them. To take back an entry of an older session, edit `Trackers.md` in Obsidian. In a fight the run shows no tracker part: use Ctrl+T, press, and
 go back.
 
 ### Loot

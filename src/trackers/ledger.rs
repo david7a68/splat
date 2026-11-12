@@ -148,15 +148,7 @@ impl Ledger {
         }
         let (front, _) = crate::sessions::split_note(text)
             .ok_or("Trackers.md has no properties block at its top.")?;
-        let yaml = front_yaml(front);
-        let value: Value = serde_yaml_ng::from_str(yaml).map_err(|error| error.to_string())?;
-        // A note of the DM's with this name is not a ledger, and is never written over.
-        if value.get("trackers_version").is_none() {
-            return Err(
-                "Trackers.md is not a tracker ledger: its properties have no trackers_version."
-                    .into(),
-            );
-        }
+        let value = properties(front)?;
         let ledger: Self = serde_yaml_ng::from_value(value).map_err(|error| error.to_string())?;
         let mut seen = std::collections::HashSet::new();
         for entry in &ledger.changes {
@@ -214,15 +206,22 @@ fn front_yaml(front: &str) -> &str {
     inner.rsplit_once("---").map_or(inner, |(yaml, _)| yaml)
 }
 
-/// Is this file in a campaign's root the ledger? Its name, and `trackers_version` in its
-/// properties.
+/// The one rule of what a ledger is: its properties, as parsed, have `trackers_version`. A note
+/// of the DM's with this name is not a ledger, and is never written over.
+fn properties(front: &str) -> Result<Value, String> {
+    let value: Value =
+        serde_yaml_ng::from_str(front_yaml(front)).map_err(|error| error.to_string())?;
+    if value.get("trackers_version").is_none() {
+        return Err(
+            "Trackers.md is not a tracker ledger: its properties have no trackers_version.".into(),
+        );
+    }
+    Ok(value)
+}
+
+/// Is this file in a campaign's root the ledger? Its name, and the rule of `properties`.
 pub fn is_ledger(file_name: &str, front: Option<&str>) -> bool {
-    file_name.eq_ignore_ascii_case(FILE)
-        && front.is_some_and(|front| {
-            front
-                .lines()
-                .any(|line| line.starts_with("trackers_version:"))
-        })
+    file_name.eq_ignore_ascii_case(FILE) && front.is_some_and(|front| properties(front).is_ok())
 }
 
 /// Where the ledger of a campaign lives.

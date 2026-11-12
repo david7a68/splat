@@ -95,6 +95,17 @@ pub struct Change {
     pub set: Option<i64>,
 }
 
+impl Quick {
+    /// Does a press ask for a number first? `ask` or `-ask` on the action, or on one of its
+    /// changes: the one rule for the amount field.
+    pub fn asks(&self) -> bool {
+        self.add
+            .iter()
+            .chain(self.changes.iter().filter_map(|change| change.add.as_ref()))
+            .any(|amount| matches!(amount.read(), Ok(Add::Ask { .. })))
+    }
+}
+
 /// A number, a dice expression, `ask` or `-ask`.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(untagged)]
@@ -193,7 +204,7 @@ impl Definition {
 }
 
 /// A tracker of a note in play, or why its definition cannot be used.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Tracker {
     pub key: String,
     pub def: Result<Definition, String>,
@@ -215,6 +226,12 @@ pub struct Rules {
 impl Rules {
     pub fn in_play(&self) -> bool {
         !self.notes.is_empty() || !self.problems.is_empty()
+    }
+
+    /// The same notes, trackers and problems: what the view draws and an act reads.
+    fn same_definitions(&self, other: &Rules) -> bool {
+        (&self.notes, &self.trackers, &self.problems)
+            == (&other.notes, &other.trackers, &other.problems)
     }
 
     pub fn def(&self, key: &str) -> Option<&Definition> {
@@ -265,22 +282,56 @@ pub fn is_house_rule_note(entry: &splat::content::Entry) -> bool {
             == Some(IMPLEMENTATION)
 }
 
-/// Read the notes in play from the content. Each member is checked alone, so a bad one is
-/// reported and the others still work.
-pub fn read_rules(index: &ContentIndex, in_play: &[Uuid]) -> Rules {
+/// The house rule notes in play as the files hold them now: the list in `Campaign.md`, and each
+/// note of the campaign read from its file, where the content found it. A package's note is the
+/// content's. This is the one read of the definitions: when the content changes, and at each
+/// act, so that an act never uses a definition that changed on disk.
+pub fn rules_on_disk(campaign: &Campaign, index: &ContentIndex) -> Rules {
+    let ids = match in_play(campaign) {
+        Ok(ids) => ids,
+        Err(error) if error.starts_with("splat_in_play") => {
+            return Rules {
+                problems: vec![error],
+                ..Rules::default()
+            };
+        }
+        Err(_) => return Rules::default(),
+    };
+    if ids.is_empty() {
+        return Rules::default();
+    }
+    read_rules(index.loot_sources(), &ids, |id| {
+        let item = index.items.iter().find(|item| item.entry.id == id)?;
+        if !item.is_campaign_note() {
+            return Some(item.entry.clone());
+        }
+        let text = std::fs::read_to_string(campaign.path.join(&item.entry.path)).ok()?;
+        splat::content::Entry::parse(&item.entry.path, &text)
+            .ok()
+            .filter(|entry| entry.id == id)
+    })
+}
+
+/// Read the notes in play. Each member is checked alone, so a bad one is reported and the
+/// others still work.
+fn read_rules(
+    tables: Arc<Sources>,
+    in_play: &[Uuid],
+    note: impl Fn(Uuid) -> Option<splat::content::Entry>,
+) -> Rules {
     let mut rules = Rules {
-        tables: Some(index.loot_sources()),
+        tables: Some(tables),
         ..Rules::default()
     };
     let mut owners: HashMap<String, Vec<String>> = HashMap::new();
     for id in in_play {
-        let Some(item) = index.items.iter().find(|item| item.entry.id == *id) else {
+        let Some(entry) = note(*id) else {
             rules
                 .problems
                 .push(format!("A house rule note in play is missing: {id}."));
             continue;
         };
-        let entry = &item.entry;
+        let entry = &entry;
         if !is_house_rule_note(entry) {
             rules.problems.push(format!(
                 "{} is in play, but it is not a house rule note.",
@@ -425,6 +476,9 @@ pub struct State {
     after: HashMap<String, i64>,
     /// The marks each change entry crossed.
     raised: HashMap<String, Vec<i64>>,
+    /// How many entries name each tracker that no note in play has, in the file's order. They
+    /// count for nothing, and the view names them.
+    pub unknown: Vec<(String, usize)>,
 }
 
 impl State {
@@ -458,7 +512,15 @@ pub fn replay(rules: &Rules, ledger: &Ledger) -> State {
             continue;
         }
         let Some(key) = &entry.tracker else { continue };
-        let Some(def) = rules.def(key) else { continue };
+        let Some(def) = rules.def(key) else {
+            if !rules.trackers.iter().any(|tracker| tracker.key == *key) {
+                match state.unknown.iter_mut().find(|(known, _)| known == key) {
+                    Some((_, count)) => *count += 1,
+                    None => state.unknown.push((key.clone(), 1)),
+                }
+            }
+            continue;
+        };
         let instance = entry.instance.as_deref();
         if !def.has_line(instance) {
             continue;
@@ -865,6 +927,53 @@ fn press_op(
     Ok(stamp(entries, session))
 }
 
+/// A waiting act, checked as a fresh act is checked, against the file as it is now. It keeps
+/// its dice and its IDs, so an entry that is in the file already is not checked or added again.
+/// An Undo still takes the whole newest act of its session, and nothing more or less.
+fn recheck(rules: &Rules, ledger: &Ledger, op: &Op, session: Option<Uuid>) -> Result<(), String> {
+    let entries = match op {
+        Op::Remove(expected) if undo_target(ledger, session) != *expected => {
+            return Err("The ledger changed on disk. Nothing was undone.".into());
+        }
+        Op::Remove(_) => return Ok(()),
+        Op::Append(entries) => entries,
+    };
+    let state = replay(rules, ledger);
+    let mut values = HashMap::new();
+    let new = entries
+        .iter()
+        .filter(|entry| !ledger.changes.iter().any(|old| old.id == entry.id));
+    for entry in new {
+        if let Some(id) = &entry.notice {
+            let open = state
+                .notice(id)
+                .ok_or("That notice is no longer due. Nothing was recorded.")?;
+            if let Some(Roll::Table(roll)) = &entry.roll
+                && roll.name.is_some()
+                && open
+                    .rolls
+                    .iter()
+                    .any(|old| old.table == roll.table && old.name == roll.name)
+            {
+                return Err("Each name has its roll.".into());
+            }
+            continue;
+        }
+        let key = entry.tracker.as_deref().unwrap_or_default();
+        let change = Change {
+            tracker: None,
+            add: entry.add.map(Amount::Number),
+            set: entry.set,
+        };
+        let instance = entry.instance.as_deref();
+        let checked = change_entry(rules, &state, &mut values, key, instance, &change, None)?;
+        if checked.was != entry.was {
+            return Err("That value changed on disk. Nothing was recorded.".into());
+        }
+    }
+    Ok(())
+}
+
 /// Where a refusal shows: beside the action that was refused.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Place {
@@ -885,7 +994,7 @@ pub struct Added {
 /// acts' results. The shell owns one, beside Lookup, and the rail reads its count.
 #[derive(Default)]
 pub struct Trackers {
-    campaign: Option<(Uuid, PathBuf)>,
+    campaign: Option<Campaign>,
     /// The content the definitions were read from.
     index: Option<Arc<ContentIndex>>,
     pub rules: Rules,
@@ -897,9 +1006,12 @@ pub struct Trackers {
     pub state: State,
     /// The entries that `Undo` takes back now: worked out when the ledger or the session changes.
     newest: Vec<Entry>,
+    /// The newest act's label and the result line's words, worked out with `newest`.
+    pub(crate) result: Option<(String, String)>,
     last_check: Option<Instant>,
-    /// An act whose save failed, with the reason. A retry adds it once.
-    pub pending: Option<(Op, String)>,
+    /// An act whose save failed, with the reason and the session it was made in. A retry checks
+    /// it again and adds it once.
+    pub pending: Option<(Op, String, Option<Uuid>)>,
     /// Why the last act wrote nothing, where the DM acted.
     pub reason: Option<(Place, String)>,
     pub added: Option<Added>,
@@ -924,12 +1036,12 @@ impl Trackers {
     ) {
         if self.played != played {
             self.played = played;
-            self.newest = undo_target(&self.ledger, played);
+            self.settle_result();
         }
-        let key = campaign.map(|campaign| (campaign.id, campaign.path.clone()));
-        if key != self.campaign {
+        let key = |campaign: &Campaign| (campaign.id, campaign.path.clone());
+        if campaign.map(key) != self.campaign.as_ref().map(key) {
             *self = Self {
-                campaign: key,
+                campaign: campaign.cloned(),
                 played,
                 ..Self::default()
             };
@@ -941,15 +1053,7 @@ impl Trackers {
                 .as_ref()
                 .is_some_and(|old| Arc::ptr_eq(old, &index))
         {
-            self.rules = match in_play(campaign) {
-                Ok(ids) if ids.is_empty() => Rules::default(),
-                Ok(ids) => read_rules(&index, &ids),
-                Err(error) if error.starts_with("splat_in_play") => Rules {
-                    problems: vec![error],
-                    ..Rules::default()
-                },
-                Err(_) => Rules::default(),
-            };
+            self.rules = rules_on_disk(campaign, &index);
             self.index = Some(index);
             self.settle();
             self.last_check = None;
@@ -972,7 +1076,9 @@ impl Trackers {
     }
 
     fn path(&self) -> Option<PathBuf> {
-        self.campaign.as_ref().map(|(_, root)| ledger::path(root))
+        self.campaign
+            .as_ref()
+            .map(|campaign| ledger::path(&campaign.path))
     }
 
     /// Take the file's text when it changed. A file that cannot be read shows nothing old.
@@ -1025,7 +1131,18 @@ impl Trackers {
     /// Work the values, the notices and the newest act out of the ledger again.
     fn settle(&mut self) {
         self.state = replay(&self.rules, &self.ledger);
+        self.settle_result();
+    }
+
+    /// The newest act of the session being played, and the result line's words for it.
+    fn settle_result(&mut self) {
         self.newest = undo_target(&self.ledger, self.played);
+        self.result = (!self.newest.is_empty()).then(|| {
+            (
+                label(&self.rules, &self.ledger, &self.newest),
+                result_words(&self.rules, &self.ledger, &self.state, &self.newest),
+            )
+        });
     }
 
     /// An act built from the values and notices of the file on disk.
@@ -1043,10 +1160,29 @@ impl Trackers {
             self.reason = Some((place, "Trackers not saved. Try again first.".into()));
             return;
         }
-        let Some(path) = self.path() else { return };
-        let rules = &self.rules;
-        let result = ledger::commit(&path, |ledger| build(rules, ledger));
+        self.commit(place, build);
+    }
+
+    /// Every act and every retry passes here. It reads the definitions in play and the ledger
+    /// as the files hold them now. When a definition changed since the view drew it, the act
+    /// writes nothing and says so, and the view draws the definitions of the files.
+    fn commit(&mut self, place: Place, build: impl FnOnce(&Rules, &Ledger) -> Result<Op, String>) {
+        let (Some(campaign), Some(index)) = (&self.campaign, &self.index) else {
+            return;
+        };
+        let rules = rules_on_disk(campaign, index);
+        let changed = !rules.same_definitions(&self.rules);
+        let result = ledger::commit(&ledger::path(&campaign.path), |ledger| {
+            if changed {
+                return Err("A house rule note changed on disk. Nothing was recorded.".into());
+            }
+            build(&rules, ledger)
+        });
         self.finish(place, result);
+        if changed {
+            self.rules = rules;
+            self.settle();
+        }
     }
 
     fn finish(&mut self, place: Place, result: Result<(Vec<u8>, Ledger, Op), Fault>) {
@@ -1064,15 +1200,19 @@ impl Trackers {
                 self.baseline = None;
             }
             Err(Fault::Refused(reason)) => {
-                // A retry that the file refuses ends the act that waited; it says why.
-                self.pending = None;
+                // A retry that the file refuses ends the act that waited, and says so.
+                let reason = match self.pending.take() {
+                    Some(_) => format!("{reason} The act that waited was not saved."),
+                    None => reason,
+                };
                 self.reason = Some((place, reason));
                 // The view draws again from the file.
                 self.read_disk();
             }
             Err(Fault::NotSaved(error, op)) => {
                 self.reason = None;
-                self.pending = Some((op, error));
+                let session = self.pending.as_ref().map_or(self.played, |(_, _, s)| *s);
+                self.pending = Some((op, error, session));
             }
         }
     }
@@ -1188,12 +1328,13 @@ impl Trackers {
     /// Save the act that waits, once.
     pub fn retry(&mut self) {
         // The act waits until it is written or refused: a file that cannot be read keeps it.
-        let Some((op, _)) = self.pending.clone() else {
+        let Some((op, _, session)) = self.pending.clone() else {
             return;
         };
-        let Some(path) = self.path() else { return };
-        let result = ledger::commit(&path, |_| Ok(op));
-        self.finish(Place::Result, result);
+        self.commit(Place::Result, |rules, ledger| {
+            recheck(rules, ledger, &op, session)?;
+            Ok(op)
+        });
     }
 }
 
@@ -1481,6 +1622,36 @@ mod tests {
         t.press("activation", None, "Missed twice or Ring reset", None);
         assert_eq!(t.newest()[0].was, Some(rolled));
         assert_eq!(value(&race, "activation", None), 0);
+
+        // An act reads the definitions on disk at the click. Done on a mark whose `at` changed
+        // in Obsidian, and a press on a tracker whose note was deleted, write nothing.
+        let drawn = race.trackers.state.due[0].clone();
+        let note = race.campaign.path.join("Tournament.md");
+        let text = fs::read_to_string(&note).unwrap();
+        assert!(text.contains("at: 1\n"));
+        fs::write(&note, text.replace("at: 1\n", "at: 2\n")).unwrap();
+        let before = file(&race);
+        let t = &mut race.trackers;
+        t.done(&drawn, &[]);
+        assert_eq!(
+            t.reason,
+            Some((
+                Place::Notice(drawn.id.clone()),
+                "A house rule note changed on disk. Nothing was recorded.".into()
+            ))
+        );
+        assert_eq!(file(&race), before);
+        fs::remove_file(&note).unwrap();
+        let t = &mut race.trackers;
+        t.press("favor", None, "Crowd loves it", None);
+        assert_eq!(
+            t.reason,
+            Some((
+                Place::Tracker("favor".into(), None),
+                "A house rule note changed on disk. Nothing was recorded.".into()
+            ))
+        );
+        assert_eq!(file(&race), before);
     }
 
     #[test]
@@ -1502,6 +1673,9 @@ mod tests {
             ],
             ..Rules::default()
         };
+        // A nested `add: ask` asks for the amount as a top-level one does.
+        assert!(def("name: Gold\nquick: [{label: Spend, changes: [{add: -ask}]}]").quick[0].asks());
+        assert!(!rules.def("teams").unwrap().quick[0].asks());
         let teams = rules.def("teams").unwrap();
         assert_eq!(
             check(teams, &rules),
@@ -1530,6 +1704,46 @@ mod tests {
         assert_eq!(target[0], raised[0]);
         assert_eq!(target.len(), 2, "the change and the roll on its notice");
         assert_eq!(newest_label(t), "Cistern or Sands");
+        // The Undo's save fails; before Try again, Obsidian adds a roll on that notice. The
+        // retry checks the whole target again: it writes nothing, and the act is dropped.
+        use std::os::unix::fs::PermissionsExt;
+        let folder = race.campaign.path.clone();
+        fs::set_permissions(&folder, fs::Permissions::from_mode(0o555)).unwrap();
+        let t = &mut race.trackers;
+        t.undo(&target);
+        fs::set_permissions(&folder, fs::Permissions::from_mode(0o755)).unwrap();
+        assert!(t.pending.is_some());
+        let path = ledger::path(&folder);
+        let before = fs::read_to_string(&path).unwrap();
+        ledger::commit(&path, |_| {
+            Ok(Op::Append(vec![Entry {
+                id: "c-0b5ide00".into(),
+                notice: Some(bell.id.clone()),
+                roll: Some(Roll::Table(TableRoll {
+                    table: "wander_early".into(),
+                    name: None,
+                    value: 1,
+                    row: "Nothing comes.".into(),
+                })),
+                session: Some(TONIGHT),
+                ..Entry::default()
+            }]))
+        })
+        .unwrap();
+        let outside = fs::read_to_string(&path).unwrap();
+        t.retry();
+        assert_eq!(fs::read_to_string(&path).unwrap(), outside);
+        assert!(t.pending.is_none());
+        assert_eq!(
+            t.reason,
+            Some((
+                Place::Result,
+                "The ledger changed on disk. Nothing was undone. The act that waited was not saved."
+                    .into()
+            ))
+        );
+        fs::write(&path, before).unwrap();
+        t.read_disk();
         t.undo(&target);
         assert!(t.ledger.changes.is_empty());
         assert_eq!(t.due(), 0);
@@ -1576,6 +1790,24 @@ mod tests {
         let t = &mut race.trackers;
         t.press("favor", None, "Crowd loves it", None);
         assert!(t.pending.is_some());
+        // The act that waits is unsaved work: a campaign switch waits for it, and a close
+        // names it.
+        let mut app = crate::Splat {
+            trackers: std::mem::take(&mut race.trackers),
+            ..Default::default()
+        };
+        assert_eq!(
+            app.blocked_switch(),
+            Some("Save the tracker act that waits to change campaigns.")
+        );
+        let items: Vec<_> = app
+            .unsaved_items()
+            .into_iter()
+            .map(|(words, _)| words)
+            .collect();
+        assert_eq!(items, ["A tracker act is not saved."]);
+        race.trackers = std::mem::take(&mut app.trackers);
+        let t = &mut race.trackers;
         t.press("favor", None, "Crowd loves it", None);
         assert_eq!(
             t.reason.as_ref().map(|(_, why)| why.as_str()),
@@ -1591,13 +1823,42 @@ mod tests {
         assert_eq!(t.pending, waiting);
         fs::write(&path, &before).unwrap();
         readonly.set_mode(0o755);
-        fs::set_permissions(&race.campaign.path, readonly).unwrap();
+        fs::set_permissions(&race.campaign.path, readonly.clone()).unwrap();
         let t = &mut race.trackers;
         t.retry();
         assert!(t.pending.is_none());
         t.retry();
         assert_eq!(t.ledger.changes.len(), entries + 1);
         assert_eq!(value(&race, "favor", None), 2);
+
+        // A spend waits; before Try again, Obsidian takes Favor to 0. The retry checks `min`
+        // against the file as it is now: it writes nothing, and the act is dropped with words.
+        let kept = fs::read_to_string(&path).unwrap();
+        readonly.set_mode(0o555);
+        fs::set_permissions(&race.campaign.path, readonly.clone()).unwrap();
+        let t = &mut race.trackers;
+        t.press("favor", None, "Throw a gift", None);
+        readonly.set_mode(0o755);
+        fs::set_permissions(&race.campaign.path, readonly.clone()).unwrap();
+        assert!(t.pending.is_some());
+        let outside = kept.replace(
+            "  add: 2\n  why: Typed in Obsidian",
+            "  add: 0\n  why: Typed in Obsidian",
+        );
+        assert_ne!(outside, kept);
+        fs::write(&path, &outside).unwrap();
+        t.retry();
+        assert_eq!(fs::read_to_string(&path).unwrap(), outside);
+        assert!(t.pending.is_none());
+        assert_eq!(
+            t.reason,
+            Some((
+                Place::Result,
+                "Crowd Favor cannot go below 0. The act that waited was not saved.".into()
+            ))
+        );
+        fs::write(&path, &kept).unwrap();
+        t.read_disk();
 
         // A restart: the values, the result line and its Undo come from the file.
         let mut again = Trackers::default();
@@ -1639,11 +1900,16 @@ mod tests {
     #[test]
     fn no_note_in_play_reads_no_ledger_and_shows_nothing() {
         let race = race();
+        // A note in play that was deleted keeps its row in Campaign → Rules and runs, so that the
+        // DM can switch it off.
+        fs::remove_file(race.campaign.path.join("Tournament.md")).unwrap();
         let mut options = Options::load(
             &race.campaign,
             &crate::content_workspace::Catalogue::load(&[], Some(&race.campaign)).unwrap(),
         )
         .unwrap();
+        let id = options.in_play[0];
+        assert_eq!(options.house_rules, [(id, format!("{id} (not found)"))]);
         options.in_play.clear();
         let document = CampaignDocument::load(&race.campaign).unwrap();
         options.save(&race.campaign, &document.text).unwrap();
