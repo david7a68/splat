@@ -101,7 +101,7 @@ const SCENARIO: &str = "plain-evening";
 const WIDE: (f32, f32) = (1200.0, 800.0);
 const NARROW: (f32, f32) = (960.0, 640.0);
 /// Section 2.5 numbers its rows 1 to 22.
-const CONTRACT_ROWS: std::ops::RangeInclusive<u32> = 1..=22;
+const CONTRACT_ROWS: std::ops::RangeInclusive<u32> = 1..=24;
 /// What the test folder becomes in a run's `splat_run_source_path`.
 const WORLD: &str = "<world>";
 const SAME: &str = "the same as at the start";
@@ -1875,6 +1875,27 @@ mod allowed_classes {
             row: 10,
             name: "P7 c: an act's words of these classes",
             fits: |d, _| rewards::act_words(d),
+        }, // R1a, rows 23 and 24 (by the lead's ruling after app round 1): a scene's row matches a
+        // fight row (V2, V8), and the folded scenes' link has the section caret (V14).
+        Class {
+            row: 23,
+            name: "R1a a: a scene's own part at the title column and the title's size",
+            fits: scene_rows::part,
+        },
+        Class {
+            row: 23,
+            name: "R1a b: an unchanged item below changed scene rows, straight up by their change",
+            fits: scene_rows::below,
+        },
+        Class {
+            row: 23,
+            name: "R1a c: a done scene's `Add to Log` on its row, where its words now keep their rows",
+            fits: scene_rows::log_on_row,
+        },
+        Class {
+            row: 24,
+            name: "R1a d: the section caret before `N scenes`",
+            fits: scene_rows::caret,
         },
         // P4, F2: row 6. The dock's `Effect` is new, in the room after Absent; nothing of
         // today's dock moves, so no class here allows a move.
@@ -2208,13 +2229,6 @@ mod allowed_classes {
         /// Rectangles `x y w h` of the items of one name.
         type Places = Vec<[f32; 4]>;
 
-        thread_local! {
-            /// A check's own frozen History bands, in place of the file's. R1c's checks are
-            /// written against the reference before R1c; a reference frozen later holds R1c.
-            static PINNED_MARKS: std::cell::Cell<Option<(f32, f32)>> =
-                const { std::cell::Cell::new(None) };
-        }
-
         /// The acts that open, show or close a run in History.
         const ACTS: [&str; 5] = [
             "Whole run",
@@ -2291,9 +2305,6 @@ mod allowed_classes {
         /// Where the bands of a History view start in its frozen view, for items of `d`'s
         /// kind: the middle of the Read-only line, and the top of `FINAL STATE`.
         fn marks(d: &Difference) -> Option<(f32, f32)> {
-            if let Some(pinned) = PINNED_MARKS.with(std::cell::Cell::get) {
-                return Some(pinned);
-            }
             let view = reference()
                 .views
                 .iter()
@@ -2509,12 +2520,16 @@ mod allowed_classes {
                 })
         }
 
-        /// The frozen plain reference, read once.
+        /// The views of the plain reference that these classes were written against, read
+        /// once. A later freeze writes a new `reference.json`, in which History already scrolls;
+        /// these classes measure the views of the freeze before pull request 275
+        /// (`history_r1c.json`, frozen at 0855cf95), as their rows did.
         fn reference() -> &'static super::super::Reference {
             static REFERENCE: std::sync::OnceLock<super::super::Reference> =
                 std::sync::OnceLock::new();
-            REFERENCE
-                .get_or_init(|| super::super::read(&super::super::folder().join("reference.json")))
+            REFERENCE.get_or_init(|| {
+                super::super::read(&super::super::folder().join("history_r1c.json"))
+            })
         }
 
         /// An act around History whose every changed word is a text that scrolled out of or
@@ -2542,10 +2557,6 @@ mod allowed_classes {
         /// The faults R1c's classes refuse, beside one scroll of the opened run's row.
         #[test]
         fn the_r1c_classes_refuse_a_loss_a_sideways_move_a_narrowing_and_other_words() {
-            // The bands of `run-ended: played last` at 960x640 in the reference these rows were
-            // written against (frozen at 3dee0a40): the Read-only line's middle at 490 + 16 / 2,
-            // and `FINAL STATE` at 551.
-            PINNED_MARKS.with(|marks| marks.set(Some((498.0, 551.0))));
             let row =
                 |screen: &str, what: &str, change: &str, name: &str, detail: &str| AllowedRow {
                     row: 22,
@@ -2765,6 +2776,408 @@ mod allowed_classes {
 
     /// P7's classes. Every difference is new, whole and of the plan's views; none lets an item
     /// of today go, move, narrow or be cut.
+    /// R1a's classes. Repair 5 draws a scene's words at a plan row title's size, from the fights'
+    /// title column (12 px left of where they started), with the box's 24 px target ending at
+    /// that column, so a scene row's height changes. ONE rule for each view: every unchanged item
+    /// below a changed scene row, control or text, moves straight up by one amount for all items
+    /// below the same scene, the sum of the height changes of the scene rows above it; nothing
+    /// moves sideways, changes size, is cut or goes. A scene's words and links take their exact
+    /// size at the title's size (`TITLE`). The scene rows keep their order and never overlap.
+    /// Repair 8 puts the section caret before `N scenes`.
+    mod scene_rows {
+        use super::super::{AllowedRow, Difference};
+
+        /// The plain campaign's scenes, their links and their second line.
+        const SCENES: [&str; 4] = [
+            "Read Emberfall Rumours",
+            "Talk to Hobb the Miller about the ropes",
+            "Ask about the toll",
+            "Meet Hobb the Miller at the mill",
+        ];
+        const LINKS: [&str; 2] = [
+            "Hobb the Miller (opens Hobb the Miller)",
+            "Emberfall Rumours (opens Emberfall Rumours)",
+        ];
+        const DETAIL: &str = "NPC · alive";
+        /// How far left the words start now: from after the 26 px box to the fights' column.
+        const LEFT: f32 = 12.0;
+        /// The box's target, and the leading slot with its gap that it ends with.
+        const BOX: f32 = 24.0;
+        const SLOT: f32 = 22.0;
+        /// The section caret of a folded section, and of an open one.
+        const CARETS: [&str; 2] = ["\u{e13a}", "\u{e136}"];
+        /// What the caret and its blank add to the width of `N scenes`.
+        const CARET: f32 = 17.0;
+        /// Each scene's words, and each link in them, at the title's size: their width on one
+        /// line of `BOX`, the same at every width of the pane.
+        const TITLE: [(&str, f32); 6] = [
+            ("Read Emberfall Rumours", 155.8),
+            ("Talk to Hobb the Miller about the ropes", 244.8),
+            ("Ask about the toll", 109.8),
+            ("Meet Hobb the Miller at the mill", 196.8),
+            ("Hobb the Miller (opens Hobb the Miller)", 96.1),
+            ("Emberfall Rumours (opens Emberfall Rumours)", 120.8),
+        ];
+        /// The gap between a scene's words and an action on its row (`design::L`).
+        const GAP: f32 = 16.0;
+
+        fn bare(name: &str) -> &str {
+            ["Button: ", "CheckBox: ", "Label: ", "TextRun: ", "Link: "]
+                .iter()
+                .find_map(|prefix| name.strip_prefix(prefix))
+                .unwrap_or(name)
+        }
+
+        fn plan_view(d: &Difference) -> bool {
+            (d.screen.starts_with("session-") || d.screen.starts_with("lookup-reader "))
+                && ["control", "text"].contains(&d.what.as_str())
+                && !d.detail.contains("seen")
+        }
+
+        fn numbers(text: &str) -> Option<[f32; 4]> {
+            let numbers: Vec<f32> = text
+                .replace('x', " ")
+                .split_whitespace()
+                .map(|n| n.parse().ok())
+                .collect::<Option<_>>()?;
+            numbers.try_into().ok()
+        }
+
+        /// The item's place before and after, whole: a `seen` (cut) item has none.
+        fn places(d: &Difference) -> (Option<[f32; 4]>, Option<[f32; 4]>) {
+            if d.detail.contains("seen") {
+                return (None, None);
+            }
+            match d.change.as_str() {
+                "gone" => (d.detail.strip_prefix("was ").and_then(numbers), None),
+                "new" => (None, d.detail.strip_prefix("at ").and_then(numbers)),
+                _ => d
+                    .detail
+                    .split_once(" -> ")
+                    .map_or((None, None), |(a, b)| (numbers(a), numbers(b))),
+            }
+        }
+
+        fn same_view<'a>(
+            d: &'a Difference,
+            rows: &'a [AllowedRow],
+        ) -> impl Iterator<Item = &'a Difference> {
+            rows.iter()
+                .map(|row| &row.difference)
+                .filter(move |o| (&o.screen, &o.view) == (&d.screen, &d.view))
+        }
+
+        /// The scene a box names, by its accessible name.
+        fn box_of(name: &str) -> Option<&'static str> {
+            let words = bare(name)
+                .strip_prefix("Done: ")
+                .or_else(|| bare(name).strip_prefix("Open: "))?;
+            SCENES.iter().copied().find(|scene| *scene == words)
+        }
+
+        /// Each scene box of the view, top down: its place before and after.
+        fn boxes(d: &Difference, rows: &[AllowedRow]) -> Vec<([f32; 4], [f32; 4])> {
+            let mut found: Vec<_> = same_view(d, rows)
+                .filter(|o| o.what == "control" && box_of(&o.name).is_some())
+                .filter_map(|o| match places(o) {
+                    (Some(a), Some(b)) => Some((a, b)),
+                    _ => None,
+                })
+                .collect();
+            found.sort_by(|a, b| a.0[1].total_cmp(&b.0[1]));
+            found
+        }
+
+        fn near(a: f32, b: f32) -> bool {
+            (a - b).abs() < 0.05
+        }
+
+        /// Words or a link of a scene at their exact size at the title's size.
+        fn title_size(name: &str, b: &[f32; 4]) -> bool {
+            TITLE
+                .iter()
+                .any(|(words, width)| *words == name && near(b[2], *width) && near(b[3], BOX))
+        }
+
+        /// A scene's own item: its box, its words or a piece of them, a link, its second line.
+        fn own(o: &Difference) -> bool {
+            let name = bare(&o.name);
+            box_of(&o.name).is_some()
+                || SCENES
+                    .iter()
+                    .any(|scene| scene.contains(name.trim()) && !name.trim().is_empty())
+                || LINKS.contains(&name)
+                || name == DETAIL
+        }
+
+        /// A scene row: its box's place before and after, and the bottom after of its own items.
+        type SceneRow = ([f32; 4], [f32; 4], f32);
+
+        /// The scene rows of the view, top down: each box's place before and after, and the
+        /// bottom after of the row's own items. `None` when the rows change their order or
+        /// overlap.
+        fn scene_rows_of(d: &Difference, rows: &[AllowedRow]) -> Option<Vec<SceneRow>> {
+            let boxes = boxes(d, rows);
+            let mut out: Vec<SceneRow> = Vec::new();
+            for (k, (old, new)) in boxes.iter().enumerate() {
+                let next = boxes.get(k + 1);
+                let inside = |y: f32, top: f32, end: Option<f32>| {
+                    y + 0.5 >= top && end.is_none_or(|end| y + 0.5 < end)
+                };
+                let bottom = same_view(d, rows)
+                    .filter(|o| plan_view(o) && own(o))
+                    .filter_map(|o| match places(o) {
+                        (Some(a), Some(b)) if inside(a[1], old[1], next.map(|n| n.0[1])) => {
+                            Some(b[1] + b[3])
+                        }
+                        (None, Some(b)) if inside(b[1], new[1], next.map(|n| n.1[1])) => {
+                            Some(b[1] + b[3])
+                        }
+                        _ => None,
+                    })
+                    .fold(new[1] + new[3], f32::max);
+                if out
+                    .last()
+                    .is_some_and(|(_, _, above)| new[1] + 0.05 < *above)
+                {
+                    return None;
+                }
+                out.push((*old, *new, bottom));
+            }
+            Some(out)
+        }
+
+        /// A scene's own part: its box, its words, its links, its second line, or a piece of its
+        /// words that now joins one line. The words start `LEFT` further left, at the title's
+        /// size: never taller, never larger, never lower; the box's target is 24 px and ends at
+        /// the fights' title column.
+        pub(super) fn part(d: &Difference, rows: &[AllowedRow]) -> bool {
+            if !plan_view(d) {
+                return false;
+            }
+            let name = bare(&d.name);
+            match places(d) {
+                (Some(a), Some(b)) if d.what == "control" && box_of(&d.name).is_some() => {
+                    near(b[2], BOX)
+                        && near(b[3], BOX)
+                        && near(b[0] + BOX, a[0] + SLOT)
+                        && b[1] <= a[1]
+                        && scene_rows_of(d, rows).is_some()
+                }
+                (Some(a), Some(b)) => {
+                    // The words start `LEFT` further left; a link in them starts inside its
+                    // scene's words after. Each takes its exact size at the title's size; the
+                    // second line keeps its size.
+                    let across = if SCENES.contains(&name) || name == DETAIL {
+                        near(b[0], a[0] - LEFT)
+                    } else {
+                        LINKS.contains(&name)
+                            && b[0] <= a[0] - LEFT
+                            && same_view(d, rows).any(|o| {
+                                let words = bare(&o.name);
+                                o.what == d.what
+                                    && SCENES.contains(&words)
+                                    && name
+                                        .split(" (opens ")
+                                        .next()
+                                        .is_some_and(|l| words.contains(l))
+                                    && places(o).1.is_some_and(|w| {
+                                        w[0] <= b[0]
+                                            && b[0] + b[2] <= w[0] + w[2] + 0.05
+                                            && near(w[1], b[1])
+                                    })
+                            })
+                    };
+                    let size = title_size(name, &b) || name == DETAIL && a[2..] == b[2..];
+                    across && size && b[1] <= a[1] && scene_rows_of(d, rows).is_some()
+                }
+                // A scene's words that wrapped at the Reader's size join one line: each piece
+                // goes, and the whole words come, in one view.
+                (Some(_), None) => {
+                    d.name.starts_with("TextRun: ")
+                        && !name.trim().is_empty()
+                        && SCENES.iter().any(|scene| {
+                            scene.contains(name.trim())
+                                && *scene != name
+                                && same_view(d, rows).any(|o| {
+                                    o.change == "new" && o.name == format!("TextRun: {scene}")
+                                })
+                        })
+                }
+                (None, Some(b)) => {
+                    d.name.starts_with("TextRun: ") && SCENES.contains(&name) && {
+                        let pieces: Vec<([f32; 4], String)> = same_view(d, rows)
+                            .filter(|o| o.change == "gone" && o.name.starts_with("TextRun: "))
+                            .filter_map(|o| Some((places(o).0?, bare(&o.name).to_owned())))
+                            .filter(|(_, piece)| name.contains(piece.trim()))
+                            .collect();
+                        let mut pieces = pieces;
+                        pieces.sort_by(|a, b| a.0[1].total_cmp(&b.0[1]));
+                        let start = pieces
+                            .iter()
+                            .map(|(a, _)| a[0])
+                            .fold(f32::INFINITY, f32::min);
+                        let joined: String = pieces.into_iter().map(|(_, piece)| piece).collect();
+                        joined == name && near(b[0], start - LEFT) && title_size(name, &b)
+                    }
+                }
+                _ => false,
+            }
+        }
+
+        /// The decisions' rule for one view: an item moved straight up (its place across and its
+        /// size kept), by the change of the scene rows above it. On a scene row's first line (its
+        /// menu), by that scene box's own move; below it and above the next scene, by the next
+        /// box's move; below the last scene row, by one amount that every such item of the view
+        /// shares, controls and texts alike, at least the last box's move. Below a scene row, an
+        /// item never lies over that row's own items.
+        pub(super) fn below(d: &Difference, rows: &[AllowedRow]) -> bool {
+            if !plan_view(d) || d.change != "moved" {
+                return false;
+            }
+            let (Some(a), Some(b)) = places(d) else {
+                return false;
+            };
+            if !(a[0] == b[0] && a[2..] == b[2..] && b[1] < a[1]) {
+                return false;
+            }
+            let shift = a[1] - b[1];
+            let Some(scenes) = scene_rows_of(d, rows) else {
+                return false;
+            };
+            let Some(at) = scenes.iter().rposition(|(old, ..)| old[1] <= a[1] + 0.5) else {
+                return false;
+            };
+            let moved = |(old, new, _): &SceneRow| old[1] - new[1];
+            if a[1] < scenes[at].0[1] + BOX + 2.0 {
+                return near(shift, moved(&scenes[at]));
+            }
+            if b[1] + 0.05 < scenes[at].2 {
+                return false;
+            }
+            if let Some(next) = scenes.get(at + 1) {
+                return near(shift, moved(next));
+            }
+            let last = scenes[at].0[1] + BOX + 2.0;
+            shift + 0.05 >= moved(&scenes[at])
+                && same_view(d, rows)
+                    .filter(|o| o.change == "moved" && plan_view(o))
+                    .filter_map(|o| match places(o) {
+                        (Some(a), Some(b)) if a[0] == b[0] && a[2..] == b[2..] && a[1] >= last => {
+                            Some(a[1] - b[1])
+                        }
+                        _ => None,
+                    })
+                    .all(|other| near(other, shift))
+        }
+
+        /// A done and linked scene's `Add to Log` on its row's first line, at least a 24 px
+        /// target, `GAP` right of that scene's words, with its word and its icon inside it; or an
+        /// act that shows or hides only that word.
+        pub(super) fn log_on_row(d: &Difference, rows: &[AllowedRow]) -> bool {
+            if d.what == "act" {
+                return d.change == "changed"
+                    && d.detail.split(" | ").all(|part| {
+                        ["appeared + Add to Log", "went + Add to Log"].contains(&part)
+                    });
+            }
+            if !plan_view(d) || d.change != "new" {
+                return false;
+            }
+            let Some(at) = places(d).1 else {
+                return false;
+            };
+            // The button, on the first line of its own done, linked scene's row, clear of its
+            // words.
+            let button = |o: &Difference| {
+                let scene = bare(&o.name).strip_prefix("Add to Log: ")?;
+                let rect = places(o).1?;
+                let linked = LINKS.iter().any(|link| {
+                    link.split(" (opens ")
+                        .next()
+                        .is_some_and(|words| scene.contains(words))
+                });
+                let on_row = same_view(o, rows).any(|b| {
+                    b.what == "control"
+                        && bare(&b.name).strip_prefix("Done: ") == Some(scene)
+                        && SCENES.contains(&scene)
+                        && places(b)
+                            .1
+                            .is_some_and(|r| near(r[1], rect[1]) && r[0] + r[2] <= rect[0])
+                });
+                let clear = same_view(o, rows).any(|w| {
+                    w.what == "control"
+                        && bare(&w.name) == scene
+                        && places(w)
+                            .1
+                            .is_some_and(|w| w[0] + w[2] + GAP <= rect[0] + 0.05)
+                });
+                let target = rect[2] >= BOX && rect[3] >= BOX;
+                (o.what == "control" && o.change == "new" && linked && on_row && clear && target)
+                    .then_some(rect)
+            };
+            if d.what == "control" {
+                return button(d).is_some();
+            }
+            ["Add to Log", "\u{e3d4}"].contains(&d.name.as_str())
+                && same_view(d, rows).filter_map(button).any(|rect| {
+                    rect[0] <= at[0]
+                        && at[0] + at[2] <= rect[0] + rect[2]
+                        && rect[1] <= at[1]
+                        && at[1] + at[3] <= rect[1] + rect[3]
+                })
+        }
+
+        fn fold_words(words: &str) -> bool {
+            words.split_once(' ').is_some_and(|(n, word)| {
+                !n.is_empty()
+                    && n.chars().all(|c| c.is_ascii_digit())
+                    && ["scene", "scenes"].contains(&word)
+            })
+        }
+
+        /// The caret before `N scenes`: the link wider by the caret, its place and height kept;
+        /// its words' old text gone, paired with the caret and the same words new, at the same
+        /// place and height, wider.
+        pub(super) fn caret(d: &Difference, rows: &[AllowedRow]) -> bool {
+            if !plan_view(d) {
+                return false;
+            }
+            let name = bare(&d.name);
+            let with_caret = |words: &str| {
+                CARETS
+                    .iter()
+                    .find_map(|caret| words.strip_prefix(caret)?.strip_prefix(' '))
+                    .filter(|rest| fold_words(rest))
+                    .map(str::to_owned)
+            };
+            let pair = |old: &Difference, new: &Difference| match (places(old).0, places(new).1) {
+                (Some(a), Some(b)) => {
+                    old.change == "gone"
+                        && new.change == "new"
+                        && old.what == "text"
+                        && new.what == "text"
+                        && with_caret(&new.name).as_deref() == Some(old.name.as_str())
+                        && a[0] == b[0]
+                        && a[1] == b[1]
+                        && a[3] == b[3]
+                        && near(b[2], a[2] + CARET)
+                }
+                _ => false,
+            };
+            match (d.what.as_str(), d.change.as_str()) {
+                ("control", "width") => {
+                    fold_words(name)
+                        && matches!(places(d), (Some(a), Some(b))
+                            if a[..2] == b[..2] && a[3] == b[3] && near(b[2], a[2] + CARET))
+                }
+                ("text", "gone") => same_view(d, rows).any(|new| pair(d, new)),
+                ("text", "new") => same_view(d, rows).any(|old| pair(old, d)),
+                _ => false,
+            }
+        }
+    }
+
     mod rewards {
         use super::super::{AllowedRow, Difference};
         use super::rect_of;
@@ -3363,18 +3776,315 @@ mod allowed_classes {
     }
 
     #[test]
+    fn the_r1a_classes_refuse_a_move_sideways_a_wrong_amount_a_cut_and_a_loss() {
+        let row = |row: u32, what: &str, change: &str, name: &str, detail: &str| AllowedRow {
+            row,
+            why: String::new(),
+            difference: Difference {
+                screen: "session-tonight".into(),
+                view: "960x640 Lookup closed".into(),
+                what: what.into(),
+                change: change.into(),
+                name: name.into(),
+                detail: detail.into(),
+            },
+        };
+        let scene_box = row(
+            23,
+            "control",
+            "resized",
+            "CheckBox: Open: Ask about the toll",
+            "372 300 26x26 -> 370 290 24x24",
+        );
+        let words = row(
+            23,
+            "control",
+            "resized",
+            "Label: Ask about the toll",
+            "406 300 120x24 -> 394 290 109.8x24",
+        );
+        let fight = |detail: &str| row(23, "control", "moved", "Link: Shrine of Cinders", detail);
+        let below = fight("394 400 106.8x24 -> 394 380 106.8x24");
+        let good = [scene_box.clone(), words.clone(), below.clone()];
+        assert!(
+            classes(&good).iter().all(Option::is_some),
+            "the intended rows"
+        );
+        // A done, linked scene's `Add to Log` and the fold's caret, as `session-last` and
+        // `session-tonight: Travel row open` measure them at 960x640.
+        let done_box = row(
+            23,
+            "control",
+            "resized",
+            "CheckBox: Done: Meet Hobb the Miller at the mill",
+            "372 363 26x26 -> 370 363 24x24",
+        );
+        let done_words = row(
+            23,
+            "control",
+            "resized",
+            "Label: Meet Hobb the Miller at the mill",
+            "406 363 229.8x24 -> 394 363 196.8x24",
+        );
+        let log = |detail: &str| {
+            row(
+                23,
+                "control",
+                "new",
+                "Button: Add to Log: Meet Hobb the Miller at the mill",
+                detail,
+            )
+        };
+        let fold = |detail: &str| row(24, "control", "width", "Link: 2 scenes", detail);
+        let fold_words = [
+            row(24, "text", "gone", "2 scenes", "was 449.6 209 55.8x18"),
+            row(
+                24,
+                "text",
+                "new",
+                "\u{e13a} 2 scenes",
+                "at 449.6 209 72.8x18",
+            ),
+        ];
+        let mut caret = fold_words.to_vec();
+        caret.push(fold("449.6 206 55.8x24 -> 449.6 206 72.8x24"));
+        for (rows, why) in [
+            (
+                vec![
+                    done_box.clone(),
+                    done_words.clone(),
+                    log("at 738.5 363 103.5x28"),
+                ],
+                "a done scene's Add to Log",
+            ),
+            (caret.clone(), "the fold's caret"),
+        ] {
+            assert!(
+                classes(&rows).iter().all(Option::is_some),
+                "{why} was refused"
+            );
+        }
+        for (rows, why) in [
+            (
+                vec![
+                    scene_box.clone(),
+                    fight("394 400 106.8x24 -> 390 380 106.8x24"),
+                ],
+                "a fight moved sideways",
+            ),
+            (
+                vec![
+                    scene_box.clone(),
+                    fight("394 400 106.8x24 -> 394 380 100x24"),
+                ],
+                "a fight narrowed",
+            ),
+            (
+                vec![
+                    scene_box.clone(),
+                    fight("394 400 106.8x24 -> 394 410 106.8x24"),
+                ],
+                "a fight moved down",
+            ),
+            (
+                vec![
+                    scene_box.clone(),
+                    fight("394 200 106.8x24 -> 394 190 106.8x24"),
+                ],
+                "an item above the scenes moved",
+            ),
+            (
+                vec![
+                    scene_box.clone(),
+                    below.clone(),
+                    row(
+                        23,
+                        "control",
+                        "moved",
+                        "Button: Start fight: Shrine of Cinders",
+                        "545 400 109x28 -> 545 385 109x28",
+                    ),
+                ],
+                "two amounts below the last scene",
+            ),
+            (
+                vec![
+                    scene_box.clone(),
+                    fight("394 400 106.8x24 -> 394 380 106.8x24, seen 394 380 106.8x10"),
+                ],
+                "a cut fight",
+            ),
+            (
+                vec![
+                    scene_box.clone(),
+                    row(
+                        23,
+                        "control",
+                        "gone",
+                        "Button: Start fight: Shrine of Cinders",
+                        "was 545 400 109x28",
+                    ),
+                ],
+                "a control gone",
+            ),
+            (
+                vec![row(
+                    23,
+                    "control",
+                    "resized",
+                    "CheckBox: Open: Ask about the toll",
+                    "372 300 26x26 -> 372 290 22x24",
+                )],
+                "a box below 24 px",
+            ),
+            (
+                vec![row(
+                    23,
+                    "control",
+                    "resized",
+                    "Label: Ask about the toll",
+                    "406 300 120x24 -> 400 290 110x24",
+                )],
+                "words not at the title column",
+            ),
+            (
+                vec![row(
+                    23,
+                    "control",
+                    "resized",
+                    "Label: Ask about the toll",
+                    "406 300 120x24 -> 394 290 110x48",
+                )],
+                "words that wrap more",
+            ),
+            (
+                vec![
+                    scene_box.clone(),
+                    row(
+                        23,
+                        "control",
+                        "new",
+                        "Button: Add to Log: Ask about the toll",
+                        "at 700 320 103.5x28",
+                    ),
+                ],
+                "an action off its scene's row",
+            ),
+            (
+                vec![row(
+                    24,
+                    "control",
+                    "width",
+                    "Link: 2 scenes",
+                    "449.6 206 55.8x24 -> 449.6 206 50x24",
+                )],
+                "a narrower fold link",
+            ),
+            (
+                vec![row(24, "text", "gone", "2 scenes", "was 449.6 209 55.8x18")],
+                "the fold's words gone alone",
+            ),
+            // The review of PR 280 made up these five.
+            (
+                vec![row(
+                    23,
+                    "control",
+                    "resized",
+                    "Label: Ask about the toll",
+                    "406 300 120x24 -> 394 290 1x1",
+                )],
+                "a scene's words shrunk to 1x1",
+            ),
+            (
+                vec![
+                    scene_box.clone(),
+                    row(
+                        23,
+                        "control",
+                        "resized",
+                        "CheckBox: Done: Read Emberfall Rumours",
+                        "372 360 26x26 -> 370 290 24x24",
+                    ),
+                ],
+                "two scene boxes that overlap",
+            ),
+            (
+                vec![
+                    scene_box.clone(),
+                    below.clone(),
+                    row(
+                        23,
+                        "text",
+                        "moved",
+                        "Shrine of Cinders",
+                        "394 403 106.8x18 -> 394 388 106.8x18",
+                    ),
+                ],
+                "a text 15 px up below the scene, its control 20 px",
+            ),
+            (
+                vec![
+                    done_box.clone(),
+                    done_words.clone(),
+                    log("at 738.5 363 1x1"),
+                ],
+                "an Add to Log of 1x1",
+            ),
+            (
+                vec![
+                    done_box.clone(),
+                    done_words.clone(),
+                    log("at 394 363 103.5x28"),
+                ],
+                "an Add to Log over its scene's words",
+            ),
+            (
+                vec![
+                    row(
+                        23,
+                        "control",
+                        "resized",
+                        "CheckBox: Open: Meet Hobb the Miller at the mill",
+                        "372 363 26x26 -> 370 363 24x24",
+                    ),
+                    done_words.clone(),
+                    log("at 738.5 363 103.5x28"),
+                ],
+                "an Add to Log on an open scene",
+            ),
+            (
+                {
+                    let mut rows = fold_words.to_vec();
+                    rows.push(fold("449.6 206 55.8x24 -> 449.6 206 255.8x24"));
+                    rows
+                },
+                "a fold link 200 px wider than its words and caret",
+            ),
+        ] {
+            assert!(
+                classes(&rows).iter().any(Option::is_none),
+                "{why} was accepted"
+            );
+        }
+    }
+
+    #[test]
     fn every_allowed_row_is_in_a_class_of_its_row() {
         let allowed: Allowed = read(&folder().join("allowed.json"));
         let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
+        let mut unfit = Vec::new();
         for (row, class) in allowed.rows.iter().zip(classes(&allowed.rows)) {
-            let class = class.unwrap_or_else(|| {
-                panic!(
-                    "allowed.json row {} fits no class of its row: {}",
-                    row.row, row.difference
-                )
-            });
-            *counts.entry(class).or_default() += 1;
+            match class {
+                Some(class) => *counts.entry(class).or_default() += 1,
+                None => unfit.push(format!("row {}: {}", row.row, row.difference)),
+            }
         }
+        assert!(
+            unfit.is_empty(),
+            "{} allowed.json rows fit no class of their row:\n{}",
+            unfit.len(),
+            unfit.join("\n")
+        );
         println!("allowed.json classes: {counts:?}");
         // The classes refuse what a fault looks like: a line gone, or `Remove` narrower.
         let remove = Difference {

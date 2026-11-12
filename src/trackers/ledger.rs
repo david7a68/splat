@@ -89,11 +89,24 @@ pub struct Entry {
     pub extra: BTreeMap<String, Value>,
 }
 
-/// A notice's identity: the change that crossed the mark, and the mark's value.
+/// A notice's identity. A mark at a value: the change that crossed the mark, and the mark's
+/// value. A day mark: its key and the day it comes due on, so a notice is the same period
+/// whatever event moved the clock there.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct NoticeRef {
-    pub change: String,
-    pub at: i64,
+#[serde(untagged)]
+pub enum NoticeRef {
+    Value { change: String, at: i64 },
+    Day { mark: String, day: u64 },
+}
+
+impl NoticeRef {
+    /// The change that raised a notice at a value; a day notice has none.
+    pub fn change(&self) -> Option<&str> {
+        match self {
+            Self::Value { change, .. } => Some(change),
+            Self::Day { .. } => None,
+        }
+    }
 }
 
 /// A quick action's dice (`"1d6: [4]"`), or a notice's roll on a table.
@@ -136,9 +149,10 @@ pub enum Op {
     Append(Vec<Entry>),
     /// These entries, exactly as they were read, leave the list.
     Remove(Vec<Entry>),
-    /// Entries that a `Remove` took go back, each after the entry it followed then (`None`: at
-    /// the top), so the acts made since keep their places. Its order is the list's.
-    Restore(Vec<(Option<String>, Entry)>),
+    /// Entries that a `Remove` took go back, each after the entry it followed then, as that
+    /// entry was read (`None`: at the top), so the acts made since keep their places. Its order
+    /// is the list's.
+    Restore(Vec<(Option<Entry>, Entry)>),
 }
 
 impl Ledger {
@@ -206,13 +220,21 @@ impl Ledger {
                     let at = match after {
                         None => 0,
                         Some(after) => {
-                            next.changes
+                            let at = next
+                                .changes
                                 .iter()
-                                .position(|old| old.id == *after)
+                                .position(|old| old.id == after.id)
                                 .ok_or(
                                     "The entry before it is no longer in Trackers.md. Nothing was put back.",
-                                )?
-                                + 1
+                                )?;
+                            // The place is named by the whole entry before it, as it was read.
+                            if next.changes[at] != *after {
+                                return Err(
+                                    "The entry before it changed on disk. Nothing was put back."
+                                        .into(),
+                                );
+                            }
+                            at + 1
                         }
                     };
                     next.changes.insert(at, entry.clone());
@@ -316,12 +338,12 @@ pub fn commit(
 mod tests {
     use super::*;
 
-    const DESIGN: &str = "---\ntrackers_version: 1\nchanges:\n- id: c-1a2b3c4d\n  tracker: seals\n  for: Old Guard\n  add: 1\n  session: 070eca36-331c-46cc-b5a6-32a6e35265da\n- id: c-5e6f7a8b\n  tracker: favor\n  add: -1\n  use: u-77aa01\n  roll: \"1d6: [4]\"\n  row: A healing potion\n  event: t-08a07eb0ec\n- id: c-6f7a8b9c\n  notice: {change: c-1a2b3c4d, at: 1}\n  roll: {table: rival_track, for: Old Guard, value: 4, row: Takes a seal.}\n  session: 070eca36-331c-46cc-b5a6-32a6e35265da\n- id: c-7a8b9c0d\n  notice: {change: c-1a2b3c4d, at: 1}\n  done: true\n  session: 070eca36-331c-46cc-b5a6-32a6e35265da\nnotes:\n  seals/Old Guard: Coming for the party\n---\n\nThe DM's own words.\n";
+    const DESIGN: &str = "---\ntrackers_version: 1\nchanges:\n- id: c-1a2b3c4d\n  tracker: seals\n  for: Old Guard\n  add: 1\n  session: 070eca36-331c-46cc-b5a6-32a6e35265da\n- id: c-5e6f7a8b\n  tracker: favor\n  add: -1\n  use: u-77aa01\n  roll: \"1d6: [4]\"\n  row: A healing potion\n  event: t-08a07eb0ec\n- id: c-6f7a8b9c\n  notice: {change: c-1a2b3c4d, at: 1}\n  roll: {table: rival_track, for: Old Guard, value: 4, row: Takes a seal.}\n  session: 070eca36-331c-46cc-b5a6-32a6e35265da\n- id: c-7a8b9c0d\n  notice: {change: c-1a2b3c4d, at: 1}\n  done: true\n  session: 070eca36-331c-46cc-b5a6-32a6e35265da\n- id: c-8b9c0d1e\n  notice: {mark: month_end, day: 32}\n  dismissed: true\nnotes:\n  seals/Old Guard: Coming for the party\n---\n\nThe DM's own words.\n";
 
     #[test]
     fn the_designs_ledger_reads_and_writes_back_every_field() {
         let ledger = Ledger::parse(DESIGN).unwrap();
-        assert_eq!(ledger.changes.len(), 4);
+        assert_eq!(ledger.changes.len(), 5);
         assert_eq!(ledger.changes[0].instance.as_deref(), Some("Old Guard"));
         assert_eq!(ledger.changes[1].roll, Some(Roll::Dice("1d6: [4]".into())));
         assert!(matches!(
@@ -329,6 +351,13 @@ mod tests {
             Some(Roll::Table(TableRoll { value: 4, name: Some(name), .. })) if name == "Old Guard"
         ));
         assert!(ledger.changes[3].done);
+        assert_eq!(
+            ledger.changes[4].notice,
+            Some(NoticeRef::Day {
+                mark: "month_end".into(),
+                day: 32
+            })
+        );
         let text = ledger.render(DESIGN).unwrap();
         assert!(text.ends_with("---\n\nThe DM's own words.\n"), "{text}");
         assert_eq!(Ledger::parse(&text).unwrap(), ledger);
@@ -346,9 +375,9 @@ mod tests {
         let once = ledger.apply(&Op::Append(vec![entry.clone()])).unwrap();
         let twice = once.apply(&Op::Append(vec![entry.clone()])).unwrap();
         assert_eq!(once, twice);
-        assert_eq!(twice.changes.len(), 5);
+        assert_eq!(twice.changes.len(), 6);
         let mut edited = once.clone();
-        edited.changes[4].add = Some(2);
+        edited.changes[5].add = Some(2);
         assert!(edited.apply(&Op::Remove(vec![entry.clone()])).is_err());
         let undone = once.apply(&Op::Remove(vec![entry.clone()])).unwrap();
         assert_eq!(undone, ledger);
@@ -356,7 +385,7 @@ mod tests {
         // Remove's Undo puts entries back after the entry each followed, also after a newer
         // act, and once only; it refuses when that entry or its own changed on disk.
         let second = ledger.changes[1].clone();
-        let placed = vec![(Some(ledger.changes[0].id.clone()), second.clone())];
+        let placed = vec![(Some(ledger.changes[0].clone()), second.clone())];
         let removed = once.apply(&Op::Remove(vec![second.clone()])).unwrap();
         let back = removed.apply(&Op::Restore(placed.clone())).unwrap();
         assert_eq!(back, once);
@@ -366,7 +395,14 @@ mod tests {
         assert!(gone.apply(&Op::Restore(placed.clone())).is_err());
         gone = once.clone();
         gone.changes[1].add = Some(9);
-        assert!(gone.apply(&Op::Restore(placed)).is_err());
+        assert!(gone.apply(&Op::Restore(placed.clone())).is_err());
+        // The entry before it was edited on disk: the place it names is not the place read.
+        let mut moved = removed.clone();
+        moved.changes[0].add = Some(20);
+        assert_eq!(
+            moved.apply(&Op::Restore(placed)),
+            Err("The entry before it changed on disk. Nothing was put back.".into())
+        );
     }
 
     #[test]

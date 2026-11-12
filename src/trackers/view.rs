@@ -1,9 +1,7 @@
 //! The Trackers view of the Lookup panel: the Due rows, then the pinned trackers in the note's
 //! order, then `More trackers`, in one scroll area; the result line keeps its place at the
 //! panel's bottom edge. The view draws from the ledger as read, and every press is one act.
-use super::{
-    Rules, State, Trackers, Unrecorded, ledger::Entry, ledger::NoticeRef, mark_of, short_name,
-};
+use super::{Rules, Says, State, Trackers, Unrecorded, ledger::Entry, ledger::NoticeRef, mark_of};
 use crate::design::{self, Action, Density, Tone, Type, colors, icons};
 use eframe::egui;
 use std::collections::HashSet;
@@ -16,6 +14,9 @@ pub(crate) struct ViewState {
     focus_asking: bool,
     /// Proposed changes the DM unticked, by notice. Ticked is the default.
     unticked: HashSet<(NoticeRef, usize)>,
+    /// The act pressed in this frame. The shell applies it after Lookup drew, once it has read
+    /// the day count again, so an act uses the day at the click.
+    pressed: Option<Act>,
 }
 
 impl ViewState {
@@ -43,8 +44,11 @@ impl ViewState {
     }
 }
 
+/// The Due list's words after the Timeline's own, while the day count is not known.
+pub(crate) const DAY_MARKS_WAIT: &str = "No day mark shows until the Timeline is read.";
+
 /// One act the DM asked for in this frame.
-enum Act {
+pub(crate) enum Act {
     Press {
         key: String,
         instance: Option<String>,
@@ -54,6 +58,7 @@ enum Act {
     Roll(super::Notice, String),
     Done(super::Notice, Vec<bool>),
     Dismiss(super::Notice),
+    DismissAll(super::Notice),
     Undo(Vec<Entry>),
     AddToTimeline(String, String),
     UndoAdd(String),
@@ -64,6 +69,25 @@ impl Trackers {
     /// Does a typed amount hold Escape? Then Escape ends the amount, not Lookup.
     pub fn takes_escape(&self) -> bool {
         self.view.asking.is_some()
+    }
+
+    /// Was an act pressed in the view this frame?
+    pub fn pressed(&self) -> bool {
+        self.view.pressed.is_some()
+    }
+
+    /// Apply the act pressed in the view. The shell calls it after `follow_clock`, so an act
+    /// on a day notice reads the day count's one answer, also when it is not known.
+    pub fn apply_pressed(&mut self) {
+        if let Some(act) = self.view.pressed.take() {
+            apply(self, act);
+        }
+    }
+
+    /// `Done` or `Next` pressed on this row, as a click in the view leaves it for the shell.
+    #[cfg(test)]
+    pub(crate) fn press_done_in_view(&mut self, notice: &super::Notice, ticked: Vec<bool>) {
+        self.view.pressed = Some(Act::Done(notice.clone(), ticked));
     }
 }
 
@@ -93,9 +117,7 @@ pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, from_top: bool) {
         ] {
             ui.label(Type::Body.rich(ui, words).color(colors().muted));
         }
-        if let Some(act) = act {
-            apply(trackers, act);
-        }
+        trackers.view.pressed = act;
         return;
     }
     // What is due is in view when the view opens.
@@ -106,9 +128,7 @@ pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, from_top: bool) {
         area = area.vertical_scroll_offset(0.0);
     }
     area.show(ui, |ui| body(ui, trackers, &mut act));
-    if let Some(act) = act {
-        apply(trackers, act);
-    }
+    trackers.view.pressed = act;
 }
 
 fn apply(trackers: &mut Trackers, act: Act) {
@@ -127,6 +147,7 @@ fn apply(trackers: &mut Trackers, act: Act) {
             }
         }
         Act::Dismiss(notice) => trackers.dismiss(&notice),
+        Act::DismissAll(notice) => trackers.dismiss_all(&notice),
         Act::Undo(entries) => trackers.undo(&entries),
         Act::AddToTimeline(entry, label) => trackers.wants_timeline = Some((entry, label)),
         Act::UndoAdd(event) => {
@@ -188,6 +209,10 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
         );
         return;
     }
+    // A day count that is not known shows no day notice, never an old one, and says why.
+    if let Some(why) = &state.clock_not_read {
+        design::small_message(ui, Tone::Error, &format!("{why} {DAY_MARKS_WAIT}"));
+    }
     if !state.due.is_empty() {
         design::group_heading(ui, "Due", state.due.len());
         for notice in &state.due {
@@ -241,19 +266,11 @@ fn notice_row(
     let Some(mark) = mark_of(rules, notice) else {
         return;
     };
-    let words = match &notice.instance {
-        Some(name) => format!("{name}: {}", mark.say),
-        None => mark.say.clone(),
-    };
-    let short = short_name(
-        rules,
-        &notice.tracker,
-        notice.instance.as_deref(),
-        notice.id.at,
-    );
+    let words = notice_words(rules, notice, mark);
+    let short = notice.name(rules);
     let ends_words = mark.tables.is_empty() && mark.changes.is_empty();
     if ends_words {
-        words_ending_with(ui, &words, finish_width(ui), |ui| {
+        words_ending_with(ui, &words, finish_width(ui, notice), |ui| {
             finish(ui, &short, notice, mark, view, act)
         });
     } else {
@@ -261,7 +278,7 @@ fn notice_row(
     }
     if !mark.tables.is_empty() {
         ui.horizontal_wrapped(|ui| {
-            for table in &mark.tables {
+            for table in mark.tables {
                 let key = table.key();
                 let rolled = notice.rolls.iter().filter(|r| r.table == key).count();
                 let each_rolled = !table.names().is_empty() && rolled >= table.names().len();
@@ -304,8 +321,12 @@ fn notice_row(
         }
     }
     for (at, change) in mark.changes.iter().enumerate() {
-        let key = change.tracker.as_deref().unwrap_or(&notice.tracker);
+        let key = change.tracker.as_deref().unwrap_or(&notice.key);
         let name = rules.def(key).map_or(key, |def| def.name.as_str());
+        let name = match &change.instance {
+            Some(line) => format!("{name} ({line})"),
+            None => name.to_owned(),
+        };
         let amount = match (&change.add, change.set) {
             (_, Some(set)) => format!("set to {set}"),
             (Some(super::Amount::Number(n)), None) => format!("{n:+}"),
@@ -326,6 +347,23 @@ fn notice_row(
         right_line(ui, |ui| finish(ui, &short, notice, mark, view, act));
     }
     ui.add_space(design::XS);
+}
+
+/// A Due row's words. A mark at a value names its line: `Old Guard: First seal.` A day mark
+/// names its day, and a row for several days says how many and which comes next, so an older
+/// period says so before it runs: `End of month ×3. Next: Day 32. Move the rival powers.`
+fn notice_words(rules: &Rules, notice: &super::Notice, mark: Says<'_>) -> String {
+    match (&notice.id, notice.days.as_slice(), &notice.instance) {
+        (NoticeRef::Day { day, .. }, [_], _) => format!("Day {day}: {}", mark.say),
+        (NoticeRef::Day { mark: key, day }, days, _) => format!(
+            "{} ×{}. Next: Day {day}. {}",
+            rules.day_title(key),
+            days.len(),
+            mark.say
+        ),
+        (_, _, Some(name)) => format!("{name}: {}", mark.say),
+        (_, _, None) => mark.say.to_owned(),
+    }
 }
 
 /// The words, with `add` at the right end of their last line when it fits there, and else on
@@ -377,21 +415,32 @@ fn right_line(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
     );
 }
 
-/// `Done` and the row's menu, with the gap between them.
-fn finish_width(ui: &egui::Ui) -> f32 {
-    Action::quiet("Done")
+/// The row's last action: `Next` on a day mark's row of several days, else `Done`. Either
+/// applies the ticked changes and ends one notice: the oldest day of the row.
+fn finish_label(notice: &super::Notice) -> &'static str {
+    if notice.days.len() > 1 {
+        "Next"
+    } else {
+        "Done"
+    }
+}
+
+/// `Done` or `Next` and the row's menu, with the gap between them.
+fn finish_width(ui: &egui::Ui, notice: &super::Notice) -> f32 {
+    Action::quiet(finish_label(notice))
         .density(Density::Read)
         .natural_width(ui)
         + ui.spacing().item_spacing.x
         + Density::Read.control()
 }
 
-/// The row's menu with `Dismiss`, then `Done`, laid out from the right.
+/// The row's menu with `Dismiss` (and `Dismiss all` on a row of several days), then `Done` or
+/// `Next`, laid out from the right.
 fn finish(
     ui: &mut egui::Ui,
     short: &str,
     notice: &super::Notice,
-    mark: &super::Mark,
+    mark: Says<'_>,
     view: &ViewState,
     act: &mut Option<Act>,
 ) {
@@ -404,9 +453,19 @@ fn finish(
             *act = Some(Act::Dismiss(notice.clone()));
             ui.close();
         }
+        if notice.days.len() > 1
+            && Action::quiet("Dismiss all")
+                .density(Density::Read)
+                .show(ui)
+                .clicked()
+        {
+            *act = Some(Act::DismissAll(notice.clone()));
+            ui.close();
+        }
     });
-    let name = format!("Done: {short}");
-    if Action::quiet("Done")
+    let finish = finish_label(notice);
+    let name = format!("{finish}: {short}");
+    if Action::quiet(finish)
         .density(Density::Read)
         .name(&name)
         .show(ui)

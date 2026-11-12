@@ -440,6 +440,10 @@ const DAY: u64 = 24 * HOUR;
 const MONTH: u64 = 30 * DAY;
 const YEAR: u64 = 12 * MONTH;
 
+/// The Timeline page's words when the file changed on disk under the DM's unsaved edit.
+pub const CHANGED_UNDER_DRAFT: &str =
+    "Timeline.md changed on disk. Your draft is safe until you choose.";
+
 /// A length the clock cannot count says so in these words, after the warning icon.
 pub const TIME_NOT_COUNTED: &str = "Not counted in the day’s time";
 
@@ -731,6 +735,9 @@ pub struct Book {
     last_check: Option<Instant>,
     /// The file changed on disk during an edit. Saving stops until the DM chooses.
     pub conflict: bool,
+    /// The file changed on disk, or cannot be read, under an edit that waits for its pause,
+    /// as the last read found: why. The save, or a read that finds the file as it was, ends it.
+    pub moved_under_edit: Option<String>,
     pub merged_outside: bool,
     /// The file cannot be read as a timeline. It is left as it is, and nothing saves.
     pub unreadable: Option<String>,
@@ -794,6 +801,7 @@ impl Book {
         self.dirty = false;
         self.reordered.clear();
         self.conflict = false;
+        self.moved_under_edit = None;
         self.merged_outside = false;
         self.error = None;
         self.unreadable = None;
@@ -1064,6 +1072,7 @@ impl Book {
         self.run_write = false;
         self.reordered.clear();
         self.conflict = false;
+        self.moved_under_edit = None;
         self.error = None;
         Ok(())
     }
@@ -1232,7 +1241,7 @@ impl Book {
     /// the events may lack what it holds until the save settles it.
     pub fn read_if_changed(&mut self) -> bool {
         if self.dirty {
-            return self.path.as_ref().and_then(|path| fs::read(path).ok()) == self.baseline;
+            return self.check_under_edit();
         }
         // A file that went is looked for again only once it is back.
         if !self
@@ -1254,6 +1263,21 @@ impl Book {
             }
         }
         true
+    }
+
+    /// While an edit waits for its pause: does the file still hold what Splat last read? When
+    /// it changed or cannot be read, `moved_under_edit` says so, and the events are the draft's.
+    fn check_under_edit(&mut self) -> bool {
+        let read = self.path.as_ref().map(fs::read);
+        let same = read.as_ref().and_then(|bytes| bytes.as_ref().ok()) == self.baseline.as_ref();
+        self.moved_under_edit = match read {
+            _ if same => None,
+            Some(Err(error)) if error.kind() != std::io::ErrorKind::NotFound => {
+                Some(format!("{FILE} could not be read. {error}"))
+            }
+            _ => Some(CHANGED_UNDER_DRAFT.to_owned()),
+        };
+        same
     }
 
     /// Add after the session's last event, or at the end. A rest found in an old recording

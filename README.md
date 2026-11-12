@@ -197,7 +197,7 @@ Session Read and Write views keep the same left-aligned prose width of at most 7
 The Write frame is no wider than the reader measure plus its padding and stays at the left edge. Read and Write sit at its top right edge.
 Spare width stays outside it; stored line breaks stay unchanged. Read omits plan links already shown beside the note, including group links and scenes.
 A task line under the plan heading is a scene: a row with a done box, whose tick writes the note at once.
-When the plan's rows do not fit, the scenes fold to `N scenes` on the Tonight line, so the next fight stays in view.
+When the plan's closed rows do not fit, or an opened row would push the next fight out of view with scenes above it, the scenes fold to `N scenes`, with a section caret, on the Tonight line, so the next fight stays in view. A scene's words are a plan row title's size at the fights' title column.
 `Scene`, the last line of the Add strip's More menu, adds one. With no run open, a creature's or an NPC's
 reader, and a scene that links one, has `Start fight`, which saves and starts `Fight with <name>`. A campaign
 World entry's reader, and a done scene that links one, has `Add to Log`, which adds one line in the DM's words
@@ -654,6 +654,15 @@ is one act. A value that rises past a mark raises a notice in the **Due** list, 
 rolls (with `for:`, one roll for each name), its proposed changes ticked, and **Done**, which applies the ticked
 changes, or **Dismiss** in its menu. While a notice is due, the rail says `Due N` on every page. Splat counts and
 shows; it never applies a rule by itself.
+
+A **day mark** (`day_marks` in the same block) raises a notice on the campaign's day count, which the Timeline
+works out: `at: 721` at the start of Day 721, or `every: 30, from: 2` on Day 32, Day 62 and so on (with no `from`,
+the count starts on Day 1). Its proposed changes name their tracker, and `for:` names the line of a tracker with
+`per`. Raising a day notice writes nothing. Days of one mark that are due together, after a long journey or while
+Splat was closed, are one row (`End of month ×3`) with **Next**, which ends the oldest day, and **Dismiss all** in
+its menu. When the clock goes back, for example by the Timeline's Undo, a day no longer reached leaves the Due
+list; a day already done stays done. While `Timeline.md` cannot be read, or it changed under a Timeline edit that is
+not saved yet, no day notice shows, the Due list says so, and no act on one is recorded; your edit is kept.
 
 Every act is one entry in `Trackers.md` in the campaign's root folder, written at once. The result line names the
 last act of the session being played, with **Undo: <label>**, which steps back newest first, also after a

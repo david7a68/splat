@@ -1296,6 +1296,10 @@ impl Splat {
             .reader
             .edit_forms_into(&mut self.lookup.reader.edited_elsewhere);
         let mut start_fight = None;
+        // Beside the encounter editor, Lookup's reader offers no Start fight: the editor's own
+        // primary Start fight is the one there.
+        self.lookup.reader.beside_editor =
+            self.page == Page::Encounters && self.encounters.editor_open();
         for reader in [&mut self.world_page.reader, &mut self.lookup.reader] {
             reader.start_blocked = start_blocked;
             if let Some(fight) = reader.start_fight.take() {
@@ -1349,6 +1353,18 @@ impl Splat {
             .start_fight_with(fight, &campaign, self.campaigns.modules());
         if !self.encounters.go_to_run {
             self.page = Page::Encounters;
+        }
+    }
+
+    /// A press in Trackers, applied after Lookup drew. The act reads the day count at the click:
+    /// the Timeline reads its file again if it changed, and Trackers follows it.
+    fn apply_tracker_act(&mut self) {
+        if self.trackers.pressed() {
+            // When the file changed or cannot be read under an edit that waits for its pause,
+            // the Timeline says so, and the day count is not known: no day act records.
+            self.timeline.read_if_changed();
+            self.trackers.follow_clock(&self.timeline);
+            self.trackers.apply_pressed();
         }
     }
 
@@ -2631,7 +2647,7 @@ impl eframe::App for Splat {
             _ => None,
         };
         self.trackers
-            .poll(self.lookup.index(), open.as_ref(), played);
+            .poll(self.lookup.index(), open.as_ref(), played, &self.timeline);
         self.old_session = self.sessions.current_dated().is_some();
         let fact = self.encounters.run().map(encounter_run::Run::timeline_fact);
         if fact != self.run_fact {
@@ -2765,6 +2781,7 @@ impl eframe::App for Splat {
             }
             self.lookup.show(ctx, &mut self.trackers);
         }
+        self.apply_tracker_act();
         self.add_tracker_act_to_timeline();
         // The Sessions page has this note itself, so two editors would squeeze a small window.
         if self.sessions.notes_open && self.page != Page::Sessions {

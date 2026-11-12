@@ -61,6 +61,83 @@ fn write_the_race(d: &Driver<'_>) {
     .unwrap();
 }
 
+/// A day mark, as a DM writes one in the note's Splat data: the month's end, every 30 days from
+/// Day 2, with one proposed change.
+const MONTH_END: &str = "> day_marks:\n>   month_end:\n>     name: End of month\n>     every: 30\n>     from: 2\n>     say: Move the rival powers. Pay each team its prize money, and roll Instability if chaos has begun.\n>     changes:\n>     - {tracker: favor, add: 1}\n";
+
+/// Day marks (P11): the Timeline's day count raises a day mark's Due row, with the words, the
+/// rows and the acts of a mark at a value. Days that pass in one step are one row with `Next`;
+/// a clock that goes back takes the row away and keeps what was done.
+fn day_marks(d: &mut Driver<'_>) {
+    use crate::timeline::Kind;
+    let note = root(d).join("Tournament.md");
+    let text = fs::read_to_string(&note).unwrap();
+    fs::write(
+        &note,
+        text.replacen("> trackers:\n", &format!("{MONTH_END}> trackers:\n"), 1),
+    )
+    .unwrap();
+    d.app_mut().lookup.refresh();
+    d.app_mut().lookup.files_changed = true;
+    d.settle();
+    // Day 1, then 61 days on the road: Day 62. The month ended on Day 32 and on Day 62.
+    let timeline = &mut d.app_mut().timeline;
+    timeline.add(Kind::Day, None);
+    let road = timeline.add(Kind::Travel, None);
+    timeline.event_mut(&road).unwrap().duration = "61 days".into();
+    timeline.touch();
+    timeline.save();
+    d.settle();
+    d.observe(
+        "T19.5",
+        d.has_containing("End of month ×2. Next: Day 32. Move the rival powers.")
+            && d.has("Next: End of month, Day 32")
+            && d.has_label("DUE 3")
+            && d.has_containing("3 notices are due")
+            && !ledger(d).contains("month_end"),
+        "Days that pass in one step are one Due row that says how many, with Next; raising it writes nothing",
+    );
+    let (whole, detail) = d.at_size(SMALL, |d| {
+        let missing: Vec<_> = ["Next: End of month, Day 32", "Undo: Take seal"]
+            .into_iter()
+            .filter(|name| !d.in_view(name))
+            .chain(
+                ["End of month ×2. Next: Day 32.", "Crowd Favor +1"]
+                    .into_iter()
+                    .filter(|words| !d.in_view_containing(words)),
+            )
+            .collect();
+        (missing.is_empty(), format!("not in view: {missing:?}"))
+    });
+    d.observe(
+        "T19.5",
+        whole,
+        format!("At 960x640 with Lookup narrow, the day mark's row, its Next and the result line are in view. {detail}"),
+    );
+    d.state("trackers-day-mark-due", Sizes::Standard);
+    d.click("Next: End of month, Day 32");
+    d.expect("End of month, Day 32 done.");
+    d.observe(
+        "T19.5",
+        d.has_containing("Day 62: Move the rival powers.")
+            && d.has("Done: End of month, Day 62")
+            && ledger(d).contains("day: 32"),
+        "Next ends the oldest day and applies its change; the row names the next day",
+    );
+    // The Timeline's Undo takes the road back: Day 62 is no longer reached and its row goes;
+    // the Done of Day 32 stays in the ledger.
+    d.app_mut().timeline.undo_add(&road);
+    d.app_mut().timeline.save();
+    d.settle();
+    d.observe(
+        "T19.5",
+        !d.has_containing("Move the rival powers.")
+            && d.has_label("DUE 2")
+            && ledger(d).contains("day: 32"),
+        "A clock that goes back takes the row away and keeps what was done",
+    );
+}
+
 pub fn run(d: &mut Driver<'_>) {
     write_the_race(d);
     // As when the DM comes back from Obsidian: the content on disk changed.
@@ -284,7 +361,9 @@ pub fn run(d: &mut Driver<'_>) {
         "After a restart the result line, its Undo and the Due rows are as before",
     );
 
-    // T19.5: last week's wrong press is corrected from the house rule note's reader. Each
+    day_marks(d);
+
+    // T19.6: last week's wrong press is corrected from the house rule note's reader. Each
     // tracker's history is folded under it there; a row with another session's stamp has
     // Remove in its menu, with one Undo where the DM acted.
     use crate::trackers::ledger::{self, Entry, Op};
@@ -306,7 +385,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.click("SEALS HISTORY 2");
     let keyring = "More actions for Take seal: Keyring +1";
     d.observe(
-        "T19.5",
+        "T19.6",
         d.has_label("Start 0")
             && d.has(keyring)
             && d.has_containing("Take seal: Old Guard +1")
@@ -319,7 +398,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.click("Remove");
     d.expect("Removed: Take seal.");
     d.observe(
-        "T19.5",
+        "T19.6",
         !ledger(d).contains("c-01de5ea1")
             && d.has("Undo remove")
             && !d.has(keyring)
@@ -331,12 +410,12 @@ pub fn run(d: &mut Driver<'_>) {
     // place at the top, and B stays.
     d.press_ctrl(Key::T);
     d.click("Crowd loves it");
-    d.expect("Crowd loves it: Crowd Favor 1.");
+    d.expect("Crowd loves it: Crowd Favor 2.");
     d.press_ctrl(Key::T);
     d.click("Undo remove");
     let text = ledger(d);
     d.observe(
-        "T19.5",
+        "T19.6",
         matches!(
             (text.find("c-01de5ea1"), text.find("why: Cistern or Sands")),
             (Some(wrong), Some(first)) if wrong < first
@@ -350,7 +429,7 @@ pub fn run(d: &mut Driver<'_>) {
         Ok(Op::Append(vec![Entry {
             id: "c-0f0ced01".into(),
             tracker: Some("favor".into()),
-            add: Some(-3),
+            add: Some(-4),
             session: Some(uuid::Uuid::from_u128(7)),
             ..Entry::default()
         }]))
@@ -360,17 +439,17 @@ pub fn run(d: &mut Driver<'_>) {
     d.settle();
     d.click(keyring);
     d.click("Remove");
-    d.click("CROWD FAVOR HISTORY 2");
+    d.click("CROWD FAVOR HISTORY 3");
     let forced = "Crowd Favor is -2, below its min of 0.";
     d.observe(
-        "T19.5",
-        d.has_containing(forced) && ledger(d).contains("add: -3"),
+        "T19.6",
+        d.has_containing(forced) && ledger(d).contains("add: -4"),
         "A value below its min is named in the note's reader and changed by nothing",
     );
-    d.click("More actions for Crowd Favor change: -3");
+    d.click("More actions for Crowd Favor change: -4");
     d.click("Remove");
     d.observe(
-        "T19.5",
+        "T19.6",
         !d.has_containing(forced) && !ledger(d).contains("c-0f0ced01"),
         "Remove of the forced row clears the problem",
     );
@@ -380,7 +459,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.app_mut().trackers.read_disk();
     d.settle();
     d.observe(
-        "T19.5",
+        "T19.6",
         d.has_containing("Trackers.md cannot be read: ")
             && !d.has_containing("SEALS HISTORY")
             && !d.has_containing("Take seal: Old Guard +1"),
@@ -400,7 +479,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.app_mut().trackers.read_disk();
     d.settle();
     d.observe(
-        "T19.5",
+        "T19.6",
         d.has(keyring) && !d.has("Remove"),
         "A menu open on a row that an edit took away does not open on the entry in its place",
     );

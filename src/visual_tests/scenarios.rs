@@ -3928,6 +3928,31 @@ pub mod encounter_build {
                 format!("The rule follows Show 3 results with no empty row at {size:?}: {detail}"),
             );
         }
+        // App round 1, V19: beside the encounter editor, Lookup's reader offers no Start fight.
+        // The editor's own primary Start fight is the one there.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (one, detail) = d.at_size(size, |d| {
+                let starts: Vec<String> = d
+                    .nodes()
+                    .into_iter()
+                    .map(|node| node.name)
+                    .filter(|name| name.starts_with("Start a fight with ") || name == "Start fight")
+                    .collect();
+                (
+                    starts
+                        .iter()
+                        .all(|name| !name.starts_with("Start a fight with ")),
+                    format!("{starts:?}"),
+                )
+            });
+            d.observe(
+                "T12.15",
+                one,
+                format!(
+                    "At {size:?}, beside the editor the reader offers no Start fight: {detail}"
+                ),
+            );
+        }
         d.state("stat-block-beside-editor", Sizes::All);
         // The Cultist's Skills row in Lookup: `Deception +2, Religion +2`.
         check_skills_row(
@@ -5489,6 +5514,31 @@ pub mod run_lookup {
             d.has_containing(SECOND_RESULT),
             "At 960x640 the best match opens with the other results visible",
         );
+        // V32 beside Lookup: the dice total comes, then changes to three digits, in its own
+        // slot; no control of the dock moves, and Lookup keeps the spell.
+        let sizes = [SMALL, DEFAULT, LARGE];
+        let before = sizes.map(|size| d.at_size(size, super::session_plan::dock_places));
+        for (expression, total) in [("1d1+3", 4), ("100d1", 100)] {
+            d.type_into("Dice", expression);
+            d.press(Key::Enter);
+            for (size, before) in sizes.into_iter().zip(&before) {
+                let (after, slot, lookup) = d.at_size(size, |d| {
+                    (
+                        super::session_plan::dock_places(d),
+                        super::session_plan::dice_total_in_its_slot(d, total),
+                        d.in_view(SPELL),
+                    )
+                });
+                d.observe(
+                    "r2a-V32-lookup",
+                    after == *before && after[0].is_some() && slot.is_ok() && lookup,
+                    format!(
+                        "At {size:?} after {expression}: dock {before:?} then {after:?}; \
+                         total {slot:?}; Lookup keeps the spell: {lookup}"
+                    ),
+                );
+            }
+        }
         let builtin_found = d.in_view(SPELL);
         d.observe_both("T2.1", "Roster and Next turn stay visible", |d| {
             d.in_view(NEXT_TURN)
@@ -19073,6 +19123,49 @@ pub mod session_plan {
         ("Sable Harrowgate", "13"),
     ];
 
+    /// The dock's selected name, then its controls by name.
+    const DOCK_CONTROLS: [&str; 7] = [
+        "Amount",
+        "Conditions for this participant",
+        "Concentrating",
+        "Absent",
+        "Effect: words for this row",
+        "Dice",
+        "Roll dice",
+    ];
+
+    pub(super) fn dock_places(d: &Driver<'_>) -> Vec<Option<egui::Rect>> {
+        let name = d
+            .nodes()
+            .into_iter()
+            .find(|node| node.name.starts_with("Selected: "));
+        std::iter::once(name.map(|node| node.rect))
+            .chain(DOCK_CONTROLS.map(|name| d.place_of(name)))
+            .collect()
+    }
+
+    /// V32: the dice total keeps to its own slot: after Roll on the dice's line, or under Roll
+    /// at the end of the name's line, after the last control, never before the name. A total
+    /// of up to three digits shows whole.
+    pub(super) fn dice_total_in_its_slot(d: &Driver<'_>, total: i64) -> Result<(), String> {
+        let rolled = d.place_of(&format!("Rolled {total}")).ok_or("no total")?;
+        let roll = d.place_of("Roll dice").ok_or("no Roll")?;
+        let placed = if rolled.top() < roll.bottom() {
+            rolled.left() >= roll.right() && rolled.right() <= roll.right() + 4.0 + 32.5
+        } else {
+            let last = ["Absent", "Effect: words for this row"]
+                .into_iter()
+                .filter_map(|name| d.place_of(name))
+                .map(|place| place.right())
+                .fold(0.0, f32::max);
+            rolled.left() >= last && rolled.right() <= roll.right() + 0.5
+        };
+        let painted = d.painted_in(rolled);
+        (placed && painted.ends_with(&total.to_string()))
+            .then_some(())
+            .ok_or(format!("{rolled:?} paints {painted:?}; Roll {roll:?}"))
+    }
+
     fn roll_and_begin(d: &mut Driver<'_>) {
         d.click("Roll NPC initiative");
         for (name, total) in PLAYERS {
@@ -19399,10 +19492,21 @@ pub mod session_plan {
 
         // T12.4: dice beside the amount, with the stat block still open.
         d.click_row("Ember Cultist");
+        let sizes = [SMALL, DEFAULT, LARGE];
+        let before = sizes.map(|size| d.at_size(size, dock_places));
         d.begin_task();
         d.type_into("Dice", "1d1+3");
         d.press(Key::Enter);
         let cost = d.goal("roll dice beside the stat block");
+        // V32: the total has its own slot, and no control of the dock moves when it comes.
+        for (size, before) in sizes.into_iter().zip(before) {
+            let (after, slot) = d.at_size(size, |d| (dock_places(d), dice_total_in_its_slot(d, 4)));
+            d.observe(
+                "r2a-V32",
+                after == before && after[0].is_some() && slot.is_ok(),
+                format!("At {size:?}: dock {before:?} then {after:?}; total {slot:?}"),
+            );
+        }
         // iter-26-R SL1: the selected name keeps the dock's left edge at every size, and the
         // total never starts the name's line: at 960 it has its own place at the line's end.
         for size in [SMALL, DEFAULT, LARGE] {

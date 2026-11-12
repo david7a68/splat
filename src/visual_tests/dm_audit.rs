@@ -691,7 +691,7 @@ fn during_the_session(a: &mut Audit<'_, '_>) {
         "last session's press is gone and tonight's stays: {corrected}"
     ));
     a.d.observe(
-        "T19.5",
+        "T19.6",
         corrected,
         "Remove in the house rule note's history takes last session's press, and tonight's stays",
     );
@@ -730,8 +730,12 @@ fn during_the_session(a: &mut Audit<'_, '_>) {
     // F3 of the session-cycle design: the same fight from the book's Bandit in Lookup.
     a.task("A fight that nobody planned, with a Bandit from the book, then talk");
     a.act(Panel, "open Lookup", |d| d.press_ctrl(Key::K));
+    // Fresh words open the first result in the reader, and the Bandit ranks first: no click.
     a.act(Find, "search: bandit", |d| d.type_text("bandit"));
-    a.act(Find, "open the Bandit", |d| d.click_starting("Bandit · "));
+    a.fact(format!(
+        "the first result opened by itself: {}",
+        a.d.has("Start a fight with Bandit")
+    ));
     a.click(Nav, "Start a fight with Bandit");
     a.fact(format!(
         "the run of Fight with Bandit is open: {}",
@@ -860,20 +864,8 @@ fn after_the_session(a: &mut Audit<'_, '_>) {
         ));
         d.press_ctrl(Key::S);
         show_plan(d);
-        // By now the plan holds an opened fight with its rewards, so its rows pass the pane and
-        // the scenes fold to `N scenes` (F3). The DM opens them with that link.
-        let fold = d
-            .nodes()
-            .into_iter()
-            .find(|node| {
-                node.name.split_once(' ').is_some_and(|(n, word)| {
-                    n.parse::<usize>().is_ok() && ["scene", "scenes"].contains(&word)
-                })
-            })
-            .map(|node| node.name);
-        if let Some(fold) = fold {
-            d.click(&fold);
-        }
+        // The opened fight with its rewards does not fold this scene: an opened row folds the
+        // scenes only when it pushes the next fight out of view with scenes above it (F3).
         d.expect(&format!("Done: {HOBB}"));
     });
     a.task("Put what an NPC said in the NPC's own note");
@@ -890,6 +882,52 @@ fn after_the_session(a: &mut Audit<'_, '_>) {
             .active_campaign()
             .and_then(|campaign| fs::read_to_string(campaign.path.join(HOBB_PATH)).ok())
             .is_some_and(|text| text.contains(": Named the informer at the ford.\n"))
+    ));
+
+    next_morning(a);
+}
+
+/// P11: a day mark. The torch rules gain a supply wagon on the next day; the DM starts that
+/// day on the Timeline, sees `Due 1` on the rail, and takes the wagon's torches in Trackers.
+fn next_morning(a: &mut Audit<'_, '_>) {
+    a.setup("the torch rules have a supply wagon on the next day", |d| {
+        let day = crate::timeline::day_now(&d.app().timeline.events).unwrap_or(0) + 1;
+        let campaign = d.app_mut().campaigns.active_campaign().expect("a campaign");
+        let id = splat::character::stable_id("Torch Rules.md");
+        let wagon = format!(
+            "```yaml\nday_marks:\n  wagon:\n    name: Supply wagon\n    at: {day}\n    say: The supply wagon arrives with fresh torches.\n    changes:\n    - {{tracker: torches, add: 6}}\ntrackers:\n"
+        );
+        let note = torch_rules(id).replacen("```yaml\ntrackers:\n", &wagon, 1);
+        fs::write(campaign.path.join("Torch Rules.md"), note).expect("write the house rule note");
+        d.app_mut().lookup.refresh();
+        d.settle();
+    });
+    a.task("A new day starts: take the supply wagon's torches");
+    a.click(Nav, NAV_TIMELINE);
+    a.click(Do, "Add Day");
+    a.fact(format!(
+        "the rail counts the day mark: {}",
+        a.d.has_containing("1 notice is due")
+    ));
+    a.act(Panel, "Ctrl+T", |d| d.press_ctrl(Key::T));
+    let done =
+        a.d.nodes()
+            .iter()
+            .find(|node| node.name.starts_with("Done: Supply wagon, Day "))
+            .map(|node| node.name.clone())
+            .unwrap_or_else(|| "Done: Supply wagon".to_owned());
+    a.click(Do, &done);
+    a.act(Panel, "Ctrl+T", |d| d.press_ctrl(Key::T));
+    let ledger =
+        a.d.app_mut()
+            .campaigns
+            .active_campaign()
+            .map(|campaign| campaign.path.join("Trackers.md"))
+            .and_then(|path| fs::read_to_string(path).ok())
+            .unwrap_or_default();
+    a.fact(format!(
+        "the ledger holds the wagon's Done: {}",
+        ledger.contains("mark: wagon") && ledger.contains("done: true")
     ));
 }
 

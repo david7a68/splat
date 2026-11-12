@@ -326,7 +326,7 @@ already show the party.
 
 The plan also holds scenes, with a done mark. A creature's or an NPC's page starts a fight that nobody planned.
 
-**Done well:** T12.0 to T12.12, T14.1 to T14.5, T14.7 and T14.8.
+**Done well:** T12.0 to T12.15, T14.1 to T14.5, T14.7 and T14.8.
 
 ### W15. Keep track of what lasts
 **Trigger:** a spell, a condition or a creature's power lasts past this turn. **Goal:** on each turn the DM sees
@@ -372,10 +372,12 @@ between fights. **Frequency:** a campaign with house rules, many times a session
 puts in play shows its trackers in Trackers (Ctrl+T). A press writes one entry to `Trackers.md`; a value that passes
 a mark raises a Due row and the rail's `Due N` on every page; `Done` finishes it. Splat counts and shows; the DM
 rules. In a fight the DM opens Trackers with Ctrl+T, presses, and goes back; the run shows no other tracker part.
+A day mark raises its Due row when the Timeline's day count reaches its day, with the same words, rolls, `Done`
+and `Dismiss`.
 A wrong press of an older session, or one with no opposite action, is removed from the tracker's history in the
 house rule note's reader.
 
-**Done well:** T19.1 to T19.5.
+**Done well:** T19.1 to T19.6.
 
 ## 3. Information architecture
 
@@ -685,6 +687,9 @@ reading the code, not from a test run.
 | T12.10 | A task line is a scene with a box. A tick changes one character. A plain list line gets no row. The empty plan is as today | session-plan-scenes | cost, state | New |
 | T12.11 | A scene's link opens its entry in Lookup in 1, and `Back` returns to an earlier entry | session-plan-scenes | cost | New |
 | T12.12 | A reader starts a fight in 1, and a scene row's menu in 2. An NPC with no stat block opens the made-up form with its name and focus in HP. After `Close run`, also after a restart, a second `Start fight` starts the same encounter. `Remove…` and `Undo remove encounter` remove and restore an encounter with no saved run; `Removed encounter <name>.` has the success tone | session-plan-scenes, npc-in-lookup, encounter-build | cost, state | New |
+| T12.13 | A scene's row matches a fight row: its words at the fights' title column and the title's size at every width, its second line at a fight row's pitch; a done scene's words and links muted; its menu has `Start fight` first and `Remove from tonight` last, each with its icon; folded scenes' `N scenes` has the section caret | session-plan-scenes | view, state | New |
+| T12.14 | The fold counts each row as it is when closed: an opened Travel row with its checks does not fold scenes below the next fight at 1200x800, and the scene just added stays in view at 960x640 while the DM types the next one. `Scene added to tonight.` shows under the field, and no row above it moves. A scene's `Undo remove` stays in reach when the fight before it is played or the scenes fold, and puts back only the scene. A result in the footer never folds the scenes, and a refused `Undo scene` says why in the footer once the field is closed | session-plan-scenes, unit test of the plan | state, view | New |
+| T12.15 | Beside the encounter editor, Lookup's reader offers no `Start fight`: the editor's primary one is the one there | encounter-build | view | New |
 | T18.1 | A fight's loot reaches the note in 1, with its reference and one Undo, and the note shows the block. The row says `In notes`, also after the heading is renamed. The XP line follows the newest block, and no block that exists is changed; an unreadable note stops that search. A made-up NPC at 0 HP gives an XP line that names the award that is not known; the next block still has an XP line, and the sum leaves that award out. A title that fills the row has the action as the last link of the opened row, at the same row height. Undo of one fight's block, after another act, leaves the other act | session-plan, run-loot | cost, state | New |
 | T12.12 | A reader starts a fight in 1, and a scene row's menu in 2. An NPC with no stat block opens the made-up form with its name and focus in HP. After `Close run`, also after a restart, a second `Start fight` starts the same encounter. `Remove…` and `Undo remove encounter` remove and restore an encounter with no saved run | session-plan-scenes, npc-in-lookup, encounter-build | cost, state | New |
 | T12.0 | A creature made the campaign's own in ≤ 7, with no page change. Party compares passive scores with no sheet open. A Library save after an encounter save is not a conflict | session-plan | cost, state | New |
@@ -718,7 +723,8 @@ reading the code, not from a test run.
 | T19.2 | A quick action takes 1, also on an instance's line. `Undo` steps back through the acts of the session being played, also after a restart. The opposite action corrects a value in 1. `Add to Timeline` makes a Major event with the act's label, with `Undo add` | trackers | cost, state | New |
 | T19.3 | A value that passes a mark raises a Due row above the trackers and the rail's count, on every page. The Run page shows no tracker part except the rail's count. With no house rule note in play the rail says nothing | trackers, run-lookup | state | New |
 | T19.4 | Case D, beside the Session page: three notices with four rolls and the result line are in view with no scroll | trackers | view | New |
-| T19.5 | The house rule note's reader lists the note's problems, also a value below its `min`, and each tracker's history, folded, with its start value. Only a row with another session's stamp has `Remove` in its menu; Remove takes the entry with its press and the notice it raised, and `Undo remove` puts them back in their places after an unrelated act. An entry changed on disk, a later notice that depends on it, a failed save and an unreadable `Trackers.md` write nothing and say so. Costs 6 from the session page (audit) | trackers, dm-audit | cost, state | New |
+| T19.5 | The Timeline's day count raises a day mark's Due row and the rail's count, and raising it writes nothing. Days that pass in one step are one row that says how many, with `Next`. A clock that goes back takes the row away and keeps what was done. At 960x640 with Lookup narrow, the row, its `Next` and the result line are in view | trackers | view, state | New |
+| T19.6 | The house rule note's reader lists the note's problems, also a value below its `min`, and each tracker's history, folded, with its start value. Only a row with another session's stamp has `Remove` in its menu; Remove takes the entry with its press and the notice it raised, and `Undo remove` puts them back in their places after an unrelated act. An entry changed on disk, a later notice that depends on it, a failed save and an unreadable `Trackers.md` write nothing and say so. Costs 6 from the session page (audit) | trackers, dm-audit | cost, state | New |
 | G1 | Every disabled control states why, in text or a working tooltip | all | state | Fail |
 | G2 | Go through every top-level page and back: each page restores section 3 state | nav-state **new** | state | Fail |
 | G3 | No dead nav items | nav-state **new** | state | Fail |

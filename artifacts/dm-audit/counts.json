@@ -248,13 +248,6 @@
     },
     {
       "phase": "during",
-      "task": "Correct a wrong press of last session from the house rule note",
-      "transitions": 0,
-      "interactions": 6,
-      "path": "Session"
-    },
-    {
-      "phase": "during",
       "task": "Next fight: start it, with the party as it stands",
       "transitions": 1,
       "interactions": 1,
@@ -285,7 +278,7 @@
       "phase": "during",
       "task": "A fight that nobody planned, with a Bandit from the book, then talk",
       "transitions": 2,
-      "interactions": 6,
+      "interactions": 5,
       "path": "Session > Run > Session"
     },
     {
@@ -357,6 +350,13 @@
       "transitions": 0,
       "interactions": 4,
       "path": "Session"
+    },
+    {
+      "phase": "after",
+      "task": "A new day starts: take the supply wagon's torches",
+      "transitions": 1,
+      "interactions": 5,
+      "path": "Session > Timeline"
     }
   ]
 }

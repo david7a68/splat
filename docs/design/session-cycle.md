@@ -121,9 +121,13 @@ art and `Edit` (`src/world.rs:1750-1753`) has about 72 px less; the plain campai
 B it shows beside a 13-letter title and also beside `Captain Varra Black` (19 letters), so the estimate above is
 low for wide titles; at case D it does not show beside a 13-letter title, and shows beside `Rook Ambry` (10). On
 the World page at 960x640 it shows beside `Captain Varra Black`. A portrait sits at the right end of the title's
-cell, with `Edit` after it, so beside a portrait no room is spare and `Start fight` does not show. A creature
-with its type's art (the plain campaign's creatures, `Cinder Wolf`) therefore has no `Start fight` in any reader;
-its routes are a scene row's menu and the encounter editor.
+cell, with `Edit` after it, so beside a portrait and `Edit` no room is spare and `Start fight` does not show.
+A creature with its type's art and no `Edit` (a package creature, or a campaign creature in Lookup) shows
+`Start fight` between its title and its art when that room holds it, as the app does (corrected by the lead's
+ruling after app round 1; seen with `Cultist` beside the encounter editor at 1200x800,
+`encounter-build__06-stat-block-beside-editor`); beside `Cinder Wolf` in the plain campaign's Lookup the room
+does not hold it. While the encounter editor is the page, Lookup's reader shows no `Start fight` at all: the
+editor's own primary `Start fight` is the one there (app round 1, V19).
 
 **Measured in P6** (`log-from-play`, `session-plan-scenes`, `npc-in-lookup` and the plain evening): `Add to Log`
 is 103.5 px wide with its word and 28 as its icon. In Lookup at case B a 13-letter title (`Warden Ostrel`) shows
@@ -420,6 +424,8 @@ that G7 allows.
 | 21 | A package creature's reader, with no run open | A quiet `Start fight` in a header that holds no action today (F3) | Rule Q |
 | 22 | The **Last time** line | When the last note has no prose under `What happened` and no processed recap, the preview is the note's first written line outside its title and date, `Recap of last time` and `Plan for tonight`. Today the line shows the link alone (`recap_preview`, `src/sessions/page.rs`) | The lead's ruling W5-D5, from the first scored round on the app: the measured evening's two reads of last week cost 2 each because the line showed none of last week's words |
 | 22 | History on the Encounters page, after `Whole run` or `Open` | The list scrolls once, at that act, so the opened run's row is at its top and its outcome, the line under Read-only and the whole Final state are in view below it (V31). The line under Read-only is `S` below it and `M` above `FINAL STATE` (V11), so what is under Read-only moves up by at most 8 px more, and the Read-only line's words are as tall as a line. Otherwise only the list's scroll offset differs: what it holds is as today, and nothing moves sideways, is cut or is resized | By the lead's ruling after app round 1 |
+| 23 | A scene's row on the plan | Its words start at the fights' title column (12 px further left) and are drawn at the plan row title's size, `Body`, at every window size; its box's 24 px target ends at that column; its second line sits at a fight row's pitch (V2, V8). So a scene row's height changes, and every item below a changed scene row moves straight up by the sum of the height changes of the scene rows above it; nothing moves sideways, changes size, is cut or goes. A done scene's `Add to Log` (row 8's feature on the plan) is on its row where its words now keep their rows beside it. A done scene's words are muted (V1), which G7 does not measure | By the lead's ruling after app round 1 |
+| 24 | The **Tonight** line, with the scenes folded | `N scenes` has the section caret of a folded section before it, as `HISTORY` has (V14): the link is wider by the caret, at its place and height | By the lead's ruling after app round 1 |
 
 Nothing else differs. A free-words effect from an encounter or an older run gives no reminder. A Travel row
 shows no checks and no new field until the DM asks. The rail says nothing about trackers unless a notice is
@@ -758,19 +764,31 @@ Add  ⚔ Fight  ⚇ Group  ⌂ Long rest  ⋯⌄    │
 
 **A row.**
 
-- **The box** is at the start of the row, where a fight has its caret. A click or Space ticks it. The note
-  changes by one character.
-- **The words** are drawn by the Reader and wrap as a plan row's title wraps today. A link opens its entry in
+- **The box** is at the start of the row, in the one leading slot that every plan row has, where a fight has
+  its caret. Its 24 px target ends where the words start, so it reaches 2 px into the margin before the rows,
+  and the scene's words start at the fights' title column (app round 1, V2). A click or Space ticks it. The
+  note changes by one character.
+- **The words** are drawn at the plan row title's size (`Body`) at every window size, with the Reader's links
+  and emphasis, one line of `XL` each, so the second line sits at a fight row's pitch, and they wrap as a plan
+  row's title wraps. No row changes height because of a state (corrected by the lead's ruling after app round
+  1, V8: the Reader's inline text, a serif at a size that changed with the window, made the scenes the largest
+  titles in the list). A done scene's words and links are `muted`; a link keeps its underline. A link opens its entry in
   Lookup, beside the page. `Back` returns to an entry that Lookup held, as today; a found note or event is
   searched again (2), and Ctrl+T returns to Trackers.
 - **The second line** shows only when the words link exactly one World entry: its kind, status and place
   (`NPC · alive · Ashfall Keep`).
 - **The action place** is empty until the scene is done. Then, when the words link exactly one World entry, it
   holds the quiet `Add to Log` of F6, by the fit rule: while the words keep their rows beside it. Else
-  `Add to Log` is the last line of the scene's menu (built in P6: a done scene with long words, and the plain
-  campaign's `Meet [[Hobb the Miller]] at the mill` at 960x640, keep their rows).
-- **The menu** holds `Remove from tonight`, with `Undo remove` under the row, as for a fight. A scene that
-  links exactly one NPC or creature also has `Start fight` there while no run is open (section 1.2): 2.
+  `Add to Log` is a line of the scene's menu (built in P6: a done scene with long words keeps its rows that
+  way; since R1a draws the words at the title's size, the plain campaign's `Meet [[Hobb the Miller]] at the
+  mill` keeps its rows beside `Add to Log`, which is then on its row).
+- **The menu** holds `Start fight` first, for a scene that links exactly one NPC or creature while no run is
+  open (section 1.2): 2; then `Add to Log` when it is not on the row; and `Remove from tonight` last. `Start
+  fight` and `Remove from tonight` have the icons that the same acts have elsewhere (`icons::RUN`,
+  `icons::REMOVE`). `Remove from tonight` says `Removed “<words>” from tonight.` with `Undo remove`, in the
+  success tone, at the removed row's place while that place is drawn. The Undo is the note's (section 4.1): when
+  that place is folded, or no longer among the rows (the fight before it was played), the result and its Undo
+  show in the plan's message footer (app round 1, W6-D1, V3, V12, V13).
 
 **A fight that nobody planned: `Start fight` in a reader's header.** It is a quiet action with the run icon,
 by the rule of section 1.2. It shows for a creature and for an NPC while no run is open. While a run is open
@@ -801,13 +819,25 @@ adds a creature. It is blocked as the editor's `Start fight` is, with the same r
   today.
   Cost from the Session page: `Encounters`, the menu, `Remove…`, `Session` = 4, **T T**.
 
-**The fold** (ruled after review, built in P3). The next fight's row and its primary action are always in view
-in the plan. Scenes give way first: when the plan's rows, with the scenes, do not fit its pane, every scene
-folds, and the **Tonight** line says `N scenes` after its count, a link, in room that is spare there today. The
+**The fold** (ruled after review, built in P3; its measure ruled again after app round 1, W1-D1). The next
+fight's row and its primary action are always in view in the plan; that promise comes first. Scenes give way
+first. Each row counts as it is when closed: when the closed rows, with the scenes, do not fit the pane, every
+scene folds. An opened row folds the scenes only when its details would push the next fight's primary action
+out of view and the scenes sit above that fight; in a plan with no fight still to come (an older session), when
+the rows with its details do not fit, as before. The Scene field, its suggestions and the plan's results never
+fold the scenes, and the fold does not change while the Scene field has focus: the fold measures the room the
+rows have with an empty message footer. With scenes folded, the
+**Tonight** line says `N scenes` after its count, a link after the section caret of a folded section (as
+`HISTORY` has on the Encounters page, V14), in room that is spare there today. The
 fold takes no line of its own, so with scenes folded every other row has the place and the width that it has
 in a note with no scene. `N scenes` opens them in place and closes them again; the DM's choice holds
 for that session. Nothing else folds: a plan whose rows do not fit without scenes scrolls as today. When the
-rows fit again, the scenes show again.
+rows fit again, the scenes show again. A stated limit: when the DM opens a row above the next fight and the
+scenes sit above that fight, the scenes still fold; the caret before `N scenes` is the DM's sign. A second
+stated limit: the footer takes its height from the rows' room. One line of it leaves the next fight in view in
+the plan at 960x640 (measured with one to nine rests above it), but a footer that grows toward its third of the
+pane can cover the next fight's row; the DM then sees the plan's scroll bar and scrolls the rows to reach
+`Start fight`. The scenes do not fold for it.
 
 **Cases B, C and D.** The plan has its own tab and the full page width; the row is the same. The note is
 behind its tab, so the typed route costs the tab changes.
@@ -837,7 +867,11 @@ still to come with the events of the session, as today; a done scene does not co
 - [x] The miller is the informer
 ```
 
-**Undo.** `Undo scene` after the field adds one, in the plan's message place below the Add strip. A tick is
+**Undo.** `Undo scene` after the field adds one, directly under the field while it is open, so the field does
+not move for it; once the field closes, in the plan's message footer (app round 1, W8-D7). A refused
+Undo says why in the same way: under the field while it is open, else in the footer. Each scene result has one
+place, decided as it is shown: its own (the row's place, the open field) while that place is drawn, else the
+plan's message footer. A tick is
 its own Undo: click again. Removing gives `Undo remove`. `Remove…` on an encounter gives `Undo remove
 encounter`.
 Section 4.1 says
@@ -854,9 +888,9 @@ the improvised encounter by `Close run` (cut: after a restart nothing remembers 
 | Check | F3 |
 |---|---|
 | Primary action in view | The first upcoming `Start fight` of the plan, as today. A scene never takes it. `Start fight` in a reader is quiet |
-| Components and tokens | `Scene`: a line of the `More Add actions` menu, icon `icons::CHECK_SQUARE`. Field: `add_field`. Box: the theme's checkbox, 24 px. Words: the Reader's inline text with `link`. Second line: `Type::Small` in `muted`. `Start fight` in a reader: `Action::quiet` with `icons::RUN`. `Remove…`: `menu_action` with `icons::REMOVE`. Messages: `undo_message` |
+| Components and tokens | `Scene`: a line of the `More Add actions` menu, icon `icons::CHECK_SQUARE`. Field: `add_field`. Box: the theme's checkbox, 24 px. Words: `Type::Body` with the Reader's links and emphasis (`markdown_view::show_row_words`). Second line: `Type::Small` in `muted`. `Start fight` in a reader: `Action::quiet` with `icons::RUN`. `Remove…`: `menu_action` with `icons::REMOVE`. Messages: `undo_message` |
 | In view at 960x640 | Lookup closed and open: the Add strip and the rows. Nothing scrolls sideways |
-| States | Open: an empty box. Done: a checked box, and the words in `muted` |
+| States | Open: an empty box. Done: a checked box, and the words and links in `muted`, a link with its underline |
 
 ### F4. Trackers and the Due list
 
@@ -864,8 +898,9 @@ the improvised encounter by `Close run` (cut: after a restart nothing remembers 
 
 **The slice.** This design builds trackers for use **between fights**: the ledger, the Trackers view of
 Lookup, the Due list and the rail's `Due N` (P9). In a fight the DM uses Trackers through Ctrl+T, and the owner
-accepted this cost (section 7), so the run has no part of F4. Marks that a round raises are dropped, and day
-marks come in P11.
+accepted this cost (section 7), so the run has no part of F4. Marks that a round raises are dropped. Day
+marks are built in P11: the Timeline's day count raises a Due row, with the same words, rolls, proposed changes,
+`Done`, `Dismiss`, ledger entries and Undo as a mark at a value.
 
 The data model of [World and house rules](world-and-house-rules.md) stands, and this pull request changes
 that document in place: Trackers is a view of Lookup, the ledger is the Undo, a mark's table can name what
@@ -990,8 +1025,24 @@ action. Escape closes Lookup.
 **What stays with the DM.** Awarding Favor, moving a rival, what a bell does on the map, and every rule that a
 tracker's number stands for. A proposed change applies only when the DM presses `Done`.
 
-**Not built, and why.** Any tracker part in a run (the owner accepted this cost; section 7), and day marks
-(P11). The parts in
+**Day marks (P11).** A day mark (`at`, or `every` with `from`, in days) is open while the day count of the
+Timeline has reached its day and no ledger entry ends it; raising it writes nothing. Its row starts with its day:
+`Day 32: Move the rival powers.` Days of one mark that are due together are one row, as
+[World and house rules](world-and-house-rules.md) says: `End of month ×3. Next: Day 32. …`, with `Next` in the place
+of `Done` (it ends the oldest day) and `Dismiss all` in the row's menu. Day rows come first, oldest day first, then
+the notices of marks at a value. The Due count counts rows, so a row of three days is `Due 1`. The result line says
+`End of month, Day 32 done.` and `Undo: End of month, Day 32 done`, or `Undo: End of month ×3 dismissed`. The day
+count has one answer, which the view, the rail's count and every act read (`trackers::today`). It is not known while
+`Timeline.md` cannot be read, while a Timeline edit waits to be saved and the file changed, or cannot be read, under
+it, and while the Timeline waits for the DM's choice. Then no day row shows, the top of the scroll area says the
+Timeline's words (`Timeline.md changed on disk. Your draft is safe until you choose.`, or why it cannot be read)
+and `No day mark shows until the Timeline is read.`, no act on a day row records, and the draft is kept. When the
+file reads again or the choice is made, the rows come back. An act on a day row reads the Timeline again at the
+click; when the row's day is no longer due, or the days of `Dismiss all` changed, it writes nothing and says so on
+the result line. The rail's
+`Due N` counts day rows too; the run shows nothing more.
+
+**Not built, and why.** Any tracker part in a run (the owner accepted this cost; section 7). The parts in
 [World and rules: later](world-and-rules-later.md). An action on a notice for a group (**Add to fight** is the
 route, as today). A `Make house rule note` action (no band holds it today; the DM sets the note's properties).
 
@@ -1713,7 +1764,7 @@ the rule in this document is the text.
 - **W16, new, Close the evening and open the next:** "Rewards, what changed in the world, the recap and the
   open threads are where the next step needs them, with nothing typed twice." (T18.1 to T18.4)
 - **W17, new, Run a house rule's numbers:** "Between fights, one press records a change, a due notice stays
-  in view, and the history is a file." (T19.1 to T19.4)
+  in view, and the history is a file." (T19.1 to T19.5)
 
 **New rows for section 8.**
 
@@ -1739,6 +1790,7 @@ the rule in this document is the text.
 | T19.2 | A quick action takes 1, also on an instance's line. `Undo` steps back through the acts of the session being played, also after a restart. The opposite action corrects a value in 1 |
 | T19.3 | A value that passes a mark raises a Due row above the trackers and the rail's count, on every page. The Run page shows no tracker part except the rail's count |
 | T19.4 | Case D, beside the Session page: three notices with four rolls and the result line are in view with no scroll |
+| T19.5 | The Timeline's day count raises a day mark's Due row and the rail's count, and raising it writes nothing. Days that pass in one step are one row with `Next`. A clock that goes back takes the row away and keeps what was done (P11) |
 | G6 | The unchanged evening of the audit gives the counts it gave before |
 | G7 | The plain campaign differs from its reference only by rows of section 2.5 |
 
@@ -1812,7 +1864,7 @@ the reference of G7.
 | **P8** | F5, with rows 11, 16 and 18 of section 2.5. The draft's provenance, and the exact inverse of `Undo carry over` | `src/sessions.rs`, `src/sessions/page.rs` (`last_time_block`, `recap_preview`), `src/markdown_view.rs` | P3 | New `session-carry-over`. Extend `session-plan` |
 | **P9** | F4, the slice between fights: house rule notes, in play, the ledger with its save and its Undo, quick actions, instances, marks at a value with `for:`, the Due rows, the rail's count, `Add to Timeline`, the Trackers view and Ctrl+T. In the Tournament example: `for:` on the bells, `activation` not pinned (P10, which needed it, is dropped), and no line about **Make house rule note** | New `src/trackers.rs`, `src/trackers/ledger.rs`, `src/trackers/view.rs`. `src/lookup.rs`, `src/lib.rs`, `src/campaign_content.rs`, `crates/core`, the example note | P1a, P1c | New `trackers`, with the Session page's plan tab and `Start fight` beside the view. Extend `run-lookup`, `nav-state` |
 | **P10** | Dropped (section 7): marks that a fight raises | – | – | – |
-| **P11** | Day marks | – | P9 | – |
+| **P11** | Day marks. Built: `at` and `every` with `from`, in days, on the Timeline's day count, `Next` and `Dismiss all` | `src/trackers.rs`, `src/trackers/ledger.rs`, `src/trackers/view.rs`, `src/lib.rs` (the act reads the day count at the click) | P9 | Extend `trackers` (T19.5) |
 | **P12** | The audit, again. Extend the evening to use every feature, measure it, and add the scripts for J2, J3, J4 and J6. Run G6 and G7 on the whole | `src/visual_tests/dm_audit.rs`, `artifacts/dm-audit/` | All that are built | The audit's captures, and `plain-evening` |
 
 **What can be built at the same time.**
