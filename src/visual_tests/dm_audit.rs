@@ -17,6 +17,12 @@
 //! counted, so a set-up change cannot move a count.
 //!
 //! `dm_audit_stale_library` is a separate audit, ignored, run by hand in its own process.
+//!
+//! The other journeys of the workflow score (J2, J3, J4 and J6) are in `journeys`. They use
+//! this file's tasks, acts and counts, and the same check: each has its own frozen files under
+//! `artifacts/dm-audit/journeys/`.
+pub mod journeys;
+
 use super::{
     driver::Driver,
     fixture::{Seed, World},
@@ -944,6 +950,19 @@ fn steps(rows: &[Row]) -> String {
     steps
 }
 
+/// The interactions of these rows by kind, in the order `nav sub panel find do`.
+fn by_kind(rows: &[&Row]) -> String {
+    [Nav, Sub, Panel, Find, Do]
+        .map(|kind| {
+            rows.iter()
+                .filter(|row| row.kind == kind)
+                .map(|row| row.interactions)
+                .sum::<u32>()
+                .to_string()
+        })
+        .join("\t")
+}
+
 fn summary(record: &Record) -> String {
     let rows: Vec<&Row> = record
         .rows
@@ -951,52 +970,60 @@ fn summary(record: &Record) -> String {
         .filter(|row| row.kind != Kind::Setup)
         .collect();
     let tasks = counts(record);
+    let mut phases: Vec<&str> = Vec::new();
+    for (phase, _, _) in &record.tasks {
+        if !phases.contains(phase) {
+            phases.push(phase);
+        }
+    }
+    phases.push("total");
     let mut out = String::new();
     let _ = writeln!(
         out,
         "Phase totals\nphase\ttasks\ttransitions\tinteractions\tnav\tsub\tpanel\tfind\tdo"
     );
-    for phase in ["before", "during", "after", "total"] {
-        let of: Vec<&&Row> = rows
+    for phase in phases {
+        let of: Vec<&Row> = rows
             .iter()
+            .copied()
             .filter(|row| phase == "total" || row.phase == phase)
             .collect();
-        let count = |kind| {
-            of.iter()
-                .filter(|row| row.kind == kind)
-                .map(|row| row.interactions)
-                .sum::<u32>()
-        };
         let _ = writeln!(
             out,
-            "{phase}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+            "{phase}\t{}\t{}\t{}\t{}",
             tasks
                 .iter()
                 .filter(|task| phase == "total" || task.phase == phase)
                 .count(),
             of.iter().map(|row| row.pages.len()).sum::<usize>(),
             of.iter().map(|row| row.interactions).sum::<u32>(),
-            count(Nav),
-            count(Sub),
-            count(Panel),
-            count(Find),
-            count(Do),
+            by_kind(&of),
         );
     }
     let _ = writeln!(
         out,
-        "\nTasks\nphase\ttask\ttransitions\tinteractions\toverhead\tpath"
+        "\nTasks\nphase\ttask\ttransitions\tinteractions\toverhead\tnav\tsub\tpanel\tfind\tdo\tpath"
     );
     for task in &tasks {
-        let overhead: u32 = rows
+        let of: Vec<&Row> = rows
             .iter()
-            .filter(|r| r.phase == task.phase && r.task == task.task && r.kind != Do)
+            .copied()
+            .filter(|r| r.phase == task.phase && r.task == task.task)
+            .collect();
+        let overhead: u32 = of
+            .iter()
+            .filter(|r| r.kind != Do)
             .map(|r| r.interactions)
             .sum();
         let _ = writeln!(
             out,
-            "{}\t{}\t{}\t{}\t{overhead}\t{}",
-            task.phase, task.task, task.transitions, task.interactions, task.path,
+            "{}\t{}\t{}\t{}\t{overhead}\t{}\t{}",
+            task.phase,
+            task.task,
+            task.transitions,
+            task.interactions,
+            by_kind(&of),
+            task.path,
         );
     }
     let _ = writeln!(out, "\nSet-up, not counted");
@@ -1015,8 +1042,8 @@ fn summary(record: &Record) -> String {
 }
 
 /// The frozen counts. An empty file proves nothing, so it fails.
-fn read_frozen() -> Frozen {
-    let path = folder().join("counts.json");
+fn read_frozen(folder: &Path) -> Frozen {
+    let path = folder.join("counts.json");
     let text = fs::read_to_string(&path)
         .unwrap_or_else(|error| panic!("G6: cannot read {}: {error}", path.display()));
     let frozen: Frozen = serde_json::from_str(&text)
@@ -1043,7 +1070,7 @@ fn blocked(rows: &[Row]) -> Vec<String> {
         .collect()
 }
 
-/// What differs between the frozen counts and this evening's, one line each.
+/// What differs between the frozen counts and this journey's, one line each.
 fn differences(frozen: &[TaskCount], measured: &[TaskCount], rows: &[Row]) -> Vec<String> {
     let name =
         |task: &TaskCount| format!("the task \"{}\" ({} the session)", task.task, task.phase);
@@ -1054,7 +1081,7 @@ fn differences(frozen: &[TaskCount], measured: &[TaskCount], rows: &[Row]) -> Ve
             .find(|new| new.phase == old.phase && new.task == old.task)
         {
             None => out.push(format!(
-                "{} is in counts.json, but the evening no longer plays it",
+                "{} is in counts.json, but the journey no longer plays it",
                 name(old)
             )),
             Some(new) if new != old => out.push(format!(
@@ -1096,7 +1123,8 @@ fn differences(frozen: &[TaskCount], measured: &[TaskCount], rows: &[Row]) -> Ve
     out
 }
 
-fn evening(d: &mut Driver<'_>) -> Record {
+/// Play a journey from its first act, at 1200x800 unless the journey says otherwise.
+fn play(d: &mut Driver<'_>, journey: impl FnOnce(&mut Audit<'_, '_>)) -> Record {
     d.set_base((1200.0, 800.0));
     let mut audit = Audit {
         d,
@@ -1104,25 +1132,52 @@ fn evening(d: &mut Driver<'_>) -> Record {
         task: String::new(),
         record: Record::default(),
     };
-    audit.setup(
-        "play last week's session, then quit and open the app",
-        last_week,
-    );
-    audit.setup("work at 1200x800", |d| d.set_base((1200.0, 800.0)));
-    before_the_session(&mut audit);
-    during_the_session(&mut audit);
-    after_the_session(&mut audit);
+    journey(&mut audit);
     audit.record
 }
 
-fn folder() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("artifacts/dm-audit")
+fn evening(a: &mut Audit<'_, '_>) {
+    a.setup(
+        "play last week's session, then quit and open the app",
+        last_week,
+    );
+    a.setup("work at 1200x800", |d| d.set_base((1200.0, 800.0)));
+    before_the_session(a);
+    during_the_session(a);
+    after_the_session(a);
+}
+
+/// A measured journey's frozen files, and the words its check uses.
+struct FrozenFiles {
+    /// What a failure calls the journey.
+    what: &'static str,
+    /// The folder of `counts.json`, `steps.tsv` and `summary.tsv`, from the repository's root.
+    folder: String,
+    /// The command that writes every row again, when a task costs more or less on purpose.
+    counts_command: &'static str,
+}
+
+impl FrozenFiles {
+    fn path(&self) -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join(&self.folder)
+    }
 }
 
 /// G6. The scenario `dm-audit`: play the frozen evening and compare each task's counts.
 pub fn run(d: &mut Driver<'_>) {
-    let record = evening(d);
-    let measured = counts(&record);
+    let record = play(d, evening);
+    let files = FrozenFiles {
+        what: "the audit's evening",
+        folder: "artifacts/dm-audit".to_owned(),
+        counts_command: COUNTS_COMMAND,
+    };
+    measure(d, &files, &record);
+}
+
+/// G6 for one journey: compare each task's counts with its frozen files, or write them when
+/// `SPLAT_DM_AUDIT_WRITE` asks.
+fn measure(d: &mut Driver<'_>, files: &FrozenFiles, record: &Record) {
+    let measured = counts(record);
     let total = |tasks: &[TaskCount]| {
         (
             tasks.iter().map(|t| t.transitions).sum::<usize>(),
@@ -1130,60 +1185,63 @@ pub fn run(d: &mut Driver<'_>) {
         )
     };
     let mode = std::env::var(WRITE).ok();
+    let dir = files.path();
+    let at = &files.folder;
     if let Some(mode) = mode.as_deref() {
         let blocked = blocked(&record.rows);
         assert!(
             blocked.is_empty(),
-            "dm-audit: an act found no control, so nothing is frozen:\n{}",
+            "{at}: an act found no control, so nothing is frozen:\n{}",
             blocked.join("\n")
         );
         let about = match mode {
-            "all" => {
-                "G6 reads this in every gate. `devenv shell -- audit-freeze counts` writes it; a \
-                      feature adds its new tasks with `devenv shell -- audit-freeze add`, which \
-                      leaves every row here as it is."
-                    .to_owned()
-            }
+            "all" => format!(
+                "G6 reads this in every gate. `{}` writes it; a feature adds its new tasks with \
+                 `{ADD_COMMAND}`, which leaves every row here as it is.",
+                files.counts_command
+            ),
             "add" => {
-                let frozen = read_frozen();
+                let frozen = read_frozen(&dir);
                 let refused: Vec<String> = differences(&frozen.tasks, &measured, &record.rows)
                     .into_iter()
                     .filter(|line| !line.contains(NEW_TASK))
                     .collect();
                 assert!(
                     refused.is_empty(),
-                    "dm-audit: `{ADD_COMMAND}` writes rows for new tasks only, and a frozen task differs, \
+                    "{at}: `{ADD_COMMAND}` writes rows for new tasks only, and a frozen task differs, \
                      so nothing is written. Put the frozen task back as it was:\n{}",
                     refused.join("\n")
                 );
                 frozen.about
             }
-            other => panic!("dm-audit: {WRITE} is `all` or `add`, not {other:?}"),
+            other => panic!("{at}: {WRITE} is `all` or `add`, not {other:?}"),
         };
         let frozen = Frozen {
             about,
             tasks: measured,
         };
-        let dir = folder();
+        fs::create_dir_all(&dir).expect("make the folder of the frozen files");
         fs::write(dir.join("steps.tsv"), steps(&record.rows)).expect("write steps.tsv");
-        fs::write(dir.join("summary.tsv"), summary(&record)).expect("write summary.tsv");
+        fs::write(dir.join("summary.tsv"), summary(record)).expect("write summary.tsv");
         fs::write(
             dir.join("counts.json"),
             serde_json::to_string_pretty(&frozen).expect("encode counts") + "\n",
         )
         .expect("write counts.json");
-        println!("dm-audit: froze {}", dir.display());
+        println!("{at}: froze {}", dir.display());
         return;
     }
-    let frozen = read_frozen();
+    let frozen = read_frozen(&dir);
     let found = differences(&frozen.tasks, &measured, &record.rows);
     assert!(
         found.is_empty(),
-        "G6: the audit's evening (artifacts/dm-audit/) does not cost what counts.json says. {}.\n\
-         If this change is meant, run `{COUNTS_COMMAND}` and say in the pull request why the task \
+        "G6: {} ({at}/) does not cost what counts.json says. {}.\n\
+         If this change is meant, run `{}` and say in the pull request why the task \
          costs more or less. If it is not meant, your change made the task cost more or less: \
-         artifacts/dm-audit/steps.tsv lists each act of the task.\nAll {} differences:\n{}",
+         {at}/steps.tsv lists each act of the task.\nAll {} differences:\n{}",
+        files.what,
         found[0],
+        files.counts_command,
         found.len(),
         found.join("\n")
     );
@@ -1192,7 +1250,8 @@ pub fn run(d: &mut Driver<'_>) {
         "G6",
         true,
         format!(
-            "{} tasks, {transitions} page transitions and {interactions} interactions, as frozen",
+            "{}: {} tasks, {transitions} page transitions and {interactions} interactions, as frozen",
+            files.what,
             measured.len()
         ),
     );

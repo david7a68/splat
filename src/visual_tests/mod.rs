@@ -62,7 +62,7 @@ type Script = fn(&mut Driver<'_>);
 
 const DEFAULT_JOBS: usize = 4;
 
-const SCENARIOS: [(&str, Seed, Script); 90] = [
+const SCENARIOS: [(&str, Seed, Script); 94] = [
     ("file-formats", Seed::Formats, scenarios::file_formats::run),
     ("stat-formats", Seed::Formats, scenarios::stat_formats::run),
     ("data-integrity", Seed::Campaign, scenarios::integrity::run),
@@ -386,6 +386,11 @@ const SCENARIOS: [(&str, Seed, Script); 90] = [
     ("dm-audit", Seed::Campaign, dm_audit::run),
     // G7: the plain campaign against its reference.
     ("plain-evening", Seed::Plain, plain_evening::run),
+    // G6 too: the other journeys of the workflow score, each against its own frozen counts.
+    ("journey-j2", Seed::Campaign, dm_audit::journeys::j2),
+    ("journey-j3", Seed::Campaign, dm_audit::journeys::j3),
+    ("journey-j4", Seed::Campaign, dm_audit::journeys::j4),
+    ("journey-j6", Seed::Campaign, dm_audit::journeys::j6),
     ("run-continue", Seed::Loot, scenarios::run_continue::run),
     (
         "encounter-difficulty",

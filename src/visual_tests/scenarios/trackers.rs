@@ -32,7 +32,7 @@ fn table(heading: &str, key: &str, dice: &str, rows: &[(&str, &str)]) -> String 
 }
 
 /// The vault's Tournament note as the example writes it, and its tables.
-fn write_the_race(d: &Driver<'_>) {
+pub fn write_the_race(d: &Driver<'_>) {
     let start = EXAMPLE.find("````markdown\n").unwrap() + "````markdown\n".len();
     let end = start + EXAMPLE[start..].find("````").unwrap();
     let id = splat::character::stable_id("Tournament.md");
