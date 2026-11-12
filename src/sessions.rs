@@ -1793,15 +1793,22 @@ impl NoteUndo {
         }
     }
 
+    /// An act of `Apply::Now` whose save failed: once a later save wrote the draft with the
+    /// fragment, the fragment is written, and its Undo goes back through the checked path.
+    pub fn follow_save(&mut self, draft: &Draft) {
+        if !self.written && !draft.unsaved() && self.live(draft) {
+            self.written = true;
+        }
+    }
+
     /// Put back the words from before the act. A fragment that waits in the draft leaves the
     /// draft, with no look at the disk, as typed words would. A written one goes back through
-    /// the act's own checked path, and is saved at once. A fragment whose save failed, and that
-    /// a later save wrote with the draft, is a written one too.
+    /// the act's own checked path, and is saved at once.
     pub fn undo(&self, draft: &mut Draft) -> Result<(), ActFault> {
         if !self.owns(draft) {
             return Err(ActFault::OtherNote);
         }
-        if self.written || !draft.unsaved() {
+        if self.written {
             return draft
                 .apply(self.note, Apply::Now, |words| {
                     (words == self.after).then(|| self.before.clone())

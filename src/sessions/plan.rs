@@ -731,6 +731,16 @@ impl Scenes {
         }) {
             self.fault = None;
         }
+        // A scene act whose save failed is written once a later save wrote the note.
+        if let Some(draft) = draft {
+            for undo in self
+                .added
+                .iter_mut()
+                .chain(self.removed.iter_mut().map(|(.., undo)| undo))
+            {
+                undo.follow_save(draft);
+            }
+        }
         let live = |undo: &NoteUndo| draft.is_some_and(|draft| undo.live(draft));
         if self.added.as_ref().is_some_and(|undo| !live(undo)) {
             self.added = None;
