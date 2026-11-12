@@ -484,4 +484,78 @@ pub fn run(d: &mut Driver<'_>) {
         !words.contains("XP 600 of 2,800") && !words.contains("Read encounter · "),
         format!("The opened paused fight's line has no difficulty: {words}"),
     );
+    // X2, review 290: a roster member whose saved level an outside edit removed. Their sheet
+    // cannot be read, and the heading still says whose level is not known, at each size and
+    // in the tab row beside Lookup; a roster with no character names the campaign's copy too.
+    go_encounters(d);
+    let campaign = d.root.join("campaigns/emberfall");
+    fn notes(at: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+        for entry in std::fs::read_dir(at).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                notes(&path, out);
+            } else if path.extension().is_some_and(|e| e == "md") {
+                out.push(path);
+            }
+        }
+    }
+    let mut paths = Vec::new();
+    notes(&campaign, &mut paths);
+    let path = paths
+        .into_iter()
+        .find(|p| {
+            let source = std::fs::read_to_string(p).unwrap();
+            splat::content::Entry::parse(p.to_str().unwrap(), &source).is_ok_and(|entry| {
+                entry.fields.contains_key("splat_character") && source.contains("Brannoch Vale")
+            })
+        })
+        .expect("Brannoch's parsed saved sheet");
+    let source = std::fs::read_to_string(&path).unwrap();
+    let (mut removed, mut in_sheet) = (0, false);
+    let revised = source
+        .lines()
+        .filter(|line| {
+            let raw = line.strip_prefix("> ").unwrap_or(line);
+            if raw == "splat_character:" {
+                in_sheet = true;
+            } else if !raw.starts_with(' ') && !raw.trim().is_empty() {
+                in_sheet = false;
+            }
+            if in_sheet && raw.starts_with("  level:") {
+                removed += 1;
+                false
+            } else {
+                true
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
+    assert_eq!(removed, 1, "remove exactly the sheet's saved level");
+    std::fs::write(&path, revised).unwrap();
+    d.focus_window(false);
+    d.focus_window(true);
+    for (encounter, id) in [
+        (LOW, "review290-level-unknown"),
+        (ABOVE, "review290-level-stand-in"),
+    ] {
+        open_saved_encounter(d, encounter);
+        for size in [SMALL, DEFAULT] {
+            let words = d.at_size(size, |d| d.painted_in(egui::Rect::EVERYTHING));
+            d.observe(
+                id,
+                words.contains("Level not known: Brannoch Vale"),
+                format!("{encounter} at {size:?}: {words}"),
+            );
+        }
+        look_up(d, "wolf");
+        let words = d.at_size(SMALL, |d| d.painted_in(egui::Rect::EVERYTHING));
+        d.observe(
+            id,
+            words.contains("Level not known: Brannoch"),
+            format!("{encounter} beside Lookup at {SMALL:?}: {words}"),
+        );
+        d.press_ctrl(Key::K);
+        d.click("Back to encounters");
+    }
 }

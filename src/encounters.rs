@@ -1556,7 +1556,7 @@ fn narrow_reason(ui: &mut egui::Ui, missing: &crate::difficulty::Missing) {
 
 /// Why a fight has no word, in `room`, and whether it was cut: `XP not known: Nameless Thing`.
 /// The names shorten from their end, to `XP not known: Nameless Th…`; with no room for one of
-/// their letters they go, and `XP not known` stays while it fits.
+/// their letters, or with no name known, they go, and `XP not known` stays while it fits.
 fn reason_that_fits(
     ui: &egui::Ui,
     missing: &crate::difficulty::Missing,
@@ -1568,7 +1568,11 @@ fn reason_that_fits(
         crate::difficulty::append(&mut job, ui, kind, words, colors().muted);
         crate::difficulty::width(ui, &job)
     };
-    let whole = missing.words()?;
+    let short = missing.short();
+    // With no name known, the reason still says what is not known.
+    let Some(whole) = missing.words() else {
+        return (width(short) <= room).then(|| (short.to_owned(), false));
+    };
     if width(&whole) <= room {
         return Some((whole, false));
     }
@@ -1591,7 +1595,6 @@ fn reason_that_fits(
     if names[..fits].iter().any(|c| c.is_alphanumeric()) {
         return Some((cut(fits), true));
     }
-    let short = missing.short();
     (width(short) <= room).then(|| (short.to_owned(), true))
 }
 
@@ -1651,9 +1654,18 @@ fn roster_difficulty(
                         party_names.push(Some(entry.name.clone()));
                     }
                 }
+                // A sheet that cannot be read keeps its file's name, as the campaign's party
+                // does, so the reason can say whose level is not known.
                 None => {
                     party.push(None);
-                    party_names.push(None);
+                    party_names.push(
+                        slot.creature
+                            .as_ref()
+                            .and_then(|reference| catalogue.unreadable_ref(reference))
+                            .and_then(|note| {
+                                Some(note.path.file_stem()?.to_string_lossy().into_owned())
+                            }),
+                    );
                 }
             }
         } else {
@@ -8147,6 +8159,27 @@ mod tests {
             (250, None),
             "{unreadable:?}"
         );
+    }
+    /// X2, review 290: a typed reason with no name known still says what is not known.
+    #[test]
+    fn review290_unnamed_missing_level_still_has_a_reason() {
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let _ = ctx.run(Default::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                let missing = crate::difficulty::Missing {
+                    what: crate::difficulty::Unknown::Level,
+                    at: vec![0],
+                    names: Vec::new(),
+                };
+                let shown = reason_that_fits(ui, &missing, Type::Label, 400.0);
+                assert_eq!(
+                    shown.as_ref().map(|(words, _)| words.as_str()),
+                    Some("Level not known"),
+                    "A typed missing-level result must not disappear when its name is unavailable"
+                );
+            });
+        });
     }
     #[test]
     fn editing_preserves_notes_unknown_fields_and_detects_external_changes() {
