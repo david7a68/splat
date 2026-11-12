@@ -274,7 +274,8 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     };
 
     let short = format!("Add to Log: {VARRA_BLACK}");
-    let warm = fit.warm(d, d.has(&short), 1);
+    let done = format!("Done: {VARRA_BLACK}");
+    let warm = fit.warm(d, d.has(&done), 1);
     d.observe(
         "T18.2-fit-warm",
         warm.is_ok(),
@@ -290,7 +291,7 @@ pub fn log_from_play(d: &mut Driver<'_>) {
         d.settle();
         d.at_size(LARGE, |_| ());
         d.settle();
-        d.has(&short)
+        d.has(&done)
     });
     d.observe(
         "T18.2-fit-steady",

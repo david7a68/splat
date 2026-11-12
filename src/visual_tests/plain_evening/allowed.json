@@ -3,66 +3,6 @@
  "rows": [
   {
    "row": 8,
-   "why": "Row 8: Add to Log comes next to Edit, so the reader's Start fight (row 9) follows it, XS after its new target (section 1.2)",
-   "difference": {
-    "screen": "lookup-reader Captain Varra, npc",
-    "view": "1200x800 Lookup open",
-    "what": "control",
-    "change": "moved",
-    "name": "Button: Start a fight with Captain Varra",
-    "detail": "1014.2 126 100x28 -> 1046.2 126 100x28"
-   }
-  },
-  {
-   "row": 8,
-   "why": "Row 8: Add to Log, or its icon, after Edit in a campaign World entry's reader (F6, section 1.2)",
-   "difference": {
-    "screen": "lookup-reader Captain Varra, npc",
-    "view": "1200x800 Lookup open",
-    "what": "control",
-    "change": "new",
-    "name": "Button: Add to Log",
-    "detail": "at 1014.2 126 28x28"
-   }
-  },
-  {
-   "row": 8,
-   "why": "Row 8: Add to Log comes next to Edit, so the reader's Start fight (row 9) follows it, XS after its new target (section 1.2)",
-   "difference": {
-    "screen": "lookup-reader Captain Varra, npc",
-    "view": "1200x800 Lookup open",
-    "what": "text",
-    "change": "moved",
-    "name": "Start fight",
-    "detail": "1042.2 131 64x18 -> 1074.2 131 64x18"
-   }
-  },
-  {
-   "row": 8,
-   "why": "Row 8: Add to Log comes next to Edit, so the reader's Start fight (row 9) follows it, XS after its new target (section 1.2)",
-   "difference": {
-    "screen": "lookup-reader Captain Varra, npc",
-    "view": "1200x800 Lookup open",
-    "what": "text",
-    "change": "moved",
-    "name": "",
-    "detail": "1022.2 131 14x18 -> 1054.2 131 14x18"
-   }
-  },
-  {
-   "row": 8,
-   "why": "Row 8: Add to Log, or its icon, after Edit in a campaign World entry's reader (F6, section 1.2)",
-   "difference": {
-    "screen": "lookup-reader Captain Varra, npc",
-    "view": "1200x800 Lookup open",
-    "what": "text",
-    "change": "moved",
-    "name": "",
-    "detail": "643.9 50 14x18 -> 1021.2 131 14x18"
-   }
-  },
-  {
-   "row": 8,
    "why": "Row 8: Add to Log, or its icon, after Edit in a campaign World entry's reader (F6, section 1.2)",
    "difference": {
     "screen": "lookup-reader Captain Varra, npc",
@@ -107,66 +47,6 @@
     "change": "new",
     "name": "",
     "detail": "at 490.3 50 14x18"
-   }
-  },
-  {
-   "row": 8,
-   "why": "Row 8: Add to Log comes next to Edit, so the reader's Start fight (row 9) follows it, XS after its new target (section 1.2)",
-   "difference": {
-    "screen": "lookup-reader Oren Thistlewick, npc",
-    "view": "1200x800 Lookup open",
-    "what": "control",
-    "change": "moved",
-    "name": "Button: Start a fight with Oren Thistlewick",
-    "detail": "1050.6 126 100x28 -> 1082.6 126 100x28"
-   }
-  },
-  {
-   "row": 8,
-   "why": "Row 8: Add to Log, or its icon, after Edit in a campaign World entry's reader (F6, section 1.2)",
-   "difference": {
-    "screen": "lookup-reader Oren Thistlewick, npc",
-    "view": "1200x800 Lookup open",
-    "what": "control",
-    "change": "new",
-    "name": "Button: Add to Log",
-    "detail": "at 1050.6 126 28x28"
-   }
-  },
-  {
-   "row": 8,
-   "why": "Row 8: Add to Log comes next to Edit, so the reader's Start fight (row 9) follows it, XS after its new target (section 1.2)",
-   "difference": {
-    "screen": "lookup-reader Oren Thistlewick, npc",
-    "view": "1200x800 Lookup open",
-    "what": "text",
-    "change": "moved",
-    "name": "Start fight",
-    "detail": "1078.6 131 64x18 -> 1110.6 131 64x18"
-   }
-  },
-  {
-   "row": 8,
-   "why": "Row 8: Add to Log comes next to Edit, so the reader's Start fight (row 9) follows it, XS after its new target (section 1.2)",
-   "difference": {
-    "screen": "lookup-reader Oren Thistlewick, npc",
-    "view": "1200x800 Lookup open",
-    "what": "text",
-    "change": "moved",
-    "name": "",
-    "detail": "1058.6 131 14x18 -> 1090.6 131 14x18"
-   }
-  },
-  {
-   "row": 8,
-   "why": "Row 8: Add to Log, or its icon, after Edit in a campaign World entry's reader (F6, section 1.2)",
-   "difference": {
-    "screen": "lookup-reader Oren Thistlewick, npc",
-    "view": "1200x800 Lookup open",
-    "what": "text",
-    "change": "moved",
-    "name": "",
-    "detail": "643.9 50 14x18 -> 1057.6 131 14x18"
    }
   },
   {
@@ -219,150 +99,6 @@
   },
   {
    "row": 8,
-   "why": "Row 8: Add to Log comes next to Edit, so the reader's Start fight (row 9) follows it, XS after its new target (section 1.2)",
-   "difference": {
-    "screen": "world-reader",
-    "view": "1200x800 Lookup closed",
-    "what": "control",
-    "change": "moved",
-    "name": "Button: Start a fight with Captain Varra Black",
-    "detail": "726.6 67 100x28 -> 834.1 67 100x28"
-   }
-  },
-  {
-   "row": 8,
-   "why": "Row 8: Add to Log, or its icon, after Edit in a campaign World entry's reader (F6, section 1.2)",
-   "difference": {
-    "screen": "world-reader",
-    "view": "1200x800 Lookup closed",
-    "what": "control",
-    "change": "new",
-    "name": "Button: Add to Log",
-    "detail": "at 726.6 67 103.5x28"
-   }
-  },
-  {
-   "row": 8,
-   "why": "Row 8: Add to Log comes next to Edit, so the reader's Start fight (row 9) follows it, XS after its new target (section 1.2)",
-   "difference": {
-    "screen": "world-reader",
-    "view": "1200x800 Lookup closed",
-    "what": "text",
-    "change": "moved",
-    "name": "Start fight",
-    "detail": "754.6 72 64x18 -> 862.1 72 64x18"
-   }
-  },
-  {
-   "row": 8,
-   "why": "Row 8: Add to Log comes next to Edit, so the reader's Start fight (row 9) follows it, XS after its new target (section 1.2)",
-   "difference": {
-    "screen": "world-reader",
-    "view": "1200x800 Lookup closed",
-    "what": "text",
-    "change": "moved",
-    "name": "",
-    "detail": "734.6 72 14x18 -> 842.1 72 14x18"
-   }
-  },
-  {
-   "row": 8,
-   "why": "Row 8: Add to Log, or its icon, after Edit in a campaign World entry's reader (F6, section 1.2)",
-   "difference": {
-    "screen": "world-reader",
-    "view": "1200x800 Lookup closed",
-    "what": "text",
-    "change": "new",
-    "name": "",
-    "detail": "at 734.6 72 14x18"
-   }
-  },
-  {
-   "row": 8,
-   "why": "Row 8: Add to Log, or its icon, after Edit in a campaign World entry's reader (F6, section 1.2)",
-   "difference": {
-    "screen": "world-reader",
-    "view": "1200x800 Lookup closed",
-    "what": "text",
-    "change": "new",
-    "name": "Add to Log",
-    "detail": "at 754.6 72 67.5x18"
-   }
-  },
-  {
-   "row": 8,
-   "why": "Row 8: Add to Log comes next to Edit, so the reader's Start fight (row 9) follows it, XS after its new target (section 1.2)",
-   "difference": {
-    "screen": "world-reader",
-    "view": "960x640 Lookup closed",
-    "what": "control",
-    "change": "moved",
-    "name": "Button: Start a fight with Captain Varra Black",
-    "detail": "726.6 67 100x28 -> 834.1 67 100x28"
-   }
-  },
-  {
-   "row": 8,
-   "why": "Row 8: Add to Log, or its icon, after Edit in a campaign World entry's reader (F6, section 1.2)",
-   "difference": {
-    "screen": "world-reader",
-    "view": "960x640 Lookup closed",
-    "what": "control",
-    "change": "new",
-    "name": "Button: Add to Log",
-    "detail": "at 726.6 67 103.5x28"
-   }
-  },
-  {
-   "row": 8,
-   "why": "Row 8: Add to Log comes next to Edit, so the reader's Start fight (row 9) follows it, XS after its new target (section 1.2)",
-   "difference": {
-    "screen": "world-reader",
-    "view": "960x640 Lookup closed",
-    "what": "text",
-    "change": "moved",
-    "name": "Start fight",
-    "detail": "754.6 72 64x18 -> 862.1 72 64x18"
-   }
-  },
-  {
-   "row": 8,
-   "why": "Row 8: Add to Log comes next to Edit, so the reader's Start fight (row 9) follows it, XS after its new target (section 1.2)",
-   "difference": {
-    "screen": "world-reader",
-    "view": "960x640 Lookup closed",
-    "what": "text",
-    "change": "moved",
-    "name": "",
-    "detail": "734.6 72 14x18 -> 842.1 72 14x18"
-   }
-  },
-  {
-   "row": 8,
-   "why": "Row 8: Add to Log, or its icon, after Edit in a campaign World entry's reader (F6, section 1.2)",
-   "difference": {
-    "screen": "world-reader",
-    "view": "960x640 Lookup closed",
-    "what": "text",
-    "change": "new",
-    "name": "",
-    "detail": "at 734.6 72 14x18"
-   }
-  },
-  {
-   "row": 8,
-   "why": "Row 8: Add to Log, or its icon, after Edit in a campaign World entry's reader (F6, section 1.2)",
-   "difference": {
-    "screen": "world-reader",
-    "view": "960x640 Lookup closed",
-    "what": "text",
-    "change": "new",
-    "name": "Add to Log",
-    "detail": "at 754.6 72 67.5x18"
-   }
-  },
-  {
-   "row": 8,
    "why": "Row 8: Add to Log, or its icon, after Edit in a campaign World entry's reader (F6, section 1.2)",
    "difference": {
     "screen": "world-reader",
@@ -383,150 +119,6 @@
     "change": "new",
     "name": "",
     "detail": "at 733.6 72 14x18"
-   }
-  },
-  {
-   "row": 8,
-   "why": "Row 8: Add to Log comes next to Edit, so the reader's Start fight (row 9) follows it, XS after its new target (section 1.2)",
-   "difference": {
-    "screen": "world-reader: Edit hover",
-    "view": "1200x800",
-    "what": "control",
-    "change": "moved",
-    "name": "Button: Start a fight with Captain Varra Black",
-    "detail": "726.6 67 100x28 -> 834.1 67 100x28"
-   }
-  },
-  {
-   "row": 8,
-   "why": "Row 8: Add to Log, or its icon, after Edit in a campaign World entry's reader (F6, section 1.2)",
-   "difference": {
-    "screen": "world-reader: Edit hover",
-    "view": "1200x800",
-    "what": "control",
-    "change": "new",
-    "name": "Button: Add to Log",
-    "detail": "at 726.6 67 103.5x28"
-   }
-  },
-  {
-   "row": 8,
-   "why": "Row 8: Add to Log comes next to Edit, so the reader's Start fight (row 9) follows it, XS after its new target (section 1.2)",
-   "difference": {
-    "screen": "world-reader: Edit hover",
-    "view": "1200x800",
-    "what": "text",
-    "change": "moved",
-    "name": "Start fight",
-    "detail": "754.6 72 64x18 -> 862.1 72 64x18"
-   }
-  },
-  {
-   "row": 8,
-   "why": "Row 8: Add to Log comes next to Edit, so the reader's Start fight (row 9) follows it, XS after its new target (section 1.2)",
-   "difference": {
-    "screen": "world-reader: Edit hover",
-    "view": "1200x800",
-    "what": "text",
-    "change": "moved",
-    "name": "",
-    "detail": "734.6 72 14x18 -> 842.1 72 14x18"
-   }
-  },
-  {
-   "row": 8,
-   "why": "Row 8: Add to Log, or its icon, after Edit in a campaign World entry's reader (F6, section 1.2)",
-   "difference": {
-    "screen": "world-reader: Edit hover",
-    "view": "1200x800",
-    "what": "text",
-    "change": "new",
-    "name": "",
-    "detail": "at 734.6 72 14x18"
-   }
-  },
-  {
-   "row": 8,
-   "why": "Row 8: Add to Log, or its icon, after Edit in a campaign World entry's reader (F6, section 1.2)",
-   "difference": {
-    "screen": "world-reader: Edit hover",
-    "view": "1200x800",
-    "what": "text",
-    "change": "new",
-    "name": "Add to Log",
-    "detail": "at 754.6 72 67.5x18"
-   }
-  },
-  {
-   "row": 8,
-   "why": "Row 8: Add to Log comes next to Edit, so the reader's Start fight (row 9) follows it, XS after its new target (section 1.2)",
-   "difference": {
-    "screen": "world-reader: Edit hover",
-    "view": "960x640",
-    "what": "control",
-    "change": "moved",
-    "name": "Button: Start a fight with Captain Varra Black",
-    "detail": "726.6 67 100x28 -> 834.1 67 100x28"
-   }
-  },
-  {
-   "row": 8,
-   "why": "Row 8: Add to Log, or its icon, after Edit in a campaign World entry's reader (F6, section 1.2)",
-   "difference": {
-    "screen": "world-reader: Edit hover",
-    "view": "960x640",
-    "what": "control",
-    "change": "new",
-    "name": "Button: Add to Log",
-    "detail": "at 726.6 67 103.5x28"
-   }
-  },
-  {
-   "row": 8,
-   "why": "Row 8: Add to Log comes next to Edit, so the reader's Start fight (row 9) follows it, XS after its new target (section 1.2)",
-   "difference": {
-    "screen": "world-reader: Edit hover",
-    "view": "960x640",
-    "what": "text",
-    "change": "moved",
-    "name": "Start fight",
-    "detail": "754.6 72 64x18 -> 862.1 72 64x18"
-   }
-  },
-  {
-   "row": 8,
-   "why": "Row 8: Add to Log comes next to Edit, so the reader's Start fight (row 9) follows it, XS after its new target (section 1.2)",
-   "difference": {
-    "screen": "world-reader: Edit hover",
-    "view": "960x640",
-    "what": "text",
-    "change": "moved",
-    "name": "",
-    "detail": "734.6 72 14x18 -> 842.1 72 14x18"
-   }
-  },
-  {
-   "row": 8,
-   "why": "Row 8: Add to Log, or its icon, after Edit in a campaign World entry's reader (F6, section 1.2)",
-   "difference": {
-    "screen": "world-reader: Edit hover",
-    "view": "960x640",
-    "what": "text",
-    "change": "new",
-    "name": "",
-    "detail": "at 734.6 72 14x18"
-   }
-  },
-  {
-   "row": 8,
-   "why": "Row 8: Add to Log, or its icon, after Edit in a campaign World entry's reader (F6, section 1.2)",
-   "difference": {
-    "screen": "world-reader: Edit hover",
-    "view": "960x640",
-    "what": "text",
-    "change": "new",
-    "name": "Add to Log",
-    "detail": "at 754.6 72 67.5x18"
    }
   },
   {
@@ -575,6 +167,198 @@
     "change": "changed",
     "name": "Session",
     "detail": "went + Add to Log"
+   }
+  },
+  {
+   "row": 8,
+   "why": "Row 8: Add to Log, or its icon, after Start fight (or after Edit) in a campaign World entry's reader (F6, section 1.2)",
+   "difference": {
+    "screen": "lookup-reader Captain Varra, npc",
+    "view": "1200x800 Lookup open",
+    "what": "control",
+    "change": "new",
+    "name": "Button: Add to Log",
+    "detail": "at 1118.3 126 28x28"
+   }
+  },
+  {
+   "row": 8,
+   "why": "Row 8: Add to Log, or its icon, after Start fight (or after Edit) in a campaign World entry's reader (F6, section 1.2)",
+   "difference": {
+    "screen": "lookup-reader Captain Varra, npc",
+    "view": "1200x800 Lookup open",
+    "what": "text",
+    "change": "moved",
+    "name": "",
+    "detail": "643.9 50 14x18 -> 1125.3 131 14x18"
+   }
+  },
+  {
+   "row": 8,
+   "why": "Row 8: Add to Log, or its icon, after Start fight (or after Edit) in a campaign World entry's reader (F6, section 1.2)",
+   "difference": {
+    "screen": "lookup-reader Oren Thistlewick, npc",
+    "view": "1200x800 Lookup open",
+    "what": "control",
+    "change": "new",
+    "name": "Button: Add to Log",
+    "detail": "at 1154.7 126 28x28"
+   }
+  },
+  {
+   "row": 8,
+   "why": "Row 8: Add to Log, or its icon, after Start fight (or after Edit) in a campaign World entry's reader (F6, section 1.2)",
+   "difference": {
+    "screen": "lookup-reader Oren Thistlewick, npc",
+    "view": "1200x800 Lookup open",
+    "what": "text",
+    "change": "moved",
+    "name": "",
+    "detail": "643.9 50 14x18 -> 1161.7 131 14x18"
+   }
+  },
+  {
+   "row": 8,
+   "why": "Row 8: Add to Log, or its icon, after Start fight (or after Edit) in a campaign World entry's reader (F6, section 1.2)",
+   "difference": {
+    "screen": "world-reader",
+    "view": "1200x800 Lookup closed",
+    "what": "control",
+    "change": "new",
+    "name": "Button: Add to Log",
+    "detail": "at 830.7 67 103.5x28"
+   }
+  },
+  {
+   "row": 8,
+   "why": "Row 8: Add to Log, or its icon, after Start fight (or after Edit) in a campaign World entry's reader (F6, section 1.2)",
+   "difference": {
+    "screen": "world-reader",
+    "view": "1200x800 Lookup closed",
+    "what": "text",
+    "change": "new",
+    "name": "",
+    "detail": "at 838.7 72 14x18"
+   }
+  },
+  {
+   "row": 8,
+   "why": "Row 8: Add to Log, or its icon, after Start fight (or after Edit) in a campaign World entry's reader (F6, section 1.2)",
+   "difference": {
+    "screen": "world-reader",
+    "view": "1200x800 Lookup closed",
+    "what": "text",
+    "change": "new",
+    "name": "Add to Log",
+    "detail": "at 858.7 72 67.5x18"
+   }
+  },
+  {
+   "row": 8,
+   "why": "Row 8: Add to Log, or its icon, after Start fight (or after Edit) in a campaign World entry's reader (F6, section 1.2)",
+   "difference": {
+    "screen": "world-reader",
+    "view": "960x640 Lookup closed",
+    "what": "control",
+    "change": "new",
+    "name": "Button: Add to Log",
+    "detail": "at 830.7 67 103.5x28"
+   }
+  },
+  {
+   "row": 8,
+   "why": "Row 8: Add to Log, or its icon, after Start fight (or after Edit) in a campaign World entry's reader (F6, section 1.2)",
+   "difference": {
+    "screen": "world-reader",
+    "view": "960x640 Lookup closed",
+    "what": "text",
+    "change": "new",
+    "name": "",
+    "detail": "at 838.7 72 14x18"
+   }
+  },
+  {
+   "row": 8,
+   "why": "Row 8: Add to Log, or its icon, after Start fight (or after Edit) in a campaign World entry's reader (F6, section 1.2)",
+   "difference": {
+    "screen": "world-reader",
+    "view": "960x640 Lookup closed",
+    "what": "text",
+    "change": "new",
+    "name": "Add to Log",
+    "detail": "at 858.7 72 67.5x18"
+   }
+  },
+  {
+   "row": 8,
+   "why": "Row 8: Add to Log, or its icon, after Start fight (or after Edit) in a campaign World entry's reader (F6, section 1.2)",
+   "difference": {
+    "screen": "world-reader: Edit hover",
+    "view": "1200x800",
+    "what": "control",
+    "change": "new",
+    "name": "Button: Add to Log",
+    "detail": "at 830.7 67 103.5x28"
+   }
+  },
+  {
+   "row": 8,
+   "why": "Row 8: Add to Log, or its icon, after Start fight (or after Edit) in a campaign World entry's reader (F6, section 1.2)",
+   "difference": {
+    "screen": "world-reader: Edit hover",
+    "view": "1200x800",
+    "what": "text",
+    "change": "new",
+    "name": "",
+    "detail": "at 838.7 72 14x18"
+   }
+  },
+  {
+   "row": 8,
+   "why": "Row 8: Add to Log, or its icon, after Start fight (or after Edit) in a campaign World entry's reader (F6, section 1.2)",
+   "difference": {
+    "screen": "world-reader: Edit hover",
+    "view": "1200x800",
+    "what": "text",
+    "change": "new",
+    "name": "Add to Log",
+    "detail": "at 858.7 72 67.5x18"
+   }
+  },
+  {
+   "row": 8,
+   "why": "Row 8: Add to Log, or its icon, after Start fight (or after Edit) in a campaign World entry's reader (F6, section 1.2)",
+   "difference": {
+    "screen": "world-reader: Edit hover",
+    "view": "960x640",
+    "what": "control",
+    "change": "new",
+    "name": "Button: Add to Log",
+    "detail": "at 830.7 67 103.5x28"
+   }
+  },
+  {
+   "row": 8,
+   "why": "Row 8: Add to Log, or its icon, after Start fight (or after Edit) in a campaign World entry's reader (F6, section 1.2)",
+   "difference": {
+    "screen": "world-reader: Edit hover",
+    "view": "960x640",
+    "what": "text",
+    "change": "new",
+    "name": "",
+    "detail": "at 838.7 72 14x18"
+   }
+  },
+  {
+   "row": 8,
+   "why": "Row 8: Add to Log, or its icon, after Start fight (or after Edit) in a campaign World entry's reader (F6, section 1.2)",
+   "difference": {
+    "screen": "world-reader: Edit hover",
+    "view": "960x640",
+    "what": "text",
+    "change": "new",
+    "name": "Add to Log",
+    "detail": "at 858.7 72 67.5x18"
    }
   }
  ]
