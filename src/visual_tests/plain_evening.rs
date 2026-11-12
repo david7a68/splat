@@ -100,8 +100,8 @@ const ADD_COMMAND: &str = "devenv shell -- audit-freeze add";
 const SCENARIO: &str = "plain-evening";
 const WIDE: (f32, f32) = (1200.0, 800.0);
 const NARROW: (f32, f32) = (960.0, 640.0);
-/// Section 2.5 numbers its rows 1 to 25.
-const CONTRACT_ROWS: std::ops::RangeInclusive<u32> = 1..=25;
+/// Section 2.5 numbers its rows 1 to 27.
+const CONTRACT_ROWS: std::ops::RangeInclusive<u32> = 1..=27;
 /// What the test folder becomes in a run's `splat_run_source_path`.
 const WORLD: &str = "<world>";
 const SAME: &str = "the same as at the start";
@@ -1861,6 +1861,22 @@ mod allowed_classes {
             name: "R1c b: an act's words that scrolled out of or into History's view",
             fits: history::act_words,
         },
+        // R3g, rows 26 and 27 (by the lead's ruling after app round 2).
+        Class {
+            row: 26,
+            name: "R3g a: History kept the opened run in view: one scroll, the log 6 px lower",
+            fits: kept::history,
+        },
+        Class {
+            row: 26,
+            name: "R3g b: an act's words that scrolled out of or into History's view",
+            fits: history::act_words,
+        },
+        Class {
+            row: 27,
+            name: "R3g c: the editor's actions on the name's line beside Lookup, the rest one line up",
+            fits: kept::editor,
+        },
         // P7, F7.
         Class {
             row: 10,
@@ -2286,7 +2302,7 @@ mod allowed_classes {
         use std::collections::BTreeMap;
 
         /// Rectangles `x y w h` of the items of one name.
-        type Places = Vec<[f32; 4]>;
+        pub(super) type Places = Vec<[f32; 4]>;
 
         /// The acts that open, show or close a run in History.
         const ACTS: [&str; 5] = [
@@ -2308,7 +2324,7 @@ mod allowed_classes {
         }
 
         /// `x y w h` of `x y wxh` or `x y wxh, seen …`.
-        fn numbers(text: &str) -> Option<[f32; 4]> {
+        pub(super) fn numbers(text: &str) -> Option<[f32; 4]> {
             let whole = text.split(',').next()?.replace('x', " ");
             let numbers: Vec<f32> = whole
                 .split_whitespace()
@@ -2327,7 +2343,7 @@ mod allowed_classes {
         }
 
         /// The part of the item in view after: its `seen` part, or the whole item.
-        fn shown_after(d: &Difference) -> Option<[f32; 4]> {
+        pub(super) fn shown_after(d: &Difference) -> Option<[f32; 4]> {
             let after = after_text(d)?;
             match after.split_once(", seen ") {
                 Some((_, seen)) => numbers(seen),
@@ -2336,7 +2352,7 @@ mod allowed_classes {
         }
 
         /// The item's place before and after.
-        fn places(d: &Difference) -> (Option<[f32; 4]>, Option<[f32; 4]>) {
+        pub(super) fn places(d: &Difference) -> (Option<[f32; 4]>, Option<[f32; 4]>) {
             match d.change.as_str() {
                 "gone" => (d.detail.strip_prefix("was ").and_then(numbers), None),
                 "new" => (None, d.detail.strip_prefix("at ").and_then(numbers)),
@@ -2349,7 +2365,7 @@ mod allowed_classes {
 
         /// How far the list scrolled in a view: how far the opened run's own row moved, with
         /// its place across and its size kept.
-        fn scroll(d: &Difference, rows: &[AllowedRow]) -> Option<f32> {
+        pub(super) fn scroll(d: &Difference, rows: &[AllowedRow]) -> Option<f32> {
             rows.iter()
                 .map(|row| &row.difference)
                 .filter(|o| (&o.screen, &o.view) == (&d.screen, &d.view))
@@ -2830,6 +2846,659 @@ mod allowed_classes {
                 rows.push(row(LAST, "text", "gone", "Resume", "was 753.1 99 95.8x28"));
                 assert!(!fits(&rows), "{why} was accepted");
             }
+        }
+    }
+
+    /// R3g's classes, rows 26 and 27 (by the lead's ruling after app round 2), measured
+    /// against the reference this pull request froze at bd7ff4b0. Each proves itself from all
+    /// the rows of its view, as R1c's do, because G7 pairs the items of one name by their order.
+    mod kept {
+        use super::super::{AllowedRow, Difference, Reference, View};
+        use super::history::{Places, places, scroll, shown_after};
+        use std::collections::BTreeMap;
+
+        /// X66: `COMBAT LOG` is `M` below the last Final state row, where it was the rows' own
+        /// gap (6 px): the log moves down by this much more than the list.
+        const LOG: f32 = crate::design::M - 6.0;
+
+        /// The frozen view of `d`.
+        fn frozen(d: &Difference) -> Option<&'static View> {
+            frozen_view(&d.screen, &d.view)
+        }
+
+        /// A frozen view, by its screen and view.
+        fn frozen_view(screen: &str, view: &str) -> Option<&'static View> {
+            static REFERENCE: std::sync::OnceLock<Reference> = std::sync::OnceLock::new();
+            REFERENCE
+                .get_or_init(|| super::super::read(&super::super::folder().join("reference.json")))
+                .views
+                .iter()
+                .find(|frozen| (frozen.screen.as_str(), frozen.view.as_str()) == (screen, view))
+        }
+
+        /// Whether an item that the scroll newly shows is one that the frozen view of the same
+        /// screen at the other size holds: its name (its words), its place across and its size,
+        /// and its height below the same mark (`COMBAT LOG` in the log, else `FINAL STATE`).
+        /// `taken` holds the frozen items already matched, so two new items never share one.
+        fn exposed_is_frozen(
+            d: &Difference,
+            name: &str,
+            b: [f32; 4],
+            (mark, below): (&str, f32),
+            taken: &mut std::collections::BTreeSet<usize>,
+        ) -> bool {
+            let other = if d.view.contains("960x640") {
+                d.view.replace("960x640", "1200x800")
+            } else {
+                d.view.replace("1200x800", "960x640")
+            };
+            let Some(view) = frozen_view(&d.screen, &other) else {
+                return false;
+            };
+            let items = if d.what == "control" {
+                &view.controls
+            } else {
+                &view.texts
+            };
+            let Some(anchor) = items.iter().find(|item| item.0.ends_with(mark)) else {
+                return false;
+            };
+            // A row's actions keep their place from the list's right edge: across, the other
+            // size moves them as far as it moves the opened run's own `Close`.
+            let close = |view: &View| {
+                let items = if d.what == "control" {
+                    &view.controls
+                } else {
+                    &view.texts
+                };
+                items
+                    .iter()
+                    .find(|item| {
+                        item.0.starts_with("Button: Close the run of ") || item.0 == "Close"
+                    })
+                    .map(|item| item.1[0])
+            };
+            let Some(right) = close(view)
+                .zip(frozen(d).and_then(close))
+                .map(|(o, t)| o - t)
+            else {
+                return false;
+            };
+            items
+                .iter()
+                .enumerate()
+                .find(|(at, item)| {
+                    item.0 == name
+                        && (item.1[0] == b[0] || (item.1[0] - right - b[0]).abs() < 0.05)
+                        && item.1[2..4] == b[2..]
+                        && (item.1[1] - anchor.1[1] - below).abs() < 0.05
+                        && !taken.contains(at)
+                })
+                .is_some_and(|(at, _)| taken.insert(at))
+        }
+
+        /// The frozen place of the first item of `d`'s kind whose name passes `pick`.
+        fn frozen_place(d: &Difference, pick: impl Fn(&str) -> bool) -> Option<[f32; 4]> {
+            let view = frozen(d)?;
+            let items = if d.what == "control" {
+                &view.controls
+            } else {
+                &view.texts
+            };
+            let item = items.iter().find(|item| pick(&item.0))?;
+            item.1.get(..4)?.try_into().ok()
+        }
+
+        /// The list's top and, when the frozen view cut an item there, its bottom: where the
+        /// frozen view's items of `d`'s kind show cut.
+        fn frozen_edges(d: &Difference) -> Option<(f32, Option<f32>)> {
+            let view = frozen(d)?;
+            let items = if d.what == "control" {
+                &view.controls
+            } else {
+                &view.texts
+            };
+            let cut = items.iter().filter(|item| item.1.len() == 8);
+            let top = cut
+                .clone()
+                .filter(|item| item.1[5] > item.1[1] + 0.05)
+                .map(|item| item.1[5])
+                .reduce(f32::max)?;
+            let bottom = cut
+                .filter(|item| item.1[5] + item.1[7] < item.1[1] + item.1[3] - 0.05)
+                .map(|item| item.1[5] + item.1[7])
+                .reduce(f32::min);
+            Some((top, bottom))
+        }
+
+        /// The rows of `d`'s view and kind.
+        fn view<'a>(d: &Difference, rows: &'a [AllowedRow]) -> Vec<&'a Difference> {
+            rows.iter()
+                .map(|row| &row.difference)
+                .filter(|o| (&o.screen, &o.view, &o.what) == (&d.screen, &d.view, &d.what))
+                .collect()
+        }
+
+        /// An item after is cut only by the list's edges: its top at `top`, its bottom at `bottom`.
+        fn cut_at_edges(o: &Difference, top: f32, bottom: f32) -> bool {
+            let (Some(whole), Some(shown)) = (places(o).1, shown_after(o)) else {
+                return true;
+            };
+            let cut_top = shown[1] > whole[1] + 0.05;
+            let cut_bottom = shown[1] + shown[3] < whole[1] + whole[3] - 0.05;
+            shown[0] == whole[0]
+                && shown[2] == whole[2]
+                && (!cut_top || (shown[1] - top).abs() < 0.5)
+                && (!cut_bottom || (shown[1] + shown[3] - bottom).abs() < 0.5)
+        }
+
+        /// Row 26: History keeps the opened run at the list's top (X36, X37). The list scrolled
+        /// by one offset, the run's own row's, down the content; `COMBAT LOG` and everything
+        /// below it in the frozen view moved by `LOG` more (X66). Each item of today that stays
+        /// in view is one to one an item after of its name, with its place across and its size
+        /// kept; what goes scrolled out at the top, what is new scrolled in from below, and an
+        /// item after is cut only by the list's edges.
+        pub(super) fn history(d: &Difference, rows: &[AllowedRow]) -> bool {
+            if !d.screen.starts_with("run-ended: played ")
+                || !["control", "text"].contains(&d.what.as_str())
+                || places(d) == (None, None)
+            {
+                return false;
+            }
+            let Some(dy) = scroll(d, rows).filter(|dy| *dy < 0.0) else {
+                return false;
+            };
+            // With no log in the frozen view, nothing of it moves in view.
+            let log = frozen_place(d, |name| name.ends_with("COMBAT LOG"))
+                .map_or(f32::INFINITY, |place| place[1]);
+            let shift = |before: f32| if before >= log - 0.5 { dy + LOG } else { dy };
+            let view = view(d, rows);
+            // The list's edges as the frozen view recorded them, where an item showed cut: the
+            // top always; the bottom where the frozen view cut one, else the bottom of what
+            // shows after. A row never sets the edge it is cut by.
+            let Some((top, frozen_bottom)) = frozen_edges(d) else {
+                return false;
+            };
+            // The run's own row, which sets the scroll, shows whole.
+            let run_whole = view.iter().all(|o| {
+                !(o.name.starts_with("Button: Close the run of ") && o.change == "moved")
+                    || shown_after(o) == places(o).1
+            });
+            if !run_whole {
+                return false;
+            }
+            // The bottom of what showed before; an item after is cut only at the list's bottom.
+            let bottom = view
+                .iter()
+                .filter_map(|o| places(o).0)
+                .map(|a| a[1] + a[3])
+                .fold(f32::NEG_INFINITY, f32::max);
+            let edge = frozen_bottom.unwrap_or_else(|| {
+                view.iter()
+                    .filter_map(|o| shown_after(o))
+                    .map(|b| b[1] + b[3])
+                    .fold(f32::NEG_INFINITY, f32::max)
+            });
+            // Where the marks are after: the log's, and Final state's above it.
+            let log_after = log + dy + LOG;
+            let Some(state_after) =
+                frozen_place(d, |name| name.ends_with("FINAL STATE")).map(|place| place[1] + dy)
+            else {
+                return false;
+            };
+            let mut names: BTreeMap<&str, (Places, Places)> = BTreeMap::new();
+            let mut taken = std::collections::BTreeSet::new();
+            for o in &view {
+                if !cut_at_edges(o, top, edge) {
+                    return false;
+                }
+                let (a, b) = places(o);
+                let (before, after) = names.entry(o.name.as_str()).or_default();
+                // Today's items that stay in view, and the items after that were in view.
+                before.extend(a.filter(|a| a[1] + shift(a[1]) + a[3] > top + 0.5));
+                if let Some(b) = b {
+                    let in_log = b[1] >= log_after - 0.5;
+                    let back = if in_log { dy + LOG } else { dy };
+                    if b[1] - back < bottom - 0.5 {
+                        after.push(b);
+                    } else {
+                        // What the scroll newly shows is checked by itself: its words, size and
+                        // place are those the frozen view of the other size holds.
+                        let mark = if in_log {
+                            ("COMBAT LOG", b[1] - log_after)
+                        } else {
+                            ("FINAL STATE", b[1] - state_after)
+                        };
+                        if !exposed_is_frozen(d, &o.name, b, mark, &mut taken) {
+                            return false;
+                        }
+                    }
+                }
+            }
+            names.values_mut().all(|(before, after)| {
+                before.sort_by(|a, b| a[1].total_cmp(&b[1]));
+                after.sort_by(|a, b| a[1].total_cmp(&b[1]));
+                before.len() == after.len()
+                    && before.iter().zip(after.iter()).all(|(a, b)| {
+                        a[0] == b[0] && a[2..] == b[2..] && (b[1] - a[1] - shift(a[1])).abs() < 0.05
+                    })
+            })
+        }
+
+        /// Row 27: beside Lookup at 960x640, `Save encounter` and `Start fight` moved up to the
+        /// name field's line, with their place across and their size (X51); the field kept its
+        /// place and height and ends before them; every other item moved straight up by the
+        /// line they left, and only what was below the pane's bottom comes into view there.
+        /// Nothing is gone, and only the pane's bottom cuts an item.
+        pub(super) fn editor(d: &Difference, rows: &[AllowedRow]) -> bool {
+            if (d.screen.as_str(), d.view.as_str()) != ("encounter-editor", "960x640 Lookup open")
+                || !["control", "text"].contains(&d.what.as_str())
+            {
+                return false;
+            }
+            let action =
+                |name: &str| name.ends_with("Save encounter") || name.ends_with("Start fight");
+            // The line the actions left: Save encounter's own move, straight up.
+            // One translation for the editor, from the Save encounter control's own move: its
+            // words and every other text move with their controls.
+            let Some((save, up)) = rows.iter().map(|row| &row.difference).find_map(|o| {
+                let (Some(a), Some(b)) = places(o) else {
+                    return None;
+                };
+                ((&o.screen, &o.view) == (&d.screen, &d.view)
+                    && o.what == "control"
+                    && o.change == "moved"
+                    && o.name == "Button: Save encounter"
+                    && a[0] == b[0]
+                    && a[2..] == b[2..]
+                    && b[1] < a[1])
+                    .then_some((b, b[1] - a[1]))
+            }) else {
+                return false;
+            };
+            // The name field's line, in the frozen view.
+            let Some(field) = frozen(d)
+                .and_then(|view| {
+                    view.controls
+                        .iter()
+                        .find(|item| item.0.starts_with("TextInput: Encounter name"))
+                })
+                .and_then(|item| <[f32; 4]>::try_from(item.1.get(..4)?).ok())
+            else {
+                return false;
+            };
+            // The pane's bottom, in the frozen view: where the items of `d`'s kind in the
+            // editor's column end, from the back button to Start fight.
+            let Some(bottom) = frozen(d).and_then(|view| {
+                let control = |start: &str| {
+                    view.controls
+                        .iter()
+                        .find(|item| item.0.starts_with(start))
+                        .map(|item| (item.1[0], item.1[0] + item.1[2]))
+                };
+                let (left, right) = (
+                    control("Button: Back to")?.0,
+                    control("Button: Start fight")?.1,
+                );
+                let items = if d.what == "control" {
+                    &view.controls
+                } else {
+                    &view.texts
+                };
+                Some(
+                    items
+                        .iter()
+                        .filter(|item| item.1[0] >= left && item.1[0] < right)
+                        .map(|item| {
+                            let shown = if item.1.len() == 8 {
+                                &item.1[4..]
+                            } else {
+                                &item.1[..]
+                            };
+                            shown[1] + shown[3]
+                        })
+                        .fold(f32::NEG_INFINITY, f32::max),
+                )
+            }) else {
+                return false;
+            };
+            let (a, b) = places(d);
+            match (d.change.as_str(), a, b) {
+                // The field takes the rest of line one: it ends at most `XL` before Save
+                // encounter, never under it, and keeps at least a control's width.
+                ("width", Some(a), Some(b)) => {
+                    let end = b[0] + b[2];
+                    d.name.starts_with("TextInput: Encounter name")
+                        && a[..2] == b[..2]
+                        && a[3] == b[3]
+                        && b[2] < a[2]
+                        && b[2] >= crate::design::Density::Scan.control()
+                        && end <= save[0]
+                        && end >= save[0] - crate::design::XL - crate::design::S
+                        && shown_after(d) == Some(b)
+                }
+                ("moved", Some(a), Some(b)) => {
+                    let whole = cut_at_edges(d, f32::NEG_INFINITY, bottom);
+                    let straight =
+                        a[0] == b[0] && a[2..] == b[2..] && (b[1] - a[1] - up).abs() < 0.05;
+                    let on_line = !action(&d.name)
+                        || (field[1]..=field[1] + field[3]).contains(&(b[1] + b[3] / 2.0));
+                    whole && straight && on_line
+                }
+                // Came into view from below the pane's bottom, cut only there.
+                ("new", None, Some(b)) => {
+                    b[1] - up >= bottom - 0.5 && cut_at_edges(d, f32::NEG_INFINITY, bottom)
+                }
+                _ => false,
+            }
+        }
+
+        /// The faults R3g's classes refuse, beside today's scroll and today's editor header.
+        #[test]
+        fn the_r3g_classes_refuse_a_loss_a_sideways_move_a_narrowing_and_other_shifts() {
+            let row =
+                |row: u32, screen: &str, view: &str, change: &str, name: &str, detail: &str| {
+                    AllowedRow {
+                        row,
+                        why: String::new(),
+                        difference: Difference {
+                            screen: screen.into(),
+                            view: view.into(),
+                            what: "control".into(),
+                            change: change.into(),
+                            name: name.into(),
+                            detail: detail.into(),
+                        },
+                    }
+                };
+            let fits =
+                |rows: &[AllowedRow]| rows.iter().all(|row| super::class_of(row, rows).is_some());
+            let with = |good: &[AllowedRow], fault: AllowedRow| {
+                let mut rows = good.to_vec();
+                match rows
+                    .iter()
+                    .position(|row| row.difference.name == fault.difference.name)
+                {
+                    Some(at) => rows[at] = fault,
+                    None => rows.push(fault),
+                }
+                rows
+            };
+            // History at 960x640: the run's row at the list's top, the log 6 px lower.
+            let history = |change: &str, name: &str, detail: &str| {
+                row(
+                    26,
+                    "run-ended: played last",
+                    "960x640 Lookup closed",
+                    change,
+                    name,
+                    detail,
+                )
+            };
+            let good = [
+                history(
+                    "moved",
+                    "Button: Close the run of Wolves",
+                    "847.2 220 50.8x28 -> 847.2 82 50.8x28",
+                ),
+                history(
+                    "moved",
+                    "Label: FINAL STATE",
+                    "180 324 73.6x14 -> 180 186 73.6x14",
+                ),
+                history(
+                    "moved",
+                    "Label: COMBAT LOG",
+                    "180 512 73.8x14 -> 180 380 73.8x14",
+                ),
+                history(
+                    "moved",
+                    "Label: HP 0/22",
+                    "306.8 344 44.2x16 -> 306.8 206 44.2x16",
+                ),
+                history("gone", "Label: GROUPS", "was 148 104 46.7x14"),
+                history(
+                    "new",
+                    "Label: Oren Thistlewick: Initiative set to 13.",
+                    "at 180 510 198.3x16",
+                ),
+            ];
+            assert!(fits(&good), "today's History fits its class");
+            for fault in [
+                // The log without X66's gap: the list's shift alone.
+                history(
+                    "moved",
+                    "Label: COMBAT LOG",
+                    "180 512 73.8x14 -> 180 374 73.8x14",
+                ),
+                // Moved sideways, or narrower.
+                history(
+                    "moved",
+                    "Label: FINAL STATE",
+                    "180 324 73.6x14 -> 184 186 73.6x14",
+                ),
+                history(
+                    "moved",
+                    "Label: HP 0/22",
+                    "306.8 344 44.2x16 -> 306.8 206 40.0x16",
+                ),
+                // Gone, or new, in the middle of the view.
+                history("gone", "Label: HP 0/22", "was 306.8 344 44.2x16"),
+                history("new", "Label: Absent", "at 180 300 40x16"),
+                // Cut inside the view.
+                history(
+                    "moved",
+                    "Label: FINAL STATE",
+                    "180 324 73.6x14 -> 180 186 73.6x14, seen 180 190 73.6x10",
+                ),
+                // The run's own row cut at the list's top, so that it would set the top.
+                history(
+                    "moved",
+                    "Button: Close the run of Wolves",
+                    "847.2 220 50.8x28 -> 847.2 82 50.8x28, seen 847.2 86 50.8x24",
+                ),
+            ] {
+                let name = fault.difference.to_string();
+                assert!(!fits(&with(&good, fault)), "R3g a takes {name}");
+            }
+            // The editor beside Lookup at 960x640: the actions on the name's line.
+            let editor = |change: &str, name: &str, detail: &str| {
+                row(
+                    27,
+                    "encounter-editor",
+                    "960x640 Lookup open",
+                    change,
+                    name,
+                    detail,
+                )
+            };
+            let good = [
+                editor(
+                    "moved",
+                    "Button: Save encounter",
+                    "381.8 44 123.4x30 -> 381.8 8 123.4x30",
+                ),
+                editor(
+                    "moved",
+                    "Button: Start fight",
+                    "513.2 44 89.3x30 -> 513.2 8 89.3x30",
+                ),
+                editor(
+                    "width",
+                    "TextInput: Encounter name: Shrine of Cinders",
+                    "186 8 416.4x30 -> 186 8 168.4x30",
+                ),
+                editor(
+                    "moved",
+                    "Button: Roster, 7 participants",
+                    "148 121 69.4x28 -> 148 85 69.4x28",
+                ),
+                editor(
+                    "new",
+                    "Label: Lists this encounter under Ready to run",
+                    "at 148 609 422.8x32, seen 148 609 422.8x23",
+                ),
+            ];
+            assert!(fits(&good), "today's editor header fits its class");
+            for fault in [
+                // The field runs under Save encounter, or moves.
+                editor(
+                    "width",
+                    "TextInput: Encounter name: Shrine of Cinders",
+                    "186 8 416.4x30 -> 186 8 300x30",
+                ),
+                editor(
+                    "width",
+                    "TextInput: Encounter name: Shrine of Cinders",
+                    "186 8 416.4x30 -> 186 10 168.4x30",
+                ),
+                // The field gives up the room it should take, or is cut.
+                editor(
+                    "width",
+                    "TextInput: Encounter name: Shrine of Cinders",
+                    "186 8 416.4x30 -> 186 8 1x30",
+                ),
+                editor(
+                    "width",
+                    "TextInput: Encounter name: Shrine of Cinders",
+                    "186 8 416.4x30 -> 186 8 168.4x30, seen 186 8 100x30",
+                ),
+                // An action moves sideways, or stays below the name's line.
+                editor(
+                    "moved",
+                    "Button: Start fight",
+                    "513.2 44 89.3x30 -> 500 8 89.3x30",
+                ),
+                editor(
+                    "moved",
+                    "Button: Start fight",
+                    "513.2 44 89.3x30 -> 513.2 44 89.3x30",
+                ),
+                // The rest moves by another amount, or something is gone or new mid-pane.
+                editor(
+                    "moved",
+                    "Button: Roster, 7 participants",
+                    "148 121 69.4x28 -> 148 90 69.4x28",
+                ),
+                editor(
+                    "gone",
+                    "Button: Roster, 7 participants",
+                    "was 148 121 69.4x28",
+                ),
+                editor(
+                    "new",
+                    "Label: Lists this encounter under Ready to run",
+                    "at 148 300 422.8x32",
+                ),
+            ] {
+                let name = fault.difference.to_string();
+                assert!(!fits(&with(&good, fault)), "R3g c takes {name}");
+            }
+            // Review 290: the real rows with one fault each. A line the scroll newly shows keeps
+            // its words, its size and its place; the editor's words move with their controls.
+            let allowed: super::super::Allowed =
+                super::super::read(&super::super::folder().join("allowed.json"));
+            let refused =
+                |rows: &[AllowedRow]| rows.iter().any(|row| super::class_of(row, rows).is_none());
+            let kestrel = |detail: Option<&str>, words: Option<&str>| {
+                let mut rows = allowed.rows.clone();
+                let mut changed = 0;
+                for row in &mut rows {
+                    let d = &mut row.difference;
+                    if row.row == 26
+                        && d.view == "960x640 Lookup closed"
+                        && d.screen == "run-ended: played last"
+                        && d.change == "new"
+                        && d.name.contains("Kestrel Dunmoor: Initiative set to 12.")
+                    {
+                        if let Some(detail) = detail {
+                            d.detail = detail.into();
+                        }
+                        if let Some(words) = words {
+                            d.name = d.name.replace("Initiative set to 12.", words);
+                        }
+                        changed += 1;
+                    }
+                }
+                assert_eq!(changed, 3);
+                rows
+            };
+            assert!(
+                refused(&kestrel(None, Some("Initiative set to 99."))),
+                "R3g a takes changed words in a newly shown log line"
+            );
+            assert!(
+                refused(&kestrel(Some("at 180 510 100x16"), None)),
+                "R3g a takes a newly shown log line narrowed and drawn over Oren's line"
+            );
+            let small = [
+                editor(
+                    "moved",
+                    "Button: Save encounter",
+                    "381.8 44 123.4x30 -> 381.8 8 123.4x30",
+                ),
+                editor(
+                    "moved",
+                    "Button: Start fight",
+                    "513.2 44 89.3x30 -> 513.2 8 89.3x30",
+                ),
+                editor(
+                    "width",
+                    "TextInput: Encounter name: Shrine of Cinders",
+                    "186 8 416.4x30 -> 186 8 168.4x30",
+                ),
+                editor(
+                    "moved",
+                    "Button: Roster, 7 participants",
+                    "148 121 69.4x28 -> 148 85 69.4x28",
+                ),
+            ];
+            let words = |name: &str, detail: &str| AllowedRow {
+                difference: Difference {
+                    what: "text".into(),
+                    ..editor("moved", name, detail).difference
+                },
+                ..editor("moved", name, detail)
+            };
+            let mut detached = small.to_vec();
+            detached.extend([
+                words("Save encounter", "393.8 50 99.4x18 -> 393.8 29 99.4x18"),
+                words("Start fight", "525.2 50 65.3x18 -> 525.2 29 65.3x18"),
+                words("Roster", "164 127 36x16 -> 164 106 36x16"),
+            ]);
+            assert!(
+                refused(&detached),
+                "R3g c takes words 15 px below their controls"
+            );
+            let mut rows = allowed.rows.clone();
+            let mut changed = 0;
+            for row in &mut rows {
+                let d = &mut row.difference;
+                if row.row != 27 || d.what != "text" {
+                    continue;
+                }
+                let (a, Some(mut b)) = places(d) else {
+                    panic!("missing after");
+                };
+                b[1] += 15.0;
+                let rect = |b: [f32; 4]| format!("{} {} {}x{}", b[0], b[1], b[2], b[3]);
+                let mut after = rect(b);
+                if b[1] + b[3] > 635.0 {
+                    let mut seen = b;
+                    seen[3] = 635.0 - b[1];
+                    after.push_str(&format!(", seen {}", rect(seen)));
+                }
+                d.detail = match a {
+                    Some(a) => format!("{} -> {after}", rect(a)),
+                    None => format!("at {after}"),
+                };
+                changed += 1;
+            }
+            assert_eq!(changed, 80);
+            assert!(
+                refused(&rows),
+                "R3g c takes the real editor's 80 texts 15 px below their controls"
+            );
         }
     }
 

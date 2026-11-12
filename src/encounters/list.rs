@@ -706,10 +706,9 @@ pub(super) struct Reading<'a> {
     pub summary: &'a FightSummary,
     /// Why it cannot go on, when it is not the fight that was played last.
     pub not_last: Option<&'static str>,
-    /// It just opened, so the list scrolls to it once.
-    pub reveal: bool,
 }
 
+/// History. Returns the screen y of the opened run's clean top edge, when a run is open there.
 pub(super) fn history_list(
     ui: &mut egui::Ui,
     page: &history::Arranged<'_>,
@@ -717,18 +716,20 @@ pub(super) fn history_list(
     live: Option<&SavedRunInfo>,
     read: Option<Reading<'_>>,
     action: &mut Option<ListAction>,
-) {
+) -> Option<f32> {
     ui.add_space(design::L);
     if page.runs_unread {
         heading(ui, "HISTORY", 0);
         blocked_reason(ui, Some(ENDED_UNREAD));
-        return;
+        return None;
     }
     if page.ended_count() == 0 && page.unreadable.is_empty() {
         heading(ui, "HISTORY", 0);
         blocked_reason(ui, Some("No ended fights yet."));
-        return;
+        return None;
     }
+    // The opened run's row: the top of its gap above it, where the list keeps it (X36, X37).
+    let mut opened_top = None;
     section(
         ui,
         "encounter_history",
@@ -810,21 +811,11 @@ pub(super) fn history_list(
                         let not_last = read.not_last.map(|reason| {
                             crate::encounter_run::continue_reason(reason, past.template.is_some())
                         });
-                        let (go_on, final_state) =
-                            history_summary(ui, read.summary, blocked.filter(|_| !here), not_last);
-                        if go_on {
+                        if history_summary(ui, read.summary, blocked.filter(|_| !here), not_last) {
                             *action = Some(ListAction::ContinueFight(run.path.clone()));
                         }
-                        // Once, when the run opens: its row comes to the top of the list, so
-                        // the outcome, the line under Read-only and the whole Final state are
-                        // in view below it, also in a smaller window. The log follows.
-                        if read.reveal {
-                            let x = ui.max_rect().x_range();
-                            ui.scroll_to_rect(
-                                egui::Rect::from_x_y_ranges(x, top..=final_state),
-                                Some(egui::Align::Min),
-                            );
-                        }
+                        // The top of the row's own gap above it: the line above ends there.
+                        opened_top = Some(top - ui.spacing().item_spacing.y);
                     }
                 }
             }
@@ -836,19 +827,26 @@ pub(super) fn history_list(
             }
         },
     );
+    if let Some(top) = opened_top {
+        // Room below the list's end, so the opened run's row reaches the list's top also when
+        // little follows it (a list held at its end would cut the line at its top, X37), and
+        // stays there when the list's visible height changes (X36).
+        let below = ui.min_rect().bottom() - top;
+        ui.add_space((ui.clip_rect().height() - below).max(0.0));
+    }
+    opened_top
 }
 
-/// An ended fight, read in place. Returns true when the DM chooses to go on with it, and the
-/// bottom of Final state. `not_last` says why this fight cannot go on, when it is not the fight
-/// that was played last: then its sentence stands where the control would be.
+/// An ended fight, read in place. Returns true when the DM chooses to go on with it. `not_last`
+/// says why this fight cannot go on, when it is not the fight that was played last: then its
+/// sentence stands where the control would be.
 fn history_summary(
     ui: &mut egui::Ui,
     summary: &FightSummary,
     blocked: Option<&str>,
     not_last: Option<&str>,
-) -> (bool, f32) {
+) -> bool {
     let mut go_on = false;
-    let mut final_state = 0.0;
     ui.indent("history_summary", |ui| {
         // The line under Read-only is `S` below it and `M` above Final state, so it reads as
         // the run's own line and not as part of Final state.
@@ -961,34 +959,55 @@ fn history_summary(
                         }
                         // The last column: one paragraph that wraps inside it, on the line's
                         // baseline.
-                        let rest: Vec<String> = (!row.present)
-                            .then(|| "Absent".to_owned())
-                            .into_iter()
-                            .chain((!row.conditions.is_empty()).then(|| {
-                                let words: Vec<_> =
-                                    row.conditions.iter().map(|c| c.words()).collect();
-                                words.join(", ")
-                            }))
-                            .collect();
-                        if !rest.is_empty() {
+                        if let Some(rest) = final_state_rest(ui, row) {
                             let width = ui.available_width();
                             ui.allocate_ui_with_layout(
                                 egui::vec2(width, 0.0),
                                 egui::Layout::top_down(egui::Align::Min),
-                                |ui| blocked_reason(ui, Some(&rest.join(" · "))),
+                                |ui| ui.add(egui::Label::new(rest).wrap()),
                             );
                         }
                     });
                 });
             });
         }
-        final_state = ui.min_rect().bottom();
+        // X66: the log's heading has the gap that Final state's has.
+        ui.add_space(design::M - spacing);
         design::group_label(ui, "Combat log");
         for line in &summary.log {
             blocked_reason(ui, Some(line));
         }
     });
-    (go_on, final_state)
+    go_on
+}
+
+/// A Final state row's last column: Absent, the saved concentration in the mark that the
+/// run's rows use (X70), then the conditions. `None` when the row has none of them.
+fn final_state_rest(
+    ui: &egui::Ui,
+    row: &crate::encounter_run::FightRow,
+) -> Option<egui::text::LayoutJob> {
+    let conditions = row
+        .conditions
+        .iter()
+        .map(|c| c.words())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let muted = colors().muted;
+    let parts = [
+        (!row.present).then(|| ("Absent".to_owned(), muted)),
+        row.concentration
+            .then(crate::encounter_run::view::concentration_mark),
+        (!conditions.is_empty()).then_some((conditions, muted)),
+    ];
+    let mut job = egui::text::LayoutJob::default();
+    for (words, color) in parts.into_iter().flatten() {
+        if !job.is_empty() {
+            crate::difficulty::append(&mut job, ui, Type::Small, " · ", muted);
+        }
+        crate::difficulty::append(&mut job, ui, Type::Small, &words, color);
+    }
+    (!job.is_empty()).then_some(job)
 }
 
 #[cfg(test)]

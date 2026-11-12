@@ -3940,6 +3940,7 @@ mod tests {
             temporary_hp: 0,
             conditions: Vec::new(),
             present: true,
+            concentration: false,
         };
         let rows = [
             row("Kestrel Dunmoor", 3, true),
