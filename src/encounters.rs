@@ -2304,6 +2304,11 @@ fn edit_input(ctx: &egui::Context) -> bool {
 
 const BLOCKED_BY_RUN: &str = "Close the open run first.";
 const BLOCKED_BY_DRAFT: &str = "Save or discard the open encounter first.";
+/// The rail's words for this page's drafts; the rail opens Encounters for each (FF2).
+pub const ENCOUNTER_DRAFT: &str = "Encounter draft";
+pub const GROUP_DRAFT: &str = "Group draft";
+pub const CREATURE_DRAFT: &str = "Creature draft";
+pub const RUN_SETTINGS_DRAFT: &str = "Run settings draft";
 const BLOCKED_BY_CREATURE: &str = "Save or discard the changes to this creature first.";
 impl Encounters {
     pub fn refocus_draft(&mut self) {
@@ -2836,9 +2841,9 @@ impl Encounters {
     /// What the rail calls the open draft.
     pub fn draft_word(&self) -> &'static str {
         if self.group_draft.is_some() {
-            "Group draft"
+            GROUP_DRAFT
         } else {
-            "Encounter draft"
+            ENCOUNTER_DRAFT
         }
     }
     /// What a message calls the open draft.
