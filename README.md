@@ -682,6 +682,8 @@ The **Edit** action beside a campaign entry's name, in World or Lookup, opens on
 **In**, **Part of** and the entry's text, without its title line. This form includes empty fields. If **Part of** could not be read, its **Change** action is blocked
 with a message that quotes the value it could not read, gives its line, and says to write each group as a link, such as `[[Arena Guild]]`. Other fields stay editable, and saving them keeps the stored group text unchanged. **Save changes** (Ctrl+S) writes them together and offers
 **Undo changes**. During a live fight, **Save changes** uses a secondary border so **Next turn** stays the primary action.
+Results and their Undo, such as **Stat block set to Guard.**, sit at the bottom of the World or Lookup pane, so the note
+you read does not move when a result comes or goes.
 The form keeps its state and quiet **Discard** at the left, with **Save changes** at the right edge of both text fields.
 **Discard** writes nothing and offers **Undo discard**. The rail shows **World draft** for an unsaved edit,
 or **World repair draft** once if a repair is also unsaved. If the note changed on disk, Splat writes
