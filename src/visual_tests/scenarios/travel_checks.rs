@@ -344,11 +344,15 @@ pub fn run(d: &mut Driver<'_>) {
     let travel_id = journey(d, "Travel").id;
     let travel_top = |d: &Driver<'_>| d.place_of("Travel").map(|rect| rect.top());
     let plan_point = d.place_of("Travel").expect("the Travel row").center();
+    // The plan starts at its top, with the next row below the view.
+    d.scroll_up_at(plan_point, 10);
+    d.settle();
     for (step, wheel) in [("wheel", true), ("keyboard", false)] {
         let pass = d.passes() as u64;
         d.app_mut().sessions.simulate_pending_reveal(&travel_id, pass);
         if wheel {
-            d.scroll_up_at(plan_point, 10);
+            // One notch, short enough that a reveal left pending would win the later draws.
+            d.scroll_up_at(plan_point, 1);
         } else {
             d.press(Key::PageUp);
         }
