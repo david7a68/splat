@@ -2731,6 +2731,22 @@ impl Run {
     /// Undo can take away an encounter group, and these all hold a participant's place.
     fn forget_removed_participants(&mut self) {
         let count = self.state.participants.len();
+        // A draft belongs to its participant: one that left the run takes its words along.
+        let keys: BTreeSet<&str> = self
+            .state
+            .participants
+            .iter()
+            .map(|p| p.key.as_str())
+            .collect();
+        self.effect_fields
+            .retain(|key, _| keys.contains(key.as_str()));
+        if self
+            .effect_open
+            .as_deref()
+            .is_some_and(|key| !keys.contains(key))
+        {
+            self.effect_open = None;
+        }
         if self.selected >= count {
             self.selected = self.current().unwrap_or(0);
         }

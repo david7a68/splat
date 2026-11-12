@@ -7,21 +7,21 @@ use splat::content::overrides::same_condition;
 
 /// A plain condition or label is a string in the run file, as before effects. An effect with a
 /// time, uses or a recharge is one object in the same list.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(untagged)]
 pub(crate) enum Condition {
     Label(String),
     Effect(Effect),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub(crate) struct Effect {
     pub name: String,
     #[serde(flatten)]
     pub time: Time,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(untagged)]
 pub(crate) enum Time {
     /// `left` is the number of this participant's turns that it still covers, with the

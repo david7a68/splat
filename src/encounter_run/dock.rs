@@ -650,5 +650,12 @@ mod tests {
             run.borrow_mut().run_command(Command::Next);
             run.borrow_mut().select(1);
         }
+        // A draft whose participant left the run goes with it.
+        run.borrow_mut()
+            .effect_fields
+            .insert("gone".into(), crate::design::AddField::default());
+        run.borrow_mut().forget_removed_participants();
+        assert!(!run.borrow().effect_fields.contains_key("gone"));
+        assert!(run.borrow().effect_fields.contains_key(&key));
     }
 }

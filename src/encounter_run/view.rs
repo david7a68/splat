@@ -90,25 +90,27 @@ fn other_effect_add() -> Action<'static> {
     Action::secondary("Add").density(Density::Read)
 }
 
-/// The field that adds an other effect, and its Add. True when the DM adds the typed words.
+/// The field that adds an other effect, and its Add. True when the DM adds the typed words;
+/// then the field's response.
 pub(crate) fn other_effect_field(
     ui: &mut egui::Ui,
     text: &mut String,
     width: f32,
     focus: bool,
-) -> bool {
+) -> (bool, egui::Response) {
     ui.horizontal(|ui| {
         let response = design::text_input(ui, "Other effect", text, "Other effect…", width);
         if focus {
             response.request_focus();
         }
         let enter = response.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
-        (other_effect_add()
+        let added = (other_effect_add()
             .blocked_if(text.trim().is_empty(), "Type an effect first.")
             .show(ui)
             .clicked()
             || enter)
-            && !text.trim().is_empty()
+            && !text.trim().is_empty();
+        (added, response)
     })
     .inner
 }
@@ -2061,7 +2063,12 @@ impl Run {
                 let focus = std::mem::take(&mut self.focus_other_effect);
                 // The participant's one draft: the dock's field shows the same words.
                 let draft = self.effect_fields.entry(p.key.clone()).or_default();
-                if other_effect_field(ui, &mut draft.words, width, focus) {
+                let (add, field) = other_effect_field(ui, &mut draft.words, width, focus);
+                // Escape clears the participant's draft, as in the dock's field.
+                if field.lost_focus() && ui.input(|i| i.key_pressed(Key::Escape)) {
+                    draft.words.clear();
+                }
+                if add {
                     // Typed as a level, it is still the one Exhaustion a creature has.
                     // Words with a time go through the one reader, which keeps the level.
                     let typed = draft.words.trim().to_owned();
@@ -6684,7 +6691,7 @@ pub(super) fn row_words_for_test(p: &Participant) -> String {
 }
 
 /// How much height a row may use.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq)]
 enum RowFit {
     Natural,
     /// The list needs the height, so a row gives up its padding too.
@@ -6723,9 +6730,111 @@ fn even_height(heights: &[f32], room: f32, cap: f32) -> f32 {
 /// The fixed columns of a run row, and its second line, which grows rather than cuts.
 const PICTURE_GAP: f32 = 6.0;
 
-/// Each row's choice of effects and save DC, by what it depends on: `RowLayout::fitted`.
+/// Each row's finished layout, by the hash of its whole input: `RowLayout::fitted`.
 #[derive(Clone, Default)]
-struct FitCache(std::collections::HashMap<u64, (EffectPart, Option<u32>)>);
+struct RowCache(std::collections::HashMap<u64, RowLayout>);
+
+#[cfg(test)]
+thread_local! {
+    /// How often `fitted` was asked for a row, and how often a row was laid out.
+    static ROW_FITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static ROW_LAYOUTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// What a row's layout shows of its participant: every word and state it reads.
+#[derive(Clone, Hash)]
+struct RowWords {
+    name: String,
+    side: String,
+    hp_word: Option<(&'static str, &'static str, egui::Color32)>,
+    present: bool,
+    initiative: bool,
+    concentration: bool,
+    conditions: Vec<super::Condition>,
+    /// `as <name>`: the stat block an NPC uses.
+    as_name: Option<String>,
+    /// The changed stats' bonuses, when the encounter or group changed the creature.
+    bonuses: Option<Vec<String>>,
+    loot: bool,
+}
+
+impl RowWords {
+    fn of(p: &Participant) -> Self {
+        Self {
+            name: p.name.clone(),
+            side: p.side.clone(),
+            hp_word: hp_word(p),
+            present: p.present,
+            initiative: p.initiative.is_some(),
+            concentration: p.concentration,
+            conditions: p.conditions.clone(),
+            as_name: p.npc_identity().then(|| p.definition.name.clone()),
+            bonuses: p
+                .changes
+                .as_ref()
+                .filter(|_| p.stat_changes())
+                .map(|changes| changes.overrides.table_bonuses(&changes.base)),
+            loot: p.loot_ready(),
+        }
+    }
+}
+
+/// A row layout's whole input. `RowLayout::measured` reads nothing else, and the hash names
+/// every field, so the cache's key holds all of it.
+struct RowInput {
+    words: RowWords,
+    sync: Option<SyncState>,
+    conc_dc: Option<u32>,
+    scale: RunScale,
+    fit: RowFit,
+    width: f32,
+    longest_name: f32,
+    pixels_per_point: f32,
+}
+
+impl std::hash::Hash for RowInput {
+    fn hash<H: std::hash::Hasher>(&self, hash: &mut H) {
+        let Self {
+            words,
+            sync,
+            conc_dc,
+            scale,
+            fit,
+            width,
+            longest_name,
+            pixels_per_point,
+        } = self;
+        let RunScale {
+            row,
+            name,
+            hp,
+            hp_max,
+            stat,
+            condition,
+            mark,
+            max_width,
+        } = scale;
+        words.hash(hash);
+        sync.hash(hash);
+        conc_dc.hash(hash);
+        fit.hash(hash);
+        for value in [
+            width,
+            longest_name,
+            pixels_per_point,
+            row,
+            name,
+            hp,
+            hp_max,
+            stat,
+            condition,
+            mark,
+            max_width,
+        ] {
+            value.to_bits().hash(hash);
+        }
+    }
+}
 
 /// What a row's second line holds beyond today's words: its effects and a save's DC.
 #[derive(Default)]
@@ -6793,6 +6902,7 @@ fn count_slot(condition: &super::Condition) -> (Vec<(String, egui::Color32)>, Ve
     (parts, forms)
 }
 
+#[derive(Clone)]
 struct RowLayout {
     /// The participant's picture. A row with none shows the first letter of the name.
     art: Option<PathBuf>,
@@ -6903,12 +7013,14 @@ impl RowLayout {
         Self::fitted(ui, width, p, (sync, None), scale, fit, longest_name)
     }
 
-    /// The row's rule of section 1.4. The row is first laid out with no effect and no save DC:
-    /// that gives its lines and its height. The effects then take only the room that is spare
-    /// there, in the first of these forms that keeps both: each effect whole; the first ones
-    /// whole and a count of the rest; the first one's words shortened from their end and a
-    /// count; the count of them all. Else the row shows none, and its hover has them. The save
-    /// DC then takes the room that the effects leave.
+    /// The row's rule of section 1.4, as one rule: the row's height and lines are those of
+    /// the same row with each time taken away (an official condition with a time is that
+    /// condition). The effects then take only the room that is spare there, in the first of
+    /// these forms that keeps both: each effect whole; the first ones whole and a count of the
+    /// rest; the first one's words shortened from their end and a count; the count of them
+    /// all. Else the row shows none, and its hover has them. The save DC then takes the room
+    /// that the effects leave. A finished layout is kept by its whole input, so a frame that
+    /// changes nothing in a row lays it out no more.
     fn fitted(
         ui: &egui::Ui,
         width: f32,
@@ -6918,31 +7030,62 @@ impl RowLayout {
         fit: RowFit,
         longest_name: f32,
     ) -> Self {
+        #[cfg(test)]
+        ROW_FITS.with(|count| count.set(count.get() + 1));
+        let input = RowInput {
+            words: RowWords::of(p),
+            sync,
+            conc_dc,
+            scale,
+            fit,
+            width,
+            longest_name,
+            pixels_per_point: ui.ctx().pixels_per_point(),
+        };
+        let key = {
+            use std::hash::{Hash, Hasher};
+            let mut hash = std::collections::hash_map::DefaultHasher::new();
+            input.hash(&mut hash);
+            hash.finish()
+        };
+        let cache = egui::Id::new("run_row_layouts");
+        if let Some(layout) = ui.data_mut(|data| {
+            data.get_temp_mut_or_default::<RowCache>(cache)
+                .0
+                .get(&key)
+                .cloned()
+        }) {
+            return layout;
+        }
+        let layout = Self::laid_out(ui, &input);
+        ui.data_mut(|data| {
+            let layouts = &mut data.get_temp_mut_or_default::<RowCache>(cache).0;
+            if layouts.len() > 512 {
+                layouts.clear();
+            }
+            layouts.insert(key, layout.clone());
+        });
+        layout
+    }
+
+    /// `fitted`'s work, for its input.
+    fn laid_out(ui: &egui::Ui, input: &RowInput) -> Self {
+        let (scale, conc_dc, conditions) = (input.scale, input.conc_dc, &input.words.conditions);
         let measure = |extra: &Extra| {
             let official = |c: &super::Condition| super::recognized_condition(c.name()).is_some();
-            let plain = p
-                .conditions
+            let plain = conditions
                 .iter()
                 .filter(|c| !c.is_effect() || (extra.official_as_plain && official(c)))
                 .count();
-            Self::measured(
-                ui,
-                width,
-                p,
-                sync,
-                scale,
-                (fit, plain, BonusFit::All, extra),
-                longest_name,
-            )
+            Self::measured(ui, input, (plain, BonusFit::All, extra))
         };
-        // The row as it is with no new words: an official condition that gained a time shows
-        // as the condition it was. Its lines, its height and the conditions it shows stay.
+        // The row with each time taken away: an official condition that gained a time shows
+        // as the condition it is. Its lines, its height and the conditions it shows stay.
         let base = measure(&Extra {
             official_as_plain: true,
             ..Extra::default()
         });
-        let effects: Vec<(usize, &str)> = p
-            .conditions
+        let effects: Vec<(usize, &str)> = conditions
             .iter()
             .enumerate()
             .filter(|(_, c)| c.is_effect())
@@ -6951,51 +7094,7 @@ impl RowLayout {
         if effects.is_empty() && conc_dc.is_none() {
             return base;
         }
-        // The choice depends only on the row's words and state and on the room, so it is made
-        // once for them and kept: a frame lays out the row with no new words, and its choice.
-        let key = {
-            use std::hash::{Hash, Hasher};
-            let mut hash = std::collections::hash_map::DefaultHasher::new();
-            let text = base.second_line.as_ref().map(|line| line.text().to_owned());
-            let words: Vec<_> = p
-                .conditions
-                .iter()
-                .map(|c| (c.words(), c.is_effect()))
-                .collect();
-            let scale_bits = [
-                scale.row,
-                scale.name,
-                scale.condition,
-                scale.mark,
-                scale.stat,
-            ];
-            (&p.name, text, words, format!("{sync:?} {fit:?}"), conc_dc).hash(&mut hash);
-            for value in [width, longest_name, base.height(scale)]
-                .iter()
-                .chain(&scale_bits)
-            {
-                value.to_bits().hash(&mut hash);
-            }
-            hash.finish()
-        };
-        let cache = egui::Id::new("run_row_effects_fit");
-        let chosen = ui.data_mut(|data| {
-            data.get_temp_mut_or_default::<FitCache>(cache)
-                .0
-                .get(&key)
-                .cloned()
-        });
-        let (effects, dc) = chosen.unwrap_or_else(|| {
-            let chosen = Self::choose(ui, &base, &effects, conc_dc, scale, measure);
-            ui.data_mut(|data| {
-                let fits = &mut data.get_temp_mut_or_default::<FitCache>(cache).0;
-                if fits.len() > 512 {
-                    fits.clear();
-                }
-                fits.insert(key, chosen.clone());
-            });
-            chosen
-        });
+        let (effects, dc) = Self::choose(ui, &base, &effects, conc_dc, scale, measure);
         if effects.shown.is_empty() && effects.rest == 0 && dc.is_none() {
             return base;
         }
@@ -7131,14 +7230,22 @@ impl RowLayout {
 
     fn measured(
         ui: &egui::Ui,
-        width: f32,
-        p: &Participant,
-        sync: Option<SyncState>,
-        scale: RunScale,
-        fit_and_count: (RowFit, usize, BonusFit, &Extra),
-        longest_name: f32,
+        input: &RowInput,
+        (condition_count, bonus_fit, extra): (usize, BonusFit, &Extra),
     ) -> Self {
-        let (fit, condition_count, bonus_fit, extra) = fit_and_count;
+        #[cfg(test)]
+        ROW_LAYOUTS.with(|count| count.set(count.get() + 1));
+        // The layout reads only its input: the cache of `fitted` is keyed on all of it.
+        let RowInput {
+            words: w,
+            sync,
+            scale,
+            fit,
+            width,
+            longest_name,
+            ..
+        } = input;
+        let (sync, scale, fit, width, longest_name) = (*sync, *scale, *fit, *width, *longest_name);
         let c = colors();
         // Fixed columns from the left of the numbers. A name stays near its HP.
         // The smallest scale has one set of columns, compressed or not, so that a list that
@@ -7229,15 +7336,15 @@ impl RowLayout {
             }
             start..end
         };
-        if inline_state && let Some((icon, word, color)) = hp_word(p) {
+        if inline_state && let Some((icon, word, color)) = w.hp_word {
             add_parts(&[(&*format!("{icon} {word}"), color)], 0.0);
         }
-        if !p.present {
+        if !w.present {
             add_parts(&[(&*format!("{} Absent", icons::ABSENT), c.muted)], 0.0);
         }
-        let initiative_span = (p.present && p.initiative.is_none())
-            .then(|| add_parts(&[("No initiative", c.accent)], 0.0));
-        if p.concentration {
+        let initiative_span =
+            (w.present && !w.initiative).then(|| add_parts(&[("No initiative", c.accent)], 0.0));
+        if w.concentration {
             add_parts(
                 &[(
                     &*format!("{} Conc", icons::CONCENTRATING),
@@ -7251,7 +7358,7 @@ impl RowLayout {
         let mut condition_spans = Vec::new();
         let mut effect_spans = Vec::new();
         for (at, words) in &extra.effects.shown {
-            let condition = &p.conditions[*at];
+            let condition = &w.conditions[*at];
             let (slot, forms) = count_slot(condition);
             let width = |parts: &[(String, egui::Color32)]| {
                 let text: String = parts.iter().map(|(text, _)| text.as_str()).collect();
@@ -7302,7 +7409,7 @@ impl RowLayout {
             effect_spans.push((EffectAct::Open, usize::MAX, span));
         }
         let official = |c: &super::Condition| super::recognized_condition(c.name()).is_some();
-        let plain: Vec<&super::Condition> = p
+        let plain: Vec<&super::Condition> = w
             .conditions
             .iter()
             .filter(|c| !c.is_effect() || (extra.official_as_plain && official(c)))
@@ -7342,16 +7449,16 @@ impl RowLayout {
                 ),
             ));
         }
-        if !["party", "enemies"].contains(&p.side.as_str()) {
-            add_parts(&[(&*style::human_label(&p.side), c.side.other)], 0.0);
+        if !["party", "enemies"].contains(&w.side.as_str()) {
+            add_parts(&[(&*style::human_label(&w.side), c.side.other)], 0.0);
         }
         // A change is never hidden. What the run cannot apply is on the row, for the roll.
         // A number stays with its word when the line wraps.
-        if p.npc_identity() {
-            add_parts(&[(&*format!("as {}", p.definition.name), c.muted)], 0.0);
+        if let Some(name) = &w.as_name {
+            add_parts(&[(&*format!("as {name}"), c.muted)], 0.0);
         }
         let mut bonus_start = None;
-        if let Some(changes) = p.changes.as_ref().filter(|_| p.stat_changes()) {
+        if let Some(bonuses) = &w.bonuses {
             add_parts(
                 &[(
                     &*format!("{}\u{a0}Changed", icons::CHANGED),
@@ -7359,7 +7466,6 @@ impl RowLayout {
                 )],
                 0.0,
             );
-            let bonuses = changes.overrides.table_bonuses(&changes.base);
             for bonus in bonuses.iter().take(match bonus_fit {
                 BonusFit::None => 0,
                 BonusFit::One => 1,
@@ -7394,7 +7500,7 @@ impl RowLayout {
             }
         }
         // Down, with something to take: the DM rolls it from the card or the ended view.
-        if p.loot_ready() {
+        if w.loot {
             add_parts(&[(&*format!("{}\u{a0}Loot", icons::LOOT), c.accent)], 0.0);
         }
         if inline_state && let Some(sync) = sync {
@@ -7481,17 +7587,13 @@ impl RowLayout {
         let mut second_line =
             (!job.is_empty()).then(|| ui.fonts_mut(|fonts| fonts.layout_job(job.clone())));
         if bonus_fit != BonusFit::None
-            && p.stat_changes()
+            && w.bonuses.is_some()
             && second_line.as_ref().is_some_and(|line| line.rows.len() > 1)
         {
             return Self::measured(
                 ui,
-                width,
-                p,
-                sync,
-                scale,
+                input,
                 (
-                    fit,
                     condition_count,
                     if bonus_fit == BonusFit::All {
                         BonusFit::One
@@ -7500,21 +7602,12 @@ impl RowLayout {
                     },
                     extra,
                 ),
-                longest_name,
             );
         }
         if condition_count > 1
             && (conditions_wrap || second_line.as_ref().is_some_and(|line| line.rows.len() > 1))
         {
-            return Self::measured(
-                ui,
-                width,
-                p,
-                sync,
-                scale,
-                (fit, condition_count - 1, bonus_fit, extra),
-                longest_name,
-            );
+            return Self::measured(ui, input, (condition_count - 1, bonus_fit, extra));
         }
         let mut bar_below_detail = false;
         let mut detail_small = false;
@@ -7545,7 +7638,7 @@ impl RowLayout {
         }
         let mut name = ui.fonts_mut(|fonts| {
             fonts.layout(
-                p.name.clone(),
+                w.name.clone(),
                 Type::Name.sized(ui, scale.name),
                 egui::Color32::PLACEHOLDER,
                 name_width,
@@ -7556,7 +7649,7 @@ impl RowLayout {
         let mut name_cut = false;
         if name.rows.len() > 2 {
             let font = Type::Name.sized(ui, design::RUN_COMPACT.name.min(scale.name));
-            (name, name_cut) = name_lines(ui, &p.name, &font, name_width);
+            (name, name_cut) = name_lines(ui, &w.name, &font, name_width);
         }
         let tight = fit != RowFit::Natural
             && second_line.is_none()
@@ -9192,30 +9285,86 @@ mod tests {
                 // Whole pixels: a form measured alone and the same form in the line can round
                 // apart by one pixel. No word moves more, or to another line.
                 assert!(at.iter().all(|x| (x - at[0]).abs() <= 1.0), "{at:?}");
-                // Review of PR 276, round 1. A time on a condition that shows keeps the row's
-                // height and its words.
-                let mut poisoned = p.clone();
-                poisoned.name = "Guard".into();
-                poisoned.initiative = Some(10);
-                poisoned.hp = poisoned.max_hp;
-                poisoned.temporary_hp = 0;
-                poisoned.conditions = vec![Condition::from("Poisoned")];
-                let mut timed = poisoned.clone();
-                timed.conditions = vec![Condition::read("Poisoned 10 rounds")];
-                for width in [442.0, 596.0] {
-                    for fit in [RowFit::Natural, RowFit::Compressed, RowFit::Summary] {
-                        let scale = design::RUN_COMPACT;
-                        let before = RowLayout::new(ui, width, &poisoned, None, scale, fit, 0.0);
-                        let after = RowLayout::new(ui, width, &timed, None, scale, fit, 0.0);
-                        let words =
-                            |l: &RowLayout| l.second_line.as_ref().map(|g| g.text().to_owned());
-                        assert_eq!(before.height(scale), after.height(scale), "{width} {fit:?}");
-                        assert!(
-                            words(&after).is_some_and(|w| w.contains("Poisoned")),
-                            "{width} {fit:?}: {:?} then {:?}",
-                            words(&before),
-                            words(&after)
-                        );
+                // Rule P, as one rule (reviews of PR 276): a row's height and lines are those of
+                // the same row with each time taken away, where an official condition with a time
+                // is that condition. So no change of a time moves a row: none to a timed effect,
+                // a plain condition given a time, a count down, `time is up`, a time removed.
+                let mut guard = p.clone();
+                guard.name = "Guard".into();
+                guard.initiative = Some(10);
+                guard.hp = guard.max_hp;
+                guard.temporary_hp = 0;
+                let rounds = |words: &str, left: u32| {
+                    let mut timed = Condition::read(words);
+                    if let Condition::Effect(super::super::effect::Effect {
+                        time: Time::Rounds { left: l, .. },
+                        ..
+                    }) = &mut timed
+                    {
+                        *l = left;
+                    }
+                    timed
+                };
+                let states: Vec<Vec<Condition>> = vec![
+                    vec![rounds("Poisoned 10 rounds", 10)],
+                    vec![rounds("Poisoned 10 rounds", 1)],
+                    vec![rounds("Poisoned 10 rounds", 0)],
+                    vec![rounds("Bless 10 rounds", 9)],
+                    vec![rounds("Bless 10 rounds", 0), Condition::from("Prone")],
+                    vec![
+                        Condition::read("Wis save DC 15 (Hold Person) on its turn"),
+                        rounds("Frightened 3 rounds", 2),
+                        Condition::from("Prone"),
+                    ],
+                    vec![
+                        Condition::read("Legendary actions 3 uses"),
+                        Condition::read("Fire Breath recharge 5-6"),
+                    ],
+                ];
+                let official =
+                    |c: &Condition| super::super::recognized_condition(c.name()).is_some();
+                for state in &states {
+                    let mut timed = guard.clone();
+                    timed.conditions = state.clone();
+                    let mut untimed = guard.clone();
+                    untimed.conditions = state
+                        .iter()
+                        .filter(|c| !c.is_effect() || official(c))
+                        .map(|c| Condition::from(c.name()))
+                        .collect();
+                    for width in [300.0, 442.0, 596.0, 900.0] {
+                        for scale in [design::RUN_COMPACT, design::RUN_REGULAR] {
+                            for fit in [RowFit::Natural, RowFit::Compressed, RowFit::Summary] {
+                                let with = RowLayout::new(ui, width, &timed, None, scale, fit, 0.0);
+                                let without =
+                                    RowLayout::new(ui, width, &untimed, None, scale, fit, 0.0);
+                                let rows = |l: &RowLayout| {
+                                    l.second_line.as_ref().map_or(0, |g| g.rows.len())
+                                };
+                                let words = |l: &RowLayout| {
+                                    l.second_line.as_ref().map(|g| g.text().to_owned())
+                                };
+                                assert_eq!(
+                                    with.height(scale),
+                                    without.height(scale),
+                                    "{width} {fit:?} {:?}: {:?} / {:?}",
+                                    scale.row,
+                                    words(&without),
+                                    words(&with)
+                                );
+                                assert!(rows(&with) <= rows(&without).max(1));
+                                // An official condition that shows without its time still shows.
+                                for name in state.iter().filter(|c| official(c)).map(|c| c.name()) {
+                                    if words(&without).is_some_and(|w| w.contains(name)) {
+                                        assert!(
+                                            words(&with).is_some_and(|w| w.contains(name)),
+                                            "{width} {fit:?}: {name} in {:?}",
+                                            words(&with)
+                                        );
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
                 let mut prone = p.clone();
@@ -9331,6 +9480,74 @@ mod tests {
                 }
             });
         });
+    }
+
+    /// Reviews of PR 276: a frame that changes nothing in a row lays it out no more, also
+    /// across the roster's passes and a resize back to a width it had; a change of the row's
+    /// input, here the same words with another kind of time, lays it out again and shows the
+    /// new words. The work is counted inside `RowLayout::measured`.
+    #[test]
+    fn a_row_is_laid_out_again_only_when_its_input_changes() {
+        use super::super::Condition;
+        use crate::test_support::{CachedWork, Counts};
+        let mut run = super::super::tests::run();
+        for (index, total) in [20, 15, 10].into_iter().enumerate() {
+            run.apply(Command::Initiative(index, Some(total))).unwrap();
+        }
+        run.apply(Command::Begin).unwrap();
+        run.state.participants[0].conditions = vec![Condition::read("Bless 2 rounds")];
+        run.state.participants[1].conditions = vec![Condition::read("Frightened 10 rounds")];
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let frame = |run: &mut Run, width: f32| -> Vec<String> {
+            let mut lines = Vec::new();
+            let _ = ctx.run(egui::RawInput::default(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    // The roster's three passes; the natural one's words are the ones read.
+                    for fit in [RowFit::Summary, RowFit::Compressed, RowFit::Natural] {
+                        let layouts = run.roster_layouts(ui, width, design::RUN_REGULAR, fit);
+                        lines = layouts
+                            .iter()
+                            .map(|layout| {
+                                layout
+                                    .second_line
+                                    .as_ref()
+                                    .map_or_else(String::new, |line| line.text().to_owned())
+                            })
+                            .collect();
+                    }
+                });
+            });
+            lines
+        };
+        let counts = |_: &mut Run| Counts {
+            reached: ROW_FITS.with(std::cell::Cell::get),
+            work: ROW_LAYOUTS.with(std::cell::Cell::get),
+        };
+        let shows =
+            |lines: &[String], words: &str| lines.iter().any(|line| line.starts_with(words));
+        let check = CachedWork::start("Run row layout", &mut run, counts);
+        frame(&mut run, 442.0);
+        let lines = frame(&mut run, 900.0);
+        check
+            .warm(&mut run, shows(&lines, "Bless 2"), 3)
+            .expect("row-layout-warm");
+        check
+            .steady(&mut run, |run| {
+                let mut lines = Vec::new();
+                for width in [900.0, 900.0, 442.0, 900.0] {
+                    lines = frame(run, width);
+                }
+                shows(&lines, "Bless 2")
+            })
+            .expect("row-layout-steady");
+        check
+            .refresh(&mut run, 1, |run| {
+                run.state.participants[0].conditions = vec![Condition::read("Bless 2 on its turn")];
+                let lines = frame(run, 900.0);
+                lines.iter().any(|line| line == "Bless 2")
+            })
+            .expect("row-layout-refresh");
     }
 
     #[test]
@@ -11283,6 +11500,28 @@ mod tests {
         assert_eq!(
             run.borrow().state.participants[0].conditions,
             ["Exhaustion (5) 8".to_string()]
+        );
+        // Escape in `Other effect…` clears the participant's draft, as in the dock's field.
+        harness.get_by_label("Other effect").click();
+        harness.run_steps(1);
+        harness.get_by_label("Other effect").type_text("Haste");
+        harness.run_steps(1);
+        let key = run.borrow().state.participants[0].key.clone();
+        assert_eq!(
+            run.borrow()
+                .effect_fields
+                .get(&key)
+                .map(|f| f.words.clone())
+                .as_deref(),
+            Some("Haste")
+        );
+        harness.key_press(Key::Escape);
+        harness.run_steps(2);
+        assert!(
+            run.borrow()
+                .effect_fields
+                .get(&key)
+                .is_none_or(|f| f.words.is_empty())
         );
     }
 
