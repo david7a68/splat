@@ -308,7 +308,6 @@ pub fn log_from_play(d: &mut Driver<'_>) {
         }),
         "Beside long words, Add to Log is a line of the scene's menu, not on its row",
     );
-    d.state("done-scene-menu", Sizes::Default);
     d.press(Key::Escape);
 
     // From a done scene on the row: Lookup opens on the entry with the field and its stamp,
