@@ -2894,29 +2894,54 @@ pub mod campaign_content {
         const A_DISCARDED: &str = "Broken.md draft discarded.";
         const B_DISCARDED: &str = "Cracked.md draft discarded.";
         const A_MESSAGE: &str = "Notes/Broken.md cannot be read";
-        let b_top = |d: &Driver<'_>| d.place_of(&b_editor).map(|rect| rect.top());
-        let a_draft = d.field_text(&a_editor).unwrap_or_default();
+        const A_PATH: &str = "Notes/Broken.md";
+        const B_PATH: &str = "Notes/Cracked.md";
+        let draft = |d: &mut Driver<'_>, path: &str| {
+            d.app_mut()
+                .campaign_content
+                .repair_draft(path)
+                .map(str::to_owned)
+        };
+        // The package list against B's save row, the last repair's: a message in the page's
+        // flow (as the old message space below each save row was) would move it; the page's
+        // scroll and A's editor height do not.
+        let b_top = |d: &Driver<'_>| {
+            let save = d
+                .nodes()
+                .into_iter()
+                .filter(|node| node.name == "Save repaired note")
+                .map(|node| node.rect.bottom())
+                .reduce(f32::max)?;
+            let list = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name.starts_with("D&D 2024"))?
+                .rect
+                .top();
+            Some(list - save)
+        };
+        let listed = |d: &Driver<'_>, words: &str| footer_with(d, words).is_some();
+        let a_draft = draft(d, A_PATH);
         let before = b_top(d);
         d.click_below(A_MESSAGE, "Discard");
-        let a_discarded = d.field_text(&a_editor) != Some(a_draft.clone());
+        let a_discarded = a_draft.is_some() && draft(d, A_PATH) != a_draft;
         let after_a = b_top(d);
+        let b_draft = draft(d, B_PATH);
         d.click_below(B_MESSAGE, "Discard");
-        let b_baseline = d.field_text(&b_editor).unwrap_or_default();
-        let both = d.visible_text(A_DISCARDED) && d.visible_text(B_DISCARDED);
+        let b_baseline = draft(d, B_PATH);
+        let both = listed(d, A_DISCARDED) && listed(d, B_DISCARDED) && b_baseline != b_draft;
         let after_b = b_top(d);
         d.click("Undo discard of Broken.md");
-        let a_back = d.field_text(&a_editor) == Some(a_draft.clone());
-        let b_kept = d.visible_text(B_DISCARDED)
-            && !d.visible_text(A_DISCARDED)
-            && d.field_text(&b_editor) == Some(b_baseline.clone())
-            && !b_baseline.contains("B again.");
+        let a_back = draft(d, A_PATH) == a_draft;
+        let b_kept =
+            listed(d, B_DISCARDED) && !listed(d, A_DISCARDED) && draft(d, B_PATH) == b_baseline;
         let after_undo = b_top(d);
         d.observe(
             "iter-26-C-two-discards",
             a_discarded && both && a_back && b_kept,
             format!(
-                "A discarded {a_discarded}; both results listed {both}; Undo A restores A \
-                 {a_back}; B's result and discarded state kept {b_kept}"
+                "A discarded {a_discarded}; both results listed and B discarded {both}; Undo A \
+                 restores A {a_back}; B's result and discarded state kept {b_kept}"
             ),
         );
         d.observe(
@@ -2926,8 +2951,8 @@ pub mod campaign_content {
                     .iter()
                     .all(|top| *top == before),
             format!(
-                "B's editor top before {before:?}, after A's discard {after_a:?}, after B's \
-                 {after_b:?}, after Undo A {after_undo:?}"
+                "Package list below B's save row: before {before:?}, after A's discard \
+                 {after_a:?}, after B's {after_b:?}, after Undo A {after_undo:?}"
             ),
         );
         d.click_below(A_MESSAGE, "Discard");

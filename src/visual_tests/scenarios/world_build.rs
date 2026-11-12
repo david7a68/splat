@@ -5268,6 +5268,7 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     d.click("Reload from disk");
     d.expect("Package.md cannot be read (line 4)");
     assert!(!d.has("Find the folder…"));
+    let invalid_tops = package_list_tops(d);
     d.state_prepared("manifest-invalid-campaign", Sizes::All, |d| {
         let open = d.place_of("Open in Library").expect("Safe manifest repair is present");
         let replace = d.place_of("Replace with a basic Package.md").expect("Manifest replacement is present");
@@ -5482,6 +5483,7 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     d.click("Reload from disk");
     d.expect("The package manifest was deleted");
     assert!(!d.has("Find the folder…"));
+    let deleted_tops = package_list_tops(d);
     d.state_prepared("manifest-deleted-campaign", Sizes::All, |d| {
         // Round 23 AE4, outside its scope: a deleted manifest stays a warning.
         let tone = manifest_fault_tone(d, "The package manifest was deleted");
@@ -5530,6 +5532,19 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     );
     d.expect("Package.md was written again.");
     d.expect("Undo write Package.md");
+    // Round 26 FD1: package warnings and results sit in the page's footer, so the package list
+    // keeps one y with an invalid manifest, a deleted one, and the written result with its Undo.
+    let written_tops = package_list_tops(d);
+    d.observe(
+        "iter-26-C-FD1",
+        invalid_tops.iter().all(Option::is_some)
+            && deleted_tops == invalid_tops
+            && written_tops == invalid_tops,
+        format!(
+            "Package list tops at 960, 1200 and 1920: invalid {invalid_tops:?}, deleted \
+             {deleted_tops:?}, written again {written_tops:?}"
+        ),
+    );
     // Round 24 FF5: a missing and a replaced manifest give one result sentence and one Undo, so
     // this capture matches `manifest-replaced-with-undo`. The file above went from missing to
     // written; what differs is only what Undo restores.
@@ -10035,4 +10050,16 @@ pub fn campaign_copy_registered(d: &mut Driver<'_>) {
             && fs::read(copy.join("Campaign.md")).unwrap() == manifest,
         "Undo ends the result and its Undo, and puts the copy's file and the active campaign back",
     );
+}
+
+/// Round 26 FD1: the top of Campaign's package list (its first row) at 960, 1200 and 1920.
+fn package_list_tops(d: &mut Driver<'_>) -> [Option<f32>; 3] {
+    [(960.0, 640.0), (1200.0, 800.0), (1920.0, 1080.0)].map(|size| {
+        d.at_size(size, |d| {
+            d.nodes()
+                .into_iter()
+                .find(|node| node.name.starts_with("D&D 2024"))
+                .map(|node| node.rect.top())
+        })
+    })
 }
