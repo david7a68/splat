@@ -1389,7 +1389,7 @@ pub mod library_navigation {
             crate::content_workspace::patch_fields(&text, &[("splat_reading", Some(reading))])
                 .unwrap();
         let text = format!("{text}\n\n[[Ashfall|Wiki watch spell]]\n\n[[Missing place]]\n");
-        std::fs::write(path, text).unwrap();
+        std::fs::write(&path, text).unwrap();
 
         go_library(d);
         d.open_combo_at(LIBRARY_PACKAGE_DROPDOWN);
@@ -1566,6 +1566,76 @@ pub mod library_navigation {
             "Saved homebrew",
             d.has_containing("silver sword"),
             "The saved homebrew words appear in Read view",
+        );
+
+        // Round 26 review: a copy's result and Undo belong to the file it linked, by package and
+        // path. Package B (Ember Reach) has its own `Rules/Ash Exposure.md` linking the same
+        // campaign-only note. Copy in A, copy in B, Undo A: each reader shows its own result,
+        // A's files come back, and B's copy, link and result stay.
+        let b_folder = d.root.join("modules/ember-reach");
+        std::fs::create_dir_all(b_folder.join("Rules")).unwrap();
+        std::fs::write(
+            b_folder.join("Package.md"),
+            crate::library::note_text("Ember Reach", "package", Some("ember_reach")),
+        )
+        .unwrap();
+        let b_reading = serde_yaml_ng::to_value(serde_json::json!({
+            "title": "Ash Exposure",
+            "summary": "Ember Reach keeps its own rule.",
+            "related": {target.id.to_string(): "Read Captain Varra"}
+        }))
+        .unwrap();
+        let b_path = b_folder.join("Rules/Ash Exposure.md");
+        let b_text = crate::content_workspace::patch_fields(
+            &crate::library::note_text("Ash Exposure", "rule", None),
+            &[("splat_reading", Some(b_reading))],
+        )
+        .unwrap();
+        std::fs::write(&b_path, &b_text).unwrap();
+        let b_module = crate::library::local_module(&b_folder).unwrap();
+        d.app_mut().campaigns.register_module(b_module).unwrap();
+        d.settle();
+        let a_text = std::fs::read_to_string(&path).unwrap();
+        let copies_in = |folder: &std::path::Path| {
+            splat::content::read_directory(folder)
+                .map(|(entries, _)| entries.iter().filter(|e| e.name == "Captain Varra").count())
+                .unwrap_or(0)
+        };
+        let a_folder = d.root.join("modules/ashen-marches");
+        let open_in = |d: &mut Driver<'_>, package: &str| {
+            d.open_combo_at(LIBRARY_PACKAGE_DROPDOWN);
+            d.click(package);
+            d.click_starting("Ash Exposure · ");
+        };
+        open_in(d, MODULE);
+        d.click("Copy Captain Varra to Ashen Marches");
+        d.wait_for_text("Captain Varra copied to Ashen Marches and linked.");
+        open_in(d, "Ember Reach");
+        d.wait_for_text("Ember Reach keeps its own rule.");
+        let a_hidden_in_b = !d.has_containing("copied to Ashen Marches");
+        d.click("Copy Captain Varra to Ember Reach");
+        d.wait_for_text("Captain Varra copied to Ember Reach and linked.");
+        let b_alone = !d.has_containing("copied to Ashen Marches");
+        let b_linked = std::fs::read_to_string(&b_path).unwrap();
+        open_in(d, MODULE);
+        d.wait_for_text("Captain Varra copied to Ashen Marches and linked.");
+        let a_alone = !d.has_containing("copied to Ember Reach");
+        d.click("Undo copy");
+        d.wait_for_text("Captain Varra is in this campaign only.");
+        let a_back = std::fs::read_to_string(&path).unwrap() == a_text && copies_in(&a_folder) == 0;
+        let b_kept = std::fs::read_to_string(&b_path).unwrap() == b_linked
+            && b_linked != b_text
+            && copies_in(&b_folder) == 1;
+        open_in(d, "Ember Reach");
+        d.wait_for_text("Ember Reach keeps its own rule.");
+        let b_result_kept = d.has_containing("Captain Varra copied to Ember Reach and linked.")
+            && d.has("Undo copy");
+        d.observe(
+            "iter-26-L-copy-owner",
+            a_hidden_in_b && b_alone && a_alone && a_back && b_kept && b_result_kept,
+            format!(
+                "Each copy result shows in its own file's reader: A hidden in B {a_hidden_in_b}, B alone {b_alone}, A alone {a_alone}; Undo A restores A {a_back} and keeps B's files {b_kept} and result {b_result_kept}"
+            ),
         );
     }
 }
@@ -4706,6 +4776,38 @@ pub mod empty {
                 .is_some_and(|node| node.rect.width() <= 166.0)
         });
         d.state("no-campaign-entries", Sizes::Default);
+        // Round 26 review: in the empty campaign scope, a create error shows in the pane's
+        // footer, and nothing is written. Cancel ends it.
+        let files = |d: &Driver<'_>| {
+            fn count(dir: &std::path::Path) -> usize {
+                std::fs::read_dir(dir).map_or(0, |entries| {
+                    entries
+                        .flatten()
+                        .map(|entry| {
+                            let path = entry.path();
+                            if path.is_dir() { count(&path) } else { 1 }
+                        })
+                        .sum()
+                })
+            }
+            count(&d.root.join(NEW_FOLDER))
+        };
+        let before = files(d);
+        d.click("New entry");
+        d.type_into("Entry name", "A/B");
+        d.click("Create entry");
+        let error = "Use a name without path separators or line breaks.";
+        let shown = d.visible_text(error);
+        let written = files(d) != before;
+        d.click("Cancel");
+        d.observe(
+            "iter-26-L-empty-scope-error",
+            shown && !written && !d.visible_text(error) && d.has(NO_ENTRIES),
+            format!(
+                "The create error shows in the empty scope ({shown}), nothing is written ({}), and Cancel ends it",
+                !written
+            ),
+        );
         d.begin_task();
         d.click("entry you can use");
         d.expect("Can use");

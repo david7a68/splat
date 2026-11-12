@@ -418,6 +418,29 @@ fn page_error<'a>(footer: &mut design::Footer<'a>, error: Option<&'a str>) {
     }
 }
 
+/// The pane's message footer when it has no reader: below a form, or below the empty state of a
+/// scope with no entries. It holds the page's results and its error. Returns what was pressed.
+fn form_footer(
+    ui: &mut egui::Ui,
+    id: &str,
+    results: &ReaderResults,
+    form_error: Option<&str>,
+    error: Option<&str>,
+) -> ResultPress {
+    let mut pressed = ResultPress::default();
+    let mut footer = design::Footer::new(id, ui.available_width().min(design::READER_MEASURE));
+    if results.any() {
+        let out = &mut pressed;
+        footer.result(results.words(), results.has_undo(), move |ui| {
+            *out = show_results(ui, results);
+        });
+    }
+    page_error(&mut footer, form_error);
+    page_error(&mut footer, error);
+    footer.show(ui);
+    pressed
+}
+
 /// What the DM pressed in the reader's messages in the pane's message footer.
 #[derive(Default)]
 struct ReaderPress {
@@ -428,7 +451,8 @@ struct ReaderPress {
     new_identities: Option<(PathBuf, Vec<String>)>,
     /// The campaign entry to copy into the package.
     copy_dependency: Option<Uuid>,
-    undo_dependency: bool,
+    /// The copy result whose Undo was pressed: its place in `dependency_undos`.
+    undo_dependency: std::cell::Cell<Option<usize>>,
 }
 
 /// The reader's messages that come and go, in the pane's message footer below the body, so the
@@ -444,7 +468,7 @@ fn reader_messages<'a>(
     duplicates: Option<(&'a Loaded, &'a Note, &'a [usize])>,
     draft_reason: Option<&'static str>,
     dependencies: &'a [(Uuid, String, String)],
-    dependency_result: Option<&'a str>,
+    dependency_results: &'a [(usize, String)],
     out: &'a mut ReaderPress,
 ) {
     let ReaderPress {
@@ -467,10 +491,13 @@ fn reader_messages<'a>(
             *heading_undo = design::undo_message(ui, Tone::Success, result, "Undo heading change");
         });
     }
-    if let Some(result) = dependency_result {
-        // Round 25 FF8: the result names the entry and the package, in the button's words.
-        footer.result(result, true, |ui| {
-            *undo_dependency = design::undo_message(ui, Tone::Success, result, "Undo copy");
+    // Round 25 FF8: each result names the entry and the package, in the button's words.
+    for (at, result) in dependency_results {
+        let undo = &*undo_dependency;
+        footer.result(result.as_str(), true, move |ui| {
+            if design::undo_message(ui, Tone::Success, result, "Undo copy") {
+                undo.set(Some(*at));
+            }
         });
     }
     if let Some((words, action, _)) = heading.and_then(|heading| heading.fix.as_ref()) {
@@ -3240,6 +3267,9 @@ pub struct Library {
     new_kind: String,
     new_folder: String,
     new_not_used: bool,
+    /// The New entry form's last create error. It shows in the pane's message footer and ends
+    /// when the form closes, the name changes, or an entry is created.
+    new_error: Option<String>,
     package_not_used: bool,
     focus_package_name: bool,
     package_path: Option<PathBuf>,
@@ -3252,7 +3282,11 @@ pub struct Library {
     /// An entry to read beside the open draft, in Lookup.
     pub peek: Option<Uuid>,
     trail: Trail<Place>,
-    dependency_undo: Option<DependencyUndo>,
+    /// Each `Copy <entry> to <package>` result with its Undo, newest last. A result belongs to
+    /// the file it linked (its package root and path), so a file at the same path in another
+    /// package never shows it. Each ends on its own Undo, or on a reload that finds one of its
+    /// files changed; other copies keep theirs (round 26 review).
+    dependency_undos: Vec<DependencyUndo>,
     selection_undo: Option<SelectionUndo>,
     /// The last reload found a registration file changed, so `Undo package registration` would
     /// refuse. The message stays for its other action; its Undo is blocked with the reason.
@@ -3500,12 +3534,10 @@ impl Library {
         {
             self.identity_undo = None;
         }
-        if self.dependency_undo.as_ref().is_some_and(|undo| {
-            !holds(&undo.root, &undo.path, &undo.after)
-                || !holds(&undo.root, &undo.copied_path, &undo.copied_text)
-        }) {
-            self.dependency_undo = None;
-        }
+        self.dependency_undos.retain(|undo| {
+            holds(&undo.root, &undo.path, &undo.after)
+                && holds(&undo.root, &undo.copied_path, &undo.copied_text)
+        });
         // Its Undo checks the package choices only, so other campaign edits keep it.
         if self.selection_undo.as_ref().is_some_and(|undo| {
             !CampaignDocument::load(&undo.campaign)
@@ -4014,6 +4046,10 @@ impl Library {
         }
     }
     pub fn show(&mut self, ui: &mut egui::Ui, campaigns: &mut Campaigns) {
+        // The New entry form's error ends with the form, however it closed.
+        if !self.new_form {
+            self.new_error = None;
+        }
         self.end_repair_on_owner_change();
         self.end_remove_on_selection();
         ui.ctx().data_mut(|data| {
@@ -4474,6 +4510,20 @@ impl Library {
                     &mut self.search,
                 );
             });
+            // Round 26 review: the page's results and error sit in this pane's footer too, below
+            // the form or the empty state.
+            let results = ReaderResults {
+                page: std::mem::take(&mut self.page_results),
+                ..Default::default()
+            };
+            self.page_pressed = form_footer(
+                ui,
+                "library_form_footer",
+                &results,
+                self.new_form.then_some(self.new_error.as_deref()).flatten(),
+                self.error.as_deref(),
+            )
+            .page;
             if self.new_form {
                 self.new_entry(ui, dirty, campaigns);
             } else {
@@ -4509,6 +4559,8 @@ impl Library {
                     self.scope = Scope::Uses;
                 }
             }
+            let pressed = std::mem::take(&mut self.page_pressed);
+            self.apply_page_press(pressed, campaigns);
             return;
         }
         if !compact && self.disk_change.is_none() {
@@ -5011,20 +5063,14 @@ impl Library {
                         page: std::mem::take(&mut self.page_results),
                         ..Default::default()
                     };
-                    let mut pressed = ResultPress::default();
-                    let mut footer = design::Footer::new(
+                    self.page_pressed = form_footer(
+                        ui,
                         "library_form_footer",
-                        ui.available_width().min(design::READER_MEASURE),
-                    );
-                    if results.any() {
-                        let (pressed, results) = (&mut pressed, &results);
-                        footer.result(results.words(), results.has_undo(), |ui| {
-                            *pressed = show_results(ui, results);
-                        });
-                    }
-                    page_error(&mut footer, self.error.as_deref());
-                    footer.show(ui);
-                    self.page_pressed = pressed.page;
+                        &results,
+                        self.new_form.then_some(self.new_error.as_deref()).flatten(),
+                        self.error.as_deref(),
+                    )
+                    .page;
                 }
                 if self.form {
                     self.package_form(ui, campaigns);
@@ -5791,6 +5837,7 @@ impl Library {
         }
         if ui.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
             self.new_form = false;
+            self.new_error = None;
             return;
         }
         // Where a new entry can go: the campaign, or a package. Never the built-in rules.
@@ -5826,6 +5873,10 @@ impl Library {
             );
             ui.vertical(|ui| {
                 let response = design::text_field(ui, "Entry name", &mut self.new_name, None, None);
+                // The create attempt's error ends when the DM changes the name.
+                if response.changed() {
+                    self.new_error = None;
+                }
                 if std::mem::take(&mut self.focus_new_name) {
                     response.request_focus();
                 }
@@ -5926,11 +5977,12 @@ impl Library {
                     ui.add_space(design::L);
                     if Action::quiet("Cancel").show(ui).clicked() {
                         self.new_form = false;
+                        self.new_error = None;
                     }
                     if create {
                         let name = self.new_name.trim();
                         if name.contains(['/', '\\', '\n', '\r']) || name == "." || name == ".." {
-                            self.error =
+                            self.new_error =
                                 Some("Use a name without path separators or line breaks.".into());
                             return;
                         }
@@ -5988,6 +6040,7 @@ impl Library {
                                 self.draft = text;
                                 self.focus_hp = self.new_kind == "creature";
                                 self.new_name.clear();
+                                self.new_error = None;
                                 self.new_folder.clear();
                                 self.new_form = false;
                                 self.error = used.err().map(|error| {
@@ -6004,7 +6057,7 @@ impl Library {
                                 }
                                 self.content_changed = Some(root);
                             }
-                            Err(e) => self.error = Some(e),
+                            Err(e) => self.new_error = Some(e),
                         }
                     }
                 });
@@ -7094,11 +7147,20 @@ impl Library {
                 .unwrap_or_default(),
             _ => Vec::new(),
         };
-        let dependency_result = self
-            .dependency_undo
-            .as_ref()
-            .filter(|change| choices_in_reader && change.path == note.path)
-            .map(|change| change.result.clone());
+        // The copies this file made, by package root and path, newest first, with their place in
+        // `dependency_undos` for their Undo.
+        let dependency_results: Vec<(usize, String)> = self
+            .dependency_undos
+            .iter()
+            .enumerate()
+            .rev()
+            .filter(|(_, change)| {
+                choices_in_reader
+                    && change.path == note.path
+                    && note.owner.root() == Some(change.root.as_path())
+            })
+            .map(|(at, change)| (at, change.result.clone()))
+            .collect();
         let mut reader_press = ReaderPress::default();
         let no_results = ReaderResults::default();
         // Where the body ends: above the message footer, when the save row has one.
@@ -7321,7 +7383,7 @@ impl Library {
                 Some((self.loaded.as_ref().unwrap(), note, &duplicate_indices)),
                 draft_reason,
                 &dependencies,
-                dependency_result.as_deref(),
+                &dependency_results,
                 &mut reader_press,
             );
             page_error(&mut footer, self.error.as_deref());
@@ -7396,7 +7458,7 @@ impl Library {
                 Some((self.loaded.as_ref().unwrap(), note, &duplicate_indices)),
                 draft_reason,
                 &dependencies,
-                dependency_result.as_deref(),
+                &dependency_results,
                 &mut reader_press,
             );
             page_error(&mut footer, self.error.as_deref());
@@ -7507,7 +7569,7 @@ impl Library {
         let mut open_link = None;
         let mut pressed_link = None;
         let copy_dependency = reader_press.copy_dependency;
-        let undo_dependency = reader_press.undo_dependency;
+        let undo_dependency = reader_press.undo_dependency.get();
         if self.source && self.disk_change.is_none() {
             egui::Frame::new()
                 .fill(colors().well)
@@ -7752,7 +7814,7 @@ impl Library {
             return;
         }
         let reconnect = (|| -> Result<(), String> {
-            if undo_dependency
+            if let Some(at) = undo_dependency
                 && let Some(DependencyUndo {
                     root,
                     path,
@@ -7761,7 +7823,7 @@ impl Library {
                     copied_path,
                     copied_text,
                     ..
-                }) = &self.dependency_undo
+                }) = self.dependency_undos.get(at)
             {
                 let copied = note_path(root, copied_path)?;
                 if fs::read_to_string(&copied)
@@ -7779,7 +7841,7 @@ impl Library {
                     return Err(error.to_string());
                 }
                 self.content_changed = Some(root.clone());
-                self.dependency_undo = None;
+                self.dependency_undos.remove(at);
                 self.stale = true;
             }
             if let Some(id) = copy_dependency
@@ -7821,7 +7883,7 @@ impl Library {
                     let _ = fs::remove_file(package.path.join(&plan.relative));
                     return Err(error);
                 }
-                self.dependency_undo = Some(DependencyUndo {
+                self.dependency_undos.push(DependencyUndo {
                     root: package.path.clone(),
                     path: note.path.clone(),
                     before: note.text.clone(),
@@ -10693,7 +10755,7 @@ mod tests {
         assert!(library.identity_undo.is_none());
 
         // `Undo copy`: the changed file is the copy.
-        library.dependency_undo = Some(DependencyUndo {
+        library.dependency_undos = vec![DependencyUndo {
             root: root.clone(),
             path: paths[0].clone(),
             before: "before".into(),
@@ -10701,11 +10763,11 @@ mod tests {
             copied_path: paths[1].clone(),
             copied_text: fs::read_to_string(root.join(&paths[1])).unwrap(),
             result: String::new(),
-        });
+        }];
         library.forget_changed_undos();
-        assert!(library.dependency_undo.is_some());
+        assert!(!library.dependency_undos.is_empty());
         change_outside(&mut library);
-        assert!(library.dependency_undo.is_none());
+        assert!(library.dependency_undos.is_empty());
 
         // `Undo link update`.
         library.link_edits = vec![LinkResult {
