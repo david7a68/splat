@@ -632,21 +632,22 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     d.begin_task();
     d.click(&short);
     d.expect(&field);
+    // The window is 1200x800 here (the base above).
+    let beside = d
+        .place_of(&format!("{stamp}:"))
+        .zip(d.place_of(&field))
+        .is_some_and(|(label, place)| {
+            label.right() < place.left()
+                && label.bottom() > place.top()
+                && label.top() < place.bottom()
+        });
     d.observe(
         "T18.2",
         d.has("Close Lookup")
             && d.focused_name().as_deref() == Some(field.as_str())
             && d.field_text(&field).as_deref() == Some("")
             && d.visible_text(&format!("{stamp}:"))
-            && d.at_size(DEFAULT, |d| {
-                d.place_of(&format!("{stamp}:"))
-                    .zip(d.place_of(&field))
-                    .is_some_and(|(label, place)| {
-                        label.right() < place.left()
-                            && label.bottom() > place.top()
-                            && label.top() < place.bottom()
-                    })
-            }),
+            && beside,
         "A done scene's Add to Log opens Lookup on its entry with the Log field and the stamp on its line at 1200x800",
     );
     d.type_text(TYPED);
