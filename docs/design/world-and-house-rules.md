@@ -1,8 +1,10 @@
 # World and house rules
 
-Status: partly implemented. World notes, roll tables, NPCs and locations, and the clock are built.
-Trackers (with marks, the Due list and day marks), house rule notes, in play and event types are still
-proposals, and the DM has put them behind the rest. It uses the Heralds of the End notes
+Status: partly implemented. World notes, roll tables, NPCs and locations, and the clock are built. The trackers
+slice between fights is built ([The session cycle](session-cycle.md), P9): house rule notes, in play, trackers with
+instances, quick actions, marks at a value with `for:`, the Due list, the ledger and its Undo, and the Trackers view.
+Day marks, `every`, a tracker's history with **Remove** and the problems list in the note's reader, and a value's
+free-text line are not built yet; event types are still proposals. It uses the Heralds of the End notes
 (`40-59 Campaigns/42 Heralds of the End` in the vault) as its test case. Those notes are early, so
 this design takes their shape and not their numbers.
 
@@ -266,7 +268,7 @@ A **mark** raises a notice when a value rises past it. Marks never act.
 | `tables` | Tables to roll, with a **Roll** button on the notice. A table can name its rolls, `{table: rival_track, for: [Old Guard, Keyring, Convicts]}`: each press rolls for the next name, and the result starts with it |
 | `changes` | Proposed changes, shown on the notice |
 
-The **Due list** holds open notices. Each row names its instance: "Old Guard: First seal". Each row has its words, then
+The **Due list** holds open notices, oldest first. Each row names its instance: "Old Guard: First seal". Each row has its words, then
 one line of actions that ends with **Done**. Proposed `changes` show with a box each, ticked; **Done** applies
 the ticked ones and finishes the notice, as one entry. **Dismiss**, in the row's menu, clears the row and
 applies nothing. A notice
@@ -352,8 +354,10 @@ row shows no time.
   keys are as beside any Lookup view: the letter keys are off.
 - **Repair.** A row for an unknown tracker or word stays in the file and shows in a problems list. The DM fixes
   it with find and replace, because the keys are plain words.
-- **Saving.** The ledger shares `timeline::Book`'s atomic write and external-change checks (`src/timeline.rs:924`),
-  which move to a shared place, and it merges by entry ID with its own code.
+- **Saving.** As built, an act reads `Trackers.md` as it is on disk at the press and writes with the shared atomic
+  write and its outside-change check (`file_batch::apply`). There is no merge: an outside edit stays, and an Undo whose entries changed on disk writes nothing. A save that
+  fails records nothing and keeps nothing: the result line says `Trackers.md was not saved: <reason>. Nothing was
+  recorded.`, and the DM presses again.
 - **The Timeline stays the story.** A race makes dozens of changes, and they do not go on the Timeline unless the DM
   presses **Add to Timeline**.
 

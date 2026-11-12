@@ -1,9 +1,9 @@
 Phase totals
 phase	tasks	transitions	interactions	nav	sub	panel	find	do
 before	8	5	36	5	0	1	9	21
-during	31	9	196	9	2	13	47	125
-after	7	5	21	5	4	0	1	11
-total	46	19	253	19	6	14	57	157
+during	31	9	195	9	2	15	46	123
+after	8	5	22	5	4	0	1	12
+total	47	19	253	19	6	16	56	156
 
 Tasks
 phase	task	transitions	interactions	overhead	path
@@ -28,7 +28,6 @@ during	Fireball hits three enemies: apply half to one, full to two	0	6	3	Run
 during	The table rules that the Fireball missed: undo it	0	1	0	Run
 during	A wolf frightens Oren: mark the condition	0	3	2	Run
 during	What does Frightened do?	0	2	2	Run
-during	A wolf frightens Oren for 10 rounds: give the condition its count	0	4	1	Run
 during	Iselle starts concentrating: mark it	0	2	1	Run
 during	Combat: round 2	0	32	8	Run
 during	Check Iselle's spell save DC and spell list	0	3	3	Run
@@ -40,6 +39,7 @@ during	Combat: round 3	0	32	8	Run
 during	A wolf is dead: take it out of the order	0	2	1	Run
 during	End the fight	1	4	1	Run > Session
 during	Record a short rest	0	2	1	Session
+during	Mark a house rule's number between fights	0	3	2	Session
 during	Next fight: start it, with the party as it stands	1	1	1	Session > Run
 during	Next fight: roll and begin	0	11	0	Run
 during	Next fight: end it after a short exchange	1	3	1	Run > Session
@@ -52,6 +52,7 @@ after	Process the recording and read the summary	0	4	3	Session
 after	Add a suggested event to the timeline	0	1	0	Session
 after	Write the wrap-up in the note	0	4	1	Session
 after	Link the fight in the note	2	6	2	Session > Timeline > Session
+after	Put the fight's rewards in the note	0	1	0	Session
 after	Check the party's HP for next time	1	1	1	Session > Party
 
 Set-up, not counted
@@ -61,6 +62,7 @@ during	save, quit and open the app at the table
 during	a microphone is there
 during	the recorder hears the table
 during	the campaign has a marked road table
+during	the campaign has a house rule note in play
 after	save, quit and open the app after the session
 after	the recording service has its keys
 
@@ -80,10 +82,10 @@ during / Note what the party decides: the words reached the note: true
 during / Check the road for encounters: the journey holds one check: true
 during / Ambush: read the read-aloud text and start the fight: setup shows the read-aloud text: true
 during / Fireball hits three enemies: apply half to one, full to two: one step of undo for all three: true
-during / A wolf frightens Oren for 10 rounds: give the condition its count: the row holds one Frightened, with its count: true
 during / Roll a save for a monster: the roll is beside the amount, with the stat block or sheet in view: true
 during / A player asks what the miller said last session: Lookup finds last session's notes: true
 during / End the fight: after the fight, the page is Session
+during / Mark a house rule's number between fights: the ledger holds the press: true
 during / Next fight: start it, with the party as it stands: Kestrel at the end of the last fight: [Kestrel Dunmoor, party, HP 9/41, Temp 0, AC 15, Initiative 21, Current turn, Bloodied, Poisoned]. At setup of the next: [Kestrel Dunmoor ·  Party · HP 9/41 · AC 15 ·  Bloodied · Poisoned]
 during / The players start a fight you did not plan, and then talk their way out: the improvised run is open: Run
 during / The players start a fight you did not plan, and then talk their way out: closing it comes back to: Session
@@ -92,4 +94,5 @@ during / A fight that nobody planned, with a Bandit from the book, then talk: cl
 after / Stop recording: the app reopened on Session
 after / Review how the fight went: log and final HP: final HP reads in place: true
 after / Link the fight in the note: the note holds the fight's link: true
+after / Put the fight's rewards in the note: the note holds the fight's rewards block: true
 after / Check the party's HP for next time: Kestrel on Party after the evening: [Kestrel Dunmoor · Level 5 Rogue · Per 11 · Ins 11 · HP 9/41 · AC 15 · Poisoned]

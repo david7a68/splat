@@ -87,9 +87,16 @@ pub(super) fn describe(rolls: &[LootRoll]) -> String {
 /// `3`, `3 and 4`, `3, 4 and 1`.
 fn values(found: &[Found]) -> String {
     let words: Vec<String> = found.iter().map(|f| f.value.to_string()).collect();
+    and_list(&words)
+}
+
+/// `a`, `a and b`, `a, b and c`.
+fn and_list<S: std::borrow::Borrow<str>>(words: &[S]) -> String {
     match words.split_last() {
-        Some((last, rest)) if !rest.is_empty() => format!("{} and {last}", rest.join(", ")),
-        _ => words.join(""),
+        Some((last, rest)) if !rest.is_empty() => {
+            format!("{} and {}", rest.join(", "), last.borrow())
+        }
+        _ => words.concat(),
     }
 }
 
@@ -153,32 +160,142 @@ impl Participant {
     }
 }
 
+/// Everyone with loot: the encounter first, then participants in turn order. `prep` is the
+/// run's read-aloud text and notes, whose `## Loot` list is the encounter's.
+fn holders(name: &str, prep: &str, state: &State) -> Vec<Holder> {
+    let mut holders = Vec::new();
+    let own = loot::items(prep);
+    if !own.is_empty() {
+        holders.push(Holder {
+            key: ENCOUNTER.into(),
+            name: name.to_owned(),
+            lines: own,
+            open: true,
+        });
+    }
+    for &index in &state.order {
+        let p = &state.participants[index];
+        let lines = p.loot_lines();
+        if !lines.is_empty() {
+            holders.push(Holder {
+                key: p.key.clone(),
+                name: p.name.clone(),
+                lines,
+                open: p.hp == Some(0),
+            });
+        }
+    }
+    holders
+}
+
+/// One holder's loot as lines for a session note: each roll's results, or the roll with
+/// `(not rolled)`, and words as the note has them. The flag marks a roll not made.
+fn note_lines(state: &State, holder: &Holder) -> Vec<(String, bool)> {
+    let mut out = Vec::new();
+    for (at, line) in holder.lines.iter().enumerate() {
+        match (Loot::parse(line), state.loot.get(&place(&holder.key, at))) {
+            (Loot::Roll { .. }, Some(found)) => {
+                out.extend(found.iter().map(|one| (one.text.clone(), false)));
+            }
+            (Loot::Roll { times, key }, None) => {
+                out.push((format!("{} (not rolled)", plain_roll(times, &key)), true));
+            }
+            (Loot::Text(text), _) => out.push((text, false)),
+        }
+    }
+    out
+}
+
+/// What an ended fight gives its session note (F7), read from its saved run: the creatures
+/// against the party at 0 HP, also one marked absent, and what still stood, each with its XP
+/// when Splat knows it; the characters who were there; and the encounter's loot and each
+/// downed creature's.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) struct Rewards {
+    pub downed: Vec<(String, Option<u64>)>,
+    pub standing: Vec<Option<u64>>,
+    pub characters: usize,
+    pub loot: Vec<String>,
+    /// How many loot rolls were not made.
+    pub not_rolled: usize,
+}
+
+/// The rewards of the run saved at `path`, read now.
+pub(crate) fn rewards(path: &std::path::Path, campaign: uuid::Uuid) -> Result<Rewards, String> {
+    let saved = super::read_saved(path, campaign)?;
+    let state = &saved.state;
+    let mut out = Rewards::default();
+    for p in &state.participants {
+        let xp = crate::difficulty::creature_xp(&p.definition);
+        if p.side.trim() == "party" {
+            let character = crate::difficulty::character_level(&p.definition).is_some();
+            out.characters += usize::from(character && p.present);
+        } else if p.hp == Some(0) {
+            out.downed.push((p.name.clone(), xp));
+        } else if p.present {
+            out.standing.push(xp);
+        }
+    }
+    let prep = super::prep_parts(&saved.setup_details).0;
+    for holder in holders(&saved.name, prep, state)
+        .iter()
+        .filter(|holder| holder.open)
+    {
+        for (line, not_rolled) in note_lines(state, holder) {
+            out.loot.push(line);
+            out.not_rolled += usize::from(not_rolled);
+        }
+    }
+    Ok(out)
+}
+
+impl Rewards {
+    /// The XP line, from the one XP answer (`Scale::weigh`): what it counted, each character's
+    /// share and what still stood, as `XP 400 for 2 at 0 HP · 80 each for 5 · 1 still stood
+    /// (XP 200)`. A creature whose XP Splat does not know is named, and its amount is left out
+    /// of every sum, never counted as zero. With the line: its XP, and the count of those
+    /// awards not known.
+    pub(crate) fn xp_line(&self) -> (String, u64, u64) {
+        let scale = crate::difficulty::Scale::default();
+        let downed = scale.weigh(&[], self.downed.iter().map(|(_, xp)| *xp));
+        let grouped = crate::encounter_run::grouped_number;
+        let known = self.downed.len() as u64 - downed.unknown;
+        let mut line = format!("XP {} for {known} at 0 HP", grouped(downed.xp));
+        if downed.unknown > 0 {
+            let names: Vec<&str> = self
+                .downed
+                .iter()
+                .filter(|(_, xp)| xp.is_none())
+                .map(|(name, _)| name.as_str())
+                .collect();
+            line.push_str(&format!(
+                ". XP not known for {}: enter an award here.",
+                and_list(&names)
+            ));
+            return (line, downed.xp, downed.unknown);
+        }
+        if self.characters > 0 && downed.xp > 0 {
+            line.push_str(&format!(
+                " · {} each for {}",
+                grouped(downed.xp / self.characters as u64),
+                self.characters
+            ));
+        }
+        if !self.standing.is_empty() {
+            let standing = scale.weigh(&[], self.standing.iter().copied());
+            line.push_str(&format!(" · {} still stood", self.standing.len()));
+            if standing.unknown == 0 {
+                line.push_str(&format!(" (XP {})", grouped(standing.xp)));
+            }
+        }
+        (line, downed.xp, 0)
+    }
+}
+
 impl Run {
     /// Everyone with loot: the encounter first, then participants in turn order.
     pub(super) fn holders(&self) -> Vec<Holder> {
-        let mut holders = Vec::new();
-        let own = loot::items(self.prep().0);
-        if !own.is_empty() {
-            holders.push(Holder {
-                key: ENCOUNTER.into(),
-                name: self.name.clone(),
-                lines: own,
-                open: true,
-            });
-        }
-        for &index in &self.state.order {
-            let p = &self.state.participants[index];
-            let lines = p.loot_lines();
-            if !lines.is_empty() {
-                holders.push(Holder {
-                    key: p.key.clone(),
-                    name: p.name.clone(),
-                    lines,
-                    open: p.hp == Some(0),
-                });
-            }
-        }
-        holders
+        holders(&self.name, self.prep().0, &self.state)
     }
 
     /// The roll lines of these holders with no result yet, as `(holder, line)`.
@@ -469,21 +586,8 @@ impl Run {
         let mut out = String::new();
         for holder in holders {
             out.push_str(&format!("**{}**\n", holder.name));
-            for (at, line) in holder.lines.iter().enumerate() {
-                match (
-                    Loot::parse(line),
-                    self.state.loot.get(&place(&holder.key, at)),
-                ) {
-                    (Loot::Roll { .. }, Some(found)) => {
-                        for one in found {
-                            out.push_str(&format!("- {}\n", one.text));
-                        }
-                    }
-                    (Loot::Roll { times, key }, None) => {
-                        out.push_str(&format!("- {} (not rolled)\n", plain_roll(times, &key)));
-                    }
-                    (Loot::Text(text), _) => out.push_str(&format!("- {text}\n")),
-                }
+            for (line, _) in note_lines(&self.state, holder) {
+                out.push_str(&format!("- {line}\n"));
             }
             out.push('\n');
         }

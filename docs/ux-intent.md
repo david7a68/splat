@@ -341,6 +341,24 @@ here, because F8 has T17.)
 
 **Done well:** T20.1 to T20.6.
 
+### W16. Close the evening and open the next
+**Trigger:** the fights are over, or the week between sessions. **Goal:** rewards, what changed in the world, the
+recap and the open threads are where the next step needs them, with nothing typed twice. **Context:** wrap-up.
+**Frequency:** every session. A played fight's row puts its link, its XP and its loot in the session note in one act,
+`Add rewards`; the newest rewards block says whether the next has XP, so a campaign with no XP deletes one line,
+once.
+
+**Done well:** T18.1.
+### W17. Run a house rule's numbers
+**Trigger:** a house rule such as a race clock, a crowd's favour or seals moves between fights. **Goal:** between
+fights, one press records a change, a due notice stays in view, and the history is a file. **Context:** table,
+between fights. **Frequency:** a campaign with house rules, many times a session. A house rule note that the DM
+puts in play shows its trackers in Trackers (Ctrl+T). A press writes one entry to `Trackers.md`; a value that passes
+a mark raises a Due row and the rail's `Due N` on every page; `Done` finishes it. Splat counts and shows; the DM
+rules. In a fight the DM opens Trackers with Ctrl+T, presses, and goes back; the run shows no other tracker part.
+
+**Done well:** T19.1 to T19.4.
+
 ## 3. Information architecture
 
 ### Current model
@@ -384,6 +402,7 @@ simulation is an action on an encounter, because it answers a question about one
   and `Next turn`. One click returns to the run.
 - **Lookup:** one shortcut or click opens search and a reader beside the current page. It does not
   navigate and does not take away the run strip.
+- **Trackers:** Ctrl+T shows the trackers and the Due list in the Lookup panel, and goes back. (T19.1)
 - **Campaign switcher:** always visible. Blocked with a stated reason during a run or draft.
 - **Status:** connection state, and which drafts are unsaved.
 
@@ -572,7 +591,7 @@ reading the code, not from a test run.
 | T4.2 | Cold start to the interrupted turn in ≤ 2, current participant selected | run-resume **new** | cost, state | 4; first row |
 | T4.3 | A player's initiative in ≤ 2. Rows do not move during entry | prep-to-table **new** | cost, state | 3; rows move |
 | T4.4 | Unfinished runs show their encounter, date and status, and come first | encounter-build | state | Fail |
-| T4.6 | An unfinished run appears only in In progress unless Keep in Ready is on, which blocks Start fight there. Its encounter returns to Ready when it ends. Ended runs wait under their session in a collapsed History. Opening one adds nothing to the timeline | encounter-history | state | Fail |
+| T4.6 | An unfinished run appears only in In progress unless Keep in Ready is on, which blocks Start fight there. Its encounter returns to Ready when it ends. Ended runs wait under their session in a collapsed History. Opening one adds nothing to the timeline, and scrolls the list once so its row, the line under Read-only and its whole Final state are in view at 960x640 and 1200x800, also beside an open run (V31) | encounter-history | state | Fail |
 | T4.5 | Setup and live views differ clearly. Live has no setup controls | encounter-run | look | Partly |
 | T5.1 | Creature results show existing CR, HP, and AC | encounter-build | state | Fail |
 | T5.2 | Read a full stat block with the draft open in ≤ 2, without leaving the editor | encounter-build | cost | 5+ |
@@ -580,7 +599,7 @@ reading the code, not from a test run.
 | T5.4 | Creature results stay smooth at about 340 rows | encounter-build | state | Not virtualised |
 | T5.5 | Edit `Run folder` with no draft, click every enabled button: no panic | encounter-build | state | Panic expected |
 | T5.6 | With sync on, the roster shows what the party has now. With it off, the roster says nothing reaches D&D Beyond | encounter-build | state | Fail |
-| T5.7 | The editor's roster line ends with the XP and a word from the rules data, wide and narrow; so do a Ready to run row, a planned fight's row or its opened line, and a group's XP in Arrivals. With no table, sheets or XP it is as today | encounter-build, encounter-difficulty, encounter-groups | state | No route |
+| T5.7 | The editor's roster line ends with the XP and a word from the rules data, wide and narrow; so do a Ready to run row, a planned fight's row or its opened line, and a group's XP in Arrivals. A Ready to run row whose word gives way keeps it in its hover and accessible name. The opened line has one blank on each side of each `·`. With no table, sheets or XP it is as today, except that the opened line says whose XP or level is not known (W1-D2) | encounter-build, encounter-difficulty, encounter-groups | state | No route |
 | T6.1 | Prose line length ≤ 75 characters at 1200x800 and 1920x1080; reader usable at 960x640 | library-browse | view, look | 760 px cap |
 | T6.2 | Back after a link returns to the prior entry and scroll in 1 | library-browse | cost, state | Fail |
 | T6.3 | List scroll at 2,065 rows stays at or below today's median | library-browse | state | 2.3 ms debug |
@@ -605,8 +624,8 @@ reading the code, not from a test run.
 | T11.6 | Process states what is missing, and where audio and words go, before anything is sent. A failure stays in view on every page | session-recording | state | New |
 | T11.7 | A marker reaches the timeline only when the DM adds it. What the second pass changed can be read | session-recording | state | New |
 | T11.8 | A note during a run in ≤ 2, beside the roster, in the session being played | session-notes | cost, view | New |
-| T11.9 | A two-day journey rolls two checks in 1; each is a quoted line of the event in `Timeline.md`, and an older reader keeps a line whose words hold `: `. A shorter length deletes none. A result edited in Obsidian shows its words, and `Clear` removes it | travel-checks **new**, roll-table-author | cost, state | New |
-| T11.10 | A result that names an encounter is planned in 1, and its `Start fight` is next; `In the plan` shows only while that row is to come. With several tables and no earlier choice, `Roll` waits, and the event holds `Checks table:` through a restart. `No checks` takes the block off. With no marked table, the row's menu is as before | travel-checks **new**, session-notes | cost, state | New |
+| T11.9 | A two-day journey rolls two checks in 1; each is a quoted line of the event in `Timeline.md`, and an older reader keeps a line whose words hold `: `. A shorter length deletes none. A result edited in Obsidian shows its words, and `Clear` removes it. The label is above the table menu; the dice words never start a line with `·`. The act's result has one kept line under the table's line, so it moves no field, and on Timeline at 960x640 it is in view after `Roll`. An event without checks takes its **How long** on each key (plain-evening) | travel-checks **new**, roll-table-author, plain-evening, `t11_9_the_dice_words_never_start_a_line_with_the_separator` | cost, state | New |
+| T11.10 | A result that names an encounter is planned in 1, and its `Start fight` is next; `In the plan` shows only while that row is to come. With several tables and no earlier choice, `Roll` waits, and the event holds `Checks table:` through a restart. `No checks` takes the block off. With no marked table, the row's menu is as before. In the open Travel row the checks come before Title and Notes | travel-checks **new**, session-notes | cost, state | New |
 | T14.1 | A plain note reads in Splat, with no change to the file | world | state | New |
 | T14.2 | A link in a note opens the note it names, as in Obsidian | world | state | New |
 | T14.3 | A marked table rolls, with a typed result as well, and its row shows | world | state | New |
@@ -647,6 +666,8 @@ reading the code, not from a test run.
 | T12.9 | Lookup finds words in a session note and keeps the run in view | session-plan | state, view | New |
 | T12.10 | A task line is a scene with a box. A tick changes one character. A plain list line gets no row. The empty plan is as today | session-plan-scenes | cost, state | New |
 | T12.11 | A scene's link opens its entry in Lookup in 1, and `Back` returns to an earlier entry | session-plan-scenes | cost | New |
+| T12.12 | A reader starts a fight in 1, and a scene row's menu in 2. An NPC with no stat block opens the made-up form with its name and focus in HP. After `Close run`, also after a restart, a second `Start fight` starts the same encounter. `Remove…` and `Undo remove encounter` remove and restore an encounter with no saved run; `Removed encounter <name>.` has the success tone | session-plan-scenes, npc-in-lookup, encounter-build | cost, state | New |
+| T18.1 | A fight's loot reaches the note in 1, with its reference and one Undo, and the note shows the block. The row says `In notes`, also after the heading is renamed. The XP line follows the newest block, and no block that exists is changed; an unreadable note stops that search. A made-up NPC at 0 HP gives an XP line that names the award that is not known; the next block still has an XP line, and the sum leaves that award out. A title that fills the row has the action as the last link of the opened row, at the same row height. Undo of one fight's block, after another act, leaves the other act | session-plan, run-loot | cost, state | New |
 | T12.12 | A reader starts a fight in 1, and a scene row's menu in 2. An NPC with no stat block opens the made-up form with its name and focus in HP. After `Close run`, also after a restart, a second `Start fight` starts the same encounter. `Remove…` and `Undo remove encounter` remove and restore an encounter with no saved run | session-plan-scenes, npc-in-lookup, encounter-build | cost, state | New |
 | T12.0 | A creature made the campaign's own in ≤ 7, with no page change. Party compares passive scores with no sheet open. A Library save after an encounter save is not a conflict | session-plan | cost, state | New |
 | T14.2 | A wrong initiative is corrected during combat, as one step of undo, and the current turn stays | session-plan | state | New |
@@ -660,8 +681,8 @@ reading the code, not from a test run.
 | T17.2 | An ended fight has one control that takes the ending away: Undo while the ending is the newest step, otherwise Continue fight. Play returns to the turn the fight ended on in 1, and Undo puts the ending back with its loot | run-continue | cost, state | New |
 | T17.3 | A closed, ended fight that was played last goes on in ≤ 2 from History and in ≤ 3 from the plan's played row | run-continue | cost, state | New |
 | T17.4 | After Continue fight, Timeline, the plan row and the Encounters lists show a live fight. After Undo, and after a second ending, they show an ended one. Close run puts the last result in `Timeline.md` at once | run-continue | state | New |
-| T17.5 | A run whose saved Undo steps cannot be read opens on its turn, says so once, and Undo starts again | run-continue | state | New |
-| T17.6 | The ended view, the History row, the sentence that stands where Continue fight would be, and the unread-steps message are whole with Lookup open and closed at 960x640, and none of their actions closes or changes Lookup | run-continue | view, state | New |
+| T17.5 | A run whose saved Undo steps cannot be read opens on its turn, says so once, in the run's message footer, and Undo starts again | run-continue | state | New |
+| T17.6 | The ended view, the History row, the sentence that stands where Continue fight would be, and the unread-steps message are whole with Lookup open and closed at 960x640, and none of their actions closes or changes Lookup. Beside Continue fight or its reason, the ended header's Undo keeps its target, on the second line where the title's line has no room for it. In History the line under Read-only is `S` below it and `M` above Final state | run-continue | view, state | New |
 | T17.7 | After Continue fight, End encounter starts with the outcome of the ending that Continue removed, selected: Enter keeps it and typing replaces it | run-continue | state | New |
 | T17.8 | Continue fight is offered only for the fight that was played last. After a later fight or long rest, and while `Timeline.md` cannot be read, the ended view and History offer no Continue fight and say why in its place. When that is no longer so, the control is back | run-continue | state | New |
 | T20.1 | An effect with a count joins a row in 3 by the key and in 4 by the pointer beside Lookup; focus returns to Amount. With the longest name the dock has no `Effect`, and the name keeps its size and words; `E` adds the effect through the Conditions tab's field in 4. `Effect` shows its key only while the key works | run-effects, run-long-names, encounter-run | cost, state | New |
@@ -670,6 +691,10 @@ reading the code, not from a test run.
 | T20.4 | Case D: a conflict on a 16-letter name and three reminders that start with the same words keep the notice line's order, and the reminders take only the room between Review and Undo. No row changes its height for its effects, and a count's slot moves no word | run-effects, run-sync-conflict | view, state | New |
 | T20.5 | A use is spent in 1 and a spent recharge rolls in 1, on the row, each as one named Undo step. A counted condition's name opens its rule, and its count opens Conditions | run-effects | cost, state | New |
 | T20.6 | Damage to a `Conc` row adds its save DC at the end of its second line until the next step, with no action, notice or new line, and only in the room the effects leave | run-effects | state | New |
+| T19.1 | Ctrl+T opens Trackers in Lookup, and Ctrl+T again shows what Lookup showed: an entry, a found note, or nothing. `Back` returns to the entry Lookup held. Ctrl+K opens Lookup on what it showed last, also on Trackers | trackers, run-lookup, nav-state | keys, state | New |
+| T19.2 | A quick action takes 1, also on an instance's line. `Undo` steps back through the acts of the session being played, also after a restart. The opposite action corrects a value in 1. `Add to Timeline` makes a Major event with the act's label, with `Undo add` | trackers | cost, state | New |
+| T19.3 | A value that passes a mark raises a Due row above the trackers and the rail's count, on every page. The Run page shows no tracker part except the rail's count. With no house rule note in play the rail says nothing | trackers, run-lookup | state | New |
+| T19.4 | Case D, beside the Session page: three notices with four rolls and the result line are in view with no scroll | trackers | view | New |
 | G1 | Every disabled control states why, in text or a working tooltip | all | state | Fail |
 | G2 | Go through every top-level page and back: each page restores section 3 state | nav-state **new** | state | Fail |
 | G3 | No dead nav items | nav-state **new** | state | Fail |

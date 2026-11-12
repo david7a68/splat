@@ -62,7 +62,7 @@ type Script = fn(&mut Driver<'_>);
 
 const DEFAULT_JOBS: usize = 4;
 
-const SCENARIOS: [(&str, Seed, Script); 87] = [
+const SCENARIOS: [(&str, Seed, Script); 88] = [
     ("file-formats", Seed::Formats, scenarios::file_formats::run),
     ("stat-formats", Seed::Formats, scenarios::stat_formats::run),
     ("data-integrity", Seed::Campaign, scenarios::integrity::run),
@@ -397,6 +397,7 @@ const SCENARIOS: [(&str, Seed, Script); 87] = [
         Seed::Campaign,
         scenarios::session_plan_scenes::run,
     ),
+    ("trackers", Seed::Campaign, scenarios::trackers::run),
 ];
 
 impl crate::Splat {
@@ -408,6 +409,7 @@ impl crate::Splat {
             || self.encounters.busy()
             || self.party.busy()
             || self.lookup.busy()
+            || self.art.busy()
             || self.dndbeyond.busy()
             || self.sessions.busy()
             || self.copy_dialog.as_ref().is_some_and(|d| d.busy())
@@ -674,8 +676,9 @@ fn run_scenarios(
     let next = std::sync::atomic::AtomicUsize::new(0);
     let results = std::sync::Mutex::new(Vec::from_iter(scenarios.iter().map(|_| None)));
     std::thread::scope(|scope| {
+        let mut workers = Vec::new();
         for _ in 0..jobs.min(scenarios.len()) {
-            scope.spawn(|| {
+            workers.push(scope.spawn(|| {
                 loop {
                     let index = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     let Some(&scenario) = scenarios.get(index) else {
@@ -688,7 +691,16 @@ fn run_scenarios(
                     results.lock().unwrap_or_else(|e| e.into_inner())[index] =
                         Some((scenario.0, outcome));
                 }
-            });
+            }));
+        }
+        // A scope can end before its threads have exited. A worker's render device is
+        // thread-local: it drops as the thread exits, and the Vulkan loader then unloads the
+        // driver. The process must not exit before that is over, or an exit handler can run
+        // in a driver that is being unloaded (SIGSEGV). `join` waits for the whole exit.
+        for worker in workers {
+            worker
+                .join()
+                .expect("a worker catches each scenario's panic");
         }
     });
     results

@@ -98,6 +98,7 @@ impl Run {
                     command = self.effect_line(ui, index);
                     return;
                 }
+                let widest = self.widest_name(ui);
                 let p = &self.state.participants[index];
                 let death_saves = self.hide_panel && p.hp == Some(0);
                 let conditions_key = if self.lookup_open { "" } else { "C" };
@@ -132,22 +133,40 @@ impl Run {
                 let effect_word = Self::effect_action(effect_key).natural_width(ui);
                 let effect_icon = Density::Read.control();
                 let mut effect = EffectFit::None;
-                // Left to right: the name, then exactly `L`, then its controls. The controls'
-                // width only limits how long a name may be.
+                // SL1: in a narrow dock the dice total has a reserved place at the line's end,
+                // under the dice and Roll, so it never joins the selected name.
+                let result_slot = if narrow {
+                    design::number_width(
+                        ui,
+                        &format!("{} 888", icons::DICE),
+                        &Type::Strong.font(ui),
+                    ) + gap
+                } else {
+                    0.0
+                };
+                // FK1: the name slot has one width for the whole fight: the widest roster name
+                // in `Heading` (`widest_name`), at most `12 × L`, so Conditions, Conc and Absent
+                // keep one x whichever row is selected.
+                // Left to right: the name slot, then exactly `L`, then its controls. The
+                // controls' width only limits how wide the slot may be.
                 ui.horizontal(|ui| {
                     ui.set_min_height(height);
-                    if narrow && let Some((total, line)) = self.dock_roll() {
-                        ui.label(Type::Strong.rich(ui, format!("= {total}")))
-                            .on_hover_text(line);
-                    }
-                    let room = ui.available_width() - controls - design::L;
-                    let (role, shown) = dock_name_shown(ui, &p.name, room);
+                    let room = ui.available_width() - controls - design::L - result_slot;
+                    let slot = widest.min(12.0 * design::L).min(room).max(0.0);
+                    let (role, shown) = dock_name_shown(ui, &p.name, slot);
                     // A name that lost a word or its size has no room to give.
                     let whole = role == Type::Heading && shown == p.name;
-                    let response = ui
-                        .label(role.rich(ui, shown).color(c.text))
-                        .on_hover_text(&p.name);
-                    design::named(ui, &response, &format!("Selected: {}", p.name));
+                    ui.allocate_ui_with_layout(
+                        vec2(slot, height),
+                        Layout::left_to_right(Align::Center),
+                        |ui| {
+                            ui.set_width(slot);
+                            let response = ui
+                                .label(role.rich(ui, shown).color(c.text))
+                                .on_hover_text(&p.name);
+                            design::named(ui, &response, &format!("Selected: {}", p.name));
+                        },
+                    );
                     ui.add_space(design::L - gap);
                     if Action::quiet("Conditions")
                         .density(Density::Read)
@@ -194,10 +213,10 @@ impl Run {
                     {
                         command = Some(Command::Presence(index, !p.present));
                     }
-                    // `Effect` takes only the room that is spare after Absent, `L` after it, so
-                    // no control of the line moves and the name keeps all its room: with its
-                    // word, else with its icon, else not at all.
-                    let spare = ui.available_width() - design::L + gap;
+                    // `Effect` takes only the room that is spare after Absent, `L` after it and
+                    // short of the dice total's place, so no control of the line moves and the
+                    // name keeps all its room: with its word, else with its icon, else not at all.
+                    let spare = ui.available_width() - design::L + gap - result_slot;
                     if running && whole && spare >= effect_word {
                         effect = EffectFit::Word;
                     } else if running && whole && spare >= effect_icon {
@@ -214,6 +233,20 @@ impl Run {
                         }
                         EffectFit::None => false,
                     };
+                    if narrow {
+                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                            if let Some((total, line)) = self.dock_roll() {
+                                let response = ui
+                                    .label(
+                                        Type::Strong
+                                            .rich(ui, format!("{} {total}", icons::DICE))
+                                            .color(c.text),
+                                    )
+                                    .on_hover_text(&line);
+                                design::named(ui, &response, &format!("Rolled {total}"));
+                            }
+                        });
+                    }
                 });
                 in_dock = effect != EffectFit::None;
             });
@@ -304,24 +337,15 @@ impl Run {
         command
     }
 
-    /// In place of the one row's actions: how many take this amount, and how to give half. The
-    /// choice is on each row, so that any number of targets stays in view.
+    /// In place of the one row's actions: how to give half. The choice is on each row, so that
+    /// any number of targets stays in view. FK5: the words show the mark that the rows paint
+    /// (`icons::OK`), and leave the count to the panel's hint, so it shows once.
     fn target_words(&self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             ui.set_min_height(28.0);
             ui.add(
-                egui::Label::new(
-                    Type::Small
-                        .rich(
-                            ui,
-                            format!(
-                                "{} targets. Press a row’s mark for half, rounded down.",
-                                self.targets().len()
-                            ),
-                        )
-                        .color(colors().muted),
-                )
-                .truncate(),
+                egui::Label::new(Type::Small.rich(ui, target_hint()).color(colors().muted))
+                    .truncate(),
             );
         });
     }
@@ -377,6 +401,34 @@ impl Run {
     }
 
     /// The dice field's last roll, beside it.
+    /// The widest roster name in the dock's `Heading` (FK1). Measured again only after a step
+    /// or an Undo (`revision`, which a rename is), a roster of another size, or another type
+    /// size; an unchanged frame reads the kept width.
+    fn widest_name(&mut self, ui: &egui::Ui) -> f32 {
+        let heading = Type::Heading.font(ui);
+        let key = (
+            self.revision,
+            self.state.participants.len(),
+            heading.size.to_bits(),
+        );
+        if let Some((_, width)) = self.widest_name.filter(|(at, _)| *at == key) {
+            return width;
+        }
+        #[cfg(test)]
+        {
+            let (a, b, c) = super::view::PREPARED.with(std::cell::Cell::get);
+            super::view::PREPARED.with(|count| count.set((a, b, c + 1)));
+        }
+        let width = self
+            .state
+            .participants
+            .iter()
+            .map(|p| design::number_width(ui, &p.name, &heading))
+            .fold(0.0_f32, f32::max);
+        self.widest_name = Some((key, width));
+        width
+    }
+
     fn dock_roll(&self) -> Option<(i64, String)> {
         let rolled = self.dock_roll.as_ref()?;
         Some((rolled.total, rolled.line()))
@@ -413,6 +465,14 @@ impl Run {
             response.request_focus();
         }
     }
+}
+
+/// The dock's words while several rows are targets: the mark the rows paint, and what it does.
+pub(super) fn target_hint() -> String {
+    format!(
+        "Press a target’s {} to give it half, rounded down.",
+        icons::OK
+    )
 }
 
 #[cfg(test)]

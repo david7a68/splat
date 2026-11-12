@@ -11,6 +11,7 @@ use crate::encounter_settings::{Grouping, Initiative};
 pub(crate) use ad_hoc::RunCreature;
 pub(crate) use effect::Condition;
 use eframe::egui;
+pub(crate) use loot::rewards;
 use serde::{Deserialize, Serialize};
 use serde_yaml_ng::{Mapping, Value};
 use splat::content::inspiration::Inspiration;
@@ -314,6 +315,17 @@ impl RunGroup {
         font: &egui::FontId,
         width: f32,
     ) -> String {
+        self.member_summary_fit(ui, font, width).0
+    }
+
+    /// `member_summary_wrapped`, and whether `Will add:` had to stand apart from its first
+    /// member because the two do not fit one line `width` wide (FI8).
+    pub(crate) fn member_summary_fit(
+        &self,
+        ui: &egui::Ui,
+        font: &egui::FontId,
+        width: f32,
+    ) -> (String, bool) {
         let summary = self.member_summary();
         let (lead, members) = match summary.strip_prefix("Will add: ") {
             Some(members) => ("Will\u{a0}add:", members),
@@ -324,7 +336,7 @@ impl RunGroup {
             .map(|member| keep_whole(ui, font, member, width))
             .collect();
         if lead.is_empty() {
-            return members.join(", ");
+            return (members.join(", "), false);
         }
         // FC6: `Will add:` stays on a line with its first member when the two fit one line;
         // only a member too wide for that takes a line of its own.
@@ -332,9 +344,9 @@ impl RunGroup {
         let together = format!("{lead}\u{a0}{first}");
         if crate::design::number_width(ui, &together, font) <= width {
             members[0] = together;
-            members.join(", ")
+            (members.join(", "), false)
         } else {
-            format!("{lead} {}", members.join(", "))
+            (format!("{lead} {}", members.join(", ")), true)
         }
     }
 
@@ -679,8 +691,21 @@ struct State {
     cast: Option<rolling::Cast>,
 }
 /// The state, groups and scale an answer in Arrivals was worked out from: the count of steps
-/// kept or taken back, and the two reads by their address.
-type ArrivalKey = (u64, usize, usize);
+/// kept or taken back, and the revisions of the two reads (never an address, which a freed read
+/// can hand to the next one).
+type ArrivalKey = (u64, u64, u64);
+/// The typed totals' revision, the groups' revision and the run's encounter, for the Arrivals
+/// reasons.
+type ReasonsKey = (u64, u64, Option<Uuid>);
+/// The groups' revision, and the widths and type size a summary was wrapped for.
+type SummaryKey = (u64, u32, u32, u32);
+/// A group's member summary in Arrivals: the wrapped words, and whether they take a full-width
+/// line above Initiative and Add because `Will add:` and its first member do not fit beside them.
+#[derive(Clone)]
+pub(crate) struct ArrivalSummary {
+    pub members: Arc<str>,
+    pub above: bool,
+}
 /// What each group would make the fight, with the XP its members on the other side add.
 pub(crate) type ArrivalWords = BTreeMap<Uuid, (crate::difficulty::Rating, u64)>;
 /// Each carried player's place in the roster, and HP and temporary HP from their sheet.
@@ -702,7 +727,9 @@ pub(crate) struct Run {
     /// The encounter this run came from. Saves from before this was kept have none.
     source: Option<Uuid>,
     /// Recheck only this encounter when its file metadata changes. Never rebuild the catalogue per frame.
-    roster_source: Option<PathBuf>,
+    /// The campaign root and the file's path in it, which the setup file line shows as the
+    /// editor does (`Encounters/Shrine of Cinders.md`, FA11).
+    roster_source: Option<(PathBuf, String)>,
     roster_stamp: Option<(Option<std::time::SystemTime>, u64)>,
     roster_faults: Vec<crate::encounters::RosterFault>,
     /// The roster slot of each unread row, by its participant key, with the row's line, so a
@@ -761,6 +788,27 @@ pub(crate) struct Run {
     /// How often frames asked for the Arrivals words, and how often they were worked out.
     #[cfg(test)]
     pub(crate) arrival_counts: (usize, usize),
+    /// Each Arrivals group's member summary, wrapped for its place, worked out for one read of
+    /// the groups, one width and one type size (FI8). Never saved.
+    arrival_summaries: Option<(SummaryKey, BTreeMap<Uuid, ArrivalSummary>)>,
+    /// Bumped by every edit of `group_totals`, so the Arrivals reasons are read again only then.
+    totals_revision: u64,
+    /// The groups that `groups_revision` counted last. Held, so their allocation is never freed
+    /// and reused while it is compared: a new read is told apart by identity, not by an address.
+    groups_seen: Option<Arc<Vec<Arc<RunGroup>>>>,
+    /// Bumped whenever `groups` is a read other than `groups_seen` (a reload replaces it, also
+    /// while Arrivals is closed). The Arrivals caches are keyed by it.
+    groups_revision: u64,
+    /// The scale that `scale_revision` counted last, held as `groups_seen` is.
+    scale_seen: Option<Arc<crate::difficulty::Scale>>,
+    /// Bumped whenever `scale` is a read other than `scale_seen`.
+    scale_revision: u64,
+    /// The Arrivals reasons for typed totals that cannot be read (FI5), for one
+    /// `totals_revision`, one read of the groups and one encounter. Never saved.
+    arrival_reasons: Option<(ReasonsKey, Arc<[String]>)>,
+    /// The widest roster name in the dock's `Heading`, for one `revision`, roster size and type
+    /// size (FK1). Never saved.
+    widest_name: Option<((u64, usize, u32), f32)>,
     /// Never saved.
     carried: Option<CarriedHp>,
     rest_order: u64,
@@ -1239,6 +1287,14 @@ impl Run {
             arrival_words: None,
             #[cfg(test)]
             arrival_counts: (0, 0),
+            arrival_summaries: None,
+            totals_revision: 0,
+            groups_seen: None,
+            groups_revision: 0,
+            scale_seen: None,
+            scale_revision: 0,
+            arrival_reasons: None,
+            widest_name: None,
             carried: None,
             rest_order: 0,
             armed: None,
@@ -1506,10 +1562,7 @@ impl Run {
     }
     /// The read-aloud text and notes, and the setup's technical details, if a run has them.
     pub(crate) fn prep(&self) -> (&str, Option<&str>) {
-        match self.setup_details.split_once(SETUP_HEADING) {
-            Some((prep, technical)) => (prep.trim(), Some(technical.trim())),
-            None => (self.setup_details.trim(), None),
-        }
+        prep_parts(&self.setup_details)
     }
     fn current(&self) -> Option<usize> {
         (self.state.phase == Phase::Running).then(|| self.state.order[self.state.cursor])
@@ -4037,7 +4090,7 @@ impl Run {
             && let Ok((entries, _)) = splat::content::read_directory(root)
             && let Some(entry) = entries.iter().find(|entry| entry.id == source)
         {
-            self.roster_source = Some(root.join(&entry.path));
+            self.roster_source = Some((root.to_owned(), entry.path.clone()));
             for participant in &self.state.participants {
                 self.roster_names.insert(
                     participant.definition.id.to_string(),
@@ -4062,9 +4115,14 @@ impl Run {
         }
     }
     fn refresh_roster_faults(&mut self) {
-        let Some(path) = &self.roster_source else {
+        let Some(path) = self
+            .roster_source
+            .as_ref()
+            .map(|(root, path)| root.join(path))
+        else {
             return;
         };
+        let path = &path;
         // A moved or deleted encounter file can no longer be repaired here; its old faults
         // must not block Begin. The run's own participants are complete.
         let Ok(metadata) = fs::metadata(path) else {
@@ -4365,6 +4423,14 @@ impl Run {
             arrival_words: None,
             #[cfg(test)]
             arrival_counts: (0, 0),
+            arrival_summaries: None,
+            totals_revision: 0,
+            groups_seen: None,
+            groups_revision: 0,
+            scale_seen: None,
+            scale_revision: 0,
+            arrival_reasons: None,
+            widest_name: None,
             carried: None,
             rest_order: saved.rest_order,
             armed: None,
@@ -4775,6 +4841,14 @@ pub(crate) fn check_saved_text(text: &str) -> Result<(), String> {
     SavedRun::parse(text.as_bytes(), None).map(drop)
 }
 
+/// A run's read-aloud text and notes, and its setup's technical details, if it has them.
+fn prep_parts(setup_details: &str) -> (&str, Option<&str>) {
+    match setup_details.split_once(SETUP_HEADING) {
+        Some((prep, technical)) => (prep.trim(), Some(technical.trim())),
+        None => (setup_details.trim(), None),
+    }
+}
+
 /// A saved run's file, within the size limit.
 fn read_saved(path: &Path, campaign: Uuid) -> Result<SavedRun, String> {
     if fs::metadata(path).map_err(|e| e.to_string())?.len() > 64 * 1024 * 1024 {
@@ -4914,6 +4988,8 @@ impl Run {
             .find(|p| p.name == name)
             .expect("participant in this run");
         participant.name = to.to_owned();
+        // A rename in play is a step, which counts in `revision`.
+        self.revision += 1;
     }
     /// A read of this sheet with the damage it had at the last match, plus `more_damage`. Test
     /// builds have no live sheet, so this goes through the same comparison that a live read does.
@@ -9163,6 +9239,42 @@ mod tests {
         // The ending is the newest step again, so Undo is the one way on, also after a close.
         let dir = tempfile::tempdir().unwrap();
         let campaign = stored(&mut run, dir.path());
+        // F7: what the saved run gives the session note, read from its file: the encounter's
+        // loot and the downed guard's, as Copy loot words them. The guard has no XP that Splat
+        // knows, so it is named, and no amount is counted for it; what stood is not counted.
+        let rewards = loot::rewards(run.path().unwrap(), campaign).unwrap();
+        assert_eq!(
+            rewards.loot,
+            [
+                "30 gp",
+                "2 × gems (not rolled)",
+                "gems (not rolled)",
+                "Iron key",
+                "gems (not rolled)"
+            ]
+        );
+        assert_eq!(rewards.not_rolled, 3);
+        assert_eq!(
+            rewards.xp_line(),
+            (
+                format!(
+                    "XP 0 for 0 at 0 HP. XP not known for {}: enter an award here.",
+                    run.state.participants[1].name
+                ),
+                0,
+                1
+            )
+        );
+        let known = loot::Rewards {
+            downed: vec![("Wolf".into(), Some(200)), ("Wolf 2".into(), Some(200))],
+            standing: vec![Some(200)],
+            characters: 5,
+            ..loot::Rewards::default()
+        };
+        assert_eq!(
+            known.xp_line().0,
+            "XP 400 for 2 at 0 HP · 80 each for 5 · 1 still stood (XP 200)"
+        );
         let mut reopened = close_and_reopen(&mut run, campaign);
         assert_same_undo(&run, &reopened);
         assert!(reopened.undo_continues());

@@ -168,6 +168,27 @@ fn save_bonus(entry: &Entry, ability: &str) -> Option<i64> {
 
 /// How an armed d20 rolls, in words for its hint and rows: `advantage`. `None` for a plain
 /// roll.
+/// The armed hint for an attack the run rolls.
+const ROLL_HINT: &str =
+    "Click a target to roll against it. Enter applies the damage. Escape stops.";
+/// The armed hint for a player's attack: the player rolls, the DM types the damage.
+const PLAYER_HINT: &str = "Click a target, then type the player’s damage. Escape stops.";
+
+/// The longest words an armed hint can say, with the longest roll mode before them. FK4: the
+/// hint keeps their lines, so `Stop` keeps its y in every mode and action.
+fn longest_hint() -> String {
+    let mode = mode_words(Mode::Disadvantage).unwrap_or_default();
+    [
+        ROLL_HINT,
+        PLAYER_HINT,
+        "99 targets. Click more, then roll the damage.",
+    ]
+    .into_iter()
+    .map(|hint| format!("With {mode}. {hint}"))
+    .max_by_key(|hint| hint.chars().count())
+    .unwrap_or_default()
+}
+
 fn mode_words(mode: Mode) -> Option<&'static str> {
     match mode {
         Mode::Advantage => Some("advantage"),
@@ -995,16 +1016,9 @@ impl Run {
                 if self.selected != armed.actor {
                     actions.push(("Roll for them", ArmedAction::RollForThem));
                 }
-                (
-                    "Click a target, then type the player’s damage. Escape stops.".to_owned(),
-                    actions,
-                )
+                (PLAYER_HINT.to_owned(), actions)
             }
-            _ => (
-                "Click a target to roll against it. Enter applies the damage. Escape stops."
-                    .to_owned(),
-                Vec::new(),
-            ),
+            _ => (ROLL_HINT.to_owned(), Vec::new()),
         };
         // The way the d20 rolls leads, so the DM can tell how the next click rolls.
         let status = match mode_words(armed.mode) {
@@ -1015,6 +1029,7 @@ impl Run {
         Some(ArmedView {
             link: armed.link.clone(),
             status,
+            reserve: longest_hint(),
             actions,
         })
     }

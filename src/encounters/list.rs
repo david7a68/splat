@@ -1,7 +1,7 @@
 //! The encounter ledger and its local editor controls.
 use super::*;
 use crate::encounter_run::{FightSummary, SavedRunInfo};
-use std::path::PathBuf;
+use std::path::Path;
 
 pub(super) fn blocked_reason(ui: &mut egui::Ui, reason: Option<&str>) {
     if let Some(reason) = reason {
@@ -218,7 +218,7 @@ pub(super) fn list_row(
     actions: impl FnOnce(&mut egui::Ui),
 ) {
     ui.push_id(id, |ui| {
-        ui.allocate_ui_with_layout(
+        let row = ui.allocate_ui_with_layout(
             egui::vec2(ui.available_width(), Density::Scan.row() + design::S),
             egui::Layout::right_to_left(egui::Align::Center),
             |ui| {
@@ -247,6 +247,11 @@ pub(super) fn list_row(
                             };
                         let visible_detail = fit_detail(ui, detail, &Type::Small.font(ui), room);
                         // F1: the word ends the line only when the detail stays whole with it.
+                        // When it gives way, hover and the accessible name keep it (V7).
+                        let whole = match rating {
+                            Some(rating) => format!("{detail} · {}", rating.word.text()),
+                            None => detail.to_owned(),
+                        };
                         let rating = rating.filter(|rating| {
                             visible_detail == detail
                                 && design::number_width(
@@ -307,20 +312,24 @@ pub(super) fn list_row(
                         }
                         let Some(rating) = rating else {
                             let response =
-                                ui.add(egui::Label::new(job).extend()).on_hover_text(detail);
-                            design::named(ui, &response, &format!("{name} · {detail}"));
+                                ui.add(egui::Label::new(job).extend()).on_hover_text(&whole);
+                            design::row_detail(ui, &response);
+                            design::named(ui, &response, &format!("{name} · {whole}"));
                             return;
                         };
                         let word = rating.word.text();
                         crate::difficulty::append(&mut job, ui, Type::Small, " · ", colors().muted);
                         crate::difficulty::append(&mut job, ui, Type::Small, word, colors().text);
                         let response = ui.add(egui::Label::new(job).extend());
+                        design::row_detail(ui, &response);
                         design::named(ui, &response, &format!("{name} · {detail} · {word}"));
                         crate::difficulty::describe(ui, response, rating);
                     },
                 );
             },
         );
+        // The row registers its rect, so its second line is known as a row detail, not help.
+        design::register_row(ui, row.response.rect);
     });
 }
 
@@ -553,38 +562,6 @@ pub(super) fn in_progress_list(
     ui.add_space(design::L);
 }
 
-impl Encounters {
-    /// `Remove…` on a Ready to run row: its result, with the words and the pattern of a saved
-    /// group's removal.
-    pub(super) fn encounter_remove_undo(
-        &mut self,
-        ui: &mut egui::Ui,
-        active: &Campaign,
-        modules: &[Module],
-    ) {
-        let Some(removed) = &self.removed_encounter else {
-            return;
-        };
-        if design::undo_message(
-            ui,
-            Tone::Info,
-            &format!("Removed encounter {}.", removed.name),
-            "Undo remove encounter",
-        ) {
-            match removed.restore() {
-                Ok(()) => {
-                    self.removed_encounter = None;
-                    self.reload_snapshot(active, modules);
-                    self.saved = true;
-                }
-                Err(error) => {
-                    self.error = Some(format!("The encounter did not come back: {error}"));
-                }
-            }
-        }
-    }
-}
-
 /// Whether a run of this encounter is saved: unfinished, ended, or in a file that cannot be read
 /// but names it. Only an encounter with none can be removed.
 fn has_saved_run(page: &history::Arranged<'_>, row: &history::ReadyRow<'_>) -> bool {
@@ -723,13 +700,22 @@ pub(super) fn group_list(
     }
 }
 
+/// The ended run read in History.
+pub(super) struct Reading<'a> {
+    pub path: &'a Path,
+    pub summary: &'a FightSummary,
+    /// Why it cannot go on, when it is not the fight that was played last.
+    pub not_last: Option<&'static str>,
+    /// It just opened, so the list scrolls to it once.
+    pub reveal: bool,
+}
+
 pub(super) fn history_list(
     ui: &mut egui::Ui,
     page: &history::Arranged<'_>,
     blocked: Option<&'static str>,
     live: Option<&SavedRunInfo>,
-    read: Option<&(PathBuf, FightSummary)>,
-    not_last: Option<&'static str>,
+    read: Option<Reading<'_>>,
     action: &mut Option<ListAction>,
 ) {
     ui.add_space(design::L);
@@ -748,7 +734,7 @@ pub(super) fn history_list(
         "encounter_history",
         "HISTORY",
         page.ended_count(),
-        read.map(|_| true),
+        read.as_ref().map(|_| true),
         |ui| {
             for session in &page.history {
                 design::group_heading(ui, session.label, session.runs.len());
@@ -774,6 +760,7 @@ pub(super) fn history_list(
                             ""
                         }
                     );
+                    let top = ui.cursor().top();
                     list_row(ui, &run.path, &run.encounter, &detail, false, None, |ui| {
                         row_menu(ui, &run.encounter, |ui| {
                             if menu_action(
@@ -798,7 +785,7 @@ pub(super) fn history_list(
                                 }
                             }
                         });
-                        let opened = read.is_some_and(|(path, _)| *path == run.path);
+                        let opened = read.as_ref().is_some_and(|read| read.path == run.path);
                         if Action::quiet(if opened { "Close" } else { "Open" })
                             .density(Density::Read)
                             .name(&format!(
@@ -813,18 +800,30 @@ pub(super) fn history_list(
                             *action = Some(ListAction::ReadHistory(run.path.clone()));
                         }
                     });
-                    if let Some((path, summary)) = read
-                        && *path == run.path
+                    if let Some(read) = &read
+                        && read.path == run.path
                     {
                         // The open run is this fight, so nothing stands in its way.
                         let here = live.is_some_and(|live| live.id == run.id);
                         // Continue fight is for the fight that was played last.
                         // A deleted encounter cannot start a new run, so its reason gives only the cause.
-                        let not_last = not_last.map(|reason| {
+                        let not_last = read.not_last.map(|reason| {
                             crate::encounter_run::continue_reason(reason, past.template.is_some())
                         });
-                        if history_summary(ui, summary, blocked.filter(|_| !here), not_last) {
+                        let (go_on, final_state) =
+                            history_summary(ui, read.summary, blocked.filter(|_| !here), not_last);
+                        if go_on {
                             *action = Some(ListAction::ContinueFight(run.path.clone()));
+                        }
+                        // Once, when the run opens: its row comes to the top of the list, so
+                        // the outcome, the line under Read-only and the whole Final state are
+                        // in view below it, also in a smaller window. The log follows.
+                        if read.reveal {
+                            let x = ui.max_rect().x_range();
+                            ui.scroll_to_rect(
+                                egui::Rect::from_x_y_ranges(x, top..=final_state),
+                                Some(egui::Align::Min),
+                            );
                         }
                     }
                 }
@@ -839,32 +838,42 @@ pub(super) fn history_list(
     );
 }
 
-/// An ended fight, read in place. Returns true when the DM chooses to go on with it.
-/// `not_last` says why this fight cannot go on, when it is not the fight that was played last:
-/// then its sentence stands where the control would be.
+/// An ended fight, read in place. Returns true when the DM chooses to go on with it, and the
+/// bottom of Final state. `not_last` says why this fight cannot go on, when it is not the fight
+/// that was played last: then its sentence stands where the control would be.
 fn history_summary(
     ui: &mut egui::Ui,
     summary: &FightSummary,
     blocked: Option<&str>,
     not_last: Option<&str>,
-) -> bool {
+) -> (bool, f32) {
     let mut go_on = false;
+    let mut final_state = 0.0;
     ui.indent("history_summary", |ui| {
-        ui.horizontal_wrapped(|ui| {
-            design::status(
-                ui,
-                Status {
-                    icon: icons::READ_ONLY,
-                    word: "Read-only",
-                    color: colors().document.read_only,
-                },
-            );
-            ui.label(
-                Type::Small
-                    .rich(ui, &summary.end_reason)
-                    .color(colors().muted),
-            );
+        // The line under Read-only is `S` below it and `M` above Final state, so it reads as
+        // the run's own line and not as part of Final state.
+        let spacing = ui.spacing().item_spacing.y;
+        // The line is as tall as its words, so the gap below it is the gap that shows. A
+        // wrapped row takes its height from the spacing when it starts.
+        ui.scope(|ui| {
+            ui.spacing_mut().interact_size.y = Type::Small.line();
+            ui.horizontal_wrapped(|ui| {
+                design::status(
+                    ui,
+                    Status {
+                        icon: icons::READ_ONLY,
+                        word: "Read-only",
+                        color: colors().document.read_only,
+                    },
+                );
+                ui.label(
+                    Type::Small
+                        .rich(ui, &summary.end_reason)
+                        .color(colors().muted),
+                );
+            });
         });
+        ui.add_space(design::S - spacing);
         // The one way on from a fight that ended by mistake. Undo puts the ending back.
         match not_last {
             Some(reason) => blocked_reason(ui, Some(reason)),
@@ -876,10 +885,14 @@ fn history_summary(
                     .clicked();
             }
         }
+        ui.add_space(design::M - spacing);
         design::group_label(ui, "Final state");
-        // AI1: one name column, so every HP starts at one x and the DM can scan down it. The
-        // column is as wide as the longest name, up to half the room; a longer name wraps.
+        // AI1, FI6, SI1: shared columns. The name column is as wide as the longest name, up to
+        // half the room (a longer name wraps); then HP and temporary HP, each as wide as its
+        // widest value, kept where a row has none; then Absent and the conditions, which wrap
+        // inside the last column. Every value sits on its name's baseline.
         let strong = Type::Strong.font(ui);
+        let small = Type::Small.font(ui);
         let gap = ui.spacing().item_spacing.x;
         let names = summary
             .rows
@@ -887,6 +900,40 @@ fn history_summary(
             .map(|row| design::number_width(ui, &row.name, &strong))
             .fold(0.0, f32::max)
             .min(ui.available_width() / 2.0);
+        let hp_words = |row: &crate::encounter_run::FightRow| {
+            let hp = row.hp.map_or_else(|| "?".to_owned(), |hp| hp.to_string());
+            let max = row
+                .max_hp
+                .map_or_else(|| "?".to_owned(), |hp| hp.to_string());
+            format!("HP {hp}/{max}")
+        };
+        let temp_words = |row: &crate::encounter_run::FightRow| {
+            (row.temporary_hp > 0).then(|| format!("{} +{}", icons::TEMP_HP, row.temporary_hp))
+        };
+        let hp_width = summary
+            .rows
+            .iter()
+            .map(|row| design::number_width(ui, &hp_words(row), &small))
+            .fold(0.0, f32::max);
+        let temp_width = summary
+            .rows
+            .iter()
+            .filter_map(&temp_words)
+            .map(|words| design::number_width(ui, &words, &small))
+            .fold(0.0, f32::max);
+        // A fixed cell: its words at the cell's left, the cell as wide as its column.
+        let cell = |ui: &mut egui::Ui, width: f32, words: Option<egui::RichText>| {
+            ui.allocate_ui_with_layout(
+                egui::vec2(width, 0.0),
+                egui::Layout::top_down(egui::Align::Min),
+                |ui| {
+                    ui.set_width(width);
+                    if let Some(words) = words {
+                        ui.add(egui::Label::new(words).extend());
+                    }
+                },
+            );
+        };
         for row in &summary.rows {
             ui.horizontal_top(|ui| {
                 ui.allocate_ui_with_layout(
@@ -901,45 +948,54 @@ fn history_summary(
                     },
                 );
                 ui.add_space(design::M - gap);
-                ui.horizontal_wrapped(|ui| {
-                    let hp = row.hp.map_or_else(|| "?".to_owned(), |hp| hp.to_string());
-                    let max = row
-                        .max_hp
-                        .map_or_else(|| "?".to_owned(), |hp| hp.to_string());
-                    ui.label(
-                        Type::Small
-                            .rich(ui, format!("HP {hp}/{max}"))
-                            .color(colors().text),
-                    );
-                    if row.temporary_hp > 0 {
-                        ui.label(
-                            Type::Small
-                                .rich(ui, format!("{} +{}", icons::TEMP_HP, row.temporary_hp))
-                                .color(colors().hp.temp),
-                        );
-                    }
-                    if !row.present {
-                        blocked_reason(ui, Some("Absent"));
-                    }
-                    if !row.conditions.is_empty() {
-                        let words: Vec<_> = row.conditions.iter().map(|c| c.words()).collect();
-                        blocked_reason(ui, Some(&words.join(", ")));
-                    }
+                // The values are one line of cells, each a top-down block, so they share the
+                // name's first line (a wrapping flow put them 4 px below it).
+                ui.vertical(|ui| {
+                    ui.horizontal_top(|ui| {
+                        let hp = Type::Small.rich(ui, hp_words(row)).color(colors().text);
+                        cell(ui, hp_width, Some(hp));
+                        if temp_width > 0.0 {
+                            let temp = temp_words(row)
+                                .map(|words| Type::Small.rich(ui, words).color(colors().hp.temp));
+                            cell(ui, temp_width, temp);
+                        }
+                        // The last column: one paragraph that wraps inside it, on the line's
+                        // baseline.
+                        let rest: Vec<String> = (!row.present)
+                            .then(|| "Absent".to_owned())
+                            .into_iter()
+                            .chain((!row.conditions.is_empty()).then(|| {
+                                let words: Vec<_> =
+                                    row.conditions.iter().map(|c| c.words()).collect();
+                                words.join(", ")
+                            }))
+                            .collect();
+                        if !rest.is_empty() {
+                            let width = ui.available_width();
+                            ui.allocate_ui_with_layout(
+                                egui::vec2(width, 0.0),
+                                egui::Layout::top_down(egui::Align::Min),
+                                |ui| blocked_reason(ui, Some(&rest.join(" · "))),
+                            );
+                        }
+                    });
                 });
             });
         }
+        final_state = ui.min_rect().bottom();
         design::group_label(ui, "Combat log");
         for line in &summary.log {
             blocked_reason(ui, Some(line));
         }
     });
-    go_on
+    (go_on, final_state)
 }
 
 #[cfg(test)]
 mod iter_2_c_tests {
     use super::*;
     use crate::timeline::{Book, Kind, page::SessionLink};
+    use std::path::PathBuf;
 
     /// F1: a Ready row's word joins its detail only when the detail stays whole with it on its
     /// one line; else the line is as it was.

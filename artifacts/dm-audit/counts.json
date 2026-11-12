@@ -150,13 +150,6 @@
     },
     {
       "phase": "during",
-      "task": "A wolf frightens Oren for 10 rounds: give the condition its count",
-      "transitions": 0,
-      "interactions": 4,
-      "path": "Run"
-    },
-    {
-      "phase": "during",
       "task": "Iselle starts concentrating: mark it",
       "transitions": 0,
       "interactions": 2,
@@ -230,6 +223,13 @@
       "task": "Record a short rest",
       "transitions": 0,
       "interactions": 2,
+      "path": "Session"
+    },
+    {
+      "phase": "during",
+      "task": "Mark a house rule's number between fights",
+      "transitions": 0,
+      "interactions": 3,
       "path": "Session"
     },
     {
@@ -315,6 +315,13 @@
       "transitions": 2,
       "interactions": 6,
       "path": "Session > Timeline > Session"
+    },
+    {
+      "phase": "after",
+      "task": "Put the fight's rewards in the note",
+      "transitions": 0,
+      "interactions": 1,
+      "path": "Session"
     },
     {
       "phase": "after",

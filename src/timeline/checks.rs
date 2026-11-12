@@ -27,7 +27,34 @@ pub enum Act {
     /// `Clear` on a result: its label and its words.
     Clear(String, String),
     /// `Plan “<name>”` on a result that links an encounter or a group.
-    Plan(String),
+    Plan(Planned),
+    /// `Undo plan line` on the line of the check that the plan line came from.
+    UndoPlan,
+}
+
+/// What `Plan “<name>”` acted on: the name, and the check the DM clicked it on, by its label
+/// and words as read.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Planned {
+    pub name: String,
+    pub check: (String, String),
+}
+
+impl Planned {
+    /// The plan line's message.
+    pub fn words(&self) -> String {
+        plan_line_words(&self.name)
+    }
+
+    /// Whether this is the check the DM clicked.
+    pub fn on(&self, check: &Check) -> bool {
+        self.check.0 == check.label && self.check.1 == check.words
+    }
+}
+
+/// The message of `Plan “<name>”`.
+fn plan_line_words(name: &str) -> String {
+    format!("“{name}” is in tonight’s plan.")
 }
 
 /// Whether this journey shows its checks: the DM chose `Roll for encounters` on it.
@@ -238,7 +265,7 @@ pub fn apply(
             event.checks.remove(at);
             Some(("Check cleared.".to_owned(), "Undo clear"))
         }
-        Act::Plan(_) => return Ok(None),
+        Act::Plan(_) | Act::UndoPlan => return Ok(None),
     };
     let after = event.clone();
     if after == before {
@@ -266,6 +293,8 @@ pub struct View<'a> {
     /// For a name that a result links: nothing when it is not an encounter or a group, else
     /// whether the plan has a row still to come for it.
     pub planned: &'a dyn Fn(&str) -> Option<bool>,
+    /// The plan line whose message and Undo show on its check's line, in place of its offer.
+    pub plan_line: Option<&'a Planned>,
 }
 
 /// What the DM typed in one block: a roll for each line, and the last line's fault.
@@ -302,56 +331,15 @@ impl State {
     }
 }
 
-/// The block's first line: `Encounter checks`, the table menu, and the dice with the interval.
+/// The block's field: the label `Encounter checks` above a line of the table menu and the dice
+/// with the interval.
 pub fn header(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<Act> {
     state.follow(&view.event.id);
     let c = colors();
     let table = chosen(view.event, view.tables);
     let mut act = None;
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing.x = design::S;
-        ui.label(Type::Small.rich(ui, "Encounter checks").color(c.muted));
-        let word = match (table, view.event.checks_table.as_deref()) {
-            (Some(table), _) => table.name(),
-            (None, Some(key)) if !key.is_empty() => "Table not found",
-            _ => "Choose a table",
-        };
-        let button = design::menu_button(ui, word, false);
-        egui::Popup::menu(&button).show(|ui| {
-            let mut names: Vec<&Table> = view.tables.iter().collect();
-            names.sort_by(|a, b| a.name().cmp(b.name()).then(a.key.cmp(&b.key)));
-            for option in names {
-                let selected = table.is_some_and(|table| table.key == option.key);
-                if ui.selectable_label(selected, option.name()).clicked() {
-                    act = Some(Act::Choose(Some(option.key.clone())));
-                    ui.close();
-                }
-            }
-            ui.separator();
-            let results = !view.event.checks.is_empty();
-            if Action::quiet("No checks")
-                .blocked_if(results, "Clear the results first.")
-                .show(ui)
-                .clicked()
-            {
-                act = Some(Act::Choose(None));
-                ui.close();
-            }
-            if results {
-                design::blocked_reason(ui, Some("Clear the results first."));
-            }
-        });
-        // Whole, so it moves to the next line with its `·` when the row is narrow.
-        if let Some(table) = table {
-            ui.add(
-                egui::Label::new(
-                    Type::Small
-                        .rich(ui, format!("· {} {}", table.dice, table.per.words()))
-                        .color(c.muted),
-                )
-                .wrap_mode(egui::TextWrapMode::Extend),
-            );
-        }
+    design::field(ui, "Encounter checks", None, None, |ui| {
+        ui.horizontal_wrapped(|ui| table_line(ui, view, table, &mut act))
     });
     if let Some(fault) = table.and_then(Table::fault) {
         design::status(
@@ -367,6 +355,61 @@ pub fn header(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<A
         design::small_message(ui, Tone::Warning, PER_NOT_READ);
     }
     act
+}
+
+/// The table menu, then `· 1d20 each day`. Dice words that move to a line of their own start
+/// with the words, not with `·`.
+fn table_line(ui: &mut egui::Ui, view: &View<'_>, table: Option<&Table>, act: &mut Option<Act>) {
+    let c = colors();
+    ui.spacing_mut().item_spacing.x = design::S;
+    let word = match (table, view.event.checks_table.as_deref()) {
+        (Some(table), _) => table.name(),
+        (None, Some(key)) if !key.is_empty() => "Table not found",
+        _ => "Choose a table",
+    };
+    let button = design::menu_button(ui, word, false);
+    egui::Popup::menu(&button).show(|ui| {
+        let mut names: Vec<&Table> = view.tables.iter().collect();
+        names.sort_by(|a, b| a.name().cmp(b.name()).then(a.key.cmp(&b.key)));
+        for option in names {
+            let selected = table.is_some_and(|table| table.key == option.key);
+            if ui.selectable_label(selected, option.name()).clicked() {
+                *act = Some(Act::Choose(Some(option.key.clone())));
+                ui.close();
+            }
+        }
+        ui.separator();
+        let results = !view.event.checks.is_empty();
+        if Action::quiet("No checks")
+            .blocked_if(results, "Clear the results first.")
+            .show(ui)
+            .clicked()
+        {
+            *act = Some(Act::Choose(None));
+            ui.close();
+        }
+        if results {
+            design::blocked_reason(ui, Some("Clear the results first."));
+        }
+    });
+    let Some(table) = table else {
+        return;
+    };
+    let words = format!("{} {}", table.dice, table.per.words());
+    let after = format!("· {words}");
+    let fits = design::number_width(ui, &after, &Type::Small.font(ui))
+        <= ui.available_size_before_wrap().x;
+    if !fits {
+        ui.end_row();
+    }
+    ui.add(
+        egui::Label::new(
+            Type::Small
+                .rich(ui, if fits { after } else { words })
+                .color(c.muted),
+        )
+        .wrap_mode(egui::TextWrapMode::Extend),
+    );
 }
 
 /// The span of the journey on the clock, for the line under **How long**.
@@ -465,7 +508,7 @@ pub fn lines(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<Ac
             );
             match check {
                 Some(check) => {
-                    if let Some(found) = result(ui, label, check, view.planned) {
+                    if let Some(found) = result(ui, label, check, view) {
                         act = Some(found);
                     }
                 }
@@ -566,12 +609,8 @@ pub fn lines(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<Ac
 
 /// A result: its number and words, `Clear` at the line's end, and an offer for each encounter
 /// or group that it links.
-fn result(
-    ui: &mut egui::Ui,
-    label: &str,
-    check: &Check,
-    planned: &dyn Fn(&str) -> Option<bool>,
-) -> Option<Act> {
+fn result(ui: &mut egui::Ui, label: &str, check: &Check, view: &View<'_>) -> Option<Act> {
+    let planned = view.planned;
     let c = colors();
     let mut act = None;
     let clear_name = format!("Clear the check for {label}");
@@ -595,24 +634,50 @@ fn result(
             );
             let mut names = crate::sessions::linked_names(&check.words);
             names.retain(|name| planned(name).is_some());
+            // Each name keeps one place of one height: its offer, then the plan line's message
+            // and Undo, then `In the plan`. The place is as high as the message needs here, so
+            // nothing moves when the message comes or goes, and the message is never cut.
             for name in names.into_iter().take(MOST_OFFERS) {
-                if planned(&name) == Some(true) {
-                    design::status(
-                        ui,
-                        Status {
-                            icon: icons::OK,
-                            word: "In the plan",
-                            color: c.document.saved,
-                        },
-                    );
-                } else if Action::quiet(&format!("Plan “{name}”"))
-                    .line_start()
-                    .density(Density::Read)
-                    .show(ui)
-                    .clicked()
-                {
-                    act = Some(Act::Plan(name));
-                }
+                let words = plan_line_words(&name);
+                let width = ui.available_width();
+                let height =
+                    design::undo_message_height(ui, Tone::Success, &words, "Undo plan line", width);
+                let size = egui::vec2(width, height);
+                let top = egui::Layout::top_down(egui::Align::Min);
+                ui.allocate_ui_with_layout(size, top, |ui| {
+                    ui.set_min_size(size);
+                    if view
+                        .plan_line
+                        .is_some_and(|line| line.name == name && line.on(check))
+                    {
+                        if design::undo_message(ui, Tone::Success, &words, "Undo plan line") {
+                            act = Some(Act::UndoPlan);
+                        }
+                    } else if planned(&name) == Some(true) {
+                        let line = egui::vec2(ui.available_width(), Density::Read.control());
+                        let left = egui::Layout::left_to_right(egui::Align::Center);
+                        ui.allocate_ui_with_layout(line, left, |ui| {
+                            design::status(
+                                ui,
+                                Status {
+                                    icon: icons::OK,
+                                    word: "In the plan",
+                                    color: c.document.saved,
+                                },
+                            );
+                        });
+                    } else if Action::quiet(&format!("Plan “{name}”"))
+                        .line_start()
+                        .density(Density::Read)
+                        .show(ui)
+                        .clicked()
+                    {
+                        act = Some(Act::Plan(Planned {
+                            name: name.clone(),
+                            check: (check.label.clone(), check.words.clone()),
+                        }));
+                    }
+                });
             }
         },
     );
@@ -707,16 +772,23 @@ pub fn length_input(
     }
 }
 
-/// A length typed for a journey whose field is no longer in view: its event takes it, as the
-/// field would have when it lost focus. `shown` is the journey whose field is in view; a page
-/// that goes out of view settles with none.
-pub fn settle_length(book: &mut Book, shown: Option<&str>) {
-    let draft = &mut book.length;
-    let Some(id) = draft
+/// A length typed for a journey whose held field is no longer in view: its event takes it, as
+/// the field would have when it lost focus. `open` is the place in the list of the event whose
+/// form is in view, as the page resolved it; a page that goes out of view settles with none.
+/// Only a journey that shows its checks holds a typed length, so a draft for an event without
+/// them settles too. A frame that keeps the draft reads that one event, never the list.
+pub fn settle_length(book: &mut Book, open: Option<usize>) {
+    let held = open
+        .and_then(|at| book.events.get(at))
+        .filter(|event| shown(event))
+        .map(|event| event.id.as_str());
+    let Some(id) = book
+        .length
         .0
         .as_ref()
-        .map(|(id, _, _)| id.clone())
-        .filter(|id| Some(id.as_str()) != shown)
+        .map(|(id, _, _)| id.as_str())
+        .filter(|id| Some(*id) != held)
+        .map(str::to_owned)
     else {
         return;
     };
@@ -825,6 +897,56 @@ mod tests {
         settle_length(&mut book, None);
         assert_eq!(book.length, LengthDraft::default());
         assert!(book.conflict && book.events[0].duration == "2 days");
+        // With its form open, a journey that shows its checks holds the typed length. One whose
+        // checks went (an edit in Obsidian) holds none: its field changes the event as typed.
+        let typed = LengthDraft(Some((id.clone(), "4 days".into(), "2 days".into())));
+        book.events[0].checks_table = Some("road".into());
+        book.length = typed.clone();
+        settle_length(&mut book, Some(0));
+        assert_eq!(book.length, typed);
+        book.events[0].checks_table = None;
+        settle_length(&mut book, Some(0));
+        assert_eq!(book.length, LengthDraft::default());
+        assert_eq!(book.events[0].duration, "4 days");
+    }
+
+    /// V4, V22: the label is above the table menu; the dice words share the menu's line after
+    /// `·`, and a line of their own starts with the words.
+    #[test]
+    fn t11_9_the_dice_words_never_start_a_line_with_the_separator() {
+        use egui_kittest::{Harness, kittest::Queryable};
+        let tables = [table("road", "On the road", Per::Day)];
+        let event = journey("journey", Some("road"));
+        for (width, words) in [(400.0, "· 1d20 each day"), (160.0, "1d20 each day")] {
+            let mut harness = Harness::builder()
+                .with_size(egui::vec2(480.0, 200.0))
+                .build_ui(|ui| {
+                    ui.set_max_width(width);
+                    let view = View {
+                        event: &event,
+                        start: None,
+                        length: "",
+                        tables: &tables,
+                        planned: &|_| None,
+                        plan_line: None,
+                    };
+                    header(ui, &view, &mut State::default());
+                });
+            design::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            let label = harness.get_by_label("Encounter checks").rect();
+            let menu = harness.get_by_label("On the road").rect();
+            let dice = harness.get_by_label(words).rect();
+            assert!(label.bottom() <= menu.top(), "{width}: {label:?} {menu:?}");
+            if width > 200.0 {
+                assert!(
+                    menu.y_range().contains(dice.center().y),
+                    "{dice:?} {menu:?}"
+                );
+            } else {
+                assert!(dice.top() >= menu.bottom() && (dice.left() - menu.left()).abs() < 1.0);
+            }
+        }
     }
 
     #[test]

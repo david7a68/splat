@@ -54,6 +54,78 @@ fn checks(d: &Driver<'_>) -> Vec<crate::timeline::Check> {
         .unwrap_or_default()
 }
 
+/// Faults in the open block's layout (V4, V22, V23): `Encounter checks` is a label above the
+/// table menu; the dice words share the menu's line, or start their own line with their words;
+/// and the act's result, when there is one, sits on its kept line between the menu's line and
+/// `next`, the first control under it.
+fn block_faults(d: &Driver<'_>, result: Option<&str>, next: &str) -> Vec<String> {
+    let nodes = d.nodes();
+    let place = |name: &str| {
+        nodes
+            .iter()
+            .find(|node| node.name == name)
+            .map(|node| node.rect)
+    };
+    let (Some(label), Some(menu), Some(next)) =
+        (place("Encounter checks"), place("On the road"), place(next))
+    else {
+        return vec![format!("the label, the menu or {next:?} is missing")];
+    };
+    let mut faults = Vec::new();
+    // The menu's target starts at the label's edge, as a field's frame does.
+    if label.bottom() > menu.top() || (label.left() - menu.left()).abs() > 1.0 {
+        faults.push(format!(
+            "the label {label:?} is not above the menu {menu:?}"
+        ));
+    }
+    match nodes
+        .iter()
+        .find(|node| node.name.ends_with("1d20 each day"))
+    {
+        Some(dice) if dice.name.starts_with('·') => {
+            if !(menu.top()..=menu.bottom()).contains(&dice.rect.center().y) {
+                faults.push(format!("{:?} {:?} starts a line", dice.name, dice.rect));
+            }
+        }
+        Some(dice) if dice.rect.top() < menu.bottom() => {
+            faults.push(format!("{:?} lost its `·` on the menu's line", dice.name));
+        }
+        Some(_) => {}
+        None => faults.push("no dice words".to_owned()),
+    }
+    if let Some(words) = result {
+        match place(words) {
+            Some(at) if at.top() >= menu.bottom() && at.bottom() <= next.top() => {}
+            at => faults.push(format!(
+                "{words:?} {at:?} is not between the menu {menu:?} and {next:?}"
+            )),
+        }
+    }
+    faults
+}
+
+/// The tops of the open Travel row's parts below its checks, from its label `Encounter checks`:
+/// Title, Notes and the row's `Timeline` link.
+fn below_checks(d: &Driver<'_>) -> Vec<Option<f32>> {
+    let nodes = d.nodes();
+    let top =
+        |found: Option<&crate::visual_tests::driver::Found>| found.map(|node| node.rect.top());
+    let label = top(nodes.iter().find(|node| node.name == "Encounter checks"));
+    let named = |name: &str| top(nodes.iter().find(|node| node.name == name));
+    let link = top(nodes
+        .iter()
+        .find(|node| node.name == "Timeline" && node.is_link()));
+    [named("Title"), named("Notes on this event"), link]
+        .into_iter()
+        .map(|at| Some(at? - label?))
+        .collect()
+}
+
+/// From the bottom of the table menu's line to the top of a control under it.
+fn below_menu(d: &Driver<'_>, name: &str) -> Option<f32> {
+    Some(d.place_of(name)?.top() - d.place_of("On the road")?.bottom())
+}
+
 pub fn run(d: &mut Driver<'_>) {
     let campaign = d.root.join("campaigns/emberfall");
     fs::write(campaign.join("Road.md"), ROAD).unwrap();
@@ -126,10 +198,26 @@ pub fn run(d: &mut Driver<'_>) {
     // Counted at 1200x800, as the design counts it. At 960x640 the open row scrolls with the
     // plan, as open rows do, and `Roll all` can need one scroll more.
     d.set_base(DEFAULT);
+    let length_at = d.place_of("How long");
     d.begin_task();
     d.click("Roll all 2");
     d.expect("2 travel checks rolled.");
     d.goal_within("T11.9", "roll a two-day journey's checks", 1);
+    let faults = block_faults(d, Some("2 travel checks rolled."), "How long");
+    d.observe(
+        "T11.9",
+        faults.is_empty() && length_at.is_some() && d.place_of("How long") == length_at,
+        format!(
+            "The label is above the table, and the result's kept line moves no field: {faults:?}"
+        ),
+    );
+    // W1-D1: the checks come first in the open row, Title and Notes after them.
+    let order = (d.place_of("Clear the check for Day 2"), d.place_of("Title"));
+    d.observe(
+        "T11.10",
+        matches!(order, (Some(last), Some(title)) if title.top() > last.bottom()),
+        format!("The open Travel row shows its checks before Title: {order:?}"),
+    );
     d.set_base(SMALL);
     let file = timeline_file(&dir);
     d.observe(
@@ -162,14 +250,48 @@ pub fn run(d: &mut Driver<'_>) {
         }
         d.expect("Encounter checks");
     });
+    let faults = block_faults(d, Some("1 travel check rolled."), "How long");
+    d.observe(
+        "T11.9",
+        faults.is_empty(),
+        format!("At 960x640 beside Lookup, the block keeps its layout: {faults:?}"),
+    );
     d.click("Close Lookup");
     // Act A: plan the fight. It is the next row, with Start fight.
+    // Places from the block's label: planning reveals the new fight row, which can scroll the plan.
+    let from_label = |d: &Driver<'_>, name: &str| {
+        let label = d.place_of("Encounter checks")?;
+        Some(d.place_of(name)?.translate(-label.min.to_vec2()))
+    };
+    let below = below_checks(d);
+    let offer = from_label(d, PLAN_AMBUSH);
     d.begin_task();
     d.click(PLAN_AMBUSH);
     d.expect("“Bridge Ambush” is in tonight’s plan.");
     d.goal_within("T11.10", "plan a result as a fight", 1);
+    // The message and its Undo take the offer's place, so nothing below the checks moves.
+    let message = from_label(d, "“Bridge Ambush” is in tonight’s plan.");
+    let after = below_checks(d);
+    d.observe(
+        "T11.10",
+        below.iter().all(Option::is_some)
+            && after == below
+            && d.has("Undo plan line")
+            && matches!((offer, message), (Some(offer), Some(at)) if offer.y_range().contains(at.top())),
+        format!("The plan line's message is on the check's line ({offer:?}, {message:?}), and moves nothing ({below:?}, {after:?})"),
+    );
+    d.state("travel-checks-planned", Sizes::Small);
+    // Beside Lookup the row is narrower and taller: the plan scrolls to the message.
+    d.state_prepared("travel-checks-planned-lookup", Sizes::Small, |d| {
+        if !d.has("Close Lookup") {
+            d.click(NAV_LOOKUP);
+        }
+        let at = d.place_of("Encounter checks").expect("the block").center();
+        d.scroll_until(at, "Undo plan line", 8);
+    });
+    d.click("Close Lookup");
     let parts = [
-        d.has_containing("In the plan"),
+        d.has_containing("in tonight’s plan"),
         !d.has(PLAN_AMBUSH),
         // The fixture's Bridge Ambush has a paused run, so its row resumes it.
         d.has("Start fight: Bridge Ambush") || d.has("Resume: Bridge Ambush"),
@@ -207,6 +329,20 @@ pub fn run(d: &mut Driver<'_>) {
         "T11.9",
         checks(d).len() == 2,
         "Undo clear puts the result back",
+    );
+    // An edit of the note ends the plan line's Undo: `In the plan` takes the message's line.
+    d.click(PLAN_AMBUSH);
+    let below = below_checks(d);
+    write_note(d);
+    d.type_into_editor("\nThe road is quiet.\n");
+    show_plan(d);
+    let after = below_checks(d);
+    d.observe(
+        "T11.10",
+        d.has_containing("In the plan") && !d.has("Undo plan line") && after == below,
+        format!(
+            "After a note edit, In the plan stands in the message's place ({below:?}, {after:?})"
+        ),
     );
     // A shorter journey deletes no result.
     d.replace_text_in("How long", "1 day");
@@ -284,11 +420,30 @@ pub fn run(d: &mut Driver<'_>) {
     d.expect("Encounter checks added to this journey.");
     d.click("Choose a table");
     d.click("On the road");
+    let before = below_menu(d, "Roll for Day 1");
     d.click("Roll for Day 1");
     d.observe(
         "T11.9",
         d.has("Encounter checks") && checks(d).len() == 1 && d.has("Clear the check for Day 1"),
         "Timeline's detail column holds the same block",
+    );
+    // V23, V28: at 960x640 the result is in view where the DM pressed Roll, on its kept line,
+    // and the line under it is where `Roll` was.
+    let after = below_menu(d, "Clear the check for Day 1");
+    let faults = block_faults(
+        d,
+        Some("1 travel check rolled."),
+        "Clear the check for Day 1",
+    );
+    let seen = d
+        .nodes()
+        .iter()
+        .any(|node| node.name == "Undo roll" && node.fully_in_view())
+        && d.visible_text("1 travel check rolled.");
+    d.observe(
+        "T11.9",
+        faults.is_empty() && seen && before.is_some() && before == after,
+        format!("Timeline: the result is in view on its kept line ({seen}), and moves no line ({before:?}, {after:?}): {faults:?}"),
     );
     d.state("travel-checks-timeline", Sizes::Default);
     d.state_prepared("travel-checks-timeline-lookup", Sizes::Small, |d| {
@@ -338,6 +493,42 @@ pub fn run(d: &mut Driver<'_>) {
         journey(d, "Travel").checks.is_empty() && journey(d, "Journey B").checks.len() == 1,
         "Plan: Undo roll takes back only this journey's roll",
     );
+    // Review of PR 274: the DM's own scroll ends a pending reveal. A reveal of the row after the
+    // open Travel row waits for its next draw; a wheel step, then a keyboard step, come first,
+    // and the plan stays where the DM put it through later draws.
+    let travel_id = journey(d, "Travel").id;
+    let travel_top = |d: &Driver<'_>| d.place_of("Travel").map(|rect| rect.top());
+    let plan_point = d.place_of("Travel").expect("the Travel row").center();
+    // The plan starts at its top, with the next row below the view.
+    d.scroll_up_at(plan_point, 10);
+    d.settle();
+    for (step, wheel) in [("wheel", true), ("keyboard", false)] {
+        let pass = d.passes() as u64;
+        d.app_mut()
+            .sessions
+            .simulate_pending_reveal(&travel_id, pass);
+        if wheel {
+            // One notch, short enough that a reveal left pending would win the later draws.
+            d.scroll_up_at(plan_point, 1);
+        } else {
+            d.press(Key::PageUp);
+        }
+        let moved = travel_top(d);
+        d.settle();
+        d.settle();
+        let later = travel_top(d);
+        let hidden = !d
+            .nodes()
+            .iter()
+            .any(|node| node.name == "Journey B" && node.fully_in_view());
+        d.observe(
+            &format!("review-274-reveal-{step}"),
+            moved.is_some() && moved == later && hidden,
+            format!(
+                "After the {step} step the Travel row stays at {moved:?} (later {later:?}); the next row stays out of view {hidden}"
+            ),
+        );
+    }
     // One owner for a length being typed: leaving a page gives the journey what was typed
     // there, and a newer length typed on the other page wins, also after a restart.
     d.replace_text_in("How long", "2 days");
