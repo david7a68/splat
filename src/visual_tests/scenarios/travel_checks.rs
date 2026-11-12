@@ -661,14 +661,21 @@ fn road_fight_keeps_its_day(d: &mut Driver<'_>, dir: &Path) {
         road_fight(d).is_none() && timeline_file(dir) == before,
         "Undo: begin combat gives Timeline.md back as it was",
     );
-    // Review finding 2: the check changes on disk a moment before Begin, while an edit waits
-    // for its pause, so Splat has not read the file. Begin reads it: an ordinary fight, and the
-    // run says why.
+    // Review finding 2: the check changes on disk a moment before Begin, while the DM's own
+    // edit of that journey waits for its pause, so Splat has not read the file and its save
+    // cannot merge. Begin reads the file: an ordinary fight, and the run says why.
     fs::write(
         dir.join("Timeline.md"),
         timeline_file(dir).replace("\"18 · A toll gang", "\"19 · A toll gang"),
     )
     .unwrap();
+    let notes = &mut d
+        .app_mut()
+        .timeline
+        .event_mut(&journey_before.id)
+        .unwrap()
+        .notes;
+    *notes = "Fog on the second day.".into();
     d.app_mut().timeline.touch();
     d.click("Begin combat");
     let events = d.app().timeline.events.clone();
@@ -685,7 +692,8 @@ fn road_fight_keeps_its_day(d: &mut Driver<'_>, dir: &Path) {
         format!("A check changed on disk gives an ordinary fight, and the run says so: {placed:?}"),
     );
     d.click("Undo: begin combat");
-    d.app_mut().timeline.save();
+    // The DM chooses the file over the waiting edit.
+    d.app_mut().timeline.reload();
     d.click(NAV_SESSIONS);
     show_plan(d);
     d.observe(
