@@ -380,8 +380,10 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     d.press(Key::Escape);
     d.observe(
         "T18.2",
-        !d.has(&field) && fs::read_to_string(&path).unwrap() == before,
-        "Escape closes the field and writes nothing",
+        !d.has(&field)
+            && d.has("Close Lookup")
+            && fs::read_to_string(&path).unwrap() == before,
+        "Escape closes the field, not Lookup, and writes nothing",
     );
 
     // The reader's header, with a 19-letter title: `Add to Log` next to Edit gives way first, to
