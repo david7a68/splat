@@ -1269,7 +1269,9 @@ fn press_op(
     let mut entries = Vec::new();
     for change in &changes {
         let target = change.tracker.as_deref().unwrap_or(key);
-        let mut entry = change_entry(rules, state, &mut values, target, instance, change, asked)?;
+        // A change that names its line with `for:` goes there, else to the line pressed.
+        let line = change.instance.as_deref().or(instance);
+        let mut entry = change_entry(rules, state, &mut values, target, line, change, asked)?;
         entry.why = Some(label.to_owned());
         entries.push(entry);
     }
@@ -2231,6 +2233,32 @@ mod tests {
         assert_eq!(app.trackers.state.due[0].days, [122, 152]);
         let month = app.trackers.state.due[0].clone();
         let before = file(&race);
+        // A Timeline edit waits for its pause, and under it the file changes on disk, or
+        // cannot be read: the day count at the click is not known, and nothing is recorded.
+        let saved = fs::read(&timeline).unwrap();
+        let edited = app.timeline.events[0].id.clone();
+        app.timeline.event_mut(&edited).unwrap().title = "Dawn".into();
+        app.timeline.touch();
+        let mut outside = String::from_utf8(saved.clone()).unwrap();
+        outside.push_str("\nWritten in Obsidian.\n");
+        for (change, mode) in [(Some(outside), 0o644), (None, 0o000)] {
+            if let Some(text) = change {
+                fs::write(&timeline, text).unwrap();
+            }
+            fs::set_permissions(&timeline, fs::Permissions::from_mode(mode)).unwrap();
+            app.trackers.press_done_in_view(&month, vec![true]);
+            app.apply_tracker_act();
+            fs::set_permissions(&timeline, fs::Permissions::from_mode(0o644)).unwrap();
+            assert_eq!(
+                app.trackers.reason,
+                Some(Unrecorded::Refused(view::DAY_NOT_KNOWN.into()))
+            );
+            assert_eq!(file(&race), before);
+        }
+        assert_eq!(app.timeline.events[0].title, "Dawn", "the edit waits, kept");
+        fs::write(&timeline, &saved).unwrap();
+        app.timeline.save();
+        app.timeline.read_if_changed();
         let mut back = Book::default();
         back.open(Some(&race.campaign.path));
         let ids: Vec<String> = back
@@ -2265,7 +2293,7 @@ mod tests {
                 Tracker {
                     key: "teams".into(),
                     def: Ok(def(
-                        "name: Teams\nper: [Party]\nquick:\n- label: Score\n  changes: [{tracker: rivals, add: 1}]",
+                        "name: Teams\nper: [Party]\nquick:\n- label: Score\n  changes: [{tracker: rivals, add: 1}]\n- label: Score for Old Guard\n  changes: [{tracker: rivals, for: Old Guard, add: 1}]",
                     )),
                 },
                 Tracker {
@@ -2288,6 +2316,14 @@ mod tests {
             press_op(&rules, &state, "teams", Some("Party"), "Score", None, None),
             Err("Rivals has no line for Party. Nothing was recorded.".into())
         );
+        // A change that names its line with `for:` goes there, from whichever line is pressed.
+        let pressed = "Score for Old Guard";
+        let Ok(Op::Append(entries)) =
+            press_op(&rules, &state, "teams", Some("Party"), pressed, None, None)
+        else {
+            panic!("the press records");
+        };
+        assert_eq!(entries[0].instance.as_deref(), Some("Old Guard"));
         // A day mark has no line of its own, so its change names its tracker, and `for:` names
         // a line that tracker has.
         let day_mark = |yaml: &str| {
