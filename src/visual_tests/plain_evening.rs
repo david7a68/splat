@@ -150,6 +150,7 @@ const SCREENS: &[(&str, Shown)] = &[
     ("run-next-round", Page),
     ("run-closed", Held),
     ("timeline", Page),
+    ("timeline: Road to the ford open", Held),
     ("session-last: again", Held),
     ("lookup-reader Captain Varra, npc", Reader),
     ("lookup-reader Captain Varra, creature", Reader),
@@ -1036,6 +1037,32 @@ fn play(d: &mut Driver<'_>) -> (Evening, Bytes, Bytes) {
 
     ev.act(d, "Timeline", |d| d.click(NAV_TIMELINE));
     ev.page(d, "timeline");
+    ev.act(d, "open Road to the ford", |d| {
+        d.click_containing("Road to the ford")
+    });
+    ev.held(d, "timeline: Road to the ford open");
+    // An ordinary journey takes its length as the DM types, before focus leaves the field, as
+    // it did before encounter checks. Then the DM puts the length back.
+    let mut typed = None;
+    ev.act(d, "type a length for Road to the ford", |d| {
+        d.replace_text_in("How long", "2 hours");
+        let road = d
+            .app()
+            .timeline
+            .events
+            .iter()
+            .find(|e| e.title == "Road to the ford");
+        typed = Some((d.focused_name(), road.map(|e| e.duration.clone())));
+        d.replace_text_in("How long", "half a day");
+        d.press(Key::Enter);
+        d.app_mut().timeline.save();
+        d.settle();
+    });
+    assert_eq!(
+        typed,
+        Some((Some("How long".to_owned()), Some("2 hours".to_owned()))),
+        "G7, section 2.5: an ordinary Travel event takes its length as the DM types it"
+    );
 
     ev.act(d, "Session", |d| d.click(NAV_SESSIONS));
     ev.held(d, "session-last: again");

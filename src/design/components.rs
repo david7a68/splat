@@ -2491,6 +2491,48 @@ pub fn undo_message(ui: &mut Ui, tone: Tone, text: &str, action: &str) -> bool {
     undo_message_named(ui, tone, text, action, None)
 }
 
+/// A kept line for an act's result and its Undo: one control high whether or not a result
+/// shows, so the result moves nothing below it. Words that do not fit beside Undo end in `…`,
+/// and their hover keeps them whole. Capped at `LIST_MEASURE` like every notice.
+pub fn undo_line(ui: &mut Ui, tone: Tone, result: Option<(&str, &str)>) -> bool {
+    let size = vec2(
+        ui.available_width().min(LIST_MEASURE),
+        Density::Read.control(),
+    );
+    let mut pressed = false;
+    ui.allocate_ui_with_layout(size, Layout::left_to_right(Align::Center), |ui| {
+        ui.set_min_size(size);
+        let Some((text, action)) = result else {
+            return;
+        };
+        let (icon, color) = tone.parts();
+        let button = Action::quiet(action)
+            .icon(icons::UNDO)
+            .density(Density::Read);
+        let gap = ui.spacing().item_spacing.x;
+        let left = ui.cursor().left();
+        ui.spacing_mut().item_spacing.x = 0.0;
+        ui.add_space(S + 1.0);
+        ui.label(Type::Body.rich(ui, icon).color(color));
+        ui.add_space(XS);
+        let room = ui.available_width() - gap - button.natural_width(ui);
+        let words = one_line(ui, text, Type::Body.font(ui), colors().text, room);
+        let cut = words.elided;
+        let response = ui.add(egui::Label::new(words));
+        if cut {
+            response.clone().on_hover_text(text);
+        }
+        let bar = Rect::from_min_max(
+            pos2(left, response.rect.top()),
+            pos2(left + 3.0, response.rect.bottom()),
+        );
+        ui.painter().rect_filled(bar, 0.0, color);
+        ui.add_space(gap);
+        pressed = button.show(ui).clicked();
+    });
+    pressed
+}
+
 /// `undo_message`, with an accessible name for the action when its words are not enough. Capped
 /// at `LIST_MEASURE` like every notice.
 pub fn undo_message_named(

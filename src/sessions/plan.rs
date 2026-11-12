@@ -1042,6 +1042,11 @@ impl Sessions {
             planned,
         };
         let mut act = checks::header(ui, &header, &mut travel.block);
+        let done = travel.done.get(&event.id);
+        let result = done.map(|done| (done.words.as_str(), done.undo));
+        if design::undo_line(ui, Tone::Success, result) {
+            undo = TravelUndo::Checks;
+        }
         let typed = length_draft.words(event);
         let help = checks::span(start, &typed).or_else(|| {
             timeline::read_duration(&typed)
@@ -1059,18 +1064,11 @@ impl Sessions {
             planned,
         };
         act = checks::lines(ui, &view, &mut travel.block).or(act);
-        let done = travel.done.get(&event.id);
         let plan_line = travel
             .planned
             .as_ref()
             .filter(|(id, _, _)| *id == event.id)
             .map(|(_, name, _)| name.as_str());
-        if let Some(done) = done {
-            ui.add_space(design::S);
-            if design::undo_message(ui, Tone::Success, &done.words, done.undo) {
-                undo = TravelUndo::Checks;
-            }
-        }
         if let Some(name) = plan_line {
             ui.add_space(design::S);
             if design::undo_message(
@@ -1532,13 +1530,15 @@ impl Sessions {
                             } else if let Some(run) = event.run {
                                 self.fight_block(ui, run, &event.id, plan);
                             } else {
-                                changed |= event_fields(ui, event);
+                                // A journey's checks come first, under its row; Title and Notes follow them.
                                 if checks::shown(event) {
                                     let (act, taken, undo) = self.travel_block(ui, event, journey_start, plan, &in_plan, &mut book.length);
                                     if taken != checks::Taken::Nothing { length_taken = taken; }
                                     if let Some(act) = act { travel_act = Some((event.id.clone(), act)); }
                                     if undo != TravelUndo::None { travel_undo = (undo, event.id.clone()); }
+                                    ui.add_space(design::XS);
                                 }
+                                changed |= event_fields(ui, event);
                                 if let Some(action) = rest_ruling(ui, event, ruling_undo.as_ref() == Some(&event.id)) {
                                     ruling = Some((event.id.clone(), action));
                                 }

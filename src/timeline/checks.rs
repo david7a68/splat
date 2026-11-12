@@ -302,56 +302,15 @@ impl State {
     }
 }
 
-/// The block's first line: `Encounter checks`, the table menu, and the dice with the interval.
+/// The block's field: the label `Encounter checks` above a line of the table menu and the dice
+/// with the interval.
 pub fn header(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<Act> {
     state.follow(&view.event.id);
     let c = colors();
     let table = chosen(view.event, view.tables);
     let mut act = None;
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing.x = design::S;
-        ui.label(Type::Small.rich(ui, "Encounter checks").color(c.muted));
-        let word = match (table, view.event.checks_table.as_deref()) {
-            (Some(table), _) => table.name(),
-            (None, Some(key)) if !key.is_empty() => "Table not found",
-            _ => "Choose a table",
-        };
-        let button = design::menu_button(ui, word, false);
-        egui::Popup::menu(&button).show(|ui| {
-            let mut names: Vec<&Table> = view.tables.iter().collect();
-            names.sort_by(|a, b| a.name().cmp(b.name()).then(a.key.cmp(&b.key)));
-            for option in names {
-                let selected = table.is_some_and(|table| table.key == option.key);
-                if ui.selectable_label(selected, option.name()).clicked() {
-                    act = Some(Act::Choose(Some(option.key.clone())));
-                    ui.close();
-                }
-            }
-            ui.separator();
-            let results = !view.event.checks.is_empty();
-            if Action::quiet("No checks")
-                .blocked_if(results, "Clear the results first.")
-                .show(ui)
-                .clicked()
-            {
-                act = Some(Act::Choose(None));
-                ui.close();
-            }
-            if results {
-                design::blocked_reason(ui, Some("Clear the results first."));
-            }
-        });
-        // Whole, so it moves to the next line with its `·` when the row is narrow.
-        if let Some(table) = table {
-            ui.add(
-                egui::Label::new(
-                    Type::Small
-                        .rich(ui, format!("· {} {}", table.dice, table.per.words()))
-                        .color(c.muted),
-                )
-                .wrap_mode(egui::TextWrapMode::Extend),
-            );
-        }
+    design::field(ui, "Encounter checks", None, None, |ui| {
+        ui.horizontal_wrapped(|ui| table_line(ui, view, table, &mut act))
     });
     if let Some(fault) = table.and_then(Table::fault) {
         design::status(
@@ -367,6 +326,61 @@ pub fn header(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<A
         design::small_message(ui, Tone::Warning, PER_NOT_READ);
     }
     act
+}
+
+/// The table menu, then `· 1d20 each day`. Dice words that move to a line of their own start
+/// with the words, not with `·`.
+fn table_line(ui: &mut egui::Ui, view: &View<'_>, table: Option<&Table>, act: &mut Option<Act>) {
+    let c = colors();
+    ui.spacing_mut().item_spacing.x = design::S;
+    let word = match (table, view.event.checks_table.as_deref()) {
+        (Some(table), _) => table.name(),
+        (None, Some(key)) if !key.is_empty() => "Table not found",
+        _ => "Choose a table",
+    };
+    let button = design::menu_button(ui, word, false);
+    egui::Popup::menu(&button).show(|ui| {
+        let mut names: Vec<&Table> = view.tables.iter().collect();
+        names.sort_by(|a, b| a.name().cmp(b.name()).then(a.key.cmp(&b.key)));
+        for option in names {
+            let selected = table.is_some_and(|table| table.key == option.key);
+            if ui.selectable_label(selected, option.name()).clicked() {
+                *act = Some(Act::Choose(Some(option.key.clone())));
+                ui.close();
+            }
+        }
+        ui.separator();
+        let results = !view.event.checks.is_empty();
+        if Action::quiet("No checks")
+            .blocked_if(results, "Clear the results first.")
+            .show(ui)
+            .clicked()
+        {
+            *act = Some(Act::Choose(None));
+            ui.close();
+        }
+        if results {
+            design::blocked_reason(ui, Some("Clear the results first."));
+        }
+    });
+    let Some(table) = table else {
+        return;
+    };
+    let words = format!("{} {}", table.dice, table.per.words());
+    let after = format!("· {words}");
+    let fits = design::number_width(ui, &after, &Type::Small.font(ui))
+        <= ui.available_size_before_wrap().x;
+    if !fits {
+        ui.end_row();
+    }
+    ui.add(
+        egui::Label::new(
+            Type::Small
+                .rich(ui, if fits { after } else { words })
+                .color(c.muted),
+        )
+        .wrap_mode(egui::TextWrapMode::Extend),
+    );
 }
 
 /// The span of the journey on the clock, for the line under **How long**.
@@ -707,16 +721,24 @@ pub fn length_input(
     }
 }
 
-/// A length typed for a journey whose field is no longer in view: its event takes it, as the
-/// field would have when it lost focus. `shown` is the journey whose field is in view; a page
-/// that goes out of view settles with none.
-pub fn settle_length(book: &mut Book, shown: Option<&str>) {
-    let draft = &mut book.length;
-    let Some(id) = draft
+/// A length typed for a journey whose held field is no longer in view: its event takes it, as
+/// the field would have when it lost focus. `open` is the event whose form is in view; a page
+/// that goes out of view settles with none. Only a journey that shows its checks holds a typed
+/// length, so a draft for an event without them settles too.
+pub fn settle_length(book: &mut Book, open: Option<&str>) {
+    let held = |id: &str| {
+        Some(id) == open
+            && book
+                .events
+                .iter()
+                .any(|event| event.id == id && shown(event))
+    };
+    let Some(id) = book
+        .length
         .0
         .as_ref()
         .map(|(id, _, _)| id.clone())
-        .filter(|id| Some(id.as_str()) != shown)
+        .filter(|id| !held(id))
     else {
         return;
     };

@@ -1111,10 +1111,23 @@ impl TimelinePage {
                             _ => "",
                         };
                         let focus = std::mem::take(&mut self.focus_length);
-                        let (words, taken) =
-                            checks::length_input(ui, &mut book.length, event, hint, focus);
-                        length = words;
-                        length_taken = taken;
+                        if checks::shown(event) {
+                            let (words, taken) =
+                                checks::length_input(ui, &mut book.length, event, hint, focus);
+                            length = words;
+                            length_taken = taken;
+                        } else {
+                            // With no checks to follow it, the event changes as the DM types.
+                            let width = ui.available_width();
+                            changed |= design::text_input(
+                                ui,
+                                "How long",
+                                &mut event.duration,
+                                hint,
+                                width,
+                            )
+                            .changed();
+                        }
                     },
                 );
             }
@@ -1152,11 +1165,11 @@ impl TimelinePage {
                     planned: &|_| None,
                 };
                 checks_act = checks::header(ui, &view, &mut self.checks).or(checks_act.take());
+                // The act's result keeps its line under the table, so it moves no field.
+                let done = self.checks_done.get(&id);
+                let result = done.map(|done| (done.words.as_str(), done.undo));
+                undo_checks |= design::undo_line(ui, Tone::Success, result);
                 checks_act = checks::lines(ui, &view, &mut self.checks).or(checks_act.take());
-                if let Some(done) = self.checks_done.get(&id) {
-                    ui.add_space(design::S);
-                    undo_checks |= design::undo_message(ui, Tone::Success, &done.words, done.undo);
-                }
             }
             ui.add_space(design::M);
             changed |= design::text_field(ui, "Where", &mut event.place, None, None).changed();

@@ -54,6 +54,61 @@ fn checks(d: &Driver<'_>) -> Vec<crate::timeline::Check> {
         .unwrap_or_default()
 }
 
+/// Faults in the open block's layout (V4, V22, V23): `Encounter checks` is a label above the
+/// table menu; the dice words share the menu's line, or start their own line with their words;
+/// and the act's result, when there is one, sits on its kept line between the menu's line and
+/// `next`, the first control under it.
+fn block_faults(d: &Driver<'_>, result: Option<&str>, next: &str) -> Vec<String> {
+    let nodes = d.nodes();
+    let place = |name: &str| {
+        nodes
+            .iter()
+            .find(|node| node.name == name)
+            .map(|node| node.rect)
+    };
+    let (Some(label), Some(menu), Some(next)) =
+        (place("Encounter checks"), place("On the road"), place(next))
+    else {
+        return vec![format!("the label, the menu or {next:?} is missing")];
+    };
+    let mut faults = Vec::new();
+    // The menu's target starts at the label's edge, as a field's frame does.
+    if label.bottom() > menu.top() || (label.left() - menu.left()).abs() > 1.0 {
+        faults.push(format!(
+            "the label {label:?} is not above the menu {menu:?}"
+        ));
+    }
+    match nodes
+        .iter()
+        .find(|node| node.name.ends_with("1d20 each day"))
+    {
+        Some(dice) if dice.name.starts_with('·') => {
+            if !(menu.top()..=menu.bottom()).contains(&dice.rect.center().y) {
+                faults.push(format!("{:?} {:?} starts a line", dice.name, dice.rect));
+            }
+        }
+        Some(dice) if dice.rect.top() < menu.bottom() => {
+            faults.push(format!("{:?} lost its `·` on the menu's line", dice.name));
+        }
+        Some(_) => {}
+        None => faults.push("no dice words".to_owned()),
+    }
+    if let Some(words) = result {
+        match place(words) {
+            Some(at) if at.top() >= menu.bottom() && at.bottom() <= next.top() => {}
+            at => faults.push(format!(
+                "{words:?} {at:?} is not between the menu {menu:?} and {next:?}"
+            )),
+        }
+    }
+    faults
+}
+
+/// From the bottom of the table menu's line to the top of a control under it.
+fn below_menu(d: &Driver<'_>, name: &str) -> Option<f32> {
+    Some(d.place_of(name)?.top() - d.place_of("On the road")?.bottom())
+}
+
 pub fn run(d: &mut Driver<'_>) {
     let campaign = d.root.join("campaigns/emberfall");
     fs::write(campaign.join("Road.md"), ROAD).unwrap();
@@ -126,10 +181,26 @@ pub fn run(d: &mut Driver<'_>) {
     // Counted at 1200x800, as the design counts it. At 960x640 the open row scrolls with the
     // plan, as open rows do, and `Roll all` can need one scroll more.
     d.set_base(DEFAULT);
+    let length_at = d.place_of("How long");
     d.begin_task();
     d.click("Roll all 2");
     d.expect("2 travel checks rolled.");
     d.goal_within("T11.9", "roll a two-day journey's checks", 1);
+    let faults = block_faults(d, Some("2 travel checks rolled."), "How long");
+    d.observe(
+        "T11.9",
+        faults.is_empty() && length_at.is_some() && d.place_of("How long") == length_at,
+        format!(
+            "The label is above the table, and the result's kept line moves no field: {faults:?}"
+        ),
+    );
+    // W1-D1: the checks come first in the open row, Title and Notes after them.
+    let order = (d.place_of("Clear the check for Day 2"), d.place_of("Title"));
+    d.observe(
+        "T11.10",
+        matches!(order, (Some(last), Some(title)) if title.top() > last.bottom()),
+        format!("The open Travel row shows its checks before Title: {order:?}"),
+    );
     d.set_base(SMALL);
     let file = timeline_file(&dir);
     d.observe(
@@ -162,6 +233,12 @@ pub fn run(d: &mut Driver<'_>) {
         }
         d.expect("Encounter checks");
     });
+    let faults = block_faults(d, Some("1 travel check rolled."), "How long");
+    d.observe(
+        "T11.9",
+        faults.is_empty(),
+        format!("At 960x640 beside Lookup, the block keeps its layout: {faults:?}"),
+    );
     d.click("Close Lookup");
     // Act A: plan the fight. It is the next row, with Start fight.
     d.begin_task();
@@ -284,11 +361,30 @@ pub fn run(d: &mut Driver<'_>) {
     d.expect("Encounter checks added to this journey.");
     d.click("Choose a table");
     d.click("On the road");
+    let before = below_menu(d, "Roll for Day 1");
     d.click("Roll for Day 1");
     d.observe(
         "T11.9",
         d.has("Encounter checks") && checks(d).len() == 1 && d.has("Clear the check for Day 1"),
         "Timeline's detail column holds the same block",
+    );
+    // V23, V28: at 960x640 the result is in view where the DM pressed Roll, on its kept line,
+    // and the line under it is where `Roll` was.
+    let after = below_menu(d, "Clear the check for Day 1");
+    let faults = block_faults(
+        d,
+        Some("1 travel check rolled."),
+        "Clear the check for Day 1",
+    );
+    let seen = d
+        .nodes()
+        .iter()
+        .any(|node| node.name == "Undo roll" && node.fully_in_view())
+        && d.visible_text("1 travel check rolled.");
+    d.observe(
+        "T11.9",
+        faults.is_empty() && seen && before.is_some() && before == after,
+        format!("Timeline: the result is in view on its kept line ({seen}), and moves no line ({before:?}, {after:?}): {faults:?}"),
     );
     d.state("travel-checks-timeline", Sizes::Default);
     d.state_prepared("travel-checks-timeline-lookup", Sizes::Small, |d| {
