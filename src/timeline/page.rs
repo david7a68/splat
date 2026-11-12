@@ -63,6 +63,8 @@ pub struct TimelinePage {
     just_added: Option<(String, Instant)>,
     /// The list opens where the story is now, at its end.
     opened: bool,
+    /// One column: the detail hides the list, so the open event's results end its form.
+    narrow: bool,
     /// The run open now, whose event must stay while it runs.
     pub open_run: Option<Uuid>,
     /// Saved runs from the same campaign snapshot used by the Session plan.
@@ -162,35 +164,50 @@ pub fn long_rest_status(restores: bool) -> Status<'static> {
 }
 
 pub fn rest_ruling(ui: &mut egui::Ui, event: &Event, undo: bool) -> Option<RestRulingAction> {
+    let mut action = rest_ruling_line(ui, event);
+    if undo && let Some(undo) = rest_ruling_result(ui, event) {
+        action = Some(undo);
+    }
+    action
+}
+
+/// The ruling now in force and the action that changes it. The action changes data, so it is a
+/// quiet button after the status, never a link.
+pub fn rest_ruling_line(ui: &mut egui::Ui, event: &Event) -> Option<RestRulingAction> {
     if event.kind != Kind::LongRest {
         return None;
     }
     let mut action = None;
     ui.horizontal_wrapped(|ui| {
         design::status(ui, long_rest_status(event.restores));
-        if design::link(
-            ui,
-            if event.restores {
-                "Mark not at full"
-            } else {
-                "Mark everyone at full"
-            },
-        )
+        ui.add_space(design::L - ui.spacing().item_spacing.x);
+        if Action::quiet(if event.restores {
+            "Mark not at full"
+        } else {
+            "Mark everyone at full"
+        })
+        .density(Density::Read)
+        .show(ui)
         .clicked()
         {
             action = Some(RestRulingAction::Set(!event.restores));
         }
     });
-    // The result says the ruling now in force, and what it does to the next fight.
+    action
+}
+
+/// The ruling's result: a finished change, so it has the success tone in both directions. It
+/// says the ruling now in force, and what it does to the next fight.
+pub fn rest_ruling_result(ui: &mut egui::Ui, event: &Event) -> Option<RestRulingAction> {
+    if event.kind != Kind::LongRest {
+        return None;
+    }
     let words = if event.restores {
         REST_RESTORES_WORDS
     } else {
         "The next fight starts from the HP the party has now."
     };
-    if undo && design::undo_message(ui, Tone::Info, words, "Undo ruling") {
-        action = Some(RestRulingAction::Undo);
-    }
-    action
+    design::undo_message(ui, Tone::Success, words, "Undo ruling").then_some(RestRulingAction::Undo)
 }
 
 /// Timeline's removal notice: the plan's words, for the removed event's own session, then how
@@ -233,9 +250,10 @@ fn flag_words(flag: &splat::content::layout::Flag) -> String {
     flag.message.clone()
 }
 
-/// What stops the timeline from saving. The DM must choose, so this cannot be dismissed.
-/// Returns true when the comparison needs the rest of the pane.
-pub fn problems(ui: &mut egui::Ui, book: &mut Book) -> bool {
+/// The file's notices that block nothing: the reload result, each flag with the file line, a
+/// duplicate, and a failed save. They arrive from outside edits and autosave, so pages draw
+/// them with their other results (Timeline's list column), never above the Add strip or a form.
+pub fn file_notices(ui: &mut egui::Ui, book: &mut Book) {
     if let Some(count) = book.dropped()
         && design::undo_message(
             ui,
@@ -267,6 +285,23 @@ pub fn problems(ui: &mut egui::Ui, book: &mut Book) -> bool {
     if let Some(warning) = &book.duplicate {
         design::message(ui, Tone::Warning, warning);
     }
+    if book.unreadable.is_none()
+        && !book.conflict
+        && let Some(error) = book.error.clone()
+    {
+        let again = design::message_with_actions(ui, Tone::Error, &error, |ui| {
+            Action::secondary("Try to save again").show(ui).clicked()
+        });
+        if again {
+            book.error = None;
+            book.save();
+        }
+    }
+}
+
+/// What stops the timeline from saving. The DM must choose, so this cannot be dismissed.
+/// Returns true when the comparison needs the rest of the pane.
+pub fn problems(ui: &mut egui::Ui, book: &mut Book) -> bool {
     if let Some(error) = book.unreadable.clone() {
         // Message choices start at the message text. The old-format notice draws its own.
         let choices = |ui: &mut egui::Ui, book: &mut Book| {
@@ -275,7 +310,7 @@ pub fn problems(ui: &mut egui::Ui, book: &mut Book) -> bool {
                     book.reload();
                 }
                 if book.gone
-                    && Action::quiet("Save this timeline there again")
+                    && Action::secondary("Save this timeline there again")
                         .show(ui)
                         .clicked()
                 {
@@ -321,14 +356,6 @@ pub fn problems(ui: &mut egui::Ui, book: &mut Book) -> bool {
                 }
             }
             return true;
-        }
-    } else if let Some(error) = book.error.clone() {
-        let again = design::message_with_actions(ui, Tone::Error, &error, |ui| {
-            Action::secondary("Try to save again").show(ui).clicked()
-        });
-        if again {
-            book.error = None;
-            book.save();
         }
     }
     false
@@ -662,13 +689,15 @@ impl TimelinePage {
     }
 
     fn list_messages(&mut self, ui: &mut egui::Ui, book: &mut Book) {
+        file_notices(ui, book);
         if let Some(label) = book.removed().map(str::to_owned) {
             let mentions = self.removed_mentions;
             let words = timeline_removal_words(book, &label, mentions);
+            // A finished change has the success tone; links left to it make it a warning.
             let tone = if mentions > 0 {
                 Tone::Warning
             } else {
-                Tone::Info
+                Tone::Success
             };
             if design::undo_message(ui, tone, &words, "Undo remove") {
                 book.undo_remove();
@@ -700,6 +729,30 @@ impl TimelinePage {
                 self.just_added = None;
                 self.selected = None;
             }
+        }
+    }
+
+    /// The open event's results stay in the list column with the other results, so they never
+    /// move the form: the link offer after a rename, and the rest ruling's result with its Undo.
+    fn event_results(
+        &mut self,
+        ui: &mut egui::Ui,
+        book: &mut Book,
+        notes: &mut crate::sessions::page::Sessions,
+        id: &str,
+    ) {
+        if !book.events.iter().any(|event| event.id == id) {
+            return;
+        }
+        notes.event_link_offer(ui, book, id);
+        let ruling = book
+            .events
+            .iter()
+            .find(|event| event.id == id && book.rest_undo_id() == Some(id))
+            .and_then(|event| rest_ruling_result(ui, event));
+        if let Some(action) = ruling {
+            action.apply(book, id);
+            self.just_added = None;
         }
     }
 
@@ -971,7 +1024,6 @@ impl TimelinePage {
         });
         ui.add_space(design::S);
         design::rule(ui);
-        let can_undo_ruling = book.rest_undo_id() == Some(id.as_str());
         let mut ruling = None;
         let mut area = egui::ScrollArea::vertical()
             .id_salt(("timeline_detail", &id))
@@ -989,7 +1041,6 @@ impl TimelinePage {
                 ui.ctx().request_repaint();
             }
             ui.set_max_width(form_width);
-            notes.event_link_offer(ui, book, &id);
             let event = &mut book.events[index];
             ui.add_space(design::M);
             let day_start = starts
@@ -1033,7 +1084,7 @@ impl TimelinePage {
                     },
                 );
             }
-            ruling = rest_ruling(ui, event, can_undo_ruling);
+            ruling = rest_ruling_line(ui, event);
             if let Some(start) = starts.filter(|_| event.kind != Kind::Day) {
                 ui.horizontal_wrapped(|ui| {
                     ui.label(
@@ -1180,6 +1231,12 @@ impl TimelinePage {
                     self.show_place = true;
                 }
             });
+            // With the list hidden, the event's results end its form, so they move no field.
+            if self.narrow {
+                ui.add_space(design::M);
+                file_notices(ui, book);
+                self.event_results(ui, book, notes, &id);
+            }
         });
         if changed {
             book.touch();
@@ -1324,6 +1381,7 @@ impl TimelinePage {
         }
         // One column, with an event open: the filters would only push it down.
         let narrow = page_width < TWO_COLUMNS_FROM;
+        self.narrow = narrow;
         let event_open = self
             .selected
             .as_ref()
@@ -1377,6 +1435,9 @@ impl TimelinePage {
                     .show_inside(ui, |ui| {
                         notes.expire_event_link_undo(true, book);
                         notes.event_link_undo(ui);
+                        if let Some(id) = self.selected.clone() {
+                            self.event_results(ui, book, notes, &id);
+                        }
                         self.list(ui, book, sessions)
                     });
             },

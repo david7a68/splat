@@ -220,7 +220,7 @@ show actual changes. **Next difference** moves between separate change groups an
 stays hidden when there is only one group.
 
 Registering a copied package keeps its warning above the name form. **Cancel** closes the form without
-writing and keeps the typed name and use choice. Help below **Use in this campaign** follows its check.
+writing and keeps the typed name and use choice. Help below **Choose for this campaign** follows its check.
 World's unreadable-note count opens the first note's repair and keeps other repair drafts.
 
 Creature, spell and item files use readable tables. The reader shows
@@ -274,8 +274,8 @@ and Timeline. Every closed long-rest row shows **Everyone at full** or **Not at 
 ruling's colour. Both pages let you turn the ruling off or on, with Undo, and the message says what the next
 fight starts with.
 Both pages name only saved, unfinished fights past Setup as keeping their saved HP.
-A saved Setup resumed after the rest starts at full. **Use the saved HP** puts back its saved HP and
-says **Party HP set to the saved values.**, with **Undo** to go back to full.
+A saved Setup resumed after the rest starts at full. That fill is not an Undo step: **Use the saved HP** puts
+back its saved HP and says **Party HP set to the saved values.**, with **Undo use saved HP** to go back to full.
 
 Library has **New entry** in its header. Its form opens in the reader column and closes after creation. World has **New ▾** for a plain note, a note with a type, an NPC, a location, or a generated NPC. Type headings use capitals and a count. World folder headings keep normal-case paths. Page headers show state or nonzero counts beside the title, with a rule and an `L` gap below. Counts use thousands separators.
 
@@ -288,7 +288,7 @@ Named NPC search results say **In roster** after Add. An NPC with a missing stat
 
 An unreadable package creature offers **Open in Library** from the encounter roster.
 Library keeps a deleted file's draft until you choose **Save my draft again** or
-**Let it go**, with Undo. A moved file's draft saves to its new path. Creature
+**Remove entry and lose draft**, with **Undo remove**. A moved file's draft saves to its new path. Creature
 copies use the same front-matter stats as a new creature and keep the book's prose.
 Each stat takes one line, in book order. Library warns on both files when their
 identities match. Save changes only the open file. Each repair action names its
@@ -761,8 +761,8 @@ be separate. Register My Homebrew in your preferred location for shared homebrew
 
 Local packages support new entries and Markdown editing. **About <package name>** opens the manifest and selects its About row. **New entry** shows the folder, kind and path before it writes a note, then opens its editor. Kind templates include a reader skeleton. A new subfolder is created when the note is saved.
 
-**Use in this campaign** starts on for new entries, new packages and copies to packages. It saves the package choice too, so the content can be found in the encounter editor. The reader shows whether an entry is used here and offers the same action when it is not.
-**Use every entry** shows its result and **Undo package use** above the reader tabs. **Save** checks note
+**Choose for this campaign** starts on for new entries, new packages and copies to packages. It saves the package choice too, so the content can be found in the encounter editor. The reader says **Chosen for this campaign** or **Not chosen**, and offers the same action in its toolbar when it is not.
+**Choose every entry** shows its result and **Undo package choice** in the reader's result place. **Save** checks note
 structure, keeps existing UUIDs and kinds, rejects duplicate identities, and checks
 for external edits before replacing a file. The header validation count opens messages for unresolved
 references; a package-only check can report references to other packages as unresolved.
@@ -998,7 +998,7 @@ from before this field loads with no steps. If Splat cannot read a file's steps,
 version wrote them, the run still opens. It says once that Undo starts again from there, the Log keeps that
 line, and the next save leaves the unread steps out. Two things are not in the file: after a restart, Undo of a
 save's damage restores the HP and does not arm the save again, and **Use the saved HP** is offered only in the
-session that made the long rest's step.
+session that filled the party's HP after the long rest.
 
 The same settings select how the campaign rolls NPC initiative: in groups of
 identical NPCs (the D&D default), individually, in one group per side, or in the
@@ -1110,7 +1110,7 @@ and unread Undo steps, each with Lookup closed and open. `encounter-difficulty` 
 the Ready to run rows, in the editor, on the plan's rows and their opened line, with Lookup closed and open, and
 the encounters whose XP or party is not known. `share-to-package` checks the new references after **Copy both**, and Library navigation checks the dependency copy action and its Undo.
 
-On window focus, Splat checks campaign notes and every registered package for disk changes. Library, Lookup and encounter search reload changed content. A changed draft opens the disk comparison. A package's About page counts its used entries and offers **Use every entry** with Undo. Removing an unavailable package also offers Undo and keeps links to the encounters that need its creatures.
+On window focus, Splat checks campaign notes and every registered package for disk changes. Library, Lookup and encounter search reload changed content. A changed draft opens the disk comparison. A package's About page counts its chosen entries and offers **Choose every entry** with Undo. Removing an unavailable package also offers Undo and keeps links to the encounters that need its creatures.
 
 If a package creature is deleted on disk, its encounter row keeps the last known name or says **Missing creature**. **Replace…** chooses a replacement with CR, HP and AC in view. **Replace all** is on by default for rows that use the same missing entry. The change keeps their names and starting values. A message names the result, such as `2 Cinder Wolf rows replaced with Guard.`, with **Undo replacement**. The row menu keeps **Edit** and can remove a row. The NPC **Add to fight** form labels its side choice **Side** and uses the roster's side names.
 
@@ -1146,7 +1146,7 @@ first heading. A copied package folder offers **Register as a new package** unde
 its warning. This writes new package and entry identities, keeps links within the
 copy, and has one Undo that restores the files. A run's Sheet uses its live death-save counts once.
 
-Copy registration has **Use in this campaign**. It starts off when the campaign uses the original. **Use the copy in encounters** changes encounter and group sources while keeping their names, counts and changes, with Undo. Duplicate repair actions name the folder when filenames match and can repair a whole copied folder at once. In the reader, the choices follow the entry's title and scroll with the entry.
+Copy registration has **Choose for this campaign**. It starts off when the campaign uses the original. **Use the copy in encounters** changes encounter and group sources while keeping their names, counts and changes, with Undo. Duplicate repair actions name the folder when filenames match and can repair a whole copied folder at once. In the reader, the choices follow the entry's title and scroll with the entry.
 
 A Library file that Splat cannot read at all, such as a note saved in another text encoding, says why and how to
 fix it, with **Show file** and **Try again**. It offers no editor link and no repair in Edit Markdown until the file

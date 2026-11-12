@@ -766,6 +766,10 @@ pub(super) fn history_list(
                         // The open run is this fight, so nothing stands in its way.
                         let here = live.is_some_and(|live| live.id == run.id);
                         // Continue fight is for the fight that was played last.
+                        // A deleted encounter cannot start a new run, so its reason gives only the cause.
+                        let not_last = not_last.map(|reason| {
+                            crate::encounter_run::continue_reason(reason, past.template.is_some())
+                        });
                         if history_summary(ui, summary, blocked.filter(|_| !here), not_last) {
                             *action = Some(ListAction::ContinueFight(run.path.clone()));
                         }

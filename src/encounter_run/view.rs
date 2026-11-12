@@ -48,10 +48,13 @@ const NAME_ROOM: f32 = 8.0;
 const NAME_LINES: usize = 3;
 /// A creature's effects beyond the official conditions, in the run's Conditions tab and in a
 /// change form alike: the `Other effects` label, then each in Body text with its row menu.
-/// Returns the position in `effects` of the one the DM removed.
+/// Returns the position in `effects` of the one the DM removed. `field` is the width of the
+/// `Other effect…` field below: each row ends where that field's Add ends, so the form has one
+/// right edge (FH2).
 pub(crate) fn other_effects_list<'a>(
     ui: &mut egui::Ui,
     effects: impl IntoIterator<Item = &'a str>,
+    field: f32,
 ) -> Option<usize> {
     let effects: Vec<_> = effects.into_iter().collect();
     if effects.is_empty() {
@@ -59,28 +62,32 @@ pub(crate) fn other_effects_list<'a>(
     }
     let mut removed = None;
     design::group_label(ui, "Other effects");
+    let row = (field + ui.spacing().item_spacing.x + other_effect_add().natural_width(ui))
+        .min(ui.available_width());
     for (at, effect) in effects.into_iter().enumerate() {
-        ui.horizontal(|ui| {
-            let menu_width = Density::Read.control() + design::S;
-            ui.allocate_ui(
-                vec2((ui.available_width() - menu_width).max(design::L), 0.0),
-                |ui| {
-                    ui.add(
-                        egui::Label::new(Type::Body.rich(ui, effect).color(colors().text)).wrap(),
-                    );
-                },
-            );
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                design::row_menu(ui, effect, |ui| {
-                    if ui.button("Remove").clicked() {
-                        removed = Some(at);
-                        ui.close();
-                    }
-                });
+        // The menu first, at the row's right edge, then the words in the rest of the row, both
+        // centred on the row's line (FH2: an empty-height slot put the words below the menu).
+        let size = vec2(row, Density::Read.control());
+        ui.allocate_ui_with_layout(size, Layout::right_to_left(Align::Center), |ui| {
+            ui.set_max_width(row);
+            design::row_menu(ui, effect, |ui| {
+                if ui.button("Remove").clicked() {
+                    removed = Some(at);
+                    ui.close();
+                }
+            });
+            ui.add_space(design::S);
+            ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                ui.add(egui::Label::new(Type::Body.rich(ui, effect).color(colors().text)).wrap());
             });
         });
     }
     removed
+}
+
+/// The other-effect field's Add, measured by `other_effects_list` for the form's right edge.
+fn other_effect_add() -> Action<'static> {
+    Action::secondary("Add").density(Density::Read)
 }
 
 /// The field that adds an other effect, and its Add. True when the DM adds the typed words.
@@ -88,8 +95,7 @@ pub(crate) fn other_effect_field(ui: &mut egui::Ui, text: &mut String, width: f3
     ui.horizontal(|ui| {
         let response = design::text_input(ui, "Other effect", text, "Other effect…", width);
         let enter = response.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
-        (Action::secondary("Add")
-            .density(Density::Read)
+        (other_effect_add()
             .blocked_if(text.trim().is_empty(), "Type an effect first.")
             .show(ui)
             .clicked()
@@ -115,10 +121,15 @@ pub(crate) fn toggle(
     )
     .selected(selected)
     .min_size(vec2(0.0, density.control()));
+    // FH1, FI3: an off toggle keeps the frame's padding, with nothing painted, so turning it
+    // on moves no word and no neighbour.
     let button = if selected {
         button.fill(colors().selected)
     } else {
-        button.frame(false)
+        button
+            .frame(true)
+            .fill(egui::Color32::TRANSPARENT)
+            .stroke(egui::Stroke::NONE)
     };
     let response = ui.add(button);
     design::named(ui, &response, name);
@@ -148,8 +159,8 @@ fn vital_columns(ui: &mut egui::Ui, columns: &[(&str, String)]) {
     );
 }
 
-/// The width `toggle` takes: its words, and the frame's padding when it is selected.
-pub(super) fn toggle_width(ui: &egui::Ui, label: &str, icon: &str, selected: bool) -> f32 {
+/// The width `toggle` takes, on or off: its words and the frame's padding.
+pub(super) fn toggle_width(ui: &egui::Ui, label: &str, icon: &str) -> f32 {
     #[cfg(test)]
     CONDITION_MEASURES.with(|count| count.set(count.get() + 1));
     let words = egui::WidgetText::from(Type::Body.rich(ui, format!("{icon} {label}")))
@@ -167,12 +178,13 @@ pub(super) fn toggle_width(ui: &egui::Ui, label: &str, icon: &str, selected: boo
         .expansion
         .max(v.hovered.expansion)
         .max(v.active.expansion);
-    words
-        + if selected {
-            2.0 * (ui.spacing().button_padding.x + expansion)
-        } else {
-            0.0
-        }
+    words + 2.0 * (ui.spacing().button_padding.x + expansion)
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How many times a group row scanned the run's participants for that group's joins.
+    static GROUP_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 #[cfg(test)]
@@ -195,7 +207,7 @@ fn condition_column_widths(ui: &egui::Ui, columns: usize) -> Vec<f32> {
     }
     let mut widths = vec![0.0_f32; columns];
     for (at, (_, name)) in crate::combat_sync::CONDITIONS.iter().enumerate() {
-        let width = toggle_width(ui, name, icons::OK, true);
+        let width = toggle_width(ui, name, icons::OK);
         widths[at % columns] = widths[at % columns].max(width);
     }
     ui.data_mut(|data| data.insert_temp(key, widths.clone()));
@@ -709,12 +721,23 @@ impl Run {
         }
     }
 
+    /// The words beside an empty Undo, before any fitting. While the unread-steps warning
+    /// shows, it says the cause, so the header says only `Nothing to undo` (AI3).
+    pub(super) fn empty_undo_words(&self) -> &str {
+        if self.undo_unread {
+            "Nothing to undo"
+        } else {
+            self.empty_undo_reason()
+        }
+    }
+
     pub(super) fn empty_undo(&self, ui: &mut egui::Ui) -> bool {
         let full = self.empty_undo_reason();
+        let words = self.empty_undo_words();
         let action = self.undo_action("Undo");
         let room = ui.available_width() - action.natural_width(ui) - design::S;
-        let shown = if design::number_width(ui, full, &Type::Small.font(ui)) <= room {
-            full
+        let shown = if design::number_width(ui, words, &Type::Small.font(ui)) <= room {
+            words
         } else {
             "Nothing to undo"
         };
@@ -868,8 +891,10 @@ impl Run {
                         - DOCK_HEIGHT
                         - self.strip_height()
                         - self.footer_height();
+                    // FJ4: the error takes one notice line, as a sheet-change warning does, and
+                    // its band is exactly that high, so the dock keeps one place.
                     let error_room = if stat_error.is_some() && !self.has_disk_conflict() {
-                        Density::Read.control() + design::XS
+                        MESSAGE_LINE
                     } else {
                         0.0
                     };
@@ -1000,10 +1025,15 @@ impl Run {
                                 } else {
                                     shown
                                 };
+                                // FJ4: the words get `text_room`; the message's bar, icon and
+                                // their gaps take room before them. A fitted notice then keeps
+                                // one line, and its band the height the list gave up.
+                                let message_width =
+                                    text_room + lead + ui.spacing().item_spacing.x * 2.0;
                                 let response = ui
                                     .allocate_ui_with_layout(
                                         vec2(
-                                            text_room,
+                                            message_width,
                                             if compact || self.notice_summary.is_some() {
                                                 Type::Small.line()
                                             } else {
@@ -1048,37 +1078,46 @@ impl Run {
                             .map_or(error.as_str(), |(first, _)| first);
                         // As the sheet-change notice: the fault in an error message, then its
                         // place to repair it as the action.
-                        ui.horizontal(|ui| {
-                            let detail = format!(
-                                "{first} Its row still works. Repair in Campaign → Packages."
-                            );
-                            let font = Type::Small.font(ui);
-                            let action = "Campaign → Packages";
-                            let lead = design::S
-                                + design::HAIRLINE_WIDTH
-                                + design::number_width(ui, icons::ERROR, &font)
-                                - design::XS;
-                            let room = ui.available_width()
-                                - Density::Read.control()
-                                - design::number_width(ui, action, &font)
-                                - design::L
-                                - design::S * 2.0
-                                - lead;
-                            let fitted = design::words_that_fit(ui, first, &font, room.max(0.0));
-                            let message = design::small_message(ui, Tone::Error, &fitted);
-                            design::named(ui, &message, &detail);
-                            message.on_hover_text(&detail);
-                            ui.add_space(design::L - ui.spacing().item_spacing.x);
-                            let response = design::small_link(ui, action);
-                            design::named(ui, &response, "Repair in Campaign → Packages");
-                            if response.clicked() {
-                                self.wants_packages = true;
-                            }
-                            if design::icon_button(ui, icons::CLOSE, "Dismiss this error").clicked()
-                            {
-                                self.error = None;
-                            }
-                        });
+                        let band = vec2(ui.available_width(), error_room);
+                        ui.allocate_ui_with_layout(
+                            band,
+                            Layout::left_to_right(Align::Center),
+                            |ui| {
+                                ui.set_min_height(error_room);
+                                ui.set_max_height(error_room);
+                                let detail = format!(
+                                    "{first} Its row still works. Repair in Campaign → Packages."
+                                );
+                                let font = Type::Small.font(ui);
+                                let action = "Campaign → Packages";
+                                let lead = design::S
+                                    + design::HAIRLINE_WIDTH
+                                    + design::number_width(ui, icons::ERROR, &font)
+                                    - design::XS;
+                                let room = ui.available_width()
+                                    - Density::Read.control()
+                                    - design::number_width(ui, action, &font)
+                                    - design::L
+                                    - design::S * 2.0
+                                    - lead;
+                                let fitted =
+                                    design::words_that_fit(ui, first, &font, room.max(0.0));
+                                let message = design::small_message(ui, Tone::Error, &fitted);
+                                design::named(ui, &message, &detail);
+                                message.on_hover_text(&detail);
+                                ui.add_space(design::L - ui.spacing().item_spacing.x);
+                                let response = design::small_link(ui, action);
+                                design::named(ui, &response, "Repair in Campaign → Packages");
+                                if response.clicked() {
+                                    self.wants_packages = true;
+                                }
+                                if design::icon_button(ui, icons::CLOSE, "Dismiss this error")
+                                    .clicked()
+                                {
+                                    self.error = None;
+                                }
+                            },
+                        );
                     }
                     // Each control band starts with fresh bounds. A child above can widen
                     // its parent's minimum rect, which set_width cannot shrink again.
@@ -1819,12 +1858,14 @@ impl Run {
                     .enumerate()
                     .filter(|(_, c)| !official(c))
                     .collect();
-                if let Some(at) =
-                    other_effects_list(ui, custom.iter().map(|(_, condition)| condition.as_str()))
-                {
+                let width = (ui.available_width() - 80.0).max(100.0);
+                if let Some(at) = other_effects_list(
+                    ui,
+                    custom.iter().map(|(_, condition)| condition.as_str()),
+                    width,
+                ) {
                     command = Some(Command::RemoveCondition(index, custom[at].0));
                 }
-                let width = (ui.available_width() - 80.0).max(100.0);
                 if other_effect_field(ui, &mut self.condition, width) {
                     // Typed as a level, it is still the one Exhaustion a creature has.
                     let typed = self.condition.trim();
@@ -1833,13 +1874,9 @@ impl Run {
                         None => Command::Condition(index, self.condition.clone()),
                     });
                 }
-                ui.add(
-                    egui::Label::new(
-                        Type::Small
-                            .rich(ui, "These record your ruling. No number changes by itself. Other effects stay local and do not sync.")
-                            .color(colors().muted),
-                    )
-                    .wrap(),
+                design::help(
+                    ui,
+                    "These record your ruling. No number changes by itself. Other effects stay local and do not sync.",
                 );
             });
         if let Some(command) = command {
@@ -1903,10 +1940,7 @@ impl Run {
                 return;
             }
             if self.closing {
-                let note = close_saved_words(
-                    !self.history.is_empty(),
-                    self.syncs.values().any(|sync| sync.enabled),
-                );
+                let note = close_saved_words(self.syncs.values().any(|sync| sync.enabled));
                 closed = self.close_confirmation(ui, &note);
                 return;
             }
@@ -2086,6 +2120,33 @@ impl Run {
 
     /// The second step of closing. Returns true when the run has closed. The words follow
     /// the save state: a run that cannot save must not say that it stays saved.
+    /// Why a close waits, as one exact sentence: `Settle 2 conflicts and 1 pending change
+    /// first.` The ended view and the close dialog both say it, so one block has one form.
+    fn close_reason(&self) -> Option<String> {
+        self.close_block().map(|general| {
+            let conflicts = self.conflict_count();
+            let pending = self
+                .syncs
+                .values()
+                .filter(|sync| {
+                    sync.unconfirmed() && sync.state() != SyncState::Conflict && !sync.stranded()
+                })
+                .count();
+            let mut parts = Vec::new();
+            if conflicts > 0 {
+                parts.push(design::count(conflicts, "conflict", "conflicts"));
+            }
+            if pending > 0 {
+                parts.push(design::count(pending, "pending change", "pending changes"));
+            }
+            if parts.is_empty() {
+                general.to_owned()
+            } else {
+                format!("Settle {} first.", parts.join(" and "))
+            }
+        })
+    }
+
     fn close_confirmation(&mut self, ui: &mut egui::Ui, note: &str) -> bool {
         self.close_dialog(ui, note)
     }
@@ -2095,7 +2156,7 @@ impl Run {
         let cannot_save = self.strip().not_saved;
         let stranded = self.stranded_names();
         let lost = self.unsent_only_here_names();
-        let block = self.close_block();
+        let block = self.close_reason();
         let mut keep = ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape));
         let mut close = false;
         let mut save_new = false;
@@ -2146,7 +2207,7 @@ impl Run {
             } else if stranded.is_empty() {
                 ui.add(egui::Label::new(note).wrap());
             } else {
-                ui.add(egui::Label::new(format!("Changes for {} were not sent to D&D Beyond. The saved run keeps HP, death saves and conditions for the next sync. Closing ends Undo for this run.", stranded.join(", "))).wrap());
+                ui.add(egui::Label::new(format!("Changes for {} were not sent to D&D Beyond. The saved run keeps HP, death saves and conditions for the next sync.", stranded.join(", "))).wrap());
             }
             if !lost.is_empty() {
                 ui.add(
@@ -2171,26 +2232,26 @@ impl Run {
             // Every close action here waits for the same cause, so it shows once, above them.
             if block.is_some() {
                 ui.add_space(design::S);
-                design::blocked_reason(ui, block);
+                design::blocked_reason(ui, block.as_deref());
             }
             let (lose, ()) = design::dialog_actions(
                 ui,
                 |ui| {
                     (cannot_save || !lost.is_empty())
                         && Action::destructive("Close and lose changes")
-                            .blocked(block)
+                            .blocked(block.as_deref())
                             .show(ui)
                             .clicked()
                 },
                 |ui| {
                     if cannot_save {
                         save_new = Action::primary("Save as a new run and close")
-                            .blocked(block)
+                            .blocked(block.as_deref())
                             .show(ui)
                             .clicked();
                     } else if lost.is_empty() {
                         close |= Action::secondary("Close now")
-                            .blocked(block)
+                            .blocked(block.as_deref())
                             .show(ui)
                             .clicked();
                     }
@@ -2587,6 +2648,23 @@ impl Run {
     /// Whatever joins a fight after it starts: one creature, or a prepared group.
     fn groups_tab(&mut self, ui: &mut egui::Ui) {
         let mut add = None;
+        // FB1: the newest arrival's result, and a tie's Move button, sit in a footer pinned
+        // to the panel's bottom, below the scrolling list. The list keeps its top, so a result
+        // that comes, grows with a tie, or goes moves no group row. Its owner is the newest
+        // step: any new step, Undo or typed search words end it.
+        if self.arrival_result_shown() {
+            egui::TopBottomPanel::bottom(egui::Id::new(("arrival_result", self.id)))
+                .resizable(false)
+                .show_separator_line(false)
+                .frame(egui::Frame::NONE)
+                .show_inside(ui, |ui| {
+                    ui.spacing_mut().item_spacing.y = design::XS;
+                    design::rule(ui);
+                    ui.add_space(design::XS);
+                    self.arrival_result(ui);
+                    ui.add_space(design::XS);
+                });
+        }
         egui::ScrollArea::vertical()
             .id_salt("run_groups")
             .auto_shrink([false, false])
@@ -2597,110 +2675,11 @@ impl Run {
                     .as_ref()
                     .is_some_and(|groups| !groups.is_empty())
                 {
-                    ui.add(
-                        egui::Label::new(
-                            Type::Small
-                                .rich(ui, "Drag a group name to the list, or use Add.")
-                                .color(colors().muted),
-                        )
-                        .wrap(),
-                    );
+                    design::help(ui, "Drag a group name to the list, or use Add.");
                 }
                 // Measured once: the search field and the group list share the block.
                 let arrival = self.arrival_block(ui);
                 self.add_creature_form(ui, arrival.map(|(_, block)| block));
-                if let Some(previous) = self.history.last().filter(|_| {
-                    self.ad_hoc.query.trim().is_empty()
-                        && self.state.log.last().is_some_and(|line| {
-                            line.starts_with(super::GROUP_ADDED)
-                                || line.starts_with(super::ONE_ADDED)
-                        })
-                }) {
-                    let start = previous.participants.len();
-                    let tied = self
-                        .state
-                        .participants
-                        .iter()
-                        .enumerate()
-                        .skip(start)
-                        .find_map(|(first, arrival)| {
-                            let total = arrival.initiative?;
-                            self.state
-                                .order
-                                .iter()
-                                .copied()
-                                .rev()
-                                .find(|i| {
-                                    *i < start
-                                        && self.state.participants[*i].present
-                                        && self.state.participants[*i].initiative == Some(total)
-                                })
-                                .map(|before| (first, Self::roll_block_first(&self.state, before)))
-                        });
-                    let group_line = self.group_arrival_notice(start);
-                    let line = group_line
-                        .as_deref()
-                        .unwrap_or_else(|| self.state.log.last().map_or("", String::as_str));
-                    if let Some((first, before)) = tied {
-                        let name =
-                            Self::roll_block_name(&self.state, &self.state.participants[before]);
-                        let waits = self.state.phase == Phase::Running
-                            && self
-                                .state
-                                .order
-                                .iter()
-                                .position(|i| *i == before)
-                                .is_some_and(|at| at <= self.state.cursor);
-                        let total = self.state.participants[first].initiative.unwrap();
-                        let tie = if group_line.is_some() {
-                            format!(" Tied with {name} at\u{a0}{total}, placed after.")
-                        } else {
-                            String::new()
-                        };
-                        let line = format!(
-                            "{line}{tie}{}",
-                            if waits {
-                                " ·\u{a0}acts next round if moved before"
-                            } else {
-                                ""
-                            }
-                        );
-                        // The name the `joined at` message uses, so one arrival has one name.
-                        let arrival = Self::arrival_name(&self.state, first, &name);
-                        let full = format!("Move {arrival} before {name}");
-                        let font = Type::Strong.font(ui);
-                        // A finished change, tie or not: the Move button shows the open choice.
-                        design::message(ui, Tone::Success, &line);
-                        design::message_choice_row(ui, Tone::Success, |ui| {
-                            let shown = undo_words(
-                                ui,
-                                &full,
-                                false,
-                                &self.state.participants,
-                                &font,
-                                ui.available_width() - design::M * 2.0,
-                            );
-                            if Action::secondary(&shown)
-                                .name(&full)
-                                .hint(&full)
-                                .density(Density::Read)
-                                .show(ui)
-                                .clicked()
-                            {
-                                self.run_command(Command::MoveArrivalBefore(first, before));
-                            }
-                        });
-                    } else {
-                        design::message(ui, Tone::Success, line);
-                    }
-                } else if let Some(line) = self
-                    .state
-                    .log
-                    .last()
-                    .filter(|line| line.contains(" moved before "))
-                {
-                    design::message(ui, Tone::Success, line);
-                }
                 design::rule(ui);
                 add = self.group_list(ui, arrival);
             });
@@ -2717,7 +2696,7 @@ impl Run {
     ) -> Option<&std::collections::BTreeMap<Uuid, (crate::difficulty::Rating, u64)>> {
         let (groups, scale) = (self.groups.as_ref()?, self.scale.as_ref()?);
         let key = (
-            self.steps_kept,
+            self.revision,
             Arc::as_ptr(groups) as usize,
             Arc::as_ptr(scale) as usize,
         );
@@ -2770,6 +2749,109 @@ impl Run {
             self.arrival_words = Some((key, words));
         }
         self.arrival_words.as_ref().map(|(_, words)| words)
+    }
+
+    /// Whether `arrival_result` has a result to show: the newest step added an arrival while
+    /// no search words are typed, or it settled a tie.
+    fn arrival_result_shown(&self) -> bool {
+        let last = self.state.log.last();
+        (!self.history.is_empty()
+            && self.ad_hoc.query.trim().is_empty()
+            && last.is_some_and(|line| {
+                line.starts_with(super::GROUP_ADDED) || line.starts_with(super::ONE_ADDED)
+            }))
+            || last.is_some_and(|line| line.contains(" moved before "))
+    }
+
+    /// The newest arrival's result: who joined and at what total, with `Move … before …` when
+    /// it tied, or the move that settled a tie. `arrival_result_shown` says when it draws.
+    fn arrival_result(&mut self, ui: &mut egui::Ui) {
+        if let Some(previous) = self.history.last().filter(|_| {
+            self.ad_hoc.query.trim().is_empty()
+                && self.state.log.last().is_some_and(|line| {
+                    line.starts_with(super::GROUP_ADDED) || line.starts_with(super::ONE_ADDED)
+                })
+        }) {
+            let start = previous.participants.len();
+            let tied = self
+                .state
+                .participants
+                .iter()
+                .enumerate()
+                .skip(start)
+                .find_map(|(first, arrival)| {
+                    let total = arrival.initiative?;
+                    self.state
+                        .order
+                        .iter()
+                        .copied()
+                        .rev()
+                        .find(|i| {
+                            *i < start
+                                && self.state.participants[*i].present
+                                && self.state.participants[*i].initiative == Some(total)
+                        })
+                        .map(|before| (first, Self::roll_block_first(&self.state, before)))
+                });
+            let group_line = self.group_arrival_notice(start);
+            let line = group_line
+                .as_deref()
+                .unwrap_or_else(|| self.state.log.last().map_or("", String::as_str));
+            if let Some((first, before)) = tied {
+                let name = Self::roll_block_name(&self.state, &self.state.participants[before]);
+                let waits = self.state.phase == Phase::Running
+                    && self
+                        .state
+                        .order
+                        .iter()
+                        .position(|i| *i == before)
+                        .is_some_and(|at| at <= self.state.cursor);
+                let total = self.state.participants[first].initiative.unwrap();
+                let tie = if group_line.is_some() {
+                    format!(" Tied with {name} at\u{a0}{total}, placed after.")
+                } else {
+                    String::new()
+                };
+                let line = format!(
+                    "{line}{tie}{}",
+                    if waits {
+                        " ·\u{a0}acts next round if moved before"
+                    } else {
+                        ""
+                    }
+                );
+                // The name the `joined at` message uses, so one arrival has one name.
+                let arrival = Self::arrival_name(&self.state, first, &name);
+                let full = format!("Move {arrival} before {name}");
+                let font = Type::Strong.font(ui);
+                // A finished change, tie or not: the Move button shows the open choice.
+                design::message(ui, Tone::Success, &line);
+                design::message_choice_row(ui, Tone::Success, |ui| {
+                    let room = ui.available_width() - design::M * 2.0;
+                    let shown = move_words(ui, &arrival, &name, &font, room).unwrap_or_else(|| {
+                        undo_words(ui, &full, false, &self.state.participants, &font, room)
+                    });
+                    if Action::secondary(&shown)
+                        .name(&full)
+                        .hint(&full)
+                        .density(Density::Read)
+                        .show(ui)
+                        .clicked()
+                    {
+                        self.run_command(Command::MoveArrivalBefore(first, before));
+                    }
+                });
+            } else {
+                design::message(ui, Tone::Success, line);
+            }
+        } else if let Some(line) = self
+            .state
+            .log
+            .last()
+            .filter(|line| line.contains(" moved before "))
+        {
+            design::message(ui, Tone::Success, line);
+        }
     }
 
     /// A group's side, size and worth: `Enemies · 3 members · XP 150`.
@@ -2846,7 +2928,7 @@ impl Run {
         let block = all
             .iter()
             .map(|group| {
-                let status = self.group_status(group);
+                let status = self.group_status(group, self.group_joined(group));
                 let totals = Self::group_totals_text(group);
                 let heading = design::number_width(
                     ui,
@@ -2900,13 +2982,19 @@ impl Run {
                         .rich(ui, "No groups yet. Make one on Encounters with")
                         .color(c.muted),
                 );
-                if design::link(ui, "New group").clicked() {
-                    self.wants_new_group = true;
-                }
+                // FJ7: one sentence in one size, and its full stop follows the link's last
+                // word. The link and its full stop wrap together.
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 0.0;
+                    if design::small_link(ui, "New group").clicked() {
+                        self.wants_new_group = true;
+                    }
+                    ui.label(Type::Small.rich(ui, ".").color(c.muted));
+                });
             });
             return None;
         }
-        design::rule(ui);
+        // SI2: `groups_tab` draws the one rule above the groups.
         let offered = super::OfferedGroups::of(&groups, self.source);
         let in_plan = |group: &Arc<super::RunGroup>| {
             self.planned
@@ -2938,8 +3026,10 @@ impl Run {
                     design::group_heading(ui, heading, list.len());
                 }
                 if heading == "For one encounter" && !list.is_empty() {
-                    ui.add(egui::Label::new(Type::Small.rich(ui,
-                        "This run was saved before groups had an encounter, so all groups show.").color(c.muted)).wrap());
+                    design::help(
+                        ui,
+                        "This run was saved before groups had an encounter, so all groups show.",
+                    );
                 }
                 for group in list {
                     ui.push_id(group.id, |ui| {
@@ -2965,24 +3055,32 @@ impl Run {
                 .any(|p| p.npc && p.side == side && p.initiative.is_some())
     }
 
-    /// What a group's row says about it before its members: when it joined, whose encounter it
-    /// is for, and `Changed`.
-    fn group_status(&self, group: &super::RunGroup) -> String {
-        let changed = group
-            .members
-            .iter()
-            .any(|member| member.overrides.changes_creature());
-        let added = self
-            .state
+    /// The newest round this group joined in (0 for setup), from one scan of the participants
+    /// and no list. Its row's status and its layout both take it from here.
+    fn group_joined(&self, group: &super::RunGroup) -> Option<u64> {
+        #[cfg(test)]
+        GROUP_SCANS.with(|count| count.set(count.get() + 1));
+        self.state
             .participants
             .iter()
             .filter_map(|p| p.added_from.as_ref())
             .filter(|from| from.group_id == Some(group.id))
             .map(|from| from.round)
-            .max();
-        let mut status = if let Some(round) = added {
+            .max()
+    }
+
+    /// What a group's row says about it before its members: when it joined (`joined`, from
+    /// `group_joined`), whose encounter it is for, and `Changed`.
+    fn group_status(&self, group: &super::RunGroup, joined: Option<u64>) -> String {
+        let changed = group
+            .members
+            .iter()
+            .any(|member| member.overrides.changes_creature());
+        let mut status = if let Some(round) = joined {
             if round == 0 {
-                "Added before combat".to_owned()
+                // Short enough for the member slot at 960, in the run's own phase word, so a
+                // first join in setup needs no line of its own (review 2).
+                "Added in setup".to_owned()
             } else {
                 format!("Added in round {round}")
             }
@@ -3021,7 +3119,8 @@ impl Run {
             .iter()
             .any(|member| member.overrides.changes_creature());
         let change_hint = if changed { " Changed." } else { "" };
-        let status = self.group_status(group);
+        let joined_round = self.group_joined(group);
+        let status = self.group_status(group, joined_round);
         let rating = self
             .arrival_words()
             .and_then(|words| words.get(&group.id))
@@ -3179,7 +3278,7 @@ impl Run {
             }
         }
         if !totals_in_heading {
-            ui.add(egui::Label::new(Type::Small.rich(ui, totals_text).color(c.muted)).wrap());
+            ui.add(egui::Label::new(Type::Small.rich(ui, &totals_text).color(c.muted)).wrap());
         }
         let mut add = false;
         let add_word = arrival_add_word(group);
@@ -3203,15 +3302,61 @@ impl Run {
             status.as_str()
         };
         // A status that cannot fit the member slot whole takes a full-width line above the
-        // members and controls, where it wraps at its spaces.
-        let status_above = arrival_summary(ui, status_shown, &members, width).is_none();
+        // members and controls, where it wraps at its spaces. FB1: a group that has joined
+        // decides by its widest join status too, so a second join that changes the words never
+        // changes the row's shape.
+        // A group that joined can show `Added in round N` again; its row keeps that room.
+        let widest = format!(
+            "Added in round {}{}",
+            self.state.round.max(10),
+            if changed {
+                format!(" · {} Changed", icons::CHANGED)
+            } else {
+                String::new()
+            }
+        );
+        let widest_in_heading = totals_in_heading
+            && heading_width
+                + design::L
+                + design::number_width(
+                    ui,
+                    &format!("{widest} · {totals_text}"),
+                    &Type::Small.font(ui),
+                )
+                <= grip.rect.width();
+        // Only a group that has joined can change its join words, so only its row keeps the
+        // room of the widest words it can show again, `Added in round NN`. A group that never
+        // joined has no blank line, and every first join fits the slot at 960.
+        let joined = joined_round.is_some();
+        let status_above = arrival_summary(ui, status_shown, &members, width).is_none()
+            || (joined
+                && !widest_in_heading
+                && arrival_summary(ui, &widest, &members, width).is_none());
         if status_above {
-            ui.add(egui::Label::new(Type::Small.rich(ui, status_shown).color(c.muted)).wrap());
+            let words = if status_shown.is_empty() {
+                " "
+            } else {
+                status_shown
+            };
+            ui.add(egui::Label::new(Type::Small.rich(ui, words).color(c.muted)).wrap());
         }
+        // FB1: room for a status line and a members line, so a group that joins (and gains
+        // `Added in round 1`) moves no row below it.
+        let two_lines = ui
+            .fonts_mut(|fonts| {
+                fonts.layout_no_wrap(
+                    "Ag\nAg".into(),
+                    Type::Small.font(ui),
+                    egui::Color32::PLACEHOLDER,
+                )
+            })
+            .size()
+            .y;
         ui.horizontal(|ui| {
             ui.allocate_ui(vec2(width, Density::Read.control()), |ui| {
                 ui.set_min_width(width);
                 ui.set_max_width(width);
+                ui.set_min_height(two_lines.max(Density::Read.control()));
                 let summary = arrival_summary(
                     ui,
                     if status_above { "" } else { status_shown },
@@ -3301,7 +3446,8 @@ impl Run {
             .collect();
         if !warnings.is_empty() || !own.is_empty() {
             for fault in warnings.iter().chain(&own) {
-                if group_fault(ui, fault) {
+                // The one member-fault row (Contract B, R): the Encounters list draws it too.
+                if crate::encounters::member_fault_row(ui, fault) {
                     if fault.kind == super::FaultKind::NotInPackages {
                         self.wants_packages = true;
                     } else {
@@ -3315,15 +3461,13 @@ impl Run {
                 .iter()
                 .chain(&own)
                 .all(|fault| fault.kind == super::FaultKind::NotInPackages)
-                && design::status_link(
-                    ui,
-                    Status {
-                        icon: icons::EDIT,
-                        word: "Edit group",
-                        color: colors().accent,
-                    },
-                )
-                .clicked()
+                // The faults' actions start at the message words; this one does too.
+                && design::message_choice_row(ui, Tone::Warning, |ui| {
+                    Action::secondary("Edit group")
+                        .density(Density::Read)
+                        .show(ui)
+                        .clicked()
+                })
             {
                 self.wants_group_editor = Some(group.path.clone());
             }
@@ -3636,9 +3780,11 @@ impl Run {
                 if let Some(at) = at {
                     let read = ui
                         .horizontal(|ui| {
+                            // AJ1: a message action without an icon has the secondary border,
+                            // and its border starts at the notice's words.
                             ui.add_space(inset);
-                            Action::quiet("Read the new version")
-                                .line_start()
+                            Action::secondary("Read the new version")
+                                .density(Density::Read)
                                 .show(ui)
                                 .clicked()
                         })
@@ -3739,20 +3885,14 @@ impl Run {
                     optional_number(ui, "Maximum HP", &mut max, 1..=1_000_000);
                 });
                 if sheet_decides {
-                    ui.add(
-                        egui::Label::new(
-                            Type::Small.rich(ui, MAX_FROM_SHEET).color(colors().muted),
-                        )
-                        .wrap(),
-                    );
+                    design::help(ui, MAX_FROM_SHEET);
                 }
                 if hp != p.hp || max != p.max_hp {
                     command = Some(Command::Health(index, hp, max));
                 }
-                ui.add(
-                    egui::Label::new(Type::Small.rich(ui,
-                        "You resolve conditions, Concentration, death saves and recovery. Zero HP does not remove a turn."
-                    ).color(colors().muted)).wrap(),
+                design::help(
+                    ui,
+                    "You resolve conditions, Concentration, death saves and recovery. Zero HP does not remove a turn.",
                 );
                 if self.state.phase == Phase::Setup {
                     let mut bonus = p.initiative_bonus;
@@ -4397,6 +4537,15 @@ impl Run {
         } else {
             format!("{} Absent · ", icons::ABSENT)
         };
+        // FF1: a row from an unread roster line marks its own fault first, in the warning tone,
+        // so the DM need not match the notice's name by reading. The notice keeps the cause.
+        let fault = self
+            .roster_fault_line(&p.key)
+            .map(|line| format!("{} Line {line} not read", icons::WARN));
+        let absent = match &fault {
+            Some(fault) => format!("{fault} · {absent}"),
+            None => absent,
+        };
         if p.temporary_hp > 0 {
             numbers.push_str(&format!(" {} +{}", icons::TEMP_HP, p.temporary_hp));
         }
@@ -4477,8 +4626,12 @@ impl Run {
                 .map(|part| part.replace(' ', "\u{a0}"))
                 .collect::<Vec<_>>()
                 .join(" ·\u{a0}");
-            let status =
-                hp_word(&p).map(|(icon, word, color)| (format!("{icon}\u{a0}{word}"), color));
+            let status = match &fault {
+                Some(fault) => Some((fault.replace(' ', "\u{a0}"), colors().result.warning)),
+                None => {
+                    hp_word(&p).map(|(icon, word, color)| (format!("{icon}\u{a0}{word}"), color))
+                }
+            };
             let detail = design::status_in_text(
                 ui,
                 &detail,
@@ -4878,7 +5031,7 @@ impl Run {
             "Close run"
         }));
         if !self.undo_continues() || self.undo_blocked().is_some() {
-            actions += match self.continue_blocked {
+            actions += match self.continue_words() {
                 Some(reason) => continue_reason_width(ui, reason) + gap,
                 None => glance(continue_action()),
             };
@@ -4984,9 +5137,10 @@ impl Run {
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
                         ui.set_max_width(ui.available_width().min(scale.max_width));
-                        // What the party takes comes first, then how everyone ended.
-                        self.loot_section(ui);
+                        // SI1: how everyone ended comes first, so the whole party's HP is in
+                        // view; what the party takes follows.
                         design::group_label(ui, "Final state");
+                        let spacing = ui.spacing().item_spacing.y;
                         ui.spacing_mut().item_spacing.y = 0.0;
                         roster_right = ui.available_rect_before_wrap().right();
                         for index in &self.state.order {
@@ -5021,6 +5175,9 @@ impl Run {
                                 response.on_hover_text(&p.name);
                             }
                         }
+                        ui.spacing_mut().item_spacing.y = spacing;
+                        ui.add_space(design::L);
+                        self.loot_section(ui);
                     });
             });
         let mut header_ui = ui.new_child(
@@ -5030,26 +5187,7 @@ impl Run {
         );
         header_ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             ui.set_min_height(60.0);
-            let close_reason = self.close_block().map(|_| {
-                let conflicts = self.conflict_count();
-                let pending = self
-                    .syncs
-                    .values()
-                    .filter(|sync| {
-                        sync.unconfirmed()
-                            && sync.state() != SyncState::Conflict
-                            && !sync.stranded()
-                    })
-                    .count();
-                let mut parts = Vec::new();
-                if conflicts > 0 {
-                    parts.push(design::count(conflicts, "conflict", "conflicts"));
-                }
-                if pending > 0 {
-                    parts.push(design::count(pending, "pending change", "pending changes"));
-                }
-                format!("Settle {} first.", parts.join(" and "))
-            });
+            let close_reason = self.close_reason();
             let close_width = close_reason.as_ref().map_or_else(
                 || {
                     Action::primary("Close run")
@@ -5147,7 +5285,7 @@ impl Run {
         }
         // Continue fight, and Undo of an ending from the run file, are for the fight that was
         // played last. For another fight, the reason stands where the control would be.
-        if let Some(reason) = self.continue_blocked {
+        if let Some(reason) = self.continue_words() {
             let width = continue_reason_width(ui, reason);
             ui.allocate_ui_with_layout(
                 vec2(width, Type::Small.line()),
@@ -5491,71 +5629,6 @@ pub(crate) fn change_preview(row: &Row) -> String {
     )
 }
 
-/// Keep a member's repair at the end of that member's fault, with no overlapping targets.
-/// The fault's tone and link come from its kind, so it looks the same on every screen.
-pub(crate) fn group_fault(ui: &mut egui::Ui, fault: &super::MemberFault) -> bool {
-    let packages = fault.kind == super::FaultKind::NotInPackages;
-    let tone = fault.tone();
-    let status = Status {
-        icon: if packages {
-            icons::CAMPAIGN
-        } else {
-            icons::EDIT
-        },
-        word: if packages {
-            "Campaign → Packages"
-        } else {
-            "Edit group"
-        },
-        color: colors().accent,
-    };
-    let gap = ui.spacing().item_spacing.x;
-    let inset = design::S
-        + design::HAIRLINE_WIDTH
-        + design::number_width(ui, icons::WARN, &Type::Body.font(ui))
-        + gap * 2.0
-        - design::XS;
-    let text_width = design::number_width(ui, fault, &Type::Body.font(ui)) + inset;
-    let link_width = design::number_width(
-        ui,
-        &format!("{} {}", status.icon, status.word),
-        &Type::Small.font(ui),
-    );
-    if text_width + design::L + link_width <= ui.available_width() {
-        ui.horizontal_top(|ui| {
-            ui.allocate_ui_with_layout(vec2(text_width, 0.0), Layout::top_down(Align::Min), |ui| {
-                design::message(ui, tone, fault);
-            });
-            ui.add_space(design::L - gap);
-            design::status_link(ui, status).clicked()
-        })
-        .inner
-    } else {
-        // A notice action: the link's words start at the warning text.
-        design::message_with_actions(ui, tone, fault, |ui| {
-            hanging_link(ui, status.icon, |ui| {
-                design::status_link(ui, status).clicked()
-            })
-        })
-    }
-}
-
-/// A repair link under a message. Its words start at the message text, and its icon hangs in
-/// the gutter before them.
-pub(crate) fn hanging_link(
-    ui: &mut egui::Ui,
-    icon: &str,
-    link: impl FnOnce(&mut egui::Ui) -> bool,
-) -> bool {
-    let hang = design::number_width(ui, &format!("{icon} "), &Type::Small.font(ui));
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 0.0;
-        ui.add_space(-hang);
-        link(ui)
-    })
-    .inner
-}
-
 /// An Arrivals row's status and members for a slot `width` wide. None when a part of the status
 /// cannot fit the slot whole: then the status takes a full-width line of its own.
 fn arrival_summary(ui: &egui::Ui, status: &str, members: &str, width: f32) -> Option<String> {
@@ -5643,16 +5716,58 @@ fn conflict_close_words(blocked: bool) -> &'static str {
     }
 }
 
-fn close_saved_words(undo: bool, sync: bool) -> String {
-    match (undo, sync) {
-        (false, false) => {
-            "The run stays saved. Resume it from Paused run on the left, or from Encounters."
-        }
-        (true, false) => "The run stays saved. Closing ends Undo for this run.",
-        (false, true) => "The run stays saved. Sync stops.",
-        (true, true) => "The run stays saved. Closing ends Undo for this run. Sync stops.",
+/// What a close keeps. A close keeps the run's Undo steps too (they are saved with the run), so
+/// nothing here may say that closing ends Undo.
+fn close_saved_words(sync: bool) -> String {
+    if sync {
+        "The run stays saved. Sync stops."
+    } else {
+        "The run stays saved. Resume it from Paused run on the left, or from Encounters."
     }
     .to_owned()
+}
+
+/// The tie button's words, `Move <arrival> before <name>`, when they fit `width`. FA4: an arrival
+/// named by its first member, `Shrine Reserve (Goblin Warrior 3)`, gives up the member's name
+/// before its copy number, which tells two arrivals apart: `Move Shrine Reserve (… 3) before
+/// Brannoch Vale`. None when neither form fits.
+fn move_words(
+    ui: &egui::Ui,
+    arrival: &str,
+    before: &str,
+    font: &egui::FontId,
+    width: f32,
+) -> Option<String> {
+    let full = format!("Move {arrival} before {before}");
+    if design::number_width(ui, &full, font) <= width {
+        return Some(full);
+    }
+    let (group, member) = arrival.strip_suffix(')')?.rsplit_once(" (")?;
+    let copy = member
+        .rsplit_once(' ')
+        .map(|(_, last)| last)
+        .filter(|last| !last.is_empty() && last.chars().all(|c| c.is_ascii_digit()))?;
+    // Then the group's and the other name's last words go, never the copy number.
+    let words = |name: &str| -> Vec<String> {
+        let all: Vec<&str> = name.split_whitespace().collect();
+        (1..=all.len())
+            .rev()
+            .map(|n| {
+                let kept = all[..n].join(" ");
+                if n == all.len() {
+                    kept
+                } else {
+                    format!("{kept}…")
+                }
+            })
+            .collect()
+    };
+    words(before).into_iter().find_map(|before| {
+        words(group).into_iter().find_map(|group| {
+            let short = format!("Move {group} (…\u{a0}{copy}) before {before}");
+            (design::number_width(ui, &short, font) <= width).then_some(short)
+        })
+    })
 }
 
 /// Cut only the target, keeping action words, amounts and copy numbers.
@@ -5815,19 +5930,44 @@ fn shortened_action(
 
 /// Keep the character's name; give up later values before shortening a sheet notice.
 fn sheet_notice_words(ui: &egui::Ui, summary: &str, font: &egui::FontId, width: f32) -> String {
+    // FJ1: a count of removed Undo steps stays as long as the character's name does.
+    let (summary, removed) = summary
+        .rsplit_once(" · ")
+        .filter(|(_, removed)| removed.ends_with(" removed"))
+        .map_or((summary, String::new()), |(summary, removed)| {
+            (summary, format!(" · {removed}"))
+        });
     let (first, more) = summary
         .rsplit_once(" and ")
         .filter(|(_, more)| more.ends_with("sheet") || more.ends_with("sheets"))
         .map_or((summary, String::new()), |(first, more)| {
             (first, format!(" and {more}"))
         });
-    let mut values: Vec<_> = first.split(", ").collect();
-    loop {
-        let shown = format!("{}{more}", values.join(", "));
-        if design::number_width(ui, &shown, font) <= width || values.len() == 1 {
-            return shown;
-        }
-        values.pop();
+    let values: Vec<_> = first.split(", ").collect();
+    let fits = |words: &str| design::number_width(ui, words, font) <= width;
+    // FJ4: then shorter forms, so the notice keeps one line and its band its height: the
+    // first value alone, `<name>: <value>`, without the other sheets, then the name alone.
+    let compact = values[0].replace(super::SHEET_CHANGED, ":");
+    let name = values[0]
+        .split_once(super::SHEET_CHANGED)
+        .map_or(values[0], |(name, _)| name);
+    let mut forms: Vec<String> = (1..=values.len())
+        .rev()
+        .map(|n| format!("{}{more}{removed}", values[..n].join(", ")))
+        .collect();
+    forms.push(format!("{compact}{more}{removed}"));
+    forms.push(format!("{compact}{removed}"));
+    if !removed.is_empty() {
+        forms.push(format!("{name}{removed}"));
+    }
+    match forms.iter().find(|form| fits(form)) {
+        Some(form) => form.clone(),
+        None => design::words_that_fit(
+            ui,
+            forms.last().map_or(summary, String::as_str),
+            font,
+            width,
+        ),
     }
 }
 
@@ -5889,6 +6029,22 @@ fn name_lines(ui: &egui::Ui, name: &str, font: &egui::FontId, width: f32) -> (Ar
             }
         }
         words.pop();
+    }
+}
+
+/// The dock's selected name and its type. FJ5: it keeps `Heading`, as every other name there
+/// does, and gives up whole words by `dock_name`. `Small` only when that shows the name whole,
+/// so a smaller name never also loses letters.
+pub(super) fn dock_name_shown(ui: &egui::Ui, name: &str, room: f32) -> (Type, String) {
+    if design::number_width(ui, name, &Type::Heading.font(ui)) <= room {
+        (Type::Heading, name.to_owned())
+    } else if design::number_width(ui, name, &Type::Small.font(ui)) <= room {
+        (Type::Small, name.to_owned())
+    } else {
+        (
+            Type::Heading,
+            dock_name(ui, name, &Type::Heading.font(ui), room),
+        )
     }
 }
 
@@ -6124,8 +6280,18 @@ impl RowLayout {
     fn with_badge(mut self, ui: &egui::Ui, badge: Option<&str>) -> Self {
         self.badge_below = false;
         if let Some(badge) = badge {
-            let (_, _, room) = badge_place(&self, 0.0);
-            self.badge_below = badge_words(ui, badge, &Type::Small.font(ui), room).is_none();
+            let font = Type::Small.font(ui);
+            let (_, _, beside) = badge_place(&self, 0.0);
+            // SJ1: the result itself (its last two parts) stays whole. When it cannot fit after
+            // the conditions but fits on a line of its own, it takes that line, even where a
+            // cut form would fit beside them: `Saved · 1 damage (half)` keeps its `(half)`.
+            let parts: Vec<&str> = badge.split(" · ").collect();
+            let result = parts[parts.len().saturating_sub(2)..].join(" · ");
+            let whole = design::number_width(ui, &result, &font);
+            self.badge_below = true;
+            let (_, _, below) = badge_place(&self, 0.0);
+            self.badge_below = badge_words(ui, badge, &font, beside).is_none()
+                || (whole > beside && whole <= below);
         }
         self
     }
@@ -6806,18 +6972,18 @@ fn paint_row(
     );
     let name_left = x + layout.name_left;
     // A compressed row can be shorter than the picture's column is wide.
+    let picture = layout.picture.min(rect.height() - 4.0);
+    // FJ3: the picture centres on the first name line, as the initiative number does, on every
+    // row with or without a second line; it only stays inside its row.
+    let picture_y = line_y.clamp(
+        rect.top() + 2.0 + picture / 2.0,
+        (rect.bottom() - 2.0 - picture / 2.0).max(rect.top() + 2.0 + picture / 2.0),
+    );
     crate::art::portrait(
         ui,
         Rect::from_center_size(
-            pos2(
-                name_left - PICTURE_GAP - layout.picture / 2.0,
-                if layout.name.rows.len() > 1 || layout.second_left < layout.name_left {
-                    line_y
-                } else {
-                    rect.center().y
-                },
-            ),
-            egui::Vec2::splat(layout.picture.min(rect.height() - 4.0)),
+            pos2(name_left - PICTURE_GAP - layout.picture / 2.0, picture_y),
+            egui::Vec2::splat(picture),
         ),
         layout.art.as_deref(),
         &p.name,
@@ -7347,6 +7513,18 @@ mod tests {
                 });
             design::theme::install(&harness.ctx);
             harness.run_steps(2);
+            // iter-25-R review 2: a frame scans the participants once per group for the panel's
+            // width and once per group for its row, and builds no list of rounds besides.
+            let scans = || GROUP_SCANS.with(std::cell::Cell::get);
+            let (before, passes) = (scans(), harness.ctx.cumulative_pass_nr());
+            harness.run_steps(3);
+            let passes = (harness.ctx.cumulative_pass_nr() - passes) as usize;
+            assert!(passes > 0);
+            assert_eq!(
+                scans() - before,
+                passes * 2 * 2,
+                "two scans for each of 2 groups in each of {passes} passes"
+            );
             let fields: Vec<_> = ["Scouts", "Lost Patrol"]
                 .map(|name| {
                     harness
@@ -8127,11 +8305,7 @@ mod tests {
             egui::CentralPanel::default().show(ctx, |ui| {
                 let font = Type::Small.font(ui);
                 for width in [90.0, 150.0, 180.0, 400.0] {
-                    for status in [
-                        "Changed",
-                        "Added in round 2 · Changed",
-                        "Added before combat",
-                    ] {
+                    for status in ["Changed", "Added in round 2 · Changed", "Added in setup"] {
                         // iter-23 SA1: a status part that cannot fit the slot whole goes to a
                         // line of its own above the row; it never breaks inside a word here.
                         let Some(summary) =
@@ -8307,6 +8481,35 @@ mod tests {
                 // Room for all of it: nothing changes.
                 let wide = design::number_width(ui, &full, &font);
                 assert_eq!(words(&full, wide), full);
+                // iter-25-R FA4: the tie button gives up a member's name before its copy
+                // number, which tells two arrivals apart. One pixel short of each form's width
+                // gives the next form.
+                let arrival = "Shrine Reserve (Goblin Warrior 3)";
+                let whole = "Move Shrine Reserve (Goblin Warrior 3) before Brannoch Vale";
+                let short = "Move Shrine Reserve (…\u{a0}3) before Brannoch Vale";
+                let at = |width: f32| move_words(ui, arrival, "Brannoch Vale", &font, width);
+                let whole_width = design::number_width(ui, whole, &font);
+                let short_width = design::number_width(ui, short, &font);
+                assert_eq!(at(whole_width).as_deref(), Some(whole));
+                assert_eq!(at(whole_width - 1.0).as_deref(), Some(short));
+                // Narrower, the group's last word goes, then the other name's: the copy stays.
+                let shorter = "Move Shrine… (…\u{a0}3) before Brannoch Vale";
+                assert_eq!(at(short_width - 1.0).as_deref(), Some(shorter));
+                let shortest = "Move Shrine… (…\u{a0}3) before Brannoch…";
+                let shortest_width = design::number_width(ui, shortest, &font);
+                assert_eq!(at(shortest_width).as_deref(), Some(shortest));
+                assert_eq!(
+                    at(shortest_width - 1.0),
+                    None,
+                    "then the caller cuts the target"
+                );
+                // An arrival named by its group alone has no member to give up.
+                let plain = "Move Shrine Reserve before Brannoch Vale";
+                let plain_width = design::number_width(ui, plain, &font);
+                let alone =
+                    |width: f32| move_words(ui, "Shrine Reserve", "Brannoch Vale", &font, width);
+                assert_eq!(alone(plain_width).as_deref(), Some(plain));
+                assert_eq!(alone(plain_width - 1.0), None);
                 // The name shortens first, while the source fits.
                 let named = format!("Undo: {SHEET_SOURCE}HP for Brannoch…");
                 assert_eq!(words(&full, design::number_width(ui, &named, &font)), named);
@@ -8685,7 +8888,7 @@ mod tests {
             let shown = fault.clone();
             let mut harness = egui_kittest::Harness::new(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    group_fault(ui, &shown);
+                    crate::encounters::member_fault_row(ui, &shown);
                 });
             });
             design::theme::install(&harness.ctx);
@@ -8719,6 +8922,15 @@ mod tests {
                 })
                 .collect();
             assert!(fills.contains(&tone), "{fault:?}: {fills:?}");
+            // iter-25-R FB5: the repair is a bordered secondary button, not an underlined
+            // link, on the Encounters list and in Arrivals alike.
+            use egui_kittest::kittest::Queryable;
+            let repair = harness.get_by_label("Edit group").rect();
+            let bordered = harness.output().shapes.iter().any(|shape| {
+                matches!(&shape.shape, egui::Shape::Rect(rect)
+                    if rect.stroke.width > 0.0 && rect.rect.expand(1.0).contains_rect(repair))
+            });
+            assert!(bordered, "{fault:?}: the repair {repair:?} has a border");
             assert!(!fills.contains(&other), "{fault:?}: {fills:?}");
         }
     }
@@ -9018,8 +9230,29 @@ mod tests {
             crate::combat_sync::CONDITIONS.map(|(_, name)| harness.get_by_label(name).rect().left())
         };
         let start = places(&harness);
+        // iter-25-R FI3: a toggle's words start at one x, on or off, and it takes one width.
+        let words = |harness: &egui_kittest::Harness<'_>, name: &str| {
+            let rect = harness.get_by_label(name).rect();
+            let left = harness
+                .output()
+                .shapes
+                .iter()
+                .find_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text)
+                        if text.galley.text().ends_with(name)
+                            && rect.contains(text.pos + text.galley.rect.center().to_vec2()) =>
+                    {
+                        Some(text.pos.x + text.galley.rect.left())
+                    }
+                    _ => None,
+                });
+            (left.expect("the toggle paints its words"), rect.width())
+        };
         for (_, name) in crate::combat_sync::CONDITIONS {
             let was = run.borrow().state.participants[0].conditions.clone();
+            // Exhaustion's level stepper takes its words' place, so it has no on form here.
+            let plain = name != "Exhaustion";
+            let off = plain.then(|| words(&harness, name));
             harness.get_by_label(name).click();
             harness.run_steps(2);
             assert_ne!(
@@ -9028,6 +9261,13 @@ mod tests {
                 "iter-24-R-FJ1: {name} toggled"
             );
             assert_eq!(places(&harness), start, "iter-24-R-FJ1: {name} toggled");
+            if let Some(off) = off {
+                let on = words(&harness, name);
+                assert!(
+                    (on.0 - off.0).abs() <= 1.0 && (on.1 - off.1).abs() < 0.5,
+                    "iter-25-R-FI3: {name} words and width off {off:?}, on {on:?}"
+                );
+            }
             // Exhaustion starts on at level 2; a second press would start it again at 1.
             if name == "Exhaustion" {
                 run.borrow_mut().undo();
@@ -9559,12 +9799,14 @@ mod tests {
     #[test]
     fn close_names_only_the_live_losses() {
         assert_eq!(
-            close_saved_words(false, false),
+            close_saved_words(false),
             "The run stays saved. Resume it from Paused run on the left, or from Encounters."
         );
-        assert!(!close_saved_words(false, true).contains("Undo"));
-        assert!(!close_saved_words(true, false).contains("Sync stops"));
-        assert!(close_saved_words(true, true).contains("Undo for this run. Sync stops."));
+        assert_eq!(close_saved_words(true), "The run stays saved. Sync stops.");
+        // AL1: a close keeps Undo, so no close words say that it ends.
+        for sync in [false, true] {
+            assert!(!close_saved_words(sync).contains("Undo"));
+        }
     }
 
     #[test]
@@ -9585,6 +9827,29 @@ mod tests {
                     );
                     assert!(design::number_width(ui, &fitted, &font) <= 70.0, "{fitted}");
                 }
+                // iter-25-R FJ5: a name that Small shows whole may use Small; one that must lose
+                // words keeps Heading, so it never loses both size and letters.
+                let heading = Type::Heading.font(ui);
+                let whole = design::number_width(ui, long, &heading);
+                let small = design::number_width(ui, long, &font);
+                let at = |room: f32| dock_name_shown(ui, long, room);
+                assert!(matches!(at(whole), (Type::Heading, shown) if shown == long));
+                assert!(matches!(at(small), (Type::Small, shown) if shown == long));
+                // iter-25-R FJ4, FJ1: a sheet notice keeps one line by shorter forms, and a
+                // count of removed Undo steps stays as long as the name does.
+                let summary = "Brannoch Vale’s sheet changed: HP 58 → 54 and 2 more sheets · 1 Undo step removed";
+                let notice = |width: f32| sheet_notice_words(ui, summary, &font, width);
+                let wide = design::number_width(ui, summary, &font);
+                assert_eq!(notice(wide), summary);
+                let compact = "Brannoch Vale: HP 58 → 54 and 2 more sheets · 1 Undo step removed";
+                assert_eq!(notice(design::number_width(ui, compact, &font)), compact);
+                let named = "Brannoch Vale · 1 Undo step removed";
+                let named_width = design::number_width(ui, named, &font);
+                assert_eq!(notice(named_width), named);
+                assert!(design::number_width(ui, &notice(named_width - 1.0), &font) <= named_width - 1.0);
+                let (role, shown) = at(small - 1.0);
+                assert!(role == Type::Heading && shown.ends_with('…'), "{shown}");
+                assert!(design::number_width(ui, &shown, &heading) <= small - 1.0);
             });
         });
         harness.run_steps(2);

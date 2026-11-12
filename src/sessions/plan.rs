@@ -8,7 +8,7 @@ use crate::{
     sessions::{Apply, each_linked_name, insert_in_note, linked_names, section_text},
     timeline::{
         self, Book, Kind,
-        page::{added_message, long_rest_status, problems, quick_add, rest_ruling},
+        page::{added_message, file_notices, long_rest_status, problems, quick_add, rest_ruling},
         removed_event_words,
     },
 };
@@ -554,7 +554,7 @@ impl Sessions {
             ui.set_min_height(*height);
             design::undo_message(
                 ui,
-                Tone::Info,
+                Tone::Success,
                 &format!("Removed “{name}” from tonight."),
                 "Undo remove",
             )
@@ -582,6 +582,7 @@ impl Sessions {
         {
             self.removed_group = None;
         }
+        file_notices(ui, book);
         if problems(ui, book) {
             return;
         }
@@ -718,9 +719,13 @@ impl Sessions {
         let ruling_undo = book.rest_undo_id().map(str::to_owned);
         let mut ruling = None;
         egui::CentralPanel::default().frame(egui::Frame::new()).show_inside(ui, |ui| {
+            // The rows leave the scroll bar's lane free whether or not the bar shows, so a row's
+            // actions keep their x when the plan grows long enough to scroll.
+            let lane_width = ui.available_width() - ui.spacing().scroll.allocated_width();
             egui::ScrollArea::vertical().id_salt(("session_plan", session))
                 .auto_shrink([false, false]).show(ui, |ui| {
-                let width = ui.available_width() - design::M;
+                ui.set_max_width(lane_width);
+                let width = lane_width.min(ui.available_width()) - design::M;
                 let action_width = [Action::primary("Start fight").icon(icons::RUN), Action::primary("Resume").icon(icons::RUN), Action::quiet("Add to notes"), Action::secondary("Arrivals").icon(icons::GROUP)]
                     .into_iter().map(|action| action.density(Density::Read).natural_width(ui)).fold(0.0, f32::max)
                     + Density::Read.control() + design::S;
@@ -730,7 +735,7 @@ impl Sessions {
                 for (at, event) in book.events.iter_mut().enumerate() {
                     if let Some((removed_at, words)) = &removed_row && *removed_at == at {
                         ui.add_space(design::S);
-                        undo_row_remove |= design::undo_message(ui, Tone::Info, words, "Undo remove");
+                        undo_row_remove |= design::undo_message(ui, Tone::Success, words, "Undo remove");
                     }
                     if !event.is_in(session) { continue; }
                     any = true;
@@ -834,7 +839,7 @@ impl Sessions {
                 }
                 if let Some((at, words)) = &removed_row && *at >= event_count {
                     ui.add_space(design::S);
-                    undo_row_remove |= design::undo_message(ui, Tone::Info, words, "Undo remove");
+                    undo_row_remove |= design::undo_message(ui, Tone::Success, words, "Undo remove");
                 }
                 for (position, fight) in planned.iter().enumerate() {
                     self.removed_fight_message(ui, session, position);
@@ -1088,7 +1093,7 @@ impl Sessions {
         ui.add_space(design::S);
         if design::undo_message(
             ui,
-            Tone::Info,
+            Tone::Success,
             &format!("Removed “{name}” from tonight."),
             "Undo remove",
         ) {
@@ -1156,7 +1161,7 @@ impl Sessions {
             if design::undo_message(
                 ui,
                 if deleted.unsent.is_empty() {
-                    Tone::Info
+                    Tone::Success
                 } else {
                     Tone::Warning
                 },
@@ -1198,11 +1203,7 @@ impl Sessions {
             }
         }
         if let Some(just) = &self.added {
-            let to = self
-                .notes
-                .iter()
-                .find(|note| Some(note.id) == session)
-                .map(|note| format!("Session {}", note.number));
+            let to = self.session_name(session);
             let restores = book
                 .events
                 .iter()
@@ -1221,7 +1222,7 @@ impl Sessions {
             && let Some(label) = book.removed().map(str::to_owned)
         {
             let words = removed_event_words(book, session, &days, &label, planned);
-            if design::undo_message(ui, Tone::Info, &words, "Undo remove") {
+            if design::undo_message(ui, Tone::Success, &words, "Undo remove") {
                 book.undo_remove();
             }
         }

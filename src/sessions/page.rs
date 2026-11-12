@@ -18,7 +18,10 @@ use crate::{
     persistence::Campaign,
     processing::{self, Job, Request, settings::ProcessingSettings},
     recording::{Health, Recorder},
-    timeline::{self, Book, page::SessionLink},
+    timeline::{
+        self, Book,
+        page::{SessionLink, added_message},
+    },
 };
 use eframe::egui::{self, Color32};
 use std::{
@@ -196,6 +199,31 @@ pub enum Played {
     Session(Uuid),
 }
 
+/// One note a link update wrote: the draft before, the words after, and the whole file and
+/// session id it held right after the write. Undo writes only into that same file.
+struct LinkWrite {
+    before: Draft,
+    after: String,
+    bytes: String,
+    id: Option<Uuid>,
+}
+
+/// Tests: what runs after a link update writes a note.
+#[cfg(test)]
+type LinkWriteHook = Box<dyn FnMut(&Path)>;
+
+#[cfg(test)]
+thread_local! {
+    /// Tests: runs after a link update writes a note, to change the next one under it.
+    static AFTER_LINK_WRITE: std::cell::RefCell<Option<LinkWriteHook>> =
+        std::cell::RefCell::new(None);
+    /// Tests: runs right before Undo reads a note it wrote, to replace it under the read.
+    static BEFORE_UNDO_READ: std::cell::RefCell<Option<LinkWriteHook>> =
+        std::cell::RefCell::new(None);
+    /// Tests: how many notes `note_bodies` read.
+    static NOTE_READS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 struct LinkUndoState {
     notes: Vec<(PathBuf, String)>,
     events: Vec<timeline::Event>,
@@ -232,9 +260,12 @@ pub struct Sessions {
     /// deletion's result owns it: its Undo, or the plan's next note or event edit, ends it.
     deleted_run: Option<(crate::encounter_run::DeletedRun, Option<u64>)>,
     row_notice: Option<(Option<Uuid>, usize)>,
-    updated_links: Option<Vec<(Draft, String)>>,
+    updated_links: Option<Vec<LinkWrite>>,
     link_undo_state: Option<LinkUndoState>,
     link_problem: Option<String>,
+    /// A link update that could not be put back whole: some notes hold the new links. Its Undo
+    /// and its error stay through the usual expiry until Undo puts them back or a new update.
+    link_partial: bool,
     removed_fight: Option<(Option<Uuid>, usize, String, NoteUndo)>,
     plan_notice_state: Option<(String, Vec<timeline::Event>)>,
     removed_event_in_plan: bool,
@@ -274,6 +305,10 @@ pub struct Sessions {
     live: Option<Live>,
     confirm_record: bool,
     notice: Option<(Tone, String)>,
+    /// A copy of a notice that arrived on its own (processing finished). While `notice` still
+    /// equals it, the notice sits in the bottom banner; any later notice replaces it and keeps
+    /// its own place above the tabs, as the result of the DM's action.
+    arrived_notice: Option<(Tone, String)>,
     /// The session a notice is about. None means whichever is open now.
     notice_session: Option<Uuid>,
     /// A job ended while the DM may be elsewhere.
@@ -794,6 +829,9 @@ fn session_detail(
     )
 }
 
+/// After Discard, a note with no file left: the editor shows its last saved words.
+const DISCARDED_GONE: &str = "This file is gone from the folder. The editor shows its last saved words. Save them as a new file to keep them.";
+
 /// A missing note's words. A known new place says why it is offered; with none, the file is
 /// only gone.
 fn missing_note_words(moved_to: Option<String>) -> String {
@@ -1140,6 +1178,113 @@ impl Sessions {
             .map(|(index, _)| index)
     }
 
+    /// The notice that arrived on its own is still the one to show.
+    fn notice_arrived(&self) -> bool {
+        self.notice.is_some() && self.notice == self.arrived_notice
+    }
+
+    /// The session's own banner notices are in view: the notes, or the Notes panel.
+    fn notes_in_view(&self) -> bool {
+        (self.on_page && self.view == View::Notes && self.form.is_none()) || self.notes_open
+    }
+
+    fn has_banner_notices(&self) -> bool {
+        let notes = self.on_page && self.view == View::Notes && self.form.is_none();
+        let selected = self
+            .selected
+            .and_then(|id| self.notes.iter().find(|note| note.id == id));
+        (notes
+            && self.notice_arrived()
+            && (self.notice_session.is_none() || self.notice_session == self.selected))
+            || (notes && selected.is_some_and(|note| !note.also.is_empty()))
+            || (notes && !self.unreadable.is_empty())
+            || (self.notes_in_view() && self.draft.as_ref().is_some_and(Draft::needs_attention))
+            || (self.on_page
+                && self.view == View::Templates
+                && self
+                    .template_draft
+                    .as_ref()
+                    .is_some_and(Draft::needs_attention))
+    }
+
+    /// Lead ruling, round 25: a session notice that arrives on its own (processing finished,
+    /// a file changed, moved or copied elsewhere, a save that failed) sits in the bottom banner,
+    /// so it never moves the tabs or the note the DM types in. The result of the DM's own
+    /// action keeps its place above the tabs. Each one wraps at `LIST_MEASURE`.
+    fn banner_notices(&mut self, ui: &mut egui::Ui) {
+        let notes = self.on_page && self.view == View::Notes && self.form.is_none();
+        let width = ui.available_width().min(design::LIST_MEASURE);
+        if notes
+            && self.notice_arrived()
+            && (self.notice_session.is_none() || self.notice_session == self.selected)
+            && let Some((tone, words)) = self.notice.clone()
+        {
+            ui.horizontal_top(|ui| {
+                let room = width - Density::Read.control() - design::S;
+                ui.allocate_ui_with_layout(
+                    egui::vec2(room, 0.0),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| design::message(ui, tone, &words),
+                );
+                if design::icon_button(ui, icons::CLOSE, "Dismiss").clicked() {
+                    self.notice = None;
+                    self.notice_session = None;
+                }
+            });
+        }
+        if notes
+            && let Some(note) = self
+                .selected
+                .and_then(|id| self.notes.iter().find(|note| note.id == id))
+                .cloned()
+        {
+            for copy in &note.also {
+                let filename = copy.file_name().unwrap_or_default().to_string_lossy();
+                if design::message_with_action(
+                    ui,
+                    Tone::Warning,
+                    &format!(
+                        "{} and {filename} claim to be the same session.",
+                        note.path.file_name().unwrap_or_default().to_string_lossy()
+                    ),
+                    &format!("Make {filename} a separate session"),
+                ) {
+                    match super::new_identity(copy) {
+                        Ok(undo) => {
+                            self.identity_undo = Some(undo);
+                            self.refresh();
+                        }
+                        Err(error) => self.notice = Some((Tone::Error, error)),
+                    }
+                }
+            }
+        }
+        if notes && !self.unreadable.is_empty() {
+            design::message(
+                ui,
+                Tone::Warning,
+                &format!(
+                    "Splat cannot read the properties of {}, so it is not listed. The file is safe. Repair it to bring it back.",
+                    self.unreadable.join(", ")
+                ),
+            );
+        }
+        if self.notes_in_view()
+            && let Some(draft) = self.draft.as_mut().filter(|draft| draft.needs_attention())
+        {
+            Self::draft_warning(ui, draft);
+        }
+        if self.on_page
+            && self.view == View::Templates
+            && let Some(draft) = self
+                .template_draft
+                .as_mut()
+                .filter(|draft| draft.needs_attention())
+        {
+            Self::draft_warning(ui, draft);
+        }
+    }
+
     fn banner_has_primary(&self, settings: &ProcessingSettings, run_open: bool) -> bool {
         self.banner_primary_owner(settings, run_open).is_some()
     }
@@ -1167,6 +1312,7 @@ impl Sessions {
                 .alerts
                 .iter()
                 .all(|alert| self.recording_row_here(alert.session))
+            && !self.has_banner_notices()
         {
             return;
         }
@@ -1181,157 +1327,213 @@ impl Sessions {
                     .inner_margin(egui::Margin::symmetric(design::M as i8, design::XS as i8)),
             )
             .show(ctx, |ui| {
-                if let Some(words) = &stalled {
-                    let session = self.live.as_ref().map(|live| live.session);
-                    // The choices start at the message text, as every message's choices do.
-                    design::message_with_actions(ui, Tone::Error, words, |ui| {
-                        ui.horizontal_wrapped(|ui| {
-                            if (if primary_owner == Some(usize::MAX) {
-                                Action::primary("Record again")
-                            } else {
-                                Action::secondary("Record again")
-                            })
-                            .show(ui)
-                            .clicked()
-                            {
-                                record_again = session;
-                            }
-                            let here = self.on_page && self.selected == session;
-                            if !here && Action::quiet("Open the session").show(ui).clicked() {
-                                open = session;
-                            }
-                            ui.add_space(design::L - ui.spacing().item_spacing.x);
-                            stop = Action::quiet("Stop recording")
-                                .name("Stop recording")
-                                .show(ui)
-                                .clicked();
-                        });
-                    });
-                }
-                let mut dismiss = None;
-                for (index, alert) in self.alerts.iter().enumerate() {
-                    if self.recording_row_here(alert.session) {
-                        continue;
-                    }
-                    let banner_primary = primary_owner == Some(index);
-                    let missing_input =
-                        alert.can_record && (settings.input_missing() || alert.missing_input());
-                    let words = if alert.word == "Recording stopped" {
-                        format!("{} {}", alert.words, recording_recovery(missing_input))
-                    } else {
-                        alert.words.clone()
-                    };
-                    // With the audio gone, no advice to process again is true. The reason
-                    // stands beside the blocked action instead.
-                    let audio_gone = alert.retry.as_ref().is_some_and(|path| !path.exists());
-                    let words = if audio_gone {
-                        processing::without_retry_advice(&words)
-                    } else {
-                        words
-                    };
-                    let retry_blocked = if audio_gone {
-                        Some("Audio removed. Restore the WAV file to process it.")
-                    } else if self.job.is_some() || self.live.is_some() {
-                        Some("Stop recording or wait for processing to finish.")
-                    } else {
-                        None
-                    };
-                    // The choices start at the message text, and wrap there too. The words keep
-                    // their hover: what the recorder itself said.
-                    let top = ui.cursor().min;
-                    let mut words_end = top.y;
-                    design::message_with_actions(ui, Tone::Error, &words, |ui| {
-                        words_end = ui.min_rect().top() - ui.spacing().item_spacing.y;
-                        ui.horizontal_wrapped(|ui| {
-                            let mut drawn = false;
-                            if missing_input
-                                && (if banner_primary {
-                                    Action::primary("Choose an input")
-                                } else {
-                                    Action::secondary("Choose an input")
-                                })
-                                .show(ui)
-                                .clicked()
-                            {
-                                self.wants_recording_input = true;
-                            }
-                            drawn |= missing_input;
-                            if let Some(path) = &alert.retry
-                                && (if banner_primary {
-                                    Action::primary("Continue processing")
-                                } else {
-                                    Action::secondary("Continue processing")
-                                })
-                                .blocked(retry_blocked)
-                                .show(ui)
-                                .clicked()
-                            {
-                                retry = Some((alert.session, path.clone()));
-                            }
-                            // One blocked control says why beside it, then `L` to the next. Before
-                            // Dismiss, Dismiss's own `L` gap is that gap.
-                            let mut gap = false;
-                            if alert.retry.is_some() && retry_blocked.is_some() {
-                                design::blocked_reason(ui, retry_blocked);
-                                gap = true;
-                            }
-                            let mut gap_before = |ui: &mut egui::Ui| {
-                                if std::mem::take(&mut gap) {
+                // Review of PR 255: many notices at once never push a recovery choice out of the
+                // window. The banner is at most a third of it, and scrolls; the recording alerts
+                // stay first, at its top.
+                let most = ui.ctx().content_rect().height() / 3.0;
+                egui::ScrollArea::vertical()
+                    .id_salt("session_banner_scroll")
+                    .max_height(most)
+                    // Short content takes its own height; long content takes the whole third.
+                    .min_scrolled_height(most)
+                    .auto_shrink([false, true])
+                    .show(ui, |ui| {
+                        if let Some(words) = &stalled {
+                            let session = self.live.as_ref().map(|live| live.session);
+                            // The choices start at the message text, as every message's choices do.
+                            design::message_with_actions(ui, Tone::Error, words, |ui| {
+                                ui.horizontal_wrapped(|ui| {
+                                    if (if primary_owner == Some(usize::MAX) {
+                                        Action::primary("Record again")
+                                    } else {
+                                        Action::secondary("Record again")
+                                    })
+                                    .show(ui)
+                                    .clicked()
+                                    {
+                                        record_again = session;
+                                    }
+                                    let here = self.on_page && self.selected == session;
+                                    if !here
+                                        && Action::secondary("Open the session").show(ui).clicked()
+                                    {
+                                        open = session;
+                                    }
                                     ui.add_space(design::L - ui.spacing().item_spacing.x);
-                                }
-                            };
-                            drawn |= alert.retry.is_some();
-                            if alert.can_record && self.live.is_none() {
-                                gap_before(ui);
-                                if (if missing_input {
-                                    Action::quiet("Record again")
-                                } else if banner_primary {
-                                    Action::primary("Record again")
-                                } else {
-                                    Action::secondary("Record again")
-                                })
-                                .show(ui)
-                                .clicked()
-                                {
-                                    record_again = Some(alert.session);
-                                }
+                                    stop = Action::secondary("Stop recording")
+                                        .name("Stop recording")
+                                        .show(ui)
+                                        .clicked();
+                                });
+                            });
+                        }
+                        let mut dismiss = None;
+                        for (index, alert) in self.alerts.iter().enumerate() {
+                            if self.recording_row_here(alert.session) {
+                                continue;
                             }
-                            drawn |= alert.can_record && self.live.is_none();
+                            let banner_primary = primary_owner == Some(index);
+                            let missing_input = alert.can_record
+                                && (settings.input_missing() || alert.missing_input());
+                            let words = if alert.word == "Recording stopped" {
+                                format!("{} {}", alert.words, recording_recovery(missing_input))
+                            } else {
+                                alert.words.clone()
+                            };
+                            // With the audio gone, no advice to process again is true. The reason
+                            // stands beside the blocked action instead.
+                            let audio_gone =
+                                alert.retry.as_ref().is_some_and(|path| !path.exists());
+                            let words = if audio_gone {
+                                processing::without_retry_advice(&words)
+                            } else {
+                                words
+                            };
+                            let retry_blocked = if audio_gone {
+                                Some("Audio removed. Restore the WAV file to process it.")
+                            } else if self.job.is_some() || self.live.is_some() {
+                                Some("Stop recording or wait for processing to finish.")
+                            } else {
+                                None
+                            };
+                            // The choices start at the message text, and wrap there too. The words keep
+                            // their hover: what the recorder itself said. Dismiss is the close icon at the
+                            // message end, as every dismiss is.
+                            let top = ui.cursor().min;
+                            let mut words_end = top.y;
                             let here = self.on_page
                                 && self.selected == Some(alert.session)
                                 && self.tab == Tab::Recordings;
-                            if !here {
-                                gap_before(ui);
-                                if Action::quiet("Open the session").show(ui).clicked() {
-                                    open = Some(alert.session);
+                            let can_record = alert.can_record && self.live.is_none();
+                            let has_choices =
+                                missing_input || alert.retry.is_some() || can_record || !here;
+                            let message_width = ui.available_width().min(design::LIST_MEASURE);
+                            ui.horizontal_top(|ui| {
+                                let room = message_width - Density::Read.control() - design::S;
+                                ui.allocate_ui_with_layout(
+                                    egui::vec2(room, 0.0),
+                                    egui::Layout::top_down(egui::Align::Min),
+                                    |ui| {
+                                        if !has_choices {
+                                            design::message(ui, Tone::Error, &words);
+                                            words_end = ui.min_rect().bottom();
+                                            return;
+                                        }
+                                        design::message_with_actions(
+                                            ui,
+                                            Tone::Error,
+                                            &words,
+                                            |ui| {
+                                                words_end = ui.min_rect().top()
+                                                    - ui.spacing().item_spacing.y;
+                                                ui.horizontal_wrapped(|ui| {
+                                                    if missing_input
+                                                        && (if banner_primary {
+                                                            Action::primary("Choose an input")
+                                                        } else {
+                                                            Action::secondary("Choose an input")
+                                                        })
+                                                        .show(ui)
+                                                        .clicked()
+                                                    {
+                                                        self.wants_recording_input = true;
+                                                    }
+                                                    if let Some(path) = &alert.retry
+                                                        && (if banner_primary {
+                                                            Action::primary("Continue processing")
+                                                        } else {
+                                                            Action::secondary("Continue processing")
+                                                        })
+                                                        .blocked(retry_blocked)
+                                                        .show(ui)
+                                                        .clicked()
+                                                    {
+                                                        retry = Some((alert.session, path.clone()));
+                                                    }
+                                                    // One blocked control says why beside it, then `L` to the next.
+                                                    let mut gap = false;
+                                                    if alert.retry.is_some()
+                                                        && retry_blocked.is_some()
+                                                    {
+                                                        design::blocked_reason(ui, retry_blocked);
+                                                        gap = true;
+                                                    }
+                                                    let mut gap_before = |ui: &mut egui::Ui| {
+                                                        if std::mem::take(&mut gap) {
+                                                            ui.add_space(
+                                                                design::L
+                                                                    - ui.spacing().item_spacing.x,
+                                                            );
+                                                        }
+                                                    };
+                                                    if can_record {
+                                                        gap_before(ui);
+                                                        // With no input, Choose an input is the one primary.
+                                                        if (if banner_primary && !missing_input {
+                                                            Action::primary("Record again")
+                                                        } else {
+                                                            Action::secondary("Record again")
+                                                        })
+                                                        .show(ui)
+                                                        .clicked()
+                                                        {
+                                                            record_again = Some(alert.session);
+                                                        }
+                                                    }
+                                                    if !here {
+                                                        gap_before(ui);
+                                                        if Action::secondary("Open the session")
+                                                            .show(ui)
+                                                            .clicked()
+                                                        {
+                                                            open = Some(alert.session);
+                                                        }
+                                                    }
+                                                });
+                                            },
+                                        );
+                                    },
+                                );
+                                if design::icon_button(ui, icons::CLOSE, "Dismiss this error")
+                                    .clicked()
+                                {
+                                    dismiss = Some(index);
                                 }
+                            });
+                            if let Some(said) = &alert.said {
+                                let width = message_width - Density::Read.control() - design::S;
+                                let words_rect = egui::Rect::from_min_max(
+                                    top,
+                                    egui::pos2(top.x + width, words_end),
+                                );
+                                ui.interact(
+                                    words_rect,
+                                    ui.id().with(("alert_said", index)),
+                                    egui::Sense::hover(),
+                                )
+                                .on_hover_text(said);
                             }
-                            drawn |= !here;
-                            // The `L` gap separates Dismiss from a choice before it. Alone, it
-                            // starts at the message text like any first choice.
-                            if drawn {
-                                ui.add_space(design::L - ui.spacing().item_spacing.x);
+                        }
+                        if let Some(index) = dismiss {
+                            self.alerts.remove(index);
+                        }
+                        // After the recording alerts, in the banner's order: what arrived on its own.
+                        self.banner_notices(ui);
+                        // A control that gains keyboard focus scrolls into view.
+                        let focus = ui.ctx().memory(|memory| memory.focused());
+                        let seen_id = egui::Id::new("session_banner_focus");
+                        let seen: Option<egui::Id> =
+                            ui.data(|data| data.get_temp(seen_id)).flatten();
+                        if focus != seen {
+                            if let Some(response) = focus.and_then(|id| ui.ctx().read_response(id))
+                                && response.layer_id == ui.layer_id()
+                                && ui.min_rect().contains_rect(response.rect)
+                            {
+                                ui.scroll_to_rect(response.rect, None);
                             }
-                            if Action::quiet("Dismiss this error").show(ui).clicked() {
-                                dismiss = Some(index);
-                            }
-                        });
+                            ui.data_mut(|data| data.insert_temp(seen_id, focus));
+                        }
                     });
-                    if let Some(said) = &alert.said {
-                        let width = ui.available_width().min(design::LIST_MEASURE);
-                        let words_rect =
-                            egui::Rect::from_min_max(top, egui::pos2(top.x + width, words_end));
-                        ui.interact(
-                            words_rect,
-                            ui.id().with(("alert_said", index)),
-                            egui::Sense::hover(),
-                        )
-                        .on_hover_text(said);
-                    }
-                }
-                if let Some(index) = dismiss {
-                    self.alerts.remove(index);
-                }
             });
         if let Some((session, path)) = retry {
             self.process_recording(ctx, &path, settings, book, session);
@@ -1447,6 +1649,7 @@ impl Sessions {
                         "“{label}” is processed. Read the result, and add the events you want to the timeline."
                     ),
                 ));
+                self.arrived_notice.clone_from(&self.notice);
             }
             Ok(Some(warning)) => {
                 self.processed_session = Some(session);
@@ -1555,6 +1758,8 @@ impl Sessions {
         }
         self.folder_error = None;
         self.notes = list_notes(folder);
+        // A new, renamed or removed note can change which titles are shared.
+        self.last_time = None;
         if let Err(error) = super::remember_notes(folder, &self.notes) {
             self.folder_error = Some(error);
         }
@@ -1810,6 +2015,14 @@ impl Sessions {
         }
     }
 
+    /// The session an Add result names (`Session 2`), from the session's own note.
+    fn session_name(&self, session: Option<Uuid>) -> Option<String> {
+        self.notes
+            .iter()
+            .find(|note| Some(note.id) == session)
+            .map(|note| format!("Session {}", note.number))
+    }
+
     /// Only this explicit action changes a note after an event rename.
     pub fn event_link_offer(&mut self, ui: &mut egui::Ui, book: &Book, event: &str) {
         if book.renamed_links.is_empty() && self.updated_links.is_none() {
@@ -1821,11 +2034,6 @@ impl Sessions {
         let Some(current) = book.events.iter().find(|item| item.id == event) else {
             return;
         };
-        let words = format!(
-            "Notes still say “{}” for {}.",
-            renamed.join("” or “"),
-            current.title
-        );
         let mut scoped = Book::default();
         scoped.events = book.events.clone();
         scoped
@@ -1848,14 +2056,10 @@ impl Sessions {
                 changes.push((draft, body));
             }
         }
-        if count > 0
-            && design::message_with_action(
-                ui,
-                Tone::Info,
-                &words,
-                &format!("Update {} in notes", design::count(count, "link", "links")),
-            )
-        {
+        let old: Vec<&str> = renamed.iter().map(String::as_str).collect();
+        let (words, action) =
+            crate::content_workspace::link_offer_words(&old, &current.title, count);
+        if count > 0 && design::message_with_action(ui, Tone::Info, &words, &action) {
             self.update_event_link_notes(changes);
             self.link_undo_state = Some(LinkUndoState {
                 notes: self.note_bodies(),
@@ -1890,6 +2094,8 @@ impl Sessions {
         self.notes
             .iter()
             .filter_map(|note| {
+                #[cfg(test)]
+                NOTE_READS.with(|reads| reads.set(reads.get() + 1));
                 let body = self
                     .draft
                     .as_ref()
@@ -1907,11 +2113,17 @@ impl Sessions {
     }
 
     pub fn expire_event_link_undo(&mut self, on_timeline: bool, book: &Book) {
-        let changed = self
-            .link_undo_state
-            .as_ref()
-            .is_some_and(|state| state.notes != self.note_bodies() || state.events != book.events);
-        if !on_timeline || changed || self.draft.as_ref().is_some_and(Draft::needs_attention) {
+        // A partial update keeps its result, its error and its Undo until Undo or a new update,
+        // and reads no note meanwhile: Undo checks its notes when the DM presses it.
+        if self.link_partial && self.updated_links.is_some() {
+            return;
+        }
+        let ends = !on_timeline || self.draft.as_ref().is_some_and(Draft::needs_attention);
+        let changed = !ends
+            && self.link_undo_state.as_ref().is_some_and(|state| {
+                state.events != book.events || state.notes != self.note_bodies()
+            });
+        if ends || changed {
             self.updated_links = None;
             self.link_undo_state = None;
             self.link_problem = None;
@@ -1919,66 +2131,178 @@ impl Sessions {
     }
 
     fn update_event_link_notes(&mut self, changes: Vec<(Draft, String)>) {
-        let mut undo = Vec::new();
+        // A new update ends the last one's result: its warning, its Undo and its hold.
+        self.link_problem = None;
+        self.updated_links = None;
+        self.link_partial = false;
+        // Every target is checked before the first write: its draft, the open draft of the same
+        // note (its owner here), and its file on disk. One blocked target writes nothing.
+        let blocked = changes.iter().find(|(before, _)| {
+            before.needs_attention()
+                || self
+                    .draft
+                    .as_ref()
+                    .is_some_and(|open| open.path == before.path && open.needs_attention())
+                || !before.file_unchanged()
+        });
+        if let Some((before, _)) = blocked {
+            self.link_problem = Some(format!(
+                "No links changed. {} changed or needs a choice first; resolve it and try again.",
+                before
+                    .path
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+            ));
+            // As before, a new update ends the last one's Undo.
+            self.updated_links = None;
+            return;
+        }
+        // Each note is written by its own save, which checks the file once more right before
+        // writing. A failure part way is not rolled back: the result names every note already
+        // written, with the error, and Undo puts back exactly those.
+        self.link_partial = false;
+        let mut written = Vec::new();
+        let mut failed = None;
         for (before, body) in changes {
             let mut next = before.clone();
-            if next.needs_attention() {
-                self.link_problem =
-                    Some("Save or resolve the changed note before updating its links.".into());
-                continue;
-            }
             next.body = body;
             next.edited();
             next.save();
             if next.unsaved() {
-                self.link_problem = Some(format!(
-                    "Links in {} were not saved. Resolve the note’s save problem and try again.",
-                    next.path.display()
-                ));
-            } else {
-                undo.push((before, next.body.clone()));
+                let name = next
+                    .path
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .into_owned();
+                let why = match &next.state {
+                    DraftState::Failed(error) => error.clone(),
+                    _ => "It changed on disk.".to_owned(),
+                };
+                failed = Some(format!("{name} was not written. {why}"));
+                break;
             }
+            let bytes = next.file_text().unwrap_or_default().to_owned();
+            written.push(LinkWrite {
+                id: super::note_identity(&next.path, &bytes),
+                before,
+                after: next.body.clone(),
+                bytes,
+            });
             if self
                 .draft
                 .as_ref()
                 .is_some_and(|draft| draft.path == next.path)
             {
-                self.draft = Some(next);
+                self.draft = Some(next.clone());
+            }
+            #[cfg(test)]
+            AFTER_LINK_WRITE.with(|hook| {
+                if let Some(hook) = hook.borrow_mut().as_mut() {
+                    hook(&next.path);
+                }
+            });
+        }
+        if let Some(failed) = failed {
+            if written.is_empty() {
+                self.link_problem = Some(format!("No links changed. {failed}"));
+            } else {
+                let names: Vec<String> = written
+                    .iter()
+                    .map(|write| {
+                        write
+                            .before
+                            .path
+                            .file_name()
+                            .unwrap_or_default()
+                            .to_string_lossy()
+                            .into_owned()
+                    })
+                    .collect();
+                self.link_problem = Some(format!(
+                    "Links changed only in {}. {failed} Undo link update puts {} back.",
+                    names.join(", "),
+                    if names.len() == 1 { "it" } else { "them" }
+                ));
+                self.link_partial = true;
             }
         }
-        self.updated_links = (!undo.is_empty()).then_some(undo);
+        self.updated_links = (!written.is_empty()).then_some(written);
         self.last_time = None;
     }
 
     fn undo_event_link_notes(&mut self) {
         let mut remaining = Vec::new();
-        for (before, after) in self.updated_links.take().unwrap_or_default() {
+        let mut refused = Vec::new();
+        for write in self.updated_links.take().unwrap_or_default() {
+            // Undo writes only into the file it wrote: the draft it saves through must hold the
+            // same bytes and the same session, and `save` checks the file against them again
+            // right before writing.
+            #[cfg(test)]
+            BEFORE_UNDO_READ.with(|hook| {
+                if let Some(hook) = hook.borrow_mut().as_mut() {
+                    hook(&write.before.path);
+                }
+            });
             let current = self
                 .draft
                 .as_ref()
-                .filter(|draft| draft.path == before.path)
+                .filter(|draft| draft.path == write.before.path)
                 .cloned()
-                .or_else(|| Draft::open(&before.path).ok());
-            if let Some(mut current) =
-                current.filter(|draft| draft.body == after && !draft.needs_attention())
-            {
-                current.body = before.body.clone();
-                current.edited();
-                current.save();
-                if current.unsaved() {
-                    remaining.push((before.clone(), after));
+                .or_else(|| Draft::open(&write.before.path).ok());
+            let same_file = |draft: &Draft| {
+                draft.file_text() == Some(write.bytes.as_str())
+                    && draft
+                        .file_text()
+                        .and_then(|text| super::note_identity(&draft.path, text))
+                        == write.id
+            };
+            match current.filter(|draft| {
+                same_file(draft) && draft.body == write.after && !draft.needs_attention()
+            }) {
+                Some(mut current) => {
+                    current.body = write.before.body.clone();
+                    current.edited();
+                    current.save();
+                    let undone = !current.unsaved();
+                    if self
+                        .draft
+                        .as_ref()
+                        .is_some_and(|draft| draft.path == current.path)
+                    {
+                        self.draft = Some(current);
+                    }
+                    if !undone {
+                        refused.push(write.before.path.clone());
+                        remaining.push(write);
+                    }
                 }
-                if self
-                    .draft
-                    .as_ref()
-                    .is_some_and(|draft| draft.path == current.path)
-                {
-                    self.draft = Some(current);
+                None => {
+                    refused.push(write.before.path.clone());
+                    remaining.push(write);
                 }
-            } else {
-                self.link_problem = Some("A note changed after its links were updated. Keep or resolve that edit before Undo.".into());
-                remaining.push((before, after));
             }
+        }
+        if refused.is_empty() {
+            if self.link_partial {
+                self.link_problem = None;
+            }
+            self.link_partial = false;
+        } else {
+            let names: Vec<String> = refused
+                .iter()
+                .map(|path| {
+                    path.file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .into_owned()
+                })
+                .collect();
+            self.link_problem = Some(format!(
+                "Undo did not change {}: it changed after its links were updated. Keep or resolve that edit first.",
+                names.join(", ")
+            ));
         }
         self.updated_links = (!remaining.is_empty()).then_some(remaining);
         self.last_time = None;
@@ -2582,7 +2906,7 @@ impl Sessions {
                             self.notice = Some((Tone::Error, error));
                         }
                     }
-                    if Action::quiet("Not now").show(ui).clicked() {
+                    if Action::secondary("Not now").show(ui).clicked() {
                         self.confirm_record = false;
                     }
                 });
@@ -2628,7 +2952,8 @@ impl Sessions {
         design::status(ui, Status { icon, word, color });
     }
 
-    fn draft_problem(ui: &mut egui::Ui, draft: &mut Draft) {
+    /// The result of the DM's choice about a draft, with its Undo, above the editor.
+    fn draft_result(ui: &mut egui::Ui, draft: &mut Draft) {
         // Each way of losing the draft keeps its own name: Undo names what the DM did.
         let undo = match draft.dropped {
             Some(Dropped::Reloaded(_)) => design::reloaded_draft(ui),
@@ -2639,6 +2964,17 @@ impl Sessions {
         };
         if undo {
             draft.undo_dropped();
+        }
+    }
+
+    /// What the file did to a draft: changed on disk, gone or moved, or not saved. It arrives on
+    /// its own, so it is drawn in the bottom banner, never above the editor.
+    fn draft_warning(ui: &mut egui::Ui, draft: &mut Draft) {
+        // A new file could not be made: why, above the choices that are still open.
+        if draft.state == DraftState::Missing
+            && let Some(error) = &draft.save_again_error
+        {
+            design::message(ui, Tone::Error, error);
         }
         // Every choice below starts at its message's text. The red choice keeps an `L` gap.
         match draft.state.clone() {
@@ -2666,6 +3002,18 @@ impl Sessions {
                         });
                     },
                 );
+            }
+            // After Discard with no file left, the editor holds the last saved words, not a
+            // draft: the one way on is a new file.
+            DraftState::Missing if matches!(draft.dropped, Some(Dropped::Discarded(_))) => {
+                let save = design::message_with_actions(ui, Tone::Warning, DISCARDED_GONE, |ui| {
+                    Action::secondary("Save these words as a new file")
+                        .show(ui)
+                        .clicked()
+                });
+                if save {
+                    draft.save_again();
+                }
             }
             DraftState::Missing => {
                 let words = missing_note_words(draft.moved_to.as_ref().map(|path| {
@@ -3128,7 +3476,7 @@ impl Sessions {
             draft.save();
         }
         if in_panel {
-            Self::draft_problem(ui, draft);
+            Self::draft_result(ui, draft);
         }
         if draft.state == DraftState::Conflict {
             if draft.on_disk.is_none() {
@@ -3232,8 +3580,18 @@ impl Sessions {
                         self.selected,
                         in_panel,
                     ));
+                    // A view at the note's end stays there when it gets shorter (a bottom banner
+                    // arrives), so the line being typed stays in view. Only a shorter view does
+                    // this; a note that grows keeps its place.
+                    let view_id = egui::Id::new(("session_editor_view", self.selected, in_panel));
+                    let before: Option<(f32, bool, f32)> = ui.data(|data| data.get_temp(view_id));
                     if reset_scroll {
                         scroll = scroll.vertical_scroll_offset(0.0);
+                    } else if let Some((height, at_end, content)) = before
+                        && at_end
+                        && visible_height < height - 0.5
+                    {
+                        scroll = scroll.vertical_scroll_offset((content - visible_height).max(0.0));
                     }
                     let output = scroll
                         .max_height(visible_height)
@@ -3367,6 +3725,12 @@ impl Sessions {
                                 }
                             }
                         });
+                    // Only a note that scrolls can be at its end.
+                    let room = output.content_size.y - output.inner_rect.height();
+                    let at_end = room > 1.0 && output.state.offset.y >= room - 1.0;
+                    ui.data_mut(|data| {
+                        data.insert_temp(view_id, (visible_height, at_end, output.content_size.y));
+                    });
                     #[cfg(test)]
                     ui.data_mut(|data| {
                         data.insert_temp(
@@ -3374,8 +3738,6 @@ impl Sessions {
                             (self.note_editor_id.unwrap(), output.state.offset),
                         )
                     });
-                    #[cfg(not(test))]
-                    let _ = output;
                 });
             },
         );
@@ -3814,9 +4176,20 @@ impl Sessions {
             let found = previous.map(|note| {
                 let text = fs::read_to_string(&note.path).unwrap_or_default();
                 let body = body_of(&text);
+                // Two notes with one title: the link names its file, as the list's second line
+                // does, so it cannot read as a link to the open session.
+                let label = note.label();
+                let shared = self
+                    .notes
+                    .iter()
+                    .any(|other| other.id != note.id && other.label() == label);
+                let label = match note.path.file_name() {
+                    Some(file) if shared => format!("{label} ({})", file.to_string_lossy()),
+                    _ => label,
+                };
                 LastTime {
                     id: note.id,
-                    label: note.label(),
+                    label,
                     what_happened: recap_preview(body),
                 }
             });
@@ -4275,17 +4648,7 @@ impl Sessions {
             ui.horizontal_wrapped(|ui| actions(ui));
         }
         if destination_here {
-            ui.scope(|ui| {
-                ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
-                ui.add(
-                    egui::Label::new(
-                        Type::Small
-                            .rich(ui, recording_destination(settings, recording))
-                            .color(c.muted),
-                    )
-                    .wrap(),
-                );
-            });
+            design::help(ui, &recording_destination(settings, recording));
         }
         if self.confirm_again.as_deref() == Some(recording.path.as_path()) {
             // Processing help keeps the reader's measure, as the destination line above does.
@@ -4539,7 +4902,7 @@ impl Sessions {
                 if added.as_ref() == self.recording_added.as_ref()
                     && let Some(id) = &added
                 {
-                    let words = format!("{title} added to the timeline.");
+                    let words = added_message(title, self.session_name(session).as_deref(), None);
                     let undo = ui
                         .scope(|ui| {
                             ui.set_max_width(message_width);
@@ -4654,6 +5017,8 @@ impl Sessions {
         {
             self.open_reading(&recording, made, None, None);
         }
+        // A marker's Add result names the session that gets the event.
+        let added_to = self.session_name(self.selected);
         let Some(reading) = &mut self.reading else {
             return;
         };
@@ -4793,7 +5158,8 @@ impl Sessions {
                                         .is_some_and(|event| event.id == *id)
                                 {
                                     let id = id.clone();
-                                    let words = format!("{} added to the timeline.", marker.title);
+                                    let words =
+                                        added_message(&marker.title, added_to.as_deref(), None);
                                     if design::undo_message(ui, Tone::Success, &words, "Undo add") {
                                         book.undo_add(&id);
                                         self.recording_added = None;
@@ -4871,11 +5237,18 @@ impl Sessions {
             }
             return;
         }
+        // The rows leave the scroll bar's lane free whether or not the bar shows, so a row's menu
+        // keeps its x when the list grows long enough to scroll.
+        let lane_width = ui.available_width() - ui.spacing().scroll.allocated_width();
         egui::ScrollArea::vertical()
             .id_salt(("session_recordings", self.selected))
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
+                ui.set_max_width(
+                    lane_width
+                        .min(ui.available_width())
+                        .min(design::LIST_MEASURE),
+                );
                 let recovery = self.recording_recovery_row();
                 let destination = recordings.iter().position(|recording| {
                     !recording.summary
@@ -5019,7 +5392,7 @@ impl Sessions {
             });
             self.record_line(ui, settings);
             if let Some(draft) = &mut self.draft {
-                Self::draft_problem(ui, draft);
+                Self::draft_result(ui, draft);
                 self.note_editor(ui, false);
             }
             return;
@@ -5043,14 +5416,18 @@ impl Sessions {
         });
         self.record_line(ui, settings);
         if let Some(draft) = &mut self.draft {
-            Self::draft_problem(ui, draft);
+            Self::draft_result(ui, draft);
         }
         self.expire_move(book);
         let shown = self.notice_session.is_none() || self.notice_session == self.selected;
         if shown && self.job_done() {
             self.job_done = false;
         }
-        if let Some((tone, words)) = self.notice.clone().filter(|_| shown) {
+        if let Some((tone, words)) = self
+            .notice
+            .clone()
+            .filter(|_| shown && !self.notice_arrived())
+        {
             if let Some(session) = self
                 .move_run_here
                 .as_ref()
@@ -5084,26 +5461,8 @@ impl Sessions {
                 });
             }
         }
-        for copy in &note.also {
-            let filename = copy.file_name().unwrap_or_default().to_string_lossy();
-            if design::message_with_action(
-                ui,
-                Tone::Warning,
-                &format!(
-                    "{} and {filename} claim to be the same session.",
-                    note.path.file_name().unwrap_or_default().to_string_lossy()
-                ),
-                &format!("Make {filename} a separate session"),
-            ) {
-                match super::new_identity(copy) {
-                    Ok(undo) => {
-                        self.identity_undo = Some(undo);
-                        self.refresh();
-                    }
-                    Err(error) => self.notice = Some((Tone::Error, error)),
-                }
-            }
-        }
+        // A copy that claims this session arrives from the folder, so it sits in the bottom
+        // banner (`banner_notices`); its result stays here.
         if let Some(undo) = &self.identity_undo {
             let filename = undo.path.file_name().unwrap_or_default().to_string_lossy();
             if design::undo_message(
@@ -5280,9 +5639,20 @@ impl Sessions {
                 });
             }
             // The same ids in both layouts: crossing the width keeps typed text, focus and scroll.
-            Tab::Plan => fixed_scope(ui, editing_group_here, "session_plan_pane", |ui| {
-                self.plan_pane(ui, book, plan)
-            }),
+            // The plan's rows end at the tab row's right edge, as the note's frame does, so the
+            // pane has one right edge; the scroll bar's lane lies beyond it. A group being edited
+            // keeps its own width.
+            Tab::Plan => {
+                ui.scope(|ui| {
+                    if !editing_group_here {
+                        ui.set_max_width(toolbar_width + ui.spacing().scroll.allocated_width());
+                    }
+                    fixed_scope(ui, editing_group_here, "session_plan_pane", |ui| {
+                        self.plan_pane(ui, book, plan)
+                    })
+                })
+                .inner
+            }
             Tab::Note => fixed_scope(ui, editing_group_here, "session_note_pane", |ui| {
                 self.note_pane(ui, book, plan, beside)
             }),
@@ -5299,16 +5669,7 @@ impl Sessions {
         book: &mut Book,
         plan: &Plan<'_>,
     ) {
-        if !self.unreadable.is_empty() {
-            design::message(
-                ui,
-                Tone::Warning,
-                &format!(
-                    "Splat cannot read the properties of {}, so it is not listed. The file is safe. Repair it to bring it back.",
-                    self.unreadable.join(", ")
-                ),
-            );
-        }
+        // An unreadable note arrives from the folder: its warning is in the bottom banner.
         let holding = self.draft.as_ref().is_some_and(Draft::needs_attention);
         if self.notes.is_empty() && self.form.is_none() && !holding {
             let mut start = false;
@@ -5507,7 +5868,7 @@ impl Sessions {
                 if let Some((name, _)) = self.deleted_template.clone()
                     && design::undo_message(
                         ui,
-                        Tone::Info,
+                        Tone::Success,
                         &format!("Deleted “{name}”."),
                         "Undo delete",
                     )
@@ -5663,7 +6024,7 @@ impl Sessions {
             if ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)) {
                 draft.save();
             }
-            Self::draft_problem(ui, draft);
+            Self::draft_result(ui, draft);
         }
         let mut pressed_link = None;
         egui::ScrollArea::vertical()
@@ -6072,6 +6433,43 @@ impl Sessions {
     /// The folder scan that otherwise runs every few seconds of wall time.
     pub fn simulate_folder_scan(&mut self) {
         self.scan_folder();
+    }
+
+    /// A processing failure for the open session, as the job would raise it.
+    pub fn simulate_alert(&mut self, words: &str) {
+        let session = self.selected.expect("an open session");
+        self.raise(Alert {
+            session,
+            can_record: false,
+            retry: None,
+            said: None,
+            word: "Processing failed",
+            words: words.to_owned(),
+        });
+    }
+
+    /// The open note's file changes outside Splat while the DM has unsaved words.
+    pub fn simulate_conflict(&mut self) {
+        self.simulate_disk_change();
+        let draft = self.draft.as_mut().expect("an open note");
+        draft.body.push_str("\nTyped before the outside edit.\n");
+        draft.edited();
+        draft.save();
+    }
+
+    /// Processing of the open session finishes now, as the background job would.
+    pub fn simulate_job_finished(&mut self) {
+        let session = self.selected.expect("an open session");
+        self.finish_job(Ok(None), session);
+    }
+
+    /// The open note's draft, to put back after a step that a scenario proves aside.
+    pub fn draft_snapshot(&self) -> Option<Draft> {
+        self.draft.clone()
+    }
+
+    pub fn restore_draft(&mut self, draft: Draft) {
+        self.draft = Some(draft);
     }
 
     /// The open note's file is renamed outside Splat, as Obsidian can do.
@@ -6707,6 +7105,170 @@ mod tests {
         sessions.update_event_link_notes(vec![(draft, updated)]);
         assert_eq!(fs::read_to_string(&notes[0].path).unwrap(), outside);
         assert!(sessions.updated_links.is_none());
+        // Review of PR 255, item 4: a blocked second target stops the whole update. First the
+        // second note's open draft is in conflict, then its file changed after the preview.
+        for (note, before) in notes.iter().zip(&original) {
+            fs::write(&note.path, before).unwrap();
+        }
+        let prepare = || -> Vec<(Draft, String)> {
+            notes
+                .iter()
+                .map(|note| {
+                    let draft = Draft::open(&note.path).unwrap();
+                    let updated = updated_event_links(&draft.body, &book).0;
+                    (draft, updated)
+                })
+                .collect()
+        };
+        let mut changes = prepare();
+        changes[1].0.state = DraftState::Conflict;
+        let mut sessions = Sessions::default();
+        sessions.update_event_link_notes(changes);
+        for (note, before) in notes.iter().zip(&original) {
+            assert_eq!(fs::read(&note.path).unwrap(), *before);
+        }
+        assert!(sessions.updated_links.is_none() && sessions.link_problem.is_some());
+        let changes = prepare();
+        let outside = format!(
+            "{}External edit.\n",
+            fs::read_to_string(&notes[1].path).unwrap()
+        );
+        fs::write(&notes[1].path, &outside).unwrap();
+        let mut sessions = Sessions::default();
+        sessions.update_event_link_notes(changes);
+        assert_eq!(fs::read(&notes[0].path).unwrap(), original[0]);
+        assert_eq!(fs::read_to_string(&notes[1].path).unwrap(), outside);
+        assert!(sessions.updated_links.is_none() && sessions.link_problem.is_some());
+        // Re-check 2 of PR 255. Note A sits beside the others, note B in its own folder.
+        use std::os::unix::fs::PermissionsExt;
+        for (note, before) in notes.iter().zip(&original) {
+            fs::write(&note.path, before).unwrap();
+        }
+        let folder_b = dir.path().join("Folder B");
+        fs::create_dir(&folder_b).unwrap();
+        let note_a = notes[0].path.clone();
+        let note_b = folder_b.join(notes[1].path.file_name().unwrap());
+        fs::rename(&notes[1].path, &note_b).unwrap();
+        let open = |path: &std::path::Path| {
+            let draft = Draft::open(path).unwrap();
+            let updated = updated_event_links(&draft.body, &book).0;
+            (draft, updated)
+        };
+        let temporary_files = || -> Vec<String> {
+            [dir.path(), folder_b.as_path()]
+                .iter()
+                .flat_map(|folder| fs::read_dir(folder).unwrap().flatten())
+                .map(|entry| entry.file_name().to_string_lossy().into_owned())
+                .filter(|name| name.starts_with(".tmp"))
+                .collect()
+        };
+        // (a) After A is written, B is written outside. B is refused; A's result, error and
+        // Undo stay, also through the expiry.
+        let b_outside = format!(
+            "{}Written outside.\n",
+            String::from_utf8_lossy(&original[1])
+        );
+        let b_path = note_b.clone();
+        let b_text = b_outside.clone();
+        super::AFTER_LINK_WRITE.with(|hook| {
+            *hook.borrow_mut() = Some(Box::new(move |written: &std::path::Path| {
+                if written.file_name() != b_path.file_name() {
+                    fs::write(&b_path, &b_text).unwrap();
+                }
+            }));
+        });
+        let mut sessions = Sessions::default();
+        sessions.update_event_link_notes(vec![open(&note_a), open(&note_b)]);
+        super::AFTER_LINK_WRITE.with(|hook| *hook.borrow_mut() = None);
+        assert_eq!(fs::read_to_string(&note_b).unwrap(), b_outside);
+        let a_written = fs::read_to_string(&note_a).unwrap();
+        assert!(a_written.contains("|Rest at the mill]]"));
+        sessions.expire_event_link_undo(false, &book);
+        assert_eq!(sessions.updated_links.as_ref().map(Vec::len), Some(1));
+        let problem = sessions.link_problem.clone().unwrap_or_default();
+        let a_name = note_a.file_name().unwrap().to_string_lossy().into_owned();
+        assert!(problem.contains(&a_name), "{problem}");
+        // (d) While that result is held, with the notes listed, a frame away from Timeline
+        // reads no note.
+        sessions.notes = list_notes(dir.path());
+        assert!(!sessions.notes.is_empty());
+        sessions.link_undo_state = Some(LinkUndoState {
+            notes: Vec::new(),
+            events: book.events.clone(),
+            title: "Rest at the mill".into(),
+        });
+        super::NOTE_READS.with(|reads| reads.set(0));
+        sessions.expire_event_link_undo(false, &book);
+        sessions.expire_event_link_undo(false, &book);
+        assert_eq!(super::NOTE_READS.with(std::cell::Cell::get), 0);
+        // (b) A is replaced by a note with another session id and the same words. Undo refuses
+        // it, names it, and leaves it byte for byte.
+        let replaced = a_written.replace(&notes[0].id.to_string(), &Uuid::new_v4().to_string());
+        assert_ne!(replaced, a_written);
+        fs::write(&note_a, &replaced).unwrap();
+        sessions.undo_event_link_notes();
+        assert_eq!(fs::read_to_string(&note_a).unwrap(), replaced);
+        let problem = sessions.link_problem.clone().unwrap_or_default();
+        assert!(problem.contains(&a_name), "{problem}");
+        // (e) Re-check 3: A holds the written bytes again, and is replaced right before Undo
+        // reads it. Undo refuses the replacement and names A.
+        fs::write(&note_a, &a_written).unwrap();
+        sessions.link_problem = None;
+        let a_path = note_a.clone();
+        let swap = replaced.clone();
+        super::BEFORE_UNDO_READ.with(|hook| {
+            *hook.borrow_mut() = Some(Box::new(move |_: &std::path::Path| {
+                fs::write(&a_path, &swap).unwrap();
+            }));
+        });
+        sessions.undo_event_link_notes();
+        super::BEFORE_UNDO_READ.with(|hook| *hook.borrow_mut() = None);
+        assert_eq!(fs::read_to_string(&note_a).unwrap(), replaced);
+        let problem = sessions.link_problem.clone().unwrap_or_default();
+        assert!(problem.contains(&a_name), "{problem}");
+        // (c) After A is written, B's folder takes no new file. B is not written, A's result
+        // stays, and no temporary file is left in either folder.
+        fs::write(&note_a, &original[0]).unwrap();
+        fs::write(&note_b, &original[1]).unwrap();
+        let locked = folder_b.clone();
+        super::AFTER_LINK_WRITE.with(|hook| {
+            *hook.borrow_mut() = Some(Box::new(move |_: &std::path::Path| {
+                fs::set_permissions(&locked, fs::Permissions::from_mode(0o555)).unwrap();
+            }));
+        });
+        let mut sessions = Sessions::default();
+        sessions.update_event_link_notes(vec![open(&note_a), open(&note_b)]);
+        super::AFTER_LINK_WRITE.with(|hook| *hook.borrow_mut() = None);
+        let left = temporary_files();
+        fs::set_permissions(&folder_b, fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(left, Vec::<String>::new());
+        assert_eq!(fs::read(&note_b).unwrap(), original[1]);
+        assert!(
+            fs::read_to_string(&note_a)
+                .unwrap()
+                .contains("|Rest at the mill]]")
+        );
+        assert_eq!(sessions.updated_links.as_ref().map(Vec::len), Some(1));
+        // Re-check 3: the retry writes B. The old "only A" warning ends, and Undo now puts back
+        // only B; A keeps its links.
+        let a_linked = fs::read(&note_a).unwrap();
+        sessions.update_event_link_notes(vec![open(&note_b)]);
+        assert!(
+            sessions.link_problem.is_none(),
+            "{:?}",
+            sessions.link_problem
+        );
+        assert!(
+            fs::read_to_string(&note_b)
+                .unwrap()
+                .contains("|Rest at the mill]]")
+        );
+        sessions.expire_event_link_undo(true, &book);
+        assert_eq!(sessions.updated_links.as_ref().map(Vec::len), Some(1));
+        sessions.undo_event_link_notes();
+        assert_eq!(fs::read(&note_b).unwrap(), original[1]);
+        assert_eq!(fs::read(&note_a).unwrap(), a_linked);
+        assert!(sessions.updated_links.is_none() && sessions.link_problem.is_none());
     }
 
     #[test]
