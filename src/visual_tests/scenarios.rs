@@ -1514,6 +1514,31 @@ pub mod library_navigation {
             d.has("Read Captain Varra") && !d.visible_text("Hot ash falls"),
             "The next Back returns to the entry the link left (Ash Exposure, with its Read Captain Varra link)",
         );
+        // Round 26 review: Lookup's Open in Library records the trail too. Link Ash Exposure →
+        // Ashfall, open Veilglass Lantern from Lookup, Back → Ashfall, Back → Ash Exposure.
+        d.click("Wiki watch spell (opens Ashfall)");
+        d.wait_for_text("Hot ash falls");
+        look_up(d, "Veilglass Lantern");
+        d.wait_for_text("This lantern of smoked glass");
+        d.click("Open in Library");
+        if d.has("Close Lookup") {
+            d.click("Close Lookup");
+        }
+        d.wait_for_text("This lantern of smoked glass");
+        let lantern_open = !d.visible_text("Hot ash falls");
+        d.click("Back");
+        let back_to_link = d.visible_text("Hot ash falls");
+        d.click("Back");
+        d.observe(
+            "iter-26-L-SB1-lookup",
+            lantern_open
+                && back_to_link
+                && d.has("Read Captain Varra")
+                && !d.visible_text("Hot ash falls"),
+            format!(
+                "Open in Library from Lookup, then Back returns to Ashfall ({back_to_link}) and Back again to Ash Exposure"
+            ),
+        );
         d.click("Read Captain Varra");
         d.wait_for_text("The last commander of the Emberfall watch.");
         d.state("reference-outside-package", Sizes::All);

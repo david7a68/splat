@@ -427,18 +427,13 @@ fn form_footer(
     form_error: Option<&str>,
     error: Option<&str>,
 ) -> ResultPress {
-    let mut pressed = ResultPress::default();
+    let pressed = std::cell::Cell::new(ResultPress::default());
     let mut footer = design::Footer::new(id, ui.available_width().min(design::READER_MEASURE));
-    if results.any() {
-        let out = &mut pressed;
-        footer.result(results.words(), results.has_undo(), move |ui| {
-            *out = show_results(ui, results);
-        });
-    }
+    add_results(&mut footer, results, &pressed);
     page_error(&mut footer, form_error);
     page_error(&mut footer, error);
     footer.show(ui);
-    pressed
+    pressed.get()
 }
 
 /// What the DM pressed in the reader's messages in the pane's message footer.
@@ -446,7 +441,7 @@ fn form_footer(
 struct ReaderPress {
     /// The heading fix, then its Undo.
     heading: (bool, bool),
-    results: Option<ResultPress>,
+    results: std::cell::Cell<ResultPress>,
     new_identity: Option<usize>,
     new_identities: Option<(PathBuf, Vec<String>)>,
     /// The campaign entry to copy into the package.
@@ -480,11 +475,7 @@ fn reader_messages<'a>(
         undo_dependency,
     } = out;
     let (heading_fix, heading_undo) = (&mut heading_out.0, &mut heading_out.1);
-    if results.any() {
-        footer.result(results.words(), results.has_undo(), |ui| {
-            *results_out = Some(show_results(ui, results));
-        });
-    }
+    add_results(footer, results, results_out);
     if let Some(result) = heading.and_then(|heading| heading.undo.as_deref()) {
         // The fix's result is a message, so its Undo keeps its icon on the message line.
         footer.result(result, true, |ui| {
@@ -1138,14 +1129,44 @@ impl Loaded {
     /// holds it with the new name (an outside rename since the last load ends the offer).
     /// The linking files are checked as they are written: each must still hold what was read.
     fn offer_holds_on_disk(&self, offer: &LinkOffer) -> bool {
-        self.notes
-            .iter()
-            .find(|note| note.entry.as_ref().is_some_and(|e| e.id == offer.owner))
-            .and_then(|note| {
-                let text = fs::read_to_string(note.owner.root()?.join(&note.path)).ok()?;
-                Entry::parse(&note.path, &text).ok()
+        let source = &offer.source;
+        let Ok(path) = note_path(&source.root, &source.path) else {
+            return false;
+        };
+        // The exact bytes the rename saved: an outside edit since then, even to the body, ends
+        // the offer.
+        fs::read_to_string(path).is_ok_and(|text| text == source.text)
+            && Entry::parse(&source.path, &source.text)
+                .is_ok_and(|entry| entry.id == offer.owner && entry.name == offer.new)
+            && !self.name_taken_on_disk(offer)
+    }
+
+    /// Whether another entry on disk, in any editable root of the notes, has the offer's old or
+    /// new name or file stem. The loaded notes may be older than the disk, so the write reads
+    /// the folders again. Built-in entries do not change, so the loaded check covers them.
+    fn name_taken_on_disk(&self, offer: &LinkOffer) -> bool {
+        let mut roots: Vec<&Path> = self.notes.iter().filter_map(|n| n.owner.root()).collect();
+        roots.sort_unstable();
+        roots.dedup();
+        let taken = |name: &str| {
+            [offer.old.as_str(), offer.new.as_str()]
+                .iter()
+                .any(|wanted| name.eq_ignore_ascii_case(wanted))
+        };
+        roots.into_iter().any(|root| {
+            let Ok((entries, _)) = content::read_directory(root) else {
+                // A folder that cannot be read cannot be checked: the write waits.
+                return true;
+            };
+            entries.iter().any(|entry| {
+                entry.id != offer.owner
+                    && (taken(&entry.name)
+                        || Path::new(&entry.path)
+                            .file_stem()
+                            .and_then(|stem| stem.to_str())
+                            .is_some_and(taken))
             })
-            .is_some_and(|entry| entry.id == offer.owner && entry.name == offer.new)
+        })
     }
 
     /// True while a rename's offer still holds: its entry still has the new name, and the old and
@@ -1153,12 +1174,18 @@ impl Loaded {
     fn offer_holds(&self, offer: &LinkOffer) -> bool {
         self.notes
             .iter()
-            .position(|note| note.entry.as_ref().is_some_and(|e| e.id == offer.owner))
+            .position(|note| {
+                note.entry.as_ref().is_some_and(|e| e.id == offer.owner)
+                    && note.owner.root() == Some(offer.source.root.as_path())
+            })
             .is_some_and(|at| {
-                self.notes[at]
-                    .entry
-                    .as_ref()
-                    .is_some_and(|entry| entry.name == offer.new)
+                let note = &self.notes[at];
+                note.path == offer.source.path
+                    && note.text == offer.source.text
+                    && note
+                        .entry
+                        .as_ref()
+                        .is_some_and(|entry| entry.name == offer.new)
                     && self.can_rename_links(at, &offer.old, &offer.new)
             })
     }
@@ -1965,12 +1992,24 @@ fn gone_file_parts(ui: &mut egui::Ui, root: &Path, relative: &str) {
     }
 }
 
-/// The offer to change links after a rename. It belongs to the renamed entry (by its id) and
-/// shows only in that entry's reader.
+/// The offer to change links after a rename. It belongs to the renamed entry (by its id, in
+/// its root) and shows only in that entry's reader. It carries the version of the entry's file
+/// it was made from: the root, the path and the exact text the rename saved. The offer holds
+/// only while that file still has those bytes (round 26 review).
+#[derive(Clone)]
 struct LinkOffer {
     owner: Uuid,
+    source: OfferSource,
     old: String,
     new: String,
+}
+
+/// The renamed entry's file as the rename saved it.
+#[derive(Clone, PartialEq)]
+struct OfferSource {
+    root: PathBuf,
+    path: String,
+    text: String,
 }
 
 /// A link update's result and its Undo. It belongs to the renamed entry and shows only in its
@@ -1980,6 +2019,8 @@ struct LinkOffer {
 /// FD6).
 struct LinkResult {
     owner: Uuid,
+    /// The offer's source version, which its Undo gives back to the offer.
+    source: OfferSource,
     edits: crate::content_workspace::ContentEdits,
     old: String,
     new: String,
@@ -2036,6 +2077,8 @@ struct PagePress {
 struct ReaderResults {
     /// The page's results, first.
     page: PageResults,
+    /// The kinds of the kept results, newest first, for the footer's order.
+    order: Vec<ResultKind>,
     /// Every entry in this package is now chosen for this campaign.
     package_use: bool,
     /// A manifest write's result and its Undo's words.
@@ -2051,7 +2094,7 @@ struct ReaderResults {
 }
 
 /// Which result's Undo was pressed this frame.
-#[derive(Default)]
+#[derive(Clone, Copy, Default)]
 struct ResultPress {
     page: PagePress,
     package_use: bool,
@@ -2062,44 +2105,6 @@ struct ResultPress {
 }
 
 impl ReaderResults {
-    /// Every result's words, in the order they show, for the part's accessible name.
-    fn words(&self) -> String {
-        let page = &self.page;
-        page.scope_notice
-            .clone()
-            .into_iter()
-            .chain(page.link_offer.as_ref().map(|(words, _)| words.clone()))
-            .chain(page.links.clone())
-            .chain(page.registration.as_ref().map(|(words, _)| words.clone()))
-            .chain(page.rosters.map(|_| USE_COPY_RESULT.to_owned()))
-            .chain(page.unregistered.clone())
-            .chain(self.package_use.then(|| PACKAGE_USE_RESULT.to_owned()))
-            .chain(self.manifest.as_ref().map(|(words, _)| words.clone()))
-            .chain(self.identities.clone())
-            .chain(self.identity.clone())
-            .chain(
-                self.discarded
-                    .as_ref()
-                    .map(|name| format!("{name} draft discarded.")),
-            )
-            .collect::<Vec<_>>()
-            .join(" ")
-    }
-
-    /// Whether a shown result carries an Undo: it then leads the message footer, before a reason.
-    fn has_undo(&self) -> bool {
-        let page = &self.page;
-        page.links.is_some()
-            || page.registration.is_some()
-            || page.rosters.is_some()
-            || page.unregistered.is_some()
-            || self.package_use
-            || self.manifest.is_some()
-            || self.identities.is_some()
-            || self.identity.is_some()
-            || self.discarded.is_some()
-    }
-
     fn any(&self) -> bool {
         self.page.any()
             || self.package_use
@@ -2107,6 +2112,229 @@ impl ReaderResults {
             || self.identities.is_some()
             || self.identity.is_some()
             || self.discarded.is_some()
+    }
+}
+
+/// A kept result with an Undo, for the order the footer lists them in: newest first.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum ResultKind {
+    Links,
+    Registration,
+    Rosters,
+    Unregistered,
+    PackageUse,
+    Manifest,
+    Identities,
+    Identity,
+    Discarded,
+}
+
+impl ResultKind {
+    /// Every kind, in the order the footer lists kinds that `order` does not name.
+    const ALL: [ResultKind; 9] = [
+        ResultKind::Links,
+        ResultKind::Registration,
+        ResultKind::Rosters,
+        ResultKind::Unregistered,
+        ResultKind::PackageUse,
+        ResultKind::Manifest,
+        ResultKind::Identities,
+        ResultKind::Identity,
+        ResultKind::Discarded,
+    ];
+}
+
+/// Records that a kept result of `kind` was just made: it is now the newest. A free function, so
+/// a closure that holds other parts of the Library can call it.
+fn made(order: &mut Vec<ResultKind>, kind: ResultKind) {
+    order.retain(|known| *known != kind);
+    order.push(kind);
+}
+
+/// Each kept result as its own message in the pane's message footer, newest first (round 26
+/// review): `order` lists the kinds newest first; a kind it does not name follows in
+/// `ResultKind::ALL` order. The scope notice and the link offer are notices. `out` gathers what
+/// was pressed.
+fn add_results<'a>(
+    footer: &mut design::Footer<'a>,
+    results: &'a ReaderResults,
+    out: &'a std::cell::Cell<ResultPress>,
+) {
+    let page = &results.page;
+    let press = move |set: fn(&mut ResultPress, bool), pressed: bool| {
+        if pressed {
+            let mut all = out.get();
+            set(&mut all, true);
+            out.set(all);
+        }
+    };
+    let mut kinds: Vec<ResultKind> = results.order.clone();
+    kinds.extend(
+        ResultKind::ALL
+            .iter()
+            .filter(|kind| !results.order.contains(kind)),
+    );
+    for kind in kinds {
+        match kind {
+            ResultKind::Links => {
+                if let Some(words) = &page.links {
+                    // The result is a message, so its Undo keeps its icon on the message line.
+                    footer.result(words.as_str(), true, move |ui| {
+                        press(
+                            |p, v| p.page.links = v,
+                            design::undo_message(ui, Tone::Success, words, "Undo link update"),
+                        );
+                    });
+                }
+            }
+            ResultKind::Registration => {
+                if let Some((words, blocked)) = &page.registration {
+                    footer.result(words.as_str(), true, move |ui| {
+                        // The Undo sits on the message line. After an outside change it stays
+                        // there, blocked, and the reason follows at the message words.
+                        press(
+                            |p, v| p.page.registration = v,
+                            kept_undo_message(
+                                ui,
+                                Tone::Success,
+                                words,
+                                "Undo package registration",
+                                *blocked,
+                                true,
+                            ),
+                        );
+                        // The other choice starts below, at the message words.
+                        if let Some(blocked) = page.use_copy {
+                            press(
+                                |p, v| p.page.use_copy = v,
+                                design::message_choice_row(ui, Tone::Success, |ui| {
+                                    Action::secondary(USE_COPY)
+                                        .density(Density::Read)
+                                        .blocked(blocked)
+                                        .show(ui)
+                                        .clicked()
+                                }),
+                            );
+                        }
+                    });
+                }
+            }
+            ResultKind::Rosters => {
+                if let Some(blocked) = page.rosters {
+                    footer.result(USE_COPY_RESULT, true, move |ui| {
+                        press(
+                            |p, v| p.page.rosters = v,
+                            kept_undo_message(
+                                ui,
+                                Tone::Success,
+                                USE_COPY_RESULT,
+                                "Undo source change",
+                                blocked,
+                                true,
+                            ),
+                        );
+                    });
+                }
+            }
+            ResultKind::Unregistered => {
+                if let Some(words) = &page.unregistered {
+                    footer.result(words.as_str(), true, move |ui| {
+                        press(
+                            |p, v| p.page.unregistered = v,
+                            design::undo_message(ui, Tone::Success, words, "Undo unregister"),
+                        );
+                    });
+                }
+            }
+            ResultKind::PackageUse => {
+                if results.package_use {
+                    footer.result(PACKAGE_USE_RESULT, true, move |ui| {
+                        press(
+                            |p, v| p.package_use = v,
+                            design::undo_message(
+                                ui,
+                                Tone::Success,
+                                PACKAGE_USE_RESULT,
+                                "Undo package choice",
+                            ),
+                        );
+                    });
+                }
+            }
+            ResultKind::Manifest => {
+                if let Some((words, action)) = &results.manifest {
+                    footer.result(words.as_str(), true, move |ui| {
+                        press(
+                            |p, v| p.manifest = v,
+                            kept_undo_message(
+                                ui,
+                                Tone::Success,
+                                words,
+                                action,
+                                results.locked,
+                                false,
+                            ),
+                        );
+                    });
+                }
+            }
+            ResultKind::Identities => {
+                if let Some(words) = &results.identities {
+                    footer.result(words.as_str(), true, move |ui| {
+                        press(
+                            |p, v| p.identities = v,
+                            kept_undo_message(
+                                ui,
+                                Tone::Success,
+                                words,
+                                "Undo separate entries",
+                                results.locked,
+                                false,
+                            ),
+                        );
+                    });
+                }
+            }
+            ResultKind::Identity => {
+                if let Some(words) = &results.identity {
+                    footer.result(words.as_str(), true, move |ui| {
+                        press(
+                            |p, v| p.identity = v,
+                            kept_undo_message(
+                                ui,
+                                Tone::Success,
+                                words,
+                                crate::world::SEPARATE_ENTRY_UNDO,
+                                results.locked,
+                                false,
+                            ),
+                        );
+                    });
+                }
+            }
+            ResultKind::Discarded => {
+                if let Some(name) = &results.discarded {
+                    footer.result(format!("{name} draft discarded."), true, move |ui| {
+                        press(|p, v| p.discarded = v, design::draft_discarded(ui, name));
+                    });
+                }
+            }
+        }
+    }
+    if let Some(words) = &page.scope_notice {
+        // It wrote nothing: the scope only widened to show the entry.
+        footer.notice(words.as_str(), move |ui| {
+            design::message(ui, Tone::Info, words);
+        });
+    }
+    if let Some((words, action)) = &page.link_offer {
+        // The offer names both names, so the DM can check the words before the write.
+        footer.notice(words.as_str(), move |ui| {
+            press(
+                |p, v| p.page.link_offer = v,
+                design::message_with_action(ui, Tone::Info, words, action),
+            );
+        });
     }
 }
 
@@ -3287,6 +3515,9 @@ pub struct Library {
     /// package never shows it. Each ends on its own Undo, or on a reload that finds one of its
     /// files changed; other copies keep theirs (round 26 review).
     dependency_undos: Vec<DependencyUndo>,
+    /// The kinds of the kept results with an Undo in the order they were made, newest last.
+    /// The footer lists them newest first. A kind's own state says whether it still shows.
+    result_order: Vec<ResultKind>,
     selection_undo: Option<SelectionUndo>,
     /// The last reload found a registration file changed, so `Undo package registration` would
     /// refuse. The message stays for its other action; its Undo is blocked with the reason.
@@ -3466,6 +3697,7 @@ impl Library {
                 Some((document.campaign, document.path, before, document.text));
         }
         self.package_copy = Some(copy);
+        self.result_made(ResultKind::Registration);
         self.registration_changed = false;
         self.rosters_changed = false;
         self.copied_package = None;
@@ -3580,6 +3812,7 @@ impl Library {
             before,
             after: after.clone(),
         });
+        made(&mut self.result_order, ResultKind::Identity);
         let loaded = self.loaded.as_mut().unwrap();
         loaded.notes[index].entry = Some(updated);
         loaded.notes[index].text = after.clone();
@@ -3670,6 +3903,7 @@ impl Library {
         let draft = std::mem::take(&mut self.draft);
         self.draft_revision += 1;
         self.discarded = Some((note.owner.id(), note.path.clone(), draft));
+        made(&mut self.result_order, ResultKind::Discarded);
         if let Some(fault) = change.fault {
             // The note becomes the file as it is: unreadable, with its fault and no text.
             note.entry = None;
@@ -3828,6 +4062,11 @@ impl Library {
         }) else {
             return false;
         };
+        // Round 26 review: every way to open another entry leaves the open one on the trail,
+        // before the scope, the search or the selection changes.
+        if self.selected != Some(index) {
+            self.trail.leave(self.here());
+        }
         if !in_scope {
             self.scope = Scope::All;
         }
@@ -4397,12 +4636,16 @@ impl Library {
         // empty reader or a form), so they never move the columns, the tabs, the file line, the
         // title or the body. Their presses are applied after the reader is drawn.
         // A link offer and a link result show only in their own entry's reader.
-        let open = self.open_entry_id();
+        let open = self.open_entry_key();
+        let owns = |owner: Uuid, source: &OfferSource| {
+            open.as_ref()
+                .is_some_and(|(id, root)| *id == owner && *root == source.root)
+        };
         self.page_results = PageResults {
             link_offer: self
                 .renamed_links
                 .iter()
-                .find(|offer| Some(offer.owner) == open)
+                .find(|offer| owns(offer.owner, &offer.source))
                 .and_then(|offer| {
                     let count = self.link_rename_count(&offer.old, &offer.new);
                     (count > 0).then(|| {
@@ -4412,7 +4655,7 @@ impl Library {
             links: self
                 .link_edits
                 .iter()
-                .find(|result| Some(result.owner) == open)
+                .find(|result| owns(result.owner, &result.source))
                 .map(|result| format!("Links now say “{}”.", result.new)),
             registration: self.package_copy.as_ref().map(|copy| {
                 (
@@ -4514,6 +4757,7 @@ impl Library {
             // the form or the empty state.
             let results = ReaderResults {
                 page: std::mem::take(&mut self.page_results),
+                order: self.results_newest_first(),
                 ..Default::default()
             };
             self.page_pressed = form_footer(
@@ -5061,6 +5305,7 @@ impl Library {
                     // below the form, so they never move it (round 26).
                     let results = ReaderResults {
                         page: std::mem::take(&mut self.page_results),
+                        order: self.results_newest_first(),
                         ..Default::default()
                     };
                     self.page_pressed = form_footer(
@@ -5084,10 +5329,20 @@ impl Library {
         self.apply_page_press(pressed, campaigns);
     }
 
-    /// The open entry's identity, which owns its link offer and link result.
-    fn open_entry_id(&self) -> Option<Uuid> {
+    /// A kept result of `kind` was just made: it is now the newest.
+    fn result_made(&mut self, kind: ResultKind) {
+        made(&mut self.result_order, kind);
+    }
+
+    /// The kept results' kinds, newest first.
+    fn results_newest_first(&self) -> Vec<ResultKind> {
+        self.result_order.iter().rev().copied().collect()
+    }
+
+    /// The open entry's identity and root: what owns a link offer and its result.
+    fn open_entry_key(&self) -> Option<(Uuid, PathBuf)> {
         let note = self.loaded.as_ref()?.notes.get(self.selected?)?;
-        note.entry.as_ref().map(|entry| entry.id)
+        Some((note.entry.as_ref()?.id, note.owner.root()?.to_path_buf()))
     }
 
     /// How many links the offer after a rename would change. The loaded notes keep the count
@@ -5118,12 +5373,16 @@ impl Library {
                 Err(error) => self.error = Some(error),
             }
         }
-        let open = self.open_entry_id();
+        let open = self.open_entry_key();
+        let owns = |owner: Uuid, source: &OfferSource| {
+            open.as_ref()
+                .is_some_and(|(id, root)| *id == owner && *root == source.root)
+        };
         if pressed.link_offer
             && let Some(at) = self
                 .renamed_links
                 .iter()
-                .position(|offer| Some(offer.owner) == open)
+                .position(|offer| owns(offer.owner, &offer.source))
             && let Some(loaded) = &self.loaded
         {
             let offer = self.renamed_links.remove(at);
@@ -5159,17 +5418,24 @@ impl Library {
                         Err(LINKS_NOT_CHANGED.into())
                     }
                 });
-                let LinkOffer { owner, old, new } = offer;
+                let LinkOffer {
+                    owner,
+                    source,
+                    old,
+                    new,
+                } = offer;
                 match written {
                     Ok(edits) => {
                         // The owner's new update ends its earlier result.
                         self.link_edits.retain(|result| result.owner != owner);
                         self.link_edits.push(LinkResult {
                             owner,
+                            source,
                             edits,
                             old,
                             new,
                         });
+                        made(&mut self.result_order, ResultKind::Links);
                         self.stale = true;
                         self.content_changed =
                             campaigns.active_campaign().map(|campaign| campaign.path);
@@ -5182,7 +5448,7 @@ impl Library {
             && let Some(at) = self
                 .link_edits
                 .iter()
-                .position(|result| Some(result.owner) == open)
+                .position(|result| owns(result.owner, &result.source))
         {
             // Undo restores only the files this update wrote, and only while they hold what it
             // wrote, so another entry's link update stays.
@@ -5190,11 +5456,22 @@ impl Library {
                 Ok(()) => {
                     // The links say the old name again: the rename's offer comes back in the
                     // result's place. The reload checks it again, as every offer.
+                    // The offer keeps the source version it was made from: its write checks it
+                    // again.
                     let LinkResult {
-                        owner, old, new, ..
+                        owner,
+                        source,
+                        old,
+                        new,
+                        ..
                     } = self.link_edits.remove(at);
                     self.renamed_links.retain(|offer| offer.owner != owner);
-                    self.renamed_links.push(LinkOffer { owner, old, new });
+                    self.renamed_links.push(LinkOffer {
+                        owner,
+                        source,
+                        old,
+                        new,
+                    });
                     self.stale = true;
                     self.content_changed =
                         campaigns.active_campaign().map(|campaign| campaign.path);
@@ -5215,6 +5492,7 @@ impl Library {
             match copy.use_in_rosters(&campaign) {
                 Ok(edits) => {
                     self.copied_rosters = Some(edits);
+                    self.result_made(ResultKind::Rosters);
                     self.rosters_changed = false;
                     self.content_changed = Some(campaign.path);
                     self.stale = true;
@@ -5415,6 +5693,7 @@ impl Library {
             match campaigns.unregister_module(module.id) {
                 Ok(()) => {
                     self.unregistered = Some(module);
+                    self.result_made(ResultKind::Unregistered);
                     self.scope = Scope::default();
                     self.stale = true;
                 }
@@ -5990,6 +6269,8 @@ impl Library {
                         let text = note_text(name, &self.new_kind, None);
                         let owner = places[place].clone();
                         let root = owner.root().expect("a writable owner").to_path_buf();
+                        // The entry the new one replaces in the reader, for Back.
+                        let left = self.here();
                         match write_note(&root, &path, None, &text) {
                             Ok(entry) => {
                                 let used =
@@ -6033,6 +6314,9 @@ impl Library {
                                 self.selected = l.notes.iter().position(|n| {
                                     n.path == created_path && n.owner.id() == created_owner
                                 });
+                                if self.selected.is_some() {
+                                    self.trail.leave(left);
+                                }
                                 self.reveal_row = true;
                                 self.search.clear();
                                 self.section = Section::All;
@@ -6215,6 +6499,11 @@ impl Library {
                 {
                     self.renamed_links.push(LinkOffer {
                         owner: entry.id,
+                        source: OfferSource {
+                            root: root.clone(),
+                            path: l.notes[i].path.clone(),
+                            text: self.draft.clone(),
+                        },
                         old: old.name.clone(),
                         new: entry.name.clone(),
                     });
@@ -6342,6 +6631,7 @@ impl Library {
                 .map(|write| (write.message(), format!("Undo write {}", write.path()))),
             locked: self.draft_reason(),
             page: std::mem::take(&mut self.page_results),
+            order: self.results_newest_first(),
             ..Default::default()
         };
         // With no entry open, the results and Remove's notice sit in the pane's message footer,
@@ -6364,7 +6654,7 @@ impl Library {
         });
         let mut undo_remove = false;
         if self.selected.is_none() {
-            let mut pressed = ResultPress::default();
+            let pressed = std::cell::Cell::new(ResultPress::default());
             let mut footer = design::Footer::new(
                 "library_footer",
                 ui.available_width().min(design::READER_MEASURE),
@@ -6375,15 +6665,10 @@ impl Library {
                     *undo = design::undo_message(ui, Tone::Info, words, "Undo remove");
                 });
             }
-            if results.any() {
-                let (pressed, results) = (&mut pressed, &results);
-                footer.result(results.words(), results.has_undo(), |ui| {
-                    *pressed = show_results(ui, results);
-                });
-            }
+            add_results(&mut footer, &results, &pressed);
             page_error(&mut footer, self.error.as_deref());
             footer.show(ui);
-            self.apply_package_results(&pressed);
+            self.apply_package_results(&pressed.get());
         }
         let recovery = self
             .selected
@@ -7192,6 +7477,7 @@ impl Library {
                         if design::save_row_state(ui, state, dirty && !conflict, None) {
                             self.discarded =
                                 Some((note.owner.id(), note.path.clone(), self.draft.clone()));
+                            made(&mut self.result_order, ResultKind::Discarded);
                             self.draft = note.text.clone();
                             // The draft changed: a failed Save of the old words no longer owns it.
                             self.draft_revision += 1;
@@ -7275,7 +7561,7 @@ impl Library {
                     crate::content_workspace::manifest_fault_tone(*exists)
                 });
             let (mut discard_undo, mut heading_undo, mut vital_undo) = (false, false, false);
-            let (mut heading_fix, mut vital_use, mut shown) = (false, None, None);
+            let (mut heading_fix, mut vital_use) = (false, None);
             let mut footer = design::Footer::new("library_footer", editor_width);
             // The fixes' results are messages, so each Undo keeps its icon on the line.
             if discard_shown {
@@ -7296,11 +7582,10 @@ impl Library {
                     *undo = design::undo_message(ui, Tone::Success, result, "Undo stat change");
                 });
             }
+            // Round 26 review: each kept result is its own message, newest first.
+            let shown_cell = std::cell::Cell::new(ResultPress::default());
             if results_shown {
-                let (shown, results) = (&mut shown, &results);
-                footer.result(results.words(), results.has_undo(), |ui| {
-                    *shown = Some(show_results(ui, results));
-                });
+                add_results(&mut footer, &results, &shown_cell);
             }
             // A repair draft's fault in its tone (a deleted manifest is a warning), or Save's
             // refusal before the write, a YAML fault in its own words.
@@ -7391,8 +7676,8 @@ impl Library {
             if broken_taken && let Some((_, _, _, warnings)) = &mut self.broken_lines {
                 *warnings = broken_cache;
             }
-            if let Some(shown) = shown {
-                pressed = shown;
+            if results_shown {
+                pressed = shown_cell.get();
             }
             heading_pressed = (heading_fix, heading_undo);
             if discard_undo && let Some((_, _, text)) = self.discarded.take() {
@@ -7465,8 +7750,8 @@ impl Library {
             body_bottom = footer.show(ui);
             heading_pressed = reader_press.heading;
         }
-        if let Some(shown) = reader_press.results.take() {
-            pressed = shown;
+        if choices_in_reader {
+            pressed = reader_press.results.get();
         }
         new_identity = new_identity.or(reader_press.new_identity.take());
         new_identities = new_identities.or(reader_press.new_identities.take());
@@ -7802,6 +8087,7 @@ impl Library {
                 match crate::content_workspace::ManifestWrite::write_as(&module, &path, exists) {
                     Ok(write) => {
                         self.manifest_write = Some(write);
+                        self.result_made(ResultKind::Manifest);
                         self.stale = true;
                         self.content_changed = Some(module.path);
                     }
@@ -7993,6 +8279,7 @@ impl Library {
             match result {
                 Ok(undo) => {
                     self.selection_undo = Some(undo);
+                    self.result_made(ResultKind::PackageUse);
                     self.stale = true;
                     self.content_changed = Some(campaign.path);
                 }
@@ -8013,6 +8300,7 @@ impl Library {
                         design::count(paths.len(), "file", "files")
                     ),
                 ));
+                made(&mut self.result_order, ResultKind::Identities);
                 self.stale = true;
                 self.content_changed = Some(root);
             })
@@ -10772,6 +11060,11 @@ mod tests {
         // `Undo link update`.
         library.link_edits = vec![LinkResult {
             owner: Uuid::nil(),
+            source: OfferSource {
+                root: root.clone(),
+                path: paths[0].clone(),
+                text: String::new(),
+            },
             edits: edit("links"),
             old: "Cinder Wolf".into(),
             new: "Ash Wolf".into(),

@@ -4767,6 +4767,26 @@ pub fn package_rename(d: &mut Driver<'_>) {
             && d.has("Update 1 link"),
         format!("The offer writes again ({again}), its Undo restores A's links and gives the offer back, and B's links stay"),
     );
+    // Round 26 review: the offer that Undo gives back keeps the version of Ash Wolf's file it
+    // was made from. An outside edit of the body, with no reload, makes it refuse: the linking
+    // file keeps its bytes. The file then gets its bytes back for the later steps.
+    let wolf = package.join("Creatures/Cinder Wolf.md");
+    let wolf_saved = fs::read(&wolf).unwrap();
+    let mut edited = wolf_saved.clone();
+    edited.extend_from_slice(b"\nA note added outside Splat.\n");
+    fs::write(&wolf, &edited).unwrap();
+    let linking = fs::read(&path).unwrap();
+    d.click("Update 1 link");
+    d.settle();
+    let refused = d.has_containing(crate::library::LINKS_NOT_CHANGED)
+        && fs::read(&path).unwrap() == linking
+        && !d.has("Undo link update");
+    d.observe(
+        "iter-26-L-offer-version",
+        refused,
+        "After an outside body edit, the offer Undo gave back writes nothing and says why",
+    );
+    fs::write(&wolf, &wolf_saved).unwrap();
 
     // Astra re-check: a stale offer goes. B is renamed (offer), then renamed again to a name
     // another entry has: the earlier offer ends with that save, though the new rename gives no
@@ -8680,6 +8700,42 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
         "Undo source change",
     );
     d.state("copy-entries-used", Sizes::All);
+    // Round 26 review: each kept result is its own footer message, newest first: the source
+    // change, then the registration it followed. Both Undos are reached; at 960 the footer
+    // scrolls to the older one.
+    for size in [SMALL, DEFAULT, LARGE] {
+        d.set_base(size);
+        let order = d
+            .nodes()
+            .into_iter()
+            .find(|node| {
+                node.name.contains(crate::library::USE_COPY_RESULT)
+                    && node.name.contains("is registered, with")
+            })
+            .map(|node| node.name)
+            .unwrap_or_default();
+        let newest_first = order
+            .find(crate::library::USE_COPY_RESULT)
+            .zip(order.find("is registered, with"))
+            .is_some_and(|(source, registration)| source < registration);
+        let first_in_view = d.in_view("Undo source change");
+        let footer = d.place_of("Undo source change").map(|undo| undo.center());
+        let older_reached = footer.is_some_and(|at| {
+            d.scroll_until(at, "Undo package registration", 8);
+            d.in_view("Undo package registration")
+        });
+        if let Some(at) = footer {
+            d.scroll_up_at(at, 8);
+        }
+        d.observe(
+            "iter-26-L-results-order",
+            newest_first && first_in_view && older_reached,
+            format!(
+                "At {size:?}: newest first {newest_first} in {order:?}; Undo source change in view {first_in_view}; Undo package registration reached {older_reached}"
+            ),
+        );
+    }
+    d.set_base(SMALL);
     // AD3, a result with another action: an outside change to an encounter that the change wrote
     // blocks Undo source change with its reason, inside its message. Restoring the bytes and
     // reloading brings it back, so the later steps see the usual state.
