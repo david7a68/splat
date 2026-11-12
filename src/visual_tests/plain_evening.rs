@@ -100,8 +100,8 @@ const ADD_COMMAND: &str = "devenv shell -- audit-freeze add";
 const SCENARIO: &str = "plain-evening";
 const WIDE: (f32, f32) = (1200.0, 800.0);
 const NARROW: (f32, f32) = (960.0, 640.0);
-/// Section 2.5 numbers its rows 1 to 27.
-const CONTRACT_ROWS: std::ops::RangeInclusive<u32> = 1..=27;
+/// Section 2.5 numbers its rows 1 to 34; rows 28 to 31 come with other pull requests.
+const CONTRACT_ROWS: std::ops::RangeInclusive<u32> = 1..=34;
 /// What the test folder becomes in a run's `splat_run_source_path`.
 const WORLD: &str = "<world>";
 const SAME: &str = "the same as at the start";
@@ -1914,24 +1914,24 @@ mod allowed_classes {
             name: "P4 c: an act shows or hides only `Effect`'s words",
             fits: |d, _| effect::act_words(d),
         },
-        // R3a, F2: rows 25 to 27, by the lead's ruling after app round 2.
+        // R3a, F2: rows 32 to 34, by the lead's ruling after app round 2.
         Class {
-            row: 25,
+            row: 32,
             name: "R3a a: `Effect` in the room after Absent, also beside a cut name (X9)",
             fits: r3a::effect,
         },
         Class {
-            row: 25,
+            row: 32,
             name: "R3a b: an act shows or hides only R3a's words",
             fits: |d, _| r3a::act_words(d),
         },
         Class {
-            row: 26,
+            row: 33,
             name: "R3a c: the dock's cut name keeps its last word, at its place (X53)",
             fits: r3a::dock_name,
         },
         Class {
-            row: 27,
+            row: 34,
             name: "R3a d: the Conditions help and field words, at their place (X7, X8)",
             fits: r3a::conditions,
         },
@@ -1989,14 +1989,15 @@ mod allowed_classes {
         }
     }
 
-    /// R3a's classes: rows 25 to 27 of section 2.5, by the lead's ruling after app round 2. Each
+    /// R3a's classes: rows 32 to 34 of section 2.5, by the lead's ruling after app round 2. Each
     /// proves itself from its view. `Effect` is new only as P4's is (X9). The dock's cut name
     /// keeps its place and height and gains its last word (X53). The Conditions help and the
     /// field's words change in place (X7, X8). An old form goes only where its new form stands
     /// at the same place; nothing of today moves or narrows.
     mod r3a {
-        use super::super::{AllowedRow, Difference};
+        use super::super::{AllowedRow, Difference, Reference, folder, read};
         use super::{rect_of, rects};
+        use std::sync::OnceLock;
 
         const OLD_HELP: &str = "These record your ruling. No number changes by itself. Other effects stay local and do not sync.";
         const NEW_HELP: &str = "No HP, AC or roll changes by itself. A time you type counts down on that creature’s turns. Other effects stay local and do not sync.";
@@ -2007,6 +2008,40 @@ mod allowed_classes {
 
         fn run_view(d: &Difference) -> bool {
             d.screen.starts_with("run-")
+        }
+
+        fn reference() -> &'static Reference {
+            static REFERENCE: OnceLock<Reference> = OnceLock::new();
+            REFERENCE.get_or_init(|| read(&folder().join("reference.json")))
+        }
+
+        /// The place of this control in the reference's view of `d` (review of PR 292).
+        fn in_reference(d: &Difference, control: &str) -> Option<[f32; 4]> {
+            reference()
+                .views
+                .iter()
+                .find(|view| (&view.screen, &view.view) == (&d.screen, &d.view))?
+                .controls
+                .iter()
+                .find(|item| item.0 == control)
+                .and_then(|item| <[f32; 4]>::try_from(item.1.as_slice()).ok())
+        }
+
+        /// A form of a name that the reference's dock shows selected, in any view.
+        fn selected(shown: &str) -> bool {
+            reference().views.iter().any(|view| {
+                view.controls.iter().any(|item| {
+                    item.0
+                        .strip_prefix("Label: Selected: ")
+                        .is_some_and(|name| form_of(name, shown))
+                })
+            })
+        }
+
+        /// The dock's name slot ends `L` before Conditions, in the reference's view of `d`.
+        fn before_conditions(d: &Difference, r: [f32; 4]) -> bool {
+            in_reference(d, "Button: Conditions for this participant")
+                .is_some_and(|conditions| r[0] + r[2] <= conditions[0] - 16.0 + 0.5)
         }
 
         fn same_view(o: &Difference, d: &Difference) -> bool {
@@ -2106,8 +2141,19 @@ mod allowed_classes {
 
         /// X9: `Effect`, new in the room after Absent, and its own words inside it.
         pub(super) fn effect(d: &Difference, rows: &[AllowedRow]) -> bool {
+            // In the dock, `L` after Absent and on its line, as the reference has Absent.
             let control = |d: &Difference| {
-                run_view(d) && d.what == "control" && d.change == "new" && d.name == EFFECT
+                run_view(d)
+                    && d.what == "control"
+                    && d.change == "new"
+                    && d.name == EFFECT
+                    && rect_of(&d.detail, "at ")
+                        .zip(in_reference(d, "Button: Absent"))
+                        .is_some_and(|(at, absent)| {
+                            (at[0] - (absent[0] + absent[2] + 16.0)).abs() < 0.5
+                                && (at[1] - absent[1]).abs() < 0.5
+                                && (at[3] - absent[3]).abs() < 0.5
+                        })
             };
             if control(d) {
                 return true;
@@ -2151,23 +2197,32 @@ mod allowed_classes {
                 })
             };
             let name = words(&d.name);
-            let slot = |old: bool| place(d).is_some_and(|at| in_slot(d, rows, at, old, name));
+            let slot = |old: bool| {
+                place(d)
+                    .is_some_and(|at| in_slot(d, rows, at, old, name) && before_conditions(d, at))
+            };
             match d.change.as_str() {
                 "gone" => cut(name).is_some() && slot(true) && other("new", &|new| pair(name, new)),
                 "new" => {
                     telling(name).is_some() && slot(false) && other("gone", &|old| pair(old, name))
                 }
+                // The label is as wide as the new text it holds, at its place, and both end
+                // before the slot's end.
                 "width" => {
+                    let Some((old, new)) = rects(&d.detail) else {
+                        return false;
+                    };
                     d.name.starts_with("Label: Selected: ")
-                        && rects(&d.detail).is_some_and(|(old, new)| at_place(old, new))
+                        && at_place(old, new)
+                        && before_conditions(d, new)
                         && rows.iter().map(|row| &row.difference).any(|o| {
                             same_view(o, d)
                                 && o.what == "text"
                                 && o.change == "new"
                                 && telling(&o.name).is_some()
-                                && rects(&d.detail)
-                                    .zip(place(o))
-                                    .is_some_and(|((_, new), o)| at_place(new, o))
+                                && place(o).is_some_and(|o| {
+                                    at_place(new, o) && (new[2] - o[2]).abs() < 0.5
+                                })
                         })
                 }
                 _ => false,
@@ -2261,12 +2316,13 @@ mod allowed_classes {
                             '+' => {
                                 EFFECT_WORDS.contains(&word)
                                     || word == NEW_HELP
-                                    || telling(word).is_some()
+                                    || (telling(word).is_some() && selected(word))
                             }
                             '-' => {
                                 EFFECT_WORDS.contains(&word)
                                     || word == OLD_HELP
                                     || (cut(word).is_some()
+                                        && selected(word)
                                         && parts.iter().any(|&(w, s, new)| {
                                             w == when && s == '+' && pair(word, new)
                                         }))
@@ -4766,7 +4822,7 @@ mod allowed_classes {
         let help = "No HP, AC or roll changes by itself. A time you type counts down on that creature’s turns. Other effects stay local and do not sync.";
         let r3a_faults = [
             (
-                26,
+                33,
                 view(
                     "run-arrivals",
                     closed,
@@ -4777,7 +4833,7 @@ mod allowed_classes {
                 ),
             ),
             (
-                26,
+                33,
                 view(
                     twelve,
                     closed,
@@ -4788,7 +4844,7 @@ mod allowed_classes {
                 ),
             ),
             (
-                26,
+                33,
                 view(
                     twelve,
                     closed,
@@ -4799,7 +4855,7 @@ mod allowed_classes {
                 ),
             ),
             (
-                26,
+                33,
                 view(
                     twelve,
                     closed,
@@ -4810,7 +4866,7 @@ mod allowed_classes {
                 ),
             ),
             (
-                27,
+                34,
                 view(
                     conditions,
                     small,
@@ -4821,7 +4877,7 @@ mod allowed_classes {
                 ),
             ),
             (
-                27,
+                34,
                 view(
                     conditions,
                     small,
@@ -4832,7 +4888,7 @@ mod allowed_classes {
                 ),
             ),
             (
-                27,
+                34,
                 view(
                     conditions,
                     small,
@@ -4843,7 +4899,7 @@ mod allowed_classes {
                 ),
             ),
             (
-                25,
+                32,
                 view(
                     twelve,
                     closed,
@@ -4854,7 +4910,7 @@ mod allowed_classes {
                 ),
             ),
             (
-                25,
+                32,
                 view(
                     "act 81",
                     "",
@@ -4865,7 +4921,7 @@ mod allowed_classes {
                 ),
             ),
             (
-                25,
+                32,
                 view(
                     "act 81",
                     "",
@@ -4877,7 +4933,7 @@ mod allowed_classes {
             ),
             // The same name change in the header, outside the dock's slot (Astra's review).
             (
-                26,
+                33,
                 view(
                     twelve,
                     closed,
@@ -4888,7 +4944,7 @@ mod allowed_classes {
                 ),
             ),
             (
-                26,
+                33,
                 view(
                     twelve,
                     closed,
@@ -4898,13 +4954,48 @@ mod allowed_classes {
                     "at 241 15 186.5x22",
                 ),
             ),
+            // Review of PR 292: `Effect` in the header, an act's shortened words of no
+            // participant, and the selected name's label far wider than its slot.
+            (
+                32,
+                view(
+                    twelve,
+                    closed,
+                    "control",
+                    "new",
+                    "Button: Effect: words for this row",
+                    "at 156 15 24x24",
+                ),
+            ),
+            (
+                32,
+                view(
+                    "act 81",
+                    "",
+                    "act",
+                    "changed",
+                    "close the run",
+                    "appeared + Unrelated… Message",
+                ),
+            ),
+            (
+                33,
+                view(
+                    "run-keys",
+                    closed,
+                    "control",
+                    "width",
+                    "Label: Selected: Ashfang, Eldest Wolf of the Southern Ridge",
+                    "156 730 147.2x18 -> 156 730 5000x18",
+                ),
+            ),
             // A text outside the help's box, also one with the help's words.
             (
-                27,
+                34,
                 view(conditions, small, "text", "gone", "HP", "was 700 200 20x16"),
             ),
             (
-                27,
+                34,
                 view(
                     conditions,
                     small,

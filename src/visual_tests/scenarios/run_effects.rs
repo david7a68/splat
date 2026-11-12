@@ -132,7 +132,8 @@ pub fn run(d: &mut Driver<'_>) {
     let die = result
         .as_deref()
         .and_then(|words| words.split_whitespace().nth(1))
-        .map(|die| format!("Rolled {die}"));
+        .map(|die| format!("Rolled {die} for {CULTIST}: Fire Breath"));
+    // Review of PR 292: the dock's total is named by its participant and effect.
     d.observe(
         "X4",
         die.as_deref().is_some_and(|die| d.has(die)),
@@ -156,7 +157,7 @@ pub fn run(d: &mut Driver<'_>) {
             words
                 .split_whitespace()
                 .nth(1)
-                .map(|die| format!("Rolled {die}"))
+                .map(|die| format!("Rolled {die} for {CULTIST}: Fire Breath"))
         });
 
     // T20.3: the count goes down when its participant's turn ends.

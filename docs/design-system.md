@@ -1407,7 +1407,10 @@ the block's edge, and a total of three digits gives up `=` there. Each place hol
 ends in `…`, and hover keeps the roll's whole line. No control of the dock moves when a total comes, changes or goes.
 Fit whole words, retain a distinguishing last word or copy number or
 letter, end shortened names with an ellipsis and drop trailing joining words: `Seraphina… Bell`, `Cinder… 2`.
-Hover and accessibility keep full names. A row at 0 HP with the panel hidden has `Death saves` first on the
+The dock's name keeps its last word while its slot holds the first word, `…` and the last word; else it is its
+first word's start and `…`, within the slot, so no control moves. The limit: in the 442 px dock at 960x640 the
+slot is 79 px (95 beside Lookup), and `Seraphina… Bell` needs 107, so it shows `Seraphina…`; from a 596 px
+dock the slot is 192 px. Hover and accessibility keep full names. A row at 0 HP with the panel hidden has `Death saves` first on the
 action tiles' line above the dock, so no control of the dock moves and the name keeps its slot.
 
 ### Effects and turn reminders
@@ -1437,8 +1440,9 @@ round`, `Bless · time is up` (the `result.warning` icon, words in `text`), `Leg
 Breath ready`, `Fire Breath spent ⚄`. An official condition's name opens its rule; the count is its own
 target of at least `XL`: a running count or words shown on each turn open Conditions, `time is up` removes,
 uses spend one (at none, give all back), a ready recharge is marked spent and a spent one rolls 1d6: its die
-shows in the dice total's place, and the run's footer says `Rolled 2 for Cinder Drake: Fire Breath still spent.`
-until the next act. The row's
+shows in the dice total's place, named `Rolled 2 for Cinder Drake: Fire Breath`, and the run's footer and the
+total's hover say `Rolled 2 for Cinder Drake: Fire Breath still spent.` until the DM's next act: any step, roll or
+Undo. The row's
 hover and accessible name hold every whole word. After damage to a row marked Conc, `Conc save DC 12` ends
 its second line until the next step, only in the room that the effects leave; else only in the hover and the
 accessible name. In Conditions an official condition's count is on its tick, `✓ Frightened 10`, while the
@@ -1450,8 +1454,8 @@ The notice line has a third part after the state notice and the sheet summary: t
 from effects with a time, `Tone::Info` icon `PIN` and `text` words. They show whole in the room that the state
 notice, the summary and today's Undo label leave; else their count; else not at all, and the row has them.
 `Next:` gives way to them. No reminder makes Undo shorter or a state notice lose a word. A conflict's name
-wider than the line beside the bare Undo shortens as the dock's name does; the icon, `Conflict` and Review
-stay.
+wider than the line beside the bare Undo shortens by the header's rule for its names; the icon, `Conflict`
+and Review stay. The dock's selected name follows the dock's rule.
 
 Overflow clips above a separate page-filled band and hairline. Count rows above and below, including rows cut
 by the edge, and their Conflict, 0 HP and Bloodied states. Each turn scrolls current and next rows into view.

@@ -2501,11 +2501,28 @@ mod tests {
         let mut run = live();
         let actor = run.current().unwrap();
         let others: Vec<usize> = (0..3).filter(|row| *row != actor).collect();
+        // X4, review of PR 292: a recharge roll's result, before the attack.
+        run.apply(Command::Condition(actor, "Fire Breath recharge 5-6".into()))
+            .unwrap();
+        let at = run.state.participants[actor].conditions.len() - 1;
+        run.apply(Command::Recharge(actor, at)).unwrap();
+        run.state.random = Random::controlled([3]);
+        run.apply(Command::Recharge(actor, at)).unwrap();
+        assert!(
+            run.recharge_result()
+                .is_some_and(|recharged| recharged.words.ends_with("still spent."))
+        );
         run.roll_link(ask(attack(), actor));
         run.state.random = Random::controlled([12, 3, 4]);
         run.target(others[0], None);
         let first = run.row_badge(others[0]).unwrap();
         assert!(first.ends_with(" damage"), "{first}");
+        // The attack is the next act: the recharge's die and footer line go with it.
+        assert!(
+            run.recharge_result().is_none() && run.dock_roll().is_none(),
+            "{:?}",
+            run.dock_roll()
+        );
         // Apply: Undo has the step; the attack stays armed for the next target.
         enter(&mut run);
         assert!(run.armed.is_some());

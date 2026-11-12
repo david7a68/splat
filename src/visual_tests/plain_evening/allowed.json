@@ -2,8 +2,8 @@
   "about": "G7's allowed differences from reference.json. Each row names its row of docs/design/session-cycle.md section 2.5 and one difference, whole, as the G7 failure prints it. A row that matches nothing fails. Add rows only for a change that section 2.5 lists.",
   "rows": [
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "act 53",
         "view": "",
@@ -14,8 +14,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "act 54",
         "view": "",
@@ -26,8 +26,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "act 55",
         "view": "",
@@ -38,8 +38,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "act 57",
         "view": "",
@@ -50,8 +50,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "act 58",
         "view": "",
@@ -62,8 +62,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "act 60",
         "view": "",
@@ -74,8 +74,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "act 61",
         "view": "",
@@ -86,8 +86,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "act 62",
         "view": "",
@@ -98,8 +98,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "act 63",
         "view": "",
@@ -110,8 +110,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "act 64",
         "view": "",
@@ -122,8 +122,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "act 78",
         "view": "",
@@ -134,8 +134,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "act 79",
         "view": "",
@@ -146,8 +146,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "act 80",
         "view": "",
@@ -158,8 +158,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "act 81",
         "view": "",
@@ -170,8 +170,8 @@
       }
     },
     {
-      "row": 27,
-      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "row": 34,
+      "why": "Row 34 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
       "difference": {
         "screen": "run-conditions",
         "view": "1200x800 Lookup closed",
@@ -182,8 +182,8 @@
       }
     },
     {
-      "row": 27,
-      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "row": 34,
+      "why": "Row 34 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
       "difference": {
         "screen": "run-conditions",
         "view": "1200x800 Lookup closed",
@@ -194,8 +194,8 @@
       }
     },
     {
-      "row": 27,
-      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "row": 34,
+      "why": "Row 34 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
       "difference": {
         "screen": "run-conditions",
         "view": "1200x800 Lookup closed",
@@ -206,8 +206,8 @@
       }
     },
     {
-      "row": 27,
-      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "row": 34,
+      "why": "Row 34 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
       "difference": {
         "screen": "run-conditions",
         "view": "1200x800 Lookup closed",
@@ -218,8 +218,8 @@
       }
     },
     {
-      "row": 27,
-      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "row": 34,
+      "why": "Row 34 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
       "difference": {
         "screen": "run-conditions",
         "view": "1200x800 Lookup closed",
@@ -230,8 +230,8 @@
       }
     },
     {
-      "row": 27,
-      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "row": 34,
+      "why": "Row 34 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
       "difference": {
         "screen": "run-conditions",
         "view": "1200x800 Lookup closed",
@@ -242,8 +242,8 @@
       }
     },
     {
-      "row": 27,
-      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "row": 34,
+      "why": "Row 34 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
       "difference": {
         "screen": "run-conditions",
         "view": "1200x800 Lookup closed",
@@ -254,8 +254,8 @@
       }
     },
     {
-      "row": 27,
-      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "row": 34,
+      "why": "Row 34 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
       "difference": {
         "screen": "run-conditions",
         "view": "1200x800 Lookup closed",
@@ -266,8 +266,8 @@
       }
     },
     {
-      "row": 27,
-      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "row": 34,
+      "why": "Row 34 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
       "difference": {
         "screen": "run-conditions",
         "view": "960x640 Lookup closed",
@@ -278,8 +278,8 @@
       }
     },
     {
-      "row": 27,
-      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "row": 34,
+      "why": "Row 34 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
       "difference": {
         "screen": "run-conditions",
         "view": "960x640 Lookup closed",
@@ -290,8 +290,8 @@
       }
     },
     {
-      "row": 27,
-      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "row": 34,
+      "why": "Row 34 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
       "difference": {
         "screen": "run-conditions",
         "view": "960x640 Lookup closed",
@@ -302,8 +302,8 @@
       }
     },
     {
-      "row": 27,
-      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "row": 34,
+      "why": "Row 34 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
       "difference": {
         "screen": "run-conditions",
         "view": "960x640 Lookup closed",
@@ -314,8 +314,8 @@
       }
     },
     {
-      "row": 27,
-      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "row": 34,
+      "why": "Row 34 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
       "difference": {
         "screen": "run-conditions",
         "view": "960x640 Lookup closed",
@@ -326,8 +326,8 @@
       }
     },
     {
-      "row": 27,
-      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "row": 34,
+      "why": "Row 34 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
       "difference": {
         "screen": "run-conditions",
         "view": "960x640 Lookup closed",
@@ -338,8 +338,8 @@
       }
     },
     {
-      "row": 27,
-      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "row": 34,
+      "why": "Row 34 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
       "difference": {
         "screen": "run-conditions",
         "view": "960x640 Lookup closed",
@@ -350,8 +350,8 @@
       }
     },
     {
-      "row": 27,
-      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "row": 34,
+      "why": "Row 34 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
       "difference": {
         "screen": "run-conditions",
         "view": "960x640 Lookup closed",
@@ -362,8 +362,8 @@
       }
     },
     {
-      "row": 27,
-      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "row": 34,
+      "why": "Row 34 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
       "difference": {
         "screen": "run-conditions",
         "view": "960x640 Lookup closed",
@@ -374,8 +374,8 @@
       }
     },
     {
-      "row": 27,
-      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "row": 34,
+      "why": "Row 34 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
       "difference": {
         "screen": "run-conditions",
         "view": "960x640 Lookup closed",
@@ -386,8 +386,8 @@
       }
     },
     {
-      "row": 27,
-      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "row": 34,
+      "why": "Row 34 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
       "difference": {
         "screen": "run-conditions",
         "view": "960x640 Lookup closed",
@@ -398,8 +398,8 @@
       }
     },
     {
-      "row": 27,
-      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "row": 34,
+      "why": "Row 34 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
       "difference": {
         "screen": "run-conditions: Conditions hover",
         "view": "1200x800",
@@ -410,8 +410,8 @@
       }
     },
     {
-      "row": 27,
-      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "row": 34,
+      "why": "Row 34 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
       "difference": {
         "screen": "run-conditions: Conditions hover",
         "view": "1200x800",
@@ -422,8 +422,8 @@
       }
     },
     {
-      "row": 27,
-      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "row": 34,
+      "why": "Row 34 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
       "difference": {
         "screen": "run-conditions: Conditions hover",
         "view": "1200x800",
@@ -434,8 +434,8 @@
       }
     },
     {
-      "row": 27,
-      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "row": 34,
+      "why": "Row 34 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
       "difference": {
         "screen": "run-conditions: Conditions hover",
         "view": "1200x800",
@@ -446,8 +446,8 @@
       }
     },
     {
-      "row": 27,
-      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "row": 34,
+      "why": "Row 34 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
       "difference": {
         "screen": "run-conditions: Conditions hover",
         "view": "1200x800",
@@ -458,8 +458,8 @@
       }
     },
     {
-      "row": 27,
-      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "row": 34,
+      "why": "Row 34 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
       "difference": {
         "screen": "run-conditions: Conditions hover",
         "view": "1200x800",
@@ -470,8 +470,8 @@
       }
     },
     {
-      "row": 27,
-      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "row": 34,
+      "why": "Row 34 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
       "difference": {
         "screen": "run-conditions: Conditions hover",
         "view": "1200x800",
@@ -482,8 +482,8 @@
       }
     },
     {
-      "row": 27,
-      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "row": 34,
+      "why": "Row 34 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
       "difference": {
         "screen": "run-conditions: Conditions hover",
         "view": "1200x800",
@@ -494,8 +494,8 @@
       }
     },
     {
-      "row": 27,
-      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "row": 34,
+      "why": "Row 34 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
       "difference": {
         "screen": "run-conditions: Conditions hover",
         "view": "960x640",
@@ -506,8 +506,8 @@
       }
     },
     {
-      "row": 27,
-      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "row": 34,
+      "why": "Row 34 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
       "difference": {
         "screen": "run-conditions: Conditions hover",
         "view": "960x640",
@@ -518,8 +518,8 @@
       }
     },
     {
-      "row": 27,
-      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "row": 34,
+      "why": "Row 34 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
       "difference": {
         "screen": "run-conditions: Conditions hover",
         "view": "960x640",
@@ -530,8 +530,8 @@
       }
     },
     {
-      "row": 27,
-      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "row": 34,
+      "why": "Row 34 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
       "difference": {
         "screen": "run-conditions: Conditions hover",
         "view": "960x640",
@@ -542,8 +542,8 @@
       }
     },
     {
-      "row": 27,
-      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "row": 34,
+      "why": "Row 34 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
       "difference": {
         "screen": "run-conditions: Conditions hover",
         "view": "960x640",
@@ -554,8 +554,8 @@
       }
     },
     {
-      "row": 27,
-      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "row": 34,
+      "why": "Row 34 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
       "difference": {
         "screen": "run-conditions: Conditions hover",
         "view": "960x640",
@@ -566,8 +566,8 @@
       }
     },
     {
-      "row": 27,
-      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "row": 34,
+      "why": "Row 34 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
       "difference": {
         "screen": "run-conditions: Conditions hover",
         "view": "960x640",
@@ -578,8 +578,8 @@
       }
     },
     {
-      "row": 27,
-      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "row": 34,
+      "why": "Row 34 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
       "difference": {
         "screen": "run-conditions: Conditions hover",
         "view": "960x640",
@@ -590,8 +590,8 @@
       }
     },
     {
-      "row": 27,
-      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "row": 34,
+      "why": "Row 34 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
       "difference": {
         "screen": "run-conditions: Conditions hover",
         "view": "960x640",
@@ -602,8 +602,8 @@
       }
     },
     {
-      "row": 27,
-      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "row": 34,
+      "why": "Row 34 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
       "difference": {
         "screen": "run-conditions: Conditions hover",
         "view": "960x640",
@@ -614,8 +614,8 @@
       }
     },
     {
-      "row": 27,
-      "why": "Row 27 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
+      "row": 34,
+      "why": "Row 34 (by the lead's ruling after app round 2, X7, X8): the Conditions help says what is true now, and the field's words give an example with a time where the dock has no room for `Effect`",
       "difference": {
         "screen": "run-conditions: Conditions hover",
         "view": "960x640",
@@ -626,8 +626,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-keys",
         "view": "1200x800 Lookup closed",
@@ -638,8 +638,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "run-keys",
         "view": "1200x800 Lookup closed",
@@ -650,8 +650,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-keys",
         "view": "1200x800 Lookup closed",
@@ -662,8 +662,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-keys",
         "view": "1200x800 Lookup closed",
@@ -674,8 +674,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-keys",
         "view": "1200x800 Lookup closed",
@@ -686,8 +686,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-keys",
         "view": "1200x800 Lookup closed",
@@ -698,8 +698,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "run-keys",
         "view": "1200x800 Lookup closed",
@@ -710,8 +710,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "run-keys",
         "view": "1200x800 Lookup closed",
@@ -722,8 +722,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "run-keys",
         "view": "1200x800 Lookup closed",
@@ -734,8 +734,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-keys",
         "view": "1200x800 Lookup open",
@@ -746,8 +746,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "run-keys",
         "view": "1200x800 Lookup open",
@@ -758,8 +758,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-keys",
         "view": "1200x800 Lookup open",
@@ -770,8 +770,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-keys",
         "view": "1200x800 Lookup open",
@@ -782,8 +782,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-keys",
         "view": "1200x800 Lookup open",
@@ -794,8 +794,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-keys",
         "view": "1200x800 Lookup open",
@@ -806,8 +806,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "run-keys",
         "view": "1200x800 Lookup open",
@@ -818,8 +818,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "run-keys",
         "view": "1200x800 Lookup open",
@@ -830,8 +830,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-keys",
         "view": "960x640 Lookup open",
@@ -842,8 +842,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-keys",
         "view": "960x640 Lookup open",
@@ -854,8 +854,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-keys",
         "view": "960x640 Lookup open",
@@ -866,8 +866,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-keys",
         "view": "960x640 Lookup open",
@@ -878,8 +878,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-keys",
         "view": "960x640 Lookup open",
@@ -890,8 +890,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-next-round",
         "view": "1200x800 Lookup closed",
@@ -902,8 +902,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "run-next-round",
         "view": "1200x800 Lookup closed",
@@ -914,8 +914,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-next-round",
         "view": "1200x800 Lookup closed",
@@ -926,8 +926,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-next-round",
         "view": "1200x800 Lookup closed",
@@ -938,8 +938,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-next-round",
         "view": "1200x800 Lookup closed",
@@ -950,8 +950,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-next-round",
         "view": "1200x800 Lookup closed",
@@ -962,8 +962,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "run-next-round",
         "view": "1200x800 Lookup closed",
@@ -974,8 +974,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "run-next-round",
         "view": "1200x800 Lookup closed",
@@ -986,8 +986,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "run-next-round",
         "view": "1200x800 Lookup closed",
@@ -998,8 +998,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-next-round",
         "view": "1200x800 Lookup open",
@@ -1010,8 +1010,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "run-next-round",
         "view": "1200x800 Lookup open",
@@ -1022,8 +1022,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-next-round",
         "view": "1200x800 Lookup open",
@@ -1034,8 +1034,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-next-round",
         "view": "1200x800 Lookup open",
@@ -1046,8 +1046,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-next-round",
         "view": "1200x800 Lookup open",
@@ -1058,8 +1058,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-next-round",
         "view": "1200x800 Lookup open",
@@ -1070,8 +1070,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "run-next-round",
         "view": "1200x800 Lookup open",
@@ -1082,8 +1082,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "run-next-round",
         "view": "1200x800 Lookup open",
@@ -1094,8 +1094,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-next-round",
         "view": "960x640 Lookup open",
@@ -1106,8 +1106,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-next-round",
         "view": "960x640 Lookup open",
@@ -1118,8 +1118,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-next-round",
         "view": "960x640 Lookup open",
@@ -1130,8 +1130,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-next-round",
         "view": "960x640 Lookup open",
@@ -1142,8 +1142,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-next-round",
         "view": "960x640 Lookup open",
@@ -1154,8 +1154,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-next-round: Undo hover",
         "view": "1200x800",
@@ -1166,8 +1166,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "run-next-round: Undo hover",
         "view": "1200x800",
@@ -1178,8 +1178,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-next-round: Undo hover",
         "view": "1200x800",
@@ -1190,8 +1190,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-next-round: Undo hover",
         "view": "1200x800",
@@ -1202,8 +1202,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-next-round: Undo hover",
         "view": "1200x800",
@@ -1214,8 +1214,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-next-round: Undo hover",
         "view": "1200x800",
@@ -1226,8 +1226,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "run-next-round: Undo hover",
         "view": "1200x800",
@@ -1238,8 +1238,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "run-next-round: Undo hover",
         "view": "1200x800",
@@ -1250,8 +1250,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "run-next-round: Undo hover",
         "view": "1200x800",
@@ -1262,8 +1262,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-twelve",
         "view": "1200x800 Lookup closed",
@@ -1274,8 +1274,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "run-twelve",
         "view": "1200x800 Lookup closed",
@@ -1286,8 +1286,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-twelve",
         "view": "1200x800 Lookup closed",
@@ -1298,8 +1298,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-twelve",
         "view": "1200x800 Lookup closed",
@@ -1310,8 +1310,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-twelve",
         "view": "1200x800 Lookup closed",
@@ -1322,8 +1322,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-twelve",
         "view": "1200x800 Lookup closed",
@@ -1334,8 +1334,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "run-twelve",
         "view": "1200x800 Lookup closed",
@@ -1346,8 +1346,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "run-twelve",
         "view": "1200x800 Lookup closed",
@@ -1358,8 +1358,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "run-twelve",
         "view": "1200x800 Lookup closed",
@@ -1370,8 +1370,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-twelve",
         "view": "1200x800 Lookup open",
@@ -1382,8 +1382,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "run-twelve",
         "view": "1200x800 Lookup open",
@@ -1394,8 +1394,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-twelve",
         "view": "1200x800 Lookup open",
@@ -1406,8 +1406,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-twelve",
         "view": "1200x800 Lookup open",
@@ -1418,8 +1418,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-twelve",
         "view": "1200x800 Lookup open",
@@ -1430,8 +1430,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-twelve",
         "view": "1200x800 Lookup open",
@@ -1442,8 +1442,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "run-twelve",
         "view": "1200x800 Lookup open",
@@ -1454,8 +1454,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "run-twelve",
         "view": "1200x800 Lookup open",
@@ -1466,8 +1466,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-twelve",
         "view": "960x640 Lookup open",
@@ -1478,8 +1478,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-twelve",
         "view": "960x640 Lookup open",
@@ -1490,8 +1490,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-twelve",
         "view": "960x640 Lookup open",
@@ -1502,8 +1502,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-twelve",
         "view": "960x640 Lookup open",
@@ -1514,8 +1514,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-twelve",
         "view": "960x640 Lookup open",
@@ -1526,8 +1526,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-twelve: row hover",
         "view": "1200x800",
@@ -1538,8 +1538,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "run-twelve: row hover",
         "view": "1200x800",
@@ -1550,8 +1550,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-twelve: row hover",
         "view": "1200x800",
@@ -1562,8 +1562,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-twelve: row hover",
         "view": "1200x800",
@@ -1574,8 +1574,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-twelve: row hover",
         "view": "1200x800",
@@ -1586,8 +1586,8 @@
       }
     },
     {
-      "row": 26,
-      "why": "Row 26 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
+      "row": 33,
+      "why": "Row 33 (by the lead's ruling after app round 2, X53): the dock's cut name keeps its last word after its first whole words, at its place and height",
       "difference": {
         "screen": "run-twelve: row hover",
         "view": "1200x800",
@@ -1598,8 +1598,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "run-twelve: row hover",
         "view": "1200x800",
@@ -1610,8 +1610,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "run-twelve: row hover",
         "view": "1200x800",
@@ -1622,8 +1622,8 @@
       }
     },
     {
-      "row": 25,
-      "why": "Row 25 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
+      "row": 32,
+      "why": "Row 32 (by the lead's ruling after app round 2, X9): the room after Absent alone decides `Effect`, so it shows also beside a selected name that its slot cut; an act shows or hides only these rows' words",
       "difference": {
         "screen": "run-twelve: row hover",
         "view": "1200x800",

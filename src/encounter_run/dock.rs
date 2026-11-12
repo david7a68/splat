@@ -402,12 +402,23 @@ impl Run {
     }
 
     /// The dice field's last roll: its total and its Log line.
-    /// The last roll beside the dice: a recharge's until the next act (X4), else the dice
-    /// field's.
-    pub(super) fn dock_roll(&self) -> Option<(i64, String)> {
-        match (&self.recharged, &self.dock_roll) {
-            (Some(recharged), _) => Some((recharged.die, recharged.line.clone())),
-            (None, rolled) => rolled.as_ref().map(|rolled| (rolled.total, rolled.line())),
+    /// The last roll beside the dice, as its total, its hover and its accessible name: a
+    /// recharge's while its act is the newest (X4), named by its participant and effect; else
+    /// the dice field's.
+    pub(super) fn dock_roll(&self) -> Option<(i64, String, String)> {
+        match (self.recharge_result(), &self.dock_roll) {
+            (Some(recharged), _) => Some((
+                recharged.die,
+                recharged.words.clone(),
+                recharged.name.clone(),
+            )),
+            (None, rolled) => rolled.as_ref().map(|rolled| {
+                (
+                    rolled.total,
+                    rolled.line(),
+                    format!("Rolled {}", rolled.total),
+                )
+            }),
         }
     }
 
@@ -415,7 +426,7 @@ impl Run {
     /// fits, else after the last one and ending in `…`. It never leaves the slot. Hover keeps
     /// the roll's whole line, and the accessible name its total.
     fn dock_result(&self, ui: &mut egui::Ui, role: Type, prefixes: &[&str]) {
-        let Some((total, line)) = self.dock_roll() else {
+        let Some((total, line, name)) = self.dock_roll() else {
             return;
         };
         let font = role.font(ui);
@@ -432,7 +443,7 @@ impl Run {
                     .show_tooltip_when_elided(false),
             )
             .on_hover_text(line);
-        design::named(ui, &response, &format!("Rolled {total}"));
+        design::named(ui, &response, &name);
     }
 
     /// Beside Notes, a letter in Amount means the DM went on writing. It and the digits
@@ -520,18 +531,23 @@ mod tests {
     }
 
     /// The places of the name and of every control of the dock.
+    /// The selected name's label. Its accessible name, which kittest's `label` query does not
+    /// read on a `Label`.
+    fn selected_label(harness: &egui_kittest::Harness<'_>, name: &str) -> Option<egui::Rect> {
+        let selected = format!("Selected: {name}");
+        harness
+            .query(
+                egui_kittest::kittest::By::new()
+                    .include_labels()
+                    .predicate(move |node| node.label().as_deref() == Some(selected.as_str())),
+            )
+            .map(|node| node.rect())
+    }
+
     fn dock_places(harness: &egui_kittest::Harness<'_>, name: &str) -> Vec<Option<egui::Rect>> {
-        let first = name.split_whitespace().next().unwrap();
-        let painted = harness
-            .output()
-            .shapes
-            .iter()
-            .find_map(|shape| match &shape.shape {
-                egui::Shape::Text(text) if text.galley.text().starts_with(first) => {
-                    Some(text.visual_bounding_rect())
-                }
-                _ => None,
-            });
+        // The name's place: its label, also when its slot cut it to its first letters or to
+        // `…` (review of PR 292).
+        let painted = selected_label(harness, name);
         [
             "Amount",
             "Conditions for this participant",
@@ -674,6 +690,28 @@ mod tests {
             BTreeSet::from(["icon", "none", "word"]),
             "each form at some width"
         );
+        // X4, review of PR 292: a recharge roll's total in the same slot is named by its
+        // participant and effect, not as the dice field's roll.
+        let (run, mut harness) = dock("Guard", 1200.0);
+        run.borrow_mut()
+            .run_command(Command::Condition(0, "Fire Breath recharge 5-6".into()));
+        let at = run.borrow().state.participants[0].conditions.len() - 1;
+        for _ in 0..2 {
+            run.borrow_mut().run_command(Command::Recharge(0, at));
+        }
+        harness.run_steps(2);
+        let die = run.borrow().dock_roll().expect("the recharge's die").0;
+        let name = format!("Rolled {die} for Guard: Fire Breath");
+        assert!(
+            harness
+                .query(
+                    egui_kittest::kittest::By::new()
+                        .include_labels()
+                        .predicate(move |node| node.label().as_deref() == Some(name.as_str()))
+                )
+                .is_some(),
+            "the recharge's total is named by its source"
+        );
         // X9: the room after Absent alone decides. Beside a name that its slot cut, `Effect`
         // shows with its word, and the cut name keeps its telling last word (X53).
         let long = "Seraphina Thornwood-Ashgrave of the Ninth Bell";
@@ -686,6 +724,75 @@ mod tests {
             "Effect beside {shown:?}"
         );
         assert!(shown.ends_with("… Bell"), "{shown}");
+        // X53, review of PR 292: in each dock, beside Lookup or not, the cut name keeps its
+        // last word wherever its slot holds the first word, `…` and the last word; else it is
+        // its first word's start. The slot is from the name's left to `L` before Conditions.
+        for width in [442.0, 596.0, 800.0, 1040.0, 1200.0] {
+            for name in [
+                long,
+                "Ashfang, Eldest Wolf of the Southern Ridge",
+                "Ember Cultist of the Southern Watch 12",
+            ] {
+                let (run, mut harness) = dock(name, width);
+                for lookup in [false, true] {
+                    run.borrow_mut().lookup_open = lookup;
+                    run.borrow_mut().hide_panel = lookup;
+                    harness.run_steps(2);
+                    let label = selected_label(&harness, name).expect("the dock's name");
+                    let (shown, font) = harness
+                        .output()
+                        .shapes
+                        .iter()
+                        .find_map(|shape| match &shape.shape {
+                            egui::Shape::Text(text)
+                                if label.contains(text.visual_bounding_rect().center()) =>
+                            {
+                                Some((
+                                    text.galley.text().to_owned(),
+                                    text.galley.job.sections[0].format.font_id.clone(),
+                                ))
+                            }
+                            _ => None,
+                        })
+                        .unwrap();
+                    let conditions = harness
+                        .get_by_label("Conditions for this participant")
+                        .rect();
+                    let slot = conditions.left() - design::L - label.left();
+                    let first = name.split(' ').next().unwrap().trim_end_matches(',');
+                    let last = name.rsplit(' ').next().unwrap();
+                    let ends = harness.ctx.fonts_mut(|fonts| {
+                        fonts
+                            .layout_no_wrap(
+                                format!("{first}… {last}"),
+                                font.clone(),
+                                egui::Color32::WHITE,
+                            )
+                            .size()
+                            .x
+                    });
+                    println!(
+                        "X53 dock {width} Lookup {lookup}: slot {slot:.1}, {first}… {last} {ends:.1}: {shown}"
+                    );
+                    if shown == name {
+                        continue;
+                    }
+                    if ends <= slot + 0.5 {
+                        assert!(
+                            shown.ends_with(&format!("… {last}")),
+                            "{width} {lookup}: {shown}"
+                        );
+                    } else {
+                        let start = shown.trim_end_matches('…');
+                        let first = name.split(' ').next().unwrap();
+                        assert!(
+                            shown.ends_with('…') && first.starts_with(start),
+                            "{width} {lookup}: {shown}"
+                        );
+                    }
+                }
+            }
+        }
     }
 
     /// F2: the dock's field adds one effect to the row it opened for. Enter adds and puts

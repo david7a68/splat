@@ -228,11 +228,18 @@ pub(super) fn count_down(p: &mut super::Participant) -> Vec<String> {
     lines
 }
 
-/// A recharge click's Log line and, for a roll, the die and the result line that the run's
-/// footer shows until the next act (X4).
+/// A recharge click's Log line and, for a roll, its result (X4).
 pub(super) struct Recharged {
     pub line: String,
-    pub roll: Option<(u32, String)>,
+    pub roll: Option<RechargeRoll>,
+}
+
+/// A recharge roll's die, the accessible name of the dock's total, `Rolled 3 for Cinder
+/// Drake: Fire Breath`, and the footer's words, which end with the result.
+pub(super) struct RechargeRoll {
+    pub die: u32,
+    pub name: String,
+    pub words: String,
 }
 
 /// The click on a recharge's words: a ready one is spent; a spent one rolls a d6 on the run's
@@ -264,12 +271,14 @@ pub(super) fn recharge(
     let ready = (u32::from(recharge[0])..=u32::from(recharge[1])).contains(&rolled);
     *spent = !ready;
     let state = if ready { "ready again" } else { "still spent" };
+    let named = format!("Rolled {rolled} for {}: {name}", p.name);
     Ok(Recharged {
         line: format!("{}: {name}: Rolled {rolled} · {state}.", p.name),
-        roll: Some((
-            rolled,
-            format!("Rolled {rolled} for {}: {name} {state}.", p.name),
-        )),
+        roll: Some(RechargeRoll {
+            die: rolled,
+            words: format!("{named} {state}."),
+            name: named,
+        }),
     })
 }
 

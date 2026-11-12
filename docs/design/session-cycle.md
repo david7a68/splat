@@ -191,8 +191,9 @@ three reminders, the count `⚑ 3` shows between `Review` and `Undo` (`run-sync-
 T20.1 to T20.6 in `docs/ux-intent.md`, because F8 has T17.
 
 So no feature makes `Undo` shorter, and no state notice loses a word. One repair comes from rule K: when a
-conflict's name is wider than the line beside the bare `Undo`, the name shortens as the dock's name does
-(`dock_name`, `src/encounter_run/view.rs:5791`); the icon, `Conflict` and `Review` stay (section 2.5, row 20).
+conflict's name is wider than the line beside the bare `Undo`, the name shortens by the header's rule for its
+names (pull request 286 owns it); the icon, `Conflict` and `Review` stay (section 2.5, row 20). The dock's
+selected name follows the dock's own rule, which keeps a telling last word (row 33).
 
 - **Sums at case D** (estimates; T17.4 tests the rule with a short and a long name). The roster is 442 px.
   Beside Lookup `Undo: next turn` has no key letter and takes about 145 px, with a gap of 16. With no state
@@ -421,15 +422,15 @@ that G7 allows.
 | 17 | Lookup, while it holds an unsaved generated NPC | An entry that opens shows under one row, `Unsaved NPC: <name> · Show`. Today the card hides it (`src/lookup.rs:2167-2169`) | The accepted repair of Lookup |
 | 18 | Read, for an embed of a session note's heading | The heading's text shows under a muted line that links the session (F5). Today Read shows the embed as a link (`src/world.rs:380-390`) | Round 2, E30: draw by the target |
 | 19 | A **Change** of status, place or group | It writes its Log line when a session is being played by W14's test. Today the test is "dated today" (`page.rs:1929-1937`). So a change during a fight or a recording on a note with another date, and a change in prep for a session dated later, now write a line | Rule M: one definition of the session being played |
-| 20 | The run's notice line, when a conflict's name is wider than the line beside the bare `Undo` | The name shortens as the dock's name does. Today nothing gives | Rule K |
+| 20 | The run's notice line, when a conflict's name is wider than the line beside the bare `Undo` | The name shortens by the header's rule for its names; the dock's name follows the dock's rule (row 33). Today nothing gives | Rule K |
 | 21 | A package creature's reader, with no run open | A quiet `Start fight` in a header that holds no action today (F3) | Rule Q |
 | 22 | The **Last time** line | When the last note has no prose under `What happened` and no processed recap, the preview is the note's first written line outside its title and date, `Recap of last time` and `Plan for tonight`. Today the line shows the link alone (`recap_preview`, `src/sessions/page.rs`) | The lead's ruling W5-D5, from the first scored round on the app: the measured evening's two reads of last week cost 2 each because the line showed none of last week's words |
 | 22 | History on the Encounters page, after `Whole run` or `Open` | The list scrolls once, at that act, so the opened run's row is at its top and its outcome, the line under Read-only and the whole Final state are in view below it (V31). The line under Read-only is `S` below it and `M` above `FINAL STATE` (V11), so what is under Read-only moves up by at most 8 px more, and the Read-only line's words are as tall as a line. Otherwise only the list's scroll offset differs: what it holds is as today, and nothing moves sideways, is cut or is resized | By the lead's ruling after app round 1 |
 | 23 | A scene's row on the plan | Its words start at the fights' title column (12 px further left) and are drawn at the plan row title's size, `Body`, at every window size; its box's 24 px target ends at that column; its second line sits at a fight row's pitch (V2, V8). So a scene row's height changes, and every item below a changed scene row moves straight up by the sum of the height changes of the scene rows above it; nothing moves sideways, changes size, is cut or goes. A done scene's `Add to Log` (row 8's feature on the plan) is on its row where its words now keep their rows beside it. A done scene's words are muted (V1), which G7 does not measure | By the lead's ruling after app round 1 |
 | 24 | The **Tonight** line, with the scenes folded | `N scenes` has the section caret of a folded section before it, as `HISTORY` has (V14): the link is wider by the caret, at its place and height | By the lead's ruling after app round 1 |
-| 25 | Run dock, line two | `Effect` (row 6) is decided by the room after **Absent** alone, so it shows also beside a selected name that its slot cut (X9). Nothing of today's dock moves; an act shows or hides only `Effect`'s and rows 26 and 27's words | By the lead's ruling after app round 2 |
-| 26 | Run dock, the selected name | A name that its slot cuts keeps its last word after its first whole words, `Ashfang, Eldest… Ridge` for `Ashfang, Eldest Wolf…`, at the same place and height in the same slot (X53). The run header's names, the notice line's and Undo's are as today | By the lead's ruling after app round 2 |
-| 27 | The **Conditions** tab | Its help says `No HP, AC or roll changes by itself. A time you type counts down on that creature’s turns. Other effects stay local and do not sync.` at its place, and may take one more line below its first (X7). Where the dock has no room for `Effect`, the field's words are `Other effect, such as Bless 10 rounds` (X8) | By the lead's ruling after app round 2 |
+| 32 | Run dock, line two | `Effect` (row 6) is decided by the room after **Absent** alone, so it shows also beside a selected name that its slot cut (X9). Nothing of today's dock moves; an act shows or hides only `Effect`'s and rows 33 and 34's words | By the lead's ruling after app round 2 |
+| 33 | Run dock, the selected name | A name that its slot cuts keeps its last word after its first whole words, `Ashfang, Eldest… Ridge` for `Ashfang, Eldest Wolf…`, at the same place and height in the same slot (X53). The run header's names, the notice line's and Undo's are as today | By the lead's ruling after app round 2 |
+| 34 | The **Conditions** tab | Its help says `No HP, AC or roll changes by itself. A time you type counts down on that creature’s turns. Other effects stay local and do not sync.` at its place, and may take one more line below its first (X7). Where the dock has no room for `Effect`, the field's words are `Other effect, such as Bless 10 rounds` (X8) | By the lead's ruling after app round 2 |
 
 Nothing else differs. A free-words effect from an encounter or an older run gives no reminder. A Travel row
 shows no checks and no new field until the DM asks. The rail says nothing about trackers unless a notice is
@@ -635,8 +636,9 @@ more room. Case C is case A with the run's panel at 346 px.
 - **A condition's name.** Words that are an official condition, such as `Frightened 10 rounds`, add that
   condition with a count. Words that are already on the row change their time and add nothing.
 - **A recharge roll** uses the run's dice. The Log says `Rolled 5 · ready again` or `Rolled 2 · still spent`.
-  The die shows in the dock's dice total place, and the run's footer says `Rolled 2 for Cinder Drake: Fire
-  Breath still spent.` until the next act (X4, by the lead's ruling after app round 2).
+  The die shows in the dock's dice total place, named `Rolled 2 for Cinder Drake: Fire Breath`, and the run's
+  footer says `Rolled 2 for Cinder Drake: Fire Breath still spent.` until the DM's next act: any step, roll or
+  Undo (X4, by the lead's ruling after app round 2).
 - **Concentration.** When a row marked `Conc` takes damage, the row's second line ends with `Conc save DC 12`
   until the next step: 10, or half the damage if that is more, and at most 30. With no room on that line, the
   words are in the row's hover and accessible name only. Splat does not roll the save or clear `Conc`. It

@@ -820,8 +820,8 @@ pub(crate) struct Run {
     saves: BTreeMap<usize, i64>,
     /// The dice field's last roll, beside it in the dock.
     dock_roll: Option<crate::rolls::Rolled>,
-    /// A recharge roll's result, until the next act, an Undo or a roll of the dice field: its
-    /// die in the dock's total place and its words in the footer (X4).
+    /// A recharge roll's result: its die in the dock's total place and its words in the
+    /// footer, while its act is the DM's newest (`recharge_result`, X4).
     recharged: Option<Recharged>,
     /// Digits typed so far. Empty after each use, so a wrong number cannot repeat.
     amount: String,
@@ -1141,15 +1141,19 @@ enum Command {
     /// still works once the fight has ended, because that is when the party searches.
     Loot(Vec<loot::LootRoll>),
 }
-/// A d20 for initiative, with the bonus and the roll mode. Returns the die and the total.
-/// A recharge roll's result (X4): its die, its Log line and the footer's words.
+/// A recharge roll's result (X4): its die in the dock's total place, with its accessible
+/// name, and the footer's words, which are also the total's hover. It belongs to the DM's
+/// act that rolled it, by `dm_steps`: any later act of the DM (a step, a roll, an Undo) ends
+/// it, in one rule (review of PR 292).
 #[derive(Clone)]
 struct Recharged {
     die: i64,
-    line: String,
+    name: String,
     words: String,
+    step: usize,
 }
 
+/// A d20 for initiative, with the bonus and the roll mode. Returns the die and the total.
 fn roll_initiative(random: &mut Random, bonus: i64, mode: i8) -> Result<(i64, i64), String> {
     let first = i64::from(random.die(20)?);
     let die = if mode == 0 {
@@ -1992,8 +1996,14 @@ impl Run {
             |rolled| vec![rolled.line()],
         )?;
         self.dock_roll = Some(rolled);
-        self.recharged = None;
         Ok(())
+    }
+    /// The recharge roll's result while its act is the DM's newest: a step, a roll or an Undo
+    /// after it ends it (X4).
+    fn recharge_result(&self) -> Option<&Recharged> {
+        self.recharged
+            .as_ref()
+            .filter(|recharged| recharged.step == self.dm_steps)
     }
     /// Roll on a table in a note. The run's log keeps the result, and its Undo takes it back.
     pub(crate) fn roll_table(
@@ -2417,13 +2427,6 @@ impl Run {
             }
             other => Self::participant_command(&mut next, other, roster_ties)?,
         };
-        // X4: a recharge roll's die, its Log line for hover, and its words for the footer, as
-        // one result until the next act.
-        let recharged = recharged.map(|(die, words)| Recharged {
-            die: i64::from(die),
-            line: label.clone(),
-            words,
-        });
         next.log.push(label);
         // A new turn ends the results of the last one; a save's damage step records its own.
         if follow_turn {
@@ -2434,15 +2437,22 @@ impl Run {
         next.cast = None;
         next.last_change = Some(Self::change_with_result(&next, &undo_label));
         self.notice = None;
-        if recharged.is_some() {
-            self.dock_roll = None;
-        }
-        self.recharged = recharged;
         // The step keeps the save as it stood, and the save is finished: its tile disarms.
         let finished = cast.is_some();
         self.state.cast = cast;
         let before = std::mem::replace(&mut self.state, next);
         self.keep_own_step(before, undo_label, false);
+        // X4: a recharge roll's result, which this act owns; the dice field's last total gives
+        // its place to it.
+        if let Some(roll) = recharged {
+            self.dock_roll = None;
+            self.recharged = Some(Recharged {
+                die: i64::from(roll.die),
+                name: roll.name,
+                words: roll.words,
+                step: self.dm_steps,
+            });
+        }
         if finished {
             self.end_cast();
         }
@@ -2733,7 +2743,6 @@ impl Run {
             self.revision += 1;
             self.saved_steps = self.saved_steps.min(self.history.len());
             self.notice = None;
-            self.recharged = None;
             self.dm_steps += 1;
             self.history_labels.pop();
             self.history_from_sheet.pop();
@@ -5814,20 +5823,26 @@ mod tests {
         );
         // X4: the roll is one result, its die in the dock and its words in the footer. Undo,
         // the next act and a roll of the dice field each end both.
-        let die = run.dock_roll().expect("the recharge's die").0;
-        let words = format!("Rolled {die} for {}: Fire Breath ", names[1]);
+        // X4, review of PR 292: the total's accessible name and hover name the participant and
+        // the effect.
+        let (die, hover, name) = run.dock_roll().expect("the recharge's die");
+        let words = format!("Rolled {die} for {}: Fire Breath", names[1]);
+        assert_eq!(name, words);
+        assert!(hover.starts_with(&format!("{words} ")), "{hover}");
         assert!(
-            run.recharged
-                .as_ref()
-                .is_some_and(|recharged| recharged.words.starts_with(&words))
+            run.recharge_result()
+                .is_some_and(|recharged| recharged.words == hover)
         );
         run.undo();
-        assert!(run.recharged.is_none() && run.dock_roll().is_none());
+        assert!(run.recharge_result().is_none() && run.dock_roll().is_none());
         run.apply(Command::Recharge(1, 2)).unwrap();
-        assert!(run.recharged.is_some());
+        assert!(run.recharge_result().is_some());
         run.roll_dice("1d1+3").unwrap();
-        assert!(run.recharged.is_none());
-        assert_eq!(run.dock_roll().map(|(total, _)| total), Some(4));
+        assert!(run.recharge_result().is_none());
+        assert_eq!(
+            run.dock_roll().map(|(total, _, name)| (total, name)),
+            Some((4, "Rolled 4".to_owned()))
+        );
         assert!(
             run.apply(Command::Spend(1, 2)).is_err(),
             "a recharge has no uses"

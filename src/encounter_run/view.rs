@@ -869,8 +869,7 @@ impl Run {
             .as_ref()
             .map(|(from, _)| format!("Party HP carries over from {from}."));
         let recharged = self
-            .recharged
-            .as_ref()
+            .recharge_result()
             .filter(|_| !setup)
             .map(|recharged| recharged.words.clone());
         // After the words its messages borrow, so it is dropped first.
@@ -6596,10 +6595,42 @@ pub(super) fn dock_name_shown(ui: &egui::Ui, name: &str, room: f32) -> (Type, St
         (Type::Small, name.to_owned())
     } else {
         let font = Type::Heading.font(ui);
-        let shown = with_telling_end(ui, name, &font, room)
-            .unwrap_or_else(|| dock_name(ui, name, &font, room));
+        // While the first word, `…` and the last word fit, the last word stays: a copy number
+        // or letter by `dock_name`'s rule, other words by the telling-end rule. Else the first
+        // word's start (review of PR 292).
+        let mut words = name.split_whitespace();
+        let first = words
+            .next()
+            .unwrap_or(name)
+            .trim_end_matches([',', ';', ':']);
+        let last = words.last().unwrap_or(first);
+        let numbered = last.chars().all(|c| c.is_ascii_digit()) || last.chars().count() == 1;
+        let ends = design::number_width(ui, &format!("{first}… {last}"), &font) <= room;
+        let shown = match (ends, numbered) {
+            (true, true) => Some(dock_name(ui, name, &font, room)),
+            (true, false) => with_telling_end(ui, name, &font, room),
+            (false, _) => None,
+        }
+        .unwrap_or_else(|| first_word_start(ui, name, &font, room));
         (Type::Heading, shown)
     }
+}
+
+/// The dock's name where its slot cannot hold the first word, `…` and the last word: its
+/// first word's start and `…`, as many letters as the slot holds (review of PR 292, X53). The
+/// hover and the accessible name hold it whole.
+fn first_word_start(ui: &egui::Ui, name: &str, font: &egui::FontId, room: f32) -> String {
+    let first: Vec<char> = name
+        .split_whitespace()
+        .next()
+        .unwrap_or(name)
+        .chars()
+        .collect();
+    (1..=first.len())
+        .rev()
+        .map(|letters| format!("{}…", first[..letters].iter().collect::<String>()))
+        .find(|shown| design::number_width(ui, shown, font) <= room)
+        .unwrap_or_else(|| "…".to_owned())
 }
 
 pub(super) fn dock_name(ui: &egui::Ui, name: &str, font: &egui::FontId, width: f32) -> String {
@@ -12028,6 +12059,41 @@ mod tests {
                 // X53: a cut name keeps its telling last word.
                 assert!(role == Type::Heading && shown.ends_with("… Bell"), "{shown}");
                 assert!(design::number_width(ui, &shown, &heading) <= small - 1.0);
+                // X53, review of PR 292: at every room the dock's name keeps to its slot, and
+                // keeps its last word wherever the first word, `…` and the last word fit. Else
+                // it is its first word's start and `…`.
+                for name in [
+                    long,
+                    "Ashfang, Eldest Wolf of the Southern Ridge",
+                    "Vault Guard",
+                    "Ember Cultist of the Southern Watch 12",
+                ] {
+                    let first = name.split(' ').next().unwrap().trim_end_matches(',');
+                    let last = name.rsplit(' ').next().unwrap();
+                    let telling = design::number_width(ui, &format!("{first}… {last}"), &heading);
+                    for room in 20..=320 {
+                        let room = room as f32;
+                        let (role, shown) = dock_name_shown(ui, name, room);
+                        let font = if role == Type::Heading { &heading } else { &font };
+                        assert!(
+                            design::number_width(ui, &shown, font) <= room,
+                            "{room}: {shown}"
+                        );
+                        if shown == name {
+                            continue;
+                        }
+                        if telling <= room {
+                            assert!(shown.ends_with(&format!("… {last}")), "{room}: {shown}");
+                        } else {
+                            let start = shown.trim_end_matches('…');
+                            let written = name.split(' ').next().unwrap();
+                            assert!(
+                                shown.ends_with('…') && written.starts_with(start),
+                                "{room}: {shown}"
+                            );
+                        }
+                    }
+                }
             });
         });
         harness.run_steps(2);
