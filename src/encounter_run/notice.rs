@@ -737,6 +737,21 @@ mod tests {
             Some(before),
             "no reminder makes Undo shorter"
         );
+        let reminder = harness
+            .output()
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.text() == "Wis save DC 15 (Hold Person)" => {
+                    Some(text.visual_bounding_rect())
+                }
+                _ => None,
+            })
+            .expect("the reminder's words");
+        assert!(
+            reminder.right() < before.left(),
+            "{reminder:?} clear of {before:?}"
+        );
         three.state.participants[0].conditions = vec![
             Condition::read("Wis save DC 15 (Hold Person) on its turn"),
             Condition::read("Wis save DC 15 (Hold Person) ends 10 rounds"),

@@ -529,6 +529,10 @@ mod tests {
             assert!(run.effect_open.is_none() && run.effect_fields.is_empty());
         }
         assert!(harness.query_by_label(field).is_none(), "the field closed");
+        assert!(
+            harness.get_by_label("Amount").is_focused(),
+            "Enter puts focus in Amount"
+        );
         // Escape clears the words and adds nothing.
         harness.get_by_label("Effect: words for this row").click();
         harness.run_steps(3);
@@ -538,6 +542,10 @@ mod tests {
         harness.run_steps(2);
         assert!(run.borrow().effect_fields.is_empty());
         assert_eq!(run.borrow().state.participants[0].conditions.len(), 2);
+        assert!(
+            harness.get_by_label("Amount").is_focused(),
+            "Escape puts focus in Amount"
+        );
         // Next turn moves the selection: the field closes, and its words wait for its row.
         harness.get_by_label("Effect: words for this row").click();
         harness.run_steps(3);
