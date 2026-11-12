@@ -118,14 +118,18 @@ impl Missing {
     /// before the names are known.
     pub fn words(&self) -> Option<String> {
         let first = self.names.first()?;
-        let what = match self.what {
-            Unknown::Xp => "XP",
-            Unknown::Level => "Level",
-        };
         Some(match self.names.len() - 1 {
-            0 => format!("{what} not known: {first}"),
-            more => format!("{what} not known: {first} and {more} more"),
+            0 => format!("{}: {first}", self.short()),
+            more => format!("{}: {first} and {more} more", self.short()),
         })
+    }
+
+    /// The reason with no names, where a line has no room for them.
+    pub fn short(&self) -> &'static str {
+        match self.what {
+            Unknown::Xp => "XP not known",
+            Unknown::Level => "Level not known",
+        }
     }
 }
 

@@ -5041,6 +5041,7 @@ impl Run {
         let title_width = self.ended_title_width(ui, &outcome);
         let one_line = title_width + self.ended_actions_width(ui) <= ui.available_width();
         let first_line = design::L * 4.0;
+        let (reason_room, second_line) = self.ended_second_line(ui, ui.available_width());
         let (header_rect, _) = ui.allocate_exact_size(
             vec2(
                 ui.available_width(),
@@ -5048,7 +5049,7 @@ impl Run {
                     + if one_line {
                         0.0
                     } else {
-                        Density::Glance.control() + design::S
+                        second_line + design::S
                     },
             ),
             egui::Sense::hover(),
@@ -5228,7 +5229,7 @@ impl Run {
                 },
             );
             if one_line {
-                self.ended_continue(ui);
+                self.ended_continue(ui, f32::INFINITY);
                 let room = ui.available_width() - title_width - gap;
                 // Undo stays at the roster's right edge, but never gives its target to it.
                 let align = (ui.available_rect_before_wrap().right() - roster_right).max(0.0);
@@ -5257,7 +5258,7 @@ impl Run {
                     .max_rect(header_rect.with_min_y(header_rect.top() + first_line)),
             );
             second.with_layout(Layout::right_to_left(Align::Min), |ui| {
-                self.ended_continue(ui);
+                self.ended_continue(ui, reason_room);
                 let room = ui.available_width();
                 self.ended_undo(ui, room);
             });
@@ -5315,6 +5316,36 @@ impl Run {
         }
     }
 
+    /// The header's second line, when the actions take it: the room for the sentence that
+    /// stands where Continue fight would be, beside Undo's whole target, and the line's
+    /// height. The sentence wraps narrower there, so Undo keeps its target (V27).
+    fn ended_second_line(&self, ui: &egui::Ui, width: f32) -> (f32, f32) {
+        let control = Density::Glance.control();
+        let Some(reason) = self
+            .continue_words()
+            .filter(|_| !self.undo_continues() || self.undo_blocked().is_some())
+        else {
+            return (f32::INFINITY, control);
+        };
+        let gap = ui.spacing().item_spacing.x;
+        let undo = self.ended_undo_whole(ui).map_or(0.0, |undo| undo + gap);
+        let room = continue_reason_width(ui, reason)
+            .min(width - undo - gap)
+            .max(design::L * 6.0);
+        let lines = ui.fonts_mut(|fonts| {
+            fonts
+                .layout(
+                    reason.to_owned(),
+                    Type::Small.font(ui),
+                    colors().muted,
+                    room,
+                )
+                .size()
+                .y
+        });
+        (room, control.max(lines))
+    }
+
     /// The width of Undo with its whole target, when the ended header shows it beside
     /// Continue fight or its reason. Then Undo never gives up its target.
     fn ended_undo_whole(&self, ui: &egui::Ui) -> Option<f32> {
@@ -5329,14 +5360,14 @@ impl Run {
     /// One control takes the ending away. While the ending is the newest step, that is Undo.
     /// After a loot roll, or with no steps, it is Continue fight, beside Close run: the two
     /// ways out of an ended fight, with the one that changes nothing last.
-    fn ended_continue(&mut self, ui: &mut egui::Ui) {
+    fn ended_continue(&mut self, ui: &mut egui::Ui, room: f32) {
         if self.undo_continues() && self.undo_blocked().is_none() {
             return;
         }
         // Continue fight, and Undo of an ending from the run file, are for the fight that was
         // played last. For another fight, the reason stands where the control would be.
         if let Some(reason) = self.continue_words() {
-            let width = continue_reason_width(ui, reason);
+            let width = continue_reason_width(ui, reason).min(room);
             ui.allocate_ui_with_layout(
                 vec2(width, Type::Small.line()),
                 Layout::top_down(Align::LEFT),

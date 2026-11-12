@@ -886,22 +886,25 @@ fn history_summary(
         // The line under Read-only is `S` below it and `M` above Final state, so it reads as
         // the run's own line and not as part of Final state.
         let spacing = ui.spacing().item_spacing.y;
-        ui.horizontal_wrapped(|ui| {
-            // The line is as tall as its words, so the gap below it is the gap that shows.
+        // The line is as tall as its words, so the gap below it is the gap that shows. A
+        // wrapped row takes its height from the spacing when it starts.
+        ui.scope(|ui| {
             ui.spacing_mut().interact_size.y = Type::Small.line();
-            design::status(
-                ui,
-                Status {
-                    icon: icons::READ_ONLY,
-                    word: "Read-only",
-                    color: colors().document.read_only,
-                },
-            );
-            ui.label(
-                Type::Small
-                    .rich(ui, &summary.end_reason)
-                    .color(colors().muted),
-            );
+            ui.horizontal_wrapped(|ui| {
+                design::status(
+                    ui,
+                    Status {
+                        icon: icons::READ_ONLY,
+                        word: "Read-only",
+                        color: colors().document.read_only,
+                    },
+                );
+                ui.label(
+                    Type::Small
+                        .rich(ui, &summary.end_reason)
+                        .color(colors().muted),
+                );
+            });
         });
         ui.add_space(design::S - spacing);
         // The one way on from a fight that ended by mistake. Undo puts the ending back.

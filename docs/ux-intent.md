@@ -559,7 +559,7 @@ reading the code, not from a test run.
 | T4.2 | Cold start to the interrupted turn in ≤ 2, current participant selected | run-resume **new** | cost, state | 4; first row |
 | T4.3 | A player's initiative in ≤ 2. Rows do not move during entry | prep-to-table **new** | cost, state | 3; rows move |
 | T4.4 | Unfinished runs show their encounter, date and status, and come first | encounter-build | state | Fail |
-| T4.6 | An unfinished run appears only in In progress unless Keep in Ready is on, which blocks Start fight there. Its encounter returns to Ready when it ends. Ended runs wait under their session in a collapsed History. Opening one adds nothing to the timeline | encounter-history | state | Fail |
+| T4.6 | An unfinished run appears only in In progress unless Keep in Ready is on, which blocks Start fight there. Its encounter returns to Ready when it ends. Ended runs wait under their session in a collapsed History. Opening one adds nothing to the timeline, and scrolls the list once so its row, the line under Read-only and its whole Final state are in view at 960x640 and 1200x800, also beside an open run (V31) | encounter-history | state | Fail |
 | T4.5 | Setup and live views differ clearly. Live has no setup controls | encounter-run | look | Partly |
 | T5.1 | Creature results show existing CR, HP, and AC | encounter-build | state | Fail |
 | T5.2 | Read a full stat block with the draft open in ≤ 2, without leaving the editor | encounter-build | cost | 5+ |
@@ -567,7 +567,7 @@ reading the code, not from a test run.
 | T5.4 | Creature results stay smooth at about 340 rows | encounter-build | state | Not virtualised |
 | T5.5 | Edit `Run folder` with no draft, click every enabled button: no panic | encounter-build | state | Panic expected |
 | T5.6 | With sync on, the roster shows what the party has now. With it off, the roster says nothing reaches D&D Beyond | encounter-build | state | Fail |
-| T5.7 | The editor's roster line ends with the XP and a word from the rules data, wide and narrow; so do a Ready to run row, a planned fight's row or its opened line, and a group's XP in Arrivals. With no table, sheets or XP it is as today | encounter-build, encounter-difficulty, encounter-groups | state | No route |
+| T5.7 | The editor's roster line ends with the XP and a word from the rules data, wide and narrow; so do a Ready to run row, a planned fight's row or its opened line, and a group's XP in Arrivals. A Ready to run row whose word gives way keeps it in its hover and accessible name. The opened line has one blank on each side of each `·`. With no table, sheets or XP it is as today, except that the opened line says whose XP or level is not known (W1-D2) | encounter-build, encounter-difficulty, encounter-groups | state | No route |
 | T6.1 | Prose line length ≤ 75 characters at 1200x800 and 1920x1080; reader usable at 960x640 | library-browse | view, look | 760 px cap |
 | T6.2 | Back after a link returns to the prior entry and scroll in 1 | library-browse | cost, state | Fail |
 | T6.3 | List scroll at 2,065 rows stays at or below today's median | library-browse | state | 2.3 ms debug |
@@ -634,7 +634,7 @@ reading the code, not from a test run.
 | T12.9 | Lookup finds words in a session note and keeps the run in view | session-plan | state, view | New |
 | T12.10 | A task line is a scene with a box. A tick changes one character. A plain list line gets no row. The empty plan is as today | session-plan-scenes | cost, state | New |
 | T12.11 | A scene's link opens its entry in Lookup in 1, and `Back` returns to an earlier entry | session-plan-scenes | cost | New |
-| T12.12 | A reader starts a fight in 1, and a scene row's menu in 2. An NPC with no stat block opens the made-up form with its name and focus in HP. After `Close run`, also after a restart, a second `Start fight` starts the same encounter. `Remove…` and `Undo remove encounter` remove and restore an encounter with no saved run | session-plan-scenes, npc-in-lookup, encounter-build | cost, state | New |
+| T12.12 | A reader starts a fight in 1, and a scene row's menu in 2. An NPC with no stat block opens the made-up form with its name and focus in HP. After `Close run`, also after a restart, a second `Start fight` starts the same encounter. `Remove…` and `Undo remove encounter` remove and restore an encounter with no saved run; `Removed encounter <name>.` has the success tone | session-plan-scenes, npc-in-lookup, encounter-build | cost, state | New |
 | T12.0 | A creature made the campaign's own in ≤ 7, with no page change. Party compares passive scores with no sheet open. A Library save after an encounter save is not a conflict | session-plan | cost, state | New |
 | T14.2 | A wrong initiative is corrected during combat, as one step of undo, and the current turn stays | session-plan | state | New |
 | T14.3 | Exhaustion is one level with a control, and each step replaces the last | session-plan | state | New |
@@ -647,8 +647,8 @@ reading the code, not from a test run.
 | T17.2 | An ended fight has one control that takes the ending away: Undo while the ending is the newest step, otherwise Continue fight. Play returns to the turn the fight ended on in 1, and Undo puts the ending back with its loot | run-continue | cost, state | New |
 | T17.3 | A closed, ended fight that was played last goes on in ≤ 2 from History and in ≤ 3 from the plan's played row | run-continue | cost, state | New |
 | T17.4 | After Continue fight, Timeline, the plan row and the Encounters lists show a live fight. After Undo, and after a second ending, they show an ended one. Close run puts the last result in `Timeline.md` at once | run-continue | state | New |
-| T17.5 | A run whose saved Undo steps cannot be read opens on its turn, says so once, and Undo starts again | run-continue | state | New |
-| T17.6 | The ended view, the History row, the sentence that stands where Continue fight would be, and the unread-steps message are whole with Lookup open and closed at 960x640, and none of their actions closes or changes Lookup | run-continue | view, state | New |
+| T17.5 | A run whose saved Undo steps cannot be read opens on its turn, says so once, `S` below the header's hairline and `S` above the first row, and Undo starts again | run-continue | state | New |
+| T17.6 | The ended view, the History row, the sentence that stands where Continue fight would be, and the unread-steps message are whole with Lookup open and closed at 960x640, and none of their actions closes or changes Lookup. Beside Continue fight or its reason, the ended header's Undo keeps its target, on the second line where the title's line has no room for it. In History the line under Read-only is `S` below it and `M` above Final state | run-continue | view, state | New |
 | T17.7 | After Continue fight, End encounter starts with the outcome of the ending that Continue removed, selected: Enter keeps it and typing replaces it | run-continue | state | New |
 | T17.8 | Continue fight is offered only for the fight that was played last. After a later fight or long rest, and while `Timeline.md` cannot be read, the ended view and History offer no Continue fight and say why in its place. When that is no longer so, the control is back | run-continue | state | New |
 | G1 | Every disabled control states why, in text or a working tooltip | all | state | Fail |

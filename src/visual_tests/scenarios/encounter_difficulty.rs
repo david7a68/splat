@@ -113,8 +113,9 @@ fn ready_rows_say_their_word(d: &mut Driver<'_>, id: &str) {
     }
 }
 
-/// The ink blank before and after each `·` on the opened row's line that starts with
-/// `Read encounter` (V9). Empty when the line is not in view.
+/// The blank before and after each `·` on the opened row's line that starts with
+/// `Read encounter` (V9), between the glyphs' boxes as the font sets them. Empty when the line
+/// is not in view.
 fn separator_blanks(d: &Driver<'_>) -> Vec<(f32, f32)> {
     let mut link = None;
     d.each_painted_text(|text, clip| {
@@ -135,8 +136,8 @@ fn separator_blanks(d: &Driver<'_>) -> Vec<(f32, f32)> {
         {
             for row in &text.galley.rows {
                 for glyph in &row.glyphs {
-                    let left = text.pos.x + glyph.pos.x + glyph.uv_rect.offset.x;
-                    glyphs.push((glyph.chr, left, left + glyph.uv_rect.size.x));
+                    let left = text.pos.x + glyph.pos.x;
+                    glyphs.push((glyph.chr, left, left + glyph.advance_width));
                 }
             }
         }
@@ -152,8 +153,8 @@ fn separator_blanks(d: &Driver<'_>) -> Vec<(f32, f32)> {
         .collect()
 }
 
-/// V9: the same blank on each side of every separator on the opened row's line. A letter's
-/// own shape moves its ink by up to a pixel.
+/// V9: the same blank on each side of every separator on the opened row's line. Glyphs sit on
+/// whole pixels, so the blanks agree to 1 px.
 fn separators_have_one_blank(d: &mut Driver<'_>, what: &str, sizes: &[(f32, f32)]) {
     for size in sizes {
         let blanks = d.at_size(*size, separator_blanks);
@@ -396,18 +397,28 @@ pub fn run(d: &mut Driver<'_>) {
     // it was (above).
     d.click(HIGH);
     d.click(UNKNOWN);
-    const WHY: &str = " · XP not known: Nameless Thing";
+    // Where the line has no room for the name, it says `XP not known`, and its hover and its
+    // accessible name keep the name.
+    const WHY: &str = "XP not known: Nameless Thing";
     for (lookup, sizes) in [(false, &[SMALL, DEFAULT, LARGE][..]), (true, &[SMALL][..])] {
         if lookup {
             look_up(d, "wolf");
             show_plan(d);
         }
         for size in sizes {
-            let words = d.at_size(*size, |d| d.painted_in(egui::Rect::EVERYTHING));
+            let (words, named) = d.at_size(*size, |d| {
+                let named = d
+                    .nodes()
+                    .into_iter()
+                    .any(|node| node.name.ends_with(WHY) && node.fully_in_view());
+                (d.painted_in(egui::Rect::EVERYTHING), named)
+            });
             d.observe(
                 "W1-D2-why",
-                words.contains("Read encounter") && words.contains(WHY),
-                format!("At {size:?}, Lookup open {lookup}, the opened row says why: {words}"),
+                words.contains("Read encounter") && words.contains(" · XP not known") && named,
+                format!(
+                    "At {size:?}, Lookup open {lookup}, the opened row says why, and whose                      {named}: {words}"
+                ),
             );
         }
         if lookup {

@@ -811,7 +811,7 @@ A finished change has the success tone, as Library's results have: `Changes save
 (`In: … → …`, `Stat block: … → …`, Status, Part of), `Name changed to <name>.`, `Note repaired.` and
 `<file> is now a separate note.` (`world::CHANGED`). Encounters' finished changes have it too: a replacement
 (`Replaced Unknown creature with Ember Cultist.`, `2 Cinder Wolf rows replaced with Guard.`), a removed member or
-group, a group moved or deleted on save, and a deleted run. A result that wrote nothing keeps the info tone:
+group, a group moved or deleted on save, a removed encounter (`Removed encounter <name>.`), and a deleted run. A result that wrote nothing keeps the info tone:
 `Your changes are already in the note.` and `<name> draft discarded.`. The unread `Part of` warning draws
 `Edit in Obsidian` with `message_with_actions`, so the link starts at the warning's words, in the edit form and in a
 reader with no file line.
@@ -1007,7 +1007,8 @@ because a colour would be a verdict. Its hover and accessible description give t
 level 3: Low 750 · Moderate 1,125 · High 2,000` (`at levels 3 to 4`; `for the party of 5` when the roster has no
 character). The editor's `ROSTER 8` heading ends `· XP 1,050 of 1,125 · Moderate` (`XP 2,400 · Above High`);
 below 760 px the tab row ends at its right with `Moderate · XP 1,050 of 1,125`. A Ready to run row's summary ends
-`· Low`. Each shows only while the line keeps its lines and words with it, and only when the XP, every level and
+`· Low`; where the word gives way, the row's hover and its accessible name keep it. Each shows only while the line
+keeps its lines and words with it, and only when the XP, every level and
 the table are known and something stands against the party; otherwise the line is as before. A row with an
 unfinished run shows no word. The answer is worked out when the encounter, the saved sheets or the rules
 change, and when the editor's draft changes; never on a frame with no change.
@@ -1018,7 +1019,9 @@ encounter <name>.` with `Undo remove encounter`, as a saved group's `Remove…` 
 back only where no file has its path. A plan line that linked it gets no row, and its link in the note has the
 hover `Not found in this campaign`.
 
-History opens read-only final state and log in place, outside the live-run slot. Final state has one name column, as
+History opens read-only final state and log in place, outside the live-run slot. When a run opens there, by `Open`
+or by `Whole run` from the plan, the list scrolls once, at that act, so the run's row is at its top and the outcome,
+the line under Read-only and the whole Final state are in view below it; the log follows. Final state has one name column, as
 wide as the longest name up to half the room, so every HP starts at one x. Rows put outcome before ended
 state and retain outcome and round. The detail header shows only Read-only and end reason. History rows keep
 Open or Close and their menu; Start and Edit stay in that menu.
@@ -1459,22 +1462,24 @@ uses muted recovery text; failed Connect retains error state. Sync stopped links
 An ended view has one control that takes the ending away. While the ending is the newest Undo step, that is
 `Undo: end encounter`, and no other control shows. Otherwise it is secondary `Continue fight` with the run icon,
 `S` left of primary Close run: the two ways out of an ended fight, with the one that changes nothing last. Undo stays
-at the roster's right edge. The title, the outcome and the save word keep their words: Undo gives up its target
-first (`Undo`, with the full action in hover and its accessible name). When the actions still cannot share the
-title's line, as beside Lookup at 960x640, Close run stays on that line and Undo and Continue fight take a line of
-their own below it, at the right edge, with Undo's full action. A closed, ended run read in History has the same
+at the roster's right edge. The title, the outcome and the save word keep their words. Beside Continue fight or the
+sentence that stands in its place, Undo keeps its target (`Undo: roll loot`); alone, Undo gives up its target first
+(`Undo`, with the full action in hover and its accessible name). When the actions cannot share the title's line with
+Undo's target, as beside Lookup at 960x640 or at 1200x800, Close run stays on that line and Undo and Continue fight
+take a line of their own below it, at the right edge, with Undo's full action. A closed, ended run read in History has the same
 secondary `Continue fight` on its own line under Read-only, blocked with `Close the open run first.` while another
 run is open. Continue fight is offered only for the fight that was played last (`README.md`, Running an encounter
 as DM). For any other ended fight the control is absent, and one muted `Small` sentence stands in its place and says
 why: `A later fight or rest was played. Start a new run to play this one again.` It is a sentence and not a blocked
 button, because no step in this view makes the control work. In the ended header the sentence wraps to at most
 `15 × L` wide, so Close run and the title keep their places; on the two-line header it follows Undo on the second
-line. In History it is the line under Read-only. Neither is modal, and Undo names the step: `Undo: continue fight`. After Continue fight, the
+line. In History it is the line under Read-only, `S` below it and `M` above `FINAL STATE`. Neither is modal, and Undo names the step: `Undo: continue fight`. After Continue fight, the
 footer's End step starts its outcome field with the outcome of the ending that went. Whenever that field opens
 with text, the text is selected, so that Enter keeps it and typing replaces it.
 
 A run whose saved Undo steps cannot be read says so once, as a warning `message` in the error line's place with a
-Dismiss button. It wraps beside Lookup and pushes the roster down by its lines. The Log keeps the line.
+Dismiss button, `S` below the header's hairline and `S` above the first row. It wraps beside Lookup and pushes the
+roster down by its lines. The Log keeps the line.
 
 Footer and strip Close run close at once only when saved with nothing unsent; otherwise ask for a choice. List
 lost changes on separate lines, up to three, then the remaining count. Deleted runs with unsent changes use
@@ -1577,8 +1582,11 @@ text's inner edge.
 
 A planned fight's summary ends with its difficulty word (`5 party · 2 × Ember Cultist · Low`) only while the
 summary keeps its lines with it. The opened row's `Read encounter` line ends with `· Low · XP 550 of 750` when the
-line has room for the whole; so a row whose summary had no room gives its word there, for 1 `Find`. A running or
-played fight's row shows its status, not a word.
+line has room for the whole; so a row whose summary had no room gives its word there, for 1 `Find`. The words start
+at the link's right edge, so each `·` has the same blank on each side. A fight with no word because an input is not
+known says why on that line, in `muted`: `Read encounter · XP not known: Nameless Thing`, or `Level not known:
+<name>`; with more names, the first and `and 2 more`. The names come from `Scale::weigh`'s typed answer
+(`Difficulty::missing`). Its closed row is as before. A running or played fight's row shows its status, not a word.
 
 The first upcoming fight gets primary Start fight when no run is open; later fights use secondary. Use Start
 fight here and in Encounters. Saved unfinished fights offer Resume, including timeline rows whose run

@@ -435,9 +435,17 @@ fn read_encounter(
         return link;
     };
     let c = colors();
-    let mut job = egui::text::LayoutJob::default();
-    match (&difficulty.rating, &difficulty.missing) {
+    let room = ui.max_rect().right() - link.rect.right();
+    let muted = |words: &str| {
+        let mut job = egui::text::LayoutJob::default();
+        crate::difficulty::append(&mut job, ui, Type::Body, &format!(" · {words}"), c.muted);
+        job
+    };
+    // The reason whole, else without its names, which hover and the accessible name keep.
+    let mut whole = None;
+    let job = match (&difficulty.rating, &difficulty.missing) {
         (Some(rating), _) => {
+            let mut job = egui::text::LayoutJob::default();
             crate::difficulty::append(&mut job, ui, Type::Body, " · ", c.muted);
             crate::difficulty::append(&mut job, ui, Type::Body, rating.word.text(), c.text);
             crate::difficulty::append(
@@ -447,17 +455,23 @@ fn read_encounter(
                 &format!(" · {}", rating.numbers()),
                 c.muted,
             );
+            job
         }
         (None, Some(missing)) => {
             let Some(words) = missing.words() else {
                 return link;
             };
-            crate::difficulty::append(&mut job, ui, Type::Body, &format!(" · {words}"), c.muted);
+            let job = muted(&words);
+            if crate::difficulty::width(ui, &job) <= room {
+                job
+            } else {
+                whole = Some(words);
+                muted(missing.short())
+            }
         }
         (None, None) => return link,
-    }
+    };
     let width = crate::difficulty::width(ui, &job);
-    let room = ui.max_rect().right() - link.rect.right();
     if width <= room {
         // The words start at the link's right edge, so the blank before the first separator
         // is the blank of the job's own leading space (V9). `ui.put` would centre them.
@@ -473,6 +487,9 @@ fn read_encounter(
             .inner;
         if let Some(rating) = &difficulty.rating {
             crate::difficulty::describe(ui, response, rating);
+        } else if let Some(whole) = whole {
+            design::named(ui, &response, &whole);
+            response.on_hover_text(whole);
         }
     }
     link
@@ -2789,15 +2806,16 @@ mod tests {
             };
             frame();
             let output = frame();
-            // Each glyph on the line by its painted ink, in order from the left. A letter's own
-            // shape moves its ink by up to a pixel, so the blanks agree to 1 px.
+            // Each glyph on the line by its advance, in order from the left: the blank is the
+            // space between two glyphs' boxes, as the font sets it. Glyphs sit on whole pixels,
+            // so the blanks agree to 1 px.
             let mut glyphs = Vec::new();
             for shape in &output.shapes {
                 if let egui::Shape::Text(text) = &shape.shape {
                     for row in &text.galley.rows {
                         for glyph in &row.glyphs {
-                            let left = text.pos.x + glyph.pos.x + glyph.uv_rect.offset.x;
-                            glyphs.push((glyph.chr, left, left + glyph.uv_rect.size.x));
+                            let left = text.pos.x + glyph.pos.x;
+                            glyphs.push((glyph.chr, left, left + glyph.advance_width));
                         }
                     }
                 }
