@@ -1336,10 +1336,11 @@ pub mod library_author {
                     "At {size:?}, the discard line has the info icon, Body text and the text colour: {painted:?}, {colour:?}"
                 ),
             );
+            // Round 26 lead ruling: the message sits in the pane's footer, below the editor.
             d.observe(
                 "iter-12-E-FD3-slot",
-                text.top() < editor.top() && text.left() > editor.left(),
-                format!("At {size:?}, the message sits in the reason slot above the editor: {text:?}, {editor:?}"),
+                text.top() > editor.bottom() && text.left() > editor.left(),
+                format!("At {size:?}, the message sits in the footer below the editor: {text:?}, {editor:?}"),
             );
             check_undo_icon(d, UNDO_DISCARD, "iter-12-E-FD3-undo");
             // Must stay true: the editor does not move when the reason becomes the message.
@@ -16584,29 +16585,26 @@ pub mod session_plan_groups {
                 "The repair names the member row {named:?}; caret {caret:?}; lines naming the id {named_ids:?}"
             ),
         );
-        // The guidance is in the reason line under Save: no empty slot between it and the editor,
-        // at 960 and 1200. The normal gap there is the design system's `S` before the editor
-        // with item spacing and the label's line padding (15 px), so the bound is `L`; an
-        // empty reserved slot (about 44 px) fails it.
+        // The guidance is in the message footer directly below the editor: no empty slot between
+        // them, at 960 and 1200. Round 26: the editor's frame margin, the footer's `S` gap and
+        // its inset come to about 20 px, so the bound is `XXL`; an empty reserved part (about
+        // 44 px) fails it.
         const LINK_WORDS: &str = "needs a creature that cannot be found. Replace the link";
-        let gap_below = |d: &Driver<'_>, words: &str, next: Option<egui::Rect>| {
-            let text = d.painted_rect_in(words, egui::Rect::EVERYTHING)?;
-            Some(next?.top() - text.bottom())
-        };
         let mut gaps = Vec::new();
         for size in [SMALL, DEFAULT] {
             gaps.push(d.at_size(size, |d| {
-                gap_below(d, LINK_WORDS, d.place_of("Markdown editor"))
+                // The editor's frame: its accessible rect follows its scrolled text.
+                let editor = d.input_frame("Markdown editor")?.0;
+                let text = d.painted_rect_in(LINK_WORDS, egui::Rect::EVERYTHING)?;
+                Some(text.top() - editor.bottom())
             }));
         }
-        // Round 24 (lead ruling on the Astra re-check): the reason slot is two text lines high
-        // whatever it holds, so the gap is at most that slot; an empty part between them fails.
-        let slot = 2.0 * crate::design::Type::Body.line();
+        let slot = crate::design::XXL;
         d.observe(
             "iter-23-B-FK1-slot",
             gaps.iter()
                 .all(|gap| gap.is_some_and(|gap| (0.0..=slot).contains(&gap))),
-            format!("Guidance to editor at 960 and 1200: {gaps:?}"),
+            format!("Editor to guidance in the footer at 960 and 1200: {gaps:?}"),
         );
         // This repair looked the row up, and unchanged frames and a resize do not look it up
         // again.
@@ -16662,9 +16660,8 @@ pub mod session_plan_groups {
                 .find(|node| node.name == "Markdown editor")
                 .map(|node| node.shown)
         };
-        // Round 25 (one message space): Save's reason comes first in the space below the save
-        // row, above the editor; the guidance follows it in the same space (it scrolls there).
-        // The old two parts showed the guidance first, then the reason.
+        // Round 25 (one message space): Save's reason comes first, then the guidance. Round 26:
+        // both sit in the pane's message footer, below the editor.
         let mut reason = None;
         d.each_painted_text(|text, clip| {
             let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
@@ -16683,9 +16680,9 @@ pub mod session_plan_groups {
             guidance.is_none()
                 && reason
                     .zip(editor_shown(d))
-                    .is_some_and(|(reason, editor)| reason.bottom() <= editor.top()),
+                    .is_some_and(|(reason, editor)| reason.top() >= editor.bottom()),
             format!(
-                "Save's reason ({reason:?}) comes first, above the editor ({:?}); guidance above it: {guidance:?}",
+                "Save's reason ({reason:?}) comes first, in the footer below the editor ({:?}); guidance above it: {guidance:?}",
                 editor_shown(d)
             ),
         );

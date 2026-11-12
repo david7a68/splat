@@ -1851,10 +1851,9 @@ impl CombatSync {
                         }
                     }
                 });
-                ui.label(
-                    Type::Small
-                        .rich(ui, "A rest goes to D&D Beyond once, when you take it. D&D Beyond resets the resources by its own rules.")
-                        .color(colors().muted),
+                design::help(
+                    ui,
+                    "A rest goes to D&D Beyond once, when you take it. D&D Beyond resets the resources by its own rules.",
                 );
             }
             Some(mut form) => {
