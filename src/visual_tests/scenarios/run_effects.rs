@@ -52,6 +52,12 @@ fn heights(d: &Driver<'_>, rows: &[&str]) -> Vec<Option<f32>> {
 pub fn run(d: &mut Driver<'_>) {
     resume_run_from_cold_start(d);
     let current = current_participant(d).expect("a turn");
+    // Iselle is Frightened before the DM gives it a time, so her row shows the condition
+    // from the start: a time on a condition that shows keeps the row (review of PR 276).
+    d.aside(|d| {
+        d.click_row(ISELLE);
+        by_key(d, "Frightened");
+    });
     d.click_row(&current);
     let next_turn = d.place_of("Next turn");
     let rows = [current.as_str(), WOLF, CULTIST, ISELLE];
