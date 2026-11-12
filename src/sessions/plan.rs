@@ -60,6 +60,7 @@ fn planned_saved_run<'a>(
             id: Uuid::nil(),
             name: fight.name.clone(),
             summary: None,
+            difficulty: Default::default(),
             repeatable: false,
         }];
         runs.iter().find(|run| {
@@ -388,6 +389,68 @@ fn plan_details(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
         ui.add_space(Type::Body.size() + design::S);
         ui.vertical(add);
     });
+}
+
+/// A planned fight's summary. Its difficulty word (F1) ends it only when the summary keeps its
+/// lines with the word.
+fn planned_summary(ui: &mut egui::Ui, summary: &str, rating: Option<&crate::difficulty::Rating>) {
+    let c = colors();
+    let summary = plan_summary(summary);
+    let job = |word: Option<&str>| {
+        let mut job = egui::text::LayoutJob::default();
+        crate::difficulty::append(&mut job, ui, Type::Small, &summary, c.muted);
+        if let Some(word) = word {
+            crate::difficulty::append(&mut job, ui, Type::Small, " ·\u{a0}", c.muted);
+            crate::difficulty::append(
+                &mut job,
+                ui,
+                Type::Small,
+                &word.replace(' ', "\u{a0}"),
+                c.text,
+            );
+        }
+        job.wrap.max_width = ui.available_width();
+        job
+    };
+    let rows = |job: egui::text::LayoutJob| ui.fonts_mut(|fonts| fonts.layout_job(job).rows.len());
+    match rating.filter(|rating| rows(job(Some(rating.word.text()))) == rows(job(None))) {
+        Some(rating) => {
+            let response = ui.add(egui::Label::new(job(Some(rating.word.text()))).wrap());
+            crate::difficulty::describe(ui, response, rating);
+        }
+        None => wrapped_words(ui, Type::Small, summary, c.muted),
+    }
+}
+
+/// The opened planned fight's link to its encounter. With its difficulty known, the line ends
+/// with ` · Low · XP 550 of 750` (F1), when the line has room for the whole.
+fn read_encounter(ui: &mut egui::Ui, rating: Option<&crate::difficulty::Rating>) -> egui::Response {
+    // The link keeps its place; the words take the room to its right on the same line.
+    let link = design::link(ui, "Read encounter");
+    if let Some(rating) = rating {
+        let c = colors();
+        let mut job = egui::text::LayoutJob::default();
+        crate::difficulty::append(&mut job, ui, Type::Body, " · ", c.muted);
+        crate::difficulty::append(&mut job, ui, Type::Body, rating.word.text(), c.text);
+        crate::difficulty::append(
+            &mut job,
+            ui,
+            Type::Body,
+            &format!(" · {}", rating.numbers()),
+            c.muted,
+        );
+        let width = crate::difficulty::width(ui, &job);
+        let room = ui.max_rect().right() - link.rect.right();
+        if width <= room {
+            let rect = egui::Rect::from_min_size(
+                link.rect.right_top(),
+                egui::vec2(width, link.rect.height()),
+            );
+            let response = ui.put(rect, egui::Label::new(job).extend());
+            crate::difficulty::describe(ui, response, rating);
+        }
+    }
+    link
 }
 
 fn plan_rule(ui: &mut egui::Ui) {
@@ -1519,7 +1582,7 @@ impl Sessions {
                                 }
                             } else if let Some(saved) = saved {
                                 design::status(ui, Status { icon: icons::RUN, word: &plan_saved_status(saved), color: c.muted });
-                            } else { wrapped_words(ui, Type::Small, plan_summary(&fight.summary), c.muted); }
+                            } else { planned_summary(ui, &fight.summary, fight.difficulty.rating.as_ref()); }
                         }, |ui| {
                             design::row_menu(ui, &fight.name, |ui| {
                                 if Action::quiet("Remove from tonight").show(ui).clicked() {
@@ -1557,7 +1620,7 @@ impl Sessions {
                         }
                         if self.open_planned.as_ref() == Some(&fight.path) {
                             plan_details(ui, |ui| {
-                                if design::link(ui, "Read encounter").clicked() { self.wants_lookup = Some(fight.name.clone()); }
+                                if read_encounter(ui, fight.difficulty.rating.as_ref().filter(|_| !running && saved.is_none())).clicked() { self.wants_lookup = Some(fight.name.clone()); }
                             });
                         }
                         plan_rule(ui);
@@ -2420,6 +2483,7 @@ mod tests {
             name: name.into(),
             path: path.into(),
             summary: String::new(),
+            difficulty: Default::default(),
         }
     }
 
@@ -2657,6 +2721,46 @@ mod tests {
                 assert_eq!(plain, restored);
             });
         });
+    }
+
+    #[test]
+    fn the_difficulty_word_joins_a_summary_only_when_the_summary_keeps_its_lines() {
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let rating = crate::difficulty::above_high();
+        let summary = "5 party · Cinder Tyrant · 2 × Ember Cultist";
+        let widths: Vec<f32> = (120..=360).map(|width| width as f32).collect();
+        let output = ctx.run(Default::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                for width in &widths {
+                    let height = |ui: &mut egui::Ui, rating| {
+                        ui.scope(|ui| {
+                            ui.set_width(*width);
+                            planned_summary(ui, summary, rating);
+                        })
+                        .response
+                        .rect
+                        .height()
+                    };
+                    let plain = height(ui, None);
+                    assert_eq!(height(ui, Some(&rating)), plain, "at {width} px");
+                }
+            });
+        });
+        let shown = output
+            .shapes
+            .iter()
+            .filter(|shape| match &shape.shape {
+                egui::Shape::Text(text) => text.galley.job.text.ends_with("Above\u{a0}High"),
+                _ => false,
+            })
+            .count();
+        // The word shows where it fits, and gives way where it would add a line.
+        assert!(
+            shown > 0 && shown < widths.len(),
+            "{shown} of {}",
+            widths.len()
+        );
     }
 
     #[test]

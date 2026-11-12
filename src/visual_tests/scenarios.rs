@@ -14,6 +14,7 @@ use super::{
     steps::*,
 };
 use eframe::egui::{self, Key, Pos2, pos2};
+pub mod encounter_difficulty;
 pub mod file_formats;
 pub mod integrity;
 pub mod list_formats;
@@ -1293,10 +1294,11 @@ pub mod library_author {
                     "At {size:?}, the discard line has the info icon, Body text and the text colour: {painted:?}, {colour:?}"
                 ),
             );
+            // Round 26 lead ruling: the message sits in the pane's footer, below the editor.
             d.observe(
                 "iter-12-E-FD3-slot",
-                text.top() < editor.top() && text.left() > editor.left(),
-                format!("At {size:?}, the message sits in the reason slot above the editor: {text:?}, {editor:?}"),
+                text.top() > editor.bottom() && text.left() > editor.left(),
+                format!("At {size:?}, the message sits in the footer below the editor: {text:?}, {editor:?}"),
             );
             check_undo_icon(d, UNDO_DISCARD, "iter-12-E-FD3-undo");
             // Must stay true: the editor does not move when the reason becomes the message.
@@ -3405,10 +3407,18 @@ pub mod encounter_build {
             format!("The saved roster has the 8 rows asked for: {SAVED_ROWS:?}"),
         );
 
-        d.unreached(
-            "encounter difficulty and summary",
-            "the saved roster, because the app has no difficulty or summary view",
-        );
+        // T5.7: the roster's line ends with its XP and difficulty: five characters at levels 5
+        // and 6 have Low 2,800, and the three creatures are worth 200 XP each. The heading in a
+        // wide editor, the tab row in a narrow one.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let words = d.at_size(size, |d| d.painted_in(eframe::egui::Rect::EVERYTHING));
+            d.observe(
+                "T5.7",
+                words.contains("ROSTER 8 · XP 125 of 2,800 · Low")
+                    || words.contains("Low · XP 125 of 2,800"),
+                format!("At {size:?} the saved roster says its XP and word: {words}"),
+            );
+        }
         // Read a full stat block in Lookup, with the editor still open.
         let before = d.interaction_count();
         d.click("Cultist");
@@ -13777,6 +13787,42 @@ pub mod encounter_groups {
                 && d.visible_text("3 members · XP 150"),
             "The panel lists each group's members and total XP",
         );
+        // T5.7 in Arrivals: after a group's XP, what the fight becomes when it joins. Bridge
+        // Ambush's three creatures and the goblins are far below the party's Low 2,800.
+        let joins = d.at_size(DEFAULT, |d| {
+            let mut words = Vec::new();
+            d.each_painted_text(|text, _| {
+                if text.galley.job.text.starts_with(" → ") {
+                    words.push(text.galley.job.text.clone());
+                }
+            });
+            words
+        });
+        d.observe(
+            "T5.7-arrivals",
+            !joins.is_empty() && joins.iter().all(|word| word == " → Low"),
+            format!("Each group heading with room says what the fight becomes: {joins:?}"),
+        );
+        // The words are worked out after a step, not on each frame of the panel.
+        let words = crate::test_support::CachedWork::start("Arrivals words", d, |d| {
+            let (reached, work) = d
+                .app_mut()
+                .encounters
+                .run()
+                .map_or((0, 0), |run| run.arrival_counts);
+            crate::test_support::Counts { reached, work }
+        });
+        let steady = words.steady(d, |d| {
+            d.settle();
+            d.at_size(LARGE, |_| ());
+            d.settle();
+            d.visible_text(" → Low")
+        });
+        d.observe(
+            "F1-arrivals-cache",
+            steady.is_ok(),
+            format!("Unchanged frames and a resize do not work the words out again: {steady:?}"),
+        );
         d.observe(
             "T13.1",
             d.visible_text("XP 50")
@@ -16274,29 +16320,26 @@ pub mod session_plan_groups {
                 "The repair names the member row {named:?}; caret {caret:?}; lines naming the id {named_ids:?}"
             ),
         );
-        // The guidance is in the reason line under Save: no empty slot between it and the editor,
-        // at 960 and 1200. The normal gap there is the design system's `S` before the editor
-        // with item spacing and the label's line padding (15 px), so the bound is `L`; an
-        // empty reserved slot (about 44 px) fails it.
+        // The guidance is in the message footer directly below the editor: no empty slot between
+        // them, at 960 and 1200. Round 26: the editor's frame margin, the footer's `S` gap and
+        // its inset come to about 20 px, so the bound is `XXL`; an empty reserved part (about
+        // 44 px) fails it.
         const LINK_WORDS: &str = "needs a creature that cannot be found. Replace the link";
-        let gap_below = |d: &Driver<'_>, words: &str, next: Option<egui::Rect>| {
-            let text = d.painted_rect_in(words, egui::Rect::EVERYTHING)?;
-            Some(next?.top() - text.bottom())
-        };
         let mut gaps = Vec::new();
         for size in [SMALL, DEFAULT] {
             gaps.push(d.at_size(size, |d| {
-                gap_below(d, LINK_WORDS, d.place_of("Markdown editor"))
+                // The editor's frame: its accessible rect follows its scrolled text.
+                let editor = d.input_frame("Markdown editor")?.0;
+                let text = d.painted_rect_in(LINK_WORDS, egui::Rect::EVERYTHING)?;
+                Some(text.top() - editor.bottom())
             }));
         }
-        // Round 24 (lead ruling on the Astra re-check): the reason slot is two text lines high
-        // whatever it holds, so the gap is at most that slot; an empty part between them fails.
-        let slot = 2.0 * crate::design::Type::Body.line();
+        let slot = crate::design::XXL;
         d.observe(
             "iter-23-B-FK1-slot",
             gaps.iter()
                 .all(|gap| gap.is_some_and(|gap| (0.0..=slot).contains(&gap))),
-            format!("Guidance to editor at 960 and 1200: {gaps:?}"),
+            format!("Editor to guidance in the footer at 960 and 1200: {gaps:?}"),
         );
         // This repair looked the row up, and unchanged frames and a resize do not look it up
         // again.
@@ -16352,9 +16395,8 @@ pub mod session_plan_groups {
                 .find(|node| node.name == "Markdown editor")
                 .map(|node| node.shown)
         };
-        // Round 25 (one message space): Save's reason comes first in the space below the save
-        // row, above the editor; the guidance follows it in the same space (it scrolls there).
-        // The old two parts showed the guidance first, then the reason.
+        // Round 25 (one message space): Save's reason comes first, then the guidance. Round 26:
+        // both sit in the pane's message footer, below the editor.
         let mut reason = None;
         d.each_painted_text(|text, clip| {
             let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
@@ -16373,9 +16415,9 @@ pub mod session_plan_groups {
             guidance.is_none()
                 && reason
                     .zip(editor_shown(d))
-                    .is_some_and(|(reason, editor)| reason.bottom() <= editor.top()),
+                    .is_some_and(|(reason, editor)| reason.top() >= editor.bottom()),
             format!(
-                "Save's reason ({reason:?}) comes first, above the editor ({:?}); guidance above it: {guidance:?}",
+                "Save's reason ({reason:?}) comes first, in the footer below the editor ({:?}); guidance above it: {guidance:?}",
                 editor_shown(d)
             ),
         );
