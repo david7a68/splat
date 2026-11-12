@@ -2345,7 +2345,7 @@ impl Reader {
         self.form_focused = false;
         let editing = campaign.is_some_and(|campaign| self.editing(id, campaign));
         if let Some(campaign) = campaign
-            && edit::editable(item, index)
+            && takes_log(item, index)
             && let Some(go) = self.log_field(ui, item, campaign, editing)
         {
             return Some(go);

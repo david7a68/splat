@@ -888,32 +888,13 @@ fn scene_row(
             .density(Density::Read)
             .name(&log_name)
     };
-    // The fit rule: on the row only while the words keep their rows beside it, each with the
-    // same words, so no word moves. Else it is a line of the scene's own menu.
+    // On the row while it fits, else a line of the scene's own menu.
     let menu = Density::Read.control();
-    let with_log = menu + log_action().natural_width(ui) + design::S;
-    let on_row = log.is_some() && {
-        // The words' room beside the action place, as `plan_row_with` gives it after the box.
-        let room = ui.available_width() - design::XL - 2.0 * design::S;
-        // The Reader's type at that width (`prose_type`), and each row's words as it breaks
-        // them there.
-        let rows = |action: f32| {
-            let width = room - action;
-            let prose = design::reader::prose_type_at(width);
-            let font = prose.font(ui);
-            let breaks = ui.fonts_mut(|fonts| {
-                let galley = fonts.layout(plain.clone(), font, c.text, width);
-                galley
-                    .rows
-                    .iter()
-                    .map(|row| row.glyphs.len())
-                    .collect::<Vec<_>>()
-            });
-            (prose == Type::Prose, breaks)
-        };
-        rows(with_log) == rows(menu)
-    };
-    let action_width = if on_row { with_log } else { menu };
+    let with_log = log
+        .map(|_| menu + log_action().natural_width(ui) + design::S)
+        .filter(|&with_log| log_keeps_rows(ui, &plain, menu, with_log));
+    let on_row = with_log.is_some();
+    let action_width = with_log.unwrap_or(menu);
     let widths = [width - action_width - design::S, action_width];
     let mut tick = false;
     let mut remove = false;
@@ -994,6 +975,31 @@ fn scene_row(
     } else if let Some(id) = log.filter(|_| add_log) {
         *act = Some(SceneAct::AddToLog(id, words_outside_links(&task.words)));
     }
+}
+
+/// The fit rule for a done scene's `Add to Log` on its row: the scene's words keep their rows
+/// beside an action place `with_log` wide, each with the same words as beside the menu alone
+/// (`menu` wide), so no word moves.
+fn log_keeps_rows(ui: &egui::Ui, plain: &str, menu: f32, with_log: f32) -> bool {
+    // The words' room beside the action place, as `plan_row_with` gives it after the box.
+    let room = ui.available_width() - design::XL - 2.0 * design::S;
+    // The Reader's type at that width (`prose_type`), and each row's words as it breaks them
+    // there.
+    let rows = |action: f32| {
+        let width = room - action;
+        let prose = design::reader::prose_type_at(width);
+        let font = prose.font(ui);
+        let breaks = ui.fonts_mut(|fonts| {
+            let galley = fonts.layout(plain.to_owned(), font, colors().text, width);
+            galley
+                .rows
+                .iter()
+                .map(|row| row.glyphs.len())
+                .collect::<Vec<_>>()
+        });
+        (prose == Type::Prose, breaks)
+    };
+    rows(with_log) == rows(menu)
 }
 
 /// Each link to a fight under the plan's heading, in order: where its line starts in the words,

@@ -539,8 +539,8 @@ pub struct Action<'a> {
     key: Option<&'a str>,
     plain: bool,
     line_start: bool,
-    /// The left edge of the message column that a `line_start` Undo stays in.
-    column: Option<f32>,
+    /// A `line_start` Undo whose target stays in its message's column: the row's left edge.
+    column: bool,
     min_width: Option<f32>,
 }
 
@@ -558,7 +558,7 @@ impl<'a> Action<'a> {
             key: None,
             plain: false,
             line_start: false,
-            column: None,
+            column: false,
             min_width: None,
         }
     }
@@ -587,10 +587,10 @@ impl<'a> Action<'a> {
     }
 
     /// `line_start` for an Undo on its own line under its message: its target stays in the
-    /// message's column, which starts at `left`.
-    fn line_start_in_column(mut self, left: f32) -> Self {
+    /// message's column, which starts at the row's left edge.
+    fn line_start_in_column(mut self) -> Self {
         self.line_start = true;
-        self.column = Some(left);
+        self.column = true;
         self
     }
 
@@ -738,9 +738,10 @@ impl<'a> Action<'a> {
             // An Undo under its message keeps its target in the message's column, so it never
             // hangs past a pane whose text edge is the message's (Lookup's reader). The icon
             // and the words keep their places.
-            let target = match self.column {
-                Some(left) => rect.with_min_x(rect.min.x.max(left)),
-                None => rect,
+            let target = if self.column {
+                rect.with_min_x(rect.min.x.max(ui.max_rect().left()))
+            } else {
+                rect
             };
             (rect, ui.interact(target, id, Sense::click()))
         } else {
@@ -2223,8 +2224,7 @@ fn undo_message_with_links_inside(
         clicked = notice(ui, tone, names, suffix);
         ui.horizontal(|ui| {
             ui.add_space((inset - gap).max(0.0));
-            let left = ui.max_rect().left();
-            pressed = button.line_start_in_column(left).show(ui).clicked();
+            pressed = button.line_start_in_column().show(ui).clicked();
         });
     } else {
         clicked = ui
@@ -2551,8 +2551,7 @@ fn undo_message_inside(
         message(ui, tone, text);
         ui.horizontal(|ui| {
             ui.add_space((inset - gap).max(0.0));
-            let left = ui.max_rect().left();
-            pressed = button.line_start_in_column(left).show(ui).clicked();
+            pressed = button.line_start_in_column().show(ui).clicked();
         });
     } else {
         ui.horizontal_top(|ui| {
