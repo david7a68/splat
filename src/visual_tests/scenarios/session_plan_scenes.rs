@@ -297,6 +297,7 @@ pub fn log_from_play(d: &mut Driver<'_>) {
             ),
         );
     }
+    d.state("done-scene-add-to-log", Sizes::All);
     // The fit rule: beside the long words the action would move a word, so it is a line of
     // that scene's menu, and the row is as a scene's row with no action.
     d.click(&long_menu);
@@ -307,7 +308,7 @@ pub fn log_from_play(d: &mut Driver<'_>) {
         }),
         "Beside long words, Add to Log is a line of the scene's menu, not on its row",
     );
-    d.state("done-scene-add-to-log", Sizes::All);
+    d.state("done-scene-menu", Sizes::Default);
     d.press(Key::Escape);
 
     // From a done scene on the row: Lookup opens on the entry with the field and its stamp,
