@@ -52,6 +52,7 @@ mod sheet_writer;
 mod test_support;
 mod timeline;
 mod touchpad;
+mod trackers;
 mod ui_state;
 #[cfg(test)]
 mod visual_tests;
@@ -117,6 +118,8 @@ struct Splat {
     party: party::Party,
     encounters: encounters::Encounters,
     lookup: lookup::Lookup,
+    /// The house rules' trackers and the ledger; Lookup shows them, and the rail counts them.
+    trackers: trackers::Trackers,
     sessions: sessions::page::Sessions,
     timeline: timeline::Book,
     timeline_page: timeline::page::TimelinePage,
@@ -159,6 +162,7 @@ impl Default for Splat {
             party: Default::default(),
             encounters: Default::default(),
             lookup: Default::default(),
+            trackers: Default::default(),
             sessions: Default::default(),
             timeline: Default::default(),
             timeline_page: Default::default(),
@@ -916,6 +920,7 @@ impl Splat {
                     for state in statuses.by_ref() {
                         self.rail_status(ui, state, false);
                     }
+                    self.trackers_status(ui);
                     // Words that could not be saved lead to where the DM can choose.
                     for (lost, word, target) in [
                         (
@@ -1045,6 +1050,66 @@ impl Splat {
                     .request_discard("The rail’s status slot changed height");
             }
         });
+    }
+
+    /// The rail's tracker sign: `Due N` only while a notice is due, or a ledger that cannot be
+    /// read or saved. With no house rule note in play it shows nothing. A click opens Trackers.
+    fn trackers_status(&mut self, ui: &mut egui::Ui) {
+        if !self.trackers.in_play() {
+            return;
+        }
+        let due = self.trackers.due();
+        let (state, hover) = if self.trackers.unreadable.is_some() {
+            (
+                Status {
+                    icon: icons::ERROR,
+                    word: "Trackers not read",
+                    color: colors().result.error,
+                },
+                format!(
+                    "{} cannot be read. Open Trackers (Ctrl+T).",
+                    trackers::ledger::FILE
+                ),
+            )
+        } else if self.trackers.pending.is_some() {
+            (
+                Status {
+                    icon: icons::ERROR,
+                    word: "Trackers not saved",
+                    color: colors().result.error,
+                },
+                "Trackers not saved. Open Trackers (Ctrl+T).".to_owned(),
+            )
+        } else if due > 0 {
+            (
+                Status {
+                    icon: icons::BELL,
+                    word: "",
+                    color: colors().text,
+                },
+                format!(
+                    "{} due. Open Trackers (Ctrl+T).",
+                    design::count(due, "notice is", "notices are")
+                ),
+            )
+        } else {
+            return;
+        };
+        let word = format!("Due {due}");
+        let state = Status {
+            word: if state.word.is_empty() {
+                &word
+            } else {
+                state.word
+            },
+            ..state
+        };
+        let response = design::status_link(ui, state);
+        design::named(ui, &response, &hover);
+        if response.on_hover_text(&hover).clicked() {
+            self.notes_give_way();
+            self.lookup.show_trackers();
+        }
     }
 
     /// One status line in the rail. Some lead to where the DM can act on them.
@@ -1248,6 +1313,27 @@ impl Splat {
             .start_fight_with(fight, &campaign, self.campaigns.modules());
         if !self.encounters.go_to_run {
             self.page = Page::Encounters;
+        }
+    }
+
+    /// `Add to Timeline` after a tracker act: a second act, a Major event with the act's label
+    /// in the session being played, with the Timeline's own `Undo add`.
+    fn add_tracker_act_to_timeline(&mut self) {
+        if let Some((entry, label)) = self.trackers.wants_timeline.take() {
+            let event = self
+                .timeline
+                .add(timeline::Kind::Event, self.trackers.played);
+            if let Some(added) = self.timeline.event_mut(&event) {
+                added.title = label;
+            }
+            self.trackers.added = Some(trackers::Added {
+                entry,
+                event,
+                at: std::time::Instant::now(),
+            });
+        }
+        if let Some(event) = self.trackers.wants_undo_add.take() {
+            self.timeline.undo_add(&event);
         }
     }
 
@@ -2418,6 +2504,12 @@ impl eframe::App for Splat {
         self.sessions.poll(ctx, open.as_ref(), &mut self.timeline);
         self.sessions
             .expire_event_link_undo(self.page == Page::Timeline, &self.timeline);
+        let played = match self.sessions.played_session() {
+            sessions::page::Played::Session(id) => Some(id),
+            _ => None,
+        };
+        self.trackers
+            .poll(self.lookup.index(), open.as_ref(), played);
         self.old_session = self.sessions.current_dated().is_some();
         let fact = self.encounters.run().map(encounter_run::Run::timeline_fact);
         if fact != self.run_fact {
@@ -2458,6 +2550,11 @@ impl eframe::App for Splat {
             if ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::J)) {
                 self.toggle_notes();
             }
+            // Trackers is a view of Lookup: one panel beside the page, as Ctrl+K.
+            if ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::T)) {
+                self.notes_give_way();
+                self.lookup.toggle_trackers();
+            }
             // Not on Sessions, where the panel is away, and not over a footer's second step.
             if self.sessions.notes_open
                 && self.page != Page::Sessions
@@ -2474,6 +2571,7 @@ impl eframe::App for Splat {
             // A dialog takes Escape first, and a form elsewhere has nothing to do with it.
             if self.lookup.open
                 && !self.lookup.reader.takes_escape()
+                && !(self.lookup.on_trackers() && self.trackers.takes_escape())
                 && ctx.memory(|memory| memory.top_modal_layer()).is_none()
                 && !egui::Popup::is_any_open(ctx)
                 && !(self.page == Page::Library && self.library.form_open())
@@ -2538,8 +2636,9 @@ impl eframe::App for Splat {
                 self.lookup
                     .set_written(self.sessions.written(&self.timeline));
             }
-            self.lookup.show(ctx);
+            self.lookup.show(ctx, &mut self.trackers);
         }
+        self.add_tracker_act_to_timeline();
         // The Sessions page has this note itself, so two editors would squeeze a small window.
         if self.sessions.notes_open && self.page != Page::Sessions {
             self.sessions.notes_panel(ctx);

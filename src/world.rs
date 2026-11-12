@@ -154,6 +154,9 @@ pub fn scan(root: &Path, sessions_folder: &Path) -> Scan {
         if extension != "md"
             || (file_name.eq_ignore_ascii_case(timeline::FILE)
                 && path.parent() == Some(sessions_folder))
+            // The tracker ledger is Splat's own file, not a world note.
+            || (file_name.eq_ignore_ascii_case(crate::trackers::ledger::FILE)
+                && path.parent() == Some(root))
         {
             continue;
         }

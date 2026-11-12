@@ -1548,6 +1548,10 @@ pub struct Lookup {
     pub files_changed: bool,
     checking: Option<mpsc::Receiver<u64>>,
     was_focused: bool,
+    /// The panel shows the Trackers view in place of what it held, which it keeps.
+    trackers_shown: bool,
+    /// Ctrl+T opened the panel, so Ctrl+T closes it again.
+    trackers_closes: bool,
 }
 
 /// Include registered packages even when there is no active campaign.
@@ -1715,8 +1719,43 @@ impl Lookup {
     pub fn toggle(&mut self) {
         self.written_stale = true;
         self.open = !self.open;
-        self.focus_search = self.open;
+        // Lookup opens on what it showed last, also on Trackers, whose keys are its own.
+        self.focus_search = self.open && !self.trackers_shown;
+        self.trackers_closes = false;
         self.results_open = self.current.is_none() || !self.query.is_empty();
+    }
+
+    /// Ctrl+T: show Trackers, and again go back to what Lookup showed. When Lookup was closed,
+    /// the second press closes it.
+    pub fn toggle_trackers(&mut self) {
+        if self.open && self.trackers_shown {
+            self.trackers_shown = false;
+            if std::mem::take(&mut self.trackers_closes) {
+                self.open = false;
+            }
+        } else {
+            self.trackers_closes = !self.open;
+            self.open = true;
+            self.written_stale = true;
+            self.trackers_shown = true;
+        }
+    }
+
+    /// The rail's `Due N`: Trackers in view, whatever Lookup showed.
+    pub fn show_trackers(&mut self) {
+        if !(self.open && self.trackers_shown) {
+            self.toggle_trackers();
+        }
+    }
+
+    pub fn on_trackers(&self) -> bool {
+        self.open && self.trackers_shown
+    }
+
+    /// The DM opened something in Lookup, so the panel shows it.
+    fn leave_trackers(&mut self) {
+        self.trackers_shown = false;
+        self.trackers_closes = false;
     }
 
     pub fn close(&mut self) {
@@ -1748,6 +1787,7 @@ impl Lookup {
             }
             Go::Many(positions) => {
                 self.open = true;
+                self.leave_trackers();
                 self.query.clear();
                 self.reader.choose_link(positions, target);
             }
@@ -1759,6 +1799,7 @@ impl Lookup {
 
     pub fn open_position(&mut self, position: usize) {
         self.open = true;
+        self.leave_trackers();
         self.written_stale = true;
         self.reading_written = None;
         self.navigate(position);
@@ -1769,6 +1810,7 @@ impl Lookup {
     /// Open with this search, for a link to something that does not exist yet.
     pub fn search_for(&mut self, words: &str) {
         self.open = true;
+        self.leave_trackers();
         self.query = words.to_owned();
         self.focus_search = true;
         self.results_open = true;
@@ -1776,6 +1818,7 @@ impl Lookup {
 
     pub fn open_id(&mut self, id: Uuid) {
         self.open = true;
+        self.leave_trackers();
         self.written_stale = true;
         self.reading_written = None;
         self.results_open = false;
@@ -1837,6 +1880,13 @@ impl Lookup {
 
     /// With nothing that way, nothing changes, so a stray press keeps a written note open.
     fn step(&mut self, step: Step) {
+        // Beside Trackers, Back returns to the entry that Lookup held.
+        if self.trackers_shown {
+            if step == Step::Back && self.holds_something() {
+                self.leave_trackers();
+            }
+            return;
+        }
         if self.trail.peek(step).is_none() {
             return;
         }
@@ -1874,7 +1924,12 @@ impl Lookup {
         }
     }
 
-    pub fn show(&mut self, ctx: &egui::Context) {
+    /// An entry or a found note, which Trackers keeps while it is in view.
+    fn holds_something(&self) -> bool {
+        self.current.is_some() || self.reading_written.is_some()
+    }
+
+    pub fn show(&mut self, ctx: &egui::Context, trackers: &mut crate::trackers::Trackers) {
         let width = design::side_panel_width(ctx.content_rect().width());
         design::Column::panel("lookup", width)
             .page_keeps(design::PANEL_LEAVES_PAGE)
@@ -1884,10 +1939,10 @@ impl Lookup {
                     .stroke(egui::Stroke::new(design::HAIRLINE_WIDTH, colors().rule))
                     .inner_margin(egui::Margin::same(PANEL_MARGIN as i8)),
             )
-            .show(ctx, |ui| self.panel(ui));
+            .show(ctx, |ui| self.panel(ui, trackers));
     }
 
-    fn panel(&mut self, ui: &mut egui::Ui) {
+    fn panel(&mut self, ui: &mut egui::Ui, trackers: &mut crate::trackers::Trackers) {
         // With the margin, so a press anywhere on the panel counts as here.
         let panel = ui.max_rect().expand(PANEL_MARGIN);
         self.panel_rect = Some(panel);
@@ -1895,9 +1950,40 @@ impl Lookup {
             data.insert_temp(egui::Id::new("reader_surface"), egui::Id::new("lookup"))
         });
         let mut close = false;
-        ui.horizontal(|ui| {
-            ui.label(Type::Heading.rich(ui, "Lookup"));
-            if self.trail.peek(Step::Back).is_some()
+        if self.trackers_shown {
+            let mut back = false;
+            ui.horizontal(|ui| {
+                ui.label(Type::Heading.rich(ui, "Trackers"));
+                // The view's heading holds the Due count.
+                let due = trackers.due();
+                if due > 0 {
+                    design::status(
+                        ui,
+                        design::Status {
+                            icon: icons::BELL,
+                            word: &format!("Due {due}"),
+                            color: colors().text,
+                        },
+                    );
+                }
+                back = self.holds_something()
+                    && Action::quiet("Back")
+                        .icon(icons::BACK)
+                        .key("Alt+Left")
+                        .density(Density::Read)
+                        .show(ui)
+                        .clicked();
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    close = design::icon_button(ui, icons::CLOSE, "Close Lookup").clicked();
+                });
+            });
+            if back {
+                self.leave_trackers();
+            }
+        } else {
+            ui.horizontal(|ui| {
+                ui.label(Type::Heading.rich(ui, "Lookup"));
+                if self.trail.peek(Step::Back).is_some()
                 // The icon buttons' density, so the title line keeps one height with or without
                 // Back, and the search field below never moves.
                 && Action::quiet("Back")
@@ -1906,12 +1992,12 @@ impl Lookup {
                     .density(Density::Read)
                     .show(ui)
                     .clicked()
-            {
-                self.step(Step::Back);
-            }
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                close = design::icon_button(ui, icons::CLOSE, "Close Lookup").clicked();
-                if let Some(current) = self
+                {
+                    self.step(Step::Back);
+                }
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    close = design::icon_button(ui, icons::CLOSE, "Close Lookup").clicked();
+                    if let Some(current) = self
                     .index
                     .as_ref()
                     .and_then(|index| self.current.and_then(|at| index.items.get(at)))
@@ -1934,12 +2020,12 @@ impl Lookup {
                             )
                             .clicked()
                         },
-                    )
-                {
-                    self.open_in_library = Some(current.entry.clone());
-                }
+                    ) {
+                        self.open_in_library = Some(current.entry.clone());
+                    }
+                });
             });
-        });
+        }
         if close {
             self.close();
         }
@@ -1977,8 +2063,18 @@ impl Lookup {
         if std::mem::take(&mut self.focus_search) {
             design::focus_and_select(ui, response.id, &self.query);
         }
+        // Words typed in the search field leave Trackers for their results.
+        if self.trackers_shown && before != self.query {
+            self.leave_trackers();
+            self.results_open = true;
+        }
         if let Some(error) = &self.error {
             design::message(ui, Tone::Error, error);
+        }
+        if self.trackers_shown {
+            design::rule(ui);
+            crate::trackers::view::show(ui, trackers);
+            return;
         }
         let Some(index) = self.index.clone() else {
             ui.horizontal(|ui| {

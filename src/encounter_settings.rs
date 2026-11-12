@@ -85,6 +85,10 @@ pub struct Options {
     pub inspiration_rules: Vec<InspirationRule>,
     /// The chosen rule, when there are several. With one, it is that one.
     pub inspiration_choice: Option<Uuid>,
+    /// The campaign's house rule notes, by name: each has a switch for "in play".
+    pub house_rules: Vec<(Uuid, String)>,
+    /// The house rule notes in play (`splat_in_play`), in the manifest's order.
+    pub in_play: Vec<Uuid>,
 }
 impl Default for Options {
     fn default() -> Self {
@@ -93,6 +97,8 @@ impl Default for Options {
             initiative: Initiative::default(),
             inspiration_rules: Vec::new(),
             inspiration_choice: None,
+            house_rules: Vec::new(),
+            in_play: Vec::new(),
         }
     }
 }
@@ -177,6 +183,8 @@ impl Options {
             }
         }
         result.inspiration_rules = inspiration_rules(campaign, catalogue, document);
+        result.house_rules = house_rule_notes(campaign, catalogue, document);
+        result.in_play = crate::trackers::read_in_play(entry.fields.get("splat_in_play"))?;
         result.inspiration_choice = chosen_inspiration(
             entry
                 .fields
@@ -375,21 +383,35 @@ impl Options {
                 choices.remove(inspiration::CHOICE);
             }
         }
-        let text = splat::content::formats::patch_model(
-            &document.text,
-            &[
-                ("splat_rule_choices", Some(choices.into())),
-                (
-                    "splat_run_storage",
-                    Some(
-                        serde_yaml_ng::to_value(
-                            serde_json::json!({"directory":self.folder.trim()}),
-                        )
+        let mut fields = vec![
+            ("splat_rule_choices", Some(choices.into())),
+            (
+                "splat_run_storage",
+                Some(
+                    serde_yaml_ng::to_value(serde_json::json!({"directory":self.folder.trim()}))
                         .map_err(|e| e.to_string())?,
-                    ),
                 ),
-            ],
-        )?;
+            ),
+        ];
+        // The in-play list changes only when a switch changed, so a campaign with no house rule
+        // note gains no key.
+        if crate::trackers::read_in_play(entry.fields.get("splat_in_play"))? != self.in_play {
+            fields.push((
+                "splat_in_play",
+                (!self.in_play.is_empty())
+                    .then(|| {
+                        serde_yaml_ng::to_value(
+                            self.in_play
+                                .iter()
+                                .map(|id| serde_json::json!({ "id": id }))
+                                .collect::<Vec<_>>(),
+                        )
+                    })
+                    .transpose()
+                    .map_err(|e| e.to_string())?,
+            ));
+        }
+        let text = splat::content::formats::patch_model(&document.text, &fields)?;
         fs::create_dir_all(rule_path.parent().ok_or("Invalid rules folder")?)
             .map_err(|e| e.to_string())?;
         crate::file_batch::apply(&[
@@ -415,6 +437,28 @@ fn chosen_inspiration(
     let reference = serde_yaml_ng::from_value::<EntryRef>(saved?.clone()).ok()?;
     let id = catalogue.resolve_ref(&reference).ok()?;
     rules.iter().any(|rule| rule.id == id).then_some(id)
+}
+
+/// The house rule notes a campaign can put in play: its own notes, and its packages' entries.
+fn house_rule_notes(
+    campaign: &Campaign,
+    catalogue: &Catalogue,
+    document: &CampaignDocument,
+) -> Vec<(Uuid, String)> {
+    let closure = catalogue.closure(&document.selections, campaign.id);
+    let mut notes: Vec<_> = catalogue
+        .entries
+        .iter()
+        .filter(|(id, e)| {
+            (e.private && e.owner == campaign.id)
+                || closure.direct.contains(*id)
+                || closure.required.contains_key(*id)
+        })
+        .filter(|(_, e)| crate::trackers::is_house_rule_note(&e.entry))
+        .map(|(id, e)| (*id, e.entry.name.clone()))
+        .collect();
+    notes.sort_by_key(|(_, name)| name.to_lowercase());
+    notes
 }
 
 /// The inspiration rules a campaign can use: its own notes, and its packages' entries.
