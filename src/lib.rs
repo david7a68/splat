@@ -2376,6 +2376,10 @@ impl eframe::App for Splat {
         self.lookup.library_draft = self.library.dirty();
         self.sessions.run_open = self.encounters.has_run();
         self.library.run_open = self.encounters.has_run();
+        // Remove's Undo in the Library belongs to the campaign that was open: a switch ends it at
+        // once, on whichever page.
+        self.library
+            .note_campaign(self.campaigns.active_campaign().map(|campaign| campaign.id));
         self.campaign_content.run_open = self.encounters.has_run();
         self.processing.poll(ctx);
         self.processing.recording_now = self.sessions.recording();

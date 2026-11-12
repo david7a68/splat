@@ -83,9 +83,10 @@ pub(super) fn vital_checks(entry: &Entry) -> Vec<(&'static str, &'static str, i6
                     key,
                     label,
                     printed,
+                    // The consequence stays: the fight uses the stat block's value. A longer
+                    // warning wraps in Edit Markdown's message space and scrolls there.
                     format!(
-                        "{label} line says {printed}, but the stat block says {value}. The fight \
-                         uses the stat block."
+                        "{label} line says {printed}; stat block says {value}. The fight uses {value}."
                     ),
                 )
             })
@@ -886,7 +887,7 @@ mod tests {
         assert_eq!(checks[0].1, "Hit Points");
         assert_eq!(
             checks[0].3,
-            "Hit Points line says 45, but the stat block says 1. The fight uses the stat block."
+            "Hit Points line says 45; stat block says 1. The fight uses 1."
         );
         let changed = use_vital(&text, &entry, "max_hp", 45).unwrap();
         let entry = Entry::parse("Guard.md", &changed).unwrap();
