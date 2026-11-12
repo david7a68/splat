@@ -56,6 +56,37 @@ use std::{
     time::SystemTime,
 };
 
+/// F3 of the session-cycle design: tonight's next fight and its `Start fight` stay whole and in
+/// view at 960x640, with Lookup closed and open, whatever scenes the note's plan holds; an
+/// opened fight's `Read encounter` too. Scenes fold first.
+fn next_fight_in_view(d: &mut Driver<'_>, screen: &str, lookup: bool) {
+    if !screen.starts_with("session-tonight") {
+        return;
+    }
+    let (whole, detail) = d.at_size(NARROW, |d| {
+        let nodes = d.nodes();
+        let start = nodes
+            .iter()
+            .find(|node| node.name == "Start fight: Shrine of Cinders");
+        let read = nodes.iter().find(|node| node.name == "Read encounter");
+        let opened = screen.ends_with("planned fight open");
+        (
+            start.is_some_and(|node| node.fully_in_view())
+                && (!opened || read.is_some_and(|node| node.fully_in_view())),
+            format!(
+                "Start fight {:?}, Read encounter {:?}",
+                start.map(|node| (node.rect, node.shown)),
+                read.map(|node| (node.rect, node.shown))
+            ),
+        )
+    });
+    assert!(
+        whole,
+        "G7, F3: at 960x640 with Lookup {}, {screen}: the next fight's action is not whole and in view. {detail}",
+        if lookup { "open" } else { "closed" }
+    );
+}
+
 /// `all` writes the reference from this run; `add` adds new views and acts only.
 const WRITE: &str = "SPLAT_PLAIN_EVENING_WRITE";
 /// G7 compares with the reference only when this is `1`.
@@ -707,8 +738,10 @@ impl Evening {
         self.lookup(d, false);
         d.state(screen, Sizes::Standard);
         self.both_sizes(d, screen, Some(false));
+        next_fight_in_view(d, screen, false);
         self.lookup(d, true);
         self.both_sizes(d, screen, Some(true));
+        next_fight_in_view(d, screen, true);
         self.lookup(d, was_open);
     }
 
@@ -916,10 +949,6 @@ fn play(d: &mut Driver<'_>) -> (Evening, Bytes, Bytes) {
     ev.act(d, "open the planned fight", |d| {
         d.click("Shrine of Cinders")
     });
-    // Row 14 of section 2.5: the plain note's old task lines are scenes above this fight. At
-    // 960x640 its opened row is below the plan's fold after the click at 1200x800, so that
-    // capture matches the Travel row's. The view's controls still differ, and G7 reads them.
-    d.expect_same("At 960x640 the opened fight is below the fold, under the plain note's scenes");
     ev.page(d, "session-tonight: planned fight open");
 
     ev.act(d, "open last session", |d| {

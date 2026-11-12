@@ -727,9 +727,7 @@ impl Scenes {
     /// when the words come back to what the act left.
     fn end_what_changed(&mut self, draft: Option<&crate::sessions::Draft>) {
         if self.fault.as_ref().is_some_and(|fault| {
-            draft.is_none_or(|draft| {
-                draft.body != fault.met || (fault.waits && !draft.unsaved())
-            })
+            draft.is_none_or(|draft| draft.body != fault.met || (fault.waits && !draft.unsaved()))
         }) {
             self.fault = None;
         }
@@ -1492,7 +1490,10 @@ impl Sessions {
     /// opens the folded scenes in place, and closes them again.
     fn fold_line(&mut self, ui: &mut egui::Ui, heading: egui::Rect, count: usize, folded: bool) {
         let rect = egui::Rect::from_min_max(
-            egui::pos2(heading.right() + design::L, heading.center().y - design::XL / 2.0),
+            egui::pos2(
+                heading.right() + design::L,
+                heading.center().y - design::XL / 2.0,
+            ),
             egui::pos2(ui.max_rect().right(), heading.center().y + design::XL / 2.0),
         );
         let mut line = ui.new_child(
@@ -1533,7 +1534,11 @@ impl Sessions {
     }
 
     /// The plan model for the selected note, built again only when what it reads changed.
-    pub(super) fn plan_model(&mut self, index: Option<&ContentIndex>, plan: &Plan<'_>) -> Arc<PlanModel> {
+    pub(super) fn plan_model(
+        &mut self,
+        index: Option<&ContentIndex>,
+        plan: &Plan<'_>,
+    ) -> Arc<PlanModel> {
         use std::hash::{Hash, Hasher};
         let mut names = std::collections::hash_map::DefaultHasher::new();
         for fight in plan.fights {
@@ -1545,7 +1550,9 @@ impl Sessions {
         }
         let key = (
             self.selected,
-            self.draft.as_ref().map_or(0, crate::sessions::Draft::revision),
+            self.draft
+                .as_ref()
+                .map_or(0, crate::sessions::Draft::revision),
             index.map(ContentIndex::generation),
             names.finish(),
         );
@@ -2749,9 +2756,10 @@ mod tests {
                 PlanLine::Links(_) => None,
             })
             .unwrap();
-        let changed = fs::read_to_string(&note.path)
-            .unwrap()
-            .replacen("- [ ] Talk", "- [x] Talk", 1);
+        let changed =
+            fs::read_to_string(&note.path)
+                .unwrap()
+                .replacen("- [ ] Talk", "- [x] Talk", 1);
         fs::write(&note.path, &changed).unwrap();
         page.scene_act(SceneAct::Tick((0, 0), task), Some(note.id));
         assert_eq!(
@@ -2764,7 +2772,10 @@ mod tests {
             (fault.words.as_str(), fault.place),
             ("That line changed on disk.", Place::Row((0, 0)))
         );
-        assert_eq!(page.draft.as_ref().unwrap().body, crate::sessions::body_of(&changed));
+        assert_eq!(
+            page.draft.as_ref().unwrap().body,
+            crate::sessions::body_of(&changed)
+        );
 
         // Review of PR 261: a scene added while the save is blocked keeps its Undo through the
         // retry that writes it, and that Undo takes the line back out of the file.
@@ -2795,7 +2806,11 @@ mod tests {
         assert_eq!(page.scenes.fault.as_ref().unwrap().words, "Notes not saved");
         assert!(page.draft.as_ref().unwrap().body.contains("- [ ] Second"));
         page.draft.as_mut().unwrap().save();
-        assert!(fs::read_to_string(&note.path).unwrap().contains("- [ ] Second"));
+        assert!(
+            fs::read_to_string(&note.path)
+                .unwrap()
+                .contains("- [ ] Second")
+        );
         assert!(
             page.scenes
                 .added
@@ -2804,7 +2819,10 @@ mod tests {
             "a failed scene save followed by retry must keep Undo scene"
         );
         page.scenes.end_what_changed(page.draft.as_ref());
-        assert!(page.scenes.fault.is_none(), "the save ends `Notes not saved`");
+        assert!(
+            page.scenes.fault.is_none(),
+            "the save ends `Notes not saved`"
+        );
         page.scene_act(SceneAct::UndoAdd, Some(note.id));
         assert_eq!(fs::read_to_string(&note.path).unwrap(), before);
     }

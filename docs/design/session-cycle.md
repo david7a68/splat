@@ -394,7 +394,7 @@ that G7 allows.
 | # | Screen | What differs | From |
 |---|---|---|---|
 | 11 | The **Last time** line | `Carry over` at its end, while the session has no event and no run and the last session holds a part to carry (F5). The preview is cut to its room today (`page.rs:4106-4115`), so the action takes about 90 px from it. The preview shortens first, to nothing; then the link's words shorten; nothing wraps | Round 3: the one ruled exception to rule J |
-| 14 | The plan, when the DM's note has a task line under `## Plan for tonight` | The line is a scene: a row with a box, counted in **Tonight**, and not repeated in Read (F3). The measured evening has none | The ruling on scenes: it is the DM's own plan |
+| 14 | The plan, when the DM's note has a task line under `## Plan for tonight` | The line is a scene: a row with a box, counted in **Tonight**, and not repeated in Read (F3). When the plan's rows do not fit its pane, the scenes fold to `› N scenes` on the **Tonight** line, so no other row moves or narrows and the next fight's action stays whole and in view (F3, the fold). The measured evening has none | The ruling on scenes: it is the DM's own plan |
 | 15 | The **Conditions** tab's `Other effect…` field | Words that end with a time, a count of uses or a recharge are read as F2 says: `Bless 10 rounds` counts down, and `Frightened 10 rounds` becomes that condition with a count. The field, its label, its `Add` button and its place are as today | Round 3: the field stays, so `Effect` has a way when the dock has no room |
 | 16 | The **Last time** line | Its preview reads the last session's `What happened`. Today it reads that note's own recap first (`page.rs:915`) | Rule H: the preview and the carry-over read one source |
 | 17 | Lookup, while it holds an unsaved generated NPC | An entry that opens shows under one row, `Unsaved NPC: <name> · Show`. Today the card hides it (`src/lookup.rs:2167-2169`) | The accepted repair of Lookup |
@@ -771,6 +771,14 @@ adds a creature. It is blocked as the editor's `Start fight` is, with the same r
   no row, and in the note its link has the hover `Not found in this campaign`, as every link to nothing has
   today.
   Cost from the Session page: `Encounters`, the menu, `Remove…`, `Session` = 4, **T T**.
+
+**The fold** (ruled after review, built in P3). The next fight's row and its primary action are always in view
+in the plan. Scenes give way first: when the plan's rows, with the scenes, do not fit its pane, every scene
+folds, and the **Tonight** line says `› N scenes` after its count, in room that is spare there today. The
+fold takes no line of its own, so with scenes folded every other row has the place and the width that it has
+in a note with no scene. `N scenes` opens them in place, with `⌄`, and closes them again; the DM's choice holds
+for that session. Nothing else folds: a plan whose rows do not fit without scenes scrolls as today. When the
+rows fit again, the scenes show again.
 
 **Cases B, C and D.** The plan has its own tab and the full page width; the row is the same. The note is
 behind its tab, so the typed route costs the tab changes.
