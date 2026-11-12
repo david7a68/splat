@@ -303,9 +303,11 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     d.click(&long_menu);
     d.observe(
         "T18.2",
-        d.has(&long) && d.place_of(&long).is_some_and(|line| {
-            d.place_of(&long_menu).is_some_and(|menu| line.top() > menu.bottom())
-        }),
+        d.has(&long)
+            && d.place_of(&long).is_some_and(|line| {
+                d.place_of(&long_menu)
+                    .is_some_and(|menu| line.top() > menu.bottom())
+            }),
         "Beside long words, Add to Log is a line of the scene's menu, not on its row",
     );
     d.press(Key::Escape);
@@ -380,9 +382,7 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     d.press(Key::Escape);
     d.observe(
         "T18.2",
-        !d.has(&field)
-            && d.has("Close Lookup")
-            && fs::read_to_string(&path).unwrap() == before,
+        !d.has(&field) && d.has("Close Lookup") && fs::read_to_string(&path).unwrap() == before,
         "Escape closes the field, not Lookup, and writes nothing",
     );
 

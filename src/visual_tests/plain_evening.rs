@@ -1830,7 +1830,10 @@ mod allowed_classes {
         }
 
         /// The new Add to Log targets of `d`'s view.
-        fn buttons<'a>(d: &'a Difference, rows: &'a [AllowedRow]) -> impl Iterator<Item = [f32; 4]> + 'a {
+        fn buttons<'a>(
+            d: &'a Difference,
+            rows: &'a [AllowedRow],
+        ) -> impl Iterator<Item = [f32; 4]> + 'a {
             rows.iter()
                 .map(|row| &row.difference)
                 .filter(move |o| {
@@ -1892,7 +1895,12 @@ mod allowed_classes {
         fn start_moved(d: &Difference, rows: &[AllowedRow]) -> Option<([f32; 4], [f32; 4])> {
             rows.iter()
                 .map(|row| &row.difference)
-                .find(|o| same_view(o, d) && o.what == "control" && o.change == "moved" && o.name.starts_with(START))
+                .find(|o| {
+                    same_view(o, d)
+                        && o.what == "control"
+                        && o.change == "moved"
+                        && o.name.starts_with(START)
+                })
                 .and_then(|o| rects(&o.detail))
         }
 
