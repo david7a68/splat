@@ -426,6 +426,7 @@ that G7 allows.
 | 22 | History on the Encounters page, after `Whole run` or `Open` | The list scrolls once, at that act, so the opened run's row is at its top and its outcome, the line under Read-only and the whole Final state are in view below it (V31). The line under Read-only is `S` below it and `M` above `FINAL STATE` (V11), so what is under Read-only moves up by at most 8 px more, and the Read-only line's words are as tall as a line. Otherwise only the list's scroll offset differs: what it holds is as today, and nothing moves sideways, is cut or is resized | By the lead's ruling after app round 1 |
 | 23 | A scene's row on the plan | Its words start at the fights' title column (12 px further left) and are drawn at the plan row title's size, `Body`, at every window size; its box's 24 px target ends at that column; its second line sits at a fight row's pitch (V2, V8). So a scene row's height changes, and every item below a changed scene row moves straight up by the sum of the height changes of the scene rows above it; nothing moves sideways, changes size, is cut or goes. A done scene's `Add to Log` (row 8's feature on the plan) is on its row where its words now keep their rows beside it. A done scene's words are muted (V1), which G7 does not measure | By the lead's ruling after app round 1 |
 | 24 | The **Tonight** line, with the scenes folded | `N scenes` has the section caret of a folded section before it, as `HISTORY` has (V14): the link is wider by the caret, at its place and height | By the lead's ruling after app round 1 |
+| 25 | The **Last time** line of a session before play, while it offers `Carry over` | `Carry over` sits `L` after the line's last word: the preview's, or the link's when no word of the preview fits (X24). It moves straight left on its line, at its size, from the pane's right edge; nothing else on the line moves, and the preview keeps its words. In the plain evening the new session's line has no preview, so the action stands `L` after its link | By the lead's ruling after app round 2 |
 
 Nothing else differs. A free-words effect from an encounter or an older run gives no reminder. A Travel row
 shows no checks and no new field until the DM asks. The rail says nothing about trackers unless a notice is
@@ -1095,7 +1096,7 @@ nothing wraps (section 2.5, row 11).
 
 ```text
 Case A, before and after
-Last time:  Session 1: The Road — Hobb the miller says the toll collectors …    Carry over
+Last time:  Session 1: The Road — Hobb the miller says the toll collectors …  Carry over
 
 Last time:  Session 1: The Road — Hobb the miller says the toll collectors …
 …
@@ -1106,7 +1107,7 @@ The result sits in the Session page's message footer, as every result of that pa
 landed (P8 followed it at the merge with `main`), so the line, the tabs and the plan never move.
 
 **An embed in Read.** Read draws an embed of a session note's heading as that heading's text, under a muted
-line, `From Session 1: The Road`, which links that session. The rule is by the embed's target, not by who
+line, `From Session 1: The Road`, which links that session (one gap, `S`, after `From` in every layout). The rule is by the embed's target, not by who
 wrote the line, so an embed that the DM typed is drawn the same way (section 2.5, row 18). Today Read shows it
 as a link. In Write it is the one line of source. The target resolves as every campaign link does, with its
 folder; an ambiguous target, and an embed inside a callout or a list item, stay links (a P8 limit).
@@ -1125,7 +1126,7 @@ your notes.` `Undo carry over`.
 | The last note cannot be read | The action is blocked: `Splat cannot read Session 1’s note.` |
 | This note changed on disk and Splat holds unsaved words | The act does nothing and says `The note changed on disk. Choose in the note first.` |
 | The embed's note was renamed outside Obsidian | As the next row. Splat never rewrites an embed: the DM links again by hand. (P8 cut `Update the link` and `Undo link`: a sole recap embed that the DM kept could not be told from the one `Carry over` wrote, so the repair could rewrite the DM's own link; review of PR 277) |
-| The embed's note or its heading is gone | Read says `The recap’s source is gone: Session 1 The Road › What happened.` in the embed's place. The line stays in the note |
+| The embed's note or its heading is gone | Read says `The recap’s source is gone: Session 1 The Road › What happened. Link the session again in Write.` in the embed's place. The line stays in the note. Only a session note at the target's whole path that has the heading keeps it a link (the index has not read that note yet, or the target names part of its path); a note with the same last name in another folder does not (review of PR 277, round 2) |
 
 **What the note stores.** The lines, and two flat properties in the same save. Obsidian's Properties view
 shows both as it shows `session_id`.
