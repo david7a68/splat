@@ -343,6 +343,13 @@
       "transitions": 0,
       "interactions": 4,
       "path": "Session"
+    },
+    {
+      "phase": "after",
+      "task": "A new day starts: take the supply wagon's torches",
+      "transitions": 1,
+      "interactions": 5,
+      "path": "Session > Timeline"
     }
   ]
 }
