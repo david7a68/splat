@@ -1021,7 +1021,7 @@ An encounter with an unfinished run appears only in **In progress** and returns 
 **Keep in Ready during a run** also keeps its Ready row, with **Start fight** blocked and a reason.
 Empty list sections show one muted line and hide the zero count.
 The rail keeps a paused run in view and resumes it in one click. Its detail wraps below the Run label. **History** holds dated, ended runs under their session.
-History rows show **Open** or **Close**, with **Start fight** and **Edit** in their menu. An ended run opens read-only in place, with its final state and log; the list scrolls once so that its row and whole final state are in view. It leaves the live run open. Run changes never
+History rows show **Open** or **Close**, with **Start fight** and **Edit** in their menu. An ended run opens read-only in place, with its final state and log; the list scrolls so that its row and whole final state are in view, and keeps them there when the window changes size, until the DM scrolls it. It leaves the live run open. Run changes never
 write to templates or character copies.
 
 A fight that ended by mistake can go on. In the ended view, **Undo: end encounter** takes the ending away while

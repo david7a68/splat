@@ -158,7 +158,7 @@ fn history_line_gaps(d: &mut Driver<'_>, line: &str) {
 /// X37, X66: the opened run's list starts at a clean edge, with no line above it cut at the
 /// list's top; and `COMBAT LOG` is `M` below the last Final state row, as `FINAL STATE` is `M`
 /// below the line above it.
-fn history_edges(d: &mut Driver<'_>) {
+pub(crate) fn history_edges(d: &mut Driver<'_>) {
     for size in [SMALL, DEFAULT, LARGE] {
         let edges = d.at_size(size, |d| {
             let (mut list, mut state, mut log) = (None, None, None);

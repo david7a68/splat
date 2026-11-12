@@ -15875,6 +15875,8 @@ pub mod encounter_history {
             smaller.is_ok(),
             format!("{what}, opened at {DEFAULT:?} and seen at {SMALL:?}: {smaller:?}"),
         );
+        // X37: also where little follows the run, its row reaches the top at a clean edge.
+        super::run_continue::history_edges(d);
     }
 
     /// X36: after the DM scrolls History, a resize does not pull the list back to the run.
@@ -15891,7 +15893,8 @@ pub mod encounter_history {
             return;
         };
         let before = row(d);
-        d.scroll_up_at(at.center(), 1);
+        // To the list's top, so that no size can hold the DM's offset in a shorter list.
+        d.scroll_up_at(at.center(), 10);
         let scrolled = row(d);
         let larger = d.at_size(DEFAULT, row);
         let back = row(d);

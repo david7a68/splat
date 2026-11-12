@@ -827,6 +827,12 @@ pub(super) fn history_list(
             }
         },
     );
+    if let Some(top) = opened_top {
+        // Room below the list's end, so the opened run's row reaches the list's top also when
+        // little follows it: a list held at its end would cut the line at its top (X37).
+        let below = ui.min_rect().bottom() - top;
+        ui.add_space((ui.clip_rect().height() - below).max(0.0));
+    }
     opened_top
 }
 
