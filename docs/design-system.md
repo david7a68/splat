@@ -605,9 +605,10 @@ line above with no gap, and its actions start at its top, so they reach below it
 day mark's row starts with its day (`Day 32: …`); days of one mark that are due together are one row, `End of month
 ×3. Next: Day 32. …`, whose quiet `Done` names the day it ends, the oldest (`Done: Day 32`), and whose menu adds
 `Dismiss all`. A notice at a value is due because the value is at or past its mark: when a later change takes the
-value back below the mark and nothing is recorded on the notice (no roll, `Done` or `Dismiss`), the notice ends, and
-the result line adds `<name> is no longer due.` Nothing is written for that; Undo of the change brings the notice
-back. A notice with a roll on it stays. Day rows come first, oldest day first,
+value back below the mark and no entry anywhere in the ledger names the notice (no roll, `Done` or `Dismiss`), the
+notice ends, and the result line of that act (a press, or a `Done` whose ticked change did it) adds `<name> is no
+longer due.` Nothing is written for that; Undo of the change brings the notice back. A notice with a roll on it
+stays, whatever act or outside edit puts the fall before the roll. Day rows come first, oldest day first,
 then the notices of marks at a value. While day marks are in play and the day count is not known (`Timeline.md` cannot be read, or it changed under a
 Timeline edit that is not saved), the top of the scroll area says so as a small error in the Timeline's words, then
 `No day mark shows until the Timeline is read.`, and no day row shows. With `for:` each roll is for the next name; after the
@@ -620,7 +621,9 @@ edge. A press that raises or ends a Due row scrolls the view by the row's height
 the pointer and a second press of a still pointer presses it again. It acts only in the few frames after the
 press and only while the content's height changed; the DM's own wheel or drag, or the view opened again, ends it.
 The scroll area keeps blank room after the trackers only while that needs it. `add: ask` puts a
-number field in the action's place; it holds focus until Enter or Escape, and Escape there does not close Lookup.
+number field in the action's place, exactly the action's width and one control high, so no other action moves; it
+holds focus until Enter or Escape, and Escape there does not close Lookup. Enter is the press, and the action keeps
+its place as after a click.
 The result line keeps its place at the panel's bottom
 edge above a hairline: the last act of the session being played as a success message, then `Undo: <label>`
 (`line_start`: its words at the message's words, its icon in the message's icon column) and `Add to Timeline` at

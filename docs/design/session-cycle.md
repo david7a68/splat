@@ -1006,10 +1006,10 @@ the trackers of each note in play.`
 
 **What the files store.** Definitions are in the house rule note's Splat data, as before, with one new
 optional word: `for:` on a mark's table. The ledger is one ordered list. Each act is one entry. A notice's
-state is not stored: a notice is open until an entry finishes or dismisses it, or, while nothing is recorded on
-it, until a later change takes its value back below its mark; it is worked out from the changes. A Remove, an
-`Undo remove` or an Undo that would leave a recorded entry on a notice with no open notice writes nothing and
-names that entry. An entry holds what it replaced where that cannot be worked out: `was` on a `set`. `why` holds the
+state is not stored: a notice is open until an entry finishes or dismisses it, or, while no entry of the ledger
+names it, until a later change takes its value back below its mark; it is worked out from the changes, so no act
+and no outside edit hides a notice with a roll. A Remove, an `Undo remove` or an Undo that would leave a recorded
+entry on a notice that no change raises any more writes nothing and names that entry. An entry holds what it replaced where that cannot be worked out: `was` on a `set`. `why` holds the
 action's label, so the result line and `Undo: <label>` name the act after a restart. The changes of one
 press share a `use` and undo together.
 
