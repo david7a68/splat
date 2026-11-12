@@ -343,8 +343,10 @@ between fights. **Frequency:** a campaign with house rules, many times a session
 puts in play shows its trackers in Trackers (Ctrl+T). A press writes one entry to `Trackers.md`; a value that passes
 a mark raises a Due row and the rail's `Due N` on every page; `Done` finishes it. Splat counts and shows; the DM
 rules. In a fight the DM opens Trackers with Ctrl+T, presses, and goes back; the run shows no other tracker part.
+A day mark raises its Due row when the Timeline's day count reaches its day, with the same words, rolls, `Done`
+and `Dismiss`.
 
-**Done well:** T19.1 to T19.4.
+**Done well:** T19.1 to T19.5.
 
 ## 3. Information architecture
 
@@ -676,6 +678,7 @@ reading the code, not from a test run.
 | T19.2 | A quick action takes 1, also on an instance's line. `Undo` steps back through the acts of the session being played, also after a restart. The opposite action corrects a value in 1. `Add to Timeline` makes a Major event with the act's label, with `Undo add` | trackers | cost, state | New |
 | T19.3 | A value that passes a mark raises a Due row above the trackers and the rail's count, on every page. The Run page shows no tracker part except the rail's count. With no house rule note in play the rail says nothing | trackers, run-lookup | state | New |
 | T19.4 | Case D, beside the Session page: three notices with four rolls and the result line are in view with no scroll | trackers | view | New |
+| T19.5 | The Timeline's day count raises a day mark's Due row and the rail's count, and raising it writes nothing. Days that pass in one step are one row that says how many, with `Next`. A clock that goes back takes the row away and keeps what was done. At 960x640 with Lookup narrow, the row, its `Next` and the result line are in view | trackers | view, state | New |
 | G1 | Every disabled control states why, in text or a working tooltip | all | state | Fail |
 | G2 | Go through every top-level page and back: each page restores section 3 state | nav-state **new** | state | Fail |
 | G3 | No dead nav items | nav-state **new** | state | Fail |

@@ -844,8 +844,9 @@ the improvised encounter by `Close run` (cut: after a restart nothing remembers 
 
 **The slice.** This design builds trackers for use **between fights**: the ledger, the Trackers view of
 Lookup, the Due list and the rail's `Due N` (P9). In a fight the DM uses Trackers through Ctrl+T, and the owner
-accepted this cost (section 7), so the run has no part of F4. Marks that a round raises are dropped, and day
-marks come in P11.
+accepted this cost (section 7), so the run has no part of F4. Marks that a round raises are dropped. Day
+marks are built in P11: the Timeline's day count raises a Due row, with the same words, rolls, proposed changes,
+`Done`, `Dismiss`, ledger entries and Undo as a mark at a value.
 
 The data model of [World and house rules](world-and-house-rules.md) stands, and this pull request changes
 that document in place: Trackers is a view of Lookup, the ledger is the Undo, a mark's table can name what
@@ -965,8 +966,19 @@ action. Escape closes Lookup.
 **What stays with the DM.** Awarding Favor, moving a rival, what a bell does on the map, and every rule that a
 tracker's number stands for. A proposed change applies only when the DM presses `Done`.
 
-**Not built, and why.** Any tracker part in a run (the owner accepted this cost; section 7), and day marks
-(P11). The parts in
+**Day marks (P11).** A day mark (`at`, or `every` with `from`, in days) is open while the day count of the
+Timeline has reached its day and no ledger entry ends it; raising it writes nothing. Its row starts with its day:
+`Day 32: Move the rival powers.` Days of one mark that are due together are one row, as
+[World and house rules](world-and-house-rules.md) says: `End of month ×3. Next: Day 32. …`, with `Next` in the place
+of `Done` (it ends the oldest day) and `Dismiss all` in the row's menu. Day rows come first, oldest day first, then
+the notices of marks at a value. The Due count counts rows, so a row of three days is `Due 1`. The result line says
+`End of month, Day 32 done.` and `Undo: End of month, Day 32 done`, or `Undo: End of month ×3 dismissed`. While
+`Timeline.md` cannot be read, no day row shows and the top of the scroll area says the Timeline's words and `Day marks
+wait until it can be read.` An act on a day row reads the Timeline again at the click; when the row's day is no
+longer due, or the days of `Dismiss all` changed, it writes nothing and says so on the result line. The rail's
+`Due N` counts day rows too; the run shows nothing more.
+
+**Not built, and why.** Any tracker part in a run (the owner accepted this cost; section 7). The parts in
 [World and rules: later](world-and-rules-later.md). An action on a notice for a group (**Add to fight** is the
 route, as today). A `Make house rule note` action (no band holds it today; the DM sets the note's properties).
 
@@ -1680,7 +1692,7 @@ the rule in this document is the text.
 - **W16, new, Close the evening and open the next:** "Rewards, what changed in the world, the recap and the
   open threads are where the next step needs them, with nothing typed twice." (T18.1 to T18.4)
 - **W17, new, Run a house rule's numbers:** "Between fights, one press records a change, a due notice stays
-  in view, and the history is a file." (T19.1 to T19.4)
+  in view, and the history is a file." (T19.1 to T19.5)
 
 **New rows for section 8.**
 
@@ -1706,6 +1718,7 @@ the rule in this document is the text.
 | T19.2 | A quick action takes 1, also on an instance's line. `Undo` steps back through the acts of the session being played, also after a restart. The opposite action corrects a value in 1 |
 | T19.3 | A value that passes a mark raises a Due row above the trackers and the rail's count, on every page. The Run page shows no tracker part except the rail's count |
 | T19.4 | Case D, beside the Session page: three notices with four rolls and the result line are in view with no scroll |
+| T19.5 | The Timeline's day count raises a day mark's Due row and the rail's count, and raising it writes nothing. Days that pass in one step are one row with `Next`. A clock that goes back takes the row away and keeps what was done (P11) |
 | G6 | The unchanged evening of the audit gives the counts it gave before |
 | G7 | The plain campaign differs from its reference only by rows of section 2.5 |
 
@@ -1779,7 +1792,7 @@ the reference of G7.
 | **P8** | F5, with rows 11, 16 and 18 of section 2.5. The draft's provenance, and the exact inverse of `Undo carry over` | `src/sessions.rs`, `src/sessions/page.rs` (`last_time_block`, `recap_preview`), `src/markdown_view.rs` | P3 | New `session-carry-over`. Extend `session-plan` |
 | **P9** | F4, the slice between fights: house rule notes, in play, the ledger with its save and its Undo, quick actions, instances, marks at a value with `for:`, the Due rows, the rail's count, `Add to Timeline`, the Trackers view and Ctrl+T. In the Tournament example: `for:` on the bells, `activation` not pinned (P10, which needed it, is dropped), and no line about **Make house rule note** | New `src/trackers.rs`, `src/trackers/ledger.rs`, `src/trackers/view.rs`. `src/lookup.rs`, `src/lib.rs`, `src/campaign_content.rs`, `crates/core`, the example note | P1a, P1c | New `trackers`, with the Session page's plan tab and `Start fight` beside the view. Extend `run-lookup`, `nav-state` |
 | **P10** | Dropped (section 7): marks that a fight raises | – | – | – |
-| **P11** | Day marks | – | P9 | – |
+| **P11** | Day marks. Built: `at` and `every` with `from`, in days, on the Timeline's day count, `Next` and `Dismiss all` | `src/trackers.rs`, `src/trackers/ledger.rs`, `src/trackers/view.rs`, `src/lib.rs` (the act reads the day count at the click) | P9 | Extend `trackers` (T19.5) |
 | **P12** | The audit, again. Extend the evening to use every feature, measure it, and add the scripts for J2, J3, J4 and J6. Run G6 and G7 on the whole | `src/visual_tests/dm_audit.rs`, `artifacts/dm-audit/` | All that are built | The audit's captures, and `plain-evening` |
 
 **What can be built at the same time.**
