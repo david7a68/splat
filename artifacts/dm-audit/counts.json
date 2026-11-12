@@ -51,13 +51,6 @@
       "path": "Encounters > Session"
     },
     {
-      "phase": "before",
-      "task": "Is each planned fight right for this party?",
-      "transitions": 0,
-      "interactions": 0,
-      "path": "Session"
-    },
-    {
       "phase": "during",
       "task": "Start recording",
       "transitions": 0,
@@ -90,6 +83,13 @@
       "task": "The party travels for half a day: record it",
       "transitions": 0,
       "interactions": 2,
+      "path": "Session"
+    },
+    {
+      "phase": "during",
+      "task": "Check the road for encounters",
+      "transitions": 0,
+      "interactions": 3,
       "path": "Session"
     },
     {

@@ -1,9 +1,9 @@
 Phase totals
 phase	tasks	transitions	interactions	nav	sub	panel	find	do
-before	8	5	36	5	0	1	9	21
-during	28	7	183	7	2	11	43	120
+before	7	5	36	5	0	1	9	21
+during	29	7	186	7	2	11	44	122
 after	7	5	21	5	4	0	1	11
-total	43	17	240	17	6	12	53	152
+total	43	17	243	17	6	12	54	154
 
 Tasks
 phase	task	transitions	interactions	overhead	path
@@ -14,12 +14,12 @@ before	Build tonight's encounter	2	16	9	Party > Session > Encounters
 before	Make the boss your own: copy it, change it, and swap it in	0	5	0	Encounters
 before	Write the read-aloud text and tactics for the encounter	0	4	0	Encounters
 before	Back to the session plan, with tonight's encounter in it	1	4	2	Encounters > Session
-before	Is each planned fight right for this party?	0	0	0	Session
 during	Start recording	0	2	0	Session
 during	Read last session's recap aloud	0	2	2	Session
 during	A player asks who Captain Varra is	0	3	3	Session
 during	Note what the party decides	0	2	1	Session
 during	The party travels for half a day: record it	0	2	1	Session
+during	Check the road for encounters	0	3	1	Session
 during	Ambush: read the read-aloud text and start the fight	1	12	1	Session > Run
 during	Combat: round 1	0	32	8	Run
 during	A player casts Fireball: read the spell	0	3	3	Run
@@ -57,6 +57,7 @@ before	work at 1200x800
 during	save, quit and open the app at the table
 during	a microphone is there
 during	the recorder hears the table
+during	the campaign has a marked road table
 after	save, quit and open the app after the session
 after	the recording service has its keys
 
@@ -68,11 +69,11 @@ before / Recall what happened last session, and where the story stands: last wee
 before / Compare the party's passive Perception, to plan an ambush: Party compares without opening a sheet: true
 before / Make the boss your own: copy it, change it, and swap it in: the roster has a row for the copy: true
 before / Back to the session plan, with tonight's encounter in it: the plan offers tonight's fight: true
-before / Is each planned fight right for this party?: the planned fights' rows say ["Low", "Low"]
 during / Open the app at the table: the app reopened on Session
 during / Read last session's recap aloud: the Last time line shows last week's words with no act: false
 during / Read last session's recap aloud: last week's words are in view: true
 during / Note what the party decides: the words reached the note: true
+during / Check the road for encounters: the journey holds one check: true
 during / Ambush: read the read-aloud text and start the fight: setup shows the read-aloud text: true
 during / Fireball hits three enemies: apply half to one, full to two: one step of undo for all three: true
 during / Roll a save for a monster: the roll is beside the amount, with the stat block or sheet in view: true

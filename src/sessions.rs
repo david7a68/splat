@@ -1632,10 +1632,6 @@ pub enum ActFault {
 
 impl ActFault {
     /// The words at the act's place.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the note acts of P3, P7 and P8 show them")
-    )]
     pub fn words(&self) -> &str {
         match self {
             Self::Changed => "The note changed on disk. Choose in the note first.",
