@@ -1091,7 +1091,8 @@ impl Campaigns {
         const DISCARDED: &str = "Campaign details draft discarded.";
         let (discarded, added, copy, error, locked) = {
             let this = me.borrow();
-            let locked = blocked.or((!this.writable).then_some("Reload valid campaign settings first."));
+            let locked =
+                blocked.or((!this.writable).then_some("Reload valid campaign settings first."));
             (
                 this.editing.is_some() && this.discarded_details.is_some(),
                 this.added.clone().filter(|_| list),
@@ -1142,7 +1143,9 @@ impl Campaigns {
             });
         }
         if let Some(error) = error {
-            footer.reason(error.clone(), move |ui| Self::draw_error(me, ui, &error, locked));
+            footer.reason(error.clone(), move |ui| {
+                Self::draw_error(me, ui, &error, locked)
+            });
         }
         if let Some(added) = added.filter(|_| !copy) {
             footer.result(added.clone(), false, move |ui| {

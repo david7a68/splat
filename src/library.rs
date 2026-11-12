@@ -6194,8 +6194,7 @@ impl Library {
                 let create_width = Action::primary("Create entry").natural_width(ui);
                 let mut create = false;
                 ui.horizontal_top(|ui| {
-                    let width =
-                        ui.available_width() - create_width - ui.spacing().item_spacing.x;
+                    let width = ui.available_width() - create_width - ui.spacing().item_spacing.x;
                     ui.allocate_ui_with_layout(
                         egui::vec2(width, 0.0),
                         egui::Layout::top_down(egui::Align::Min),

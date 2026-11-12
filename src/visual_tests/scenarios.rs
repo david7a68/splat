@@ -309,8 +309,30 @@ fn creation_row(
     {
         Ok((field, action, reason))
     } else {
-        Err(format!("field {field:?}, action {action:?}, reason {reason:?}"))
+        Err(format!(
+            "field {field:?}, action {action:?}, reason {reason:?}"
+        ))
     }
+}
+
+/// Round 26 review: words of the page that show inside the footer's area. A footer's own words
+/// are clipped to the footer; a page's words are clipped above it, so a clip that starts above
+/// the footer and a visible part inside it mean the page reaches under the footer.
+fn body_under_footer(d: &Driver<'_>, words: &str) -> Vec<String> {
+    let Some(footer) = footer_with(d, words) else {
+        return vec!["no footer".to_owned()];
+    };
+    let mut leaks = Vec::new();
+    d.each_painted_text(|text, clip| {
+        let shown = egui::Rect::from_min_size(text.pos, text.galley.size()).intersect(clip);
+        if clip.top() < footer.top() - 1.0
+            && shown.is_positive()
+            && shown.intersects(footer.shrink(1.0))
+        {
+            leaks.push(text.galley.job.text.clone());
+        }
+    });
+    leaks
 }
 
 /// Click the control whose name starts with `name`. When it is not wholly in view, Tab brings it
@@ -3181,6 +3203,8 @@ pub mod campaign_content {
                 let footer = footer_with(d, A_DISCARDED)?;
                 Some(row.fully_in_view() && row.rect.bottom() <= footer.top())
             };
+            // Nothing of the page shows under the footer: the body ends where the footer starts.
+            let leaks = body_under_footer(d, A_DISCARDED);
             let tabbed = d.tab_to(&row_name) && above_footer(d) == Some(true);
             d.harness_focus_nothing();
             let read = d.reader_focus(&row_name) && above_footer(d) == Some(true);
@@ -3193,15 +3217,14 @@ pub mod campaign_content {
             d.click_below(SAVE_SELECTIONS, DISCARD_SELECTION);
             let discarded = !selections(d);
             d.click(UNDO_P);
-            let own_undo = selections(d)
-                && draft(d, A_PATH) == a_discarded_draft
-                && listed(d, A_DISCARDED);
+            let own_undo =
+                selections(d) && draft(d, A_PATH) == a_discarded_draft && listed(d, A_DISCARDED);
             d.click_below(SAVE_SELECTIONS, DISCARD_SELECTION);
             d.observe(
                 "iter-26-C-rows-above-footer",
-                tabbed && read && only_selection && discarded && own_undo,
+                leaks.is_empty() && tabbed && read && only_selection && discarded && own_undo,
                 format!(
-                    "At {size:?}: Tab reaches the row above the footer {tabbed}; screen-reader \
+                    "At {size:?}: page words under the footer {leaks:?}; Tab reaches the row above the footer {tabbed}; screen-reader \
                      focus {read}; a click changes only the selection {only_selection}; Discard \
                      {discarded}; the packages' Undo restores only its own state {own_undo}"
                 ),
@@ -3221,8 +3244,8 @@ pub mod campaign_content {
             && listed(d, P_DISCARDED)
             && b_baseline != b_draft;
         let order = [UNDO_B, UNDO_P, UNDO_A].map(|name| undo_top(d, name));
-        let newest_first = order.iter().all(Option::is_some)
-            && order.windows(2).all(|pair| pair[0] < pair[1]);
+        let newest_first =
+            order.iter().all(Option::is_some) && order.windows(2).all(|pair| pair[0] < pair[1]);
         let after_b = b_top(d);
         d.click(UNDO_A);
         let a_back = draft(d, A_PATH) == a_draft;
@@ -3258,7 +3281,8 @@ pub mod campaign_content {
         // Review round 26: a campaign change ends this campaign's Undos at the change, also
         // while the page is hidden (A → B → A from Settings).
         d.click_below(A_MESSAGE, "Discard");
-        let live_before = listed(d, A_DISCARDED) && listed(d, B_DISCARDED) && listed(d, P_DISCARDED);
+        let live_before =
+            listed(d, A_DISCARDED) && listed(d, B_DISCARDED) && listed(d, P_DISCARDED);
         go_settings(d);
         d.click("Make Quiet Harbor the active campaign");
         d.click("Make The Emberfall Marches the active campaign");

@@ -3106,9 +3106,10 @@ mod tests {
             let notice = out.shapes.iter().find_map(|clipped| match &clipped.shape {
                 egui::Shape::Text(text)
                     if text.galley.job.text.starts_with("D&D Beyond")
-                        && clipped
-                            .clip_rect
-                            .contains_rect(egui::Rect::from_min_size(text.pos, text.galley.size())) =>
+                        && clipped.clip_rect.contains_rect(egui::Rect::from_min_size(
+                            text.pos,
+                            text.galley.size(),
+                        )) =>
                 {
                     Some(text.pos.y)
                 }

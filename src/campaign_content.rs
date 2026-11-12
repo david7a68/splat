@@ -1276,7 +1276,11 @@ impl CampaignContent {
                 }
             }
             PageResult::RepairDiscard(stamp) => {
-                if let Some(at) = self.discarded_repairs.iter().position(|(.., s)| *s == stamp) {
+                if let Some(at) = self
+                    .discarded_repairs
+                    .iter()
+                    .position(|(.., s)| *s == stamp)
+                {
                     let (path, text, _) = self.discarded_repairs.remove(at);
                     if let Some(repair) = self.repairs.iter_mut().find(|r| r.path == path)
                         && let Some(active) = self.active.clone()

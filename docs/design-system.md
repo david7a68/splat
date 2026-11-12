@@ -661,8 +661,10 @@ changes) and the package warnings (a faulty manifest, a chosen package that is n
 actions). Each Undo stays with its own object and action until it is used or its object ends it; a failed Undo
 keeps it. Every live Undo, the page's and the repairs', shares one order, newest first, so a second repair's
 Discard keeps the first one's Undo below its own. A campaign change ends the open campaign's Undos at the change,
-also while the page is hidden. A plain result gives way to any newer result. The footer is drawn above the page,
-so the package columns under it never take its presses.
+also while the page is hidden. A plain result gives way to any newer result. The page's body ends where the footer
+starts: the package columns clip their painting and their clicks to the page's viewport, so nothing of the page
+shows or takes a press under the footer. Rows below it come into view as the page scrolls, by Tab or by a screen
+reader's focus.
 So no result, error or package warning moves the save rows, the repairs or the package list.
 The save row, package list and entry search stop at LIST_MEASURE from the tab’s left edge.
 An open repair keeps the same right edge as the save row. Its save row lays out `Save repaired note` first at that edge; a long
