@@ -847,6 +847,52 @@ fn after_the_session(a: &mut Audit<'_, '_>) {
             .and_then(|campaign| fs::read_to_string(campaign.path.join(HOBB_PATH)).ok())
             .is_some_and(|text| text.contains(": Named the informer at the ford.\n"))
     ));
+
+    next_morning(a);
+}
+
+/// P11: a day mark. The torch rules gain a supply wagon on the next day; the DM starts that
+/// day on the Timeline, sees `Due 1` on the rail, and takes the wagon's torches in Trackers.
+fn next_morning(a: &mut Audit<'_, '_>) {
+    a.setup("the torch rules have a supply wagon on the next day", |d| {
+        let day = crate::timeline::day_now(&d.app().timeline.events).unwrap_or(0) + 1;
+        let campaign = d.app_mut().campaigns.active_campaign().expect("a campaign");
+        let id = splat::character::stable_id("Torch Rules.md");
+        let wagon = format!(
+            "```yaml\nday_marks:\n  wagon:\n    name: Supply wagon\n    at: {day}\n    say: The supply wagon arrives with fresh torches.\n    changes:\n    - {{tracker: torches, add: 6}}\ntrackers:\n"
+        );
+        let note = torch_rules(id).replacen("```yaml\ntrackers:\n", &wagon, 1);
+        fs::write(campaign.path.join("Torch Rules.md"), note).expect("write the house rule note");
+        d.app_mut().lookup.refresh();
+        d.settle();
+    });
+    a.task("A new day starts: take the supply wagon's torches");
+    a.click(Nav, NAV_TIMELINE);
+    a.click(Do, "Add Day");
+    a.fact(format!(
+        "the rail counts the day mark: {}",
+        a.d.has_containing("1 notice is due")
+    ));
+    a.act(Panel, "Ctrl+T", |d| d.press_ctrl(Key::T));
+    let done =
+        a.d.nodes()
+            .iter()
+            .find(|node| node.name.starts_with("Done: Supply wagon, Day "))
+            .map(|node| node.name.clone())
+            .unwrap_or_else(|| "Done: Supply wagon".to_owned());
+    a.click(Do, &done);
+    a.act(Panel, "Ctrl+T", |d| d.press_ctrl(Key::T));
+    let ledger =
+        a.d.app_mut()
+            .campaigns
+            .active_campaign()
+            .map(|campaign| campaign.path.join("Trackers.md"))
+            .and_then(|path| fs::read_to_string(path).ok())
+            .unwrap_or_default();
+    a.fact(format!(
+        "the ledger holds the wagon's Done: {}",
+        ledger.contains("mark: wagon") && ledger.contains("done: true")
+    ));
 }
 
 /// The World NPC of F6's task, whom a done scene links.

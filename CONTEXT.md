@@ -238,7 +238,7 @@ _Avoid_: Ledger, which is the history of trackers.
 An unticked task line in a world note: a fact the DM has not decided.
 
 **House rule note**:
-A rule entry with `implementation: splat:house_rules` whose `splat_members` hold trackers. It counts nothing until
+A rule entry with `implementation: splat:house_rules` whose `splat_members` hold trackers and day marks. It counts nothing until
 it is in play.
 
 **In play**:
@@ -254,6 +254,11 @@ A named press that makes one or more linked changes, which undo as one.
 
 **Mark**:
 A value that raises a notice when a tracker's value rises past it. A mark never acts.
+
+**Day mark**:
+A mark on the campaign's day count, at one day (`at`) or every so many days from a day (`every`, `from`). Its
+notice is open while the day count has reached its day and no ledger entry ends it. Days of one mark that are due
+together are one Due row.
 
 **Due list**:
 The open notices: what a mark raised and the DM has not yet finished with `Done` or `Dismiss`.

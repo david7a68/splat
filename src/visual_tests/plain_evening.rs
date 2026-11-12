@@ -2499,12 +2499,16 @@ mod allowed_classes {
                 })
         }
 
-        /// The frozen plain reference, read once.
+        /// The views of the plain reference that these classes were written against, read
+        /// once. A later freeze writes a new `reference.json`, in which History already scrolls;
+        /// these classes measure the views of the freeze before pull request 275
+        /// (`history_r1c.json`, frozen at 0855cf95), as their rows did.
         fn reference() -> &'static super::super::Reference {
             static REFERENCE: std::sync::OnceLock<super::super::Reference> =
                 std::sync::OnceLock::new();
-            REFERENCE
-                .get_or_init(|| super::super::read(&super::super::folder().join("reference.json")))
+            REFERENCE.get_or_init(|| {
+                super::super::read(&super::super::folder().join("history_r1c.json"))
+            })
         }
 
         /// An act around History whose every changed word is a text that scrolled out of or

@@ -3,7 +3,8 @@
 Status: partly implemented. World notes, roll tables, NPCs and locations, and the clock are built. The trackers
 slice between fights is built ([The session cycle](session-cycle.md), P9): house rule notes, in play, trackers with
 instances, quick actions, marks at a value with `for:`, the Due list, the ledger and its Undo, and the Trackers view.
-Day marks, `every`, a tracker's history with **Remove** and the problems list in the note's reader, and a value's
+Day marks, with `at` or `every` and `from`, are built too ([The session cycle](session-cycle.md), P11). A tracker's
+history with **Remove** and the problems list in the note's reader, `every` on a mark at a value, and a value's
 free-text line are not built yet; event types are still proposals. It uses the Heralds of the End notes
 (`40-59 Campaigns/42 Heralds of the End` in the vault) as its test case. Those notes are early, so
 this design takes their shape and not their numbers.
@@ -323,6 +324,8 @@ notes:
 ---
 ```
 
+A day notice's entries name the day mark and the day: `notice: {mark: month_end, day: 32}`.
+
 `changes` is one ordered list of acts. An act is a tracker change, a roll on a notice, or the end of a notice
 (`done` or `dismissed`, with the changes it applied). A notice's state is not stored: a notice is open until
 an entry ends it. So removing an entry gives back what it replaced. An entry holds the old value only where
@@ -476,10 +479,13 @@ must not change this clock.
   its day, an event's panel shows when it starts, and the list says where the story is now.
 - **Shorter time** stays where it already works: rounds in a run, and the race clock as a tracker. A run does not move
   the clock, because a fight is minutes.
-- **If `Timeline.md` cannot be read,** the clock and the day marks must freeze when day marks exist, and the Due list must
-  say why. They must not treat this as a timeline with no events (`src/timeline.rs:458-463`).
+- **If `Timeline.md` cannot be read,** the clock and the day marks freeze when day marks exist, and the Due list says
+  why. They do not treat this as a timeline with no events. As built (P11): no day notice shows, never an old one;
+  the top of the Due list says the Timeline's own words and `No day mark shows until the Timeline is read.`; an act on a
+  day notice writes nothing and says so; the notices of marks at a value still show and act. The same holds while a
+  Timeline edit waits to be saved and the file changed, or cannot be read, under it: the draft is kept.
 
-**Day marks** are not built, because they need the Due list. A mark can use the day count. This is the same mechanism, with `at` or `every` in days:
+**Day marks** are built (P11). A mark can use the day count. This is the same mechanism, with `at` or `every` in days:
 
 ```yaml
 day_marks:
@@ -494,7 +500,18 @@ day_marks:
 ```
 
 `at: 721` means the start of Day 721. `every: 30, from: 2` means Day 32, Day 62, and so on, so `from` sets where a schedule
-counts from. Heralds uses it because the campaign's first day is the Tournament and not Year 1.
+counts from. Heralds uses it because the campaign's first day is the Tournament and not Year 1. With no `from`, a
+schedule counts from Day 1, the clock's first day. A day mark has no line of its own, so each proposed change names its
+`tracker`, and `for:` names the line of a tracker with `per`. `name` is the row's name; with none, the first sentence of
+`say`.
+
+**As built (P11).** A day notice is not stored: it is open while the day count, as the Timeline works it out, has
+reached its day and no ledger entry ends it. So raising it writes nothing, a day that passed while Splat was closed
+shows at the next start, and a clock that goes back (the Timeline's Undo, or an event moved earlier) takes away a
+row whose day is no longer reached, while a `Done` already in the ledger stays. Its entries name it by the mark's key
+and the day: `notice: {mark: month_end, day: 32}`. Splat works the rows out again when the day count, the
+definitions or the ledger change, never in each frame, and an act reads the Timeline again at the click: when the
+row's day is no longer due, it writes nothing and says so on the result line.
 
 Repeats of one mark are one row: "End of month ×3", with **Next** and **Dismiss all**. A done period stays done, and moving a
 boundary does not reverse its income. An overdue item uses today's values, and an older period says so before it runs. An
@@ -592,7 +609,7 @@ unplanned, so part 5 may come sooner than its number.
 4. **Event types.** *Not built, and deprioritized.* *Changes:* `timeline.rs`, `timeline/page.rs`, `processing.rs`. A test covers an unknown type's round trip.
 5. **NPCs and locations.** *Built.* *Changes:* `content/mod.rs` (`splat_world`), `presentation.rs`, `lookup.rs`, `encounter_run.rs`.
    *Done when:* a typed name becomes a participant in the fight, and the run stays on screen.
-6. **The clock and day marks.** *The clock is built. Day marks wait for part 3.* Year 1 begins. *Changes:* `timeline.rs`, the ledger module, the Trackers view.
+6. **The clock and day marks.** *Built: the clock, and day marks in P11 of [The session cycle](session-cycle.md).* Year 1 begins. *Changes:* `trackers.rs` (the day count from `timeline::Book`, the day notices in the replay, `Next` and `Dismiss all`), the ledger module (a day notice's identity), the Trackers view; `timeline.rs` is unchanged.
 
 ## Alternatives rejected
 

@@ -1352,6 +1352,18 @@ impl Splat {
         }
     }
 
+    /// A press in Trackers, applied after Lookup drew. The act reads the day count at the click:
+    /// the Timeline reads its file again if it changed, and Trackers follows it.
+    fn apply_tracker_act(&mut self) {
+        if self.trackers.pressed() {
+            // When the file changed or cannot be read under an edit that waits for its pause,
+            // the Timeline says so, and the day count is not known: no day act records.
+            self.timeline.read_if_changed();
+            self.trackers.follow_clock(&self.timeline);
+            self.trackers.apply_pressed();
+        }
+    }
+
     /// `Add to Timeline` after a tracker act: a second act, a Major event with the act's label
     /// in the session being played, with the Timeline's own `Undo add`.
     fn add_tracker_act_to_timeline(&mut self) {
@@ -2630,7 +2642,7 @@ impl eframe::App for Splat {
             _ => None,
         };
         self.trackers
-            .poll(self.lookup.index(), open.as_ref(), played);
+            .poll(self.lookup.index(), open.as_ref(), played, &self.timeline);
         self.old_session = self.sessions.current_dated().is_some();
         let fact = self.encounters.run().map(encounter_run::Run::timeline_fact);
         if fact != self.run_fact {
@@ -2764,6 +2776,7 @@ impl eframe::App for Splat {
             }
             self.lookup.show(ctx, &mut self.trackers);
         }
+        self.apply_tracker_act();
         self.add_tracker_act_to_timeline();
         // The Sessions page has this note itself, so two editors would squeeze a small window.
         if self.sessions.notes_open && self.page != Page::Sessions {

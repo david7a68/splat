@@ -61,6 +61,83 @@ fn write_the_race(d: &Driver<'_>) {
     .unwrap();
 }
 
+/// A day mark, as a DM writes one in the note's Splat data: the month's end, every 30 days from
+/// Day 2, with one proposed change.
+const MONTH_END: &str = "> day_marks:\n>   month_end:\n>     name: End of month\n>     every: 30\n>     from: 2\n>     say: Move the rival powers. Pay each team its prize money, and roll Instability if chaos has begun.\n>     changes:\n>     - {tracker: favor, add: 1}\n";
+
+/// Day marks (P11): the Timeline's day count raises a day mark's Due row, with the words, the
+/// rows and the acts of a mark at a value. Days that pass in one step are one row with `Next`;
+/// a clock that goes back takes the row away and keeps what was done.
+fn day_marks(d: &mut Driver<'_>) {
+    use crate::timeline::Kind;
+    let note = root(d).join("Tournament.md");
+    let text = fs::read_to_string(&note).unwrap();
+    fs::write(
+        &note,
+        text.replacen("> trackers:\n", &format!("{MONTH_END}> trackers:\n"), 1),
+    )
+    .unwrap();
+    d.app_mut().lookup.refresh();
+    d.app_mut().lookup.files_changed = true;
+    d.settle();
+    // Day 1, then 61 days on the road: Day 62. The month ended on Day 32 and on Day 62.
+    let timeline = &mut d.app_mut().timeline;
+    timeline.add(Kind::Day, None);
+    let road = timeline.add(Kind::Travel, None);
+    timeline.event_mut(&road).unwrap().duration = "61 days".into();
+    timeline.touch();
+    timeline.save();
+    d.settle();
+    d.observe(
+        "T19.5",
+        d.has_containing("End of month ×2. Next: Day 32. Move the rival powers.")
+            && d.has("Next: End of month, Day 32")
+            && d.has_label("DUE 3")
+            && d.has_containing("3 notices are due")
+            && !ledger(d).contains("month_end"),
+        "Days that pass in one step are one Due row that says how many, with Next; raising it writes nothing",
+    );
+    let (whole, detail) = d.at_size(SMALL, |d| {
+        let missing: Vec<_> = ["Next: End of month, Day 32", "Undo: Take seal"]
+            .into_iter()
+            .filter(|name| !d.in_view(name))
+            .chain(
+                ["End of month ×2. Next: Day 32.", "Crowd Favor +1"]
+                    .into_iter()
+                    .filter(|words| !d.in_view_containing(words)),
+            )
+            .collect();
+        (missing.is_empty(), format!("not in view: {missing:?}"))
+    });
+    d.observe(
+        "T19.5",
+        whole,
+        format!("At 960x640 with Lookup narrow, the day mark's row, its Next and the result line are in view. {detail}"),
+    );
+    d.state("trackers-day-mark-due", Sizes::Standard);
+    d.click("Next: End of month, Day 32");
+    d.expect("End of month, Day 32 done.");
+    d.observe(
+        "T19.5",
+        d.has_containing("Day 62: Move the rival powers.")
+            && d.has("Done: End of month, Day 62")
+            && ledger(d).contains("day: 32"),
+        "Next ends the oldest day and applies its change; the row names the next day",
+    );
+    // The Timeline's Undo takes the road back: Day 62 is no longer reached and its row goes;
+    // the Done of Day 32 stays in the ledger.
+    d.app_mut().timeline.undo_add(&road);
+    d.app_mut().timeline.save();
+    d.settle();
+    d.observe(
+        "T19.5",
+        !d.has_containing("Move the rival powers.")
+            && d.has_label("DUE 2")
+            && ledger(d).contains("day: 32"),
+        "A clock that goes back takes the row away and keeps what was done",
+    );
+}
+
 pub fn run(d: &mut Driver<'_>) {
     write_the_race(d);
     // As when the DM comes back from Obsidian: the content on disk changed.
@@ -283,6 +360,8 @@ pub fn run(d: &mut Driver<'_>) {
         d.has("Undo: Take seal") && d.has_label("DUE 2"),
         "After a restart the result line, its Undo and the Due rows are as before",
     );
+
+    day_marks(d);
 
     // A fight starts beside the view; the run shows no tracker part, only the rail's count.
     d.click(&format!("Start fight: {SHRINE}"));
