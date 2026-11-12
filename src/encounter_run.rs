@@ -682,8 +682,9 @@ struct State {
     cast: Option<rolling::Cast>,
 }
 /// The state, groups and scale an answer in Arrivals was worked out from: the count of steps
-/// kept or taken back, and the two reads by their address.
-type ArrivalKey = (u64, usize, usize);
+/// kept or taken back, and the revisions of the two reads (never an address, which a freed read
+/// can hand to the next one).
+type ArrivalKey = (u64, u64, u64);
 /// The typed totals' revision, the groups' revision and the run's encounter, for the Arrivals
 /// reasons.
 type ReasonsKey = (u64, u64, Option<Uuid>);
@@ -789,6 +790,10 @@ pub(crate) struct Run {
     /// Bumped whenever `groups` is a read other than `groups_seen` (a reload replaces it, also
     /// while Arrivals is closed). The Arrivals caches are keyed by it.
     groups_revision: u64,
+    /// The scale that `scale_revision` counted last, held as `groups_seen` is.
+    scale_seen: Option<Arc<crate::difficulty::Scale>>,
+    /// Bumped whenever `scale` is a read other than `scale_seen`.
+    scale_revision: u64,
     /// The Arrivals reasons for typed totals that cannot be read (FI5), for one
     /// `totals_revision`, one read of the groups and one encounter. Never saved.
     arrival_reasons: Option<(ReasonsKey, Arc<[String]>)>,
@@ -1263,6 +1268,8 @@ impl Run {
             totals_revision: 0,
             groups_seen: None,
             groups_revision: 0,
+            scale_seen: None,
+            scale_revision: 0,
             arrival_reasons: None,
             widest_name: None,
             carried: None,
@@ -4288,6 +4295,8 @@ impl Run {
             totals_revision: 0,
             groups_seen: None,
             groups_revision: 0,
+            scale_seen: None,
+            scale_revision: 0,
             arrival_reasons: None,
             widest_name: None,
             carried: None,

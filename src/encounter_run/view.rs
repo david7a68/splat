@@ -2822,6 +2822,20 @@ impl Run {
         self.groups_revision
     }
 
+    /// The revision of the scale's read, as `groups_revision` is for the groups.
+    fn scale_revision(&mut self) -> u64 {
+        let same = match (&self.scale, &self.scale_seen) {
+            (Some(now), Some(seen)) => Arc::ptr_eq(now, seen),
+            (None, None) => true,
+            _ => false,
+        };
+        if !same {
+            self.scale_revision += 1;
+            self.scale_seen = self.scale.clone();
+        }
+        self.scale_revision
+    }
+
     /// Each offered group whose typed total cannot be read: `<group>: <reason>`, in list order.
     /// Worked out again only after an edit of the typed totals, a new read of the groups or
     /// another encounter (`totals_revision`, the groups' address, `source`).
@@ -2907,12 +2921,8 @@ impl Run {
     /// party is the characters who are present; the fight is every present creature against them.
     /// Worked out again only after a step, a new read of the groups or of the scale.
     pub(super) fn arrival_words(&mut self) -> Option<&super::ArrivalWords> {
+        let key = (self.revision, self.groups_revision(), self.scale_revision());
         let (groups, scale) = (self.groups.as_ref()?, self.scale.as_ref()?);
-        let key = (
-            self.revision,
-            Arc::as_ptr(groups) as usize,
-            Arc::as_ptr(scale) as usize,
-        );
         #[cfg(test)]
         {
             self.arrival_counts.0 += 1;
@@ -8148,7 +8158,16 @@ mod tests {
         // Add adds the current members.
         use std::{cell::RefCell, rc::Rc};
         let (pack, vanguard) = (Uuid::new_v4(), Uuid::new_v4());
-        let read = |run: &Run, pack_name: &str, count: u64| {
+        // A member with a challenge rating, so each read has XP and difficulty words.
+        let rated = |run: &Run| {
+            let mut entry = (*run.state.participants[0].definition).clone();
+            entry.fields.insert(
+                "splat_creature".into(),
+                serde_yaml_ng::from_str("{type: humanoid, cr_text: '1'}").unwrap(),
+            );
+            Arc::new(entry)
+        };
+        let read = |rated: &Arc<Entry>, pack_name: &str, count: u64| {
             let group = |id: Uuid, name: &str| {
                 Arc::new(super::super::RunGroup {
                     id,
@@ -8158,7 +8177,7 @@ mod tests {
                     encounter: None,
                     encounter_name: None,
                     members: vec![super::super::GroupMember {
-                        entry: run.state.participants[0].definition.clone(),
+                        entry: rated.clone(),
                         count,
                         overrides: Default::default(),
                     }],
@@ -8174,7 +8193,17 @@ mod tests {
             Arc::new(vec![group(pack, pack_name), group(vanguard, "Vanguard")])
         };
         let mut run = super::super::tests::run();
-        run.groups = Some(read(&run, "Pack A", 2));
+        // Every creature's XP is known, so the fight has a word.
+        let creature = rated(&run);
+        for p in &mut run.state.participants {
+            p.definition = creature.clone();
+        }
+        run.groups = Some(read(&creature, "Pack A", 2));
+        // A scale, so each read has difficulty words (#262), which must follow the read too.
+        run.scale = Some(Arc::new(crate::difficulty::Scale {
+            budgets: Some(crate::difficulty::builtin_budgets()),
+            party: [(Uuid::new_v4(), Some(4))].into_iter().collect(),
+        }));
         run.group_totals.insert(pack, "2-5".into());
         run.group_totals.insert(vanguard, "12".into());
         let shared = Rc::new(RefCell::new((run, true)));
@@ -8212,18 +8241,33 @@ mod tests {
             "the first read shows: {:?}",
             texts(&harness)
         );
-        // Closed, then three reloads, each dropping the read before.
+        let first_words = shared.borrow_mut().0.arrival_words().cloned();
+        // Closed, then two reloads back to back, each dropping the read before: the last read
+        // takes the first one's freed allocation, as a reload can. Nothing is allocated between.
         shared.borrow_mut().1 = false;
         harness.run_steps(2);
-        for (name, count) in [("Pack B", 4), ("Pack C", 5), ("Pack D", 3)] {
-            {
-                let (run, _) = &mut *shared.borrow_mut();
-                run.groups = Some(read(run, name, count));
-            }
-            harness.run_steps(2);
+        {
+            let (run, _) = &mut *shared.borrow_mut();
+            run.groups = Some(read(&creature, "Pack B", 4));
+            run.groups = Some(read(&creature, "Pack D", 3));
         }
+        harness.run_steps(2);
         shared.borrow_mut().1 = true;
         harness.run_steps(3);
+        // #262's difficulty words follow the current read: the kept words are the ones worked
+        // out fresh for it, and they differ from the first read's.
+        let (kept, fresh) = {
+            let run = &mut shared.borrow_mut().0;
+            let kept = run.arrival_words().cloned();
+            run.arrival_words = None;
+            (kept, run.arrival_words().cloned())
+        };
+        assert!(
+            fresh.as_ref().is_some_and(|words| !words.is_empty())
+                && fresh != first_words
+                && kept == fresh,
+            "iter-26-R-reload-words: first {first_words:?}, kept {kept:?}, fresh {fresh:?}"
+        );
         let now = texts(&harness);
         let members: Vec<_> = now
             .iter()
@@ -8236,7 +8280,7 @@ mod tests {
                     .all(|text| text.starts_with("3\u{a0}×\u{a0}"))
                 && now.iter().any(|text| text.starts_with("Pack D: "))
                 && !now.iter().any(|text| {
-                    ["Pack A: ", "Pack B: ", "Pack C: "]
+                    ["Pack A: ", "Pack B: "]
                         .iter()
                         .any(|old| text.starts_with(old))
                 }),
