@@ -5678,26 +5678,6 @@ impl Library {
                     });
                 });
                 form_heading(ui, "Add a package folder");
-                ui.horizontal(|ui| {
-                    design::text_input(
-                        ui,
-                        "Package folder",
-                        &mut self.path,
-                        "Choose a folder",
-                        (ui.available_width()
-                            - Action::secondary("Browse…").natural_width(ui)
-                            - ui.spacing().item_spacing.x)
-                            .max(design::XXL),
-                    );
-                    if Action::secondary("Browse…")
-                        .blocked(locked)
-                        .show(ui)
-                        .clicked()
-                        && let Some(path) = crate::hermetic::pick_folder()
-                    {
-                        self.path = path.display().to_string();
-                    }
-                });
                 if self.copied_package.as_ref().is_some_and(|copy| {
                     Path::new(self.path.trim()).canonicalize().ok().as_ref() != Some(&copy.path)
                 }) {
@@ -5714,12 +5694,38 @@ impl Library {
                         .trim()
                         .is_empty()
                         .then_some("Choose a folder first."));
-                ui.horizontal(|ui| {
-                    if Action::secondary("Add folder")
+                // Round 26 FB6: Add folder follows the field on its line; the reason is below.
+                let add = ui
+                    .horizontal(|ui| {
+                    // As tall as the buttons, so the field and its actions share one centre.
+                    ui.set_min_height(Density::Scan.control());
+                    design::text_input(
+                        ui,
+                        "Package folder",
+                        &mut self.path,
+                        "Choose a folder",
+                        (ui.available_width()
+                            - Action::secondary("Browse…").natural_width(ui)
+                            - Action::secondary("Add folder").natural_width(ui)
+                            - 2.0 * ui.spacing().item_spacing.x)
+                            .max(design::XXL),
+                    );
+                    if Action::secondary("Browse…")
+                        .blocked(locked)
+                        .show(ui)
+                        .clicked()
+                        && let Some(path) = crate::hermetic::pick_folder()
+                    {
+                        self.path = path.display().to_string();
+                    }
+                    Action::secondary("Add folder")
                         .blocked(add_reason)
                         .show(ui)
                         .clicked()
-                    {
+                    })
+                    .inner;
+                {
+                    if add {
                         match local_module(Path::new(self.path.trim())).and_then(|module| {
                             if let Some(original) = campaigns
                                 .modules()
@@ -5752,9 +5758,8 @@ impl Library {
                             Err(error) => self.error = Some(error),
                         }
                     }
-                    design::blocked_reason(ui, add_reason);
-                    ui.add_space(design::L);
-                });
+                }
+                crate::campaigns::creation_reason(ui, add_reason);
 
                 if let Some(copy) = self.copied_package.clone() {
                     if Path::new(self.path.trim()).canonicalize().ok().as_ref() != Some(&copy.path)
@@ -5845,6 +5850,26 @@ impl Library {
                     if std::mem::take(&mut self.focus_package_name) {
                         response.request_focus();
                     }
+                    // Round 26 FB6: the choice comes before the last field, so Create package can
+                    // follow that field on its line.
+                    if campaigns.active_campaign().is_some() {
+                        use_checkbox(
+                            ui,
+                            &mut self.package_not_used,
+                            "Uses every entry in this package, including future entries.",
+                        );
+                    }
+                    let reason =
+                        locked.or(self.name.trim().is_empty().then_some("Type a name first."));
+                    let create_action = || {
+                        if self.run_open {
+                            Action::secondary("Create package")
+                        } else {
+                            Action::primary("Create package")
+                        }
+                    };
+                    let create_width = create_action().natural_width(ui);
+                    let mut create = false;
                     let parent = self.package_path.get_or_insert_with(|| {
                         campaigns
                             .modules()
@@ -5862,7 +5887,8 @@ impl Library {
                     ui.horizontal_top(|ui| {
                         let width = ui.available_width()
                             - Action::secondary("Browse…").natural_width(ui)
-                            - ui.spacing().item_spacing.x;
+                            - create_width
+                            - 2.0 * ui.spacing().item_spacing.x;
                         ui.allocate_ui_with_layout(
                             egui::vec2(width, 0.0),
                             egui::Layout::top_down(egui::Align::Min),
@@ -5887,6 +5913,32 @@ impl Library {
                                 self.package_folder_changed = true;
                             }
                         });
+                        ui.vertical(|ui| {
+                            ui.add_space(design::L + design::XS);
+                            create = create_action().blocked(reason).show(ui).clicked();
+                        });
+                    });
+                    // The reason sits on its own line below, kept when empty; quiet Clear starts
+                    // it when there is something to clear.
+                    ui.horizontal(|ui| {
+                        // As tall as Clear, so Clear coming moves nothing.
+                        ui.set_min_height(Density::Read.control());
+                        if (!self.name.is_empty() || self.package_folder_changed)
+                            && Action::quiet("Clear")
+                                .name("Clear the new package fields")
+                                .density(Density::Read)
+                                .line_start()
+                                .show(ui)
+                                .clicked()
+                        {
+                            self.name.clear();
+                            self.package_path = None;
+                            self.package_folder_changed = false;
+                        }
+                        if !self.name.is_empty() || self.package_folder_changed {
+                            ui.add_space(design::L - ui.spacing().item_spacing.x);
+                        }
+                        design::blocked_reason(ui, reason);
                     });
                     let namespace: String = self
                         .name
@@ -5919,25 +5971,8 @@ impl Library {
                             .wrap(),
                         );
                     }
-                    if campaigns.active_campaign().is_some() {
-                        use_checkbox(
-                            ui,
-                            &mut self.package_not_used,
-                            "Uses every entry in this package, including future entries.",
-                        );
-                    }
-                    let reason =
-                        locked.or(self.name.trim().is_empty().then_some("Type a name first."));
-                    ui.horizontal(|ui| {
-                        if (if self.run_open {
-                            Action::secondary("Create package")
-                        } else {
-                            Action::primary("Create package")
-                        })
-                        .blocked(reason)
-                        .show(ui)
-                        .clicked()
-                        {
+                    {
+                        if create {
                             let namespace: String = self
                                 .name
                                 .trim()
@@ -5983,19 +6018,7 @@ impl Library {
                                 Err(error) => self.error = Some(error),
                             }
                         }
-                        design::blocked_reason(ui, reason);
-                        ui.add_space(design::L);
-                        if (!self.name.is_empty() || self.package_folder_changed)
-                            && Action::quiet("Clear")
-                                .name("Clear the new package fields")
-                                .show(ui)
-                                .clicked()
-                        {
-                            self.name.clear();
-                            self.package_path = None;
-                            self.package_folder_changed = false;
-                        }
-                    });
+                    }
                 }
                 form_heading(ui, "Registered packages");
                 design::rule(ui);
@@ -6150,13 +6173,63 @@ impl Library {
                     })
                 });
                 design::named(ui, &combo.response, "Destination");
-                folder_field(
-                    ui,
-                    "Folder",
-                    &mut self.new_folder,
-                    places[place].root().unwrap(),
-                    Some(&self.new_kind),
-                );
+                // Round 26 FB6: the choice comes before the last field, so Create entry follows
+                // that field on its line; Cancel and the reason are on the line below.
+                if matches!(places[place], Owner::Package(_))
+                    && campaigns.active_campaign().is_some()
+                {
+                    use_checkbox(
+                        ui,
+                        &mut self.new_not_used,
+                        "Adds this entry to the campaign’s package choices.",
+                    );
+                }
+                let blocked = if dirty {
+                    Some("Save or discard this entry first.")
+                } else if self.new_name.trim().is_empty() {
+                    Some("Type a name first.")
+                } else {
+                    None
+                };
+                let create_width = Action::primary("Create entry").natural_width(ui);
+                let mut create = false;
+                ui.horizontal_top(|ui| {
+                    let width = ui.available_width() - create_width - ui.spacing().item_spacing.x;
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(width, 0.0),
+                        egui::Layout::top_down(egui::Align::Min),
+                        |ui| {
+                            folder_field(
+                                ui,
+                                "Folder",
+                                &mut self.new_folder,
+                                places[place].root().unwrap(),
+                                Some(&self.new_kind),
+                            );
+                        },
+                    );
+                    ui.vertical(|ui| {
+                        ui.add_space(design::L + design::XS);
+                        create = Action::primary("Create entry")
+                            .blocked(blocked)
+                            .show(ui)
+                            .clicked();
+                    });
+                });
+                ui.horizontal(|ui| {
+                    ui.set_min_height(Density::Read.control());
+                    if Action::quiet("Cancel")
+                        .density(Density::Read)
+                        .line_start()
+                        .show(ui)
+                        .clicked()
+                    {
+                        self.new_form = false;
+                        self.new_error = None;
+                    }
+                    ui.add_space(design::L - ui.spacing().item_spacing.x);
+                    design::blocked_reason(ui, blocked);
+                });
                 let relative = if self.new_folder.trim().is_empty() {
                     format!("{}.md", self.new_name.trim())
                 } else {
@@ -6174,33 +6247,8 @@ impl Library {
                     };
                     creation_path(ui, places[place].root().unwrap(), &relative, destination);
                 }
-                if matches!(places[place], Owner::Package(_))
-                    && campaigns.active_campaign().is_some()
-                {
-                    use_checkbox(
-                        ui,
-                        &mut self.new_not_used,
-                        "Adds this entry to the campaign’s package choices.",
-                    );
-                }
-                let blocked = if dirty {
-                    Some("Save or discard this entry first.")
-                } else if self.new_name.trim().is_empty() {
-                    Some("Type a name first.")
-                } else {
-                    None
-                };
-                ui.horizontal(|ui| {
-                    let create = Action::primary("Create entry")
-                        .blocked(blocked)
-                        .show(ui)
-                        .clicked();
-                    design::blocked_reason(ui, blocked);
-                    ui.add_space(design::L);
-                    if Action::quiet("Cancel").show(ui).clicked() {
-                        self.new_form = false;
-                        self.new_error = None;
-                    }
+                // A closure, so an early `return` ends only the creation.
+                (|| {
                     if create {
                         let name = self.new_name.trim();
                         if name.contains(['/', '\\', '\n', '\r']) || name == "." || name == ".." {
@@ -6287,7 +6335,7 @@ impl Library {
                             Err(e) => self.new_error = Some(e),
                         }
                     }
-                });
+                })();
             });
         });
         self.new_place = (place != default_place).then_some(place);

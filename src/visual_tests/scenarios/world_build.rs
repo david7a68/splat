@@ -5904,6 +5904,7 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     d.click("Reload from disk");
     d.expect("Package.md cannot be read (line 4)");
     assert!(!d.has("Find the folder…"));
+    let invalid_tops = package_list_tops(d);
     d.state_prepared("manifest-invalid-campaign", Sizes::All, |d| {
         let open = d.place_of("Open in Library").expect("Safe manifest repair is present");
         let replace = d.place_of("Replace with a basic Package.md").expect("Manifest replacement is present");
@@ -6118,6 +6119,7 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     d.click("Reload from disk");
     d.expect("The package manifest was deleted");
     assert!(!d.has("Find the folder…"));
+    let deleted_tops = package_list_tops(d);
     d.state_prepared("manifest-deleted-campaign", Sizes::All, |d| {
         // Round 23 AE4, outside its scope: a deleted manifest stays a warning.
         let tone = manifest_fault_tone(d, "The package manifest was deleted");
@@ -6166,6 +6168,19 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     );
     d.expect("Package.md was written again.");
     d.expect("Undo write Package.md");
+    // Round 26 FD1: package warnings and results sit in the page's footer, so the package list
+    // keeps one y with an invalid manifest, a deleted one, and the written result with its Undo.
+    let written_tops = package_list_tops(d);
+    d.observe(
+        "iter-26-C-FD1",
+        invalid_tops.iter().all(Option::is_some)
+            && deleted_tops == invalid_tops
+            && written_tops == invalid_tops,
+        format!(
+            "Package list tops at 960, 1200 and 1920: invalid {invalid_tops:?}, deleted \
+             {deleted_tops:?}, written again {written_tops:?}"
+        ),
+    );
     // Round 24 FF5: a missing and a replaced manifest give one result sentence and one Undo, so
     // this capture matches `manifest-replaced-with-undo`. The file above went from missing to
     // written; what differs is only what Undo restores.
@@ -10954,7 +10969,48 @@ pub fn campaign_copy_registered(d: &mut Driver<'_>) {
     );
     // The return shows the same result and Undo as before Build an encounter.
     d.assert_state_matches("copy-registered-after-build", "copy-registered");
-    d.click("Undo register campaign");
+    // Review round 26: Undo register campaign changes the registration and can change the active
+    // campaign, so it waits for an unsaved campaign draft and for a run, with the reason; the
+    // copy's bytes and the registration stay.
+    const UNDO: &str = "Undo register campaign";
+    let registered = |d: &mut Driver<'_>| {
+        (
+            d.app_mut().campaigns.all().len(),
+            fs::read(copy.join("Campaign.md")).unwrap(),
+        )
+    };
+    let start = registered(d);
+    go_campaign(d);
+    d.click_starting("Ashen Marches · ");
+    d.click("Use Ash Wraith");
+    go_settings(d);
+    d.wait_for_text(&result);
+    let draft_locked = d.is_disabled(UNDO);
+    let draft_kept = registered(d) == start;
+    go_campaign(d);
+    d.click_below("Save selections", "Discard");
+    go_settings(d);
+    d.wait_for_text(&result);
+    let free_again = !d.is_disabled(UNDO);
+    d.click("Make The Emberfall Marches the active campaign");
+    go_encounters(d);
+    resume_run_from_cold_start(d);
+    go_settings(d);
+    d.wait_for_text(&result);
+    let run_locked = d.is_disabled(UNDO) && d.visible_text("Close the run to change campaigns.");
+    let run_kept = registered(d) == start;
+    d.click("Back to run");
+    close_run(d);
+    go_settings(d);
+    d.observe(
+        "iter-26-C-undo-register-locked",
+        draft_locked && draft_kept && free_again && run_locked && run_kept,
+        format!(
+            "Undo locked by a draft {draft_locked} (kept {draft_kept}), free after Discard \
+             {free_again}, locked by a run {run_locked} (kept {run_kept})"
+        ),
+    );
+    d.click(UNDO);
     d.settle();
     let active = d.app_mut().campaigns.active_campaign().map(|c| c.id);
     d.observe(
@@ -10965,4 +11021,16 @@ pub fn campaign_copy_registered(d: &mut Driver<'_>) {
             && fs::read(copy.join("Campaign.md")).unwrap() == manifest,
         "Undo ends the result and its Undo, and puts the copy's file and the active campaign back",
     );
+}
+
+/// Round 26 FD1: the top of Campaign's package list (its first row) at 960, 1200 and 1920.
+fn package_list_tops(d: &mut Driver<'_>) -> [Option<f32>; 3] {
+    [(960.0, 640.0), (1200.0, 800.0), (1920.0, 1080.0)].map(|size| {
+        d.at_size(size, |d| {
+            d.nodes()
+                .into_iter()
+                .find(|node| node.name.starts_with("D&D 2024"))
+                .map(|node| node.rect.top())
+        })
+    })
 }

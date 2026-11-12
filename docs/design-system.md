@@ -273,9 +273,12 @@ offers another action stays, and its Undo is blocked with the reason. The change
 result's words keep the text colour: only Undo greys, on the message line, and the reason follows in `Small`
 muted words at the message words (`library::kept_undo_message`). An Undo that waits for an open draft keeps its
 words in the text colour too; the draft's reason is the save row's. Discard recovery is an Undo message too: info icon, bar,
-`Body` text that names the draft, and quiet `Undo discard`, whose accessible name also names the draft. Inline creation uses a Label title, fields, a named Create
-action, its `Small` blocked reason, an `L` gap and quiet Cancel. Creation and copy fields share one
-right edge.
+`Body` text that names the draft, and quiet `Undo discard`, whose accessible name also names the draft. Inline creation uses a Label title and fields; the
+named Create action follows the last field on that field's line (after its Browse…), centred on it. Choices
+(`Choose for this campaign`) come before that last field. Below the field is one line, as tall as a control and
+kept when empty, so typing moves nothing: quiet Cancel or Clear at its start when there is something to cancel,
+then the `Small` blocked reason. Settings' Add campaign, Manage packages (Add folder, Create package) and New entry
+have this one order; save rows keep their commit at the right edge. Creation and copy fields share one right edge.
 
 Several safe choices after a message share one line when they fit. Put a destructive choice at the end
 after an `L` gap, or on its own line below after an `M` gap.
@@ -652,32 +655,39 @@ repair choice and file line start at its words. Packages keeps its save row dire
 The Packages page scrolls as one page and keeps the scroll bar's lane whether or not the bar shows; the package list
 fills the rest of the window and keeps room for a few rows, so tall repairs make the page scroll. A control that
 gains focus (Tab or a screen reader) scrolls into view, and a repair editor brings its whole viewport into view.
-Below `Save selections`, the page keeps one message space, two text lines high whatever it holds: every live
-result with an Undo (a discard, a written Campaign.md or manifest, a found folder, a removed package), newest
-first, then the latest plain result (`Campaign selections saved.`, applied changes), then the page's errors
-(Save's or a load's, the change check's). Each Undo stays with its own object and action until it is used or its
-object ends it; a failed Undo keeps it. A plain result gives way to any newer result. The space scrolls when they
-need more than two lines. So no result or error moves the repairs or the package list below. With nothing loaded, the errors stand alone.
+The page's messages sit in its one footer, pinned below the page's scroll area: every live result with an Undo (a
+discard, a written Campaign.md or manifest, a found folder, a removed package, each repair's discarded draft),
+newest first, then the reasons (each repair's failed Save or refusal, named by its file, then the page's errors:
+Save's or a load's, the change check's), then the latest plain result (`Campaign selections saved.`, applied
+changes) and the package warnings (a faulty manifest, a chosen package that is not available, with their
+actions). Each Undo stays with its own object and action until it is used or its object ends it; a failed Undo
+keeps it. Every live Undo, the page's and the repairs', shares one order, newest first, so a second repair's
+Discard keeps the first one's Undo below its own. A campaign change ends the open campaign's Undos at the change,
+also while the page is hidden. A plain result gives way to any newer result. The page's body ends where the footer
+starts: the package columns clip their painting and their clicks to the page's viewport, so nothing of the page
+shows or takes a press under the footer. Rows below it come into view as the page scrolls, by Tab or by a screen
+reader's focus.
+So no result, error or package warning moves the save rows, the repairs or the package list.
 The save row, package list and entry search stop at LIST_MEASURE from the tab’s left edge.
 An open repair keeps the same right edge as the save row. Its save row lays out `Save repaired note` first at that edge; a long
 state (`Not saved. …`) or lock reason wraps beside it and never cuts it.
 Repair fills the column with the invalid-note message above it; an `L` gap and hairline separate its save row
 from the package save row. While the repair is open, that message keeps the same words (`<path> cannot be read.
-Fix it here or in World.`), so no edit moves the editor. Below the repair's own save row is the one message space,
-two text lines high whatever it holds: a result with a live Undo first (`Broken.md draft discarded.` with `Undo
-discard`), then Save's cause in the same part; with no such result, the cause alone. Discard returns to the
-unreadable file, so its cause follows the result; the next edit ends the result and the cause leads. In a short
-window the repair editor gives way: the save row, the message space and a few package rows keep their size, and
-the editor's top never moves. Below the message space, an `L` gap and the package list's one hairline
+Fix it here or in World.`), so no edit moves the editor. The repair's messages are in the page's footer: its
+result with a live Undo (`Broken.md draft discarded.` with `Undo discard`), then its cause (`Broken.md: Line 3
+opens a list …`). Discard returns to the unreadable file, so its cause follows the result; the next edit ends the
+result. In a short window the repair editor gives way: the save row and a few package rows keep their size, and
+the editor's top never moves. Below the repair's save row, an `L` gap and the package list's one hairline
 separate the repair from the list; the repair adds no second rule. Invalid YAML uses plain words and marks the line to fix.
 The reason above names the file, so the `REPAIR` heading has no path. A repair draft's save-row state comes from
 the draft as Save checks it, as in Library: while Save would refuse it, the state says Invalid and Save is blocked
 with the cause; Unsaved and a primary Save come only when Save would write it. Save's check without writing is the one World's repair uses (the path rule, YAML, identity,
 campaign ownership). Each repair keeps its answer and asks again only when its draft changes, so the page never
 reads the disk or parses a draft on an unchanged frame. A Save that fails on the disk (read only, missing, a write
-error) is an action-time failure: that repair's state slot says `Not saved.` with Save's reason until its next
-edit, its successful Save, a reload or another campaign. The failure shows only there: the message above stops at
-`Fix it here or in World.` While it shows, `Save repaired note` stays open for a retry but is secondary; the next
+error) is an action-time failure: that repair's state slot says `Not saved`, and its cause is a reason in the
+footer (`Broken.md is not saved. This file is read only. Make it writable, then Save again.`), where a parse cause
+also sits, until its next edit, its successful Save, a reload or another campaign. The failure shows only there:
+the message above stops at `Fix it here or in World.` While it shows, `Save repaired note` stays open for a retry but is secondary; the next
 edit gives the primary back. A refusal that Save's own check finds at Save is Invalid with its cause, never `Not
 saved.` Another repair's edit, Save or failure leaves it. Each
 repair editor's accessible name holds its file (`Note text: Notes/Broken.md`), in Campaign and World. While a repair blocks the package
@@ -686,13 +696,16 @@ first edit in the repair moves nothing.
 
 Needed by your entries sits below packages in the left column. Its right pane has one search and list; rows
 open Lookup. Short package lists fit their rows. A package row's count has one form: `All chosen · 2,065 entries`,
-`None chosen · 6 entries`, `3 of 6 chosen`, `5 of 6 chosen · 1 needed`. `chosen` counts only the DM's own
-choices, as the page header does; `· N needed` counts the entries that other choices need and the DM did not
+`None chosen · 6 entries`, `3 of 6 chosen`, `5 of 6 chosen · 1 still needed`. `chosen` counts only the DM's own
+choices, as the page header does (`2,069 entries chosen · 1 still needed`); `· N still needed` counts the entries that
+other choices need and the DM did not
 choose, and is left out when it is 0. An off package with required entries shows
-`None chosen · 3 needed`, an indeterminate checkbox and encounters that use its creatures. A package whose manifest
+`None chosen · 3 still needed`, an indeterminate checkbox and encounters that use its creatures. A package whose manifest
 has a fault leads its count with the fault's icon in its tone (amber warning for a deleted manifest, red error for
 one that cannot be read), as the About row does; the message above names the fault, and the row's accessible name
-says it in words (`Manifest deleted · 5 of 6 chosen · 1 needed`).
+says it in words (`Manifest deleted · 5 of 6 chosen · 1 still needed`). `still` keeps the short count apart from
+the list `Needed by your entries`, which counts every needed entry, chosen or not. A package's heading shares the
+centre line of its mode and its `Choose all` (or `Include future additions`) and `Choose none` actions.
 
 A missing Campaign.md states whether Splat holds the last read copy and counts its packages and rules. Writing
 held text requires an explicit action. With no copy, `Write a new Campaign.md` sits beside the explanation
@@ -755,7 +768,8 @@ written text, the message and its Undo go away.
 ### Link and folder
 
 Name the campaign folder, session folder and link. The session folder has one heading and no repeated visible
-Folder label; keep its accessible field name. Fields and save actions end at `FORM_WIDTH`. A clean folder form
+Folder label; keep its accessible field name. Fields and save actions end at `FORM_WIDTH`; the D&D Beyond campaign picker
+has the same width when a run locks it. A clean folder form
 shows the check icon and No changes. Locked controls have no clean-state reason. Folder help names its files
 and permits a folder in an Obsidian vault. Disconnected campaign-link help opens Settings from an inline link.
 Its state says Not connected · showing the name saved on this computer.
@@ -1856,9 +1870,9 @@ A stopped-sync notice sits below the Party header, across the page. Its bar star
 Dismiss sits at the right end of its first line. Every dismissable Party notice (stopped sync, a replaced sheet,
 a combat sync action's result) has this one form: the close icon at the right end of the first line, never a
 word. Notices above the member list and the sheet end with an `L` gap. The member list keeps the scroll bar's
-lane whether or not the bar shows, so its rows and header columns never move. A combat sync action's result has
-a reserved place above the editable fields, two text lines high whatever it holds, so the result, its dismissal and
-the next read move no field. The sync panel's help keeps the reader measure. Sheet pages use Small tabs on one line, with later pages in More.
+lane whether or not the bar shows, so its rows and header columns never move. A combat sync action's result sits
+in the sheet's footer, below the sheet's scroll area, with its close icon, so the result, its dismissal and the
+next read move no field. The sync panel's help keeps the reader measure. Sheet pages use Small tabs on one line, with later pages in More.
 
 Local-edit notices measure the full message inset, including its bar, icon and gaps. The Party header owns Connect to refresh, except while a signed-out local-edit notice shows: then the notice's secondary `Connect D&D Beyond`, before Show file, is the one way to connect, and the header shows only the state (`Not connected · Fetched 3 h ago`). One action has one control and one name on a screen. Signed-out notices say replacement keeps the DM’s version as a copy. Local-edit warnings name the character and say replacement keeps a copy. Keep each notice within `LIST_MEASURE`. Actions follow its text after an `L` gap, or wrap below, aligned with the text. The affected row says Local edits; replacement names the character, offers Show file for the kept
 version and Dismiss. Empty Party has one Connect D&D Beyond action. An offline Party now line offers Connect
@@ -1960,12 +1974,18 @@ own Connect again. Put quiet Disconnect after trust text. Settings and rail shar
 Rail shortens Signed out of D&D Beyond to Signed out, retaining full hover text. Wrap Connected · not
 remembered on two lines with full hover and accessible text. Settings states recovery once.
 
-Campaign add forms close on success; messages follow campaign rows below their heading. Add/edit forms put
-Cancel at the left and commit at the right. An unchanged form blocks Save details with No changes to save.
+The campaign list is as wide as its widest name and link block, an `L` gap and one action column that every row
+shares, and never narrower than `FORM_WIDTH`; the account column starts an `XL` gap after it.
+Campaign add forms close on success; messages follow campaign rows below their heading. The add form is an inline
+creation form: Add campaign on the Folder line after Browse…, quiet Cancel and the reason on the line below. The edit form is a save
+row, with Cancel or Discard at the left and the commit at the right. An unchanged form blocks Save details with No changes to save.
 Details hides Edit details, uses a plain Details heading, and puts state and Discard at the left, Save details
-at the right. Discard restores saved details with Undo discard; clean forms use Cancel. Below the save row, the
-form keeps the one message space, two text lines high whatever it holds: the discard result with its live Undo
-first, then Save's error. So neither moves the campaign rows below the form. Import opens below its
+at the right. Discard restores saved details with Undo discard; clean forms use Cancel. The tab's messages sit in
+its one footer: the discard result with its live Undo first (while the form is open), then a registered copy
+with `Undo register campaign` (disabled with the reason while a run, a recording or an unsaved draft blocks a
+campaign change, as the list is), then the error (a failed Connect, Save's error with its own recovery, the D&D
+Beyond list's error), then the add result with `Build an encounter`. So none of them moves the form, Connect or
+the campaign rows. Campaign → Link and folder has the same footer for the details form and the link's result. Import opens below its
 chosen row with a new sibling folder filled in. Keep campaign name in its field; omit remote ID, repeated
 heading and the open row's Add action. Removal dialogs use the shared `dialog` and its top anchor, as every dialog does. Reload from disk names the local reload
 action.
