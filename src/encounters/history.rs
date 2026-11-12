@@ -222,6 +222,7 @@ mod tests {
             played_order: 0,
             checks_table: None,
             checks: Vec::new(),
+            within: None,
             extra: Default::default(),
         }
     }

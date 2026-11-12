@@ -1734,8 +1734,10 @@ Recap, the one source that carry-over reads too; then the note's first written l
 `Recap of last time` and `Plan for tonight`; with none of these, show the session link alone. While the
 session is the current one and has no event, no run and no live recording, and the last session holds a part
 to carry, a quiet `Carry over` (`Action::in_line`, 24 px, so the line keeps its height) ends the line, `L` after
-the preview, with what it adds on hover. The preview gives it room first, to nothing, then the link's words
-shorten; nothing wraps. The preview stops at `READER_MEASURE`, as muted help does. A last note that cannot be read blocks it: `Splat cannot read Session 1’s note.` It
+the line's last word (the preview's, or the link's when no word of the preview fits) at every width, never at
+the pane's edge, with what it adds on hover. The preview gives it room first, to nothing, then the link's words
+shorten; nothing wraps. The preview is the longest run of whole words that fits; when no word fits, no dash and
+no ellipsis show. The preview stops at `READER_MEASURE`, as muted help does. A last note that cannot be read blocks it: `Splat cannot read Session 1’s note.` It
 adds, through `Draft::apply_with_properties` and in one save, the recap as one embed line
 `![[<note>#What happened]]` (or the processed recap under `> This draft was written automatically. Check it
 against your memory.`, which the embed replaces once What happened has prose), the plan lines still to come
@@ -1745,11 +1747,13 @@ every result of that page, so the Last time line, the tabs and the plan never mo
 what it added, with `Undo carry over`, which puts back the exact text and properties. The result belongs to
 the new note by its ID: another session or page leaves it, it shows also when the last session can no longer be
 found, and any other change of the note's text ends it. A refusal shows in the same footer, in a warning. Read draws an embed of a session note's heading as that heading's words under a
-`Type::Small` muted `From` and a small link to the session. Its target is resolved as every campaign link is
+`Type::Small` muted `From` and, one `S` after it in every layout, a small link to the session. Its target is resolved as every campaign link is
 (`ContentIndex::resolve_link`), with its folder when it has one: a target that two notes share stays a link,
 and so does an embed inside a callout or a list item. A target that names nothing, also after a rename outside
-Obsidian, is a warning `small_message`, `The recap’s source is gone: <target> › <heading>.`, and the line
-stays in the note; Splat never rewrites an embed, and the DM links again by hand. Read's words are prepared
+Obsidian, is a warning `small_message`, `The recap’s source is gone: <target> › <heading>. Link the session
+again in Write.`, and the line stays in the note. A session note at the target's whole path (as Obsidian reads
+`Archive/Same`) that has the heading keeps it a link: the index has not read that note yet, or the target names
+part of its path. A note with only the same last name in another folder does not; Splat never rewrites an embed, and the DM links again by hand. Read's words are prepared
 when the note's words, the content, the plan or the folder change, not on a quiet frame. An older session warns once and links the session being played, which the list marks
 Playing. The action says Return to the session being played. When the two session numbers match, the warning
 names both note files. Reading old notes changes neither the destination for new events nor runs: use the newest session
@@ -1802,7 +1806,7 @@ beside Undo end in `…` and keep their whole text on hover. It is kept by its j
 lasts while that event is as the act left it, until the DM leaves the page, and an act on another journey
 leaves it. The length being typed has one owner, the Timeline book, whichever page shows the field; leaving
 the page gives it to the journey, as a loss of focus does. `Plan “<name>”` is a note act through `Draft::apply`: it writes
-`- [[<name>]]` before the first plan line still to come, says `“<name>” is in tonight’s plan.` and offers `Undo
+`- [[<name>]]` with the hidden mark of the journey and the check (`<!-- splat:check … -->`, F9) before the first plan line still to come, says `“<name>” is in tonight’s plan.` and offers `Undo
 plan line`, which is the note's: it lasts while the note's words are what the act left, also through a page
 change, and ends when they change or another session is selected. The message and its Undo take the place of
 the `Plan “<name>”` line of the check the DM clicked, and `In the plan` takes that place after them. Each offer
@@ -2041,7 +2045,14 @@ conflict. Completed link updates use success.
 
 A Travel event's checks are lines of the event: `- Checks table: road` (no key while none is chosen) and
 `- Check at 24h: "16 · …"`, one for each result, its words in quotes so that the reader of the format before
-them keeps each as one string. A check's identity is its offset in hours, never a day's name.
+them keeps each as one string. A check's identity is its offset in hours, never a day's name. A fight begun from a
+plan line with that mark carries `journey=<event> at=<hours>` in its `%% splat … %%` line: it follows the
+journey, and the clock starts it at the check while the journey still covers it (W5-D1). Its planned row ends
+its second line with `· Day 2 of <journey>`; the journey's name goes, then the day, so the row keeps its lines. The mark is one whole
+comment; the words before and after it are the line's own. The clock places the fight while it is a fight and its
+journey covers the check (`checks::covers`), and the clock after the journey is the later of the journey's end and
+each such fight's end. A road fight's removal takes the line break its insertion wrote, so its Undo gives back the
+file to the byte; every other removal is as before.
 
 Version 2 stores event lists and day IDs in comments below headings. Every write renumbers days to the
 displayed clock. File items use Fight and Major event; accept Encounter and Event in any case, with or without

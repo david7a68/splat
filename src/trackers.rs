@@ -1839,6 +1839,46 @@ mod tests {
 
     const EXAMPLE: &str = include_str!("../docs/design/world-examples/heralds-tournament.md");
 
+    /// Review of PR 284, finding 3: the day count that day marks use is the clock's, so a fight
+    /// placed inside a journey never takes it back, and a fight that ends after the journey
+    /// carries it on.
+    #[test]
+    fn pr284_review_the_day_count_never_goes_back_for_a_fight_inside_a_journey() {
+        use crate::timeline::{Kind, RunFact, RunState, Within};
+        let session = Some(Uuid::from_u128(1));
+        let mut book = crate::timeline::Book::default();
+        book.add(Kind::Day, session);
+        let road = book.add(Kind::Travel, session);
+        book.event_mut(&road).unwrap().duration = "2 days".into();
+        assert_eq!(today(&book), Today::Day(3));
+        let fact = |state| RunFact {
+            id: Uuid::from_u128(7),
+            copied_from: None,
+            name: "Wolf Pack".into(),
+            round: 1,
+            state,
+            steps: 1,
+        };
+        let within = Within {
+            journey: road,
+            at: 24,
+        };
+        book.record_change(
+            Some(&fact(RunState::Setup)),
+            &fact(RunState::Running),
+            session,
+            Some(&within),
+        );
+        assert_eq!(
+            today(&book),
+            Today::Day(3),
+            "the fight is on Day 2; the count stays"
+        );
+        let fight = book.events.iter().position(|e| e.run.is_some()).unwrap();
+        book.events[fight].duration = "2 days".into();
+        assert_eq!(today(&book), Today::Day(4), "the fight ends on Day 4");
+    }
+
     fn table(heading: &str, key: &str, dice: &str, rows: &[(&str, &str)]) -> String {
         let mut text = format!(
             "## {heading}\n\n<!-- splat:rolls key={key} dice={dice} -->\n\n| {} | Result |\n| --- | --- |\n",
