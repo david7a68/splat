@@ -1446,8 +1446,10 @@ impl Run {
                         && row_top + layout.height(scale)
                             <= original_clip.bottom() + design::HAIRLINE_WIDTH;
                     // A row cut by the list's edge or by the message footer is not drawn: the
-                    // list ends at a whole row, and `1 below` counts the rest.
-                    if (overflow || behind) && !whole_row {
+                    // list ends at a whole row, and `1 below` counts the rest. It keeps its place,
+                    // and neither it nor any control of it is a target, a hover or a Tab stop.
+                    let hidden = (overflow || behind) && !whole_row;
+                    if hidden {
                         ui.set_clip_rect(Rect::NOTHING);
                     }
                     let selected = self.selected == index || self.also.contains(&index);
@@ -1470,6 +1472,9 @@ impl Run {
                         name.push_str(&format!(", {badge}"));
                     }
                     let response = ui.push_id(&p.key, |ui| {
+                        if hidden {
+                            ui.set_invisible();
+                        }
                         if self.live_initiative == Some(index) {
                             let (rect, _) = ui.allocate_exact_size(
                                 vec2(ui.available_width(), layout.height(scale)),
@@ -1567,8 +1572,9 @@ impl Run {
                     if let Some(choice) = self.row_menu(&response, index) {
                         row_choice = Some((index, choice));
                     }
-                    if let (Some(span), Some(galley)) =
-                        (&layout.initiative_span, &layout.second_line)
+                    if !hidden
+                        && let (Some(span), Some(galley)) =
+                            (&layout.initiative_span, &layout.second_line)
                     {
                         let start = galley.pos_from_cursor(egui::text::CCursor::new(span.start));
                         let end = galley.pos_from_cursor(egui::text::CCursor::new(span.end));
@@ -1612,7 +1618,8 @@ impl Run {
                     }
                     // In combat the number itself opens a field to change it.
                     // With several targets, this place holds the half-damage mark.
-                    if self.state.phase == Phase::Running
+                    if !hidden
+                        && self.state.phase == Phase::Running
                         && self.live_initiative != Some(index)
                         && (!selected || self.also.is_empty())
                     {
@@ -1655,7 +1662,7 @@ impl Run {
                             design::focus_ring(ui, target);
                         }
                     }
-                    if self.live_initiative == Some(index) {
+                    if !hidden && self.live_initiative == Some(index) {
                         let field = Rect::from_min_size(
                             pos2(
                                 rect.left() + design::S,
@@ -1702,7 +1709,8 @@ impl Run {
                     }
                     // An ended run shows its effects as words: nothing counts, and a click
                     // does nothing.
-                    if self.state.phase == Phase::Running
+                    if !hidden
+                        && self.state.phase == Phase::Running
                         && let Some((act, _)) = effect_links(ui, rect, p, layout, scale)
                     {
                         clicked = Some((index, false));
@@ -1715,7 +1723,7 @@ impl Run {
                     }
                     // More than a fill says a row is one of several targets, and the mark
                     // says whether it took half for a save.
-                    if selected && !self.also.is_empty() {
+                    if !hidden && selected && !self.also.is_empty() {
                         let half = self.halved.contains(&index);
                         let target = Rect::from_center_size(
                             pos2(rect.left() + design::L, rect.center().y),

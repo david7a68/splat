@@ -2728,7 +2728,7 @@ impl<'a> Footer<'a> {
                 ui.ctx().data_mut(|data| data.remove::<f32>(key));
                 ui.ctx().request_discard("the message footer emptied");
             }
-            FooterRooms::forget(ui, self.id);
+            FooterRooms::lost(ui, self.id, pane.height());
             return pane.bottom();
         }
         // A stable sort keeps the caller's order inside each rank.
@@ -2760,9 +2760,11 @@ impl<'a> Footer<'a> {
                 .request_discard("the message footer changed height");
         }
         if height == 0.0 {
+            FooterRooms::lost(ui, self.id, pane.height());
             return pane.bottom();
         }
-        FooterRooms::record(ui, self.id, pane, rect, height);
+        let lost = FooterRooms::lost(ui, self.id, rect.top() - S - pane.top());
+        FooterRooms::record(ui, pane, rect, lost);
         // egui's `set_max_height` also moves the cursor back to the top of `ui`, so it goes
         // back to where the body starts.
         let top = ui.cursor().top();
@@ -2773,10 +2775,9 @@ impl<'a> Footer<'a> {
 }
 
 /// The room each message footer took from its pane in this pass: the band from `S` above the
-/// footer to the pane's bottom, across the whole pane, and whether that room is new in this pass
-/// (the footer came, changed height, or its pane changed size). A pane's content ends at the
-/// band's top; `keep_above_footer` uses a new band to bring a primary action it cut back into
-/// view whole.
+/// footer to the pane's bottom, across the whole pane, and `lost`, the height the pane's content
+/// lost in this pass because the footer grew or the window got smaller (0 when it shrank or the
+/// window grew). A pane's content ends at the band's top; `keep_above_footer` reads `lost`.
 #[derive(Clone, Default)]
 struct FooterRooms {
     pass: u64,
@@ -2787,7 +2788,7 @@ struct FooterRooms {
 struct FooterRoom {
     band: Rect,
     footer: Rect,
-    new: bool,
+    lost: f32,
 }
 
 impl FooterRooms {
@@ -2795,17 +2796,18 @@ impl FooterRooms {
         Id::new("message_footer_rooms")
     }
 
-    fn record(ui: &Ui, id: Id, pane: Rect, footer: Rect, height: f32) {
+    /// The content's visible height now, and how much of it was lost since the last pass.
+    fn lost(ui: &Ui, id: Id, visible: f32) -> f32 {
+        ui.ctx().data_mut(|data| {
+            let last = data.get_temp::<f32>(id.with("visible"));
+            data.insert_temp(id.with("visible"), visible);
+            last.map_or(0.0, |last| (last - visible).max(0.0))
+        })
+    }
+
+    fn record(ui: &Ui, pane: Rect, footer: Rect, lost: f32) {
         let ctx = ui.ctx();
         let pass = ctx.cumulative_pass_nr();
-        let applied = (height, pane.size());
-        // New room: the footer came or grew, or its pane changed size. A footer that shrinks
-        // gives room back, so it never scrolls what the DM scrolled away.
-        let new = ctx.data_mut(|data| {
-            let last = data.get_temp::<(f32, Vec2)>(id.with("applied"));
-            data.insert_temp(id.with("applied"), applied);
-            last.is_none_or(|(height, size)| applied.0 > height || applied.1 != size)
-        });
         let band = Rect::from_min_max(pos2(pane.left(), footer.top() - S), pane.right_bottom());
         ctx.data_mut(|data| {
             let rooms = data.get_temp_mut_or_default::<Self>(Self::key());
@@ -2815,14 +2817,8 @@ impl FooterRooms {
                     rooms: Vec::new(),
                 };
             }
-            rooms.rooms.push(FooterRoom { band, footer, new });
+            rooms.rooms.push(FooterRoom { band, footer, lost });
         });
-    }
-
-    /// An empty footer: the next message that comes takes new room.
-    fn forget(ui: &Ui, id: Id) {
-        ui.ctx()
-            .data_mut(|data| data.remove::<(f32, Vec2)>(id.with("applied")));
     }
 
     fn this_pass(ctx: &egui::Context) -> Vec<FooterRoom> {
@@ -2845,35 +2841,136 @@ pub(crate) fn footer_bands(ctx: &egui::Context) -> Vec<Rect> {
         .unwrap_or_default()
 }
 
-/// A pane's content ends above its message footer. When a footer's room is new (it came, grew,
-/// or the pane was resized), or the action has just become the pane's next action, and the room
-/// cuts or covers that action, the pane's scroll area scrolls up by as little as it takes to show
-/// it whole above the footer: the row that holds the action the DM needs next stays in reach. An
-/// action inside the footer, wholly above it, or wholly below the pane moves nothing.
+/// What the reveal knows of one next action between passes.
+#[derive(Clone, Copy, Default)]
+struct NextAction {
+    /// Whole in view after the last pass.
+    whole: bool,
+    /// Room lost while it was whole and not yet given back by a scroll.
+    owed: f32,
+    /// Where the pointer rested when the room was lost.
+    pointer: Option<egui::Pos2>,
+    /// A footer took room while it was whole, and no scroll of the DM's came since.
+    promised: bool,
+}
+
+/// A next action as the reveal saw it in the last finished pass, for checks.
+#[cfg(test)]
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct NextSeen {
+    pub rect: Rect,
+    pub whole: bool,
+    /// A footer took room while it was whole, and no scroll of the DM's came since.
+    pub promised: bool,
+    /// What holds the reveal back: `pointer` or `field`.
+    pub held: Option<&'static str>,
+}
+
+#[cfg(test)]
+pub(crate) fn next_actions(ctx: &egui::Context) -> Vec<NextSeen> {
+    let last = ctx.cumulative_pass_nr().saturating_sub(1);
+    ctx.data(|data| data.get_temp::<(u64, Vec<NextSeen>)>(Id::new("next_actions_seen")))
+        .filter(|(pass, _)| *pass == last)
+        .map(|(_, seen)| seen)
+        .unwrap_or_default()
+}
+
+/// The reveal rule (docs/design-system.md, Message footer). Let `d` be the room the pane's content
+/// lost in this pass because its footer grew or the window got smaller. When the next action's
+/// row was whole in view before the loss and is cut after it, the pane's scroll area scrolls by
+/// exactly what the row needs to be whole again, never by more than `d`. A row that was already
+/// cut or out of view is never pulled back. Two guards hold the reveal back until they let go:
+/// a pointer that rests over the pane's content and has not moved since the loss (a scroll would
+/// put another control under it), and a focused text field of the pane that the scroll would move
+/// out of view. The DM's own scroll or press in the pane ends what is owed. A footer that
+/// shrinks and a window that grows scroll nothing.
 ///
 /// Every primary `Action` does this by itself. Call it for an action the DM needs next that is
 /// not drawn as the primary (a retry while another form owns the accent fill).
 pub fn keep_above_footer(ui: &Ui, response: &Response) {
-    let (id, rect) = (response.id, response.rect);
-    let pass = ui.ctx().cumulative_pass_nr();
-    let key = id.with("primary_pass");
-    let came = ui.ctx().data_mut(|data| {
-        let last = data.get_temp::<u64>(key);
-        data.insert_temp(key, pass);
-        last.is_none_or(|last| last + 1 < pass)
+    let (ctx, rect, clip) = (ui.ctx(), response.rect, ui.clip_rect());
+    let room = FooterRooms::this_pass(ctx).into_iter().find(|room| {
+        !room.footer.contains_rect(clip) && room.band.x_range().intersects(rect.x_range())
     });
-    let cut = FooterRooms::this_pass(ui.ctx()).into_iter().any(|room| {
-        (room.new || came)
-            && !room.footer.contains_rect(ui.clip_rect())
-            && room.band.x_range().intersects(rect.x_range())
-            && rect.bottom() > room.band.top()
-            && rect.top() < room.band.bottom()
+    // The scroll area's viewport (egui widens its clip by a margin), ending above the footer.
+    let margin = ui.visuals().clip_rect_margin;
+    let view = Rect::from_min_max(
+        pos2(clip.left(), clip.top() + margin),
+        pos2(
+            clip.right(),
+            (clip.bottom() - margin).min(room.map_or(f32::INFINITY, |room| room.band.top())),
+        ),
+    );
+    let whole_at = |top: f32| top >= view.top() - 0.5 && top + rect.height() <= view.bottom() + 0.5;
+    let key = response.id.with("next_action");
+    let mut next = ctx
+        .data(|data| data.get_temp::<NextAction>(key))
+        .unwrap_or(NextAction {
+            whole: whole_at(rect.top()),
+            ..Default::default()
+        });
+    let (pointer, scrolled) = ctx.input(|input| {
+        let pointer = input.pointer.latest_pos();
+        let over = pointer.is_some_and(|at| view.contains(at));
+        let acts = input.raw_scroll_delta != Vec2::ZERO || input.pointer.any_down();
+        (pointer, over && acts)
     });
-    if cut {
-        ui.scroll_to_rect_animation(rect, None, egui::style::ScrollAnimation::none());
-        ui.ctx()
-            .request_discard("a primary action came into view above its footer");
+    // The DM's own scroll or press in the pane ends what a footer owed the row.
+    if scrolled {
+        next.promised = false;
+        next.owed = 0.0;
     }
+    if whole_at(rect.top()) {
+        next.owed = 0.0;
+    }
+    let lost = room.map_or(0.0, |room| room.lost);
+    if lost > 0.0 && (next.whole || next.owed > 0.0) && !whole_at(rect.top()) {
+        if next.owed == 0.0 {
+            next.pointer = pointer;
+        }
+        next.owed += lost;
+        next.promised = true;
+    }
+    let mut top = rect.top();
+    let field = ctx
+        .memory(|memory| memory.focused())
+        .filter(|id| egui::text_edit::TextEditState::load(ctx, *id).is_some())
+        .and_then(|id| ctx.read_response(id))
+        .map(|field| field.rect)
+        .filter(|field| field.intersects(clip));
+    let by = (rect.bottom() - view.bottom()).min(next.owed);
+    // What holds the reveal back; only the checks read it.
+    #[cfg_attr(not(test), allow(unused_variables))]
+    let held = if next.owed <= 0.0 {
+        None
+    } else if pointer.is_some_and(|at| view.contains(at)) && pointer == next.pointer {
+        Some("pointer")
+    } else if field.is_some_and(|field| field.top() - by < view.top() - 0.5) {
+        Some("field")
+    } else {
+        ui.scroll_with_delta_animation(vec2(0.0, -by), egui::style::ScrollAnimation::none());
+        ctx.request_discard("a next action came back into view above its footer");
+        top -= by;
+        next.owed = 0.0;
+        None
+    };
+    next.whole = whole_at(top);
+    ctx.data_mut(|data| data.insert_temp(key, next));
+    #[cfg(test)]
+    ctx.data_mut(|data| {
+        let pass = ctx.cumulative_pass_nr();
+        let seen =
+            data.get_temp_mut_or_default::<(u64, Vec<NextSeen>)>(Id::new("next_actions_seen"));
+        if seen.0 != pass {
+            *seen = (pass, Vec::new());
+        }
+        seen.1.push(NextSeen {
+            rect: rect.translate(vec2(0.0, top - rect.top())),
+            whole: next.whole,
+            promised: next.promised,
+            held,
+        });
+    });
 }
 
 /// The same safe-first choice for a draft whose file changed on disk.
@@ -4869,9 +4966,10 @@ mod tests {
     }
 
     /// R3f: a pane's content ends above its footer. When the footer comes over the pane's next
-    /// action, the body scrolls by no more than the footer's room so that action is whole above
-    /// it; a footer that then shrinks after the DM scrolled away moves nothing; and an action the
-    /// DM needs next that is not drawn as the primary (`keep_above_footer`) comes into view too.
+    /// action, the body scrolls by no more than the room lost so that action is whole above it,
+    /// also for an action the DM needs next that is not drawn as the primary
+    /// (`keep_above_footer`); after the DM scrolls away, a footer that shrinks and a window that
+    /// grows move nothing.
     #[test]
     fn r3f_the_next_action_is_whole_above_a_footer_that_comes() {
         use std::{cell::Cell, rc::Rc};
@@ -4954,6 +5052,199 @@ mod tests {
         assert_eq!(
             scrolled, shrunk,
             "a footer that shrinks moves nothing the DM scrolled away"
+        );
+        harness.set_size(vec2(960.0, 650.0));
+        let grown = save(&mut harness);
+        assert_eq!(
+            shrunk, grown,
+            "a window that grows pulls back nothing the DM scrolled away"
+        );
+    }
+
+    // Review round 1 of pull request 289: the reviewer's probes of the reveal's bound, the still
+    // pointer and the focused field, kept as they were written.
+    #[test]
+    fn review_r3f_scroll_is_bounded_by_footer_room() {
+        use std::{cell::Cell, rc::Rc};
+        let messages = Rc::new(Cell::new(0));
+        let count = messages.clone();
+        let mut h = egui_kittest::Harness::builder()
+            .with_size(vec2(960.0, 640.0))
+            .build_ui(move |ui| {
+                let mut footer = Footer::new("review_bound", ui.available_width());
+                for at in 0..count.get() {
+                    footer.notice(format!("Notice {at}"), move |ui| {
+                        message(ui, Tone::Warning, &format!("Notice {at}"));
+                    });
+                }
+                let bottom = footer.show(ui);
+                egui::ScrollArea::vertical()
+                    .id_salt("review_body")
+                    .max_height(bottom - ui.cursor().top())
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        ui.add_space(610.0);
+                        let r = Action::primary("Save").show(ui);
+                        ui.ctx()
+                            .data_mut(|d| d.insert_temp(Id::new("review_rect"), r.rect));
+                        ui.add_space(100.0);
+                    });
+            });
+        super::super::theme::install(&h.ctx);
+        h.run_steps(6);
+        let before = h
+            .ctx
+            .data(|d| d.get_temp::<Rect>(Id::new("review_rect")))
+            .unwrap();
+        messages.set(1);
+        h.run_steps(6);
+        let after = h
+            .ctx
+            .data(|d| d.get_temp::<Rect>(Id::new("review_rect")))
+            .unwrap();
+        let band = footer_bands(&h.ctx)[0];
+        assert!(
+            before.top() - after.top() <= band.height() + 0.5,
+            "scroll exceeds footer room: before={before:?}, after={after:?}, footer={band:?}, moved={}",
+            before.top() - after.top()
+        );
+    }
+
+    #[test]
+    fn review_r3f_result_keeps_the_focused_field_visible() {
+        use std::{cell::Cell, rc::Rc};
+        let messages = Rc::new(Cell::new(0));
+        let count = messages.clone();
+        let mut text = "typing here".to_owned();
+        let mut h = egui_kittest::Harness::builder()
+            .with_size(vec2(960.0, 640.0))
+            .build_ui(move |ui| {
+                let mut footer = Footer::new("review_focus_footer", ui.available_width());
+                for at in 0..count.get() {
+                    footer.notice(format!("Notice {at}"), move |ui| {
+                        message(ui, Tone::Warning, &format!("Notice {at}"));
+                    });
+                }
+                let bottom = footer.show(ui);
+                egui::ScrollArea::vertical()
+                    .id_salt("review_focus_body")
+                    .max_height(bottom - ui.cursor().top())
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        let field = ui.text_edit_singleline(&mut text);
+                        field.request_focus();
+                        ui.ctx().data_mut(|d| {
+                            d.insert_temp(
+                                Id::new("review_field"),
+                                (field.rect, ui.clip_rect(), field.id),
+                            )
+                        });
+                        ui.add_space(530.0);
+                        Action::primary("Save").show(ui);
+                        ui.add_space(100.0);
+                    });
+            });
+        super::super::theme::install(&h.ctx);
+        h.run_steps(6);
+        messages.set(3);
+        h.run_steps(6);
+        let (field, clip, id) = h
+            .ctx
+            .data(|d| d.get_temp::<(Rect, Rect, Id)>(Id::new("review_field")))
+            .unwrap();
+        let hidden = !clip.contains_rect(field);
+        let focused = h.ctx.memory(|m| m.has_focus(id));
+        h.input_mut().events.push(egui::Event::Text("x".into()));
+        h.run_steps(6);
+        let typed = h
+            .ctx
+            .data(|d| d.get_temp::<(Rect, Rect, Id)>(Id::new("review_field")))
+            .unwrap()
+            .0;
+        messages.set(0);
+        h.run_steps(6);
+        messages.set(3);
+        h.run_steps(6);
+        let polled = h
+            .ctx
+            .data(|d| d.get_temp::<(Rect, Rect, Id)>(Id::new("review_field")))
+            .unwrap()
+            .0;
+        assert!(
+            !hidden,
+            "result hid focused field: field={field:?}, clip={clip:?}, still focused={focused}; next typed character reveals field at {typed:?}; next poll hides it at {polled:?}"
+        );
+    }
+
+    #[test]
+    fn review_r3f_pointer_keeps_its_action_when_a_result_arrives() {
+        use std::{cell::Cell, rc::Rc};
+        let messages = Rc::new(Cell::new(0));
+        let count = messages.clone();
+        let clicked = Rc::new(Cell::new("none"));
+        let pressed = clicked.clone();
+        let mut h = egui_kittest::Harness::builder()
+            .with_size(vec2(960.0, 640.0))
+            .build_ui(move |ui| {
+                let mut footer = Footer::new("review_pointer_footer", ui.available_width());
+                for at in 0..count.get() {
+                    footer.notice(format!("Notice {at}"), move |ui| {
+                        message(ui, Tone::Warning, &format!("Notice {at}"));
+                    });
+                }
+                let bottom = footer.show(ui);
+                egui::ScrollArea::vertical()
+                    .id_salt("review_pointer_body")
+                    .max_height(bottom - ui.cursor().top())
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        ui.add_space(550.0);
+                        let cancel = Action::secondary("Cancel").show(ui);
+                        if cancel.clicked() {
+                            pressed.set("Cancel");
+                        }
+                        let cancel = cancel.rect;
+                        let save = Action::primary("Save").show(ui);
+                        if save.clicked() {
+                            pressed.set("Save");
+                        }
+                        let save = save.rect;
+                        ui.ctx().data_mut(|d| {
+                            d.insert_temp(Id::new("review_pointer_rects"), (cancel, save))
+                        });
+                        ui.add_space(100.0);
+                    });
+            });
+        super::super::theme::install(&h.ctx);
+        h.run_steps(6);
+        let before = h
+            .ctx
+            .data(|d| d.get_temp::<(Rect, Rect)>(Id::new("review_pointer_rects")))
+            .unwrap();
+        let pointer = before.0.center();
+        h.input_mut()
+            .events
+            .push(egui::Event::PointerMoved(pointer));
+        h.run_steps(2);
+        messages.set(2);
+        h.run_steps(6);
+        let after = h
+            .ctx
+            .data(|d| d.get_temp::<(Rect, Rect)>(Id::new("review_pointer_rects")))
+            .unwrap();
+        for pressed in [true, false] {
+            h.input_mut().events.push(egui::Event::PointerButton {
+                pos: pointer,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: egui::Modifiers::NONE,
+            });
+        }
+        h.run_steps(3);
+        assert_ne!(
+            clicked.get(),
+            "Save",
+            "Save moved under the pointer that rested on Cancel, and the click invoked Save: pointer={pointer:?}, before={before:?}, after={after:?}"
         );
     }
 

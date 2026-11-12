@@ -961,6 +961,91 @@ pub fn run(d: &mut Driver<'_>) {
         ),
     );
 
+    // R3f, review round 1 of pull request 289: twelve rows at 960x640, the last whole row is
+    // current, then a three-line warning comes. Every row keeps its place; a row the footer
+    // hides has no target, no hover and no Tab stop, so a click on its blank strip opens nothing.
+    d.act_at_size(SMALL, |d| {
+        d.app_mut()
+            .encounters
+            .run_mut()
+            .expect("an open run")
+            .simulate_rows(12);
+        d.app_mut().encounters.simulate_run_error("");
+        d.settle();
+        let last = d
+            .nodes()
+            .into_iter()
+            .rfind(|n| n.name.contains(", HP ") && n.name.contains(", AC ") && n.fully_in_view())
+            .and_then(|n| n.name.split(", ").next().map(str::to_owned))
+            .expect("a whole roster row");
+        d.click_row(&last);
+        d.app_mut()
+            .encounters
+            .run_mut()
+            .expect("an open run")
+            .simulate_current(&last);
+        d.settle();
+        let before = roster_places(d);
+        d.app_mut().encounters.simulate_run_error(
+            "The saved run could not be written because its folder changed outside Splat. Your \
+             current fight is still open. Restore the folder and try again.",
+        );
+        d.settle();
+        let after = roster_places(d);
+        // Rows whose name the list does not paint: the footer hides them.
+        let nodes = d.nodes();
+        let hidden: Vec<_> = nodes
+            .iter()
+            .filter(|row| row.name.contains(", HP ") && row.name.contains(", AC "))
+            .filter(|row| {
+                let name = row.name.split(", ").next().unwrap_or_default();
+                row.rect.top() < d.window_size().1 && d.painted_rect_in(name, row.rect).is_none()
+            })
+            .collect();
+        let live: Vec<_> = hidden
+            .iter()
+            .filter(|row| !row.disabled)
+            .map(|row| row.name.clone())
+            .chain(nodes.iter().filter_map(|link| {
+                let name = link
+                    .name
+                    .strip_prefix("Change initiative for ")
+                    .or_else(|| link.name.strip_prefix("No initiative for "))?;
+                hidden
+                    .iter()
+                    .any(|row| row.name.starts_with(&format!("{name},")))
+                    .then(|| link.name.clone())
+            }))
+            .collect();
+        d.observe(
+            "r3f-X39-hidden-row-no-target",
+            before == after && !hidden.is_empty() && live.is_empty(),
+            format!(
+                "Rows keep their places ({}); hidden rows {:?}; live targets of hidden rows {live:?}",
+                before == after,
+                hidden.iter().map(|row| (&row.name, row.rect)).collect::<Vec<_>>()
+            ),
+        );
+        // A click where a hidden row's initiative number would be.
+        if let Some(row) = hidden.first() {
+            let name = row.name.split(", ").next().unwrap_or_default().to_owned();
+            let place = egui::Rect::from_center_size(
+                egui::pos2(row.rect.left() + 24.0, row.rect.center().y),
+                egui::vec2(8.0, 8.0),
+            );
+            d.click_rect(place, "the blank strip of a hidden row");
+            let field = format!("Initiative for {name}");
+            d.observe(
+                "r3f-X39-blank-click-no-editor",
+                !d.has(&field),
+                format!("A click on the hidden row of {name} opens {field}: {}", d.has(&field)),
+            );
+            d.press(Key::Escape);
+        }
+        d.app_mut().encounters.simulate_run_error("");
+        d.settle();
+    });
+
     // That fight was played after the vault's. History offers no Continue fight for the
     // vault and says why, where the control was.
     go_encounters(d);

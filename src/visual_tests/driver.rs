@@ -1130,7 +1130,7 @@ impl<'a> Driver<'a> {
         }
     }
 
-    fn click_rect(&mut self, rect: egui::Rect, caption: &str) {
+    pub(super) fn click_rect(&mut self, rect: egui::Rect, caption: &str) {
         let pos = rect.center();
         self.film_aim(rect, caption);
         self.harness.hover_at(pos);
@@ -2759,8 +2759,10 @@ impl<'a> Driver<'a> {
             state,
             &window,
         ));
-        // R3f: a pane's content ends above its message footer, so no primary action shows in
-        // part where a footer takes its room. Each state with a footer names its words.
+        // R3f: a pane's content ends above its message footer. Each next action the reveal saw
+        // (every primary, and each action marked with `keep_above_footer`) that a footer took
+        // room from while it was whole is whole now, unless a guard holds the reveal back.
+        // Each state with a footer names its words.
         let bands = self.footer_bands();
         if !bands.is_empty() {
             let footers: Vec<String> = self
@@ -2772,42 +2774,30 @@ impl<'a> Driver<'a> {
                 })
                 .map(|node| node.name.chars().take(80).collect())
                 .collect();
-            let under = self.primaries_under_footers();
+            let seen = crate::design::next_actions(&self.harness.ctx);
+            let owed: Vec<_> = seen
+                .iter()
+                .filter(|next| next.promised && !next.whole && next.held.is_none())
+                .collect();
+            let held: Vec<_> = seen.iter().filter(|next| next.held.is_some()).collect();
             self.observe(
                 &format!("r3f-footer-room {state}"),
-                under.is_empty(),
+                owed.is_empty(),
                 format!(
-                    "{window}: footers {footers:?}; primary actions in part in their room: {under:?}"
+                    "{window}: footers {footers:?}; {} next actions; cut after a footer took their \
+                     room: {owed:?}; held by a guard: {held:?}",
+                    seen.len()
                 ),
             );
         }
     }
 
-    /// Each accent-filled (primary) control in view that lies in part in the room a message
-    /// footer takes from its pane, with its rect.
-    fn primaries_under_footers(&self) -> Vec<(String, egui::Rect)> {
-        let accent = [
-            crate::design::colors().accent_fill,
-            crate::design::colors().accent_hover,
-        ];
-        let bands = self.footer_bands();
-        self.nodes()
+    /// The next action the reveal saw at this rect (AccessKit's pixels) in the last pass.
+    pub fn next_action_at(&self, rect: egui::Rect) -> Option<crate::design::NextSeen> {
+        let scale = self.harness.ctx.pixels_per_point();
+        crate::design::next_actions(&self.harness.ctx)
             .into_iter()
-            .filter(|node| node.in_view() && node.role == Role::Button)
-            .filter(|node| {
-                bands.iter().any(|band| {
-                    band.x_range().intersects(node.rect.x_range())
-                        && node.rect.bottom() > band.top() + 0.5
-                        && node.rect.top() < band.bottom()
-                        && !band.contains_rect(node.rect)
-                })
-            })
-            .filter(|node| {
-                self.control_frame_at(node.rect)
-                    .is_some_and(|frame| accent.contains(&frame.fill))
-            })
-            .map(|node| (node.name, node.rect))
-            .collect()
+            .find(|next| (next.rect * scale).center().distance(rect.center()) < 1.0)
     }
 
     fn capture(

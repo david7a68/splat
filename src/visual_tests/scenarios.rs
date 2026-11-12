@@ -4771,7 +4771,12 @@ pub mod settings {
         // R3f X41: at each size, also after the resizes above, the retry is whole above the
         // footer that holds the failure's cause.
         d.state_prepared("connect-failed", Sizes::All, |d| {
-            super::session_recording::check_row_clear_of_footer(d, CONNECT, "r3f-X41-connect");
+            super::session_recording::check_row_clear_of_footer(
+                d,
+                CONNECT,
+                "r3f-X41-connect",
+                true,
+            );
         });
         d.goal("try to connect without a network");
         // The cookie stays for a retry. There is nothing saved, so nothing to disconnect.
@@ -4781,6 +4786,40 @@ pub mod settings {
             retry,
             "After a failed attempt, Connect can retry at once",
         );
+        // R3f, review round 1 of pull request 289: with a campaign form open, the form owns the
+        // accent fill and Connect is secondary. Where the retry was whole before the window got
+        // smaller, it is whole again above the failure's footer after it, and it can be pressed.
+        d.aside(|d| {
+            let whole_before = d.act_at_size(DEFAULT, |d| {
+                d.click(EDIT_DETAILS);
+                d.expect(EDIT_FORM);
+                d.click(CONNECT);
+                d.expect(OFFLINE_ERROR);
+                d.nodes()
+                    .iter()
+                    .any(|node| node.name == CONNECT && node.fully_in_view())
+            });
+            let secondary = d.control_frame(CONNECT).is_some_and(|frame| {
+                let colors = crate::design::colors();
+                frame.fill != colors.accent_fill && frame.fill != colors.accent_hover
+            });
+            d.observe(
+                "r3f-X41-secondary-connect-set-up",
+                whole_before && secondary && !d.is_disabled(CONNECT),
+                format!(
+                    "With a campaign form open, Connect is secondary ({secondary}), enabled, and \
+                     was whole at 1200x800 ({whole_before})"
+                ),
+            );
+            super::session_recording::check_row_clear_of_footer(
+                d,
+                CONNECT,
+                "r3f-X41-secondary-connect",
+                true,
+            );
+            d.click(CANCEL);
+            assert!(!d.has(EDIT_FORM), "Cancel closes the campaign form");
+        });
         // Each state through the same fields a real attempt sets.
         let mut words = true;
         let mut targets = Vec::new();
@@ -11596,14 +11635,22 @@ pub mod session_notes {
         d.state("session-folder-in-campaign", Sizes::All);
         // Round 26 FN2, FN5: the form's warning and its result sit in the pane's message footer,
         // so the save row keeps its y when the first letter brings the warning, and after a move.
+        // The save row's top, with the top of the Folder field above it in the same scrolled
+        // content: a scroll moves both by one amount, any other layout move parts them.
         let save_row = |d: &Driver<'_>| {
-            d.nodes()
-                .into_iter()
+            let nodes = d.nodes();
+            let row = nodes
+                .iter()
                 .find(|node| {
                     (node.name.ends_with("No changes") || node.name.ends_with("Unsaved"))
                         && node.in_view()
                 })
-                .map(|node| node.rect.top())
+                .map(|node| node.rect.top())?;
+            let field = nodes
+                .iter()
+                .find(|node| node.name == "Folder" && node.role == egui::accesskit::Role::TextInput)
+                .map(|node| node.rect.top())?;
+            Some((row, field))
         };
         let row_clean = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, save_row));
         // The height of the room the footer takes (the footer and `S` above it).
@@ -11658,6 +11705,13 @@ pub mod session_notes {
         // as Move runs and save is on Rules and runs.
         d.state_prepared("session-folder-move-offered", Sizes::All, |d| {
             super::session_recording::check_one_primary(d, "Move files and save", "iter-16-C-FT4");
+            // R3f X40: the warning came while the save row was whole.
+            super::session_recording::check_row_clear_of_footer(
+                d,
+                "Move files and save",
+                "r3f-X40-move-clear",
+                true,
+            );
             // iter-23-S FK8: the warning names which choice hides the files.
             d.observe(
                 "iter-23-S-FK8",
@@ -11712,31 +11766,38 @@ pub mod session_notes {
                 (save_row(d), result, footer_room(d))
             })
         });
-        // R3f: where the footer's room would cover the save row (960x640), the pane scrolls the
-        // row up, by no more than that room, so it is whole above the footer
-        // (`iter-16-C-FT4-clear`); where the window has room, the row keeps its y.
-        let kept = |clean: Option<f32>, now: Option<f32>, room: f32| {
-            clean.zip(now).is_some_and(|(clean, now)| {
-                clean == now || (now < clean && clean - now <= room + 0.5)
-            })
+        // R3f: where the footer's room would cut the save row (960x640), the pane scrolls it up
+        // by no more than the room the footer took (`r3f-X40-move-clear` checks it whole). The
+        // scroll is the Folder field's move; the row's place in the unscrolled content (its top
+        // plus that scroll) never changes, so no other layout move passes. Where the window has
+        // room, nothing scrolls and the row keeps its y.
+        let kept = |clean: Option<(f32, f32)>, now: Option<(f32, f32)>, room: f32, small: bool| {
+            clean
+                .zip(now)
+                .is_some_and(|((row, field), (now_row, now_field))| {
+                    let scroll = field - now_field;
+                    (now_row + scroll - row).abs() < 0.5
+                        && (-0.5..=room + 0.5).contains(&scroll)
+                        && (small || scroll.abs() < 0.5)
+                })
         };
         d.observe(
             "iter-26-S-FN2",
             row_clean.iter().zip(&row_typed).zip(&row_moved).enumerate().all(
                 |(at, ((clean, (typed, warning, typed_room)), (moved, result, moved_room)))| {
-                    let small = at == 0;
                     clean.is_some()
-                        && (if small {
-                            kept(*clean, *typed, *typed_room) && kept(*clean, *moved, *moved_room)
-                        } else {
-                            clean == typed && clean == moved
-                        })
-                        && warning.zip(*typed).is_some_and(|(warning, row)| warning > row)
-                        && result.zip(*moved).is_some_and(|(result, row)| result > row)
+                        && kept(*clean, *typed, *typed_room, at == 0)
+                        && kept(*clean, *moved, *moved_room, at == 0)
+                        && warning
+                            .zip(*typed)
+                            .is_some_and(|(warning, (row, _))| warning > row)
+                        && result
+                            .zip(*moved)
+                            .is_some_and(|(result, (row, _))| result > row)
                 },
             ),
             format!(
-                "Save row clean {row_clean:?}; first letter (row, warning) {row_typed:?}; moved (row, result) {row_moved:?}"
+                "Save row and Folder field clean {row_clean:?}; first letter (row and field, warning, room) {row_typed:?}; moved (row and field, result, room) {row_moved:?}"
             ),
         );
         d.observe_both(
@@ -12745,13 +12806,20 @@ pub mod session_recording {
             primary == [expected],
             format!("Exactly one accent-filled control is visible, {expected}: {primary:?}"),
         );
-        check_row_clear_of_footer(d, expected, &format!("{id}-clear"));
+        check_row_clear_of_footer(d, expected, &format!("{id}-clear"), false);
     }
 
-    /// R3f: a pane's content ends above its message footer. The action the DM needs next
-    /// (`action`) and every control on its row are whole on screen, and none lies in the room a
-    /// footer takes (the footer and the `S` above it).
-    pub(super) fn check_row_clear_of_footer(d: &mut Driver<'_>, action: &str, id: &str) {
+    /// R3f: a pane's content ends above its message footer. `action` is a next action the
+    /// reveal knows (a primary, or an action marked with `keep_above_footer`). When a footer took room from it while it was whole (`came`, when the scenario
+    /// knows a footer did; else the reveal's own record says so), the action and every control on
+    /// its line are whole and clear of every footer's room (the footer and the `S` above it),
+    /// also when it is wholly hidden, unless a guard holds the reveal back.
+    pub(super) fn check_row_clear_of_footer(
+        d: &mut Driver<'_>,
+        action: &str,
+        id: &str,
+        came: bool,
+    ) {
         let nodes = d.nodes();
         let bands = d.footer_bands();
         let detail = |rows: &[&Found]| {
@@ -12765,6 +12833,16 @@ pub mod session_recording {
             .find(|node| node.name == action && node.role != egui::accesskit::Role::Label)
         else {
             d.observe(id, false, format!("{action} is not drawn"));
+            return;
+        };
+        // An accent-filled control that is no `Action` owes nothing; where the scenario knows a
+        // footer came, the action must be one the reveal knows.
+        let Some(seen) = d.next_action_at(target.rect) else {
+            d.observe(
+                id,
+                !came,
+                format!("{action} is not a next action the reveal knows"),
+            );
             return;
         };
         // The row: every control whose middle is on the action's line, in the action's pane.
@@ -12790,14 +12868,17 @@ pub mod session_recording {
                     || node.rect.bottom() <= band.top() + 0.5
             })
         };
+        // The action itself is checked apart, so a row filtered to nothing cannot pass.
+        let whole = target.fully_in_view()
+            && clear(target)
+            && row.iter().all(|node| node.fully_in_view() && clear(node));
+        let owed = came || seen.promised;
         d.observe(
             id,
-            // The action itself is checked apart, so a row filtered to nothing cannot pass.
-            target.fully_in_view()
-                && clear(target)
-                && row.iter().all(|node| node.fully_in_view() && clear(node)),
+            seen.held.is_some() || !owed || whole,
             format!(
-                "{action}'s row is whole and above every footer band {bands:?}: {}",
+                "{action} (reveal: {seen:?}; a footer came while it was whole: {owed}) and its row \
+                 are whole above every footer band {bands:?}: {}",
                 detail(&row)
             ),
         );
