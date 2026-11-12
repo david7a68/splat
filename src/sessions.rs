@@ -409,8 +409,22 @@ pub(crate) fn note_path(folder: &Path, number: u32, title: &str) -> PathBuf {
     free_path(folder, &stem, "md")
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Scans of a session folder by `storage_files`, counted inside the scan.
+    static STORAGE_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How often `storage_files` scanned a folder on this thread.
+#[cfg(test)]
+pub(crate) fn storage_scans() -> usize {
+    STORAGE_SCANS.with(std::cell::Cell::get)
+}
+
 /// Files owned by session storage. Other campaign notes stay where they are.
 pub(crate) fn storage_files(folder: &Path) -> Result<Vec<PathBuf>, String> {
+    #[cfg(test)]
+    STORAGE_SCANS.with(|scans| scans.set(scans.get() + 1));
     fn files(root: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
         if !root.exists() {
             return Ok(());
@@ -1337,6 +1351,8 @@ pub struct Draft {
     pub restored: Option<Uuid>,
     /// The words the DM chose to lose, and how, until the next edit.
     pub dropped: Option<Dropped>,
+    /// When the drop's result was made (`timeline::next_result_order`).
+    pub dropped_order: u64,
     /// The file's text when the words were dropped. If the draft has followed the file since,
     /// Undo meets the conflict choice instead of saving over the newer text.
     dropped_baseline: Option<String>,
@@ -1384,6 +1400,7 @@ impl Draft {
             moved_to: None,
             restored: None,
             dropped: None,
+            dropped_order: 0,
             dropped_baseline: None,
             save_again_error: None,
             last_edit: None,
@@ -1580,6 +1597,7 @@ impl Draft {
             }
         }
         self.dropped = Some(Dropped::Discarded(words));
+        self.dropped_order = crate::timeline::next_result_order();
         self.dropped_baseline.clone_from(&self.baseline);
     }
 
@@ -1607,6 +1625,7 @@ impl Draft {
         let words = self.body.clone();
         self.reload()?;
         self.dropped = Some(Dropped::Reloaded(words));
+        self.dropped_order = crate::timeline::next_result_order();
         self.dropped_baseline.clone_from(&self.baseline);
         Ok(())
     }

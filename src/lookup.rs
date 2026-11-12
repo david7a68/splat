@@ -27,6 +27,8 @@ pub(crate) const RESULTS_LISTED: usize = 8;
 const PANEL_MARGIN: f32 = design::M;
 
 pub const SEARCH_NAME: &str = "Search everything";
+/// What an empty search finds, below the search field.
+pub(crate) const SEARCH_HELP: &str = "Search built-in rules, every package, this campaign’s own entries, session notes and the timeline. Press Escape to close.";
 /// How many lines of a long note show where the words were found.
 const FOUND_LINES: usize = 3;
 const FOUND_FROM_LINES: usize = 12;
@@ -208,6 +210,9 @@ pub struct ContentIndex {
     pub errors: Vec<String>,
     /// The loot editor's tables and items, read the first time a page asks.
     loot: std::sync::OnceLock<Arc<crate::loot_editor::Sources>>,
+    /// Each World note's link problems in its list row's words, found the first time a result
+    /// row asks. Any file change makes a new index, so this starts empty again (round 26 AE2).
+    link_problems: std::sync::OnceLock<HashMap<usize, String>>,
     pub broken_world: Vec<(String, String)>,
     pub duplicate_world: BTreeMap<String, Vec<String>>,
     /// World notes whose name another World note also has, found once when the index loads, so
@@ -315,6 +320,12 @@ impl Item {
     }
 
     pub(crate) fn result_detail(&self) -> String {
+        self.result_detail_marked(None)
+    }
+
+    /// The result detail with a fault mark (`⚠ Place not found`) before the optional summary,
+    /// so a cut detail keeps the fault longest.
+    pub(crate) fn result_detail_marked(&self, fault: Option<&str>) -> String {
         let source = if self.private {
             Some("Campaign")
         } else if self.builtin {
@@ -328,7 +339,10 @@ impl Item {
         } else {
             self.subtitle.clone()
         };
-        let detail = presentation::list_subtitle(&subtitle, source);
+        let mut detail = presentation::list_subtitle(&subtitle, source);
+        if let Some(fault) = fault {
+            detail = format!("{detail} · {} {fault}", design::icons::WARN);
+        }
         // A world page says what it is in its first paragraph.
         match self.summary() {
             "" => detail,
@@ -700,6 +714,29 @@ impl ContentIndex {
     /// The campaign's roll table with this key, ready to roll, or why there can be none.
     pub fn roll_table(&self, key: &str) -> Result<crate::roll_table::TableRoll, String> {
         self.loot_sources().roll(key)
+    }
+
+    /// A World note's link problems as its list row says them (`Place not found`), or `None`.
+    /// Found for every note once per index, so a result row costs a map lookup.
+    pub(crate) fn link_problem_words(&self, at: usize) -> Option<&str> {
+        self.link_problems
+            .get_or_init(|| {
+                (0..self.items.len())
+                    .filter(|&at| self.items[at].entry.kind == "world")
+                    .filter_map(|at| {
+                        let problems = world::broken_links(&self.items[at], self);
+                        (!problems.is_empty()).then(|| (at, world::link_problem_words(&problems)))
+                    })
+                    .collect()
+            })
+            .get(&at)
+            .map(String::as_str)
+    }
+
+    /// A result row's detail: what the entry is, its link fault when it has one, then its
+    /// summary. World's list row and Lookup's result say the same fault (round 26 AE2).
+    pub(crate) fn result_detail(&self, at: usize) -> String {
+        self.items[at].result_detail_marked(self.link_problem_words(at))
     }
 
     /// What a loot list can name: each roll table in the campaign's own notes by its key, the
@@ -2229,7 +2266,7 @@ impl Lookup {
                         let item = &index.items[position];
                         (
                             item.entry.name.clone(),
-                            item.result_detail(),
+                            index.result_detail(position),
                             self.reading_written.is_none() && row == self.highlight,
                         )
                     }
@@ -2458,14 +2495,8 @@ impl Lookup {
         let Some(current) = self.current.and_then(|c| index.items.get(c)) else {
             if query.is_empty() {
                 ui.add_space(design::S);
-                ui.label(
-                    Type::Body
-                        .rich(
-                            ui,
-                            "Search built-in rules, every package, this campaign’s own entries, session notes and the timeline. Press Escape to close.",
-                        )
-                        .color(colors().muted),
-                );
+                // Help keeps the reader measure, as every help line does (round 26 AB2).
+                design::help(ui, SEARCH_HELP);
             }
             return;
         };
@@ -2477,7 +2508,17 @@ impl Lookup {
         }
         self.reader.compact = true;
         let (reader, campaign) = (&mut self.reader, self.campaign.as_ref());
+        // The reader's results and their Undo sit in Lookup's footer, pinned below the reader,
+        // so a result never moves the kind line, `Add to fight` or the text (round 26 FJ3).
+        let lines = reader.footer_lines(current, &index, campaign, None);
+        let (pressed, bottom) = world::draw_footer(ui, "lookup_footer", &lines);
+        if let Some(act) = pressed
+            && let Some(campaign) = campaign
+        {
+            nav = nav.take().or(reader.footer_act(act, current, campaign));
+        }
         egui::ScrollArea::vertical()
+            .max_height((bottom - ui.cursor().top()).max(0.0))
             .id_salt(("lookup_reader", current.entry.id))
             .auto_shrink([false, false])
             .show(ui, |ui| {

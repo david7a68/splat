@@ -13,7 +13,8 @@ use crate::{
     timeline::{
         self, Book, Kind, checks,
         page::{
-            added_message, file_notices, long_rest_status, problems, quick_add_with, rest_ruling,
+            LiveUndos, added_message, file_act, file_notices_in_footer, long_rest_status, problems,
+            quick_add_with, rest_ruling,
         },
         removed_event_words,
     },
@@ -28,6 +29,92 @@ use std::{
 use uuid::Uuid;
 
 const UNDO_ADD_FOR: Duration = Duration::from_secs(30);
+
+/// One draw of the plan's one-time reveal: after the DM adds a row or acts on one, the row after
+/// it scrolls into view above the message footer, so its action needs no extra gesture.
+struct Reveal {
+    target: Option<String>,
+    /// The target row's rect, until the next row is drawn.
+    armed: Option<egui::Rect>,
+    shown: bool,
+}
+
+impl Reveal {
+    fn new(target: Option<String>) -> Self {
+        Self {
+            target,
+            armed: None,
+            shown: false,
+        }
+    }
+
+    /// After each row: the row after the target scrolls into view when it is not.
+    fn after(&mut self, ui: &egui::Ui, id: Option<&str>, rect: egui::Rect) {
+        if self.armed.take().is_some() {
+            self.show(ui, rect);
+        }
+        if id.is_some() && id == self.target.as_deref() {
+            self.armed = Some(rect);
+        }
+    }
+
+    /// After the last row: with no row after it, the target itself.
+    fn finish(&mut self, ui: &egui::Ui) {
+        if let Some(rect) = self.armed.take() {
+            self.show(ui, rect);
+        }
+    }
+
+    fn show(&mut self, ui: &egui::Ui, rect: egui::Rect) {
+        self.shown = ui.clip_rect().contains_rect(rect);
+        if !self.shown {
+            ui.scroll_to_rect(rect, None);
+        }
+    }
+}
+
+/// The DM scrolled or moved through the page this draw: the wheel, a drag, or a navigation key.
+fn user_moved_the_view(ui: &egui::Ui) -> bool {
+    use egui::Key;
+    ui.input(|input| {
+        input.raw_scroll_delta != egui::Vec2::ZERO
+            || input.smooth_scroll_delta != egui::Vec2::ZERO
+            || input.pointer.is_decidedly_dragging()
+            || input.events.iter().any(|event| {
+                matches!(
+                    event,
+                    egui::Event::Key {
+                        key: Key::ArrowUp
+                            | Key::ArrowDown
+                            | Key::PageUp
+                            | Key::PageDown
+                            | Key::Home
+                            | Key::End
+                            | Key::Tab
+                            | Key::Space,
+                        pressed: true,
+                        ..
+                    }
+                )
+            })
+    })
+}
+
+/// How many draws a reveal may take before it gives up.
+const REVEAL_DRAWS: u8 = 3;
+
+/// What the DM chose in the plan's message footer. It is done after the footer is drawn, so
+/// the footer's messages borrow nothing that the plan's rows change.
+#[derive(Clone, Debug, PartialEq)]
+enum FooterAct {
+    GoToGroup,
+    UndoGroupDiscard,
+    UndoGroupRemove,
+    UndoDeletedRun,
+    UndoAdd(String),
+    UndoRemove,
+    Scene(SceneAct),
+}
 /// A list longer than this gets a search, and it scrolls instead of leaving the window.
 const FIGHT_SEARCH_FROM: usize = 8;
 const FIGHT_MENU_WIDTH: f32 = 240.0;
@@ -88,14 +175,39 @@ fn in_party_order<'a>(
 }
 
 /// Keep each summary item and its separator together, including the rest ruling.
-fn plan_event_summary(ui: &mut egui::Ui, summary: &str, restores: Option<bool>) {
+fn plan_event_summary(
+    ui: &mut egui::Ui,
+    summary: &str,
+    restores: Option<bool>,
+    warning: Option<&str>,
+) {
     let mut job = egui::text::LayoutJob::default();
     let format = egui::TextFormat {
         font_id: Type::Small.font(ui),
         color: colors().muted,
         ..Default::default()
     };
-    job.append(&plan_summary(summary), 0.0, format.clone());
+    let text = plan_summary(summary);
+    // Round 26 FG4, FD7: a length the clock cannot count is a warning part, in its colour.
+    let warning = warning.map(plan_summary);
+    match warning
+        .as_deref()
+        .and_then(|warning| text.find(warning).map(|at| (at, warning.len())))
+    {
+        Some((at, len)) => {
+            job.append(&text[..at], 0.0, format.clone());
+            job.append(
+                &text[at..at + len],
+                0.0,
+                egui::TextFormat {
+                    color: colors().result.warning,
+                    ..format.clone()
+                },
+            );
+            job.append(&text[at + len..], 0.0, format.clone());
+        }
+        None => job.append(&text, 0.0, format.clone()),
+    }
     if let Some(restores) = restores {
         let status = long_rest_status(restores);
         let words = format!(
@@ -114,7 +226,10 @@ fn plan_event_summary(ui: &mut egui::Ui, summary: &str, restores: Option<bool>) 
         );
     }
     if !job.text.is_empty() {
-        ui.add(egui::Label::new(job).wrap());
+        let response = ui.add(egui::Label::new(job).wrap());
+        if warning.is_some() {
+            response.on_hover_text(timeline::TIME_REPAIR);
+        }
     }
 }
 
@@ -135,15 +250,82 @@ fn plan_summary_text(ui: &egui::Ui, group: &crate::encounter_run::RunGroup) -> S
     }
 }
 
+/// The separator between a summary's facts: it wraps with the words after it.
+const FACT_SEPARATOR: &str = " ·\u{a0}";
+
+/// FI7: `text` with its facts joined by `FACT_SEPARATOR`, laid out at `width` so that no line
+/// ends or starts with a loose `·`: where a line would start at a separator, the separator goes
+/// and the line starts with the next fact. Each cut can only let later lines hold more, so it
+/// stops after at most one layout per separator; the galleys come from egui's cache.
+fn without_loose_separators(
+    ui: &egui::Ui,
+    text: String,
+    font: &egui::FontId,
+    width: f32,
+) -> String {
+    let mut text = text;
+    for _ in 0..text.matches(FACT_SEPARATOR).count() {
+        let galley =
+            ui.fonts_mut(|fonts| fonts.layout(text.clone(), font.clone(), colors().muted, width));
+        let mut start = 0;
+        let mut dot = None;
+        for (index, row) in galley.rows.iter().enumerate() {
+            let lead = row
+                .glyphs
+                .iter()
+                .take_while(|glyph| glyph.chr == ' ')
+                .count();
+            if index > 0 && row.glyphs.get(lead).is_some_and(|glyph| glyph.chr == '·') {
+                dot = Some(start + lead);
+                break;
+            }
+            start += row.char_count_including_newline();
+        }
+        let Some(byte) = dot.and_then(|at| text.char_indices().nth(at).map(|(byte, _)| byte))
+        else {
+            break;
+        };
+        let Some(from) = text[..byte].strip_suffix(' ').map(str::len) else {
+            break;
+        };
+        let to = byte
+            + '·'.len_utf8()
+            + text[byte + '·'.len_utf8()..]
+                .chars()
+                .next()
+                .map_or(0, char::len_utf8);
+        text.replace_range(from..to, "\n");
+    }
+    text
+}
+
+/// FL2: a planned fight's summary for the plan: each fact keeps its words together, and the
+/// members (`2 × Cinder Wolf, 1 × Ember Cultist`) wrap between members, never inside one.
+fn fight_summary_text(summary: &str) -> String {
+    summary
+        .split(" · ")
+        .map(|part| {
+            if part.contains(" × ") {
+                part.split(", ")
+                    .map(|member| member.replace(' ', "\u{a0}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            } else {
+                part.replace(' ', "\u{a0}")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(FACT_SEPARATOR)
+}
+
 /// A plan group's summary. Each separator wraps with the words after it, so no line ends with
-/// `·`. A flagged group keeps every fact (`max_rows` of `usize::MAX`).
+/// `·`, and a line that would start at a separator starts with the next fact (FI7). A flagged
+/// group keeps every fact (`max_rows` of `usize::MAX`).
 fn plan_group_summary(ui: &mut egui::Ui, summary: &str, max_rows: usize) {
-    let mut job = egui::text::LayoutJob::simple(
-        summary.replace(" · ", " ·\u{a0}"),
-        Type::Small.font(ui),
-        colors().muted,
-        ui.available_width(),
-    );
+    let font = Type::Small.font(ui);
+    let width = ui.available_width();
+    let text = without_loose_separators(ui, summary.replace(" · ", FACT_SEPARATOR), &font, width);
+    let mut job = egui::text::LayoutJob::simple(text, font, colors().muted, width);
     job.wrap.max_rows = max_rows;
     let plain = summary.replace('\u{a0}', " ");
     let response = ui.add(egui::Label::new(job).wrap());
@@ -392,33 +574,52 @@ fn plan_details(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
 }
 
 /// A planned fight's summary. Its difficulty word (F1) ends it only when the summary keeps its
-/// lines with the word.
+/// lines with the word. FL2, FI7: each fact keeps its words together, the members wrap between
+/// members and never inside one, and no line starts or ends with `·`.
 fn planned_summary(ui: &mut egui::Ui, summary: &str, rating: Option<&crate::difficulty::Rating>) {
     let c = colors();
-    let summary = plan_summary(summary);
-    let job = |word: Option<&str>| {
-        let mut job = egui::text::LayoutJob::default();
-        crate::difficulty::append(&mut job, ui, Type::Small, &summary, c.muted);
-        if let Some(word) = word {
-            crate::difficulty::append(&mut job, ui, Type::Small, " ·\u{a0}", c.muted);
-            crate::difficulty::append(
-                &mut job,
-                ui,
-                Type::Small,
-                &word.replace(' ', "\u{a0}"),
-                c.text,
-            );
-        }
-        job.wrap.max_width = ui.available_width();
-        job
+    let font = Type::Small.font(ui);
+    let width = ui.available_width();
+    let text = fight_summary_text(summary);
+    let laid = |text: String| without_loose_separators(ui, text, &font, width);
+    let rows = |text: &str| {
+        ui.fonts_mut(|fonts| {
+            fonts
+                .layout(text.to_owned(), font.clone(), c.muted, width)
+                .rows
+                .len()
+        })
     };
-    let rows = |job: egui::text::LayoutJob| ui.fonts_mut(|fonts| fonts.layout_job(job).rows.len());
-    match rating.filter(|rating| rows(job(Some(rating.word.text()))) == rows(job(None))) {
-        Some(rating) => {
-            let response = ui.add(egui::Label::new(job(Some(rating.word.text()))).wrap());
+    let alone = laid(text.clone());
+    let with_word = rating.map(|rating| {
+        let word = rating.word.text().replace(' ', "\u{a0}");
+        (laid(format!("{text}{FACT_SEPARATOR}{word}")), word)
+    });
+    match rating
+        .zip(with_word)
+        .filter(|(_, (whole, _))| rows(whole) == rows(&alone))
+    {
+        Some((rating, (whole, word))) => {
+            // The word keeps the text colour; the facts before it are muted.
+            let facts = whole.strip_suffix(word.as_str()).unwrap_or(&whole);
+            let mut job = egui::text::LayoutJob::default();
+            crate::difficulty::append(&mut job, ui, Type::Small, facts, c.muted);
+            crate::difficulty::append(&mut job, ui, Type::Small, &word, c.text);
+            job.wrap.max_width = width;
+            let response = ui.add(egui::Label::new(job).wrap());
+            design::named(
+                ui,
+                &response,
+                &format!("{summary} · {}", rating.word.text()),
+            );
             crate::difficulty::describe(ui, response, rating);
         }
-        None => wrapped_words(ui, Type::Small, summary, c.muted),
+        None => {
+            let response =
+                ui.add(egui::Label::new(Type::Small.rich(ui, alone).color(c.muted)).wrap());
+            // The breaks only steer the wrap; the name keeps the summary's words.
+            design::named(ui, &response, summary);
+        }
     }
 }
 
@@ -524,8 +725,15 @@ fn plan_menu(
                 .show(ui, |ui| {
                     for name in names {
                         if name.to_lowercase().contains(&query) {
-                            let row = ui.selectable_label(false, *name);
-                            design::named(ui, &row, &format!("Plan {name}"));
+                            // Round 26 FL4: one left edge. Each name is a quiet action with the
+                            // new action's padding and an empty icon slot, so the names start
+                            // at the x of the word after `+`.
+                            let row = Action::quiet(name)
+                                .plain()
+                                .icon("")
+                                .name(&format!("Plan {name}"))
+                                .density(Density::Read)
+                                .show(ui);
                             if row.clicked() {
                                 chosen = Some((*name).to_owned());
                             }
@@ -825,6 +1033,7 @@ impl Scenes {
 }
 
 /// A scene act that the plan takes after it draws.
+#[derive(Clone, Debug, PartialEq)]
 enum SceneAct {
     Add(String),
     Tick(Slot, TaskLine),
@@ -986,7 +1195,7 @@ fn plan_first(
 }
 
 /// The help line of **How long** when the clock cannot place the journey.
-const LENGTH_HELP: &str = "A number and a unit move the clock: 3 days, 8 hours, an hour.";
+const LENGTH_HELP: &str = timeline::LENGTH_HELP;
 
 /// Which result's Undo the DM pressed in a journey's checks.
 #[derive(Clone, Copy, PartialEq)]
@@ -1167,28 +1376,29 @@ impl Sessions {
         }
     }
 
-    fn removed_group_message(
+    /// Lead ruling, round 26 (one pane, one footer): a plan group's removal result and its Undo
+    /// sit in the plan's message footer, not in the removed row's place.
+    fn removed_group_message<'a>(
         &self,
-        ui: &mut egui::Ui,
+        undos: &mut LiveUndos<'a>,
+        act: &'a std::cell::Cell<Option<FooterAct>>,
         session: Option<Uuid>,
-        position: usize,
-    ) -> bool {
-        let Some((id, at, _, _, height, name)) = &self.removed_group else {
-            return false;
+    ) {
+        let Some((id, _, _, after, _, name)) = &self.removed_group else {
+            return;
         };
-        if *id != session || *at != position {
-            return false;
+        if *id != session {
+            return;
         }
-        ui.allocate_ui(egui::vec2(ui.available_width(), *height), |ui| {
-            ui.set_min_height(*height);
-            design::undo_message(
-                ui,
-                Tone::Success,
-                &format!("Removed “{name}” from tonight."),
-                "Undo remove",
-            )
-        })
-        .inner
+        let words = format!("Removed “{name}” from tonight.");
+        let order = self
+            .result_orders
+            .of("group remove", (session, name, after.len()));
+        undos.push(order, words.clone(), move |ui| {
+            if design::undo_message(ui, Tone::Success, &words, "Undo remove") {
+                act.set(Some(FooterAct::UndoGroupRemove));
+            }
+        });
     }
 
     /// The session as a list, top to bottom: what happened, then what is still to come. It
@@ -1212,7 +1422,7 @@ impl Sessions {
         {
             self.removed_group = None;
         }
-        file_notices(ui, book);
+        // The comparison or the unread file takes the pane: the DM must choose first.
         if problems(ui, book) {
             return;
         }
@@ -1317,30 +1527,6 @@ impl Sessions {
             }
             None => None,
         };
-        if plan.group_open && self.not_being_played().is_none() {
-            let label = self
-                .notes
-                .iter()
-                .find(|note| Some(note.id) == self.group_session)
-                .map_or_else(
-                    || "another session".to_owned(),
-                    |note| format!("“{}”", note.label()),
-                );
-            if design::message_with_action(
-                ui,
-                Tone::Info,
-                &format!("A group is being assembled in the plan of {label}."),
-                "Go to it",
-            ) {
-                self.select(self.group_session);
-            }
-        }
-        if plan.group_discarded && here && design::draft_discarded(ui, &plan.group_discarded_name) {
-            self.wants_group_undo = true;
-        }
-        if let Some(problem) = &self.rename_problem {
-            design::message(ui, Tone::Warning, problem);
-        }
         // Planned fights not yet played, and whether each has an ended run: a removal notice
         // says when one with the same name stays.
         let planned_results: Vec<(String, bool)> = planned
@@ -1354,14 +1540,86 @@ impl Sessions {
                 )
             })
             .collect();
-        self.plan_messages(ui, book, session, plan, &planned_results);
-        self.scene_messages(ui, folded, &mut scene_act);
+        // Round 26 FL1: the plan's results, reasons and notices sit in its message footer, pinned
+        // below the rows, so a result never moves a row or the Add strip.
+        let footer_act = std::cell::Cell::new(None);
+        let mut group_undo_in_footer = false;
+        let mut footer =
+            design::Footer::new(("session_plan_footer", session), ui.available_width());
+        if plan.group_open && self.not_being_played().is_none() {
+            let label = self
+                .notes
+                .iter()
+                .find(|note| Some(note.id) == self.group_session)
+                .map_or_else(
+                    || "another session".to_owned(),
+                    |note| format!("“{}”", note.label()),
+                );
+            let words = format!("A group is being assembled in the plan of {label}.");
+            let act = &footer_act;
+            footer.notice(words.clone(), move |ui| {
+                if design::message_with_action(ui, Tone::Info, &words, "Go to it") {
+                    act.set(Some(FooterAct::GoToGroup));
+                }
+            });
+        }
+        let mut undos = LiveUndos::new();
+        if plan.group_discarded && here {
+            let name = plan.group_discarded_name.clone();
+            let act = &footer_act;
+            let order = plan.group_discarded_order;
+            undos.push(order, format!("{name} draft discarded."), move |ui| {
+                if design::draft_discarded(ui, &name) {
+                    act.set(Some(FooterAct::UndoGroupDiscard));
+                }
+            });
+        }
+        if let Some(problem) = self.rename_problem.clone() {
+            footer.reason(problem.clone(), move |ui| {
+                design::message(ui, Tone::Warning, &problem);
+            });
+        }
+        let file = std::cell::Cell::new(None);
+        file_notices_in_footer(&mut footer, &mut undos, book, &file);
+        self.plan_messages(
+            ui,
+            &mut undos,
+            &footer_act,
+            book,
+            session,
+            plan,
+            &planned_results,
+        );
+        self.scene_messages(&mut footer, &mut undos, &footer_act, folded);
+        self.removed_group_message(&mut undos, &footer_act, session);
+        undos.into_footer(&mut footer);
+        let body_bottom = footer.show(ui);
+        match footer_act.take() {
+            Some(FooterAct::GoToGroup) => {
+                self.select(self.group_session);
+            }
+            Some(FooterAct::UndoGroupDiscard) => self.wants_group_undo = true,
+            Some(FooterAct::UndoGroupRemove) => group_undo_in_footer = true,
+            Some(FooterAct::UndoDeletedRun) => self.undo_deleted_run(),
+            Some(FooterAct::UndoAdd(id)) => {
+                book.undo_add(&id);
+                self.added = None;
+            }
+            Some(FooterAct::UndoRemove) => {
+                book.undo_remove();
+            }
+            Some(FooterAct::Scene(act)) => scene_act = Some(act),
+            None => {}
+        }
+        file_act(book, file.take());
         if let Some(id) = &added {
             if let Some(event) = book.events.iter_mut().find(|event| event.id == *id) {
                 event.title = event.kind.word().to_owned();
             }
             let days = timeline::day_numbers(&book.events);
             let index = book.events.iter().position(|event| event.id == *id);
+            self.row_reveal = Some((id.clone(), 0, ui.ctx().cumulative_pass_nr()));
+            self.result_orders.renew("add");
             self.added = Some(Added {
                 id: id.clone(),
                 label: index.map_or_else(String::new, |at| book.events[at].label(days[at])),
@@ -1374,7 +1632,7 @@ impl Sessions {
         let mut insert = None;
         let mut remove = None;
         let mut remove_group = None;
-        let mut undo_group_remove = false;
+        let undo_group_remove = group_undo_in_footer;
         let mut remove_fight = None;
         let mut delete_run = None;
         let mut toggle = None;
@@ -1427,11 +1685,25 @@ impl Sessions {
                         .any(|group| group.name.eq_ignore_ascii_case(name))
             })
         };
+        // Review of PR 274: the DM's own scroll or navigation, or a draw the plan missed (the
+        // DM left the view), ends a pending reveal, so it never pulls the plan back.
+        let pass = ui.ctx().cumulative_pass_nr();
+        if self
+            .row_reveal
+            .as_ref()
+            .is_some_and(|(_, _, last)| pass > last + 1 || user_moved_the_view(ui))
+        {
+            self.row_reveal = None;
+        }
+        let mut reveal = Reveal::new(self.row_reveal.as_ref().map(|(id, _, _)| id.clone()));
         egui::CentralPanel::default().frame(egui::Frame::new()).show_inside(ui, |ui| {
             // The rows leave the scroll bar's lane free whether or not the bar shows, so a row's
             // actions keep their x when the plan grows long enough to scroll.
             let lane_width = ui.available_width() - ui.spacing().scroll.allocated_width();
+            // The rows end above the message footer, whatever the panel's own bottom.
+            let rows_height = (body_bottom - ui.cursor().top()).max(0.0);
             let output = egui::ScrollArea::vertical().id_salt(("session_plan", session))
+                .max_height(rows_height)
                 .auto_shrink([false, false]).show(ui, |ui| {
                 ui.set_max_width(lane_width);
                 let width = lane_width.min(ui.available_width()) - design::M;
@@ -1480,7 +1752,8 @@ impl Sessions {
                                 design::status(ui, Status { icon: icons::RUN,
                                     word: &plan_saved_status(saved), color: c.muted });
                             } else if !(is_open && event.kind == Kind::LongRest) {
-                                plan_event_summary(ui, &summary, (event.kind == Kind::LongRest).then_some(event.restores));
+                                plan_event_summary(ui, &summary, (event.kind == Kind::LongRest).then_some(event.restores),
+                                    event.time_warning().filter(|_| event.run.is_none()).as_deref());
                             }
                         }, |ui| {
                             if let Some(saved) = saved {
@@ -1548,12 +1821,13 @@ impl Sessions {
                         }
                         if self.row_notice == Some((session, at)) && self.deleted_run.is_some() {
                             ui.add_space(design::S);
-                            self.deleted_run_message(ui);
+                            self.deleted_run_in_row(ui);
                         }
                         plan_rule(ui);
                     });
                     // The opened row and the next row stay in reach.
                     if is_open && std::mem::take(&mut self.reveal_event) { row.response.scroll_to_me(Some(egui::Align::TOP)); }
+                    reveal.after(ui, Some(&event.id), row.response.rect);
                 }
                 if let Some((at, words)) = &removed_row && *at >= event_count {
                     ui.add_space(design::S);
@@ -1567,7 +1841,7 @@ impl Sessions {
                     any = true;
                     let running = plan.open_run.is_some() && plan.open_encounter == Some(fight.name.as_str());
                     let saved = planned_saved_run(fight, plan.fights, plan.saved_runs);
-                    ui.push_id((&fight.path, position), |ui| {
+                    let fight_row = ui.push_id((&fight.path, position), |ui| {
                         let row_widths = if running {
                             [width - Density::Read.control() - design::S, Density::Read.control()]
                         } else { widths };
@@ -1616,7 +1890,7 @@ impl Sessions {
                         });
                         if self.row_notice == Some((session, event_count + position)) && self.deleted_run.is_some() {
                             ui.add_space(design::S);
-                            self.deleted_run_message(ui);
+                            self.deleted_run_in_row(ui);
                         }
                         if self.open_planned.as_ref() == Some(&fight.path) {
                             plan_details(ui, |ui| {
@@ -1625,6 +1899,7 @@ impl Sessions {
                         }
                         plan_rule(ui);
                     });
+                    reveal.after(ui, None, fight_row.response.rect);
                 }
                 self.removed_fight_message(ui, session, planned.len());
                 if !folded {
@@ -1632,7 +1907,6 @@ impl Sessions {
                 }
                 any |= scenes.iter().any(|scenes| !scenes.is_empty());
                 for (position, group) in planned_groups.iter().enumerate() {
-                    undo_group_remove |= self.removed_group_message(ui, session, position);
                     any = true;
                     let row = ui.push_id(group.id, |ui| {
                         let mut read_group = false;
@@ -1687,16 +1961,26 @@ impl Sessions {
                         plan_rule(ui);
                     });
                     if let Some((at, _, height)) = &mut remove_group && *at == position { *height = row.response.rect.height(); }
+                    reveal.after(ui, None, row.response.rect);
                 }
-                undo_group_remove |= self.removed_group_message(ui, session, planned_groups.len());
-                if !any && self.removed_group.is_none() {
+                if !any {
                     design::empty_state(ui, icons::SESSIONS, "Nothing planned yet",
                         "Use Add to plan a fight, a group, or an event.", |_| {});
                 }
+                reveal.finish(ui);
                 self.scene_field(ui, index.as_deref(), &mut scene_act);
             });
             pane = Some((output.inner_rect.height(), output.content_size.y));
         });
+        // The reveal ends when the row after the target is in view, or after at most
+        // `REVEAL_DRAWS` tries (a draw that the footer discards to measure itself does not show).
+        if let Some((_, draws, last)) = &mut self.row_reveal {
+            *draws += 1;
+            *last = pass;
+            if reveal.shown || *draws >= REVEAL_DRAWS {
+                self.row_reveal = None;
+            }
+        }
         if let Some((viewport, content)) = pane {
             self.measure_fold(ui.ctx(), scene_count, folded, viewport, content);
         }
@@ -1746,6 +2030,7 @@ impl Sessions {
             let before = draft.body.clone();
             unlink_group(&mut draft.body, &name);
             draft.edited();
+            self.result_orders.renew("group remove");
             self.removed_group =
                 Some((session, position, before, draft.body.clone(), height, name));
             self.plan_notice_state = Some((draft.body.clone(), book.events.clone()));
@@ -1755,6 +2040,7 @@ impl Sessions {
         }
         checks::note_taken(book, length_taken);
         if let Some((id, act)) = travel_act {
+            self.row_reveal = Some((id.clone(), 0, ui.ctx().cumulative_pass_nr()));
             self.travel_act(book, session, &id, act, plan);
         }
         match travel_undo {
@@ -1956,19 +2242,36 @@ impl Sessions {
         }
     }
 
-    /// The scenes' results in the plan's message place, below the Add strip.
-    fn scene_messages(&mut self, ui: &mut egui::Ui, folded: bool, act: &mut Option<SceneAct>) {
-        // A row's words show under the row; a folded row's show here.
+    /// The scenes' results in the plan's message footer. A row's words show under the row; a
+    /// folded row's, and the Add strip's, show in the footer.
+    fn scene_messages<'a>(
+        &self,
+        footer: &mut design::Footer<'a>,
+        undos: &mut LiveUndos<'a>,
+        act: &'a std::cell::Cell<Option<FooterAct>>,
+        folded: bool,
+    ) {
         if let Some(fault) = &self.scenes.fault
             && (fault.place == Place::Strip || folded && matches!(fault.place, Place::Row(_)))
         {
-            design::message(ui, Tone::Warning, &fault.words);
+            let words = fault.words.clone();
+            footer.reason(words.clone(), move |ui| {
+                design::message(ui, Tone::Warning, &words);
+            });
         }
         if let Some(undo) = &self.scenes.added
             && self.draft.as_ref().is_some_and(|draft| undo.live(draft))
-            && design::undo_message(ui, Tone::Success, "Scene added to tonight.", "Undo scene")
         {
-            *act = Some(SceneAct::UndoAdd);
+            const ADDED: &str = "Scene added to tonight.";
+            // A cheap identity: the session and the length the act left, never the words.
+            let order = self
+                .result_orders
+                .of("scene", (self.selected, undo.after().len()));
+            undos.push(order, ADDED.to_owned(), move |ui| {
+                if design::undo_message(ui, Tone::Success, ADDED, "Undo scene") {
+                    act.set(Some(FooterAct::Scene(SceneAct::UndoAdd)));
+                }
+            });
         }
     }
 
@@ -2053,6 +2356,7 @@ impl Sessions {
                 let result = draft.apply(note, Apply::Now, |text| Some(add_scene(text, &words)));
                 if let Ok(undo) | Err(ActFault::NotSaved(_, undo)) = &result {
                     scenes.added = Some(undo.clone());
+                    self.result_orders.renew("scene");
                     if let Some(field) = &mut scenes.field {
                         field.clear();
                         field.focus = true;
@@ -2149,6 +2453,7 @@ impl Sessions {
         deleted: crate::encounter_run::DeletedRun,
         run: Option<Uuid>,
     ) {
+        self.result_orders.renew("deleted run");
         self.deleted_run = Some((deleted, removal_replaced_by(book, run)));
         self.wants_runs_refresh = true;
     }
@@ -2176,35 +2481,68 @@ impl Sessions {
         }
     }
 
-    fn deleted_run_message(&mut self, ui: &mut egui::Ui) {
-        if let Some((deleted, _)) = &self.deleted_run {
-            let words = deleted.message();
-            if design::undo_message(
+    /// The deleted run's result at the row it was deleted from: the row owns it.
+    fn deleted_run_in_row(&mut self, ui: &mut egui::Ui) {
+        if let Some((tone, words)) = self.deleted_run_words()
+            && design::undo_message(
                 ui,
-                if deleted.unsent.is_empty() {
-                    Tone::Success
-                } else {
-                    Tone::Warning
-                },
+                tone,
                 &words,
                 crate::encounter_run::DeletedRun::UNDO_LABEL,
-            ) {
-                self.undo_deleted_run();
-            }
+            )
+        {
+            self.undo_deleted_run();
+        }
+    }
+
+    fn deleted_run_words(&self) -> Option<(Tone, String)> {
+        self.deleted_run.as_ref().map(|(deleted, _)| {
+            let tone = if deleted.unsent.is_empty() {
+                Tone::Success
+            } else {
+                Tone::Warning
+            };
+            (tone, deleted.message())
+        })
+    }
+
+    fn deleted_run_message<'a>(
+        &self,
+        undos: &mut LiveUndos<'a>,
+        act: &'a std::cell::Cell<Option<FooterAct>>,
+    ) {
+        if let Some((tone, words)) = self.deleted_run_words() {
+            let order = self.result_orders.of("deleted run", &words);
+            undos.push(order, words.clone(), move |ui| {
+                if design::undo_message(
+                    ui,
+                    tone,
+                    &words,
+                    crate::encounter_run::DeletedRun::UNDO_LABEL,
+                ) {
+                    act.set(Some(FooterAct::UndoDeletedRun));
+                }
+            });
         }
     }
 
     /// What can be undone in the plan: the event just added or just removed.
-    fn plan_messages(
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the plan’s parts that its results name"
+    )]
+    fn plan_messages<'a>(
         &mut self,
-        ui: &mut egui::Ui,
-        book: &mut Book,
+        ui: &egui::Ui,
+        undos: &mut LiveUndos<'a>,
+        act: &'a std::cell::Cell<Option<FooterAct>>,
+        book: &Book,
         session: Option<Uuid>,
         plan: &Plan<'_>,
         planned: &[(String, bool)],
     ) {
         if self.row_notice.is_none() {
-            self.deleted_run_message(ui);
+            self.deleted_run_message(undos, act);
         }
         let days = timeline::day_numbers(&book.events);
         // It goes at the DM's next edit, or soon, so that it cannot undo the wrong thing.
@@ -2234,18 +2572,23 @@ impl Sessions {
                 just.id.clone(),
                 added_message(&just.label, to.as_deref(), restores),
             );
-            if design::undo_message(ui, Tone::Success, &words, "Undo add") {
-                book.undo_add(&id);
-                self.added = None;
-            }
+            let order = self.result_orders.of("add", &id);
+            undos.push(order, words.clone(), move |ui| {
+                if design::undo_message(ui, Tone::Success, &words, "Undo add") {
+                    act.set(Some(FooterAct::UndoAdd(id)));
+                }
+            });
         } else if !self.removed_event_in_plan
             && !self.removal_superseded(book)
             && let Some(label) = book.removed().map(str::to_owned)
         {
             let words = removed_event_words(book, session, &days, &label, planned);
-            if design::undo_message(ui, Tone::Success, &words, "Undo remove") {
-                book.undo_remove();
-            }
+            let order = self.result_orders.of("remove", book.removal_action());
+            undos.push(order, words.clone(), move |ui| {
+                if design::undo_message(ui, Tone::Success, &words, "Undo remove") {
+                    act.set(Some(FooterAct::UndoRemove));
+                }
+            });
         }
     }
 
@@ -2428,6 +2771,58 @@ mod tests {
     use super::*;
     use crate::sessions::Draft;
     use std::{fs, path::PathBuf};
+
+    /// iter-26-B FI7, FL2: at every width, no summary line starts or ends with `·`, and no
+    /// member breaks inside its `N × name`.
+    #[test]
+    fn plan_summaries_never_start_a_line_with_a_separator() {
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                let font = Type::Small.font(ui);
+                let summary = "5 party · 2 × Cinder Wolf, 1 × Ember Cultist · Changed";
+                let mut cuts = 0;
+                for width in [90.0, 120.0, 140.0, 180.0, 220.0, 260.0, 330.0, 600.0] {
+                    let text = summary
+                        .split(" · ")
+                        .map(|part| {
+                            part.split(", ")
+                                .map(|member| member.replace(' ', "\u{a0}"))
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        })
+                        .collect::<Vec<_>>()
+                        .join(FACT_SEPARATOR);
+                    let kept = without_loose_separators(ui, text.clone(), &font, width);
+                    cuts += usize::from(kept != text);
+                    let galley = ui
+                        .painter()
+                        .layout(kept, font.clone(), colors().muted, width);
+                    let rows: Vec<String> = galley
+                        .rows
+                        .iter()
+                        .map(|row| row.glyphs.iter().map(|glyph| glyph.chr).collect())
+                        .collect();
+                    for row in &rows {
+                        assert!(!row.trim().starts_with('·'), "{width}: {rows:?}");
+                        assert!(!row.trim_end().ends_with('·'), "{width}: {rows:?}");
+                    }
+                    for member in [
+                        "2\u{a0}×\u{a0}Cinder\u{a0}Wolf",
+                        "1\u{a0}×\u{a0}Ember\u{a0}Cultist",
+                    ] {
+                        assert!(
+                            width < 120.0 || rows.iter().any(|row| row.contains(member)),
+                            "{width}: {member} is split in {rows:?}"
+                        );
+                    }
+                }
+                // The check can fail: some width wraps at a separator, which the cut removed.
+                assert!(cuts > 0, "no width wrapped at a separator");
+            });
+        });
+    }
 
     #[test]
     fn iter23_s_fk4_final_hp_follows_the_party_order() {
@@ -2641,6 +3036,7 @@ mod tests {
                         group_open: false,
                         group_discarded: false,
                         group_discarded_name: String::new(),
+                        group_discarded_order: 0,
                         arrivals_open: false,
                         group_editor: std::cell::RefCell::new(&mut group),
                         blocked: None,
@@ -2690,7 +3086,7 @@ mod tests {
         use egui_kittest::kittest::Queryable;
         let mut harness = egui_kittest::Harness::builder().build(|ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
-                plan_event_summary(ui, "Old mill", Some(false));
+                plan_event_summary(ui, "Old mill", Some(false), None);
             });
         });
         design::theme::install(&harness.ctx);
@@ -2709,12 +3105,12 @@ mod tests {
             egui::CentralPanel::default().show(ctx, |ui| {
                 ui.set_width(design::FORM_WIDTH);
                 let plain = ui
-                    .scope(|ui| plan_event_summary(ui, "Long rest · Old mill", None))
+                    .scope(|ui| plan_event_summary(ui, "Long rest · Old mill", None, None))
                     .response
                     .rect
                     .height();
                 let restored = ui
-                    .scope(|ui| plan_event_summary(ui, "Long rest · Old mill", Some(true)))
+                    .scope(|ui| plan_event_summary(ui, "Long rest · Old mill", Some(true), None))
                     .response
                     .rect
                     .height();
@@ -2966,6 +3362,7 @@ mod tests {
                         group_open: false,
                         group_discarded: false,
                         group_discarded_name: String::new(),
+                        group_discarded_order: 0,
                         arrivals_open: false,
                         group_editor: std::cell::RefCell::new(&mut group),
                         blocked: None,
@@ -3100,7 +3497,13 @@ mod tests {
         harness.key_press(egui::Key::Enter);
         harness.run_steps(3);
         assert!(read().contains("- [x] Pay the toll\n- [ ] Meet the ferryman\n\n## What happened"));
-        assert!(harness.query_by_label("Scene added to tonight.").is_some());
+        // The footer's group carries the same words as the message in it.
+        assert!(
+            harness
+                .query_all_by_label("Scene added to tonight.")
+                .next()
+                .is_some()
+        );
         assert!(
             harness.query_by_label("Plan a scene").is_some(),
             "the field stays open"

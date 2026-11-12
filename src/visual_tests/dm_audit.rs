@@ -440,7 +440,18 @@ fn during_the_session(a: &mut Audit<'_, '_>) {
     ));
 
     a.task("Ambush: read the read-aloud text and start the fight");
-    a.click(Nav, &format!("Start fight: {TONIGHT}"));
+    // Review of PR 274, item 1: after the road check, the plan's one-time reveal puts the next
+    // row clear of the footer, so `Start fight` is pressed with no scroll first.
+    let start = format!("Start fight: {TONIGHT}");
+    a.act(Nav, &start, |d| {
+        assert!(
+            d.nodes()
+                .iter()
+                .any(|node| node.name == start && node.fully_in_view()),
+            "{start} is fully in view, so no scroll comes first"
+        );
+        d.click(&start);
+    });
     a.fact(format!(
         "setup shows the read-aloud text: {}",
         a.d.visible_text("Ash falls on the crossing.")
