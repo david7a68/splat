@@ -496,6 +496,8 @@ mod tests {
                 egui::CentralPanel::default().show(ctx, |ui| shown.borrow_mut().dock(ui));
             });
         design::theme::install(&harness.ctx);
+        // The name slot's width is kept from the first frame, which had no theme fonts yet.
+        run.borrow_mut().widest_name = None;
         harness.run_steps(2);
         (run, harness)
     }
@@ -520,11 +522,12 @@ mod tests {
     /// at all. The name and today's controls keep their places at every width.
     #[test]
     fn effect_gives_up_its_place_before_the_name_loses_a_word_or_its_size() {
-        let name = "Oren Thistlewick of the Southern Road";
+        // A name that the dock's name slot (at most `12 × L`, from main) shows whole.
+        let name = "Oren Thistlewick";
         let (_, wide) = dock(name, 900.0);
         let (_, size) = name_shown(&wide, name).unwrap();
         let mut forms = BTreeSet::new();
-        for width in (360..=760).step_by(8) {
+        for width in (360..=1200).step_by(8) {
             let (run, harness) = dock(name, width as f32);
             let effect = harness.query_by_label("Effect: words for this row");
             let word = harness.output().shapes.iter().any(|shape| {
