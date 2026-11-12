@@ -2176,11 +2176,21 @@ impl Sessions {
         // Each scene result's place in this frame: its own while that is drawn, else the footer.
         let rows = (!folded).then_some(scenes.as_slice());
         let shown = Shown {
-            added: self.scenes.added.as_ref().map(|_| self.shown_at(Place::Field, rows)),
-            removed: self.scenes.removed.as_ref().map(|_| {
-                self.shown_at(removed_slot.map_or(Place::Footer, Place::Row), rows)
-            }),
-            fault: self.scenes.fault.as_ref().map(|fault| self.shown_at(fault.place, rows)),
+            added: self
+                .scenes
+                .added
+                .as_ref()
+                .map(|_| self.shown_at(Place::Field, rows)),
+            removed: self
+                .scenes
+                .removed
+                .as_ref()
+                .map(|_| self.shown_at(removed_slot.map_or(Place::Footer, Place::Row), rows)),
+            fault: self
+                .scenes
+                .fault
+                .as_ref()
+                .map(|fault| self.shown_at(fault.place, rows)),
         };
         let mut scene_act = None;
         // The closed rows' heights, without and with the scenes, for the next frame's fold.
@@ -4578,9 +4588,17 @@ mod tests {
             let day = *timeline::day_numbers(&book.events).last().unwrap();
             (event.id.clone(), event.label(day), book.events.len())
         };
-        harness.state_mut().0.added = Some(Added { id, label, at: Instant::now(), count });
+        harness.state_mut().0.added = Some(Added {
+            id,
+            label,
+            at: Instant::now(),
+            count,
+        });
         harness.run_steps(4);
-        assert!(harness.query_by_label("Undo add").is_some(), "the footer holds a result");
+        assert!(
+            harness.query_by_label("Undo add").is_some(),
+            "the footer holds a result"
+        );
         assert!(
             harness.query_by_label("Open: Pay the toll").is_some(),
             "a result in the footer does not fold the scenes"
@@ -4665,8 +4683,14 @@ mod tests {
         // `Undo scene` is in the footer; Obsidian changes the note just before the DM presses
         // it. The outside words stay, and the reason shows in the footer.
         let kept = read();
-        assert!(harness.state().0.scenes.field.is_none(), "the field is closed");
-        harness.state_mut().0.scene_act(SceneAct::Add("Wait for the tide".into()), Some(note.id));
+        assert!(
+            harness.state().0.scenes.field.is_none(),
+            "the field is closed"
+        );
+        harness
+            .state_mut()
+            .0
+            .scene_act(SceneAct::Add("Wait for the tide".into()), Some(note.id));
         harness.run_steps(3);
         let obsidian = format!("{}\nObsidian added this just before Undo.\n", read());
         fs::write(&note.path, &obsidian).unwrap();
@@ -4674,7 +4698,10 @@ mod tests {
         harness.run_steps(3);
         assert_eq!(read(), obsidian, "the outside edit stays");
         assert!(
-            harness.query_all_by_label("That line changed on disk.").next().is_some(),
+            harness
+                .query_all_by_label("That line changed on disk.")
+                .next()
+                .is_some(),
             "a refused Undo scene says why after the field closed"
         );
         fs::write(&note.path, &kept).unwrap();
