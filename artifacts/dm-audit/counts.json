@@ -87,6 +87,13 @@
     },
     {
       "phase": "during",
+      "task": "Check the road for encounters",
+      "transitions": 0,
+      "interactions": 3,
+      "path": "Session"
+    },
+    {
+      "phase": "during",
       "task": "Ambush: read the read-aloud text and start the fight",
       "transitions": 1,
       "interactions": 12,
@@ -238,6 +245,13 @@
       "transitions": 3,
       "interactions": 8,
       "path": "Session > Encounters > Run > Session"
+    },
+    {
+      "phase": "during",
+      "task": "A fight that nobody planned, with a Bandit from the book, then talk",
+      "transitions": 2,
+      "interactions": 6,
+      "path": "Session > Run > Session"
     },
     {
       "phase": "during",
