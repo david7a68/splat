@@ -2257,6 +2257,8 @@ pub struct Encounters {
     group_draft: Option<GroupDraft>,
     /// The group draft `Discard changes` last dropped, for one step of undo.
     discarded_group: Option<GroupDraft>,
+    /// When that discard was made (`timeline::next_result_order`), for the plan's footer order.
+    discarded_group_order: u64,
     /// A creature made the campaign's own, with its text open beside the roster.
     creature: Option<CreatureEditor>,
 
@@ -2807,6 +2809,10 @@ impl Encounters {
     pub fn group_discarded_in_plan(&self) -> bool {
         // The plan shows it again, so an encounter draft left open cannot hide it there.
         self.group_in_plan && self.group_draft.is_none() && self.discarded_group.is_some()
+    }
+    /// When the discard the plan shows was made, for its footer's newest-first order.
+    pub fn discarded_group_order(&self) -> u64 {
+        self.discarded_group_order
     }
     pub fn discarded_group_name(&self) -> String {
         self.discarded_group

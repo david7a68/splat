@@ -160,12 +160,6 @@ pub(crate) struct ResultOrder {
     seen: std::cell::RefCell<std::collections::HashMap<(String, u64), u64>>,
 }
 
-/// The one count behind every `ResultOrder`.
-fn next_result_order() -> u64 {
-    static ORDER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    ORDER.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1
-}
-
 /// How many results a `ResultOrder` remembers; the oldest go first.
 const KEPT_ORDERS: usize = 64;
 
@@ -187,7 +181,7 @@ impl ResultOrder {
                 seen.remove(&oldest);
             }
         }
-        *seen.entry(key).or_insert_with(next_result_order)
+        *seen.entry(key).or_insert_with(super::next_result_order)
     }
 
     /// A new result of `kind` was just made: its next `of` gives it a new, newest order, even
@@ -437,7 +431,6 @@ pub enum FileAct {
 pub fn file_notices_in_footer<'a>(
     footer: &mut design::Footer<'a>,
     undos: &mut LiveUndos<'a>,
-    orders: &ResultOrder,
     book: &Book,
     act: &'a std::cell::Cell<Option<FileAct>>,
 ) {
@@ -446,7 +439,7 @@ pub fn file_notices_in_footer<'a>(
             "Reloaded. Your version, with {}, is gone unless you undo.",
             design::count(count, "event", "events")
         );
-        let order = orders.of("reload", (&book.path, count));
+        let order = book.dropped_order;
         undos.push(order, words.clone(), move |ui| {
             if design::undo_message(ui, Tone::Info, &words, "Undo reload") {
                 act.set(Some(FileAct::UndoReload));
@@ -933,7 +926,7 @@ impl TimelinePage {
         let mut undos = LiveUndos::new();
         if let Some(words) = notes.event_link_result() {
             let act = &act;
-            undos.push(self.orders.of("links", &words), words.clone(), move |ui| {
+            undos.push(notes.event_link_order(), words.clone(), move |ui| {
                 if design::undo_message(ui, Tone::Success, &words, "Undo link update") {
                     act.set(Some(ListAct::UndoLinks));
                 }
@@ -969,14 +962,14 @@ impl TimelinePage {
                 "The next fight starts from the HP the party has now."
             };
             let act = &act;
-            let order = self.orders.of("ruling", (id, event.restores));
+            let order = book.rest_undo_order;
             undos.push(order, words.to_owned(), move |ui| {
                 if design::undo_message(ui, Tone::Success, words, "Undo ruling") {
                     act.set(Some(ListAct::UndoRuling));
                 }
             });
         }
-        file_notices_in_footer(&mut footer, &mut undos, &self.orders, book, &file);
+        file_notices_in_footer(&mut footer, &mut undos, book, &file);
         if let Some(label) = book.removed().map(str::to_owned) {
             let mentions = self.removed_mentions;
             let words = timeline_removal_words(book, &label, mentions);

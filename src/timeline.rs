@@ -698,9 +698,21 @@ fn new_id() -> String {
     format!("t-{}", &id[id.len() - 10..])
 }
 
+/// When a kept result was made: one count for every footer result, so a footer lists its results
+/// with a live Undo newest first, whatever their kind. The owner of a result takes it when the
+/// result is made, every time, also when it repeats an earlier one.
+pub(crate) fn next_result_order() -> u64 {
+    static ORDER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    ORDER.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1
+}
+
 /// A campaign's events, kept in step with its file. Edits save shortly after they stop.
 #[derive(Default)]
 pub struct Book {
+    /// When the reload result was made (`next_result_order`).
+    pub dropped_order: u64,
+    /// When the rest ruling's result was made (`next_result_order`).
+    pub rest_undo_order: u64,
     path: Option<PathBuf>,
     pub events: Vec<Event>,
     pub flags: Vec<splat::content::layout::Flag>,
@@ -1140,6 +1152,7 @@ impl Book {
         let events = self.events.clone();
         self.reload();
         self.dropped = Some(events);
+        self.dropped_order = next_result_order();
     }
 
     pub fn dropped(&self) -> Option<usize> {
@@ -1297,6 +1310,7 @@ impl Book {
         let after = event.clone();
         self.touch();
         self.rest_undo = Some((before, after));
+        self.rest_undo_order = next_result_order();
     }
 
     pub fn rest_undo_id(&self) -> Option<&str> {

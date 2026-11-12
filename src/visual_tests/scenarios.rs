@@ -16318,6 +16318,38 @@ pub mod session_plan_groups {
             d.has_containing("Session 1: The Crossing"),
             "Assembling a group stays on the session's page",
         );
+        // Review of PR 274: every result takes its order when it is made, also a repeat. Discard
+        // Ash Pack, add a scene, Undo the discard, discard Ash Pack again: the newer discard is
+        // now above the scene. Then both are undone, so the group is as it was.
+        d.aside(|d| {
+            const UNDO_DISCARD: &str = "Undo discard of Ash Pack";
+            let top = |d: &Driver<'_>, name: &str| d.place_of(name).map(|rect| rect.top());
+            d.click("Discard");
+            d.expect(UNDO_DISCARD);
+            d.click("More Add actions");
+            d.click("Add Scene");
+            d.type_text("Watch the ford");
+            d.press(Key::Enter);
+            d.expect("Scene added to tonight.");
+            d.press(Key::Escape);
+            let first = (top(d, "Undo scene"), top(d, UNDO_DISCARD));
+            d.click(UNDO_DISCARD);
+            d.expect("Back to the plan");
+            d.click("Discard");
+            d.expect(UNDO_DISCARD);
+            let second = (top(d, "Undo scene"), top(d, UNDO_DISCARD));
+            d.observe(
+                "review-274-order-repeat",
+                first.0.zip(first.1).is_some_and(|(scene, discard)| scene < discard)
+                    && second.0.zip(second.1).is_some_and(|(scene, discard)| discard < scene),
+                format!(
+                    "(scene, discard) Undo tops: first discard {first:?}; after the second discard {second:?}"
+                ),
+            );
+            d.click("Undo scene");
+            d.click(UNDO_DISCARD);
+            d.expect("Back to the plan");
+        });
         // AK1: the empty group's reason has a reserved place, so adding the first creature moves
         // no field. AH1: Save refuses an empty group, so it says Invalid.
         let sizes = [SMALL, DEFAULT, LARGE];

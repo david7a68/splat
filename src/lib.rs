@@ -1707,6 +1707,7 @@ impl Splat {
                     let group_open = self.encounters.group_open_in_plan();
                     let group_discarded = self.encounters.group_discarded_in_plan();
                     let group_discarded_name = self.encounters.discarded_group_name();
+                    let group_discarded_order = self.encounters.discarded_group_order();
                     let arrivals_open = self.encounters.run_takes_arrivals();
                     let run_directory = self.encounters.run_directory(campaign);
                     let open_state = self
@@ -1731,6 +1732,7 @@ impl Splat {
                         group_open,
                         group_discarded,
                         group_discarded_name,
+                        group_discarded_order,
                         arrivals_open,
                         group_editor: std::cell::RefCell::new(&mut group_editor),
                         blocked,

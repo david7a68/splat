@@ -73,6 +73,33 @@ impl Reveal {
     }
 }
 
+/// The DM scrolled or moved through the page this draw: the wheel, a drag, or a navigation key.
+fn user_moved_the_view(ui: &egui::Ui) -> bool {
+    use egui::Key;
+    ui.input(|input| {
+        input.raw_scroll_delta != egui::Vec2::ZERO
+            || input.smooth_scroll_delta != egui::Vec2::ZERO
+            || input.pointer.is_decidedly_dragging()
+            || input.events.iter().any(|event| {
+                matches!(
+                    event,
+                    egui::Event::Key {
+                        key: Key::ArrowUp
+                            | Key::ArrowDown
+                            | Key::PageUp
+                            | Key::PageDown
+                            | Key::Home
+                            | Key::End
+                            | Key::Tab
+                            | Key::Space,
+                        pressed: true,
+                        ..
+                    }
+                )
+            })
+    })
+}
+
 /// How many draws a reveal may take before it gives up.
 const REVEAL_DRAWS: u8 = 3;
 
@@ -1454,7 +1481,7 @@ impl Sessions {
         if plan.group_discarded && here {
             let name = plan.group_discarded_name.clone();
             let act = &footer_act;
-            let order = self.result_orders.of("group discard", (session, &name));
+            let order = plan.group_discarded_order;
             undos.push(order, format!("{name} draft discarded."), move |ui| {
                 if design::draft_discarded(ui, &name) {
                     act.set(Some(FooterAct::UndoGroupDiscard));
@@ -1467,7 +1494,7 @@ impl Sessions {
             });
         }
         let file = std::cell::Cell::new(None);
-        file_notices_in_footer(&mut footer, &mut undos, &self.result_orders, book, &file);
+        file_notices_in_footer(&mut footer, &mut undos, book, &file);
         self.plan_messages(
             ui,
             &mut undos,
@@ -1505,7 +1532,7 @@ impl Sessions {
             }
             let days = timeline::day_numbers(&book.events);
             let index = book.events.iter().position(|event| event.id == *id);
-            self.row_reveal = Some((id.clone(), 0));
+            self.row_reveal = Some((id.clone(), 0, ui.ctx().cumulative_pass_nr()));
             self.result_orders.renew("add");
             self.added = Some(Added {
                 id: id.clone(),
@@ -1572,7 +1599,17 @@ impl Sessions {
                         .any(|group| group.name.eq_ignore_ascii_case(name))
             })
         };
-        let mut reveal = Reveal::new(self.row_reveal.as_ref().map(|(id, _)| id.clone()));
+        // Review of PR 274: the DM's own scroll or navigation, or a draw the plan missed (the
+        // DM left the view), ends a pending reveal, so it never pulls the plan back.
+        let pass = ui.ctx().cumulative_pass_nr();
+        if self
+            .row_reveal
+            .as_ref()
+            .is_some_and(|(_, _, last)| pass > last + 1 || user_moved_the_view(ui))
+        {
+            self.row_reveal = None;
+        }
+        let mut reveal = Reveal::new(self.row_reveal.as_ref().map(|(id, _, _)| id.clone()));
         egui::CentralPanel::default().frame(egui::Frame::new()).show_inside(ui, |ui| {
             // The rows leave the scroll bar's lane free whether or not the bar shows, so a row's
             // actions keep their x when the plan grows long enough to scroll.
@@ -1849,11 +1886,12 @@ impl Sessions {
             });
             pane = Some((output.inner_rect.height(), output.content_size.y));
         });
-        // The reveal ends when the row after the target is in view, or after a few draws (a
-        // draw that the footer discards to measure itself does not count as shown).
-        if let Some((_, draws)) = &mut self.row_reveal {
+        // The reveal ends when the row after the target is in view, or after at most
+        // `REVEAL_DRAWS` tries (a draw that the footer discards to measure itself does not show).
+        if let Some((_, draws, last)) = &mut self.row_reveal {
             *draws += 1;
-            if reveal.shown || *draws > REVEAL_DRAWS {
+            *last = pass;
+            if reveal.shown || *draws >= REVEAL_DRAWS {
                 self.row_reveal = None;
             }
         }
@@ -1916,7 +1954,7 @@ impl Sessions {
         }
         checks::note_taken(book, length_taken);
         if let Some((id, act)) = travel_act {
-            self.row_reveal = Some((id.clone(), 0));
+            self.row_reveal = Some((id.clone(), 0, ui.ctx().cumulative_pass_nr()));
             self.travel_act(book, session, &id, act, plan);
         }
         match travel_undo {
@@ -2860,6 +2898,7 @@ mod tests {
                         group_open: false,
                         group_discarded: false,
                         group_discarded_name: String::new(),
+                        group_discarded_order: 0,
                         arrivals_open: false,
                         group_editor: std::cell::RefCell::new(&mut group),
                         blocked: None,
@@ -3185,6 +3224,7 @@ mod tests {
                         group_open: false,
                         group_discarded: false,
                         group_discarded_name: String::new(),
+                        group_discarded_order: 0,
                         arrivals_open: false,
                         group_editor: std::cell::RefCell::new(&mut group),
                         blocked: None,

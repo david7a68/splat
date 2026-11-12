@@ -20,7 +20,7 @@ use crate::{
     recording::{Health, Recorder},
     timeline::{
         self, Book,
-        page::{LiveUndos, ResultOrder, SessionLink, added_message, body_above},
+        page::{LiveUndos, SessionLink, added_message, body_above},
     },
 };
 use eframe::egui::{self, Color32};
@@ -93,6 +93,8 @@ pub struct Plan<'a> {
     /// A new group started in the plan was discarded there.
     pub group_discarded: bool,
     pub group_discarded_name: String,
+    /// When that discard was made, for the plan footer's newest-first order.
+    pub group_discarded_order: u64,
     /// A fight is open that something can still join.
     pub arrivals_open: bool,
     pub group_editor: std::cell::RefCell<&'a mut dyn FnMut(&mut egui::Ui)>,
@@ -271,8 +273,11 @@ pub struct Sessions {
     /// error, for the form drawn after it: one scan a frame, as before the footer.
     folder_files: Option<FolderFiles>,
     /// Review of PR 274, item 1: the plan row the DM just added or acted on, until the row
-    /// after it is in view above the footer (or a few draws pass), and the draws it took.
-    pub(super) row_reveal: Option<(String, u8)>,
+    /// after it is in view above the footer (or a few draws pass), the draws it took, and the
+    /// pass it was last drawn in.
+    pub(super) row_reveal: Option<(String, u8, u64)>,
+    /// When the link update's result was made (`timeline::next_result_order`).
+    link_order: u64,
     /// When each kept result in this page's footers was made, so live Undo results go newest
     /// first whatever their kind (review of PR 274, item 2).
     pub(super) result_orders: crate::timeline::page::ResultOrder,
@@ -909,19 +914,9 @@ fn missing_note_words(moved_to: Option<String>) -> String {
 
 /// A draft's own result (Discard or Reload, with its Undo) in a pane's message footer. The
 /// draft owns it until an edit or the file's next change; `undo` says the DM pressed its Undo.
-fn draft_result_in<'a>(
-    undos: &mut LiveUndos<'a>,
-    orders: &ResultOrder,
-    draft: &Draft,
-    undo: &'a std::cell::Cell<bool>,
-) {
-    // A cheap identity: the file and the kind of drop. Never the words, which are the note.
-    let kind = match draft.dropped {
-        Some(Dropped::Reloaded(_)) => 1u8,
-        Some(Dropped::Discarded(_)) => 2,
-        None => 0,
-    };
-    let order = || orders.of("draft", (&draft.path, kind));
+fn draft_result_in<'a>(undos: &mut LiveUndos<'a>, draft: &Draft, undo: &'a std::cell::Cell<bool>) {
+    // The drop's own order, taken when the DM dropped the words, every time.
+    let order = || draft.dropped_order;
     match draft.dropped {
         Some(Dropped::Reloaded(_)) => {
             undos.push(order(), "Reloaded from disk.".to_owned(), move |ui| {
@@ -2188,6 +2183,7 @@ impl Sessions {
     /// The DM took the link offer: write the notes, and keep what Undo needs.
     pub fn accept_event_link_offer(&mut self, offer: LinkOffer, book: &Book) {
         self.update_event_link_notes(offer.changes);
+        self.link_order = crate::timeline::next_result_order();
         self.link_undo_state = Some(LinkUndoState {
             notes: self.note_bodies(),
             events: book.events.clone(),
@@ -2206,6 +2202,17 @@ impl Sessions {
 
     pub fn undo_event_link_update(&mut self) {
         self.undo_event_link_notes();
+    }
+
+    /// A reveal that waits for its next draw, as one does just after an add or a travel act.
+    #[cfg(test)]
+    pub fn simulate_pending_reveal(&mut self, row: &str, pass: u64) {
+        self.row_reveal = Some((row.to_owned(), 0, pass));
+    }
+
+    /// When the link update's result was made, for the footer's newest-first order.
+    pub fn event_link_order(&self) -> u64 {
+        self.link_order
     }
 
     /// Why the last link update or its Undo did not finish.
@@ -3059,7 +3066,7 @@ impl Sessions {
         };
         if let Some(draft) = draft {
             let mut undos = LiveUndos::new();
-            draft_result_in(&mut undos, &self.result_orders, draft, &undo);
+            draft_result_in(&mut undos, draft, &undo);
             undos.into_footer(&mut footer);
         }
         if template && let Some(error) = self.template_error.clone() {
@@ -3982,7 +3989,7 @@ impl Sessions {
                 let mut footer = design::Footer::new("notes_panel_footer", ui.available_width());
                 if let Some(draft) = &self.draft {
                     let mut undos = LiveUndos::new();
-            draft_result_in(&mut undos, &self.result_orders, draft, &undo);
+            draft_result_in(&mut undos, draft, &undo);
             undos.into_footer(&mut footer);
                 }
                 if let Some(words) = note.and_then(|note| dated_before_today(note, &today)) {
@@ -5522,7 +5529,7 @@ impl Sessions {
             design::Footer::new(("session_footer", self.selected), ui.available_width());
         let mut undos = LiveUndos::new();
         if let Some(draft) = &self.draft {
-            draft_result_in(&mut undos, &self.result_orders, draft, &undo_dropped);
+            draft_result_in(&mut undos, draft, &undo_dropped);
         }
         if let Some((tone, words)) = self
             .notice

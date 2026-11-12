@@ -338,6 +338,36 @@ pub fn run(d: &mut Driver<'_>) {
         journey(d, "Travel").checks.is_empty() && journey(d, "Journey B").checks.len() == 1,
         "Plan: Undo roll takes back only this journey's roll",
     );
+    // Review of PR 274: the DM's own scroll ends a pending reveal. A reveal of the row after the
+    // open Travel row waits for its next draw; a wheel step, then a keyboard step, come first,
+    // and the plan stays where the DM put it through later draws.
+    let travel_id = journey(d, "Travel").id;
+    let travel_top = |d: &Driver<'_>| d.place_of("Travel").map(|rect| rect.top());
+    let plan_point = d.place_of("Travel").expect("the Travel row").center();
+    for (step, wheel) in [("wheel", true), ("keyboard", false)] {
+        let pass = d.passes() as u64;
+        d.app_mut().sessions.simulate_pending_reveal(&travel_id, pass);
+        if wheel {
+            d.scroll_up_at(plan_point, 10);
+        } else {
+            d.press(Key::PageUp);
+        }
+        let moved = travel_top(d);
+        d.settle();
+        d.settle();
+        let later = travel_top(d);
+        let hidden = !d
+            .nodes()
+            .iter()
+            .any(|node| node.name == "Journey B" && node.fully_in_view());
+        d.observe(
+            &format!("review-274-reveal-{step}"),
+            moved.is_some() && moved == later && hidden,
+            format!(
+                "After the {step} step the Travel row stays at {moved:?} (later {later:?}); the next row stays out of view {hidden}"
+            ),
+        );
+    }
     // One owner for a length being typed: leaving a page gives the journey what was typed
     // there, and a newer length typed on the other page wins, also after a restart.
     d.replace_text_in("How long", "2 days");
