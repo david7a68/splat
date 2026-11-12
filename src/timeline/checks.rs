@@ -119,10 +119,12 @@ impl Done {
 
     /// Put the event back as it was before the act, while nothing else changed it.
     pub fn undo(&self, book: &mut Book) {
-        if !self.live(book) {
-            return;
-        }
-        if let Some(event) = book.events.iter_mut().find(|event| event.id == self.id) {
+        if let Some(event) = book
+            .events
+            .iter_mut()
+            .find(|event| event.id == self.id)
+            .filter(|event| **event == self.after)
+        {
             event.clone_from(&self.before);
             book.touch();
             book.save();
@@ -363,7 +365,7 @@ pub fn lines(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<Ac
         }
     };
     let schedule = offsets(view.length, every);
-    let listed = schedule.clone().unwrap_or_default();
+    let listed = schedule.as_deref().unwrap_or_default();
     let placed = |check: &Check| {
         check.at.is_some_and(|at| match &schedule {
             Ok(listed) => listed.contains(&at),
@@ -372,7 +374,7 @@ pub fn lines(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<Ac
     };
     // Each result on its line, or a line to roll, in the journey's order.
     let mut rows: Vec<(String, Option<&Check>, u64)> = Vec::new();
-    for at in &listed {
+    for at in listed {
         let results: Vec<&Check> = view
             .event
             .checks

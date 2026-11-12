@@ -34,9 +34,9 @@ use std::{
 /// `all` writes the frozen files from this run; `add` writes rows for new tasks only. Either
 /// takes the place of the G6 check.
 const WRITE: &str = "SPLAT_DM_AUDIT_WRITE";
-/// The one way a feature adds its tasks.
 /// The road table of the journey's encounter checks (F9).
 const ROAD_TABLE: &str = "# Road\n\n## On the road\n\n<!-- splat:rolls key=road dice=1d20 per=day -->\n\n| d20 | On the road |\n| --- | --- |\n| 1-14 | Nothing stirs. |\n| 15-20 | Wolves pick up the trail. |\n";
+/// The one way a feature adds its tasks.
 const ADD_COMMAND: &str = "devenv shell -- audit-freeze add";
 /// How an author records counts that change on purpose.
 const COUNTS_COMMAND: &str = "devenv shell -- audit-freeze counts";

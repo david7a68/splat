@@ -44,13 +44,9 @@ impl Sources {
         if let Some(problem) = self.problem(key) {
             return Err(problem);
         }
-        let table = self.table(key).ok_or("No roll table has this key.")?;
-        Ok(TableRoll {
-            key: table.key.clone(),
-            dice: table.dice.clone(),
-            typed: None,
-            rows: table.rows.clone(),
-        })
+        self.table(key)
+            .ok_or("No roll table has this key.")?
+            .roll(None)
     }
 
     pub fn table(&self, key: &str) -> Option<&Table> {
