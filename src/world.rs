@@ -3064,6 +3064,10 @@ impl Reader {
         if select {
             design::focus_and_select(ui, response.id, &field.words);
         }
+        // While the field has the keyboard, Escape is the field's, not Lookup's.
+        if response.has_focus() || response.lost_focus() {
+            self.form_focused = true;
+        }
         let enter = response.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter));
         if ui.input(|input| input.key_pressed(egui::Key::Escape))
             && (response.has_focus() || response.lost_focus())
