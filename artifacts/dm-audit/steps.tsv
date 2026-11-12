@@ -253,3 +253,9 @@ after	Put what an NPC said in the NPC's own note	Panel	Add to Log: Hobb the Mill
 after	Put what an NPC said in the NPC's own note	Do	type the line	1	Session		false
 after	Put what an NPC said in the NPC's own note	Do	add it	1	Session		false
 after	Put what an NPC said in the NPC's own note	Panel	close Lookup	1	Session		false
+after	Set-up	Setup	the torch rules have a supply wagon on the next day	0	Session		false
+after	A new day starts: take the supply wagon's torches	Nav	Timeline	1	Session	Timeline	false
+after	A new day starts: take the supply wagon's torches	Do	Add Day	1	Timeline		false
+after	A new day starts: take the supply wagon's torches	Panel	Ctrl+T	1	Timeline		false
+after	A new day starts: take the supply wagon's torches	Do	Done: Supply wagon, Day 2	1	Timeline		false
+after	A new day starts: take the supply wagon's torches	Panel	Ctrl+T	1	Timeline		false
