@@ -1954,6 +1954,7 @@ pub(crate) fn page_result(ui: &mut egui::Ui, result: &PageResult) -> bool {
 }
 
 /// The least room that `Add to Log`'s field keeps for a sentence when its stamp shares its line.
+/// It also keeps the words it holds whole, with the field's margins.
 const LOG_FIELD_BESIDE: f32 = design::XXL * 7.0;
 
 /// How `Add to Log` shows in a reader's header.
@@ -2028,7 +2029,6 @@ impl Reader {
     /// Open `Add to Log` for this entry, as a done scene's `Add to Log` does. The field starts
     /// with `words`, selected, unless the DM already typed words there.
     pub fn open_log(&mut self, id: Uuid, words: &str) {
-        eprintln!("P6TRACE open_log {words:?} {}", std::backtrace::Backtrace::force_capture());
         let field = self.log_fields.entry((id, self.played.clone())).or_default();
         field.focus = true;
         if field.words.trim().is_empty() {
@@ -2108,7 +2108,6 @@ impl Reader {
         campaign: Option<&Campaign>,
     ) -> Option<Nav> {
         if self.showing != Some(item.entry.id) {
-            eprintln!("P6TRACE showing changes {:?}", item.entry.name);
             self.undo = None;
             self.kept = None;
             if let Some(previous) = self.showing {
@@ -2576,7 +2575,16 @@ impl Reader {
                 if let Some(change) = &self.undo
                     && change.shows_on(campaign, &item.entry.path)
                     && matches!(change.kind, ChangeKind::Edit | ChangeKind::Log)
-                    && Self::change_notice(ui, &change.word, change.kind)
+                    && ui
+                        .scope(|ui| {
+                            // A long name puts Undo on a line of its own, and its target hangs
+                            // `S` left of the text edge (`line_start`). In Lookup that edge is
+                            // the scroll area's own, so the hang shows in the pane's margin.
+                            let clip = ui.clip_rect();
+                            ui.set_clip_rect(clip.with_min_x(clip.min.x - design::S));
+                            Self::change_notice(ui, &change.word, change.kind)
+                        })
+                        .inner
                 {
                     return self.undo_change(campaign, item.entry.id);
                 }
@@ -3032,16 +3040,27 @@ impl Reader {
                     .x;
                 let words = Type::Small.rich(ui, stamp).color(colors().muted);
                 // The stamp shares the field's line while the field keeps room for a sentence.
-                if ui.available_width() - width - design::S >= LOG_FIELD_BESIDE {
-                    ui.horizontal(|ui| {
-                        ui.label(words);
-                        draw(ui, field)
-                    })
-                    .inner
-                } else {
+                // One layout for both, so the field keeps its ID, and the keyboard, when the
+                // window changes size.
+                let room = ui.available_width() - width - design::S;
+                let typed = ui
+                    .painter()
+                    .layout_no_wrap(
+                        field.words.clone(),
+                        egui::TextStyle::Body.resolve(ui.style()),
+                        colors().text,
+                    )
+                    .size()
+                    .x;
+                let beside = room >= LOG_FIELD_BESIDE.max(typed + 3.0 * design::S);
+                ui.horizontal_wrapped(|ui| {
                     ui.label(words);
+                    if !beside {
+                        ui.end_row();
+                    }
                     draw(ui, field)
-                }
+                })
+                .inner
             }
         };
         if select {
@@ -3068,7 +3087,6 @@ impl Reader {
     /// and writes only when the file still holds what it read. A failed write keeps the field
     /// and its words, and names the file.
     fn add_log_line(&mut self, campaign: &Campaign, item: &Item, words: &str) -> Option<Go> {
-        eprintln!("P6TRACE add_log_line {words:?}");
         let line = match self.line_stamp() {
             Some(stamp) => format!("{stamp}: {words}"),
             None => words.to_owned(),
