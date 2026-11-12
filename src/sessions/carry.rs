@@ -1384,7 +1384,7 @@ mod tests {
                             let mut undos = crate::timeline::page::LiveUndos::new();
                             page.carry_in_footer(&mut undos, &mut footer, &act);
                             undos.into_footer(&mut footer);
-                            footer.show(ui);
+                            let _bottom = footer.show(ui);
                             if let Some(super::super::SessionAct::UndoCarry(session)) = act.take() {
                                 page.undo_carry(session);
                             }
