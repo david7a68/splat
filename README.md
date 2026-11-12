@@ -199,7 +199,9 @@ Spare width stays outside it; stored line breaks stay unchanged. Read omits plan
 A task line under the plan heading is a scene: a row with a done box, whose tick writes the note at once.
 When the plan's rows do not fit, the scenes fold to `N scenes` on the Tonight line, so the next fight stays in view.
 `Scene`, the last line of the Add strip's More menu, adds one. With no run open, a creature's or an NPC's
-reader, and a scene that links one, has `Start fight`, which saves and starts `Fight with <name>`. A Ready to
+reader, and a scene that links one, has `Start fight`, which saves and starts `Fight with <name>`. A campaign
+World entry's reader, and a done scene that links one, has `Add to Log`, which adds one line in the DM's words
+to the entry's Log, stamped as a Change is, with `Undo Log line`. A Ready to
 run encounter with no saved run has `Remove…` in its menu, with `Undo remove encounter`.
 A group editor stays beside the note when both fit at their width limits. Smaller pages use the Note tab.
 A paused fight on the plan offers Resume even when it came from a timeline event.
@@ -515,7 +517,11 @@ title, length, place and notes. A paused fight on the plan offers Resume even wh
 The Add strip stays directly below Tonight, above messages and plan rows. Fight,
 Group and Long rest stay visible. When all actions do not fit on one line, More holds
 Day, Short rest, Travel and Major event. The menu uses a compact `⋯⌄` button named `More Add actions`; hover text names its actions. The strip stays on one line. Timeline
-uses the same width rule. At the top, **Last time** links to the previous session and shows the first line of its recap. The title and date share one line. A **Playing** status marks the session being played.
+uses the same width rule. At the top, **Last time** links to the previous session and shows the first line of its `What happened`,
+else of its processed recording's recap, else its first written line. While the session has no event and no run,
+**Carry over** at the end of that line adds the last session's recap as a link, its plan lines that were not
+played and its open threads to this note, in one save with `carried_from` and `carried_parts`, and `Undo carry
+over` puts the note back exactly. Read shows such an embed as the recap's words under `From <session>`. The title and date share one line. A **Playing** status marks the session being played.
 **Return to the session being played** opens that note from another session. If both sessions have the same
 number, the warning names both note files.
 In a narrow window, the plan and the note have a tab each. **Read** and **Write** turn the note between its two forms, and

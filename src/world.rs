@@ -794,6 +794,13 @@ pub fn is_world(item: &Item) -> bool {
     item.entry.kind == "world" || item.is_world_note()
 }
 
+/// Whether `Add to Log` can add a line to this entry's Log: a World entry of the campaign,
+/// as Edit can change it. A package's entry has no action: its Log would belong to every
+/// campaign that uses the package.
+pub fn takes_log(item: &Item, index: &ContentIndex) -> bool {
+    edit::editable(item, index)
+}
+
 /// A creature or an NPC that a fight can start with. A party member's copy is neither.
 pub fn start_fight(item: &Item, index: &ContentIndex) -> Option<StartFight> {
     let entry = &item.entry;
@@ -1424,6 +1431,8 @@ pub(crate) enum ChangeKind {
     Identity(IdentityNoun),
     /// Everything the edit form saved at once.
     Edit,
+    /// One line that `Add to Log` added, in the DM's words.
+    Log,
 }
 
 impl ChangeKind {
@@ -1446,6 +1455,7 @@ impl ChangeKind {
             Self::Name => "Undo name change",
             Self::Identity(noun) => noun.undo_label(),
             Self::Edit => "Undo changes",
+            Self::Log => "Undo Log line",
         }
     }
 }
@@ -1919,9 +1929,19 @@ pub struct Reader {
     pub live: bool,
     pub in_run: std::collections::BTreeMap<Uuid, (usize, Option<i64>)>,
     pub select_run: Option<usize>,
-    /// The session being played and the day, as a Log line begins: `[[Session 1]], Day 1`.
-    /// With no session, a change writes no Log line.
-    pub log_as: Option<String>,
+    /// The session being played, as a Log line names it: `[[Session 1]]`. None when no
+    /// session is being played (`played_session`).
+    pub played: Option<String>,
+    /// The campaign's day on the Timeline's clock, when the clock has one.
+    pub day: Option<u64>,
+    /// Each open `Add to Log` field, by its entry and the session it was opened in. Its words
+    /// wait while the reader shows another entry; a restart loses them, as every held form.
+    log_fields: HashMap<LogKey, LogField>,
+    /// The words of Log lines whose entry is gone, for the footer, and whether they were shown.
+    gone_log_lines: Vec<(String, bool)>,
+    /// The entries whose edit form is open in the other reader (Lookup's, or the World
+    /// page's). Their Log field waits too, so Splat never makes its own disk conflict.
+    pub edited_elsewhere: Vec<Uuid>,
 }
 
 /// A result that the World page owns, drawn by the reader in the one place for results.
@@ -1950,6 +1970,81 @@ impl PageResult {
             Self::Discarded(name) => FooterLine::discarded(name, FooterAct::Page),
         }
     }
+}
+
+/// Whose an `Add to Log` field is: the campaign and the entry's ID, nothing else. A copied note
+/// in another campaign has the same entry ID, so the campaign is part of the key, and the words
+/// never reach another campaign's note. The session is not: the stamp is the session being
+/// played at Enter, so a renamed, closed or changed session cannot hide typed words.
+type LogKey = (Uuid, Uuid);
+
+/// One open `Add to Log` field: its words, and whether its next draw selects them.
+#[derive(Default)]
+struct LogField {
+    field: design::AddField,
+    /// The entry's name, for the warnings that list unsaved work.
+    name: String,
+    /// The words came from a done scene, so typing replaces them and Enter keeps them.
+    select: bool,
+}
+
+/// The least room that `Add to Log`'s field keeps for a sentence when its stamp shares its line.
+/// It also keeps the words it holds whole, with the field's margins.
+const LOG_FIELD_BESIDE: f32 = design::XXL * 7.0;
+
+/// How `Add to Log` shows in a reader's header.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum LogAction {
+    /// With its word, this wide.
+    Word(f32),
+    /// As its icon, with its name on hover.
+    Icon,
+}
+
+/// The header's quiet actions after Edit, in `room`, by section 1.2 of the session-cycle
+/// design: the first of these that fits. Both with their words; `Start fight` with its word and
+/// `Add to Log` as its icon; `Start fight` alone; `Add to Log` as its icon; neither. An entry
+/// with only `Add to Log` shows its word, then its icon, then nothing. `Start fight` is never an
+/// icon. Each action after the first has `XS` before it. Returns how `Add to Log` shows and
+/// `Start fight`'s width when it shows.
+fn header_actions(
+    room: f32,
+    log: Option<f32>,
+    start: Option<f32>,
+) -> (Option<LogAction>, Option<f32>) {
+    let icon = Density::Read.control();
+    let fits = |widths: &[f32]| {
+        widths.iter().sum::<f32>() + design::XS * widths.len().saturating_sub(1) as f32 <= room
+    };
+    let choices = [
+        (log.map(LogAction::Word), start),
+        (log.map(|_| LogAction::Icon), start),
+        (None, start),
+        (log.map(|_| LogAction::Icon), None),
+        (None, None),
+    ];
+    choices
+        .into_iter()
+        // An entry with one of the two meets its choices in the same order.
+        .find(|(shown, width)| {
+            let shown = shown.map(|shown| match shown {
+                LogAction::Word(width) => width,
+                LogAction::Icon => icon,
+            });
+            fits(&[shown, *width].into_iter().flatten().collect::<Vec<_>>())
+        })
+        .unwrap_or((None, None))
+}
+
+/// Draw one header action in its target.
+fn in_rect(ui: &mut egui::Ui, rect: egui::Rect, add: impl FnOnce(&mut egui::Ui) -> bool) -> bool {
+    ui.scope_builder(
+        egui::UiBuilder::new()
+            .max_rect(rect)
+            .layout(egui::Layout::left_to_right(egui::Align::Center)),
+        add,
+    )
+    .inner
 }
 
 /// Where a footer line stands: a result with a live Undo, a reason, or another notice.
@@ -2090,6 +2185,36 @@ pub(crate) fn draw_footer(
 }
 
 impl Reader {
+    /// The stamp that a change's Log line begins with: the session being played and the day,
+    /// `[[Session 1]], Day 1`. With no session, a change writes no Log line.
+    fn log_as(&self) -> Option<String> {
+        let session = self.played.as_ref()?;
+        Some(match self.day {
+            Some(day) => format!("{session}, Day {day}"),
+            None => session.clone(),
+        })
+    }
+
+    /// The stamp of an `Add to Log` line: a change's stamp, or the day alone when no session
+    /// is being played, because the DM asked for a line.
+    fn line_stamp(&self) -> Option<String> {
+        self.log_as()
+            .or_else(|| self.day.map(|day| format!("Day {day}")))
+    }
+
+    /// Open `Add to Log` for this entry of this campaign, as a done scene's `Add to Log` and the
+    /// header's do. The field starts with `words`, selected, unless the DM already typed words
+    /// there.
+    pub fn open_log(&mut self, campaign: Uuid, id: Uuid, name: &str, words: &str) {
+        let open = self.log_fields.entry((campaign, id)).or_default();
+        open.field.focus = true;
+        name.clone_into(&mut open.name);
+        if open.field.words.trim().is_empty() {
+            words.clone_into(&mut open.field.words);
+            open.select = !words.is_empty();
+        }
+    }
+
     /// Offer the same short chooser to links opened outside the World page.
     pub fn choose_link(&mut self, positions: Vec<usize>, target: &str) {
         self.many = positions;
@@ -2173,6 +2298,7 @@ impl Reader {
             self.status_editing = self.status != status(&item.entry);
             // Only a form with changes is worth keeping. It opens again where it was left.
             self.edits.retain(|_, draft| draft.dirty());
+            self.gone_log_lines.retain(|(_, shown)| !shown);
             self.other_type.clear();
             self.adding = None;
             self.picker = None;
@@ -2322,39 +2448,67 @@ impl Reader {
             }
             // The header's quiet actions follow Edit, `XS` apart, in the room that is spare: the
             // title keeps its width and the row its line (section 1.2 of the session-cycle
-            // design). `Add to Log` comes first, next to Edit. `Start fight` keeps its word, or
-            // does not show.
-            if let Some(start) = start {
-                let name = format!("Start a fight with {}", start.name);
-                let action = Action::quiet("Start fight")
+            // design): `Start fight` next to Edit, where it is for a DM who never adds to a Log,
+            // then `Add to Log`, which gives way first: to its icon, then away. `Start fight`
+            // keeps its word, or does not show.
+            let log_action = Action::quiet("Add to Log")
+                .icon(design::icons::ADD)
+                .density(Density::Read);
+            let start_name = start
+                .as_ref()
+                .map(|start| format!("Start a fight with {}", start.name));
+            let start_action = start_name.as_deref().map(|name| {
+                Action::quiet("Start fight")
                     .icon(design::icons::RUN)
                     .density(Density::Read)
-                    .name(&name)
-                    .blocked(self.start_blocked);
-                let size = egui::vec2(action.natural_width(ui), Density::Read.control());
-                let limit = if art && edit.is_none() {
-                    cell.right() - art_width
-                } else {
-                    right
-                };
-                if next + size.x <= limit {
-                    let rect = egui::Rect::from_min_size(egui::pos2(next, top), size);
-                    let pressed = ui
-                        .scope_builder(
-                            egui::UiBuilder::new()
-                                .max_rect(rect)
-                                .layout(egui::Layout::left_to_right(egui::Align::Center)),
-                            |ui| action.show(ui).clicked(),
-                        )
-                        .inner;
-                    if pressed {
-                        self.start_fight = Some(start);
-                    }
+                    .name(name)
+                    .blocked(self.start_blocked)
+            });
+            let limit = if art && edit.is_none() {
+                cell.right() - art_width
+            } else {
+                right
+            };
+            let (log, start_width) = header_actions(
+                limit - next,
+                edit.map(|_| log_action.natural_width(ui)),
+                start_action.as_ref().map(|action| action.natural_width(ui)),
+            );
+            // Each shown action's target, in order from `next`.
+            let mut at = |width: f32| {
+                let rect = egui::Rect::from_min_size(
+                    egui::pos2(next, top),
+                    egui::vec2(width, Density::Read.control()),
+                );
+                next = rect.right() + design::XS;
+                rect
+            };
+            if let (Some(start), Some(action), Some(width)) = (start, start_action, start_width)
+                && in_rect(ui, at(width), |ui| action.show(ui).clicked())
+            {
+                self.start_fight = Some(start);
+            }
+            let log_pressed = match log {
+                Some(LogAction::Word(width)) => {
+                    in_rect(ui, at(width), |ui| log_action.show(ui).clicked())
                 }
+                Some(LogAction::Icon) => in_rect(ui, at(Density::Read.control()), |ui| {
+                    design::icon_button(ui, design::icons::ADD, "Add to Log").clicked()
+                }),
+                None => false,
+            };
+            if log_pressed && let Some(campaign) = edit {
+                self.open_log(campaign.id, id, &item.entry.name, "");
             }
         });
         self.form_focused = false;
         let editing = campaign.is_some_and(|campaign| self.editing(id, campaign));
+        if let Some(campaign) = campaign
+            && takes_log(item, index)
+            && let Some(go) = self.log_field(ui, item, campaign, editing)
+        {
+            return Some(go);
+        }
         if !editing && let Some(campaign) = campaign {
             self.refresh_group_fault(item, index.generation(), || {
                 note_path(&campaign.path, &item.entry.path)
@@ -2894,8 +3048,7 @@ impl Reader {
         // What play changes goes in the entry's Log, in the same write, so one Undo takes
         // both back.
         let log = self
-            .log_as
-            .as_ref()
+            .log_as()
             .filter(|_| matches!(key, "in" | "part_of" | "status"))
             .map(|stamp| {
                 let words = log_words(index, key, world_field(current_entry, key), &value);
@@ -2922,6 +3075,139 @@ impl Reader {
                 kind: ChangeKind::of_key(key),
             })
         })();
+        let go = self.written(result, item.entry.id);
+        if go.is_some() {
+            self.picker = None;
+            self.place_choices_open = false;
+        }
+        go
+    }
+
+    /// `Add to Log`'s field under the header, while it is open for this entry in this session:
+    /// the line's stamp in muted words, then the field. Enter adds the line and closes the
+    /// field; Escape clears and closes it. An open edit form blocks it.
+    fn log_field(
+        &mut self,
+        ui: &mut egui::Ui,
+        item: &Item,
+        campaign: &Campaign,
+        editing: bool,
+    ) -> Option<Go> {
+        let key = (campaign.id, item.entry.id);
+        if !self.log_fields.contains_key(&key) {
+            return None;
+        }
+        if editing || self.edited_elsewhere.contains(&item.entry.id) {
+            design::message(ui, Tone::Info, "Save or discard your edit first.");
+            return None;
+        }
+        let stamp = self
+            .line_stamp()
+            .map(|stamp| format!("{}:", sessions::plain_links(&stamp)));
+        let open = self.log_fields.get_mut(&key)?;
+        let select = std::mem::take(&mut open.select);
+        let field = &mut open.field;
+        let name = format!("Log line for {}", item.entry.name);
+        let draw = |ui: &mut egui::Ui, field: &mut design::AddField| {
+            design::add_field(
+                ui,
+                field,
+                &name,
+                "What happened?",
+                0.0,
+                |_| None::<()>,
+                |_| Vec::new(),
+            )
+            .field
+        };
+        let response = match &stamp {
+            None => draw(ui, field),
+            Some(stamp) => {
+                let width = ui
+                    .painter()
+                    .layout_no_wrap(stamp.clone(), Type::Small.font(ui), colors().muted)
+                    .size()
+                    .x;
+                let words = Type::Small.rich(ui, stamp).color(colors().muted);
+                // The stamp shares the field's line while the field keeps room for a sentence.
+                // One layout for both, so the field keeps its ID, and the keyboard, when the
+                // window changes size.
+                let room = ui.available_width() - width - design::S;
+                let typed = ui
+                    .painter()
+                    .layout_no_wrap(
+                        field.words.clone(),
+                        egui::TextStyle::Body.resolve(ui.style()),
+                        colors().text,
+                    )
+                    .size()
+                    .x;
+                let beside = room >= LOG_FIELD_BESIDE.max(typed + 3.0 * design::S);
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(words);
+                    if !beside {
+                        ui.end_row();
+                    }
+                    draw(ui, field)
+                })
+                .inner
+            }
+        };
+        if select {
+            design::focus_and_select(ui, response.id, &field.words);
+        }
+        // While the field has the keyboard, Escape is the field's, not Lookup's.
+        if response.has_focus() || response.lost_focus() {
+            self.form_focused = true;
+        }
+        let enter = response.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter));
+        if ui.input(|input| input.key_pressed(egui::Key::Escape))
+            && (response.has_focus() || response.lost_focus())
+        {
+            self.log_fields.remove(&key);
+        } else if enter {
+            let words = field.words.trim().to_owned();
+            if words.is_empty() {
+                self.log_fields.remove(&key);
+            } else {
+                return self.add_log_line(campaign, item, &words);
+            }
+        }
+        None
+    }
+
+    /// `Add to Log`: one line in the entry's own note, at the end of its Log, stamped as a
+    /// change is at this moment. It reads the file now, so an edit made a moment before stays,
+    /// and writes only when the file still holds what it read. A failed write keeps the field
+    /// and its words, and names the file.
+    fn add_log_line(&mut self, campaign: &Campaign, item: &Item, words: &str) -> Option<Go> {
+        let line = match self.line_stamp() {
+            Some(stamp) => format!("{stamp}: {words}"),
+            None => words.to_owned(),
+        };
+        let result = (|| {
+            let before = file_fault::read_note(&campaign.path, &item.entry.path)?;
+            let after = lines::add_log(&before, &line);
+            write_note(&campaign.path, &item.entry.path, Some(&before), &after)?;
+            Ok::<_, String>(Change {
+                campaign: campaign.id,
+                path: item.entry.path.clone(),
+                before,
+                after,
+                word: format!("Added to {}’s Log.", item.entry.name),
+                kind: ChangeKind::Log,
+            })
+        })();
+        let go = self.written(result, item.entry.id);
+        if go.is_some() {
+            self.log_fields.remove(&(campaign.id, item.entry.id));
+        }
+        go
+    }
+
+    /// A change to one World note, written or not: its result and Undo, or its error, in the
+    /// reader's one place for each.
+    fn written(&mut self, result: Result<Change, String>, id: Uuid) -> Option<Go> {
         match result {
             Ok(change) => {
                 self.error = None;
@@ -2930,9 +3216,7 @@ impl Reader {
                 self.undo = Some(change);
                 self.stamp(FooterAct::Change);
                 self.kept = None;
-                self.picker = None;
-                self.place_choices_open = false;
-                Some(Go::Reload(item.entry.id))
+                Some(Go::Reload(id))
             }
             Err(error) => {
                 self.error = Some(error);
@@ -3345,7 +3629,7 @@ impl Reader {
         self.prepare(item);
         let id = item.entry.id;
         let editing = campaign.is_some_and(|campaign| self.editing(id, campaign));
-        let mut lines = Vec::new();
+        let mut lines = self.gone_log_notices();
         let has_unread = self
             .group_fault
             .as_ref()
@@ -5111,7 +5395,8 @@ mod tests {
         let path = dir.path().join("NPCs/Hob.md");
         let original = fs::read_to_string(&path).unwrap();
         let mut reader = Reader {
-            log_as: Some("[[Session 1]], Day 2".into()),
+            played: Some("[[Session 1]]".into()),
+            day: Some(2),
             ..Default::default()
         };
         let mut change = |key: &str, value: Value| {
@@ -5161,6 +5446,34 @@ mod tests {
         }
         assert_eq!(index.members(cart).len(), 1);
 
+        // F6: `Add to Log` writes the DM's words as one line with the stamp a change has at
+        // that moment, and the session lists it. Its Undo takes back that line alone.
+        let before_log = fs::read_to_string(&path).unwrap();
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        let item = &index.items[index.position(hob).unwrap()];
+        assert!(
+            reader
+                .add_log_line(&campaign, item, "Gave the gate key to Iselle.")
+                .is_some()
+        );
+        let logged = fs::read_to_string(&path).unwrap();
+        assert_eq!(
+            logged,
+            format!("{before_log}- [[Session 1]], Day 2: Gave the gate key to Iselle.\n")
+        );
+        let line = reader.undo.clone().unwrap();
+        assert_eq!(line.word, "Added to Hob’s Log.");
+        assert_eq!(line.kind.undo_label(), "Undo Log line");
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        assert_eq!(
+            index
+                .world_changes(&dir.path().join("Sessions/Session 1.md"))
+                .len(),
+            4
+        );
+        line.undo(&campaign).unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), before_log);
+
         // Undo takes back the field and its Log line together.
         group.undo(&campaign).unwrap();
         let text = fs::read_to_string(&path).unwrap();
@@ -5185,11 +5498,262 @@ mod tests {
 
         // With no session, a change writes no Log line.
         fs::write(&path, &original).unwrap();
-        reader.log_as = None;
+        reader.played = None;
         let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
         let item = &index.items[index.position(hob).unwrap()];
         reader.change(&campaign, item, &index, "status", "dead".into());
         assert!(!fs::read_to_string(&path).unwrap().contains("## Log"));
+        // With no session, `Add to Log` still writes the line the DM asked for, with the day
+        // alone; with no day either, the words alone.
+        for (day, line) in [(Some(2), "- Day 2: Rode north."), (None, "- Rode north.")] {
+            reader.day = day;
+            let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+            let item = &index.items[index.position(hob).unwrap()];
+            let before = fs::read_to_string(&path).unwrap();
+            reader.add_log_line(&campaign, item, "Rode north.");
+            let after = fs::read_to_string(&path).unwrap();
+            assert!(after.ends_with(&format!("## Log\n\n{line}\n")), "{after}");
+            fs::write(&path, &before).unwrap();
+        }
+    }
+
+    /// Section 4.1 of the session-cycle design for `Add to Log`'s write, and its Undo.
+    #[test]
+    fn a_log_line_follows_the_disk_and_a_failed_write_keeps_the_words() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = sample_campaign(dir.path());
+        let hob = create_entry(&campaign, "Hob", "npc").unwrap();
+        let oren = create_entry(&campaign, "Oren", "npc").unwrap();
+        let path = dir.path().join("NPCs/Hob.md");
+        let reader = || Reader {
+            played: Some("[[Session 1]]".into()),
+            ..Default::default()
+        };
+        let mut lookup = reader();
+        let key = (campaign.id, hob);
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        let item = &index.items[index.position(hob).unwrap()];
+        lookup.open_log(campaign.id, hob, "Hob", "the ropes");
+        lookup.log_fields.get_mut(&key).unwrap().field.words = "Told who burned the ropes.".into();
+
+        // An edit in Obsidian a moment before, while the field holds typed words: the line
+        // goes after it, in the entry's new Log heading.
+        let edited = format!("{}Seen at the ford.\n", fs::read_to_string(&path).unwrap());
+        fs::write(&path, &edited).unwrap();
+        assert!(
+            lookup
+                .add_log_line(&campaign, item, "Told who burned the ropes.")
+                .is_some()
+        );
+        let a = fs::read_to_string(&path).unwrap();
+        assert_eq!(
+            a,
+            format!("{edited}\n## Log\n\n- [[Session 1]]: Told who burned the ropes.\n")
+        );
+        assert!(
+            !lookup.log_fields.contains_key(&key),
+            "Enter closes the field"
+        );
+
+        // Act A in Lookup, an unrelated act B in the World page's reader, then Undo of A: A's
+        // line goes, B's stays.
+        let mut world = reader();
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        let other = &index.items[index.position(oren).unwrap()];
+        let oren_path = dir.path().join("NPCs/Oren.md");
+        let oren_before = fs::read_to_string(&oren_path).unwrap();
+        world
+            .add_log_line(&campaign, other, "Paid the toll.")
+            .unwrap();
+        let oren_after = fs::read_to_string(&oren_path).unwrap();
+        assert_ne!(oren_before, oren_after);
+        assert!(lookup.undo_change(&campaign, hob).is_some());
+        assert_eq!(fs::read_to_string(&path).unwrap(), edited);
+        assert_eq!(fs::read_to_string(&oren_path).unwrap(), oren_after);
+
+        // A failed write names the file, writes nothing, and keeps the field with its words.
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        let item = &index.items[index.position(hob).unwrap()];
+        lookup.open_log(campaign.id, hob, "Hob", "");
+        lookup.log_fields.get_mut(&key).unwrap().field.words = "Kept.".into();
+        let folder = dir.path().join("NPCs");
+        fs::set_permissions(&folder, fs::Permissions::from_mode(0o555)).unwrap();
+        let failed = lookup.add_log_line(&campaign, item, "Kept.");
+        fs::set_permissions(&folder, fs::Permissions::from_mode(0o755)).unwrap();
+        assert!(failed.is_none());
+        assert!(
+            lookup
+                .error
+                .as_deref()
+                .is_some_and(|error| error.contains("NPCs/Hob.md"))
+        );
+        assert_eq!(fs::read_to_string(&path).unwrap(), edited);
+        assert_eq!(lookup.log_fields[&key].field.words, "Kept.");
+
+        // A note that cannot be read, and a note renamed or deleted under the open field: the
+        // act names the file and writes nothing.
+        fs::write(&path, [0xff, 0xfe, b'\n']).unwrap();
+        assert!(lookup.add_log_line(&campaign, item, "Kept.").is_none());
+        assert!(
+            lookup
+                .error
+                .as_deref()
+                .is_some_and(|error| error.contains("NPCs/Hob.md"))
+        );
+        assert_eq!(fs::read(&path).unwrap(), [0xff, 0xfe, b'\n']);
+        fs::remove_file(&path).unwrap();
+        assert!(lookup.add_log_line(&campaign, item, "Kept.").is_none());
+        assert!(
+            lookup
+                .error
+                .as_deref()
+                .is_some_and(|error| error.contains("NPCs/Hob.md"))
+        );
+        assert!(!path.exists());
+        assert_eq!(lookup.log_fields[&key].field.words, "Kept.");
+
+        // A done scene's words fill only an empty field: words the DM typed stay, and nothing
+        // selects them. Clearing Lookup's search keeps them too.
+        lookup.open_log(campaign.id, hob, "Hob", "the ropes");
+        assert_eq!(lookup.log_fields[&key].field.words, "Kept.");
+        lookup.clear();
+        assert_eq!(lookup.log_fields[&key].field.words, "Kept.");
+        // The app gives the reader the session being played again on each frame.
+        lookup.played = Some("[[Session 1]]".into());
+        // Each field keeps its own request to select its words.
+        lookup.open_log(campaign.id, oren, "Oren", "paid the toll");
+        assert!(!lookup.log_fields[&key].select);
+        assert!(lookup.log_fields[&(campaign.id, oren)].select);
+
+        // Typed Log words are unsaved work: the campaign switch's guard and the close warning
+        // count them, by the entry's name. An empty field holds nothing to lose.
+        assert!(lookup.has_unsaved_edits());
+        assert!(
+            lookup
+                .unsaved_edits()
+                .iter()
+                .any(|(id, name)| *id == hob && name == "Hob")
+        );
+        let mut empty = reader();
+        empty.open_log(campaign.id, oren, "Oren", "");
+        assert!(!empty.has_unsaved_edits() && empty.unsaved_edits().is_empty());
+
+        // A copied note in another campaign has the same ID. Its reader shows no field with
+        // this campaign's words, so Enter there cannot write them into the copy.
+        let other_dir = tempfile::tempdir().unwrap();
+        let other = sample_campaign(other_dir.path());
+        fs::create_dir_all(other_dir.path().join("NPCs")).unwrap();
+        fs::write(other_dir.path().join("NPCs/Hob.md"), &edited).unwrap();
+        let index = ContentIndex::load(&[], Some(&other)).unwrap();
+        let copy = &index.items[index.position(hob).unwrap()];
+        let ctx = egui::Context::default();
+        crate::design::theme::install(&ctx);
+        ctx.enable_accesskit();
+        let output = ctx.run(Default::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                lookup.read(ui, copy, &index, Some(&other));
+            });
+        });
+        let nodes = output.platform_output.accesskit_update.unwrap().nodes;
+        assert!(
+            nodes
+                .iter()
+                .any(|(_, node)| node.label() == Some("Edit Hob")),
+            "the copy's reader drew its header"
+        );
+        assert!(
+            !nodes.iter().any(|(_, node)| {
+                node.label() == Some("Log line for Hob")
+                    || node.value().is_some_and(|value| value.contains("Kept."))
+            }),
+            "another campaign's reader shows this campaign's typed words"
+        );
+        assert!(!lookup.log_fields.contains_key(&(other.id, hob)));
+
+        // Every draft that the guards count has a field in view. A renamed played session
+        // does not hide typed words: the stamp is the session at Enter, not the field's key.
+        fs::write(&path, &edited).unwrap();
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        let item = &index.items[index.position(hob).unwrap()];
+        lookup.played = Some("[[Renamed Session]]".into());
+        assert!(lookup.has_unsaved_edits());
+        let output = ctx.run(Default::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                lookup.read(ui, item, &index, Some(&campaign));
+            });
+        });
+        let nodes = output.platform_output.accesskit_update.unwrap().nodes;
+        assert!(
+            nodes
+                .iter()
+                .any(|(_, node)| node.label() == Some("Log line for Hob")),
+            "the guarded words have a field after the session is renamed"
+        );
+
+        // An entry that is gone: its draft waits for no guard, and the pane's footer says the
+        // words once, so nothing is lost without a word.
+        fs::remove_file(&path).unwrap();
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        assert!(index.position(hob).is_none());
+        lookup.forget_gone_log_lines(&index);
+        assert!(lookup.unsaved_edits().iter().all(|(id, _)| *id != hob));
+        let item = &index.items[index.position(oren).unwrap()];
+        let notices: Vec<_> = lookup
+            .footer_lines(item, &index, Some(&campaign), None)
+            .into_iter()
+            .map(|line| line.words)
+            .collect();
+        assert!(
+            notices.contains(
+                &"\u{201c}Hob\u{201d} was deleted. The Log line was not added: \u{201c}Kept.\u{201d}"
+                    .to_owned()
+            ),
+            "{notices:?}"
+        );
+    }
+
+    #[test]
+    fn the_header_shows_the_first_choice_that_fits() {
+        let (log, start, icon) = (108.0, 100.0, Density::Read.control());
+        let both = log + design::XS + start;
+        let cases = [
+            (both, Some(LogAction::Word(log)), Some(start)),
+            (both - 1.0, Some(LogAction::Icon), Some(start)),
+            (
+                icon + design::XS + start,
+                Some(LogAction::Icon),
+                Some(start),
+            ),
+            (icon + design::XS + start - 1.0, None, Some(start)),
+            (start, None, Some(start)),
+            (start - 1.0, Some(LogAction::Icon), None),
+            (icon, Some(LogAction::Icon), None),
+            (icon - 1.0, None, None),
+        ];
+        for (room, shown, started) in cases {
+            assert_eq!(
+                header_actions(room, Some(log), Some(start)),
+                (shown, started),
+                "{room}"
+            );
+        }
+        // An entry with only `Add to Log`: its word, then its icon, then nothing. One with only
+        // `Start fight`: its word, or nothing.
+        assert_eq!(
+            header_actions(log, Some(log), None),
+            (Some(LogAction::Word(log)), None)
+        );
+        assert_eq!(
+            header_actions(log - 1.0, Some(log), None),
+            (Some(LogAction::Icon), None)
+        );
+        assert_eq!(header_actions(icon - 1.0, Some(log), None), (None, None));
+        assert_eq!(
+            header_actions(start, None, Some(start)),
+            (None, Some(start))
+        );
+        assert_eq!(header_actions(start - 1.0, None, Some(start)), (None, None));
     }
 
     #[test]
