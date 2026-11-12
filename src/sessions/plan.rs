@@ -1036,7 +1036,7 @@ fn plan_first(
 }
 
 /// The help line of **How long** when the clock cannot place the journey.
-const LENGTH_HELP: &str = "A number and a unit move the clock: 3 days, 8 hours, an hour.";
+const LENGTH_HELP: &str = timeline::LENGTH_HELP;
 
 /// Which result's Undo the DM pressed in a journey's checks.
 #[derive(Clone, Copy, PartialEq)]
@@ -2328,7 +2328,7 @@ impl Sessions {
     /// What can be undone in the plan: the event just added or just removed.
     #[expect(
         clippy::too_many_arguments,
-        reason = "the plan's parts that its results name"
+        reason = "the plan’s parts that its results name"
     )]
     fn plan_messages<'a>(
         &mut self,
@@ -3240,7 +3240,13 @@ mod tests {
         harness.key_press(egui::Key::Enter);
         harness.run_steps(3);
         assert!(read().contains("- [x] Pay the toll\n- [ ] Meet the ferryman\n\n## What happened"));
-        assert!(harness.query_by_label("Scene added to tonight.").is_some());
+        // The footer's group carries the same words as the message in it.
+        assert!(
+            harness
+                .query_all_by_label("Scene added to tonight.")
+                .next()
+                .is_some()
+        );
         assert!(
             harness.query_by_label("Plan a scene").is_some(),
             "the field stays open"

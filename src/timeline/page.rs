@@ -1317,9 +1317,7 @@ impl TimelinePage {
                 design::field(
                     ui,
                     "How long",
-                    Some(
-                        "A number and a unit move the clock, such as 4 hours, 1 day or half a day.",
-                    ),
+                    Some(super::LENGTH_HELP),
                     None,
                     |ui| {
                         let hint = match event.kind {

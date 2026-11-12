@@ -443,6 +443,10 @@ const YEAR: u64 = 12 * MONTH;
 /// A length the clock cannot count says so in these words, after the warning icon.
 pub const TIME_NOT_COUNTED: &str = "Not counted in the day’s time";
 
+/// How long's help, on Timeline and in the plan's open journey: the forms the clock counts.
+pub const LENGTH_HELP: &str =
+    "A number and a unit move the clock, such as 4 hours, 1 day or half a day.";
+
 /// How to write a length the clock counts. The event form's help and the rows' hover say it.
 pub const TIME_REPAIR: &str = "Write a number and a unit, such as 4 hours, 1 day or half a day.";
 
