@@ -1102,8 +1102,9 @@ pub(super) struct Fault {
 /// What the scenes' fold measured on the last frame. Scenes fold first, so that the next
 /// fight's row and its primary action stay in view and nothing else in the plan moves or narrows
 /// because scenes exist. Each row counts as it is when closed. An opened row folds the scenes
-/// only when its details push the next fight out of view and the scenes sit above that fight;
-/// the Scene field, its suggestions and the plan's results never fold them.
+/// only when its details push the next fight out of view and the scenes sit above that fight,
+/// or, in a plan with no fight still to come, when the rows with its details do not fit; the
+/// Scene field, its suggestions and the plan's results never fold them.
 #[derive(Default)]
 struct Fold {
     /// The pane's height, once a frame measured it.
@@ -1122,6 +1123,8 @@ mod fold {
         /// The closed rows' height without the scenes, and the scenes' height when shown.
         pub(super) closed: f32,
         pub(super) scenes: f32,
+        /// The opened rows' details, in a plan with no fight still to come.
+        pub(super) details: f32,
         pub(super) next: Option<Next>,
     }
 
@@ -1154,18 +1157,23 @@ mod fold {
 impl Fold {
     /// Whether the scenes give way: the closed rows, with the scenes, are taller than the pane;
     /// or the opened rows' details push the next fight's row out of the pane and scenes sit
-    /// above that fight.
+    /// above that fight; or, with no fight still to come, the rows with the opened rows'
+    /// details are taller than the pane.
     fn measured(&self) -> bool {
         let Some(viewport) = self.viewport else {
             return false;
         };
         let m = &self.measure;
         let rows = m.closed + m.scenes > viewport + 0.5;
-        let pushed = m.next.is_some_and(|next| {
-            next.scenes > 0.0
-                && next.details > 0.0
-                && next.bottom + next.scenes + next.details > viewport + 0.5
-        });
+        let pushed = match m.next {
+            Some(next) => {
+                next.scenes > 0.0
+                    && next.details > 0.0
+                    && next.bottom + next.scenes + next.details > viewport + 0.5
+            }
+            // With no fight still to come, the rows with an opened row's details.
+            None => m.details > 0.0 && m.closed + m.scenes + m.details > viewport + 0.5,
+        };
         rows || pushed
     }
 
@@ -2747,6 +2755,7 @@ impl Sessions {
             let measure = fold::Measure {
                 closed,
                 scenes: closed_scenes,
+                details: details_above,
                 next,
             };
             self.measure_fold(ui.ctx(), folded, viewport, measure, hold);

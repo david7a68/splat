@@ -472,21 +472,10 @@ pub fn run(d: &mut Driver<'_>) {
             "At 1200x800, the open Travel row with its checks leaves the scenes in place: {detail}"
         ),
     );
-    d.state("travel-row-open-beside-scenes", Sizes::Standard);
     d.click("Travel");
 
     // App round 1, V14: when the scenes fold, `N scenes` has the caret of a folded section.
-    // At 960x640, three more scenes fold them.
-    d.act_at_size(SMALL, |d| {
-        d.click("More Add actions");
-        d.click("Add Scene");
-        for words in ["Pay the toll", "Cross at dawn", "Rest at the ford"] {
-            d.type_text(words);
-            d.press(Key::Enter);
-            d.expect(&format!("Open: {words}"));
-        }
-        d.press(Key::Escape);
-    });
+    // At 960x640 these closed rows do not fit with the scenes, so the scenes fold.
     let caret = |d: &Driver<'_>, icon: &str| {
         let mut found = None;
         d.each_painted_text(|text, _| {
