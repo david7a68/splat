@@ -19,6 +19,7 @@ pub mod integrity;
 pub mod list_formats;
 pub mod markdown_links;
 pub mod run_continue;
+pub mod run_effects;
 pub mod session_plan_scenes;
 pub mod stat_formats;
 pub mod travel_checks;

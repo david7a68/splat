@@ -203,6 +203,7 @@ const SCENARIOS: [(&str, Seed, Script); 85] = [
         Seed::Campaign,
         scenarios::run_long_names::run,
     ),
+    ("run-effects", Seed::Campaign, scenarios::run_effects::run),
     (
         "session-notes",
         Seed::Campaign,
