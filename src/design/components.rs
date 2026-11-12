@@ -2897,10 +2897,6 @@ pub(crate) fn next_actions(ctx: &egui::Context) -> Vec<NextSeen> {
 /// Every primary `Action` does this by itself. Call it for an action the DM needs next that is
 /// not drawn as the primary (a retry while another form owns the accent fill).
 pub fn keep_above_footer(ui: &Ui, response: &Response) {
-    // A pass that only measures, or a part that is not shown, owes nothing.
-    if ui.is_sizing_pass() || !ui.is_visible() {
-        return;
-    }
     let (ctx, rect, clip) = (ui.ctx(), response.rect, ui.clip_rect());
     let room = FooterRooms::this_pass(ctx).into_iter().find(|room| {
         !room.footer.contains_rect(clip) && room.band.x_range().intersects(rect.x_range())
