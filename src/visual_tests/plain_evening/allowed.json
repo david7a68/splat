@@ -1,4 +1,197 @@
 {
   "about": "G7's allowed differences from reference.json. Each row names its row of docs/design/session-cycle.md section 2.5 and one difference, whole, as the G7 failure prints it. A row that matches nothing fails. Add rows only for a change that section 2.5 lists.",
-  "rows": []
+  "rows": [
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2): `Carry over` moves straight left on its line to L after the Last time line's last word (X24)",
+      "difference": {
+        "screen": "session-new",
+        "view": "1200x800 Lookup closed",
+        "what": "control",
+        "change": "moved",
+        "name": "Button: Carry over",
+        "detail": "1106.6 140 81.4x24 -> 596.9 140 81.4x24"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2): `Carry over` moves straight left on its line to L after the Last time line's last word (X24)",
+      "difference": {
+        "screen": "session-new",
+        "view": "1200x800 Lookup closed",
+        "what": "text",
+        "change": "moved",
+        "name": "Carry over",
+        "detail": "1114.6 143 65.4x18 -> 604.9 143 65.4x18"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2): `Carry over` moves straight left on its line to L after the Last time line's last word (X24)",
+      "difference": {
+        "screen": "session-new",
+        "view": "960x640 Lookup closed",
+        "what": "control",
+        "change": "moved",
+        "name": "Button: Carry over",
+        "detail": "866.6 140 81.4x24 -> 596.9 140 81.4x24"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2): `Carry over` moves straight left on its line to L after the Last time line's last word (X24)",
+      "difference": {
+        "screen": "session-new",
+        "view": "960x640 Lookup closed",
+        "what": "text",
+        "change": "moved",
+        "name": "Carry over",
+        "detail": "874.6 143 65.4x18 -> 604.9 143 65.4x18"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2): `Carry over` moves straight left on its line to L after the Last time line's last word (X24)",
+      "difference": {
+        "screen": "session-new",
+        "view": "1200x800 Lookup open",
+        "what": "control",
+        "change": "moved",
+        "name": "Button: Carry over",
+        "detail": "674.6 174 81.4x24 -> 372.9 174 81.4x24"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2): `Carry over` moves straight left on its line to L after the Last time line's last word (X24)",
+      "difference": {
+        "screen": "session-new",
+        "view": "1200x800 Lookup open",
+        "what": "text",
+        "change": "moved",
+        "name": "Carry over",
+        "detail": "682.6 177 65.4x18 -> 380.9 177 65.4x18"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2): `Carry over` moves straight left on its line to L after the Last time line's last word (X24)",
+      "difference": {
+        "screen": "session-new",
+        "view": "960x640 Lookup open",
+        "what": "control",
+        "change": "moved",
+        "name": "Button: Carry over",
+        "detail": "521 174 81.4x24 -> 372.9 174 81.4x24"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2): `Carry over` moves straight left on its line to L after the Last time line's last word (X24)",
+      "difference": {
+        "screen": "session-new",
+        "view": "960x640 Lookup open",
+        "what": "text",
+        "change": "moved",
+        "name": "Carry over",
+        "detail": "529 177 65.4x18 -> 380.9 177 65.4x18"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2): `Carry over` moves straight left on its line to L after the Last time line's last word (X24)",
+      "difference": {
+        "screen": "session-new: note written",
+        "view": "1200x800",
+        "what": "control",
+        "change": "moved",
+        "name": "Button: Carry over",
+        "detail": "1106.6 140 81.4x24 -> 596.9 140 81.4x24"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2): `Carry over` moves straight left on its line to L after the Last time line's last word (X24)",
+      "difference": {
+        "screen": "session-new: note written",
+        "view": "1200x800",
+        "what": "text",
+        "change": "moved",
+        "name": "Carry over",
+        "detail": "1114.6 143 65.4x18 -> 604.9 143 65.4x18"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2): `Carry over` moves straight left on its line to L after the Last time line's last word (X24)",
+      "difference": {
+        "screen": "session-new: note written",
+        "view": "960x640",
+        "what": "control",
+        "change": "moved",
+        "name": "Button: Carry over",
+        "detail": "866.6 140 81.4x24 -> 596.9 140 81.4x24"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2): `Carry over` moves straight left on its line to L after the Last time line's last word (X24)",
+      "difference": {
+        "screen": "session-new: note written",
+        "view": "960x640",
+        "what": "text",
+        "change": "moved",
+        "name": "Carry over",
+        "detail": "874.6 143 65.4x18 -> 604.9 143 65.4x18"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2): `Carry over` moves straight left on its line to L after the Last time line's last word (X24)",
+      "difference": {
+        "screen": "session-new: note saved",
+        "view": "1200x800",
+        "what": "control",
+        "change": "moved",
+        "name": "Button: Carry over",
+        "detail": "1106.6 140 81.4x24 -> 596.9 140 81.4x24"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2): `Carry over` moves straight left on its line to L after the Last time line's last word (X24)",
+      "difference": {
+        "screen": "session-new: note saved",
+        "view": "1200x800",
+        "what": "text",
+        "change": "moved",
+        "name": "Carry over",
+        "detail": "1114.6 143 65.4x18 -> 604.9 143 65.4x18"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2): `Carry over` moves straight left on its line to L after the Last time line's last word (X24)",
+      "difference": {
+        "screen": "session-new: note saved",
+        "view": "960x640",
+        "what": "control",
+        "change": "moved",
+        "name": "Button: Carry over",
+        "detail": "866.6 140 81.4x24 -> 596.9 140 81.4x24"
+      }
+    },
+    {
+      "row": 25,
+      "why": "Row 25 (by the lead's ruling after app round 2): `Carry over` moves straight left on its line to L after the Last time line's last word (X24)",
+      "difference": {
+        "screen": "session-new: note saved",
+        "view": "960x640",
+        "what": "text",
+        "change": "moved",
+        "name": "Carry over",
+        "detail": "874.6 143 65.4x18 -> 604.9 143 65.4x18"
+      }
+    }
+  ]
 }
