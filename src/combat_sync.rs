@@ -3144,7 +3144,7 @@ mod tests {
                         // Round 26: the result sits in the sheet's footer.
                         let mut footer = crate::design::Footer::new("sync_test_footer", 600.0);
                         sync.footer_messages(&mut footer);
-                        footer.show(ui);
+                        let _ = footer.show(ui);
                         sync.show(ui);
                     });
                 },

@@ -815,10 +815,11 @@ impl CampaignContent {
         // is left of it, and the header and tabs above stay where they are.
         let rest = ui.available_rect_before_wrap();
         ui.scope_builder(egui::UiBuilder::new().max_rect(rest), |ui| {
-            self.page_footer(ui, campaigns, &active, width.min(design::LIST_MEASURE));
-            let page_height = ui.available_height();
+            let bottom = self.page_footer(ui, campaigns, &active, width.min(design::LIST_MEASURE));
+            let page_height = (bottom - ui.cursor().top()).max(0.0);
             egui::ScrollArea::vertical()
                 .id_salt("campaign_packages_page")
+                .max_height(page_height)
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
                     // egui gives the content only the visible height, so a scroll area inside it
@@ -924,7 +925,7 @@ impl CampaignContent {
         campaigns: &Campaigns,
         active: &Campaign,
         width: f32,
-    ) {
+    ) -> f32 {
         use std::cell::{Cell, RefCell};
         let locked = self
             .dirty()
@@ -961,7 +962,7 @@ impl CampaignContent {
         let write = Cell::new(false);
         let undo_repair = Cell::new(None);
         let me = RefCell::new(&mut *self);
-        {
+        let bottom = {
             let mut footer = design::Footer::new(("campaign_page_footer", active.id), width);
             for kind in results.iter().copied().filter(|kind| kind.has_undo()) {
                 let words = me.borrow().words_of(kind);
@@ -1020,8 +1021,8 @@ impl CampaignContent {
                         .package_warnings(ui, campaigns, active, warnings.unavailable);
                 });
             }
-            footer.show(ui);
-        }
+            footer.show(ui)
+        };
         let this = me.into_inner();
         this.press_result(press.take());
         if write.get() {
@@ -1035,6 +1036,7 @@ impl CampaignContent {
             repair.draft = text;
             repair.draft_changed(active, &mut this.repair_checks);
         }
+        bottom
     }
 
     /// The page's errors, in one part: Save's or a load's error and the change check's error.

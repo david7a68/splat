@@ -757,17 +757,24 @@ impl Party {
                 if session.is_some() {
                     self.combat.footer_messages(&mut footer);
                 }
-                footer.show(ui);
-                if session.is_some() && self.sync_heading(ui) {
-                    self.sync_panel(ui);
-                }
-                if !self.reader.loading() {
-                    ui.label(
-                        Type::Body
-                            .rich(ui, "No local copy is available for this character.")
-                            .color(c.muted),
-                    );
-                }
+                let bottom = footer.show(ui);
+                // The panel scrolls above the footer when it needs more room.
+                egui::ScrollArea::vertical()
+                    .id_salt(("party_sheet_no_copy", id))
+                    .max_height((bottom - ui.cursor().top()).max(0.0))
+                    .auto_shrink([false, true])
+                    .show(ui, |ui| {
+                        if session.is_some() && self.sync_heading(ui) {
+                            self.sync_panel(ui);
+                        }
+                        if !self.reader.loading() {
+                            ui.label(
+                                Type::Body
+                                    .rich(ui, "No local copy is available for this character.")
+                                    .color(c.muted),
+                            );
+                        }
+                    });
             });
             return;
         };
@@ -813,16 +820,17 @@ impl Party {
         let rest = ui.available_rect_before_wrap();
         ui.scope_builder(egui::UiBuilder::new().max_rect(rest), |ui| {
             // Round 26: the sync panel's result sits in the sheet's footer, below its scroll area.
-            {
+            let bottom = {
                 let width = ui.available_width().min(design::LIST_MEASURE);
                 let mut footer = design::Footer::new(("party_sheet_footer", id), width);
                 if session.is_some() {
                     self.combat.footer_messages(&mut footer);
                 }
-                footer.show(ui);
-            }
+                footer.show(ui)
+            };
             egui::ScrollArea::vertical()
                 .id_salt((id, self.page))
+                .max_height((bottom - ui.cursor().top()).max(0.0))
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
                     // The heading and its body are one block, below the tabs: the tabs never sit

@@ -1654,17 +1654,18 @@ impl Splat {
                     // Round 26: results, reasons and errors on this tab sit in one footer at the
                     // bottom of the pane (a failed Connect, the campaign form, the campaign list), so
                     // none of them moves the form the DM works in.
-                    {
+                    let bottom = {
                         let width = ui.available_width().min(design::LIST_MEASURE);
                         let campaigns = std::cell::RefCell::new(&mut self.campaigns);
                         let mut footer = design::Footer::new("settings_footer", width);
                         campaigns::Campaigns::footer_messages(&campaigns, &mut footer, true);
                         self.settings.footer_messages(&mut footer);
                         self.dndbeyond.footer_messages(&mut footer, false);
-                        footer.show(ui);
-                    }
+                        footer.show(ui)
+                    };
                     let page = egui::ScrollArea::vertical()
                         .id_salt("settings_page")
+                        .max_height((bottom - ui.cursor().top()).max(0.0))
                         .auto_shrink([false, false])
                         .show(ui, |ui| {
                             ui.add_space(design::L);
@@ -1927,7 +1928,7 @@ impl Splat {
                         ui.scope_builder(egui::UiBuilder::new().max_rect(rest), |ui| {
                             // Round 26: the link's and the details form's messages sit in the pane's
                             // footer, below its scroll area.
-                            {
+                            let bottom = {
                                 let width = ui.available_width().min(design::LIST_MEASURE);
                                 let campaigns = std::cell::RefCell::new(&mut self.campaigns);
                                 let mut footer = design::Footer::new("campaign_link_footer", width);
@@ -1937,10 +1938,11 @@ impl Splat {
                                     false,
                                 );
                                 self.dndbeyond.footer_messages(&mut footer, true);
-                                footer.show(ui);
-                            }
+                                footer.show(ui)
+                            };
                             egui::ScrollArea::vertical()
                                 .id_salt("campaign_link")
+                                .max_height((bottom - ui.cursor().top()).max(0.0))
                                 .auto_shrink([false, false])
                                 .show(ui, |ui| {
                                     self.campaigns.show_active(

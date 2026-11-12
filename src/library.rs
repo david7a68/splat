@@ -122,8 +122,8 @@ fn draft_repair_problem(
 }
 
 /// A manifest's recovery in Edit Markdown: the bordered action at the message text edge, then
-/// its consequence. It sits directly below the message space, which holds the error: the action
-/// depends on the saved file only, so it stays while the DM edits and moves nothing (round 25).
+/// its consequence. It follows the error in the pane's message footer: the action depends on the
+/// saved file only, so it stays while the DM edits and moves nothing.
 fn recovery_action(
     ui: &mut egui::Ui,
     (_, path, exists): &(Module, String, bool),
@@ -155,16 +155,9 @@ fn recovery_action(
         if *exists {
             ui.horizontal(|ui| {
                 ui.add_space((inset - ui.spacing().item_spacing.x).max(0.0));
-                ui.add(
-                    egui::Label::new(
-                        Type::Small
-                            .rich(
-                                ui,
-                                crate::content_workspace::manifest_replace_consequence(path),
-                            )
-                            .color(colors().muted),
-                    )
-                    .wrap(),
+                design::help(
+                    ui,
+                    &crate::content_workspace::manifest_replace_consequence(path),
                 );
             });
         }
@@ -214,16 +207,9 @@ fn repair_notice(
                 ui.set_max_width(ui.available_width().min(EDITOR_MAX_WIDTH));
                 ui.horizontal(|ui| {
                     ui.add_space((inset - ui.spacing().item_spacing.x).max(0.0));
-                    ui.add(
-                        egui::Label::new(
-                            Type::Small
-                                .rich(
-                                    ui,
-                                    crate::content_workspace::manifest_replace_consequence(path),
-                                )
-                                .color(colors().muted),
-                        )
-                        .wrap(),
+                    design::help(
+                        ui,
+                        &crate::content_workspace::manifest_replace_consequence(path),
                     );
                 });
             });
@@ -1905,44 +1891,6 @@ struct ResultPress {
 }
 
 impl ReaderResults {
-    /// Every result's words, in the order they show, for the part's accessible name.
-    fn words(&self) -> String {
-        let page = &self.page;
-        page.scope_notice
-            .clone()
-            .into_iter()
-            .chain(page.link_offer.as_ref().map(|(words, _)| words.clone()))
-            .chain(page.links.clone())
-            .chain(page.registration.as_ref().map(|(words, _)| words.clone()))
-            .chain(page.rosters.map(|_| USE_COPY_RESULT.to_owned()))
-            .chain(page.unregistered.clone())
-            .chain(self.package_use.then(|| PACKAGE_USE_RESULT.to_owned()))
-            .chain(self.manifest.as_ref().map(|(words, _)| words.clone()))
-            .chain(self.identities.clone())
-            .chain(self.identity.clone())
-            .chain(
-                self.discarded
-                    .as_ref()
-                    .map(|name| format!("{name} draft discarded.")),
-            )
-            .collect::<Vec<_>>()
-            .join(" ")
-    }
-
-    /// Whether a shown result carries an Undo: it then leads the message space, before a reason.
-    fn has_undo(&self) -> bool {
-        let page = &self.page;
-        page.links.is_some()
-            || page.registration.is_some()
-            || page.rosters.is_some()
-            || page.unregistered.is_some()
-            || self.package_use
-            || self.manifest.is_some()
-            || self.identities.is_some()
-            || self.identity.is_some()
-            || self.discarded.is_some()
-    }
-
     fn any(&self) -> bool {
         self.page.any()
             || self.package_use
@@ -1953,92 +1901,220 @@ impl ReaderResults {
     }
 }
 
+/// The age of each kept result by its words: the clock when it was first seen. Results first seen
+/// together take the next ticks in the order given. Results no longer
+/// shown leave, so a result that comes back is new again.
+fn result_ages<'a>(
+    ages: &mut std::collections::HashMap<String, u64>,
+    clock: &mut u64,
+    words: impl Iterator<Item = &'a str> + Clone,
+) -> Vec<u64> {
+    ages.retain(|known, _| words.clone().any(|words| words == known));
+    words
+        .map(|words| {
+            *ages.entry(words.to_owned()).or_insert_with(|| {
+                *clock += 1;
+                *clock
+            })
+        })
+        .collect()
+}
+
+/// One kept result of a pane, in the order `show_results` draws them in Read.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum ResultKind {
+    ScopeNotice,
+    LinkOffer,
+    Links,
+    Registration,
+    Rosters,
+    Unregistered,
+    PackageUse,
+    Manifest,
+    Identities,
+    Identity,
+    Discarded,
+}
+
+impl ReaderResults {
+    /// The results shown, in Read's order, each with its words and whether its Undo is live.
+    fn items(&self) -> Vec<(ResultKind, String, bool)> {
+        let page = &self.page;
+        let mut items = Vec::new();
+        let mut add = |kind, words: Option<String>, undo| {
+            if let Some(words) = words {
+                items.push((kind, words, undo));
+            }
+        };
+        add(ResultKind::ScopeNotice, page.scope_notice.clone(), false);
+        add(
+            ResultKind::LinkOffer,
+            page.link_offer.as_ref().map(|(words, _)| words.clone()),
+            false,
+        );
+        add(ResultKind::Links, page.links.clone(), true);
+        add(
+            ResultKind::Registration,
+            page.registration.as_ref().map(|(words, _)| words.clone()),
+            true,
+        );
+        add(
+            ResultKind::Rosters,
+            page.rosters.map(|_| USE_COPY_RESULT.to_owned()),
+            true,
+        );
+        add(ResultKind::Unregistered, page.unregistered.clone(), true);
+        add(
+            ResultKind::PackageUse,
+            self.package_use.then(|| PACKAGE_USE_RESULT.to_owned()),
+            true,
+        );
+        add(
+            ResultKind::Manifest,
+            self.manifest.as_ref().map(|(words, _)| words.clone()),
+            true,
+        );
+        add(ResultKind::Identities, self.identities.clone(), true);
+        add(ResultKind::Identity, self.identity.clone(), true);
+        add(
+            ResultKind::Discarded,
+            self.discarded
+                .as_ref()
+                .map(|name| format!("{name} draft discarded.")),
+            true,
+        );
+        items
+    }
+}
+
 fn show_results(ui: &mut egui::Ui, results: &ReaderResults) -> ResultPress {
     let mut pressed = ResultPress::default();
-    let page = &results.page;
-    if let Some(words) = &page.scope_notice {
-        // It wrote nothing: the scope only widened to show the entry.
-        design::message(ui, Tone::Info, words);
-    }
-    if let Some((words, action)) = &page.link_offer {
-        // The offer names both names, so the DM can check the words before the write.
-        pressed.page.link_offer = design::message_with_action(ui, Tone::Info, words, action);
-    }
-    if let Some(words) = &page.links {
-        // The result is a message, so its Undo keeps its icon on the message line.
-        pressed.page.links = design::undo_message(ui, Tone::Success, words, "Undo link update");
-    }
-    if let Some((words, blocked)) = &page.registration {
-        // The Undo sits on the message line, as every Undo after a message does. After an
-        // outside change it stays there, blocked, and the reason follows at the message words.
-        // The result still happened, so its words keep the text colour.
-        pressed.page.registration = kept_undo_message(
-            ui,
-            Tone::Success,
-            words,
-            "Undo package registration",
-            *blocked,
-            true,
-        );
-        // The other choice starts below, at the message words. Only Undo is quiet.
-        if let Some(blocked) = page.use_copy {
-            pressed.page.use_copy = design::message_choice_row(ui, Tone::Success, |ui| {
-                Action::secondary(USE_COPY)
-                    .density(Density::Read)
-                    .blocked(blocked)
-                    .show(ui)
-                    .clicked()
-            });
-        }
-    }
-    if let Some(blocked) = page.rosters {
-        // After an outside change the Undo stays, blocked, and the reason follows.
-        pressed.page.rosters = kept_undo_message(
-            ui,
-            Tone::Success,
-            USE_COPY_RESULT,
-            "Undo source change",
-            blocked,
-            true,
-        );
-    }
-    if let Some(words) = &page.unregistered {
-        // A finished change: the package left this campaign's lists.
-        pressed.page.unregistered =
-            design::undo_message(ui, Tone::Success, words, "Undo unregister");
-    }
-    if results.package_use {
-        pressed.package_use =
-            design::undo_message(ui, Tone::Success, PACKAGE_USE_RESULT, "Undo package choice");
-    }
-    if let Some((words, action)) = &results.manifest {
-        pressed.manifest =
-            kept_undo_message(ui, Tone::Success, words, action, results.locked, false);
-    }
-    if let Some(words) = &results.identities {
-        pressed.identities = kept_undo_message(
-            ui,
-            Tone::Success,
-            words,
-            "Undo separate entries",
-            results.locked,
-            false,
-        );
-    }
-    if let Some(words) = &results.identity {
-        pressed.identity = kept_undo_message(
-            ui,
-            Tone::Success,
-            words,
-            crate::world::SEPARATE_ENTRY_UNDO,
-            results.locked,
-            false,
-        );
-    }
-    if let Some(name) = &results.discarded {
-        pressed.discarded = design::draft_discarded(ui, name);
+    for (kind, ..) in results.items() {
+        show_result(ui, results, kind, &mut pressed);
     }
     pressed
+}
+
+/// Draw one kept result, and note its press in `pressed`.
+fn show_result(
+    ui: &mut egui::Ui,
+    results: &ReaderResults,
+    kind: ResultKind,
+    pressed: &mut ResultPress,
+) {
+    let page = &results.page;
+    match kind {
+        ResultKind::ScopeNotice => {
+            if let Some(words) = &page.scope_notice {
+                // It wrote nothing: the scope only widened to show the entry.
+                design::message(ui, Tone::Info, words);
+            }
+        }
+        ResultKind::LinkOffer => {
+            if let Some((words, action)) = &page.link_offer {
+                // The offer names both names, so the DM can check the words before the write.
+                pressed.page.link_offer =
+                    design::message_with_action(ui, Tone::Info, words, action);
+            }
+        }
+        ResultKind::Links => {
+            if let Some(words) = &page.links {
+                // The result is a message, so its Undo keeps its icon on the message line.
+                pressed.page.links =
+                    design::undo_message(ui, Tone::Success, words, "Undo link update");
+            }
+        }
+        ResultKind::Registration => {
+            if let Some((words, blocked)) = &page.registration {
+                // The Undo sits on the message line, as every Undo after a message does. After
+                // an outside change it stays there, blocked, and the reason follows at the
+                // message words. The result still happened, so its words keep the text colour.
+                pressed.page.registration = kept_undo_message(
+                    ui,
+                    Tone::Success,
+                    words,
+                    "Undo package registration",
+                    *blocked,
+                    true,
+                );
+                // The other choice starts below, at the message words. Only Undo is quiet.
+                if let Some(blocked) = page.use_copy {
+                    pressed.page.use_copy = design::message_choice_row(ui, Tone::Success, |ui| {
+                        Action::secondary(USE_COPY)
+                            .density(Density::Read)
+                            .blocked(blocked)
+                            .show(ui)
+                            .clicked()
+                    });
+                }
+            }
+        }
+        ResultKind::Rosters => {
+            if let Some(blocked) = page.rosters {
+                // After an outside change the Undo stays, blocked, and the reason follows.
+                pressed.page.rosters = kept_undo_message(
+                    ui,
+                    Tone::Success,
+                    USE_COPY_RESULT,
+                    "Undo source change",
+                    blocked,
+                    true,
+                );
+            }
+        }
+        ResultKind::Unregistered => {
+            if let Some(words) = &page.unregistered {
+                // A finished change: the package left this campaign's lists.
+                pressed.page.unregistered =
+                    design::undo_message(ui, Tone::Success, words, "Undo unregister");
+            }
+        }
+        ResultKind::PackageUse => {
+            if results.package_use {
+                pressed.package_use = design::undo_message(
+                    ui,
+                    Tone::Success,
+                    PACKAGE_USE_RESULT,
+                    "Undo package choice",
+                );
+            }
+        }
+        ResultKind::Manifest => {
+            if let Some((words, action)) = &results.manifest {
+                pressed.manifest =
+                    kept_undo_message(ui, Tone::Success, words, action, results.locked, false);
+            }
+        }
+        ResultKind::Identities => {
+            if let Some(words) = &results.identities {
+                pressed.identities = kept_undo_message(
+                    ui,
+                    Tone::Success,
+                    words,
+                    "Undo separate entries",
+                    results.locked,
+                    false,
+                );
+            }
+        }
+        ResultKind::Identity => {
+            if let Some(words) = &results.identity {
+                pressed.identity = kept_undo_message(
+                    ui,
+                    Tone::Success,
+                    words,
+                    crate::world::SEPARATE_ENTRY_UNDO,
+                    results.locked,
+                    false,
+                );
+            }
+        }
+        ResultKind::Discarded => {
+            if let Some(name) = &results.discarded {
+                pressed.discarded = design::draft_discarded(ui, name);
+            }
+        }
+    }
 }
 
 /// The result of `Choose every entry`.
@@ -3133,6 +3209,10 @@ pub struct Library {
     /// The file, the draft before and after a stat fix, and its result message.
     vital_undo: Option<(String, String, String, String)>,
     heading_undo: Option<(String, String, String)>,
+    /// When the editor pane first saw each kept result, by its words, so the message footer can
+    /// list results with a live Undo newest first. A result ends its age when it leaves.
+    result_ages: std::collections::HashMap<String, u64>,
+    result_clock: u64,
 }
 /// Sort so that "Level 2" comes before "Level 18".
 fn natural_key(name: &str) -> Vec<(String, u64)> {
@@ -5132,14 +5212,7 @@ impl Library {
                     ));
                 }
             }
-            ui.add(
-                egui::Label::new(
-                    Type::Small
-                        .rich(ui, format!("The files stay in {}.", module.path.display()))
-                        .color(colors().muted),
-                )
-                .wrap(),
-            );
+            design::help(ui, &format!("The files stay in {}.", module.path.display()));
             ui.add_space(design::S);
             design::dialog_actions(
                 ui,
@@ -6809,8 +6882,8 @@ impl Library {
                     .to_string_lossy(),
             )
         });
-        // Edit Markdown puts the results in the reserved slot below its save row, so a result
-        // never moves the editor. Without that row (a built-in's source, a file changed on disk)
+        // Edit Markdown puts the results in the pane's message footer, below the editor, so a
+        // result never moves the editor. Without that row (a built-in's source, a file changed on disk)
         // they stay above the editor, with the warnings.
         let slot_row = save_row && !conflict;
         let mut pressed = ResultPress::default();
@@ -6821,7 +6894,7 @@ impl Library {
         let mut read_again = false;
         // The heading warning and its Undo. The reader draws them after the title, directly above
         // the duplicate warning, so one file's warnings share one place and the title never moves.
-        // Edit Markdown draws them in the message space below the save row.
+        // Edit Markdown draws them in the pane's message footer.
         let heading = HeadingChoice::new(
             (editable && !conflict)
                 .then(|| parsed.as_ref().ok())
@@ -6831,6 +6904,8 @@ impl Library {
             &note.path,
         );
         let mut heading_pressed = (false, false);
+        // Where the body ends: above the message footer, when the save row has one.
+        let mut body_bottom = f32::INFINITY;
         // Save and Discard are one row, as far apart as the pane allows.
         if slot_row {
             ui.horizontal(|ui| {
@@ -6866,16 +6941,15 @@ impl Library {
                     });
                 });
             });
-            // One message space below the save row, two text lines high whatever it holds:
-            // longer words wrap and scroll inside it, so nothing in it moves the editor.
-            // A result that carries a live Undo comes first (Discard's, the heading and stat
-            // fixes', the reader's results with Undo): a broken file's reason never clears after
-            // Discard or Reload, so a reason first would hide the only way back. Then Save's
-            // reason (a repair draft's parse error with its recovery, a refusal before the write,
-            // the disk's failure), then the missing link Campaign sent here. With no reason, the
-            // warnings follow: the other broken links, the first-heading and stat warnings, and
-            // results with no Undo. A reason hides those; they come back when it clears, while
-            // their owner lives. With none of these, the space says why other actions wait.
+            // The pane's message footer, pinned at the bottom of the pane below the editor, so
+            // no message moves the editor: its top stays and only its visible height changes.
+            // Results that carry a live Undo come first (Discard's, the heading and stat fixes',
+            // the reader's results with Undo): a broken file's reason never clears after Discard
+            // or Reload, so a reason first would hide the only way back. Then Save's reason (a
+            // repair draft's parse error with its recovery, a refusal before the write, the
+            // disk's failure). Then the notices: results with no Undo, the missing link Campaign
+            // sent here, the other broken links, the first-heading and stat warnings. With none
+            // of these, the footer says why other actions wait.
             let discard_shown =
                 discard_is_for(self.discarded.as_ref(), note) && self.draft == note.text;
             let link_words = missing_link.as_ref().map(|(_, words)| words.as_str());
@@ -6895,7 +6969,7 @@ impl Library {
                     "reader_link_index",
                 ))
             });
-            // Borrowed out of the cache for this frame and put back after the space is drawn.
+            // Borrowed out of the cache for this frame and put back after the footer is drawn.
             let mut broken_taken = false;
             let broken_cache: (Vec<String>, String) = match (&index, parsed) {
                 (Some(index), Ok(entry)) if note.owner.editable() && !note.is_manifest() => {
@@ -6922,82 +6996,147 @@ impl Library {
                 }
                 _ => Default::default(),
             };
-            let (broken, broken_words) = (&broken_cache.0, broken_cache.1.as_str());
+            let broken = &broken_cache.0;
             let results_shown = !choices_in_reader && results.any();
-            // The result group: Discard's result, the heading and stat fixes' results, and the
-            // reader's results. It leads while one of them carries a live Undo.
-            let undo_first = discard_shown
-                || heading.undo.is_some()
-                || vital_result.is_some()
-                || (results_shown && results.has_undo());
-            let mut result_words = Vec::new();
-            if discard_shown {
-                result_words.push(format!("{} draft discarded.", note.name()));
-            }
-            result_words.extend(heading.undo.clone());
-            result_words.extend(vital_result.map(str::to_owned));
-            if results_shown {
-                result_words.push(results.words());
-            }
-            let result_words = result_words.join(" ");
-            // The reason group: Save's reason, the link Campaign sent here, then the warnings
-            // (each broken link, the first heading, a stat line). With nothing else in the
-            // space, why other actions wait for this draft.
-            let reason = repair_problem.is_some() || failed.is_some();
-            let warned = link_words.is_some()
-                || !broken.is_empty()
-                || heading.fix.is_some()
-                || !vitals.is_empty();
-            let waits = !reason && !warned && result_words.is_empty();
-            // Borrowed parts; the broken links' part was composed once, with its warnings.
-            let mut reason_words: Vec<&str> = Vec::new();
-            reason_words.extend(repair_problem.as_deref());
-            reason_words.extend(failed.as_deref());
-            reason_words.extend(link_words);
-            if !broken_words.is_empty() {
-                reason_words.push(broken_words);
-            }
-            reason_words.extend(heading.fix.as_ref().map(|(words, _, _)| words.as_str()));
-            reason_words.extend(vitals.iter().map(|(_, _, _, words)| words.as_str()));
-            if waits {
-                reason_words.extend(draft_reason);
-            }
-            let reason_words = reason_words.join(" ");
-            let mut heading_fix = false;
-            let mut vital_use = None;
+            let repair = recovery.as_ref().filter(|_| note.error.is_some());
+            let waits = repair_problem.is_none()
+                && failed.is_none()
+                && link_words.is_none()
+                && broken.is_empty()
+                && heading.fix.is_none()
+                && vitals.is_empty()
+                && !discard_shown
+                && heading.undo.is_none()
+                && vital_result.is_none()
+                && !results_shown;
             let reason_tone = recovery
                 .as_ref()
                 .filter(|_| note.error.is_some())
                 .map_or(Tone::Error, |(_, _, exists)| {
                     crate::content_workspace::manifest_fault_tone(*exists)
                 });
-            let mut space = design::MessageSpace::new("library_message_space", editor_width);
-            if !reason_words.is_empty() {
-                let (repair_problem, failed, broken, vitals) =
-                    (&repair_problem, &failed, broken, &vitals);
-                let (heading_fix, vital_use) = (&mut heading_fix, &mut vital_use);
-                let fix = heading.fix.as_ref();
-                space = space.reason(&reason_words, move |ui| {
-                    // A repair draft's fault in its tone (a deleted manifest is a warning), or
-                    // Save's refusal before the write, a YAML fault in its own words.
-                    if let Some(problem) = repair_problem {
-                        design::message(ui, reason_tone, problem);
+            let (mut heading_fix, mut vital_use) = (false, None);
+            // Each kept result is its own footer message, with its own Undo: Discard's, the
+            // heading and stat fixes', and each of the reader's results. Results with a live Undo
+            // are listed newest first, by when this pane first saw each one. Results first seen in
+            // one frame take the next ticks in the order they are listed here (Discard, the fixes,
+            // then Read's order), so among them the last listed shows first.
+            #[derive(Clone, Copy)]
+            enum Kept {
+                Discard,
+                Heading,
+                Vital,
+                Reader(ResultKind),
+            }
+            let mut kept: Vec<(Kept, String, bool)> = Vec::new();
+            if discard_shown {
+                kept.push((
+                    Kept::Discard,
+                    format!("{} draft discarded.", note.name()),
+                    true,
+                ));
+            }
+            if let Some(result) = heading.undo.as_deref() {
+                kept.push((Kept::Heading, result.to_owned(), true));
+            }
+            if let Some(result) = vital_result {
+                kept.push((Kept::Vital, result.to_owned(), true));
+            }
+            if results_shown {
+                kept.extend(
+                    results
+                        .items()
+                        .into_iter()
+                        .map(|(kind, words, undo)| (Kept::Reader(kind), words, undo)),
+                );
+            }
+            let ages = result_ages(
+                &mut self.result_ages,
+                &mut self.result_clock,
+                kept.iter().map(|(_, words, _)| words.as_str()),
+            );
+            let mut order: Vec<usize> = (0..kept.len()).collect();
+            order.sort_by_key(|at| std::cmp::Reverse(ages[*at]));
+            let (discard_undo, heading_undo, vital_undo) = (
+                std::cell::Cell::new(false),
+                std::cell::Cell::new(false),
+                std::cell::Cell::new(false),
+            );
+            let shown = std::cell::RefCell::new(None::<ResultPress>);
+            let mut footer = design::Footer::new("library_footer", editor_width);
+            for at in order {
+                let (which, words, undo) = &kept[at];
+                let (which, results) = (*which, &results);
+                let (discard_undo, heading_undo, vital_undo, shown) =
+                    (&discard_undo, &heading_undo, &vital_undo, &shown);
+                let heading_result = heading.undo.as_deref();
+                // The fixes' results are messages, so each Undo keeps its icon on the line.
+                footer.result(words.as_str(), *undo, move |ui| match which {
+                    Kept::Discard => discard_undo.set(design::draft_discarded(ui, note.name())),
+                    Kept::Heading => heading_undo.set(heading_result.is_some_and(|result| {
+                        design::undo_message(ui, Tone::Success, result, "Undo heading change")
+                    })),
+                    Kept::Vital => vital_undo.set(vital_result.is_some_and(|result| {
+                        design::undo_message(ui, Tone::Success, result, "Undo stat change")
+                    })),
+                    Kept::Reader(kind) => {
+                        let mut shown = shown.borrow_mut();
+                        show_result(
+                            ui,
+                            results,
+                            kind,
+                            shown.get_or_insert_with(Default::default),
+                        );
                     }
-                    if let Some(failure) = failed {
-                        // The disk's failure of the last Save of this draft.
-                        design::message(ui, Tone::Error, failure);
-                    }
-                    // The repair this note was opened for.
-                    if let Some(words) = link_words {
-                        design::message(ui, Tone::Warning, words);
-                    }
-                    for words in broken {
-                        design::message(ui, Tone::Warning, words);
-                    }
-                    if let Some((words, action, _)) = fix {
-                        *heading_fix =
-                            design::message_with_action(ui, Tone::Warning, words, action);
-                    }
+                });
+            }
+            // A repair draft's fault in its tone (a deleted manifest is a warning), or Save's
+            // refusal before the write, a YAML fault in its own words.
+            if let Some(problem) = &repair_problem {
+                footer.reason(problem.as_str(), move |ui| {
+                    design::message(ui, reason_tone, problem);
+                });
+            }
+            // A broken manifest's recovery depends on the saved file only, so it stays while
+            // the DM edits.
+            if let Some(repair) = repair {
+                let pressed = &mut repair_pressed;
+                footer.reason("", |ui| {
+                    *pressed = recovery_action(ui, repair, draft_reason);
+                });
+            }
+            if let Some(failure) = &failed {
+                // The disk's failure of the last Save of this draft.
+                footer.reason(failure.as_str(), |ui| {
+                    design::message(ui, Tone::Error, failure);
+                });
+            }
+            // The repair this note was opened for.
+            if let Some(words) = link_words {
+                footer.notice(words, |ui| {
+                    design::message(ui, Tone::Warning, words);
+                });
+            }
+            for words in broken {
+                footer.notice(words.as_str(), |ui| {
+                    design::message(ui, Tone::Warning, words);
+                });
+            }
+            if let Some((words, action, _)) = heading.fix.as_ref() {
+                let fix = &mut heading_fix;
+                footer.notice(words.as_str(), |ui| {
+                    *fix = design::message_with_action(ui, Tone::Warning, words, action);
+                });
+            }
+            if !vitals.is_empty() {
+                let vital_use = &mut vital_use;
+                let words = vitals
+                    .iter()
+                    .map(|(_, _, _, words)| words.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                let vitals = &vitals;
+                footer.notice(words, move |ui| {
                     for (key, label, value, message) in vitals {
                         if design::message_with_action(
                             ui,
@@ -7008,32 +7147,22 @@ impl Library {
                             *vital_use = Some((*key, *label, *value));
                         }
                     }
-                    if waits && let Some(reason) = draft_reason {
-                        ui.add(
-                            egui::Label::new(Type::Small.rich(ui, reason).color(colors().muted))
-                                .wrap(),
-                        );
-                    }
                 });
             }
-            let heading_undo = heading.undo.as_deref();
-            let results = &results;
-            if !result_words.is_empty() {
-                space = space.result(&result_words, undo_first, move |ui| {
-                    // The fixes' results are messages, so each Undo keeps its icon on the line.
-                    let discard_undo = discard_shown && design::draft_discarded(ui, note.name());
-                    let heading_undo = heading_undo.is_some_and(|result| {
-                        design::undo_message(ui, Tone::Success, result, "Undo heading change")
-                    });
-                    let vital_undo = vital_result.is_some_and(|result| {
-                        design::undo_message(ui, Tone::Success, result, "Undo stat change")
-                    });
-                    let pressed = results_shown.then(|| show_results(ui, results));
-                    (discard_undo, heading_undo, vital_undo, pressed)
+            if waits && let Some(reason) = draft_reason {
+                footer.notice(reason, move |ui| {
+                    ui.add(
+                        egui::Label::new(Type::Small.rich(ui, reason).color(colors().muted)).wrap(),
+                    );
                 });
             }
-            let (discard_undo, heading_undo, vital_undo, shown) =
-                space.show(ui).unwrap_or_default();
+            body_bottom = footer.show(ui);
+            let (discard_undo, heading_undo, vital_undo, shown) = (
+                discard_undo.get(),
+                heading_undo.get(),
+                vital_undo.get(),
+                shown.into_inner(),
+            );
             if broken_taken && let Some((_, _, _, warnings)) = &mut self.broken_lines {
                 *warnings = broken_cache;
             }
@@ -7041,9 +7170,6 @@ impl Library {
                 pressed = shown;
             }
             heading_pressed = (heading_fix, heading_undo);
-            if let Some(recovery) = recovery.as_ref().filter(|_| note.error.is_some()) {
-                repair_pressed = recovery_action(ui, recovery, draft_reason);
-            }
             if discard_undo && let Some((_, _, text)) = self.discarded.take() {
                 self.draft = text;
                 // The draft changed: a failed Save of the old words no longer owns it.
@@ -7208,7 +7334,11 @@ impl Library {
                 .inner_margin(design::S)
                 .show(ui, |ui| {
                     ui.set_max_width(editor_width - (design::S + design::HAIRLINE_WIDTH) * 2.0);
-                    let visible_height = ui.available_height().max(design::XL);
+                    // The editor ends above the message footer, inside this frame's margin.
+                    let visible_height = ui
+                        .available_height()
+                        .min(body_bottom - design::S - design::HAIRLINE_WIDTH - ui.cursor().top())
+                        .max(design::XL);
                     egui::ScrollArea::vertical()
                         .id_salt(("library_source", note.owner.id(), &note.path))
                         .max_height(visible_height)
@@ -7298,7 +7428,7 @@ impl Library {
             // clipped at the pane's edge. The text stays where it was.
             let body = egui::Rect::from_min_max(
                 egui::pos2(ui.cursor().min.x - design::S, ui.cursor().min.y),
-                egui::pos2(right, ui.max_rect().bottom()),
+                egui::pos2(right, ui.max_rect().bottom().min(body_bottom)),
             );
             ui.scope_builder(egui::UiBuilder::new().max_rect(body), |ui| {
                 crate::markdown_view::with_wide_tables(ui, |ui| {
