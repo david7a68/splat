@@ -9991,6 +9991,7 @@ pub mod session_notes {
             };
             d.click_containing("Travel ·");
             d.replace_text_in("How long", "a few hours");
+            d.press(Key::Enter);
             d.settle();
             let timeline = not_counted(d);
             let where_warned = d.place_of("Where").map(|rect| rect.top());
@@ -10019,6 +10020,7 @@ pub mod session_notes {
             d.click(NAV_TIMELINE);
             d.click_containing("Travel ·");
             d.replace_text_in("How long", "half a day");
+            d.press(Key::Enter);
             d.settle();
             let read = not_counted(d);
             let where_read = d.place_of("Where").map(|rect| rect.top());
@@ -10034,6 +10036,7 @@ pub mod session_notes {
                 format!("Where keeps its y with and without the warning: {where_warned:?}, {where_read:?}"),
             );
             d.clear_text_in("How long");
+            d.press(Key::Enter);
             d.press_ctrl(Key::S);
             d.settle();
         });
