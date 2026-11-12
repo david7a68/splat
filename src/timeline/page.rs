@@ -1314,24 +1314,18 @@ impl TimelinePage {
             });
             if event.kind != Kind::Day {
                 ui.add_space(design::M);
-                design::field(
-                    ui,
-                    "How long",
-                    Some(super::LENGTH_HELP),
-                    None,
-                    |ui| {
-                        let hint = match event.kind {
-                            Kind::LongRest => "8 hours",
-                            Kind::ShortRest => "1 hour",
-                            _ => "",
-                        };
-                        let focus = std::mem::take(&mut self.focus_length);
-                        let (words, taken) =
-                            checks::length_input(ui, &mut book.length, event, hint, focus);
-                        length = words;
-                        length_taken = taken;
-                    },
-                );
+                design::field(ui, "How long", Some(super::LENGTH_HELP), None, |ui| {
+                    let hint = match event.kind {
+                        Kind::LongRest => "8 hours",
+                        Kind::ShortRest => "1 hour",
+                        _ => "",
+                    };
+                    let focus = std::mem::take(&mut self.focus_length);
+                    let (words, taken) =
+                        checks::length_input(ui, &mut book.length, event, hint, focus);
+                    length = words;
+                    length_taken = taken;
+                });
             }
             ruling = rest_ruling_line(ui, event);
             if let Some(start) = starts.filter(|_| event.kind != Kind::Day) {

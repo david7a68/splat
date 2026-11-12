@@ -16271,7 +16271,9 @@ pub mod session_plan_groups {
         let footer = d
             .nodes()
             .into_iter()
-            .find(|node| node.role == egui::accesskit::Role::GenericContainer && node.name.contains(&removed))
+            .find(|node| {
+                node.role == egui::accesskit::Role::GenericContainer && node.name.contains(&removed)
+            })
             .map(|node| node.rect);
         let rows_end = d
             .nodes()
