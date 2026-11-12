@@ -803,13 +803,15 @@ it is a link that opens the NPC's card on World from any page.
 
 Every World result with an Undo (a value, name, edit, identity or file change, and a discarded edit draft) and every
 edit form with its `Undo reload` belong to the campaign that made them: Lookup keeps its reader across a campaign change, and the result shows, and its Undo acts,
-only in that campaign. A World result is one message form in one place: `message` (or the shared Undo message) below the file line, where
-`<file> is now a separate note.` sits, so the title never moves. `Note repaired.` is a success message there, and
-`<name> draft discarded.` sits there below the open note's file line. The edit form's save result (`Changes saved.`
-with `Undo changes`, or `Your changes are already in the note.`) sits there too, and a later result on the same note
-replaces `Note repaired.`. An Undo message centres its words on its Undo target's line, so its words start 4 px lower
-than a message without an action. In an edit form, which has no file line, a result
-sits below the title. With no note open, it sits below the empty state's words.
+only in that campaign. Every World and Lookup result, and the error of the last action, sits in one place: the pane's message footer (Widgets,
+Message footer), pinned below the reader, so the title, the file line, the value rows, `Add to fight` and the prose
+never move when a result comes or goes (round 26). That holds for `<file> is now a separate note.`, `Note repaired.`,
+`<name> draft discarded.`, the edit form's save result (`Changes saved.` with `Undo changes`, or `Your changes are
+already in the note.`), a name or file rename, and every value change. In the edit form and with no note open, the
+result is in the same footer. A later result on the same note replaces `Note repaired.`. Results with a live Undo come
+first, then the error. An older Undo whose file a newer result wrote refuses and leaves the bytes; the newer Undo goes
+first. The note's own faults (unread values, a place loop, a duplicate's repair, a lost draft) are the note's state, not
+results: they stay below the file line.
 A finished change has the success tone, as Library's results have: `Changes saved.`, a value change
 (`Stat block set to Guard.`, `In set to North Gate. It was Watch House.`, `In cleared. It was Ashfall Keep.`; Status and
 Part of alike), `Name changed to <name>.`, `Note repaired.` and
@@ -859,8 +861,7 @@ which checks the file before writing. Always use this one saves a path with Undo
 sentences that name both values as the rows show them: the name of the note a link opens, else the words in the file
 (`In cleared. It was Ashfall Keep.`, not the alias written in the file). Only the note's Log lines keep the arrow form
 (`In Ashfall Keep → not set.`). When another World note has the same name, a result and a picker name the folder too
-(`In set to Watch House (Locations). It was Watch House.`), so the DM can tell which file the change chose. They follow Change when they fit, otherwise sit below the whole row block. Only a Change message that
-names a row value sits there; every other World result sits below the file line. A place that matches more than one
+(`In set to Watch House (Locations). It was Watch House.`), so the DM can tell which file the change chose. They sit in the pane's footer, as every World result does. A cleared value's row goes with the value. A place that matches more than one
 note is the link `⚠ <name> · N matches`: the warning icon is its own glyph in the warning colour before the link
 words, so the underline covers only the words, as in `status_link`. Its accessible name keeps the icon. Different file and
 stored names offer two safe choices below the warning's words, `L` apart: `Rename the note to <file name>`, with a
