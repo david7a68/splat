@@ -3,6 +3,7 @@
 //! nobody planned, from a scene's menu and from a reader's header. Then F6: `Add to Log` from a
 //! done scene and from a reader's header.
 use super::*;
+use crate::test_support::{CachedWork, Counts};
 use std::fs;
 use uuid::Uuid;
 
@@ -242,6 +243,11 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     d.click(NAV_SESSIONS);
     new_session(d, "The Crossing");
     let body = d.editor_text().expect("a new session has a note");
+    // A done scene's fit is measured when its room changes, not on each frame.
+    let fit = CachedWork::start("Done scene fit", d, |_: &mut Driver<'_>| {
+        let (reached, work) = crate::sessions::page::scene_fit_counts();
+        Counts { reached, work }
+    });
     // Two done scenes with her: her link alone, and her link with long words. One scene still
     // to come, with a place.
     d.replace_editor_text(&body.replace(
@@ -267,9 +273,35 @@ pub fn log_from_play(d: &mut Driver<'_>) {
         None => session.clone(),
     };
 
+    let short = format!("Add to Log: {VARRA_BLACK}");
+    let warm = fit.warm(d, d.has(&short), 1);
+    d.observe(
+        "T18.2-fit-warm",
+        warm.is_ok(),
+        format!("The plan measured the done scenes' fit: {warm:?}"),
+    );
+    let refresh = fit.refresh(d, 1, |d| d.at_size(LARGE, |d| d.has(&short)));
+    d.observe(
+        "T18.2-fit-refresh",
+        refresh.is_ok(),
+        format!("A wider room measures the fit again: {refresh:?}"),
+    );
+    let steady = fit.steady(d, |d| {
+        d.settle();
+        d.at_size(LARGE, |_| ());
+        d.settle();
+        d.has(&short)
+    });
+    d.observe(
+        "T18.2-fit-steady",
+        steady.is_ok(),
+        format!(
+            "Unchanged frames, and a room it measured before, do not measure it again: {steady:?}"
+        ),
+    );
+
     // A done scene that links one World entry has `Add to Log` in its action place, left of its
     // menu, while its words keep their rows; else in its menu. A scene still to come has none.
-    let short = format!("Add to Log: {VARRA_BLACK}");
     let long = format!("Add to Log: {VARRA_BLACK}: {WORDS}");
     let long_menu = format!("More actions for {VARRA_BLACK}: {WORDS}");
     for size in [SMALL, DEFAULT, LARGE] {

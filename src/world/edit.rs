@@ -585,17 +585,19 @@ impl Reader {
             .is_some_and(|draft| draft.campaign == campaign.id)
     }
 
+    /// An edit form with changes, or a Log line with typed words, that is not saved.
     pub fn has_unsaved_edits(&self) -> bool {
-        self.edits.values().any(EditDraft::dirty)
+        self.edits.values().any(EditDraft::dirty) || self.typed_log_lines().next().is_some()
     }
 
-    /// Entries with changes that are not saved, by name.
+    /// Entries with changes that are not saved, by name: edit forms, and typed Log lines.
     pub fn unsaved_edits(&self) -> Vec<(Uuid, String)> {
         let mut names: Vec<_> = self
             .edits
             .iter()
             .filter(|(_, draft)| draft.dirty())
             .map(|(id, draft)| (*id, draft.name.clone()))
+            .chain(self.typed_log_lines())
             .collect();
         names.sort_by(|a, b| a.1.cmp(&b.1));
         names
@@ -604,6 +606,14 @@ impl Reader {
     /// Escape cancels a picker, and leaves a field of the form, before it closes a panel.
     pub fn takes_escape(&self) -> bool {
         self.picker.is_some() || self.form_focused
+    }
+
+    /// A new reader that keeps only this one's typed Log lines.
+    pub(crate) fn keep_log_lines(mut old: Self) -> Self {
+        Self {
+            log_fields: std::mem::take(&mut old.log_fields),
+            ..Self::default()
+        }
     }
 
     /// Start again with nothing on show. Unsaved changes stay: edit forms, and Log lines.
@@ -615,9 +625,19 @@ impl Reader {
         };
     }
 
-    /// The entries whose edit form is open in this reader.
-    pub fn edit_forms(&self) -> Vec<Uuid> {
-        self.edits.keys().copied().collect()
+    /// The Log lines with typed words, by entry and name.
+    fn typed_log_lines(&self) -> impl Iterator<Item = (Uuid, String)> + '_ {
+        self.log_fields
+            .iter()
+            .filter(|(_, open)| !open.field.words.trim().is_empty())
+            .map(|((_, id, _), open)| (*id, open.name.clone()))
+    }
+
+    /// Put the entries whose edit form is open in this reader in `out`, with no new
+    /// allocation once `out` has room.
+    pub fn edit_forms_into(&self, out: &mut Vec<Uuid>) {
+        out.clear();
+        out.extend(self.edits.keys().copied());
     }
 
     /// A draft whose note is gone, or the Undo for one, is on show.

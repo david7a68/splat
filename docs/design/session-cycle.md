@@ -87,7 +87,8 @@ Timeline` (F4).
 - **The reader's header** is one row: the title, and for an entry of the campaign `Edit`, one `L` after the
   measured title (`src/world.rs:1733-1768`). It has no menu. Lookup and the World page draw this one reader
   (`src/lookup.rs:2195-2203`); the Library page has its own header and does not change. `Start fight` (F3)
-  and `Add to Log` (F6) follow `Edit`, as quiet actions, 4 px apart; `Add to Log` is next to `Edit`. The title
+  and `Add to Log` (F6) follow `Edit`, as quiet actions, 4 px apart; `Start fight` is next to `Edit`, so it
+  stays where it is for a DM who never adds to a Log, and `Add to Log` follows it (review of P6). The title
   keeps the width that it has
   today, and the row gains no line and no menu. The header shows the first of these that fits:
   1. `Start fight` and `Add to Log`, each with its word;
@@ -388,8 +389,8 @@ today and its fit rule. No row adds a line, changes a row's height or takes widt
 | 5 | A row marked `Conc` that takes damage | The row's second line ends with `Conc save DC 10` until the next step (F2) | `view.rs:6476-6486` | Only when the line keeps its lines and folds nothing that shows today. Else in the hover and accessible name only |
 | 6 | Run dock, line two | A quiet `Effect`, left of **Conditions** (F2) | `dock.rs:80-172` | F2: the word, then the icon, then not shown, before the name loses a word or its size |
 | 7 | The Add strip's **More** menu | Its last line is `Scene` (F3) | `src/design/components.rs:2339`; `src/timeline/page.rs:89` | A menu line. The strip's visible actions are as today |
-| 8 | A campaign World entry's reader | `Add to Log` after `Edit` (F6) | The header: `src/world.rs:1733-1768` | Section 1.2: its word, then its icon, then not shown |
-| 9 | A campaign creature's or NPC's reader, with no run open | A quiet `Start fight` after `Add to Log` (F3) | The same header | Section 1.2: with its word, or not shown |
+| 8 | A campaign World entry's reader | `Add to Log` after `Edit`, and after `Start fight` where it shows (F6) | The header: `src/world.rs:1733-1768` | Section 1.2: its word, then its icon, then not shown |
+| 9 | A campaign creature's or NPC's reader, with no run open | A quiet `Start fight` after `Edit` (F3) | The same header | Section 1.2: with its word, or not shown |
 | 10 | An ended fight's plan row | `Add rewards` (F7) | The action band: `plan.rs:692-694`; the opened row's links: `:1313-1321` | On the row only when the title keeps its lines beside the action's own width. Else the last link of the opened row, after `Timeline`. A fight whose reference an old note already has as a list line says `In notes` |
 | 12 | A Travel row's menu | One more line, `Roll for encounters`, when the campaign has a marked table (F9) | `plan.rs:727-735`; `src/timeline/page.rs:875-877` | A menu line |
 | 13 | A **Ready to run** row's menu, for an encounter with no saved run | One more line, `Remove…` (F3) | `src/encounters/list.rs:560-565` | A menu line |

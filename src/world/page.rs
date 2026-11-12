@@ -245,7 +245,8 @@ impl WorldPage {
             self.selected = None;
             self.repair = None;
             self.kept_repairs.clear();
-            self.reader = Reader::default();
+            // Typed Log lines are kept, by campaign; the switch guard counts them as unsaved.
+            self.reader = Reader::keep_log_lines(std::mem::take(&mut self.reader));
             self.generated = None;
             self.generated_shown = false;
             self.discarded_npc = None;
@@ -1341,6 +1342,20 @@ mod tests {
         }
         let index = Arc::new(ContentIndex::load(&[], Some(&campaign)).unwrap());
         (campaign, index)
+    }
+
+    /// A campaign change keeps typed Log words, by their campaign: the switch guard counts
+    /// them, and a reader of another campaign never shows them.
+    #[test]
+    fn a_campaign_change_keeps_typed_log_words() {
+        let mut page = WorldPage::default();
+        let first = Uuid::new_v4();
+        page.set_campaign(first);
+        let id = Uuid::new_v4();
+        page.reader.open_log(first, id, "Hob", "Words I typed.");
+        page.set_campaign(Uuid::new_v4());
+        assert!(page.reader.has_unsaved_edits());
+        assert_eq!(page.reader.unsaved_edits(), vec![(id, "Hob".to_owned())]);
     }
 
     fn held(page: &WorldPage) -> Option<String> {

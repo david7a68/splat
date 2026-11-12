@@ -1791,28 +1791,21 @@ mod allowed_classes {
         },
         Class {
             row: 8,
-            name: "P6 c: the reader's Start fight, XS after Add to Log",
-            fits: log::start_after,
-        },
-        Class {
-            row: 8,
             name: "P6 d: an act shows or hides Add to Log",
             fits: |d, _| log::act_words(d),
         },
     ];
 
     /// P6's classes. Each proves itself from the geometry of its view: Add to Log is new only in a
-    /// reader; the one thing of today that moves is the reader's `Start fight`, right along its
-    /// line by exactly the new target and `XS`, keeping its size; a glyph matched by its order
-    /// pairs with a new glyph at its old place. Nothing of today goes, is cut, or narrows.
+    /// reader, after what the header shows today; a glyph matched by its order pairs with a new
+    /// glyph at its old place. Nothing of today goes, moves, is cut, or narrows: `Start fight`
+    /// stays next to Edit.
     mod log {
         use super::super::{AllowedRow, Difference};
         use super::{rect_of, rects};
 
         const ADD: &str = "\u{e3d4}";
-        const RUN: &str = "\u{e3d0}";
         const BUTTON: &str = "Button: Add to Log";
-        const START: &str = "Button: Start a fight with ";
 
         fn reader(d: &Difference) -> bool {
             d.screen.starts_with("world-reader") || d.screen.starts_with("lookup-reader ")
@@ -1889,51 +1882,6 @@ mod allowed_classes {
                                 && rect_of(&o.detail, "at ") == Some(was)
                         })
                 })
-        }
-
-        /// The Start fight target of `d`'s view that moved, as it was and as it is.
-        fn start_moved(d: &Difference, rows: &[AllowedRow]) -> Option<([f32; 4], [f32; 4])> {
-            rows.iter()
-                .map(|row| &row.difference)
-                .find(|o| {
-                    same_view(o, d)
-                        && o.what == "control"
-                        && o.change == "moved"
-                        && o.name.starts_with(START)
-                })
-                .and_then(|o| rects(&o.detail))
-        }
-
-        pub(super) fn start_after(d: &Difference, rows: &[AllowedRow]) -> bool {
-            if !reader(d) || d.change != "moved" {
-                return false;
-            }
-            let (Some((was, now)), Some((target_was, target_now))) =
-                (rects(&d.detail), start_moved(d, rows))
-            else {
-                return false;
-            };
-            // Right along its line, the same size.
-            let along = was[1] == now[1] && was[2..] == now[2..] && now[0] > was[0];
-            match (d.what.as_str(), d.name.as_str()) {
-                // The target starts `XS` after a new Add to Log that starts where it started.
-                ("control", name) if name.starts_with(START) => {
-                    along
-                        && buttons(d, rows).any(|button| {
-                            (button[0] - was[0]).abs() < 0.05
-                                && (now[0] - (button[0] + button[2] + crate::design::XS)).abs()
-                                    < 0.05
-                        })
-                }
-                // Its word and its icon move with it, by the same distance.
-                ("text", "Start fight" | RUN) => {
-                    along
-                        && inside(was, target_was)
-                        && inside(now, target_now)
-                        && ((now[0] - was[0]) - (target_now[0] - target_was[0])).abs() < 0.05
-                }
-                _ => false,
-            }
         }
 
         pub(super) fn act_words(d: &Difference) -> bool {
@@ -2568,9 +2516,9 @@ mod allowed_classes {
                 );
             }
         }
-        // P6's classes refuse the reader's Start fight gone, moved by another distance, moved
-        // down or narrowed; Add to Log outside a reader; an existing glyph moved elsewhere; and
-        // an act that hides Start fight.
+        // P6's classes refuse the reader's Start fight gone, moved sideways (as Add to Log next
+        // to Edit would move it), moved down or narrowed; Add to Log outside a reader; an
+        // existing glyph moved elsewhere; and an act that hides Start fight.
         let start = Difference {
             screen: "world-reader".into(),
             view: "1200x800 Lookup closed".into(),

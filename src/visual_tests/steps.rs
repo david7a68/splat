@@ -226,8 +226,9 @@ pub fn open_arrivals(d: &mut Driver<'_>) {
 }
 
 /// Section 1.2 of the session-cycle design: a reader's quiet header actions after `Edit <name>`,
-/// on Edit's line. `Add to Log` comes next to Edit and `Start fight` after it, each `XS` after the
-/// one before. Returns where each shows, and whether they keep that order and spacing.
+/// on Edit's line. `Start fight` comes next to Edit, where it is for a DM who never adds to a
+/// Log, and `Add to Log` after it, each `XS` after the one before. Returns where each shows, and
+/// whether they keep that order and spacing.
 pub fn reader_header(
     d: &Driver<'_>,
     name: &str,
@@ -260,6 +261,6 @@ pub fn reader_header(
     (
         log,
         start,
-        follows(log, edit) && follows(start, log.unwrap_or(edit)),
+        follows(start, edit) && follows(log, start.unwrap_or(edit)),
     )
 }

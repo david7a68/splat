@@ -881,7 +881,8 @@ A campaign world entry has a quiet Edit action, with a pencil icon and the word 
 entry, or a package creature, whose header has no Edit) has a quiet `Start fight` with the run icon after Edit,
 `XS` apart (after the measured title, one `L` on, when there is no Edit), named `Start a fight with <name>` and
 blocked as the encounter editor's `Start fight` is. A campaign world entry also has a quiet `Add to Log`
-(`icons::ADD`) next to Edit, `XS` apart, with `Start fight` `XS` after it. They take only the room after the
+(`icons::ADD`) `XS` after `Start fight`, or after Edit when there is no `Start fight`, so `Start fight` keeps
+its place whether or not the DM ever adds to a Log. They take only the room after the
 title on the title's line: the title keeps its width and the row gains no line and no menu. The header shows
 the first of these that fits: both words; `Start fight` and `Add to Log` as its icon (`icon_button`, its name
 on hover); `Start fight` alone; the icon alone; neither. `Start fight` is never an icon, so when the room does

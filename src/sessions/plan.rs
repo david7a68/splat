@@ -575,6 +575,52 @@ struct Scene {
     task: TaskLine,
     /// The one entry that its words link, when they link exactly one.
     entry: Option<SceneEntry>,
+    /// Whether `Add to Log` fits on the row, for the last few rooms it was measured in. The
+    /// words and the done mark are this model's, so only the room can change it
+    /// (`Scene::log_keeps_rows`).
+    fit: std::sync::Mutex<Vec<(f32, f32, bool)>>,
+}
+
+impl Scene {
+    /// The fit rule for this scene's `Add to Log`, measured again only when the room or the
+    /// action's width changes; an unchanged frame lays out no words.
+    fn log_keeps_rows(&self, ui: &egui::Ui, plain: &str, menu: f32, with_log: f32) -> bool {
+        let room = ui.available_width();
+        #[cfg(test)]
+        FIT_COUNTS.with(|counts| counts.set((counts.get().0 + 1, counts.get().1)));
+        let mut fit = self
+            .fit
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(&(_, _, keeps)) = fit
+            .iter()
+            .find(|(at, wide, _)| *at == room && *wide == with_log)
+        {
+            return keeps;
+        }
+        let keeps = log_keeps_rows(ui, plain, menu, with_log);
+        // A few rooms: the window's sizes, with Lookup open or closed.
+        if fit.len() == FIT_ROOMS {
+            fit.remove(0);
+        }
+        fit.push((room, with_log, keeps));
+        keeps
+    }
+}
+
+/// How many rooms a done scene's fit remembers.
+const FIT_ROOMS: usize = 4;
+
+#[cfg(test)]
+thread_local! {
+    /// How often frames reached a done scene's fit, and how often it laid out the words.
+    static FIT_COUNTS: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
+}
+
+/// A done scene's fit on this (the UI) thread: frames that reached it, and layouts of its words.
+#[cfg(test)]
+pub(crate) fn scene_fit_counts() -> (usize, usize) {
+    FIT_COUNTS.with(std::cell::Cell::get)
 }
 
 struct SceneEntry {
@@ -583,7 +629,7 @@ struct SceneEntry {
     /// The fight that its `Start fight` starts, for an NPC or a creature.
     start: Option<crate::world::StartFight>,
     /// The entry's ID, when it is a campaign World entry whose Log takes a line (F6).
-    log: Option<Uuid>,
+    log: Option<(Uuid, String)>,
 }
 
 /// A World entry's kind, status and place, as a scene's second line and a suggestion say it.
@@ -647,7 +693,7 @@ fn scene_entry(index: &ContentIndex, words: &str) -> Option<SceneEntry> {
     Some(SceneEntry {
         detail: is_world(index, at).then(|| world_detail(index, at)),
         start: crate::world::start_fight(item, index),
-        log: crate::world::takes_log(item, index).then_some(item.entry.id),
+        log: crate::world::takes_log(item, index).then(|| (item.entry.id, item.entry.name.clone())),
     })
 }
 
@@ -706,7 +752,11 @@ impl PlanModel {
                 match task.filter(|_| !links_fight_or_group(&names, fights, groups)) {
                     Some(task) => {
                         let entry = index.and_then(|index| scene_entry(index, &task.words));
-                        ModelLine::Scene(Scene { task, entry })
+                        ModelLine::Scene(Scene {
+                            task,
+                            entry,
+                            fit: std::sync::Mutex::new(Vec::new()),
+                        })
                     }
                     None => ModelLine::Fights(
                         names
@@ -858,8 +908,8 @@ enum SceneAct {
     UndoAdd,
     UndoRemove,
     StartFight(crate::world::StartFight),
-    /// A done scene's `Add to Log`: its entry, and the scene's words outside its link.
-    AddToLog(Uuid, String),
+    /// A done scene's `Add to Log`: its entry, its name, and the scene's words outside its link.
+    AddToLog(Uuid, String, String),
 }
 
 /// One scene: its box where a fight has its caret, its words as the Reader draws them, its
@@ -879,7 +929,7 @@ fn scene_row(
     let log = scene
         .entry
         .as_ref()
-        .and_then(|entry| entry.log)
+        .and_then(|entry| entry.log.as_ref())
         .filter(|_| task.done);
     let log_name = format!("Add to Log: {plain}");
     let log_action = || {
@@ -892,7 +942,7 @@ fn scene_row(
     let menu = Density::Read.control();
     let with_log = log
         .map(|_| menu + log_action().natural_width(ui) + design::S)
-        .filter(|&with_log| log_keeps_rows(ui, &plain, menu, with_log));
+        .filter(|&with_log| scene.log_keeps_rows(ui, &plain, menu, with_log));
     let on_row = with_log.is_some();
     let action_width = with_log.unwrap_or(menu);
     let widths = [width - action_width - design::S, action_width];
@@ -972,8 +1022,12 @@ fn scene_row(
         *act = Some(SceneAct::Remove(slot, task.clone()));
     } else if let Some(fight) = start {
         *act = Some(SceneAct::StartFight(fight));
-    } else if let Some(id) = log.filter(|_| add_log) {
-        *act = Some(SceneAct::AddToLog(id, words_outside_links(&task.words)));
+    } else if let Some((id, name)) = log.filter(|_| add_log) {
+        *act = Some(SceneAct::AddToLog(
+            *id,
+            name.clone(),
+            words_outside_links(&task.words),
+        ));
     }
 }
 
@@ -981,6 +1035,8 @@ fn scene_row(
 /// beside an action place `with_log` wide, each with the same words as beside the menu alone
 /// (`menu` wide), so no word moves.
 fn log_keeps_rows(ui: &egui::Ui, plain: &str, menu: f32, with_log: f32) -> bool {
+    #[cfg(test)]
+    FIT_COUNTS.with(|counts| counts.set((counts.get().0, counts.get().1 + 1)));
     // The words' room beside the action place, as `plan_row_with` gives it after the box.
     let room = ui.available_width() - design::XL - 2.0 * design::S;
     // The Reader's type at that width (`prose_type`), and each row's words as it breaks them
@@ -2122,8 +2178,8 @@ impl Sessions {
             self.wants_start_fight = Some(fight);
             return;
         }
-        if let SceneAct::AddToLog(id, words) = act {
-            self.wants_log = Some((id, words));
+        if let SceneAct::AddToLog(id, name, words) = act {
+            self.wants_log = Some((id, name, words));
             return;
         }
         let (Some(draft), Some(note)) = (&mut self.draft, session) else {

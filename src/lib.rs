@@ -1192,8 +1192,12 @@ impl Splat {
         let day = timeline::day_now(&self.timeline.events);
         let start_blocked = self.encounters.plan_blocked();
         // An edit form in one reader holds back the other's Log field for that entry.
-        self.world_page.reader.edited_elsewhere = self.lookup.reader.edit_forms();
-        self.lookup.reader.edited_elsewhere = self.world_page.reader.edit_forms();
+        self.lookup
+            .reader
+            .edit_forms_into(&mut self.world_page.reader.edited_elsewhere);
+        self.world_page
+            .reader
+            .edit_forms_into(&mut self.lookup.reader.edited_elsewhere);
         let mut start_fight = None;
         for reader in [&mut self.world_page.reader, &mut self.lookup.reader] {
             reader.start_blocked = start_blocked;
@@ -2162,10 +2166,10 @@ impl Splat {
             if let Some(fight) = self.sessions.wants_start_fight.take() {
                 self.start_fight_with(&fight);
             }
-            if let Some((id, words)) = self.sessions.wants_log.take() {
+            if let Some((id, name, words)) = self.sessions.wants_log.take() {
                 self.notes_give_way();
                 self.lookup.open_id(id);
-                self.lookup.reader.open_log(id, &words);
+                self.lookup.reader.open_log(campaign.id, id, &name, &words);
             }
             // Encounters shows why, and a button that seems dead tells the table nothing.
             if asked && !self.encounters.go_to_run {
