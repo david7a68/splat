@@ -4031,23 +4031,38 @@ impl Encounters {
     /// data and ends with it.
     fn kept_results(&mut self, page: bool) -> Vec<KeptResult> {
         self.expire_discards();
-        let present: Vec<KeptResult> = [
-            (KeptResult::Discarded, self.encounter_undo_ready()),
-            (KeptResult::GroupDiscarded, self.group_undo_ready()),
-            (KeptResult::RunDeleted, page && self.deleted_run.is_some()),
+        // Every result whose data is still held, and whether this view shows it.
+        let alive = [
+            (
+                KeptResult::Discarded,
+                self.discarded.is_some(),
+                self.encounter_undo_ready(),
+            ),
+            (
+                KeptResult::GroupDiscarded,
+                self.discarded_group.is_some(),
+                self.group_undo_ready(),
+            ),
+            (KeptResult::RunDeleted, self.deleted_run.is_some(), page),
             (
                 KeptResult::GroupRemoved,
-                page && self.removed_saved_group.is_some(),
+                self.removed_saved_group.is_some(),
+                page,
             ),
             (
                 KeptResult::EncounterRemoved,
-                page && self.removed_encounter.is_some(),
+                self.removed_encounter.is_some(),
+                page,
             ),
-        ]
-        .into_iter()
-        .filter_map(|(kind, shown)| shown.then_some(kind))
-        .collect();
-        let mut order: Vec<KeptResult> = present
+        ];
+        let held: Vec<KeptResult> = alive
+            .iter()
+            .filter(|(_, held, _)| *held)
+            .map(|(kind, ..)| *kind)
+            .collect();
+        // A result new since the last frame goes first; one whose data is gone leaves the
+        // order. One that this view does not show keeps its place for the views that do.
+        let mut order: Vec<KeptResult> = held
             .iter()
             .filter(|kind| !self.result_order.contains(kind))
             .copied()
@@ -4055,11 +4070,18 @@ impl Encounters {
         order.extend(
             self.result_order
                 .iter()
-                .filter(|kind| present.contains(kind))
+                .filter(|kind| held.contains(kind))
                 .copied(),
         );
         self.result_order = order.clone();
         order
+            .into_iter()
+            .filter(|kind| {
+                alive
+                    .iter()
+                    .any(|(shown, held, here)| shown == kind && *held && *here)
+            })
+            .collect()
     }
 
     /// A kept result's tone, words, Undo and the Undo's accessible name.
