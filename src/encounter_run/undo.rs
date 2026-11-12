@@ -196,15 +196,17 @@ impl Lines {
 }
 
 impl Step {
-    /// The row this step acted on, as its own data says: the one row it changed, when its
-    /// name names that row at its start or end (`7 damage to Guard 1`, `Guard 1 absent`). The
-    /// file keeps no more; a step on no row, or on several, has none.
-    fn target(&self) -> Option<String> {
-        let [(_, row)] = self.rows.iter().collect::<Vec<_>>()[..] else {
+    /// The row this step acted on, as its own data says: the one row it changed, by its
+    /// place, named as the run names that row (what a row is stays the run's, as in `before`),
+    /// when the step's name names it at its start or end (`7 damage to Guard 1`, `Guard 1
+    /// absent`). The file keeps no more; a step on no row, or on several, has none.
+    fn target(&self, after: &State) -> Option<String> {
+        let [at] = self.rows.keys().collect::<Vec<_>>()[..] else {
             return None;
         };
-        (self.label.ends_with(&row.name) || self.label.starts_with(&row.name))
-            .then(|| row.name.clone())
+        let name = &after.participants.get(*at)?.name;
+        (self.label.ends_with(name.as_str()) || self.label.starts_with(name.as_str()))
+            .then(|| name.clone())
     }
     fn of(before: &State, after: &State, label: &str, from_sheet: bool) -> Self {
         // Every field is named, so that a new field of a state is a decision here. The two
@@ -431,7 +433,7 @@ pub(super) fn read(saved: &RawValue, now: &State) -> Option<History> {
         if memory > MEMORY_BYTES {
             break;
         }
-        history.3.push(step.target());
+        history.3.push(step.target(after));
         history.1.push(std::mem::take(&mut step.label));
         history.2.push(step.from_sheet);
         let state = step.before(after)?;
