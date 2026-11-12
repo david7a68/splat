@@ -1491,6 +1491,8 @@ mod tests {
         let words = result_words(&t.rules, &t.ledger, &t.state, t.newest());
         assert_eq!(words, "Cistern or Sands: Elapsed race time 20. Due: Bell.");
         assert_eq!(newest_label(t), "Cistern or Sands");
+        // The result line's label and words are worked out with the act, not in each frame.
+        assert_eq!(t.result, Some(("Cistern or Sands".into(), words)));
 
         // `for:` rolls for the next name, and then the button is off.
         let bell = t.state.due[0].clone();
@@ -1869,6 +1871,10 @@ mod tests {
         );
         assert_eq!(again.state.value(&again.rules, "favor", None), 2);
         assert_eq!(newest_label(&again), "Crowd loves it");
+        assert_eq!(
+            again.result.as_ref().map(|(label, _)| label.as_str()),
+            Some("Crowd loves it")
+        );
         let newest = again.newest().to_vec();
         again.undo(&newest);
         assert_eq!(again.state.value(&again.rules, "favor", None), 1);
