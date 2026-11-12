@@ -1515,7 +1515,7 @@ pub struct Status<'a> {
 }
 
 pub fn status(ui: &mut Ui, state: Status<'_>) -> Response {
-    status_label(ui, state, false)
+    status_label(ui, state)
 }
 
 /// A painted row keeps its status word in the shared status colour.
@@ -1551,9 +1551,69 @@ pub fn status_in_text(
     ui.fonts_mut(|fonts| fonts.layout_job(job))
 }
 
-/// Rail notices wrap so their cause stays visible in a narrow column.
+/// Rail notices wrap so their cause stays visible in a narrow column. A second line starts at
+/// the word, not under the icon, as in every other status that wraps.
 pub fn wrapped_status(ui: &mut Ui, state: Status<'_>) -> Response {
-    status_label(ui, state, true)
+    if status_fits(ui, state) {
+        return status_label(ui, state);
+    }
+    let status = ui.horizontal_top(|ui| {
+        ui.spacing_mut().item_spacing.x = 0.0;
+        status_icon_column(ui, state);
+        ui.add(egui::Label::new(Type::Small.rich(ui, state.word).color(state.color)).wrap())
+    });
+    // The whole status, icon included, as one label's rect was before it wrapped at the word.
+    status
+        .inner
+        .union(status.response)
+        .on_hover_text(state.word)
+}
+
+/// Whether a status's icon, a space and its word fit on one line in what is left of `ui`. Then
+/// it is one text, as a one-line status always was; otherwise its lines start at the word.
+fn status_fits(ui: &Ui, state: Status<'_>) -> bool {
+    let width = ui.fonts_mut(|fonts| {
+        fonts
+            .layout_no_wrap(
+                format!("{} {}", state.icon, state.word),
+                Type::Small.font(ui),
+                Color32::PLACEHOLDER,
+            )
+            .size()
+            .x
+    });
+    width <= ui.available_width()
+}
+
+/// Where a one-line status starts its word: the glyph after the icon and one space. A galley's
+/// size rounds up to whole pixels, so the glyph's own position is the measure.
+fn status_word_x(ui: &Ui, state: Status<'_>) -> f32 {
+    ui.fonts_mut(|fonts| {
+        let galley = fonts.layout_no_wrap(
+            format!("{} {}", state.icon, state.word),
+            Type::Small.font(ui),
+            Color32::PLACEHOLDER,
+        );
+        let at = state.icon.chars().count() + 1;
+        galley.rows[0]
+            .glyphs
+            .get(at)
+            .map_or(galley.size().x, |glyph| glyph.pos.x)
+    })
+}
+
+/// The icon of a status in its own column, as wide as the icon and one space, so the words
+/// after it start where a one-line status starts them and every line of them starts there.
+fn status_icon_column(ui: &mut Ui, state: Status<'_>) {
+    let column = status_word_x(ui, state);
+    ui.allocate_ui_with_layout(
+        vec2(column, Type::Small.line()),
+        Layout::left_to_right(Align::Min),
+        |ui| {
+            ui.set_min_width(column);
+            ui.label(Type::Small.rich(ui, state.icon).color(state.color))
+        },
+    );
 }
 
 /// Two rail lines share the word's left edge, leaving the icon in its own column. The icon and
@@ -1562,28 +1622,7 @@ pub fn wrapped_status(ui: &mut Ui, state: Status<'_>) -> Response {
 pub fn rail_status_detail(ui: &mut Ui, state: Status<'_>, detail: &str) -> (Response, Rect) {
     ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
-        // Where a one-line status starts its word: the glyph after the icon and one space. A
-        // galley's size rounds up to whole pixels, so the glyph's own position is the measure.
-        let column = ui.fonts_mut(|fonts| {
-            let galley = fonts.layout_no_wrap(
-                format!("{} {}", state.icon, state.word),
-                Type::Small.font(ui),
-                Color32::PLACEHOLDER,
-            );
-            let at = state.icon.chars().count() + 1;
-            galley.rows[0]
-                .glyphs
-                .get(at)
-                .map_or(galley.size().x, |glyph| glyph.pos.x)
-        });
-        ui.allocate_ui_with_layout(
-            vec2(column, Type::Small.line()),
-            Layout::left_to_right(Align::Min),
-            |ui| {
-                ui.set_min_width(column);
-                ui.label(Type::Small.rich(ui, state.icon).color(state.color))
-            },
-        );
+        status_icon_column(ui, state);
         ui.vertical(|ui| {
             ui.spacing_mut().item_spacing.y = 0.0;
             let response = ui.label(Type::Small.rich(ui, state.word).color(state.color));
@@ -1598,7 +1637,7 @@ pub fn rail_status_detail(ui: &mut Ui, state: Status<'_>, detail: &str) -> (Resp
     .inner
 }
 
-fn status_label(ui: &mut Ui, state: Status<'_>, wrap: bool) -> Response {
+fn status_label(ui: &mut Ui, state: Status<'_>) -> Response {
     let mut job = LayoutJob::default();
     let format = egui::TextFormat {
         font_id: Type::Small.font(ui),
@@ -1608,22 +1647,34 @@ fn status_label(ui: &mut Ui, state: Status<'_>, wrap: bool) -> Response {
     job.append(state.icon, 0.0, format.clone());
     job.append(" ", 0.0, format.clone());
     job.append(state.word, 0.0, format);
-    let label = egui::Label::new(job);
-    ui.add(if wrap { label.wrap() } else { label.truncate() })
+    ui.add(egui::Label::new(job).truncate())
         .on_hover_text(state.word)
 }
 
 /// A status that also leads to where the DM can act on it. The line wraps, because the
-/// words are a warning and must not be cut.
+/// words are a warning and must not be cut. A second line starts at the word, not under the
+/// icon, as in every other status that wraps.
 pub fn status_link(ui: &mut Ui, state: Status<'_>) -> Response {
     let format = egui::TextFormat {
         font_id: Type::Small.font(ui),
         color: state.color,
         ..Default::default()
     };
+    // On one line the icon and the word are one text; when it wraps, the word gets its own
+    // column, so its second line starts at the word.
+    let (column, icon) = if status_fits(ui, state) {
+        (0.0, None)
+    } else {
+        let icon = ui.fonts_mut(|fonts| {
+            fonts.layout_no_wrap(state.icon.to_owned(), format.font_id.clone(), state.color)
+        });
+        (status_word_x(ui, state), Some(icon))
+    };
     let mut job = LayoutJob::default();
-    job.append(state.icon, 0.0, format.clone());
-    job.append(" ", 0.0, format.clone());
+    if icon.is_none() {
+        job.append(state.icon, 0.0, format.clone());
+        job.append(" ", 0.0, format.clone());
+    }
     job.append(
         state.word,
         0.0,
@@ -1632,17 +1683,21 @@ pub fn status_link(ui: &mut Ui, state: Status<'_>) -> Response {
             ..format
         },
     );
-    job.wrap.max_width = ui.available_width().max(1.0);
+    job.wrap.max_width = (ui.available_width() - column).max(1.0);
     let galley = ui.fonts_mut(|fonts| fonts.layout_job(job));
     let (rect, response) = ui.allocate_exact_size(
-        vec2(galley.size().x, galley.size().y.max(24.0)),
+        vec2(column + galley.size().x, galley.size().y.max(24.0)),
         Sense::click(),
     );
     response.widget_info(|| WidgetInfo::labeled(WidgetType::Link, ui.is_enabled(), state.word));
     if ui.is_rect_visible(rect) {
         let top = rect.center().y - galley.size().y / 2.0;
+        if let Some(icon) = icon {
+            ui.painter()
+                .galley(pos2(rect.left(), top), icon, state.color);
+        }
         ui.painter()
-            .galley(pos2(rect.left(), top), galley, state.color);
+            .galley(pos2(rect.left() + column, top), galley, state.color);
         if response.has_focus() {
             focus_ring(ui, rect);
         }
@@ -2369,7 +2424,27 @@ pub fn fixed_part<R>(
     name: &str,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> R {
-    let focus = Id::new((id, "focus"));
+    scroll_part(ui, rect, Id::new(id), name, add).0
+}
+
+/// How far a message part's words sit inside its edge: the focus ring's width and one hairline
+/// more, so a focus ring at the edge never crosses a letter.
+pub const PART_INSET: f32 = FOCUS_WIDTH + HAIRLINE_WIDTH;
+
+/// A part at `rect` whose words wrap and scroll inside it, `PART_INSET` from its edge, beside a
+/// lane kept for its scroll bar. It is one widget named with its whole message, and Tab reaches
+/// it; while it has focus the up and down arrows scroll it by a line and
+/// Page Up and Page Down by the part, and its ring is at the part's edge, clear of the words.
+/// The wheel scrolls it too. Returns what `add` returned and the height of what it drew.
+fn scroll_part<R>(
+    ui: &mut Ui,
+    rect: Rect,
+    id: Id,
+    name: &str,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> (R, f32) {
+    let focus = id.with("focus");
+    let inner_rect = rect.shrink(PART_INSET);
     let focused = ui.ctx().memory(|memory| memory.has_focus(focus));
     let step = if focused {
         // The arrows scroll the part instead of moving focus.
@@ -2388,8 +2463,8 @@ pub fn fixed_part<R>(
             for (key, by) in [
                 (egui::Key::ArrowDown, line),
                 (egui::Key::ArrowUp, -line),
-                (egui::Key::PageDown, rect.height()),
-                (egui::Key::PageUp, -rect.height()),
+                (egui::Key::PageDown, inner_rect.height()),
+                (egui::Key::PageUp, -inner_rect.height()),
             ] {
                 while input.consume_key(egui::Modifiers::NONE, key) {
                     step += by;
@@ -2402,24 +2477,27 @@ pub fn fixed_part<R>(
     };
     let mut part = ui.new_child(
         egui::UiBuilder::new()
-            .max_rect(rect)
+            .max_rect(inner_rect)
             .layout(Layout::top_down(Align::Min)),
     );
+    // egui paints a scroll area's content a few points past its edge; here that would put words
+    // under the focus ring, so the words stop at the part's inset.
+    part.visuals_mut().clip_rect_margin = 0.0;
     let lane = part.spacing().scroll.bar_width + part.spacing().scroll.bar_outer_margin;
-    let inner = egui::ScrollArea::vertical()
+    let output = egui::ScrollArea::vertical()
         .id_salt(id)
-        .max_height(rect.height())
+        .max_height(inner_rect.height())
         // egui's default minimum would let a short overflow grow past the part.
-        .min_scrolled_height(rect.height())
+        .min_scrolled_height(inner_rect.height())
         .auto_shrink([false, true])
         .show(&mut part, |ui| {
-            ui.set_max_width(rect.width() - lane);
+            // The words end `PART_INSET` before the ring, which ends before the bar's lane.
+            ui.set_max_width(inner_rect.width() - lane - PART_INSET);
             if step != 0.0 {
                 ui.scroll_with_delta(vec2(0.0, -step));
             }
             add(ui)
-        })
-        .inner;
+        });
     let response = ui.interact(rect, focus, Sense::focusable_noninteractive());
     // A named group that holds the message and its actions: a screen reader reads the whole
     // message, and the group is not a second target over its own Undo.
@@ -2428,13 +2506,171 @@ pub fn fixed_part<R>(
         node.set_label(name);
     });
     if response.has_focus() {
-        // Inside the content area, clear of the part's own scroll bar lane.
+        // At the part's edge, `PART_INSET` outside the words, and clear of the scroll bar lane.
         focus_ring(
             ui,
-            Rect::from_min_max(rect.min, pos2(rect.right() - lane, rect.bottom())),
+            Rect::from_min_max(rect.min, pos2(inner_rect.right() - lane, rect.bottom())),
         );
     }
-    inner
+    (output.inner, output.content_size.y)
+}
+
+/// Where a footer message stands in the footer's one order.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+enum FooterRank {
+    /// A result whose Undo is live.
+    Undo,
+    /// Why Save or the draft waits: Save's reason, a parse error, a disk failure.
+    Reason,
+    /// Every other notice, and a result with no live Undo.
+    Notice,
+}
+
+type FooterMessage<'a> = (
+    FooterRank,
+    std::borrow::Cow<'a, str>,
+    Box<dyn FnOnce(&mut Ui) + 'a>,
+);
+
+/// The one message footer of a pane. Results, reasons and notices that come and go sit in it,
+/// pinned at the bottom of the pane, below the pane's scroll area or editor, so none of them
+/// moves what the DM works on: the content above keeps its top, and only its visible height
+/// shrinks. The footer is absent when it holds nothing, as tall as what it holds up to one third
+/// of the pane, and scrolls inside beyond that (see `scroll_part`). Its order is fixed: results
+/// with a live Undo first, then reasons, then other notices; within each, the order the caller
+/// added them, newest first. A state word stays on the save row; a fault that belongs to one row
+/// stays on that row.
+///
+/// Build it, then call `show` where the pane's body starts: the footer takes the bottom of
+/// what is left of the pane, and `show` returns the y `S` above it where the body drawn next (in
+/// its own scroll area or editor) ends.
+///
+/// ```ignore
+/// let mut undo = false;
+/// let mut footer = design::Footer::new(("library_footer", path), width);
+/// footer.result(&words, true, |ui| undo = design::draft_discarded(ui, name));
+/// footer.reason(problem, |ui| { design::message(ui, Tone::Error, problem); });
+/// let bottom = footer.show(ui);
+/// // ...the body, which ends at `bottom`...
+/// ```
+pub struct Footer<'a> {
+    id: Id,
+    width: f32,
+    messages: Vec<FooterMessage<'a>>,
+}
+
+impl<'a> Footer<'a> {
+    /// An empty footer `width` wide. `id` keeps its height, scroll and focus; give each pane
+    /// instance its own.
+    pub fn new(id: impl std::hash::Hash, width: f32) -> Self {
+        Self {
+            id: Id::new(id),
+            width,
+            messages: Vec::new(),
+        }
+    }
+
+    /// A result. `has_undo` is true while its Undo is live: it then leads the footer, so a
+    /// reason that does not clear never hides the way back. Without one it is a notice.
+    pub fn result(
+        &mut self,
+        words: impl Into<std::borrow::Cow<'a, str>>,
+        has_undo: bool,
+        draw: impl FnOnce(&mut Ui) + 'a,
+    ) -> &mut Self {
+        let rank = if has_undo {
+            FooterRank::Undo
+        } else {
+            FooterRank::Notice
+        };
+        self.messages.push((rank, words.into(), Box::new(draw)));
+        self
+    }
+
+    /// Why Save or the draft waits: a refusal, a parse error or a failed write.
+    pub fn reason(
+        &mut self,
+        words: impl Into<std::borrow::Cow<'a, str>>,
+        draw: impl FnOnce(&mut Ui) + 'a,
+    ) -> &mut Self {
+        self.messages
+            .push((FooterRank::Reason, words.into(), Box::new(draw)));
+        self
+    }
+
+    /// Any other notice: a warning, guidance, or why other actions wait.
+    pub fn notice(
+        &mut self,
+        words: impl Into<std::borrow::Cow<'a, str>>,
+        draw: impl FnOnce(&mut Ui) + 'a,
+    ) -> &mut Self {
+        self.messages
+            .push((FooterRank::Notice, words.into(), Box::new(draw)));
+        self
+    }
+
+    /// Draw the footer at the bottom of what is left of `ui`, and return the y where the body
+    /// ends: `S` above the footer, or the pane's bottom when the footer is empty. Each message's
+    /// `draw` runs here, in the footer's order. The body sizes itself to end there (a scroll
+    /// area's `max_height`, an editor's height). `ui` also ends there when it holds nothing below
+    /// the cursor already, but egui keeps a `Ui`'s bottom below what it holds, so do not rely on
+    /// `ui.available_height()` alone. `ui` lays out top down.
+    pub fn show(mut self, ui: &mut Ui) -> f32 {
+        debug_assert!(
+            ui.layout().main_dir() == egui::Direction::TopDown,
+            "a pane's message footer ends a top-down Ui"
+        );
+        let key = self.id.with("height");
+        let stored = ui
+            .ctx()
+            .data(|data| data.get_temp::<f32>(key))
+            .unwrap_or(0.0);
+        let pane = ui.available_rect_before_wrap();
+        if self.messages.is_empty() {
+            if stored != 0.0 {
+                ui.ctx().data_mut(|data| data.remove::<f32>(key));
+                ui.ctx().request_discard("the message footer emptied");
+            }
+            return pane.bottom();
+        }
+        // A stable sort keeps the caller's order inside each rank.
+        self.messages.sort_by_key(|(rank, ..)| *rank);
+        let most = (pane.height() / 3.0).floor().max(0.0);
+        // Last pass's height; a change is measured below, and the pass is drawn again.
+        let height = stored.min(most);
+        let rect = Rect::from_min_size(
+            pos2(pane.left(), pane.bottom() - height),
+            vec2(self.width.min(pane.width()), height),
+        );
+        let name = self
+            .messages
+            .iter()
+            .map(|(_, words, _)| words.as_ref())
+            .filter(|words| !words.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ");
+        let messages = std::mem::take(&mut self.messages);
+        let (_, content) = scroll_part(ui, rect, self.id, &name, |ui| {
+            for (_, _, draw) in messages {
+                draw(ui);
+            }
+        });
+        let wanted = (content + 2.0 * PART_INSET).ceil().min(most);
+        if (wanted - stored).abs() >= HAIRLINE_WIDTH {
+            ui.ctx().data_mut(|data| data.insert_temp(key, wanted));
+            ui.ctx()
+                .request_discard("the message footer changed height");
+        }
+        if height == 0.0 {
+            return pane.bottom();
+        }
+        // egui's `set_max_height` also moves the cursor back to the top of `ui`, so it goes
+        // back to where the body starts.
+        let top = ui.cursor().top();
+        ui.set_max_height((rect.top() - S - top).max(0.0));
+        ui.add_space(top - ui.cursor().top());
+        rect.top() - S
+    }
 }
 
 /// The same safe-first choice for a draft whose file changed on disk.
@@ -2756,13 +2992,18 @@ pub fn focus_and_select(ui: &Ui, id: Id, text: &str) {
 
 /// Keep frequent Add actions visible. Other actions share More when space is short.
 /// `always_visible` names the actions that stay beside the caller's frequent actions.
-/// Returns the chosen action's original index, whether inline or in the menu.
+/// `menu_only` are lines of More alone, after the others: they take no part in the fit, so no
+/// action moves for them, and a strip with no More has none of them.
+/// Returns the chosen action's original index, whether inline or in the menu. A `menu_only`
+/// line's index follows the last of `actions`.
 pub fn hanging_add_strip(
     ui: &mut Ui,
     first: impl FnOnce(&mut Ui),
     actions: Vec<Action<'_>>,
     always_visible: &[usize],
+    menu_only: Vec<Action<'_>>,
 ) -> Option<usize> {
+    let after = actions.len();
     let mut chosen = None;
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = XS;
@@ -2792,6 +3033,7 @@ pub fn hanging_add_strip(
                         overflow.push((index, action));
                     }
                 }
+                overflow.extend((after..).zip(menu_only));
                 let hint = overflow
                     .iter()
                     .map(|(_, action)| action.label)
@@ -4292,6 +4534,259 @@ mod tests {
                 && (detail - word).abs() <= 0.5,
             "one line: icon {icon_x}, word {word_x}; two lines: icon {icon}, word {word}, detail {detail}"
         );
+    }
+
+    /// iter-26-A FB3, AJ1, FM3: a rail status that wraps, through `wrapped_status` or
+    /// `status_link`, starts its second line at the word, where a one-line status starts it.
+    #[test]
+    fn iter26_a_a_wrapped_status_starts_its_second_line_at_the_word() {
+        const WRAPPED: &str = "Timeline not readable";
+        const LINKED: &str = "Session folder not found";
+        let state = |word: &'static str| Status {
+            icon: icons::WARN,
+            word,
+            color: colors().result.warning,
+        };
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(vec2(200.0, 300.0))
+            .build_ui(move |ui| {
+                status(ui, state("Connected"));
+                // As narrow as a rail at 960, so both wrap.
+                ui.set_max_width(100.0);
+                wrapped_status(ui, state(WRAPPED));
+                let _ = status_link(ui, state(LINKED));
+            });
+        super::super::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        // The x of each row's first glyph, by the words of the painted text.
+        let mut rows = Vec::new();
+        for shape in &harness.output().shapes {
+            if let egui::Shape::Text(text) = &shape.shape {
+                let xs = text
+                    .galley
+                    .rows
+                    .iter()
+                    .map(|row| text.pos.x + row.pos.x + row.glyphs[0].pos.x)
+                    .collect::<Vec<_>>();
+                rows.push((text.galley.job.text.clone(), xs));
+            }
+        }
+        let one_line = format!("{} Connected", icons::WARN);
+        let word_x = harness
+            .output()
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.job.text == one_line => {
+                    let glyph = text.galley.rows[0].glyphs.iter().find(|g| g.chr == 'C')?;
+                    Some(text.pos.x + glyph.pos.x)
+                }
+                _ => None,
+            });
+        let word_x = word_x.expect("the one-line status is painted");
+        for words in [WRAPPED, LINKED] {
+            let xs = &rows
+                .iter()
+                .find(|(text, _)| text == words)
+                .unwrap_or_else(|| panic!("{words} is painted on its own: {rows:?}"))
+                .1;
+            assert!(
+                xs.len() == 2 && xs.iter().all(|x| (x - word_x).abs() <= 0.5),
+                "{words} wraps to two lines, each at the word x {word_x}: {xs:?}"
+            );
+        }
+    }
+
+    /// iter-26-A footer contract: the body's top is the same with 0, 1, 3 and 10 messages, at
+    /// 960, 1200 and 1920; the footer is never more than a third of the pane; and with 20, the last
+    /// message is reached by Tab with the arrow keys and by the wheel. Its focus ring stays clear
+    /// of every word.
+    #[test]
+    fn iter26_a_the_footer_keeps_the_body_top_and_reaches_its_last_message() {
+        const BODY: &str = "The body starts here.";
+        let last = |count: usize| format!("Result {} of {count} kept with its Undo.", count - 1);
+        let harness = |size: Vec2, count: usize| {
+            let mut harness =
+                egui_kittest::Harness::builder()
+                    .with_size(size)
+                    .build_ui(move |ui| {
+                        let words: Vec<String> = (0..count)
+                            .map(|at| format!("Result {at} of {count} kept with its Undo."))
+                            .collect();
+                        // A save row above the footer, as in a pane: the body starts below it.
+                        ui.label("Save row");
+                        let mut footer = Footer::new("test_footer", ui.available_width());
+                        for (at, words) in words.iter().enumerate() {
+                            footer.result(words.as_str(), true, move |ui| {
+                                let _ = undo_message_named(
+                                    ui,
+                                    Tone::Success,
+                                    words,
+                                    "Undo",
+                                    Some(&format!("Undo {at}")),
+                                );
+                            });
+                        }
+                        if count > 1 {
+                            footer.reason("Line 3 opens a list.", |ui| {
+                                message(ui, Tone::Error, "Line 3 opens a list.");
+                            });
+                        }
+                        let bottom = footer.show(ui);
+                        let body = egui::ScrollArea::vertical()
+                            .id_salt("test_body")
+                            .max_height(bottom - ui.cursor().top())
+                            .auto_shrink([false, false])
+                            .show(ui, |ui| {
+                                ui.label(BODY);
+                            })
+                            .inner_rect;
+                        ui.ctx()
+                            .data_mut(|data| data.insert_temp(Id::new("test_body"), body));
+                    });
+            super::super::theme::install(&harness.ctx);
+            harness.run_steps(3);
+            harness
+        };
+        let text_at = |harness: &egui_kittest::Harness<'_>, words: &str| {
+            harness
+                .output()
+                .shapes
+                .iter()
+                .find_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) if text.galley.job.text == words => Some((
+                        Rect::from_min_size(text.pos, text.galley.size()),
+                        shape.clip_rect,
+                    )),
+                    _ => None,
+                })
+        };
+        let footer_rect = |harness: &egui_kittest::Harness<'_>| {
+            harness
+                .ctx
+                .read_response(Id::new("test_footer").with("focus"))
+                .map(|response| response.rect)
+        };
+        for size in [
+            vec2(960.0, 640.0),
+            vec2(1200.0, 800.0),
+            vec2(1920.0, 1080.0),
+        ] {
+            let tops: Vec<_> = [0, 1, 3, 10]
+                .map(|count| {
+                    let harness = harness(size, count);
+                    let body = harness
+                        .ctx
+                        .data(|data| data.get_temp::<Rect>(Id::new("test_body")))
+                        .expect("the body is drawn");
+                    let (row, _) = text_at(&harness, "Save row").unwrap();
+                    assert!(
+                        body.top() >= row.bottom(),
+                        "{count} at {size:?}: the body {body:?} starts below the save row {row:?}"
+                    );
+                    if count > 0 {
+                        let footer = footer_rect(&harness).expect("the footer is drawn");
+                        assert!(
+                            footer.height() <= size.y / 3.0 + 1.0
+                                && body.bottom() <= footer.top() - S + 0.5
+                                && footer.bottom() <= size.y,
+                            "{count} at {size:?}: the body {body:?} ends `S` above the footer {footer:?}, a third of the pane at most"
+                        );
+                    } else {
+                        assert!(
+                            body.bottom() >= size.y - L,
+                            "With no message the body {body:?} takes the pane at {size:?}"
+                        );
+                    }
+                    text_at(&harness, BODY).map(|(rect, _)| rect.top())
+                })
+                .into();
+            assert!(
+                tops[0].is_some() && tops.iter().all(|top| *top == tops[0]),
+                "The body's top at {size:?} with 0, 1, 3, 10 messages: {tops:?}"
+            );
+            // The last of 20 messages (more than fit at every size), fully in the footer's view.
+            let shown = |harness: &egui_kittest::Harness<'_>| {
+                text_at(harness, &last(20)).is_some_and(|(rect, clip)| {
+                    footer_rect(harness).is_some_and(|footer| {
+                        clip.intersect(footer).expand(0.5).contains_rect(rect)
+                    })
+                })
+            };
+            // Tab: from the start, to the footer, then the arrow keys scroll it.
+            let mut keyboard = harness(size, 20);
+            assert!(!shown(&keyboard), "20 messages overflow at {size:?}");
+            let focus = Id::new("test_footer").with("focus");
+            // Each Undo is a stop before the footer itself.
+            for _ in 0..48 {
+                if keyboard.ctx.memory(|memory| memory.has_focus(focus)) {
+                    break;
+                }
+                keyboard.key_press(egui::Key::Tab);
+                keyboard.run_steps(2);
+            }
+            assert!(
+                keyboard.ctx.memory(|memory| memory.has_focus(focus)),
+                "Tab reaches the footer at {size:?}"
+            );
+            for _ in 0..40 {
+                if shown(&keyboard) {
+                    break;
+                }
+                keyboard.key_press(egui::Key::ArrowDown);
+                keyboard.run_steps(2);
+            }
+            assert!(
+                shown(&keyboard),
+                "the arrows reach the last message at {size:?}"
+            );
+            // Every word in the footer is inside the painted ring, clear of its stroke.
+            let footer = footer_rect(&keyboard).unwrap();
+            let mut rings = Vec::new();
+            for shape in &keyboard.output().shapes {
+                if let egui::Shape::Rect(ring) = &shape.shape
+                    && ring.stroke.color == colors().focus
+                {
+                    rings.push(ring.rect);
+                }
+            }
+            assert!(
+                rings.len() == 1 && footer.contains_rect(rings[0]),
+                "one focus ring, the footer's, at {size:?}: {rings:?}"
+            );
+            let ring = rings[0].shrink(FOCUS_WIDTH);
+            for shape in &keyboard.output().shapes {
+                if let egui::Shape::Text(text) = &shape.shape {
+                    let rect = text.visual_bounding_rect().intersect(shape.clip_rect);
+                    if rect.is_positive() && footer.intersects(rect) {
+                        assert!(
+                            ring.contains_rect(rect),
+                            "{:?} at {rect:?} is clear of the ring {footer:?}",
+                            text.galley.job.text
+                        );
+                    }
+                }
+            }
+            // The wheel over the footer.
+            let mut wheel = harness(size, 20);
+            let over = footer_rect(&wheel).unwrap().center();
+            wheel.event(egui::Event::PointerMoved(over));
+            for _ in 0..40 {
+                if shown(&wheel) {
+                    break;
+                }
+                wheel.event(egui::Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Point,
+                    delta: vec2(0.0, -Type::Body.line()),
+                    modifiers: egui::Modifiers::NONE,
+                });
+                wheel.run_steps(2);
+            }
+            assert!(
+                shown(&wheel),
+                "the wheel reaches the last message at {size:?}"
+            );
+        }
     }
 
     #[test]

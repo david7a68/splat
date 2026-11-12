@@ -43,6 +43,8 @@ pub(super) struct AdHoc {
     pub(super) side: Option<String>,
     /// The words for which the DM chose Show all.
     pub(super) show_all: Option<String>,
+    /// HP takes the keyboard on the next frame.
+    pub(super) focus_hp: bool,
 }
 
 /// What the form says now, when it can be added.
@@ -226,6 +228,10 @@ const NEEDS_HP: &str = "Type its HP. A creature made up here has no stat block."
 const FIRST_FIELD_WIDTH: f32 = 56.0;
 
 /// A field with its word before it. A `label_width` gives the word a fixed column.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "each field differs in each of these"
+)]
 fn short_field(
     ui: &mut egui::Ui,
     word: &str,
@@ -234,6 +240,7 @@ fn short_field(
     text: &mut String,
     hint: &str,
     width: f32,
+    focus: bool,
 ) -> bool {
     let words = Type::Small.rich(ui, word).color(colors().muted);
     match label_width {
@@ -254,6 +261,9 @@ fn short_field(
     }
     ui.add_space(design::XS);
     let response = design::number_field(ui, name, text, hint, width, Density::Read.control());
+    if focus {
+        response.request_focus();
+    }
     response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))
 }
 
@@ -267,6 +277,24 @@ impl Run {
     pub(crate) fn show_arrivals(&mut self) {
         self.panel = super::Panel::Groups;
         self.close_lookup = true;
+    }
+
+    /// An NPC with no stat block joins as a creature made up at the table: the form, with its
+    /// name filled in and the keyboard in HP.
+    pub(crate) fn made_up(&mut self, name: &str) {
+        self.ad_hoc = AdHoc {
+            query: name.to_owned(),
+            focus_hp: true,
+            ..AdHoc::default()
+        };
+        self.show_arrivals();
+    }
+
+    /// The name in the made-up form, while Arrivals shows it.
+    #[cfg(test)]
+    pub(crate) fn made_up_name(&self) -> Option<&str> {
+        (self.panel == super::Panel::Groups && self.ad_hoc.focus_hp)
+            .then_some(self.ad_hoc.query.as_str())
     }
 
     /// The sides this run already has, so that a new creature joins one and not a misspelling.
@@ -439,6 +467,7 @@ impl Run {
                 &mut form.count,
                 "1",
                 FIRST_FIELD_WIDTH,
+                false,
             );
             ui.add_space(design::M);
             enter |= short_field(
@@ -449,6 +478,7 @@ impl Run {
                 &mut form.hp,
                 &hp_hint,
                 64.0,
+                std::mem::take(&mut form.focus_hp),
             );
             ui.add_space(design::M);
             enter |= short_field(
@@ -459,6 +489,7 @@ impl Run {
                 &mut form.ac,
                 &ac_hint,
                 52.0,
+                false,
             );
         });
         let sides = self.sides_to_join();
@@ -472,6 +503,7 @@ impl Run {
                 &mut self.ad_hoc.total,
                 "Roll",
                 FIRST_FIELD_WIDTH,
+                false,
             );
             ui.add_space(design::M);
             ui.label(Type::Small.rich(ui, "Side").color(c.muted));

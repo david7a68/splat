@@ -1193,7 +1193,13 @@ impl Splat {
                 None => session,
             }
         });
+        let start_blocked = self.encounters.plan_blocked();
+        let mut start_fight = None;
         for reader in [&mut self.world_page.reader, &mut self.lookup.reader] {
+            reader.start_blocked = start_blocked;
+            if let Some(fight) = reader.start_fight.take() {
+                start_fight = Some(fight);
+            }
             reader.log_as.clone_from(&log_as);
             reader.sides = sides.clone();
             reader.live = live;
@@ -1219,12 +1225,28 @@ impl Splat {
         if refresh {
             self.lookup.refresh();
         }
+        if let Some(fight) = start_fight {
+            self.start_fight_with(&fight);
+        }
         if let Some(roll) = roll_table::take_roll(ctx) {
             let result = match self.encounters.run_mut() {
                 Some(run) if !run.ended() => run.roll_table(roll),
                 _ => roll_table::roll_alone(&roll),
             };
             roll_table::settle_roll(ctx, result.unwrap_or_else(|error| error));
+        }
+    }
+
+    /// A fight that nobody planned, from a reader's `Start fight`: it starts, or Encounters says
+    /// why it cannot, as a planned fight's `Start fight` does.
+    fn start_fight_with(&mut self, fight: &world::StartFight) {
+        let Some(campaign) = self.campaigns.active_campaign() else {
+            return;
+        };
+        self.encounters
+            .start_fight_with(fight, &campaign, self.campaigns.modules());
+        if !self.encounters.go_to_run {
+            self.page = Page::Encounters;
         }
     }
 
@@ -1697,8 +1719,10 @@ impl Splat {
                         encounters.group_in_plan_view(ui, campaign, campaigns);
                     };
                     let party = self.party.order();
+                    let sources = self.lookup.index().map(|index| index.loot_sources());
                     let plan = sessions::page::Plan {
                         party: &party,
+                        tables: sources.as_ref().map_or(&[], |sources| &sources.tables),
                         fights: &fights,
                         saved_runs: &saved_runs,
                         groups: &groups,
@@ -1731,6 +1755,8 @@ impl Splat {
                     self.timeline.run_open = self.encounters.has_run();
                     self.timeline_page.saved_runs = self.encounters.saved_runs();
                     self.timeline_page.dated = self.sessions.current_dated();
+                    self.timeline_page.tables =
+                        self.lookup.index().map(|index| index.loot_sources());
                     self.timeline_page.places = self
                         .lookup
                         .index()
@@ -2131,6 +2157,9 @@ impl Splat {
             if let Some(path) = self.sessions.wants_saved_run.take() {
                 self.encounters.open_saved_run(&path, campaign);
             }
+            if let Some(fight) = self.sessions.wants_start_fight.take() {
+                self.start_fight_with(&fight);
+            }
             // Encounters shows why, and a button that seems dead tells the table nothing.
             if asked && !self.encounters.go_to_run {
                 self.page = Page::Encounters;
@@ -2297,6 +2326,7 @@ impl eframe::App for Splat {
         if ctx.input(|i| i.viewport().close_requested()) {
             // An edit in its pause before saving is saved now, not reported as a loss.
             self.sessions.flush();
+            timeline::checks::settle_length(&mut self.timeline, None);
             self.timeline.run_open = self.encounters.has_run();
             self.timeline.save();
             if (self.library.dirty()
@@ -2482,6 +2512,9 @@ impl eframe::App for Splat {
         self.encounters
             .tick_sync(ctx, session, epoch, active.as_ref());
         self.sessions.on_page = self.page == Page::Sessions;
+        if !self.sessions.on_page {
+            self.sessions.left_page();
+        }
         self.sessions.banner(
             ctx,
             &self.processing,
@@ -2551,6 +2584,8 @@ impl eframe::App for Splat {
         }
         // Coming back to a page beside the open note, the keyboard goes back to the note.
         if self.page != self.shown_page {
+            // A length typed on the page the DM left is the journey's now, as at focus loss.
+            timeline::checks::settle_length(&mut self.timeline, None);
             self.campaign_content.clear_notice();
             self.encounters.clear_notice();
             self.sessions.clear_notice();

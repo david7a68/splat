@@ -293,7 +293,7 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool, short_links
                             cell.to_owned()
                         }
                     };
-                    if let Some(Ok((_, dice))) = &rolls
+                    if let Some(Ok(crate::roll_table::Marker { dice, .. })) = &rolls
                         && let Some(header) = rows.first_mut().and_then(|row| row.first_mut())
                         && header.trim().is_empty()
                     {

@@ -58,23 +58,81 @@ impl TableRoll {
     }
 }
 
-/// A marker's key and dice, or why it has none, and the table's rows.
-pub type MarkedTable = (Result<(String, String), String>, Vec<Vec<String>>);
+/// How often a table rolls on a journey: the marker's optional `per` word. A day is the value
+/// when there is none.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub enum Per {
+    #[default]
+    Day,
+    /// Eight hours.
+    Watch,
+    Hours(u64),
+    /// A word that Splat cannot read. A journey then rolls one check each day.
+    NotRead(String),
+}
 
-/// The key and dice of a `splat:rolls` marker.
-pub fn rolls_marker(html: &str) -> Option<Result<(String, String), String>> {
+/// The warning on a table whose `per` word Splat cannot read.
+pub const PER_NOT_READ: &str = "Interval not read; using one check each day.";
+
+impl Per {
+    pub fn read(word: &str) -> Self {
+        match word {
+            "day" => Self::Day,
+            "watch" => Self::Watch,
+            _ => match word.strip_suffix('h').and_then(|hours| hours.parse().ok()) {
+                Some(hours) if hours > 0 => Self::Hours(hours),
+                _ => Self::NotRead(word.to_owned()),
+            },
+        }
+    }
+
+    /// The hours between two checks.
+    pub fn hours(&self) -> u64 {
+        match self {
+            Self::Day | Self::NotRead(_) => 24,
+            Self::Watch => 8,
+            Self::Hours(hours) => *hours,
+        }
+    }
+
+    /// How often, in the words after the dice: `each day`, `each watch`, `every 4 hours`.
+    pub fn words(&self) -> String {
+        match self {
+            Self::Day | Self::NotRead(_) => "each day".to_owned(),
+            Self::Watch => "each watch".to_owned(),
+            Self::Hours(1) => "every hour".to_owned(),
+            Self::Hours(hours) => format!("every {hours} hours"),
+        }
+    }
+}
+
+/// What a `splat:rolls` marker says: the table's key, its dice and how often a journey rolls it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Marker {
+    pub key: String,
+    pub dice: String,
+    pub per: Per,
+}
+
+/// A marker, or why it has none, and the table's rows.
+pub type MarkedTable = (Result<Marker, String>, Vec<Vec<String>>);
+
+/// The key, dice and interval of a `splat:rolls` marker.
+pub fn rolls_marker(html: &str) -> Option<Result<Marker, String>> {
     let inner = html.trim().strip_prefix(ROLLS_MARKER)?;
     let inner = inner.strip_suffix("-->").unwrap_or(inner);
-    let (mut key, mut dice) = (None, None);
+    let (mut key, mut dice, mut per) = (None, None, Per::Day);
     for word in inner.split_whitespace() {
         if let Some(value) = word.strip_prefix("key=") {
             key = Some(value.to_owned());
         } else if let Some(value) = word.strip_prefix("dice=") {
             dice = Some(value.to_owned());
+        } else if let Some(value) = word.strip_prefix("per=") {
+            per = Per::read(value);
         }
     }
     Some(match (key, dice) {
-        (Some(key), Some(dice)) => Ok((key, dice)),
+        (Some(key), Some(dice)) => Ok(Marker { key, dice, per }),
         _ => Err("This roll table’s marker needs key= and dice=.".to_owned()),
     })
 }
@@ -84,13 +142,13 @@ pub fn rolls_marker(html: &str) -> Option<Result<(String, String), String>> {
 pub fn marked_tables(body: &str) -> Vec<MarkedTable> {
     marked_tables_under_headings(body)
         .into_iter()
-        .map(|(_, table)| table)
+        .map(|(_, table, _)| table)
         .collect()
 }
 
 /// One marked table, as a place outside its own note names it: its source note, its heading,
-/// its key and its dice, and its rows checked against the dice. A table's identity is its key;
-/// its heading is for reading.
+/// its key, its dice and its interval, and its rows checked against the dice. A table's
+/// identity is its key; its heading is for reading.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Table {
     pub key: String,
@@ -99,13 +157,48 @@ pub struct Table {
     pub path: String,
     /// The note's last heading above it, when there is one.
     pub heading: Option<String>,
+    /// How often a journey rolls it.
+    pub per: Per,
     /// Why it cannot roll, when it cannot.
     pub problem: Option<String>,
     /// Its rows, checked against its dice. Empty when it cannot roll.
     pub rows: Vec<RollRow>,
+    /// Each row's words with their links as `[[…]]`, in the order of `rows`, so a result kept
+    /// in a file can still name what it links.
+    pub markup: Vec<String>,
 }
 
 impl Table {
+    /// Its name for reading: its heading, or else its note's name.
+    pub fn name(&self) -> &str {
+        self.heading.as_deref().unwrap_or_else(|| {
+            let file = self.path.rsplit('/').next().unwrap_or(&self.path);
+            file.strip_suffix(".md").unwrap_or(file)
+        })
+    }
+
+    /// A roll on this table, or why it cannot roll.
+    pub fn roll(&self, typed: Option<i64>) -> Result<TableRoll, String> {
+        match self.fault() {
+            Some(fault) => Err(fault),
+            None => Ok(TableRoll {
+                key: self.key.clone(),
+                dice: self.dice.clone(),
+                typed,
+                rows: self.rows.clone(),
+            }),
+        }
+    }
+
+    /// The words, with their links, of the row that has this result.
+    pub fn linked_words(&self, value: i64) -> Option<&str> {
+        let at = self
+            .rows
+            .iter()
+            .position(|row| (row.min..=row.max).contains(&value))?;
+        self.markup.get(at).map(String::as_str)
+    }
+
     /// Why it cannot roll, with the note that holds it.
     pub fn fault(&self) -> Option<String> {
         let path = &self.path;
@@ -120,8 +213,8 @@ impl Table {
 pub fn tables_in<'a>(notes: impl IntoIterator<Item = (&'a str, &'a str)>) -> Vec<Table> {
     let mut tables: Vec<Table> = Vec::new();
     for (path, body) in notes {
-        for (heading, (marker, rows)) in marked_tables_under_headings(body) {
-            let Ok((key, dice)) = marker else {
+        for (heading, (marker, rows), linked) in marked_tables_under_headings(body) {
+            let Ok(Marker { key, dice, per }) = marker else {
                 continue;
             };
             if tables.iter().any(|table| table.key == key) {
@@ -131,24 +224,46 @@ pub fn tables_in<'a>(notes: impl IntoIterator<Item = (&'a str, &'a str)>) -> Vec
                 Ok(rows) => (rows, None),
                 Err(error) => (Vec::new(), Some(error)),
             };
+            // A row's words with links, found by its range, as the rows are in dice order.
+            let markup = rows
+                .iter()
+                .map(|row| {
+                    linked
+                        .iter()
+                        .skip(1)
+                        .find(|cells| {
+                            cells
+                                .first()
+                                .and_then(|cell| parse_range(cell))
+                                .is_some_and(|range| range == (row.min, row.max))
+                        })
+                        .map_or_else(|| row.text.clone(), |cells| cells[1..].join(" · "))
+                })
+                .collect();
             tables.push(Table {
                 key,
                 dice,
                 path: path.to_owned(),
                 heading,
+                per,
                 problem,
                 rows,
+                markup,
             });
         }
     }
     tables
 }
 
-/// `marked_tables`, with the last heading above each table.
-fn marked_tables_under_headings(body: &str) -> Vec<(Option<String>, MarkedTable)> {
+/// `marked_tables`, with the last heading above each table, and its cells again with each link
+/// to a note as `[[…]]`. A note in the campaign's index has its links as Markdown links.
+type Headed = (Option<String>, MarkedTable, Vec<Vec<String>>);
+fn marked_tables_under_headings(body: &str) -> Vec<Headed> {
     let mut found = Vec::new();
     let mut marker = None;
     let mut rows: Option<Vec<Vec<String>>> = None;
+    let mut linked: Vec<Vec<String>> = Vec::new();
+    let mut link: Option<(String, usize)> = None;
     let mut heading: Option<String> = None;
     let mut in_heading = false;
     for event in Parser::new_ext(body, Options::ENABLE_TABLES) {
@@ -173,15 +288,43 @@ fn marked_tables_under_headings(body: &str) -> Vec<(Option<String>, MarkedTable)
             Event::Start(
                 Tag::Paragraph | Tag::List(_) | Tag::CodeBlock(_) | Tag::BlockQuote(_),
             ) if rows.is_none() => marker = None,
-            Event::Start(Tag::Table(_)) => rows = Some(Vec::new()),
+            Event::Start(Tag::Table(_)) => {
+                rows = Some(Vec::new());
+                linked.clear();
+            }
             Event::Start(Tag::TableHead | Tag::TableRow) => {
                 if let Some(rows) = &mut rows {
                     rows.push(Vec::new());
+                    linked.push(Vec::new());
                 }
             }
             Event::Start(Tag::TableCell) => {
                 if let Some(row) = rows.as_mut().and_then(|rows| rows.last_mut()) {
                     row.push(String::new());
+                    if let Some(row) = linked.last_mut() {
+                        row.push(String::new());
+                    }
+                }
+            }
+            Event::Start(Tag::Link { ref dest_url, .. }) if rows.is_some() => {
+                if let (Some(target), Some(cell)) = (
+                    dest_url.strip_prefix(crate::markdown_view::NOTE_LINK),
+                    linked.last().and_then(|row| row.last()),
+                ) {
+                    link = Some((target.to_owned(), cell.len()));
+                }
+            }
+            Event::End(TagEnd::Link) => {
+                if let (Some((target, start)), Some(cell)) = (
+                    link.take(),
+                    linked.last_mut().and_then(|row| row.last_mut()),
+                ) {
+                    let words = cell.split_off(start);
+                    if words == target {
+                        cell.push_str(&format!("[[{target}]]"));
+                    } else {
+                        cell.push_str(&format!("[[{target}|{words}]]"));
+                    }
                 }
             }
             Event::Text(ref text) | Event::Code(ref text) => {
@@ -191,11 +334,14 @@ fn marked_tables_under_headings(body: &str) -> Vec<(Option<String>, MarkedTable)
                     .and_then(|row| row.last_mut())
                 {
                     cell.push_str(text);
+                    if let Some(cell) = linked.last_mut().and_then(|row| row.last_mut()) {
+                        cell.push_str(text);
+                    }
                 }
             }
             Event::End(TagEnd::Table) => {
                 if let (Some(marker), Some(rows)) = (marker.take(), rows.take()) {
-                    found.push((heading.clone(), (marker, rows)));
+                    found.push((heading.clone(), (marker, rows), std::mem::take(&mut linked)));
                 }
                 rows = None;
             }
@@ -212,7 +358,7 @@ pub(crate) fn fault_count(body: &str) -> usize {
         .filter(|(marker, rows)| {
             marker
                 .as_ref()
-                .map_or(true, |(_, dice)| table_rows(dice, rows).is_err())
+                .map_or(true, |marker| table_rows(&marker.dice, rows).is_err())
         })
         .count()
 }
@@ -302,14 +448,14 @@ fn requester_id() -> egui::Id {
 pub fn roll_control(
     ui: &mut egui::Ui,
     reader: egui::Id,
-    marker: &Result<(String, String), String>,
+    marker: &Result<Marker, String>,
     table: &[Vec<String>],
 ) {
     let checked = marker
         .as_ref()
         .map_err(String::clone)
-        .and_then(|(key, dice)| Ok((key, dice, table_rows(dice, table)?)));
-    let (key, dice, rows) = match checked {
+        .and_then(|marker| Ok((marker, table_rows(&marker.dice, table)?)));
+    let (Marker { key, dice, per }, rows) = match checked {
         Ok(checked) => checked,
         // One bad table says so where it is. The rest of the note still reads.
         Err(error) => {
@@ -374,6 +520,10 @@ pub fn roll_control(
         );
         slot.add(egui::Label::new(Type::Body.rich(&slot, result).color(colors().text)).truncate());
     }
+    // The table still rolls; only a journey's checks need the word.
+    if matches!(per, Per::NotRead(_)) {
+        design::small_message(ui, Tone::Warning, PER_NOT_READ);
+    }
     ui.data_mut(|data| data.insert_temp(id, state));
 }
 
@@ -401,10 +551,10 @@ pub fn settle_roll(ctx: &egui::Context, result: String) {
 pub fn matched_row(
     ui: &egui::Ui,
     reader: egui::Id,
-    marker: &Result<(String, String), String>,
+    marker: &Result<Marker, String>,
     table: &[Vec<String>],
 ) -> Option<usize> {
-    let (key, dice) = marker.as_ref().ok()?;
+    let Marker { key, dice, .. } = marker.as_ref().ok()?;
     let value = ui
         .data(|data| data.get_temp::<RollState>(roll_state_id(reader, key)))?
         .value?;
@@ -473,7 +623,11 @@ mod tests {
         let found = marked_tables(note);
         assert_eq!(found.len(), 1);
         let (marker, rows) = &found[0];
-        assert_eq!(marker, &Ok(("gifts".to_owned(), "1d2".to_owned())));
+        let marker = marker.as_ref().unwrap();
+        assert_eq!(
+            (marker.key.as_str(), marker.dice.as_str()),
+            ("gifts", "1d2")
+        );
         assert_eq!(rows.len(), 3, "the heading row and two more");
         assert_eq!(rows[1], ["1", "A knife"]);
         assert_eq!(table_rows("1d2", rows).unwrap()[1].text, "A net");
@@ -493,15 +647,64 @@ mod tests {
             ("World/Road.md", Some("On the road"), "gifts", "1d2")
         );
         assert_eq!((table.rows.len(), table.fault()), (2, None));
-        assert_eq!(tables_in([("Other.md", note)])[0].heading, None);
+        assert_eq!((table.name(), &table.per), ("On the road", &Per::Day));
+        // A row's words keep a link to an encounter, so a journey's result can offer it.
+        let linked = "<!-- splat:rolls key=road dice=1d2 -->\n\n| d2 | Road |\n|---|---|\n| 1 | [[Wolf Pack]] pick up the trail. |\n| 2 | Quiet. |\n";
+        assert_eq!(
+            tables_in([("Road.md", linked)])[0].linked_words(1),
+            Some("[[Wolf Pack]] pick up the trail.")
+        );
+        // The campaign's index holds a note's links as Markdown links: the row's words read as
+        // before, and its linked words name the note again.
+        let indexed = crate::world::with_links(linked, &Default::default());
+        let table = &tables_in([("Road.md", indexed.as_str())])[0];
+        assert_eq!(
+            (table.rows[0].text.as_str(), table.linked_words(1)),
+            (
+                "Wolf Pack pick up the trail.",
+                Some("[[Wolf Pack]] pick up the trail.")
+            )
+        );
+        let plain = &tables_in([("World/Other.md", note)])[0];
+        assert_eq!((plain.heading.as_deref(), plain.name()), (None, "Other"));
     }
 
     #[test]
     fn markers_need_their_key_and_dice() {
+        let marker = |per: &str| {
+            rolls_marker(&format!("<!-- splat:rolls key=gifts dice=1d6{per} -->\n"))
+                .unwrap()
+                .unwrap()
+        };
         assert_eq!(
-            rolls_marker("<!-- splat:rolls key=gifts dice=1d6 -->\n"),
-            Some(Ok(("gifts".to_owned(), "1d6".to_owned())))
+            marker(""),
+            Marker {
+                key: "gifts".to_owned(),
+                dice: "1d6".to_owned(),
+                per: Per::Day
+            }
         );
+        // F9: the interval, with its words after the dice. A word that cannot be read rolls one
+        // check each day, and says so.
+        for (per, read, hours, words) in [
+            (" per=day", Per::Day, 24, "each day"),
+            (" per=watch", Per::Watch, 8, "each watch"),
+            (" per=4h", Per::Hours(4), 4, "every 4 hours"),
+            (" per=1h", Per::Hours(1), 1, "every hour"),
+            (" per=0h", Per::NotRead("0h".into()), 24, "each day"),
+            (
+                " per=fortnight",
+                Per::NotRead("fortnight".into()),
+                24,
+                "each day",
+            ),
+        ] {
+            let found = marker(per).per;
+            assert_eq!(
+                (&found, found.hours(), found.words().as_str()),
+                (&read, hours, words)
+            );
+        }
         assert!(matches!(
             rolls_marker("<!-- splat:rolls key=gifts -->"),
             Some(Err(_))

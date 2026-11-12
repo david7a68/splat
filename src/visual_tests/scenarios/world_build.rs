@@ -2605,7 +2605,7 @@ pub fn round_trip(d: &mut Driver<'_>) {
 }
 
 pub fn tables(d: &mut Driver<'_>) {
-    let body = "# Table Workshop\n\n<!-- splat:rolls key=valid dice=1d6 -->\n\n| d6 | Result |\n|---|---|\n| 1 | Rain |\n| 2-5 | Fog |\n| 6 | Sun |\n\n<!-- splat:rolls key=gap dice=1d4 -->\n\n| d4 | Gap |\n|---|---|\n| 1 | One |\n| 3-4 | Later |\n\n<!-- splat:rolls key=overlap dice=1d4 -->\n\n| d4 | Overlap |\n|---|---|\n| 1-3 | First |\n| 3-4 | Second |\n\n<!-- splat:rolls key=words dice=1d6 -->\n\n| d6 | Words |\n|---|---|\n| 1 | One |\n| 2 to 5 | Fog |\n| 6 | Six |\n";
+    let body = "# Table Workshop\n\n<!-- splat:rolls key=valid dice=1d6 per=fortnight -->\n\n| d6 | Result |\n|---|---|\n| 1 | Rain |\n| 2-5 | Fog |\n| 6 | Sun |\n\n<!-- splat:rolls key=gap dice=1d4 -->\n\n| d4 | Gap |\n|---|---|\n| 1 | One |\n| 3-4 | Later |\n\n<!-- splat:rolls key=overlap dice=1d4 -->\n\n| d4 | Overlap |\n|---|---|\n| 1-3 | First |\n| 3-4 | Second |\n\n<!-- splat:rolls key=words dice=1d6 -->\n\n| d6 | Words |\n|---|---|\n| 1 | One |\n| 2 to 5 | Fog |\n| 6 | Six |\n";
     let body = body.replace(
         "<!-- splat:rolls key=words",
         &format!(
@@ -2621,6 +2621,12 @@ pub fn tables(d: &mut Driver<'_>) {
         "W6",
         "Table faults appear in the World list and warning count",
         |d| d.has_containing("3 table faults") && d.visible_text("1 note needs fixing"),
+    );
+    // F9: a `per` word that Splat cannot read warns on its table, and the table still rolls.
+    d.observe(
+        "T11.9",
+        d.visible_text(crate::roll_table::PER_NOT_READ) && d.has("Roll 1d6"),
+        "An interval that cannot be read warns on its table",
     );
     d.state("authored-table-validation", Sizes::All);
     d.observe_both(
@@ -2726,6 +2732,20 @@ pub fn tables(d: &mut Driver<'_>) {
             )
         })
     };
+    // F9: the descriptor holds the interval. With no `per`, a journey checks each day; a word
+    // that cannot be read also checks each day.
+    let per = |key: &str| {
+        tables
+            .iter()
+            .find(|table| table.key == key)
+            .map(|table| table.per.clone())
+    };
+    d.observe(
+        "P5-table-interval",
+        per("forced_trip") == Some(crate::roll_table::Per::Day)
+            && per("valid") == Some(crate::roll_table::Per::NotRead("fortnight".into())),
+        format!("Each table names how often a journey rolls it: {tables:?}"),
+    );
     // A note's title is its name, not a heading above the table; a `##` heading is one.
     d.observe(
         "P1c-table-descriptor",
@@ -4132,6 +4152,83 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
             && !d.visible_text("Location · Campaign"),
         "After a restart, Lookup opens with no entry, no trail and no held NPC",
     );
+
+    // F3 of the session-cycle design, rows 9 and 21 of its section 2.5: with no run open, an
+    // NPC's and a package creature's reader has a quiet Start fight after Edit, in the room the
+    // title leaves. It starts `Fight with <name>`, and after an untouched Setup is closed, the
+    // same click starts that encounter again.
+    if d.app().encounters.run().is_some() {
+        if !d.has(CLOSE_RUN) {
+            d.click(BACK_TO_RUN);
+        }
+        close_run(d);
+    }
+    let start = "Start a fight with Rook Ambry";
+    let show = |d: &mut Driver<'_>, name: &str| {
+        if !d.has(SEARCH_LOOKUP) {
+            d.click(NAV_LOOKUP);
+        }
+        look_up_again(d, name);
+    };
+    show(d, "Rook Ambry");
+    d.wait_for_text("Watch House");
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (placed, detail) = d.at_size(size, |d| {
+            let start = d.place_of(start);
+            let edit = d.place_of("Edit Rook Ambry");
+            (
+                (size == SMALL || start.is_some())
+                    && start.zip(edit).is_none_or(|(start, edit)| {
+                        (start.left() - edit.right() - design::XS).abs() <= 0.5
+                            && (start.top() - edit.top()).abs() <= 0.5
+                    }),
+                format!("Start fight {start:?}, Edit {edit:?}"),
+            )
+        });
+        d.observe(
+            "T12.12",
+            placed,
+            format!("At {size:?}, the NPC's Start fight follows Edit by XS: {detail}"),
+        );
+    }
+    d.state("npc-start-fight-in-lookup", Sizes::All);
+    show(d, "Guard");
+    d.click("Guard · Creature · CR 1/8");
+    d.wait_for_text("ARMOR CLASS");
+    let package = d.at_size(DEFAULT, |d| {
+        d.has("Start a fight with Guard") && !d.has_containing("Edit Guard")
+    });
+    d.observe(
+        "T12.12",
+        package,
+        "A package creature's reader, which has no Edit, has Start fight",
+    );
+    d.state("package-creature-start-fight", Sizes::All);
+    show(d, "Rook Ambry");
+    d.wait_for_text("Watch House");
+    d.set_base(DEFAULT);
+    d.begin_task();
+    d.click(start);
+    d.expect(&format!("{RUN_HEADING}Fight with Rook Ambry"));
+    d.audit_goal_within(
+        "T12.12",
+        "start a fight that nobody planned from a reader",
+        1,
+    );
+    let encounters = root(d).join("Encounters");
+    let count = || fs::read_dir(&encounters).unwrap().count();
+    let before = count();
+    close_run(d);
+    show(d, "Rook Ambry");
+    d.wait_for_text("Watch House");
+    d.click(start);
+    d.expect(&format!("{RUN_HEADING}Fight with Rook Ambry"));
+    d.observe(
+        "T12.12",
+        count() == before && !encounters.join("Fight with Rook Ambry 2.md").exists(),
+        "After Close run, Start fight starts the same encounter, and no second one is saved",
+    );
+    close_run(d);
 }
 
 /// AD3: a result's Undo follows its message, drawn by `undo_message`, at each size. It has the
@@ -4527,10 +4624,17 @@ pub fn package_rename(d: &mut Driver<'_>) {
     let b_result_shown = d.has_containing(&format!("Links now say “{LAMP}”."));
     let b_result_alone = !d.has_containing("Links now say “Ash Wolf”");
     let b_with_result = editor_below_read(d);
-    // Astra re-check 2: B's long result scrolls by keyboard and by wheel, and its Undo keeps
-    // clear of every scroll bar, splitter and other target at 960, 1200 and 1920.
+    // Astra re-check 2: B's long result is reached by keyboard and by wheel, and its Undo keeps
+    // clear of every scroll bar, splitter and other target at 960, 1200 and 1920. Round 26: the
+    // message footer is as tall as what it holds, so a result that fits needs no scroll; it must
+    // still be reached, with its Undo, at each size.
     let b_message = format!("Links now say “{LAMP}”.");
-    let (tabbed, keyed, wheeled, ring) = fixed_part_scrolls(d, &b_message);
+    let (tabbed, _, _, ring) = fixed_part_scrolls(d, &b_message);
+    let reached = space_reaches(d, &b_message, Some("Undo link update"));
+    let (keyed, wheeled) = (
+        reached.iter().all(|(keyboard, _)| *keyboard),
+        reached.iter().all(|(_, pointer)| *pointer),
+    );
     let undo_clear = [SMALL, DEFAULT, LARGE].map(|size| {
         d.at_size(size, |d| {
             let lanes = d.chrome_lanes();
@@ -4549,7 +4653,7 @@ pub fn package_rename(d: &mut Driver<'_>) {
         "iter-24-L-part-keyboard-result",
         tabbed && keyed && wheeled && undo_clear.iter().all(|clear| *clear) && ring.iter().all(|r| *r),
         format!(
-            "B's result part: Tab {tabbed}, a key scrolls it {keyed}, the wheel scrolls it {wheeled}, Undo clear at 960, 1200, 1920 {undo_clear:?}, its focus ring clear {ring:?}"
+            "B's result part: Tab {tabbed}, the keys reach it {keyed}, the wheel reaches it {wheeled}, Undo clear at 960, 1200, 1920 {undo_clear:?}, its focus ring clear {ring:?}"
         ),
     );
     d.observe(
@@ -4924,12 +5028,14 @@ fn check_repair_reason(d: &mut Driver<'_>, manifest: bool) {
         .input_frame("Markdown editor")
         .expect("The source editor is visible")
         .0;
+    // Round 26 lead ruling: the error is in the pane's message footer, below the source, so it
+    // never moves the source, which starts directly below Save.
     d.observe(
         "iter-9-E-FD9",
-        error.top() >= save.bottom()
-            && error.top() - save.bottom() <= design::S * 2.0
-            && editor.top() > error.bottom(),
-        "The error fills the reason line directly below Save and above the source",
+        editor.top() >= save.bottom()
+            && editor.top() - save.bottom() <= design::S * 2.0
+            && error.top() >= editor.bottom() + design::S - 1.0,
+        "The source starts directly below Save, and the error is in the footer below it",
     );
     if manifest {
         let action = d
@@ -5032,6 +5138,8 @@ pub fn package_about(d: &mut Driver<'_>) {
         })
     };
     let no_result = editor_below_read(d);
+    // Round 26 A: with nothing to say, the editor has no footer and runs to the pane's bottom.
+    let footer_empty = footer_in_order(d, &[]);
     let original = d.editor_text().unwrap();
     let renamed = crate::content_workspace::patch_fields(
         &original,
@@ -5142,15 +5250,35 @@ pub fn package_about(d: &mut Driver<'_>) {
         .all(|(keyboard, pointer)| *keyboard && *pointer)
     };
     let refused = (kept(d), editor_below_read(d));
+    // Round 26 A: the footer's one order. The write result's live Undo first, then Save's reason.
+    const WRITTEN: &str = "Module.md was written again.";
+    const REASON: &str = "opens a list";
+    let footer_refused = footer_in_order(d, &[WRITTEN, REASON]);
+    d.state("manifest-footer-undo-then-reason", Sizes::All);
     d.click("Discard");
     assert_eq!(d.editor_text().as_deref(), Some(written.as_str()));
     let discarded = (
         kept(d) && d.has_containing("Undo discard"),
         editor_below_read(d),
     );
+    // Two live Undo results, newest first: Discard's, then the write's. No reason is left.
+    let footer_discarded = footer_in_order(d, &["draft discarded.", WRITTEN]);
+    let reason_gone = !d.has_containing(REASON);
+    d.state("manifest-footer-two-undo-results", Sizes::All);
     d.click_starting("Undo discard");
     assert_eq!(d.editor_text().as_deref(), Some(invalid.as_str()));
     let undone = (kept(d), editor_below_read(d));
+    let footer_undone = footer_in_order(d, &[WRITTEN, REASON]);
+    d.observe(
+        "iter-26-A-footer-order",
+        [&footer_empty, &footer_refused, &footer_discarded, &footer_undone]
+            .iter()
+            .all(|sizes| sizes.iter().all(|ok| *ok))
+            && reason_gone,
+        format!(
+            "Edit Markdown's footer at 960, 1200, 1920: none with nothing to say {footer_empty:?}; the write's Undo, then the reason {footer_refused:?}; Discard's Undo, then the write's {footer_discarded:?}; after Undo discard {footer_undone:?}"
+        ),
+    );
     d.observe(
         "iter-24-L-FB3-states",
         [&refused, &discarded, &undone]
@@ -5201,7 +5329,14 @@ pub fn package_about(d: &mut Driver<'_>) {
             sizes.push((text.pos, text.galley.size(), clip));
         }
     });
-    let (tabbed, keyed, wheeled, ring) = fixed_part_scrolls(d, &space);
+    // Round 26: the footer is as tall as what it holds, so the reason is reached whether or not
+    // it needs to scroll.
+    let (tabbed, _, _, ring) = fixed_part_scrolls(d, &space);
+    let reached = space_reaches(d, &message, None);
+    let (keyed, wheeled) = (
+        reached.iter().all(|(keyboard, _)| *keyboard),
+        reached.iter().all(|(_, pointer)| *pointer),
+    );
     let clear = [SMALL, DEFAULT, LARGE].map(|size| {
         d.at_size(size, |d| {
             let lanes = d.chrome_lanes();
@@ -5221,7 +5356,7 @@ pub fn package_about(d: &mut Driver<'_>) {
         "iter-24-L-part-keyboard-reason",
         tabbed && keyed && wheeled && clear.iter().all(|clear| *clear) && ring.iter().all(|r| *r),
         format!(
-            "The reason part: Tab {tabbed}, a key scrolls it {keyed}, the wheel scrolls it {wheeled}, its words clear of bars and splitters at 960, 1200, 1920 {clear:?}, its focus ring clear {ring:?}; painted {sizes:?}"
+            "The reason part: Tab {tabbed}, the keys reach it {keyed}, the wheel reaches it {wheeled}, its words clear of bars and splitters at 960, 1200, 1920 {clear:?}, its focus ring clear {ring:?}; painted {sizes:?}"
         ),
     );
     d.click("Discard");
@@ -6602,6 +6737,49 @@ pub(super) fn reader_title_tops(d: &mut Driver<'_>, title: &str) -> Vec<Option<f
         .into_iter()
         .map(|size| d.at_size(size, |d| reader_title(d, title).map(|rect| rect.top())))
         .collect()
+}
+
+/// The Markdown editor's message footer at 960, 1200 and 1920 (round 26 lead ruling: one footer
+/// per pane, pinned below the editor). With `words`, at each size: one footer holds them all, it
+/// starts at least `S` below the editor frame and ends in the window, it is at most a third of
+/// the window high, and each of `words` is painted inside it, in this order from the top. With
+/// no `words`: no footer, and the editor runs to the pane's bottom.
+fn footer_in_order(d: &mut Driver<'_>, words: &[&str]) -> [bool; 3] {
+    [SMALL, DEFAULT, LARGE].map(|size| {
+        d.at_size(size, |d| {
+            let Some((editor, _)) = d.input_frame("Markdown editor") else {
+                return false;
+            };
+            let below: Vec<_> = d
+                .nodes()
+                .into_iter()
+                .filter(|node| {
+                    node.role == Role::GenericContainer
+                        && !node.name.is_empty()
+                        && node.rect.is_positive()
+                        && node.rect.top() > editor.bottom()
+                })
+                .collect();
+            if words.is_empty() {
+                return below.is_empty() && editor.bottom() > size.1 - crate::design::XXL * 2.0;
+            }
+            let Some(footer) = below
+                .iter()
+                .find(|node| words.iter().all(|word| node.name.contains(word)))
+            else {
+                return false;
+            };
+            let tops: Vec<_> = words
+                .iter()
+                .map(|word| d.painted_rect_in(word, footer.rect).map(|rect| rect.top()))
+                .collect();
+            footer.rect.top() >= editor.bottom() + crate::design::S - 1.0
+                && footer.rect.bottom() <= size.1
+                && footer.rect.height() <= size.1 / 3.0
+                && tops.iter().all(Option::is_some)
+                && tops.windows(2).all(|pair| pair[0] < pair[1])
+        })
+    })
 }
 
 /// The Markdown editor frame's top at 960, 1200 and 1920. Round 25: the one message space below

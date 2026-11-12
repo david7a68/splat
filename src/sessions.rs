@@ -1108,6 +1108,117 @@ pub fn insert_in_plan(body: &mut String, words: &str) {
     body.push_str(&rest);
 }
 
+/// One line of a note's plan, in the note's order.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PlanLine {
+    /// A task line that starts at the line's start: `- [ ] words` or `- [x] words`.
+    Task(TaskLine),
+    /// Any other line, by the names it links.
+    Links(Vec<String>),
+}
+
+/// A task line of the plan. It is a scene when it links no fight and no group.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TaskLine {
+    /// The line's number in the note's words, so that an act finds it nearest this place.
+    pub at: usize,
+    /// The whole line, as the note holds it.
+    pub line: String,
+    pub done: bool,
+    /// The words after the box.
+    pub words: String,
+}
+
+/// A line's box and words, when it is a task line that starts at the line's start.
+fn task_parts(line: &str) -> Option<(bool, &str)> {
+    let rest = line
+        .strip_prefix("- ")
+        .or_else(|| line.strip_prefix("* "))
+        .or_else(|| line.strip_prefix("+ "))?;
+    let (done, words) = if let Some(words) = rest.strip_prefix("[ ]") {
+        (false, words)
+    } else {
+        (true, rest.strip_prefix("[x]").or(rest.strip_prefix("[X]"))?)
+    };
+    let words = words.strip_prefix(' ')?.trim();
+    (!words.is_empty()).then_some((done, words))
+}
+
+/// The lines under `## Plan for tonight`, as `section_text` finds that section.
+pub fn plan_lines(body: &str) -> Vec<PlanLine> {
+    let mut lines = body.lines().enumerate();
+    if lines
+        .find(|(_, line)| line.trim_end().strip_prefix("## ") == Some("Plan for tonight"))
+        .is_none()
+    {
+        return Vec::new();
+    }
+    lines
+        .take_while(|(_, line)| !line.starts_with("## "))
+        .filter(|(_, line)| !line.trim().is_empty())
+        .map(|(at, line)| match task_parts(line.trim_end()) {
+            Some((done, words)) => PlanLine::Task(TaskLine {
+                at,
+                line: line.trim_end_matches('\r').to_owned(),
+                done,
+                words: words.to_owned(),
+            }),
+            None => PlanLine::Links(each_linked_name(line)),
+        })
+        .collect()
+}
+
+/// The note's words with one line replaced, or taken out with `None`. The line is the one at
+/// `at` that the act was drawn from, and it must still hold `line` exactly. `None` comes back
+/// when that place holds other words: the act never looks for another line that reads the same.
+pub fn change_line(body: &str, at: usize, line: &str, new: Option<&str>) -> Option<String> {
+    let lines: Vec<&str> = body.split_inclusive('\n').collect();
+    if lines.get(at)?.trim_end_matches(['\n', '\r']) != line {
+        return None;
+    }
+    let mut out = String::with_capacity(body.len());
+    for (index, text) in lines.iter().enumerate() {
+        if index != at {
+            out.push_str(text);
+        } else if let Some(new) = new {
+            out.push_str(new);
+            out.push_str(&text[line.len()..]);
+        }
+    }
+    Some(out)
+}
+
+/// The same task line, ticked or not: one character changes.
+pub fn ticked(line: &str, done: bool) -> String {
+    let at = line.find('[').map_or(0, |at| at + 1);
+    let mut out = line.to_owned();
+    if at > 0 && at < line.len() {
+        out.replace_range(at..at + 1, if done { "x" } else { " " });
+    }
+    out
+}
+
+/// A scene's line at the end of the plan. A note with no plan gets the heading at its end.
+pub fn add_scene(body: &str, words: &str) -> String {
+    let line = format!(
+        "- [ ] {}",
+        words.split_whitespace().collect::<Vec<_>>().join(" ")
+    );
+    let has_plan = body
+        .lines()
+        .any(|text| text.trim_end().strip_prefix("## ") == Some("Plan for tonight"));
+    if has_plan {
+        let mut out = body.to_owned();
+        insert_in_plan(&mut out, &line);
+        return out;
+    }
+    let kept = body.trim_end();
+    format!(
+        "{kept}{}## Plan for tonight\n\n{line}\n",
+        if kept.is_empty() { "" } else { "\n\n" }
+    )
+}
+
 /// The links to a thing that has a new name, whatever their case. Returns whether any changed.
 pub fn rename_links(body: &mut String, old: &str, new: &str) -> bool {
     let mut excluded = Vec::new();
@@ -1632,10 +1743,6 @@ pub enum ActFault {
 
 impl ActFault {
     /// The words at the act's place.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the note acts of P3, P7 and P8 show them")
-    )]
     pub fn words(&self) -> &str {
         match self {
             Self::Changed => "The note changed on disk. Choose in the note first.",
@@ -1683,6 +1790,14 @@ impl NoteUndo {
     pub fn moved(&mut self, from: &Path, to: &Path) {
         if self.path == from {
             to.clone_into(&mut self.path);
+        }
+    }
+
+    /// An act of `Apply::Now` whose save failed: once a later save wrote the draft with the
+    /// fragment, the fragment is written, and its Undo goes back through the checked path.
+    pub fn follow_save(&mut self, draft: &Draft) {
+        if !self.written && !draft.unsaved() && self.live(draft) {
+            self.written = true;
         }
     }
 
@@ -2675,6 +2790,79 @@ mod tests {
         let mut other = "## Next time\n\n".to_owned();
         insert_in_plan(&mut other, "[[A]]");
         assert!(other.contains("[[A]]"));
+    }
+
+    /// T12.10: a task line is a scene line, a plain or nested line is not, and a tick, a removal
+    /// and a new scene change only their own line.
+    #[test]
+    fn a_task_line_of_the_plan_is_a_scene_line_and_changes_alone() {
+        let body = "## Plan for tonight\n\n- [[Bridge]]\n- [ ] [[Captain Varra]]\n  - [ ] nested\n* [x] The miller is the informer\n- [] not a box\n1. [ ] numbered\n\n## What happened\n\n- [ ] Not the plan\n";
+        let lines = plan_lines(body);
+        let tasks: Vec<_> = lines
+            .iter()
+            .filter_map(|line| match line {
+                PlanLine::Task(task) => Some((task.at, task.done, task.words.as_str())),
+                PlanLine::Links(_) => None,
+            })
+            .collect();
+        assert_eq!(
+            tasks,
+            [
+                (3, false, "[[Captain Varra]]"),
+                (5, true, "The miller is the informer")
+            ]
+        );
+        assert_eq!(
+            lines.len(),
+            6,
+            "every other line of the plan keeps its links"
+        );
+        assert!(lines.contains(&PlanLine::Links(vec!["Bridge".into()])));
+
+        let tick = change_line(
+            body,
+            3,
+            "- [ ] [[Captain Varra]]",
+            Some(&ticked("- [ ] [[Captain Varra]]", true)),
+        )
+        .unwrap();
+        assert_eq!(tick.len(), body.len());
+        assert_eq!(
+            tick.chars()
+                .zip(body.chars())
+                .filter(|(a, b)| a != b)
+                .count(),
+            1,
+            "a tick changes one character"
+        );
+        assert!(tick.contains("- [x] [[Captain Varra]]\n"));
+        assert_eq!(
+            ticked("* [x] The miller is the informer", false),
+            "* [ ] The miller is the informer"
+        );
+
+        // Two lines with the same words: the act changes the one at its own place, and a place
+        // that holds other words now changes nothing, even when another line reads the same.
+        let twice = "## Plan for tonight\n\n- [ ] A\n- [[Bridge]]\n- [ ] A\n";
+        assert_eq!(
+            change_line(twice, 4, "- [ ] A", None).unwrap(),
+            "## Plan for tonight\n\n- [ ] A\n- [[Bridge]]\n"
+        );
+        assert_eq!(change_line(twice, 2, "- [ ] B", None), None);
+        assert_eq!(change_line(twice, 3, "- [ ] A", None), None);
+        assert_eq!(change_line(twice, 9, "- [ ] A", None), None);
+
+        assert_eq!(
+            add_scene(
+                "## Plan for tonight\n\n- [[Bridge]]\n\n## What happened\n",
+                "  Meet\nHobb "
+            ),
+            "## Plan for tonight\n\n- [[Bridge]]\n- [ ] Meet Hobb\n\n## What happened\n"
+        );
+        assert_eq!(
+            add_scene("# Session 1\n\nWords.\n", "Meet Hobb"),
+            "# Session 1\n\nWords.\n\n## Plan for tonight\n\n- [ ] Meet Hobb\n"
+        );
     }
 
     #[test]
