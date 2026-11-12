@@ -101,7 +101,7 @@ const SCENARIO: &str = "plain-evening";
 const WIDE: (f32, f32) = (1200.0, 800.0);
 const NARROW: (f32, f32) = (960.0, 640.0);
 /// Section 2.5 numbers its rows 1 to 22.
-const CONTRACT_ROWS: std::ops::RangeInclusive<u32> = 1..=24;
+const CONTRACT_ROWS: std::ops::RangeInclusive<u32> = 1..=26;
 /// What the test folder becomes in a run's `splat_run_source_path`.
 const WORLD: &str = "<world>";
 const SAME: &str = "the same as at the start";
@@ -1914,7 +1914,256 @@ mod allowed_classes {
             name: "P4 c: an act shows or hides only `Effect`'s words",
             fits: |d, _| effect::act_words(d),
         },
+        // R3b, rows 25 and 26 (by the lead's ruling after app round 2).
+        Class {
+            row: 25,
+            name: "R3b a: Next turn gives up `N`, its right edge kept",
+            fits: run_header::next_turn,
+        },
+        Class {
+            row: 25,
+            name: "R3b b: `N` gone inside the old Next turn",
+            fits: run_header::key_gone,
+        },
+        Class {
+            row: 25,
+            name: "R3b c: an item of the header's line left of Next turn, right by its narrowing",
+            fits: run_header::shifted,
+        },
+        Class {
+            row: 25,
+            name: "R3b d: the turn's heading wider to its right",
+            fits: run_header::heading,
+        },
+        Class {
+            row: 25,
+            name: "R3b e: the turn's name shows more of its words where it was",
+            fits: run_header::name_form,
+        },
+        Class {
+            row: 26,
+            name: "R3b f: a tile's bare digit becomes `Ctrl+<digit>` on its line and right edge",
+            fits: run_header::tile_digit,
+        },
+        Class {
+            row: 25,
+            name: "R3b g: an act shows or hides only these words",
+            fits: |d, _| run_header::act_words(d),
+        },
+        Class {
+            row: 26,
+            name: "R3b g: an act shows or hides only these words",
+            fits: |d, _| run_header::act_words(d),
+        },
     ];
+
+    /// R3b, by the lead's ruling after app round 2. Row 25, X49: where the current turn's name
+    /// is cut and would show more words, Next turn gives up its `N` key letter. Next turn keeps
+    /// its right edge, line and height; what is left of it on the header's line moves right by
+    /// exactly that narrowing; the name shows more of its words where it was. Row 26, X54: an
+    /// action tile's bare key digit becomes `Ctrl+<digit>`, on its line, with its right edge.
+    /// Nothing else moves, narrows, goes or is cut.
+    mod run_header {
+        use super::super::{AllowedRow, Difference};
+        use super::rect_of;
+
+        /// The run header's first line ends above this.
+        const HEADER: f32 = 48.0;
+        const NEXT: &str = "Button: Next turn";
+
+        fn run_view(d: &Difference) -> bool {
+            d.screen.starts_with("run-")
+        }
+
+        fn same_view(a: &Difference, b: &Difference) -> bool {
+            (&a.screen, &a.view) == (&b.screen, &b.view)
+        }
+
+        fn before_after(d: &Difference) -> Option<([f32; 4], [f32; 4])> {
+            let (before, after) = d.detail.split_once(" -> ")?;
+            Some((rect_of(before, "")?, rect_of(after, "")?))
+        }
+
+        /// Next turn narrower from its left, with its right edge, line and height: the
+        /// narrowing and its old place.
+        fn narrowed(d: &Difference) -> Option<(f32, [f32; 4])> {
+            let (b, a) = before_after(d)?;
+            (run_view(d)
+                && d.what == "control"
+                && d.change == "resized"
+                && d.name == NEXT
+                && (b[0] + b[2] - a[0] - a[2]).abs() <= 0.5
+                && b[1] == a[1]
+                && b[3] == a[3]
+                && a[2] < b[2])
+                .then_some((b[2] - a[2], b))
+        }
+
+        /// `N` gone from inside Next turn's old place.
+        fn key_in(d: &Difference, next: [f32; 4]) -> bool {
+            d.what == "text"
+                && d.change == "gone"
+                && d.name == "N"
+                && rect_of(&d.detail, "was ").is_some_and(|n| {
+                    n[0] >= next[0]
+                        && n[1] >= next[1]
+                        && n[0] + n[2] <= next[0] + next[2]
+                        && n[1] + n[3] <= next[1] + next[3]
+                })
+        }
+
+        /// The narrowing of Next turn in `d`'s view, proved by its `N` gone inside it.
+        fn view_narrowing(d: &Difference, rows: &[AllowedRow]) -> Option<(f32, [f32; 4])> {
+            let others = || rows.iter().map(|row| &row.difference);
+            others()
+                .filter(|o| same_view(o, d))
+                .filter_map(narrowed)
+                .find(|(_, next)| others().any(|o| same_view(o, d) && key_in(o, *next)))
+        }
+
+        pub(super) fn next_turn(d: &Difference, rows: &[AllowedRow]) -> bool {
+            narrowed(d).is_some() && view_narrowing(d, rows).is_some()
+        }
+
+        pub(super) fn key_gone(d: &Difference, rows: &[AllowedRow]) -> bool {
+            view_narrowing(d, rows).is_some_and(|(_, next)| key_in(d, next))
+        }
+
+        /// An item of the header's line, left of Next turn, moved right by its narrowing.
+        pub(super) fn shifted(d: &Difference, rows: &[AllowedRow]) -> bool {
+            let (Some((b, a)), Some((dx, next))) = (before_after(d), view_narrowing(d, rows))
+            else {
+                return false;
+            };
+            ["control", "text"].contains(&d.what.as_str())
+                && d.change == "moved"
+                && d.name != NEXT
+                && b[1] < HEADER
+                && b[1] == a[1]
+                && (b[2], b[3]) == (a[2], a[3])
+                && ((a[0] - b[0]) - dx).abs() <= 0.5
+                && b[0] < next[0]
+        }
+
+        /// The turn's heading, wider to the right on its line.
+        pub(super) fn heading(d: &Difference, rows: &[AllowedRow]) -> bool {
+            let Some((b, a)) = before_after(d) else {
+                return false;
+            };
+            d.what == "control"
+                && d.change == "width"
+                && d.name.starts_with("Label: ")
+                && d.name.ends_with("’s turn")
+                && b[1] < HEADER
+                && (b[0], b[1], b[3]) == (a[0], a[1], a[3])
+                && a[2] > b[2]
+                && view_narrowing(d, rows).is_some()
+        }
+
+        fn words(name: &str) -> &str {
+            name.strip_prefix("TextRun: ").unwrap_or(name)
+        }
+
+        /// The name's shown form and its place on the header's line: new, gone, or resized away
+        /// from it.
+        fn form(d: &Difference) -> Option<(&str, [f32; 4], bool)> {
+            let shown = ["control", "text"].contains(&d.what.as_str())
+                && (d.what == "text" || d.name.starts_with("TextRun: "))
+                && d.name.ends_with('…');
+            let (place, new) = match d.change.as_str() {
+                "new" => (rect_of(&d.detail, "at ")?, true),
+                "gone" => (rect_of(&d.detail, "was ")?, false),
+                "resized" => (before_after(d)?.0, false),
+                _ => return None,
+            };
+            (shown && place[1] < HEADER).then_some((words(&d.name), place, new))
+        }
+
+        /// The new form keeps the old form's words and adds more after them.
+        fn extends(new: &str, old: &str) -> bool {
+            let (new, old) = (new.trim_end_matches('…'), old.trim_end_matches('…'));
+            new.len() > old.len() && new.starts_with(old) && new[old.len()..].starts_with(' ')
+        }
+
+        /// The name's form on the header's line: a new form at the old form's place that keeps
+        /// its words and shows more, paired in the same view.
+        pub(super) fn name_form(d: &Difference, rows: &[AllowedRow]) -> bool {
+            let Some((own, place, new)) = form(d) else {
+                return false;
+            };
+            view_narrowing(d, rows).is_some()
+                && rows.iter().any(|row| {
+                    let o = &row.difference;
+                    same_view(o, d)
+                        && form(o).is_some_and(|(other, at, other_new)| {
+                            other_new != new
+                                && (at[0], at[1]) == (place[0], place[1])
+                                && if new {
+                                    extends(own, other)
+                                } else {
+                                    extends(other, own)
+                                }
+                        })
+                })
+        }
+
+        fn digit(name: &str) -> Option<char> {
+            let mut chars = name.chars();
+            let first = chars.next()?;
+            (chars.next().is_none() && ('1'..='9').contains(&first)).then_some(first)
+        }
+
+        /// A tile's bare digit gone and `Ctrl+<digit>` new on its line with its right edge.
+        fn tile_pair(gone: &Difference, new: &Difference) -> bool {
+            let (Some(g), Some(n)) = (rect_of(&gone.detail, "was "), rect_of(&new.detail, "at "))
+            else {
+                return false;
+            };
+            run_view(gone)
+                && same_view(gone, new)
+                && (gone.what.as_str(), gone.change.as_str()) == ("text", "gone")
+                && (new.what.as_str(), new.change.as_str()) == ("text", "new")
+                && digit(&gone.name).is_some_and(|digit| new.name == format!("Ctrl+{digit}"))
+                && (g[1], g[3]) == (n[1], n[3])
+                && (g[0] + g[2] - n[0] - n[2]).abs() <= 1.0
+        }
+
+        pub(super) fn tile_digit(d: &Difference, rows: &[AllowedRow]) -> bool {
+            rows.iter()
+                .any(|row| tile_pair(d, &row.difference) || tile_pair(&row.difference, d))
+        }
+
+        /// An act that shows or hides only a tile's digit and its `Ctrl+` form together, or
+        /// Next turn's `N`.
+        pub(super) fn act_words(d: &Difference) -> bool {
+            let parts: Vec<(&str, &str)> = d
+                .detail
+                .split(" | ")
+                .filter_map(|part| {
+                    let (verb, word) = part.split_once(' ')?;
+                    Some((verb, word))
+                })
+                .collect();
+            let has = |verb: &str, word: &str| parts.contains(&(verb, word));
+            let flip = |sign: &str| if sign == "-" { "+" } else { "-" };
+            d.what == "act"
+                && d.change == "changed"
+                && parts.len() == d.detail.split(" | ").count()
+                && parts.iter().all(|(verb, word)| {
+                    ["appeared", "went"].contains(verb)
+                        && match word.split_once(' ') {
+                            Some(("-" | "+", "N")) => true,
+                            Some((sign, key)) if digit(key).is_some() => {
+                                has(verb, &format!("{} Ctrl+{key}", flip(sign)))
+                            }
+                            Some((sign, key)) => key.strip_prefix("Ctrl+").is_some_and(|key| {
+                                digit(key).is_some() && has(verb, &format!("{} {key}", flip(sign)))
+                            }),
+                            None => false,
+                        }
+                })
+        }
+    }
 
     /// P4's classes: the dock's `Effect`, its icon, word and key letter, and acts that show or
     /// hide only those. Each is new; none lets an item of today go, move, narrow or be cut.
@@ -4436,6 +4685,122 @@ mod allowed_classes {
                 class_of(&row, &allowed.rows).is_none(),
                 "a class allows {}",
                 row.difference
+            );
+        }
+        // R3b's classes, rows 25 and 26: each passes on its own evidence, and refuses a Next
+        // turn that moved its right edge, an item that moved further or down, a name cut
+        // shorter, a digit without its `Ctrl+` form or in another place, and another word.
+        let view = |what: &str, change: &str, name: &str, detail: &str| Difference {
+            screen: "run-arrivals".into(),
+            view: "960x640 Lookup closed".into(),
+            what: what.into(),
+            change: change.into(),
+            name: name.into(),
+            detail: detail.into(),
+        };
+        let next = view(
+            "control",
+            "resized",
+            "Button: Next turn",
+            "468.7 8 121.7x36 -> 485.2 8 105.2x36",
+        );
+        let key = view("text", "gone", "N", "was 569.9 18 8.5x16");
+        let add = view(
+            "control",
+            "moved",
+            "Button: Add to fight",
+            "383.4 8 69.3x36 -> 399.9 8 69.3x36",
+        );
+        let heading = view(
+            "control",
+            "width",
+            "Label: Ashfang, Eldest Wolf of the Southern Ridge’s turn",
+            "241 15 83.8x22 -> 241 15 137.8x22",
+        );
+        let old = view("text", "gone", "Ashfang,…", "was 241 15 83.8x22");
+        let new = view("text", "new", "Ashfang, Eldest…", "at 241 15 137.8x22");
+        let digit = view("text", "gone", "1", "was 920.8 507 7.2x16");
+        let ctrl = view("text", "new", "Ctrl+1", "at 894.8 507 33.2x16");
+        let act = Difference {
+            screen: "act 53".into(),
+            view: String::new(),
+            what: "act".into(),
+            change: "changed".into(),
+            name: "resume the 12-person fight".into(),
+            detail: "appeared + Ctrl+1 | appeared - 1 | appeared - N".into(),
+        };
+        let r3b = |row: u32, d: &Difference| AllowedRow {
+            row,
+            why: String::new(),
+            difference: d.clone(),
+        };
+        let header: Vec<_> = [&next, &key, &add, &heading, &old, &new]
+            .into_iter()
+            .map(|d| r3b(25, d))
+            .chain([r3b(26, &digit), r3b(26, &ctrl)])
+            .collect();
+        for row in header.iter().chain([&r3b(26, &act)]) {
+            assert!(
+                class_of(row, &header).is_some(),
+                "R3b refuses {}",
+                row.difference
+            );
+        }
+        let edge = view(
+            "control",
+            "resized",
+            "Button: Next turn",
+            "468.7 8 121.7x36 -> 480.2 8 105.2x36",
+        );
+        let further = view(
+            "control",
+            "moved",
+            "Button: Add to fight",
+            "383.4 8 69.3x36 -> 409.9 8 69.3x36",
+        );
+        let down = view(
+            "control",
+            "moved",
+            "Button: Add to fight",
+            "383.4 8 69.3x36 -> 399.9 12 69.3x36",
+        );
+        let row_below = view(
+            "control",
+            "moved",
+            "Button: Cinder Wolf",
+            "383.4 98 69.3x36 -> 399.9 98 69.3x36",
+        );
+        let shorter = view("text", "new", "Ash…", "at 241 15 37.8x22");
+        let other_digit = view("text", "new", "Ctrl+2", "at 894.8 507 33.2x16");
+        let lower = view("text", "new", "Ctrl+1", "at 894.8 523 33.2x16");
+        let other_word = Difference {
+            detail: "appeared - Close run | appeared - N".into(),
+            ..act.clone()
+        };
+        let lone_digit = Difference {
+            detail: "appeared - 1".into(),
+            ..act.clone()
+        };
+        for (fault, rows) in [
+            (r3b(25, &edge), vec![r3b(25, &edge), r3b(25, &key)]),
+            (r3b(25, &further), header.clone()),
+            (r3b(25, &down), header.clone()),
+            (r3b(25, &row_below), header.clone()),
+            (r3b(25, &shorter), header.clone()),
+            (r3b(25, &add), vec![r3b(25, &add), r3b(25, &next)]),
+            (
+                r3b(26, &other_digit),
+                vec![r3b(26, &digit), r3b(26, &other_digit)],
+            ),
+            (r3b(26, &lower), vec![r3b(26, &digit), r3b(26, &lower)]),
+            (r3b(26, &digit), vec![r3b(26, &digit)]),
+            (r3b(25, &other_word), vec![]),
+            (r3b(26, &lone_digit), vec![]),
+        ] {
+            assert!(
+                class_of(&fault, &rows).is_none(),
+                "an R3b class allows {}",
+                fault.difference
             );
         }
     }
