@@ -288,6 +288,38 @@ fn before_the_session(a: &mut Audit<'_, '_>) {
         "the plan offers tonight's fight: {}",
         a.d.has(&format!("Start fight: {TONIGHT}"))
     ));
+
+    // F1: the word ends each planned fight's summary. A summary with no room for it gives it on
+    // the opened row's line, for one Find, and one more to close the row again.
+    a.task("Is each planned fight right for this party?");
+    let words = |d: &Driver<'_>| {
+        let mut words = Vec::new();
+        d.each_painted_text(|text, _| {
+            let line = text.galley.job.text.replace('\u{a0}', " ");
+            if let Some(word) = ["Above High", "Moderate", "High", "Low"]
+                .into_iter()
+                .find(|word| line.ends_with(&format!(" · {word}")))
+            {
+                words.push(word);
+            }
+        });
+        words
+    };
+    let on_rows = words(a.d);
+    a.fact(format!("the planned fights' rows say {on_rows:?}"));
+    if on_rows.len() < 2 {
+        a.click(Find, TONIGHT);
+        a.fact(format!(
+            "the opened row says {:?}",
+            a.d.painted_in(eframe::egui::Rect::EVERYTHING)
+                .split("Read encounter")
+                .nth(1)
+                .unwrap_or_default()
+                .lines()
+                .next()
+        ));
+        a.click(Find, TONIGHT);
+    }
 }
 
 /// The Last time line previews only a recap or `What happened`, and last week's words are under

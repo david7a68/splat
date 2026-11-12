@@ -153,6 +153,11 @@ including participants that enter during a later phase.
 A group of participants assigned to the same side of an encounter, independently
 of their creature type or membership in a campaign's party.
 
+**Encounter difficulty**:
+The word that compares an encounter's XP with the party's XP budget from the campaign's
+rules: Low, Moderate, High or Above High. Splat shows it and blocks nothing.
+_Avoid_: Rating, challenge.
+
 **Encounter group**:
 A reusable, named list of creatures with counts, a default side, and notes, owned by
 a campaign. It is for any encounter, or it belongs to one encounter, and then only runs
