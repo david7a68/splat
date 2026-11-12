@@ -258,14 +258,19 @@ pub fn run(d: &mut Driver<'_>) {
     );
     d.click("Close Lookup");
     // Act A: plan the fight. It is the next row, with Start fight.
+    // Places from the block's label: planning reveals the new fight row, which can scroll the plan.
+    let from_label = |d: &Driver<'_>, name: &str| {
+        let label = d.place_of("Encounter checks")?;
+        Some(d.place_of(name)?.translate(-label.min.to_vec2()))
+    };
     let below = below_checks(d);
-    let offer = d.place_of(PLAN_AMBUSH);
+    let offer = from_label(d, PLAN_AMBUSH);
     d.begin_task();
     d.click(PLAN_AMBUSH);
     d.expect("“Bridge Ambush” is in tonight’s plan.");
     d.goal_within("T11.10", "plan a result as a fight", 1);
     // The message and its Undo take the offer's place, so nothing below the checks moves.
-    let message = d.place_of("“Bridge Ambush” is in tonight’s plan.");
+    let message = from_label(d, "“Bridge Ambush” is in tonight’s plan.");
     let after = below_checks(d);
     d.observe(
         "T11.10",
