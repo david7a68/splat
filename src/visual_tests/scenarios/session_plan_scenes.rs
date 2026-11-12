@@ -637,8 +637,17 @@ pub fn log_from_play(d: &mut Driver<'_>) {
         d.has("Close Lookup")
             && d.focused_name().as_deref() == Some(field.as_str())
             && d.field_text(&field).as_deref() == Some("")
-            && d.visible_text(&format!("{stamp}:")),
-        "A done scene's Add to Log opens Lookup on its entry with the Log field and the stamp",
+            && d.visible_text(&format!("{stamp}:"))
+            && d.at_size(DEFAULT, |d| {
+                d.place_of(&format!("{stamp}:"))
+                    .zip(d.place_of(&field))
+                    .is_some_and(|(label, place)| {
+                        label.right() < place.left()
+                            && label.bottom() > place.top()
+                            && label.top() < place.bottom()
+                    })
+            }),
+        "A done scene's Add to Log opens Lookup on its entry with the Log field and the stamp on its line at 1200x800",
     );
     d.type_text(TYPED);
     d.press(Key::Enter);
@@ -713,19 +722,18 @@ pub fn log_from_play(d: &mut Driver<'_>) {
             && d.field_text(&field).as_deref() == Some(WORDS),
         "The menu's Add to Log fills the field with the scene's words outside its link",
     );
-    // X30 of app round 2: beside the plan at 1200x800 the stamp shares the field's line, for
-    // the field keeps the rule's room, whatever words it holds.
+    // X30 of app round 2: beside the plan at 1200x800 the stamp stands above a field whose words
+    // would not fit beside it, so no word of the scene is cut; an empty field shares its line
+    // (the first check of this scenario's field).
     let (label, place) = d.at_size(DEFAULT, |d| {
         (d.place_of(&format!("{stamp}:")), d.place_of(&field))
     });
     d.observe(
         "T18.2",
-        label.zip(place).is_some_and(|(label, place)| {
-            label.right() < place.left()
-                && label.bottom() > place.top()
-                && label.top() < place.bottom()
-        }),
-        format!("At 1200x800 the stamp {label:?} shares the field's line {place:?}"),
+        label
+            .zip(place)
+            .is_some_and(|(label, place)| label.bottom() <= place.top() + 0.5),
+        format!("At 1200x800 the stamp {label:?} stands above the field {place:?} of long words"),
     );
     d.state("log-field-from-scene", Sizes::All);
     d.type_text(TYPED);

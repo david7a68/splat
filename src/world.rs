@@ -2004,6 +2004,7 @@ struct LogField {
 }
 
 /// The least room that `Add to Log`'s field keeps for a sentence when its stamp shares its line.
+/// It also keeps the words it holds whole, with the field's margins.
 const LOG_FIELD_BESIDE: f32 = design::XXL * 7.0;
 
 /// How `Add to Log` shows in a reader's header.
@@ -3165,11 +3166,20 @@ impl Reader {
                     .size()
                     .x;
                 let words = Type::Small.rich(ui, stamp).color(colors().muted);
-                // The stamp shares the field's line while the field keeps room for a sentence,
-                // whatever words it holds. One layout for both, so the field keeps its ID, and
-                // the keyboard, when the window changes size.
+                // The stamp shares the field's line while the field keeps room for a sentence.
+                // One layout for both, so the field keeps its ID, and the keyboard, when the
+                // window changes size.
                 let room = ui.available_width() - width - design::S;
-                let beside = room >= LOG_FIELD_BESIDE;
+                let typed = ui
+                    .painter()
+                    .layout_no_wrap(
+                        field.words.clone(),
+                        egui::TextStyle::Body.resolve(ui.style()),
+                        colors().text,
+                    )
+                    .size()
+                    .x;
+                let beside = room >= LOG_FIELD_BESIDE.max(typed + 3.0 * design::S);
                 ui.horizontal_wrapped(|ui| {
                     ui.label(words);
                     if !beside {

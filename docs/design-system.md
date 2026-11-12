@@ -957,7 +957,7 @@ opens the run's made-up form in Arrivals, with the name filled in and the keyboa
 `add_field` under the kind line, named `Log line for <name>`, with the placeholder `What happened?` and the
 keyboard in it; the line's stamp (`Session 12, Day 3:`, the stamp of a Change at that moment, or the day alone
 when no session is being played) stands before it in `Type::Small` `muted`, on the field's line while the field
-keeps 224 px, whatever words it holds, else above it. Stamp and field end at the reader's measure
+keeps 224 px and the words it holds fit whole, else above it, so a done scene's long words are never cut. Stamp and field end at the reader's measure
 (`READER_MEASURE`, 488 px), as its rules do. Enter adds one line at the end of the entry's `## Log` (Splat makes the heading
 when the note has none) and closes the field; Escape clears and closes it. Its result, `Added to <name>’s Log.`
 with `Undo Log line`, sits in the pane's message footer, as every World and Lookup result does; Undo removes
