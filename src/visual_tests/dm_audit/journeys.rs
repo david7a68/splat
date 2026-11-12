@@ -45,7 +45,8 @@ pub fn j6(d: &mut Driver<'_>) {
     journey(d, "J6", week_between);
 }
 
-const VARRA: &str = "Captain Varra";
+/// J2's planned NPC: a World NPC whose stat block is the fixture's creature Captain Varra.
+const OSTREL: &str = "Warden Ostrel";
 const WOLVES: &str = "Wolf Pack";
 const SHRINE: &str = "Shrine of Cinders";
 const WATCH: &str = "Ember Watch";
@@ -61,36 +62,32 @@ fn campaign_root(d: &mut Driver<'_>) -> PathBuf {
         .path
 }
 
-/// A new encounter, as the DM made it in prep: a copy of the fixture's `from`, under its own
-/// name and ID, with these words for its note.
+/// A new encounter, as the DM made it in prep: a copy of the fixture's `from`, roster and all,
+/// under its own name and ID, with these words at the end of its note.
 fn encounter(d: &mut Driver<'_>, from: &str, name: &str, words: &str) {
     let root = campaign_root(d);
     let text = fs::read_to_string(root.join(format!("Encounters/{from}.md")))
         .expect("read the fixture's encounter");
     let old = splat::character::stable_id(&format!("visual:encounter:{from}"));
     let new = splat::character::stable_id(&format!("visual:encounter:{name}"));
-    let head = text
-        .split_once("\n---\n")
-        .map_or(text.as_str(), |(head, _)| head)
-        .replace(&old.to_string(), &new.to_string())
-        .replace(
-            &format!("splat_name: {from}"),
-            &format!("splat_name: {name}"),
-        );
+    let text = text.replace(&old.to_string(), &new.to_string()).replace(
+        &format!("splat_name: {from}"),
+        &format!("splat_name: {name}"),
+    );
     fs::write(
         root.join(format!("Encounters/{name}.md")),
-        format!("{head}\n---\n\n{words}\n"),
+        format!("{}\n\n{words}\n", text.trim_end()),
     )
     .expect("write the encounter");
 }
 
-/// A World NPC of the campaign, as the DM wrote one.
-fn npc(d: &mut Driver<'_>, name: &str, words: &str) {
+/// A World NPC of the campaign, as the DM wrote one, with these extra fields of `splat_world`.
+fn npc(d: &mut Driver<'_>, name: &str, fields: &str, words: &str) {
     let path = format!("NPCs/{name}.md");
     let text = splat::content::formats::fixture(
         "World.md",
         &format!(
-            "splat_id: {}\nsplat_kind: world\nsplat_name: {name}\nsplat_world:\n  type: npc\n  status: alive\n",
+            "splat_id: {}\nsplat_kind: world\nsplat_name: {name}\nsplat_world:\n  type: npc\n  status: alive\n{fields}",
             splat::character::stable_id(&path)
         ),
         &format!("\n# {name}\n\n{words}\n"),
@@ -212,95 +209,111 @@ fn add_rewards(a: &mut Audit<'_, '_>, fight: &str) {
 }
 
 /// J2, section 2.2: the party skips the planned fight, talks to a planned NPC and then attacks
-/// her, takes loot nobody planned, and travels two days with a random encounter on the second.
+/// him, takes loot nobody planned, and travels two days with a random encounter on the second.
 fn improvised_evening(a: &mut Audit<'_, '_>) {
-    a.setup("prep: the Wolf Pack encounter and the road table", |d| {
-        encounter(
-            d,
-            "Bridge Ambush",
-            WOLVES,
-            "Wolves at the edge of the firelight.",
-        );
-        road_table(d, "11-20");
-    });
+    a.setup(
+        "prep: Warden Ostrel, the Wolf Pack encounter and the road table",
+        |d| {
+            let varra = splat::character::stable_id("visual:note:varra");
+            npc(
+                d,
+                OSTREL,
+                &format!("  creature: {{id: {varra}}}\n"),
+                "Keeps the ford for the watch.",
+            );
+            encounter(
+                d,
+                "Bridge Ambush",
+                WOLVES,
+                "Wolves at the edge of the firelight.",
+            );
+            road_table(d, "11-20");
+        },
+    );
     a.setup(
         "play last week's session, then quit and open the app",
         last_week,
     );
     a.setup("work at 1200x800", |d| d.set_base((1200.0, 800.0)));
     a.setup(
-        "prep: tonight's plan holds a fight and a talk with Varra",
+        "prep: tonight's plan holds a fight and a talk with Ostrel",
         |d| {
             tonight(
                 d,
                 2,
                 TONIGHT_SESSION,
-                &format!("- [[{SHRINE}]]\n- [ ] [[{VARRA}]]\n"),
+                &format!("- [[{SHRINE}]]\n- [ ] [[{OSTREL}]]\n"),
             );
         },
     );
+    a.setup("last week's paused fight was closed", |d| {
+        d.click_starting("Paused run · ");
+        close_run(d);
+        d.click(NAV_SESSIONS);
+    });
+    a.setup("save, quit and open the app at the table", restart);
     a.phase = "during";
     a.fact(format!(
         "the planned fight stays on the plan, skipped: {}",
         a.d.has(&format!("Start fight: {SHRINE}"))
     ));
 
-    a.task("Play the planned NPC: read Captain Varra");
-    a.act(Panel, "open her from the scene", |d| {
-        d.click_starting(&format!("{VARRA} (opens"));
+    a.task("Play the planned NPC: read Warden Ostrel");
+    a.act(Panel, "open him from the scene", |d| {
+        d.click_starting(&format!("{OSTREL} (opens"));
     });
 
-    a.task("The party attacks Captain Varra: start the fight");
-    let start = format!("Start a fight with {VARRA}");
+    a.task("The party attacks Warden Ostrel: start the fight");
+    let start = format!("Start a fight with {OSTREL}");
     if !a.d.has(&start) {
-        a.click(Find, &format!("More actions for {VARRA}"));
+        a.click(Find, &format!("More actions for {OSTREL}"));
     }
     a.click(Nav, &start);
-    a.act(Panel, "close Lookup, to see her stat block", |d| {
+    a.act(Panel, "close Lookup, to see his stat block", |d| {
         d.press(Key::Escape);
     });
     a.fact(format!(
-        "the run of Fight with {VARRA} is open: {}",
-        a.d.has_containing(&format!("{RUN_HEADING}Fight with {VARRA}"))
+        "the run of Fight with {OSTREL} is open: {}",
+        a.d.has_containing(&format!("{RUN_HEADING}Fight with {OSTREL}"))
     ));
 
-    a.task("Roll and begin the fight with Captain Varra");
+    a.task("Roll and begin the fight with Warden Ostrel");
     counted_roll_and_begin(a);
 
-    a.task("Captain Varra gives up: end the fight");
-    counted_end(a, Some("Varra gave up"));
+    a.task("Warden Ostrel gives up: end the fight");
+    counted_end(a, Some("Ostrel gave up"));
 
-    a.task("She gave up, and the party holds her: a line in her Log");
-    a.act(Panel, "Ctrl+K shows her page again", |d| {
+    a.task("He gave up, and the party holds him: a line in his Log");
+    a.act(Panel, "Ctrl+K shows his page again", |d| {
         d.press_ctrl(Key::K)
     });
     a.click(Do, "Add to Log");
     a.act(Do, "type the line", |d| {
-        d.type_text("Gave up at the ford; the party holds her.");
+        d.type_text("Gave up at the ford; the party holds him.");
     });
     a.act(Do, "add it", |d| d.press(Key::Enter));
     a.act(Panel, "close Lookup", |d| d.press(Key::Escape));
     a.fact(format!(
-        "her note holds the line: {}",
-        file(a.d, "Notes/Captain Varra.md").contains("the party holds her.")
+        "his note holds the line: {}",
+        file(a.d, &format!("NPCs/{OSTREL}.md")).contains("the party holds him.")
     ));
 
     a.task("Close the fight, keep the rewards, and add loot nobody planned");
     a.act(Nav, CLOSE_RUN, close_run);
-    add_rewards(a, &format!("Fight with {VARRA}"));
+    add_rewards(a, &format!("Fight with {OSTREL}"));
     a.act(Do, "click under the new block", |d| {
         d.click_line_end("  - XP ")
     });
     a.act(Do, "type the loot", |d| {
-        d.type_text("\n  - Varra’s signet ring")
+        d.type_text("\n  - Ostrel’s signet ring")
     });
     a.fact(format!(
         "the ring is under the fight's block: {}",
         a.d.editor_text().is_some_and(|text| text
             .split("## Loot and rewards")
             .nth(1)
-            .is_some_and(|rest| rest.contains("|Fight with Captain Varra]]")
-                && rest.contains("  - Varra’s signet ring")))
+            .is_some_and(|rest| rest.contains(&format!("|Fight with {OSTREL}]]"))
+                && rest.contains("  - Ostrel’s signet ring")))
     ));
 
     a.task("Two days overland: roll for encounters on the road");
@@ -337,9 +350,9 @@ fn improvised_evening(a: &mut Audit<'_, '_>) {
     a.task("Put the Wolf Pack fight's rewards in the note");
     add_rewards(a, WOLVES);
 
-    a.task("Mark the talk with Captain Varra done, and log what happened");
-    a.click(Do, &format!("Open: {VARRA}"));
-    a.click(Panel, &format!("Add to Log: {VARRA}"));
+    a.task("Mark the talk with Warden Ostrel done, and log what happened");
+    a.click(Do, &format!("Open: {OSTREL}"));
+    a.click(Panel, &format!("Add to Log: {OSTREL}"));
     a.act(Do, "type the line", |d| {
         d.type_text("Handed to the watch at the ford.");
     });
@@ -376,6 +389,7 @@ fn broken_evening(a: &mut Audit<'_, '_>) {
             ),
         );
     });
+    a.setup("save, quit and open the app at the table", restart);
     a.setup("play the first fight", |d| played_fight(d, SHRINE));
     a.setup("the second fight, in round 2", |d| {
         d.click(&format!("Start fight: {WOLVES}"));
@@ -509,6 +523,7 @@ fn the_race(a: &mut Audit<'_, '_>) {
     a.setup("prep: tonight's plan holds the arena fight", |d| {
         tonight(d, 1, "The Race", &format!("- [[{SHRINE}]]\n"));
     });
+    a.setup("save, quit and open the app at the table", restart);
     a.setup("the race so far: the clock at 30, Favor 2, no seals", |d| {
         d.press_ctrl(Key::T);
         d.click("Cistern or Sands");
@@ -552,7 +567,11 @@ fn the_race(a: &mut Audit<'_, '_>) {
 
     a.phase = "the fight";
     a.task("Start the arena fight");
-    a.click(Nav, &format!("Start fight: {SHRINE}"));
+    let start = format!("Start fight: {SHRINE}");
+    if !a.d.has(&start) && a.d.has("Plan") {
+        a.click(Sub, "Plan");
+    }
+    a.click(Nav, &start);
 
     a.task("Roll and begin the arena fight");
     counted_roll_and_begin(a);
@@ -616,6 +635,7 @@ fn the_race(a: &mut Audit<'_, '_>) {
             d.settle();
         },
     );
+    a.setup("save, quit and open the app after the session", restart);
     a.phase = "between sessions";
     a.task("A new day between sessions: the prize day comes due");
     a.click(Nav, NAV_TIMELINE);
@@ -653,7 +673,7 @@ fn week_between(a: &mut Audit<'_, '_>) {
             "# Treasure\n\n<!-- splat:rolls key=gems dice=1d4 -->\n\n| d4 | Gem |\n| --- | --- |\n| 1 | A cracked garnet (10 gp) |\n| 2 | A river pearl (50 gp) |\n| 3 | A smoky quartz (50 gp) |\n| 4 | A star ruby (100 gp) |\n",
         )
         .expect("write the treasure table");
-        npc(d, VERORI, "Keeper of the north gate.");
+        npc(d, VERORI, "", "Keeper of the north gate.");
         road_table(d, "15-20");
     });
     a.setup(
@@ -679,6 +699,7 @@ fn week_between(a: &mut Audit<'_, '_>) {
         d.press_ctrl(Key::S);
         show_plan(d);
     });
+    a.setup("save, quit and open the app at the table", restart);
     a.setup("play two fights, and the third to its end", |d| {
         played_fight(d, SHRINE);
         played_fight(d, WOLVES);

@@ -101,6 +101,7 @@
   '';
   # G6's counts and G7's plain reference (README.md, Visual tests).
   #   audit-freeze counts [label]     G6: write every row of the audit's counts from this source.
+  #   audit-freeze journeys [label]   G6: write every row of journeys J2, J3, J4 and J6 likewise.
   #   audit-freeze reference [label]  G7: write the plain reference on an unchanged commit of main.
   #   audit-freeze add [label]        Add new tasks, views and acts; keep every frozen record.
   #   audit-freeze verify [label]     Write the reference to a scratch folder and compare bytes.
@@ -108,7 +109,7 @@
     what="''${1:-}"
     label="''${2:-freeze}"
     if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
-      echo "Use: audit-freeze counts|reference|add|verify [label]" >&2
+      echo "Use: audit-freeze counts|journeys|reference|add|verify [label]" >&2
       exit 2
     fi
     case "$label" in
@@ -125,16 +126,19 @@
         exit 1
       fi
     }
+    journeys="journey-j2,journey-j3,journey-j4,journey-j6"
     case "$what" in
       counts)
         SPLAT_DM_AUDIT_WRITE=all visual-test "$label" --only dm-audit ;;
+      journeys)
+        SPLAT_DM_AUDIT_WRITE=all visual-test "$label" --only "$journeys" ;;
       reference)
         unchanged
         SPLAT_FROZEN_AT="$(git rev-parse HEAD)" SPLAT_PLAIN_EVENING_WRITE=all \
           visual-test "$label" --only plain-evening ;;
       add)
         SPLAT_DM_AUDIT_WRITE=add SPLAT_PLAIN_EVENING_WRITE=add \
-          visual-test "$label" --only dm-audit,plain-evening ;;
+          visual-test "$label" --only "dm-audit,plain-evening,$journeys" ;;
       verify)
         unchanged
         out="$PWD/artifacts/screenshots/$label/verify"
@@ -154,7 +158,7 @@
           exit 1
         fi ;;
       *)
-        echo "Use: audit-freeze counts|reference|add|verify [label]" >&2
+        echo "Use: audit-freeze counts|journeys|reference|add|verify [label]" >&2
         exit 2 ;;
     esac
   '';
