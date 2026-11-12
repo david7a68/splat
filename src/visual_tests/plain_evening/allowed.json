@@ -10,7 +10,7 @@
         "what": "control",
         "change": "resized",
         "name": "Button: Remove this event",
-        "detail": "681 299 67.8x30 -> 681 335 137.9x30"
+        "detail": "669 299 67.8x30 -> 669 335 137.9x30"
       }
     },
     {
@@ -22,7 +22,7 @@
         "what": "control",
         "change": "new",
         "name": "Button: Roll for encounters",
-        "detail": "at 681 299 137.9x30"
+        "detail": "at 669 299 137.9x30"
       }
     },
     {
@@ -34,7 +34,7 @@
         "what": "text",
         "change": "moved",
         "name": "Remove",
-        "detail": "689 305 51.8x18 -> 689 341 51.8x18"
+        "detail": "677 305 51.8x18 -> 677 341 51.8x18"
       }
     },
     {
@@ -46,7 +46,7 @@
         "what": "text",
         "change": "new",
         "name": "Roll for encounters",
-        "detail": "at 689 305 121.9x18"
+        "detail": "at 677 305 121.9x18"
       }
     },
     {
@@ -58,7 +58,7 @@
         "what": "control",
         "change": "resized",
         "name": "Button: Remove this event",
-        "detail": "873 300 67.8x30 -> 803 336 137.9x30"
+        "detail": "857 300 67.8x30 -> 733 336 137.9x30"
       }
     },
     {
@@ -70,7 +70,7 @@
         "what": "control",
         "change": "new",
         "name": "Button: Roll for encounters",
-        "detail": "at 803 300 137.9x30"
+        "detail": "at 733 300 137.9x30"
       }
     },
     {
@@ -82,7 +82,7 @@
         "what": "text",
         "change": "moved",
         "name": "Remove",
-        "detail": "881 306 51.8x18 -> 811 342 51.8x18"
+        "detail": "865 306 51.8x18 -> 741 342 51.8x18"
       }
     },
     {
@@ -94,7 +94,7 @@
         "what": "text",
         "change": "new",
         "name": "Roll for encounters",
-        "detail": "at 811 306 121.9x18"
+        "detail": "at 741 306 121.9x18"
       }
     },
     {
