@@ -217,6 +217,8 @@ mod tests {
             restores: false,
             continued_in: None,
             played_order: 0,
+            checks_table: None,
+            checks: Vec::new(),
             extra: Default::default(),
         }
     }

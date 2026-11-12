@@ -20,6 +20,7 @@ pub mod list_formats;
 pub mod markdown_links;
 pub mod run_continue;
 pub mod stat_formats;
+pub mod travel_checks;
 pub mod world_build;
 
 /// The middle of the reading pane and of the entry list, at the minimum window.
@@ -9693,6 +9694,15 @@ pub mod session_notes {
                 && !d.has("Where"),
             "An opened plan event has its kind as Title and keeps duration and place on Timeline",
         );
+        // F9 (section 2.5, row 12): a campaign with no marked table has no checks to offer, so
+        // the Travel row's menu is as before.
+        d.click("More actions for Travel");
+        d.observe(
+            "T11.10",
+            d.has("Remove this event") && !d.has("Roll for encounters"),
+            "With no marked table, a Travel row's menu has no Roll for encounters",
+        );
+        d.press(Key::Escape);
         d.observe(
             "S13",
             d.has("Travel"),

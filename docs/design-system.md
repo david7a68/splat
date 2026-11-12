@@ -955,7 +955,10 @@ Every other World message about a file that the system will not read or write, a
 file and the recovery, never the system's words. A rolled table selects the matching row, marks it with dice and
 states the result below in UI sans, on one line reserved under the Roll row from the start, so a roll moves nothing
 below the table. A longer result ends in `…`; its hover keeps it whole. Typed rolls use well fill, a centred placeholder and dice as the column
-heading. Fixed headers cover passing rows with page fill and a hairline. Generator cards name their table
+heading. A marker's optional `per` word (`day`, `watch`, or hours such as `4h`) says how often a journey's
+encounter checks roll the table; a word that Splat cannot read adds the warning `Interval not read; using one check
+each day.` under that table, which still rolls. `Cannot roll` stays the words for a fault in the dice or the rows.
+Fixed headers cover passing rows with page fill and a hairline. Generator cards name their table
 sources below attributes. Every card's `Will save <path>` is the path Save NPC writes: the folder that holds most of
 the campaign's NPCs, or `NPCs/` when it has none. Without a names table, the World page's card says `Built-in names. To
 use your own, add a table of names to a note. Paste the marker on the line above the table.` with a quiet `Copy the
@@ -1514,7 +1517,30 @@ separate tabs; stacked Timeline says All events. Each row has an icon, link and 
 action on the name line, fixed right-aligned action slot and separate menu slot. Row fields open in place,
 align with the name and use Timeline form parts. A caret and accessible expanded state mark open rows; a
 hairline follows details after `S`. New events stay closed with kind as title. Open rows show Title and Notes;
-duration and place stay on Timeline. The Add strip stays directly below Tonight (or This session), above
+duration and place stay on Timeline.
+
+**Encounter checks** (F9). While the campaign has a marked table, a Travel row's menu (on the plan and on
+Timeline) has `Roll for encounters`. Only that act puts the block on that row: `Encounter checks`, the table
+as a `menu_button` with `· 1d20 each day` (or `each watch`, `every 4 hours`) after it, **How long** (on the plan;
+Timeline's own field above serves there), and one line for each check. Focus goes to **How long** when the
+journey has no length, and the event takes the length on Enter or when the field loses focus, not on each key;
+the lines follow the words as typed. One check at each whole interval from the start, and none at the end; an
+empty or unread length gives one line, `This journey`; a length of zero gives none. A line is its clock name (`Day 3`, or `Day 3, 08:00` for
+a watch or hours), then a secondary `Roll` with the dice icon and an `Enter a roll` number field; `Roll all N`
+follows when two or more wait. A result shows its number and words, a quiet `Clear` at the line's end, and,
+for each encounter or group it links (at most three), a quiet `Plan “<name>”` with `line_start`, or the status
+`In the plan` while the plan has a row still to come for it. A result whose offset is no longer a line stays under
+the muted `Outside this journey now` until cleared. The table menu lists the tables by name, then `No checks`,
+which waits with `Clear the results first.` while a result stands. With several tables the block starts on the
+table of the latest journey with checks, else on `Choose a table`, and `Roll` waits with `Choose a table first.`.
+A journey of more than 31 checks says `This journey has N checks. Split it into shorter journeys to roll them
+here.` Each act's message, with `Undo checks`, `Undo roll` or `Undo clear`, is kept by its journey's event: it
+lasts while that event is as the act left it, until the DM leaves the page, and an act on another journey
+leaves it. The length being typed has one owner, the Timeline book, whichever page shows the field; leaving
+the page gives it to the journey, as a loss of focus does. `Plan “<name>”` is a note act through `Draft::apply`: it writes
+`- [[<name>]]` before the first plan line still to come, says `“<name>” is in tonight’s plan.` and offers `Undo
+plan line`, which is the note's: it lasts while the note's words are what the act left, also through a page
+change, and ends when they change or another session is selected. Splat rolls and offers; it never plans or starts a fight by itself. The Add strip stays directly below Tonight (or This session), above
 messages and scrolling rows. Fight, Group and Long rest stay visible. If all seven actions do not fit on one line,
 a compact `⋯⌄` button, named `More Add actions`, holds Day, Short rest, Travel and Major event. Its hover text names those actions. Keep the strip on one line at all three supported window sizes. Long rest stays one click away (T11.2). Timeline uses the same width rule.
 It stays in place when messages or rows change. Empty plans use empty_state
@@ -1654,6 +1680,10 @@ until Undo or a new update. Undo writes only into the same file it wrote (same b
 names the note and changes nothing; custom
 aliases remain. Undo stays only in the list column until a note/event edit or leaving Timeline, never in
 conflict. Completed link updates use success.
+
+A Travel event's checks are lines of the event: `- Checks table: road` (no key while none is chosen) and
+`- Check at 24h: "16 · …"`, one for each result, its words in quotes so that the reader of the format before
+them keeps each as one string. A check's identity is its offset in hours, never a day's name.
 
 Version 2 stores event lists and day IDs in comments below headings. Every write renumbers days to the
 displayed clock. File items use Fight and Major event; accept Encounter and Event in any case, with or without
