@@ -44,6 +44,10 @@ impl ViewState {
     }
 }
 
+/// Why an act on a day notice recorded nothing when the Timeline's file changed, or cannot be
+/// read, under an edit that waits to be saved.
+pub(crate) const DAY_NOT_KNOWN: &str = "Timeline.md changed on disk, or cannot be read, while a Timeline edit waits to be saved. The day count is not known, so nothing was recorded.";
+
 /// One act the DM asked for in this frame.
 pub(crate) enum Act {
     Press {
@@ -74,10 +78,24 @@ impl Trackers {
     }
 
     /// Apply the act pressed in the view. The shell calls it after `follow_clock`.
-    pub fn apply_pressed(&mut self) {
-        if let Some(act) = self.view.pressed.take() {
-            apply(self, act);
+    /// `day_known` is false when the Timeline could not give the day count at the click: then
+    /// an act on a day notice records nothing and says why. Other acts do not use the day.
+    pub fn apply_pressed(&mut self, day_known: bool) {
+        let Some(act) = self.view.pressed.take() else {
+            return;
+        };
+        let on_a_day = match &act {
+            Act::Roll(notice, _)
+            | Act::Done(notice, _)
+            | Act::Dismiss(notice)
+            | Act::DismissAll(notice) => matches!(notice.id, NoticeRef::Day { .. }),
+            _ => false,
+        };
+        if on_a_day && !day_known {
+            self.reason = Some(Unrecorded::Refused(DAY_NOT_KNOWN.into()));
+            return;
         }
+        apply(self, act);
     }
 
     /// `Done` or `Next` pressed on this row, as a click in the view leaves it for the shell.

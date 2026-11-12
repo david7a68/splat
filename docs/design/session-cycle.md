@@ -975,7 +975,8 @@ the notices of marks at a value. The Due count counts rows, so a row of three da
 `End of month, Day 32 done.` and `Undo: End of month, Day 32 done`, or `Undo: End of month ×3 dismissed`. While
 `Timeline.md` cannot be read, no day row shows and the top of the scroll area says the Timeline's words and `Day marks
 wait until it can be read.` An act on a day row reads the Timeline again at the click; when the row's day is no
-longer due, or the days of `Dismiss all` changed, it writes nothing and says so on the result line. The rail's
+longer due, or the days of `Dismiss all` changed, it writes nothing and says so on the result line. So does
+an act on a day row while a Timeline edit waits to be saved and the file changed, or cannot be read, under it. The rail's
 `Due N` counts day rows too; the run shows nothing more.
 
 **Not built, and why.** Any tracker part in a run (the owner accepted this cost; section 7). The parts in
