@@ -684,6 +684,9 @@ struct State {
 /// The state, groups and scale an answer in Arrivals was worked out from: the count of steps
 /// kept or taken back, and the two reads by their address.
 type ArrivalKey = (u64, usize, usize);
+/// The typed totals' revision, the groups' read by its address and the run's encounter, for
+/// the Arrivals reasons.
+type ReasonsKey = (u64, usize, Option<Uuid>);
 /// The groups' read by its address, and the widths and type size a summary was wrapped for.
 type SummaryKey = (usize, u32, u32, u32);
 /// A group's member summary in Arrivals: the wrapped words, and whether they take a full-width
@@ -782,7 +785,7 @@ pub(crate) struct Run {
     totals_revision: u64,
     /// The Arrivals reasons for typed totals that cannot be read (FI5), for one
     /// `totals_revision`, one read of the groups and one encounter. Never saved.
-    arrival_reasons: Option<((u64, usize, Option<Uuid>), Arc<[String]>)>,
+    arrival_reasons: Option<(ReasonsKey, Arc<[String]>)>,
     /// The widest roster name in the dock's `Heading`, for one `revision`, roster size and type
     /// size (FK1). Never saved.
     widest_name: Option<((u64, usize, u32), f32)>,
