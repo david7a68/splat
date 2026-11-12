@@ -166,6 +166,7 @@ const SCREENS: &[(&str, Shown)] = &[
     ("session-new", Page),
     ("session-new: note written", Held),
     ("session-new: note saved", Held),
+    ("timeline: Road to the ford open", Held),
 ];
 
 /// What a hover rests on.
@@ -1085,6 +1086,34 @@ fn play(d: &mut Driver<'_>) -> (Evening, Bytes, Bytes) {
         d.settle();
     });
     ev.held(d, "session-new: note saved");
+    // Last, so that no old act starts on a Timeline with an event open.
+    ev.act(d, "open Road to the ford on Timeline", |d| {
+        d.click(NAV_TIMELINE);
+        d.click_containing("Road to the ford");
+    });
+    ev.held(d, "timeline: Road to the ford open");
+    // An ordinary journey takes its length as the DM types, before focus leaves the field, as
+    // it did before encounter checks. Then the DM puts the length back.
+    let mut typed = None;
+    ev.act(d, "type a length for Road to the ford", |d| {
+        d.replace_text_in("How long", "2 hours");
+        let road = d
+            .app()
+            .timeline
+            .events
+            .iter()
+            .find(|e| e.title == "Road to the ford");
+        typed = Some((d.focused_name(), road.map(|e| e.duration.clone())));
+        d.replace_text_in("How long", "half a day");
+        d.press(Key::Enter);
+        d.app_mut().timeline.save();
+        d.settle();
+    });
+    assert_eq!(
+        typed,
+        Some((Some("How long".to_owned()), Some("2 hours".to_owned()))),
+        "G7, section 2.5: an ordinary Travel event takes its length as the DM types it"
+    );
     ev.check_seen();
     let at_end = ev.files.all();
     (ev, at_start, at_end)
@@ -1682,7 +1711,7 @@ pub fn run(d: &mut Driver<'_>) {
 /// thing appear and an old one move, never go, be cut or get narrower. A row that fits no
 /// class fails, so the list cannot allow a fault by copying the failures. Each pull request of
 /// the build plan keeps its own classes here: P5 the Travel menu (row 12), P2 the difficulty
-/// word (rows 1 to 3).
+/// word (rows 1 to 3), P7 `Add rewards` (row 10).
 #[cfg(test)]
 mod allowed_classes {
     use super::*;
@@ -2346,6 +2375,90 @@ mod allowed_classes {
                 rows.push(row(LAST, "text", "gone", "Resume", "was 753.1 99 95.8x28"));
                 assert!(!fits(&rows), "{why} was accepted");
             }
+        // P7, F7.
+        Class {
+            row: 10,
+            name: "P7 a: `Add rewards` new on a played row, or as the opened row's last link",
+            fits: |d, _| rewards::action(d),
+        },
+        Class {
+            row: 10,
+            name: "P7 b: its word and its `·`, inside or just before a new action of its view",
+            fits: rewards::words,
+        },
+        Class {
+            row: 10,
+            name: "P7 c: an act's words of these classes",
+            fits: |d, _| rewards::act_words(d),
+        },
+    ];
+
+    /// P7's classes. Every difference is new, whole and of the plan's views; none lets an item
+    /// of today go, move, narrow or be cut.
+    mod rewards {
+        use super::super::{AllowedRow, Difference};
+        use super::rect_of;
+
+        const WORD: &str = "Add rewards";
+
+        fn plan_view(d: &Difference) -> bool {
+            d.screen.starts_with("session-") || d.screen.starts_with("lookup-reader ")
+        }
+
+        fn new_whole(d: &Difference) -> Option<[f32; 4]> {
+            (plan_view(d)
+                && ["control", "text"].contains(&d.what.as_str())
+                && d.change == "new"
+                && !d.detail.contains("seen"))
+            .then(|| rect_of(&d.detail, "at "))
+            .flatten()
+        }
+
+        /// The row's action, named for its fight, or the opened row's link.
+        pub(super) fn action(d: &Difference) -> bool {
+            new_whole(d).is_some()
+                && (d
+                    .name
+                    .strip_prefix("Button: Add rewards: ")
+                    .is_some_and(|title| !title.is_empty())
+                    || d.name == "Link: Add rewards")
+        }
+
+        /// The painted word lies inside a new action of its view; a separator sits on that
+        /// link's line, just before it.
+        pub(super) fn words(d: &Difference, rows: &[AllowedRow]) -> bool {
+            let Some(at) = new_whole(d) else {
+                return false;
+            };
+            let actions = rows.iter().map(|row| &row.difference).filter(|o| {
+                (&o.screen, &o.view, o.what.as_str()) == (&d.screen, &d.view, "control")
+                    && action(o)
+            });
+            let (x, y) = (at[0] + at[2] / 2.0, at[1] + at[3] / 2.0);
+            match d.name.as_str() {
+                WORD => actions
+                    .filter_map(|o| rect_of(&o.detail, "at "))
+                    .any(|r| r[0] <= x && x <= r[0] + r[2] && r[1] <= y && y <= r[1] + r[3]),
+                "·" | "Label: ·" | "TextRun: ·" => actions
+                    .filter(|o| o.name == "Link: Add rewards")
+                    .filter_map(|o| rect_of(&o.detail, "at "))
+                    .any(|r| {
+                        at[0] + at[2] <= r[0]
+                            && r[0] - (at[0] + at[2]) <= crate::design::M
+                            && (r[1] + r[3] / 2.0 - y).abs() <= 4.0
+                    }),
+                _ => false,
+            }
+        }
+
+        /// An act now shows or hides only the action's word.
+        pub(super) fn act_words(d: &Difference) -> bool {
+            d.what == "act"
+                && d.change == "changed"
+                && d.detail.split(" | ").all(|part| {
+                    [format!("appeared + {WORD}"), format!("went + {WORD}")]
+                        .contains(&part.to_owned())
+                })
         }
     }
 
@@ -2958,6 +3071,66 @@ mod allowed_classes {
                 ..fight
             },
         ];
+        // P7's classes refuse what a fault of row 10 looks like: the action cut, a control of
+        // today moved, a title that grew a line, the word outside any action, and other words.
+        let action = Difference {
+            screen: "session-last".into(),
+            view: "1200x800".into(),
+            what: "control".into(),
+            change: "new".into(),
+            name: "Button: Add rewards: The Toll Bridge Brawl".into(),
+            detail: "at 557.1 290 96.9x28".into(),
+        };
+        let rewards_faults = [
+            Difference {
+                detail: "at 557.1 290 96.9x28, seen 557.1 290 40x28".into(),
+                ..action.clone()
+            },
+            Difference {
+                change: "moved".into(),
+                name: "Button: More actions for The Toll Bridge Brawl".into(),
+                detail: "662 290 28x28 -> 691.6 290 28x28".into(),
+                ..action.clone()
+            },
+            Difference {
+                change: "height".into(),
+                name: "Link: Wolves at the Ford Below the Burning Shrine Road".into(),
+                detail: "24 -> 48".into(),
+                ..action.clone()
+            },
+            Difference {
+                what: "text".into(),
+                name: "Add rewards".into(),
+                detail: "at 100 600 80.9x18".into(),
+                ..action.clone()
+            },
+            Difference {
+                change: "gone".into(),
+                name: "Link: Timeline".into(),
+                detail: "was 560 476 60x24".into(),
+                ..action.clone()
+            },
+            Difference {
+                screen: "act 3".into(),
+                view: String::new(),
+                what: "act".into(),
+                change: "changed".into(),
+                name: "Session".into(),
+                detail: "appeared + Add rewards | went - Timeline".into(),
+            },
+        ];
+        for fault in rewards_faults {
+            let row = AllowedRow {
+                row: 10,
+                why: String::new(),
+                difference: fault,
+            };
+            assert!(
+                class_of(&row, &allowed.rows).is_none(),
+                "a class allows {}",
+                row.difference
+            );
+        }
         for fault in faults {
             for row in [14, 7, 9, 13, 21] {
                 let row = AllowedRow {

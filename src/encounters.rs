@@ -6298,6 +6298,25 @@ impl Encounters {
                     design::help(ui, "This campaign’s packages have more than one inspiration rule. Runs offer inspiration once you choose one.");
                 }
             }
+            // Campaign → Rules and runs has a switch for each house rule note (F4). A campaign
+            // with none shows nothing new.
+            if !snapshot.options.house_rules.is_empty() {
+                let notes = snapshot.options.house_rules.clone();
+                design::small_field(ui, "House rules in play", None, None, |ui| {
+                    ui.vertical(|ui| {
+                        for (id, name) in &notes {
+                            let mut on = snapshot.options.in_play.contains(id);
+                            if ui.checkbox(&mut on, name).changed() {
+                                if on {
+                                    snapshot.options.in_play.push(*id);
+                                } else {
+                                    snapshot.options.in_play.retain(|other| other != id);
+                                }
+                            }
+                        }
+                    });
+                });
+            }
             let changed = snapshot.options != snapshot.saved_options;
             let left = snapshot.options.runs_left_in(&snapshot.saved_options, &active);
             let run_files = left.as_ref().map_or(0, Vec::len);

@@ -2793,6 +2793,74 @@ pub fn undo_message(ui: &mut Ui, tone: Tone, text: &str, action: &str) -> bool {
     undo_message_named(ui, tone, text, action, None)
 }
 
+/// A kept line for an act's result and its Undo: one control high whether or not a result
+/// shows, so the result moves nothing below it. Words that do not fit beside Undo end in `…`,
+/// and their hover keeps them whole. Capped at `LIST_MEASURE` like every notice.
+pub fn undo_line(ui: &mut Ui, tone: Tone, result: Option<(&str, &str)>) -> bool {
+    let size = vec2(
+        ui.available_width().min(LIST_MEASURE),
+        Density::Read.control(),
+    );
+    let mut pressed = false;
+    ui.allocate_ui_with_layout(size, Layout::left_to_right(Align::Center), |ui| {
+        ui.set_min_size(size);
+        let Some((text, action)) = result else {
+            return;
+        };
+        let (icon, color) = tone.parts();
+        let button = Action::quiet(action)
+            .icon(icons::UNDO)
+            .density(Density::Read);
+        let gap = ui.spacing().item_spacing.x;
+        let left = ui.cursor().left();
+        ui.spacing_mut().item_spacing.x = 0.0;
+        ui.add_space(S + 1.0);
+        ui.label(Type::Body.rich(ui, icon).color(color));
+        ui.add_space(XS);
+        let font = Type::Body.font(ui);
+        let mut room = ui.available_width() - gap - button.natural_width(ui);
+        // A cut adds `…` past the room it was given, so a cut leaves room for it.
+        if number_width(ui, text, &font) > room {
+            room -= number_width(ui, "…", &font);
+        }
+        let words = one_line(ui, text, font, colors().text, room);
+        let cut = words.elided;
+        let response = ui.add(egui::Label::new(words));
+        if cut {
+            response.clone().on_hover_text(text);
+        }
+        let bar = Rect::from_min_max(
+            pos2(left, response.rect.top()),
+            pos2(left + 3.0, response.rect.bottom()),
+        );
+        ui.painter().rect_filled(bar, 0.0, color);
+        ui.add_space(gap);
+        pressed = button.show(ui).clicked();
+    });
+    pressed
+}
+
+/// The height `undo_message` takes for these words in `width`: one control when the words and
+/// the action share a line; else the wrapped words, then the action's line under them. A place
+/// that must not move when the message comes reserves this height from the start.
+pub fn undo_message_height(ui: &Ui, tone: Tone, text: &str, action: &str, width: f32) -> f32 {
+    let width = width.min(LIST_MEASURE);
+    let button = Action::quiet(action)
+        .icon(icons::UNDO)
+        .density(Density::Read);
+    let font = Type::Body.font(ui);
+    let icon_width = number_width(ui, tone.parts().0, &font);
+    let gap = ui.spacing().item_spacing.x;
+    let inset = S + 1.0 + icon_width + XS + gap;
+    if width >= number_width(ui, text, &font) + inset + gap + button.natural_width(ui) {
+        return Density::Read.control();
+    }
+    let wrap = width - (S + 1.0 + icon_width + XS);
+    let words =
+        ui.fonts_mut(|fonts| fonts.layout(text.to_owned(), font, Color32::PLACEHOLDER, wrap));
+    words.size().y + ui.spacing().item_spacing.y + Density::Read.control()
+}
+
 /// `undo_message`, with an accessible name for the action when its words are not enough. Capped
 /// at `LIST_MEASURE` like every notice.
 pub fn undo_message_named(
