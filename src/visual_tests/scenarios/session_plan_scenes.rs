@@ -556,4 +556,57 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     d.click("Close Lookup");
     d.click(NAV_WORLD);
     d.click("Discard");
+
+    // Words typed in the Log field survive Trackers: Ctrl+T, and Ctrl+T again, give back the
+    // entry with its field.
+    d.click(NAV_SESSIONS);
+    show_plan(d);
+    d.click(&long_menu);
+    d.click(&long);
+    d.expect(&field);
+    d.type_text(TYPED);
+    d.press_ctrl(Key::T);
+    d.press_ctrl(Key::T);
+    d.observe(
+        "T18.2",
+        d.field_text(&field).as_deref() == Some(TYPED),
+        "Typed Log words survive Ctrl+T and Ctrl+T again",
+    );
+
+    // Every draft that the campaign switch's guard and the close warning count has a field in
+    // view, reached from where the warning sends the DM. A renamed played session does not
+    // hide the words: they belong to the campaign and the entry.
+    let note_path = d.app().sessions.selected_path().unwrap().to_owned();
+    fs::rename(
+        &note_path,
+        note_path.with_file_name("Renamed played session.md"),
+    )
+    .unwrap();
+    d.app_mut().sessions.refresh();
+    d.settle();
+    let blocked =
+        d.app().blocked_switch() == Some("Save or discard your changes to change campaigns.");
+    d.request_close();
+    let warned = d.in_view_containing(&format!("Edits to “{VARRA_BLACK}” are not saved."));
+    d.click("Keep editing");
+    d.observe(
+        "T18.2-guard",
+        blocked && warned && d.field_text(&field).as_deref() == Some(TYPED),
+        "After the played session is renamed, Keep editing shows the field with the typed words",
+    );
+    // An entry that is gone: its draft waits for no guard, and the footer says the words.
+    fs::remove_file(&path).unwrap();
+    d.app_mut().lookup.refresh();
+    d.settle();
+    let free = d.app().blocked_switch().is_none();
+    d.app_mut().lookup.open_id(keep);
+    d.settle();
+    d.observe(
+        "T18.2-guard",
+        free && d.visible_text(&format!(
+            "“{VARRA_BLACK}” was deleted. The Log line was not added: “{TYPED}”"
+        )),
+        "A deleted entry's typed Log words block nothing, and the footer says them",
+    );
+    d.state("log-words-of-a-deleted-entry", Sizes::Default);
 }

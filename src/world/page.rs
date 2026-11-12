@@ -664,7 +664,10 @@ impl WorldPage {
                 else {
                     // The result sits in the pane's footer, as it does below a note (round 26
                     // FF1), so the empty state's advice keeps its place.
-                    let lines: Vec<_> = self.result(None).iter().map(|(r, _)| r.line()).collect();
+                    let mut lines: Vec<_> =
+                        self.result(None).iter().map(|(r, _)| r.line()).collect();
+                    // A Log line whose entry is gone says its words here too.
+                    lines.extend(self.reader.gone_log_notices());
                     if super::draw_footer(ui, "world_footer", &lines).0.is_some() {
                         self.undo_discard();
                     }

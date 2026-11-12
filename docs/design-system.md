@@ -953,8 +953,11 @@ when the note has none) and closes the field; Escape clears and closes it. Its r
 with `Undo Log line`, sits in the pane's message footer, as every World and Lookup result does; Undo removes
 that line only while the file holds what the act wrote, and ends when the entry's text changes or the reader
 shows another entry. A failed read or write is the error of the last action, also in the footer: it names the
-file, and the field keeps its words. The typed words wait, by campaign, entry and session, while the reader
-shows another entry. While the entry's edit form is open the field waits
+file, and the field keeps its words. The typed words belong to the campaign and the entry, not the session:
+the stamp is the session being played at Enter. They wait while the reader shows another entry and across a
+campaign change, and the campaign switch's guard and the close warning count them. When the entry is gone
+(deleted, or another note took its ID), its draft waits for nothing, and the pane's footer says once:
+`“<name>” was deleted. The Log line was not added: “<words>”`. While the entry's edit form is open the field waits
 under `Save or discard your edit first.` A package's entry has no `Add to Log`. Edit replaces the rows and
 the text with one form. Read and Edit show Stat block, In, Part of, then Status, so a value keeps its place when the DM
 presses Edit; conflict lines after Overwrite use the same order. Text follows in the reader's prose type,

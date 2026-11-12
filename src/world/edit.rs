@@ -630,7 +630,54 @@ impl Reader {
         self.log_fields
             .iter()
             .filter(|(_, open)| !open.field.words.trim().is_empty())
-            .map(|((_, id, _), open)| (*id, open.name.clone()))
+            .map(|((_, id), open)| (*id, open.name.clone()))
+    }
+
+    /// Drop the Log fields of this index's campaign whose entry is gone (deleted, or another
+    /// note took its ID), so no guard waits on words that no field can show. Typed words are
+    /// not lost without a word: the pane's footer says once what they were.
+    pub fn forget_gone_log_lines(&mut self, index: &ContentIndex) {
+        if self.log_fields.is_empty() {
+            return;
+        }
+        let campaign = index_campaign(index);
+        let gone: Vec<_> = self
+            .log_fields
+            .keys()
+            .filter(|(owner, id)| *owner == campaign && index.position(*id).is_none())
+            .copied()
+            .collect();
+        for key in gone {
+            if let Some(open) = self.log_fields.remove(&key)
+                && !open.field.words.trim().is_empty()
+            {
+                self.gone_log_lines.push((
+                    format!(
+                        "\u{201c}{}\u{201d} was deleted. The Log line was not added: \u{201c}{}\u{201d}",
+                        open.name,
+                        open.field.words.trim()
+                    ),
+                    false,
+                ));
+            }
+        }
+    }
+
+    /// The words of Log lines whose entry is gone, as footer notices. Each shows until the
+    /// reader shows another entry after it was shown.
+    pub(crate) fn gone_log_notices(&mut self) -> Vec<super::FooterLine> {
+        self.gone_log_lines
+            .iter_mut()
+            .map(|(words, shown)| {
+                *shown = true;
+                super::FooterLine::new(
+                    super::FooterRank::Notice,
+                    Tone::Warning,
+                    words,
+                    super::FooterKind::Plain,
+                )
+            })
+            .collect()
     }
 
     /// Put the entries whose edit form is open in this reader in `out`, with no new

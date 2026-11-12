@@ -1283,6 +1283,11 @@ impl Splat {
         let played = self.sessions.current_link();
         let day = timeline::day_now(&self.timeline.events);
         let start_blocked = self.encounters.plan_blocked();
+        // A Log line whose entry is gone waits for no one; the footer says its words.
+        if let Some(index) = self.lookup.index() {
+            self.world_page.reader.forget_gone_log_lines(&index);
+            self.lookup.reader.forget_gone_log_lines(&index);
+        }
         // An edit form in one reader holds back the other's Log field for that entry.
         self.lookup
             .reader

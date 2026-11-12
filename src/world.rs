@@ -1937,6 +1937,8 @@ pub struct Reader {
     /// Each open `Add to Log` field, by its entry and the session it was opened in. Its words
     /// wait while the reader shows another entry; a restart loses them, as every held form.
     log_fields: HashMap<LogKey, LogField>,
+    /// The words of Log lines whose entry is gone, for the footer, and whether they were shown.
+    gone_log_lines: Vec<(String, bool)>,
     /// The entries whose edit form is open in the other reader (Lookup's, or the World
     /// page's). Their Log field waits too, so Splat never makes its own disk conflict.
     pub edited_elsewhere: Vec<Uuid>,
@@ -1970,10 +1972,11 @@ impl PageResult {
     }
 }
 
-/// Whose an `Add to Log` field is: the campaign, the entry's ID, and the session being played,
-/// as its stamp names it. A copied note in another campaign has the same entry ID, so the
-/// campaign is part of the key, and the words never reach another campaign's note.
-type LogKey = (Uuid, Uuid, Option<String>);
+/// Whose an `Add to Log` field is: the campaign and the entry's ID, nothing else. A copied note
+/// in another campaign has the same entry ID, so the campaign is part of the key, and the words
+/// never reach another campaign's note. The session is not: the stamp is the session being
+/// played at Enter, so a renamed, closed or changed session cannot hide typed words.
+type LogKey = (Uuid, Uuid);
 
 /// One open `Add to Log` field: its words, and whether its next draw selects them.
 #[derive(Default)]
@@ -2203,10 +2206,7 @@ impl Reader {
     /// header's do. The field starts with `words`, selected, unless the DM already typed words
     /// there.
     pub fn open_log(&mut self, campaign: Uuid, id: Uuid, name: &str, words: &str) {
-        let open = self
-            .log_fields
-            .entry((campaign, id, self.played.clone()))
-            .or_default();
+        let open = self.log_fields.entry((campaign, id)).or_default();
         open.field.focus = true;
         name.clone_into(&mut open.name);
         if open.field.words.trim().is_empty() {
@@ -2298,6 +2298,7 @@ impl Reader {
             self.status_editing = self.status != status(&item.entry);
             // Only a form with changes is worth keeping. It opens again where it was left.
             self.edits.retain(|_, draft| draft.dirty());
+            self.gone_log_lines.retain(|(_, shown)| !shown);
             self.other_type.clear();
             self.adding = None;
             self.picker = None;
@@ -3092,7 +3093,7 @@ impl Reader {
         campaign: &Campaign,
         editing: bool,
     ) -> Option<Go> {
-        let key = (campaign.id, item.entry.id, self.played.clone());
+        let key = (campaign.id, item.entry.id);
         if !self.log_fields.contains_key(&key) {
             return None;
         }
@@ -3199,8 +3200,7 @@ impl Reader {
         })();
         let go = self.written(result, item.entry.id);
         if go.is_some() {
-            self.log_fields
-                .remove(&(campaign.id, item.entry.id, self.played.clone()));
+            self.log_fields.remove(&(campaign.id, item.entry.id));
         }
         go
     }
@@ -3629,7 +3629,7 @@ impl Reader {
         self.prepare(item);
         let id = item.entry.id;
         let editing = campaign.is_some_and(|campaign| self.editing(id, campaign));
-        let mut lines = Vec::new();
+        let mut lines = self.gone_log_notices();
         let has_unread = self
             .group_fault
             .as_ref()
@@ -5531,7 +5531,7 @@ mod tests {
             ..Default::default()
         };
         let mut lookup = reader();
-        let key = (campaign.id, hob, lookup.played.clone());
+        let key = (campaign.id, hob);
         let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
         let item = &index.items[index.position(hob).unwrap()];
         lookup.open_log(campaign.id, hob, "Hob", "the ropes");
@@ -5624,7 +5624,7 @@ mod tests {
         // Each field keeps its own request to select its words.
         lookup.open_log(campaign.id, oren, "Oren", "paid the toll");
         assert!(!lookup.log_fields[&key].select);
-        assert!(lookup.log_fields[&(campaign.id, oren, lookup.played.clone())].select);
+        assert!(lookup.log_fields[&(campaign.id, oren)].select);
 
         // Typed Log words are unsaved work: the campaign switch's guard and the close warning
         // count them, by the entry's name. An empty field holds nothing to lose.
@@ -5669,10 +5669,47 @@ mod tests {
             }),
             "another campaign's reader shows this campaign's typed words"
         );
+        assert!(!lookup.log_fields.contains_key(&(other.id, hob)));
+
+        // Every draft that the guards count has a field in view. A renamed played session
+        // does not hide typed words: the stamp is the session at Enter, not the field's key.
+        fs::write(&path, &edited).unwrap();
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        let item = &index.items[index.position(hob).unwrap()];
+        lookup.played = Some("[[Renamed Session]]".into());
+        assert!(lookup.has_unsaved_edits());
+        let output = ctx.run(Default::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                lookup.read(ui, item, &index, Some(&campaign));
+            });
+        });
+        let nodes = output.platform_output.accesskit_update.unwrap().nodes;
         assert!(
-            !lookup
-                .log_fields
-                .contains_key(&(other.id, hob, lookup.played.clone()))
+            nodes
+                .iter()
+                .any(|(_, node)| node.label() == Some("Log line for Hob")),
+            "the guarded words have a field after the session is renamed"
+        );
+
+        // An entry that is gone: its draft waits for no guard, and the pane's footer says the
+        // words once, so nothing is lost without a word.
+        fs::remove_file(&path).unwrap();
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        assert!(index.position(hob).is_none());
+        lookup.forget_gone_log_lines(&index);
+        assert!(lookup.unsaved_edits().iter().all(|(id, _)| *id != hob));
+        let item = &index.items[index.position(oren).unwrap()];
+        let notices: Vec<_> = lookup
+            .footer_lines(item, &index, Some(&campaign), None)
+            .into_iter()
+            .map(|line| line.words)
+            .collect();
+        assert!(
+            notices.contains(
+                &"\u{201c}Hob\u{201d} was deleted. The Log line was not added: \u{201c}Kept.\u{201d}"
+                    .to_owned()
+            ),
+            "{notices:?}"
         );
     }
 
