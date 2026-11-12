@@ -1969,9 +1969,9 @@ mod allowed_classes {
 
         /// `Where`'s label, and its field one `Small` line and `XS` under it.
         const LABEL_TO_FIELD: f32 = 20.0;
-        /// What the block may add to the rows beyond the label and the field: the spacing
-        /// around it, at most one `XL`.
-        const BLOCK_SPACE: f32 = 24.0;
+        /// What the block adds to the rows beyond its label and its field: the `XS` before it
+        /// and the rows' spacing around the field, 18 px as measured at every size.
+        const BLOCK_SPACE: f32 = 18.0;
         /// A one-line scene's words start this much lower: half of `XL` less a `Body` row.
         const PAD: f32 = 2.9;
         /// Each gap of the links that the page's `L` reached is `S` now.
@@ -2052,9 +2052,8 @@ mod allowed_classes {
             SCENE_WORDS.contains(&bare(&d.name))
         }
 
-        /// The one amount by which the view's items below `Where` move: the move of every item
-        /// that is not a scene's words, when they all share it and it lies between the block's
-        /// height and that height and `BLOCK_SPACE`.
+        /// The one amount by which the view's items below `Where` move: the block's height and
+        /// `BLOCK_SPACE`, when the move of every item that is not a scene's words is that.
         fn amount(d: &Difference, rows: &[AllowedRow]) -> Option<f32> {
             let (label, field) = block(d, rows)?;
             let height = field[1] + field[3] - label[1];
@@ -2063,9 +2062,7 @@ mod allowed_classes {
                 .filter_map(|o| down(o).map(|(by, _)| by))
                 .collect();
             let first = *moves.first()?;
-            (moves.iter().all(|by| near(*by, first))
-                && first >= height - 0.05
-                && first <= height + BLOCK_SPACE)
+            (moves.iter().all(|by| near(*by, first)) && near(first, height + BLOCK_SPACE))
                 .then_some(first)
         }
 
@@ -4526,6 +4523,23 @@ mod allowed_classes {
             (
                 with(menu("662 540 28x28 -> 662 590 28x28")),
                 "an item below by another amount",
+            ),
+            (
+                good.iter()
+                    .filter(|row| {
+                        ![
+                            "Button: More actions for Ask about the toll",
+                            "Label: Ask about the toll",
+                        ]
+                        .contains(&row.difference.name.as_str())
+                    })
+                    .cloned()
+                    .chain([
+                        menu("662 529 28x28 -> 662 579 28x28"),
+                        scene(25, "394 529 109.8x24 -> 394 581.9 109.8x24"),
+                    ])
+                    .collect(),
+                "every item below by one wrong amount",
             ),
             (
                 with(row(

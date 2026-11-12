@@ -928,4 +928,31 @@ pub fn log_from_play(d: &mut Driver<'_>) {
         d.observe("X14", said, format!("At {size:?}: {detail}"));
     }
     d.state("log-words-of-a-deleted-entry", Sizes::Default);
+    // Astra's review: a link that two entries share is not gone; that scene says no `Not found`.
+    entry(
+        d,
+        "Locations/Ashfall Keep, the old fort.md",
+        KEEP,
+        "location",
+        "",
+    );
+    d.app_mut().lookup.refresh();
+    d.settle();
+    let row = d.place_of(&format!("Open: {KEEP}"));
+    let found: Vec<_> = painted(d, "Not found")
+        .into_iter()
+        .map(|(rect, _)| rect)
+        .filter(|rect| {
+            row.is_some_and(|row| {
+                rect.top() > row.top() && rect.top() < row.top() + 2.0 * crate::design::XL
+            })
+        })
+        .collect();
+    d.observe(
+        "X14",
+        row.is_some() && found.is_empty(),
+        format!(
+            "A name that two entries share is not Not found: row {row:?}, Not found at {found:?}"
+        ),
+    );
 }

@@ -999,14 +999,15 @@ fn scene_entry(index: &ContentIndex, words: &str) -> Option<SceneEntry> {
     })
 }
 
-/// Whether a scene's words link a name and no entry of the campaign has any of them: its entry
-/// is gone. With the content not yet read, this is not known, and the caller says nothing.
+/// Whether a scene's words link a name and every one of them is missing from the campaign: its
+/// entry is gone. A name that two entries share is not gone. With the content not yet read,
+/// this is not known, and the caller says nothing.
 fn links_no_entry(index: &ContentIndex, words: &str) -> bool {
     let names = each_linked_name(words);
     !names.is_empty()
         && names
             .iter()
-            .all(|name| !matches!(index.resolve_link(name, None), crate::world::Go::Item(..)))
+            .all(|name| matches!(index.resolve_link(name, None), crate::world::Go::Missing(_)))
 }
 
 /// A scene's words that are outside its links, as `Add to Log` starts its field with them:
@@ -2117,6 +2118,12 @@ impl Sessions {
             Ok(None) => {}
             Err(error) => self.travel.block.failed(&act, error),
         }
+    }
+
+    /// A planned fight's `Edit encounter` that opened nothing: why, on the page where the DM acted.
+    pub fn encounter_not_opened(&mut self, why: String) {
+        self.notice = Some((Tone::Warning, why));
+        self.notice_session = None;
     }
 
     /// Lead ruling, round 26 (one pane, one footer): a plan group's removal result and its Undo

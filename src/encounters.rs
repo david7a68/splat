@@ -3176,32 +3176,41 @@ impl Encounters {
         }
     }
 
-    /// A planned fight's `Edit encounter` (W1-D1): that encounter, found by its ID in what the
-    /// campaign holds now, opens in the editor read from its file, and the editor's way back is
-    /// the session. The plan blocks the act while the editor holds unsaved words; a group left
-    /// open with nothing unsaved gives way, so the page shows this encounter. An encounter that
-    /// is gone opens nothing, and the page says why.
-    pub fn edit_from_plan(&mut self, id: Uuid, active: &Campaign) {
+    /// A planned fight's `Edit encounter` (W1-D1): that encounter, found by its ID, opens in the
+    /// editor read from its file at the click, and the editor's way back is the session. The plan
+    /// blocks the act while the editor holds unsaved words; a group left open with nothing
+    /// unsaved gives way, so the page shows this encounter. When the encounter is gone, or its
+    /// file now holds another encounter, nothing opens and the words say why, for the plan.
+    pub fn edit_from_plan(&mut self, id: Uuid, active: &Campaign) -> Result<(), String> {
         if let Some(reason) = self.plan_group_blocked() {
-            self.error = Some(reason.to_owned());
-            return;
+            return Err(reason.to_owned());
         }
-        let path = self.snapshot.as_ref().and_then(|snapshot| {
-            snapshot
-                .templates
-                .iter()
-                .find(|template| template.id == id)
-                .map(|template| template.path.clone())
-        });
-        let Some(path) = path else {
-            self.clear_notice();
-            self.error = Some("This encounter is no longer in the campaign.".to_owned());
-            return;
-        };
+        let gone = || "This encounter is no longer in the campaign. Open it from Encounters.";
+        let path = self
+            .snapshot
+            .as_ref()
+            .and_then(|snapshot| {
+                snapshot
+                    .templates
+                    .iter()
+                    .find(|template| template.id == id)
+                    .map(|template| template.path.clone())
+            })
+            .ok_or_else(|| gone().to_owned())?;
+        let draft = Draft::open(&active.path, &path)?;
+        if draft.id != id {
+            return Err(gone().to_owned());
+        }
+        self.clear_notice();
+        self.search.clear();
         self.group_draft = None;
         self.group_in_plan = false;
-        self.edit_path(&path, active);
-        self.from_session = self.draft.is_some();
+        self.draft = Some(draft);
+        self.from_session = true;
+        self.plan_on_save = false;
+        self.error = None;
+        self.message = None;
+        Ok(())
     }
 
     /// The file the editor holds, for the visual tests.

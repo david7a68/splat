@@ -495,4 +495,22 @@ pub fn run(d: &mut Driver<'_>) {
             && line.as_deref() == Some("5 party · 3 × Ember Cultist · Low"),
         format!("Back in the same session, the row reads the saved roster: {line:?}"),
     );
+    // Astra's review: the act names the encounter by its ID. When its file now holds another
+    // encounter (Mill Road's), the editor does not open it, and the plan says why.
+    let folder = d.root.join("campaigns/emberfall/Encounters");
+    let mill = std::fs::read_to_string(folder.join(format!("{HIGH}.md"))).unwrap();
+    std::fs::write(folder.join(format!("{LOW}.md")), &mill).unwrap();
+    d.click(&format!("More actions for {LOW}"));
+    d.click("Edit encounter");
+    const GONE: &str = "This encounter is no longer in the campaign. Open it from Encounters.";
+    d.observe(
+        "W1-D1-edit",
+        d.app().encounters.draft_path().is_none()
+            && d.page_title().as_deref() == Some("Session")
+            && d.has_containing(GONE),
+        format!(
+            "A file that now holds another encounter opens nothing, and the plan says why: {:?}",
+            d.app().encounters.draft_path()
+        ),
+    );
 }
