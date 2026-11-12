@@ -20,6 +20,7 @@ pub mod integrity;
 pub mod list_formats;
 pub mod markdown_links;
 pub mod run_continue;
+pub mod session_carry_over;
 pub mod session_plan_scenes;
 pub mod stat_formats;
 pub mod travel_checks;
@@ -16839,6 +16840,12 @@ pub mod session_plan {
                 && d.visible_text("Hobb the miller says"),
             "A new session shows what the last one left, with nothing to open",
         );
+        // F5: while the new session is prepared, Carry over ends the line.
+        d.observe(
+            "T18.3-offered",
+            d.in_view("Carry over"),
+            "A new session with no event and no run offers Carry over",
+        );
 
         // T12.1: from the plan to the fight, and back to the plan.
         show_plan(d);
@@ -16943,6 +16950,12 @@ pub mod session_plan {
         close_run(d);
         d.click(NAV_SESSIONS);
         show_plan(d);
+        // F5: carry-over is a prep act. Once the session has a fight, the line is as before.
+        d.observe(
+            "T18.3-play",
+            d.has("Last time:") && !d.has("Carry over"),
+            "During play the Last time line has no Carry over",
+        );
         d.click(&format!("More actions for {FIRST}"));
         assert!(d.in_view("Remove this event"));
         d.click("Remove this event");
