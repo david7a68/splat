@@ -658,6 +658,12 @@ impl WorldPage {
                     .and_then(|id| index.position(id))
                     .map(|position| &index.items[position])
                 else {
+                    // The result sits in the pane's footer, as it does below a note (round 26
+                    // FF1), so the empty state's advice keeps its place.
+                    let lines: Vec<_> = self.result(None).iter().map(|r| r.line()).collect();
+                    if super::draw_footer(ui, "world_footer", &lines).is_some() {
+                        self.undo_discard();
+                    }
                     design::empty_state(
                         ui,
                         icons::WORLD,
@@ -665,33 +671,30 @@ impl WorldPage {
                         "Choose one from the list, or make a new one.",
                         |_| {},
                     );
-                    // With no file line, the result sits below the empty state's words, near
-                    // the height it has below a note's file line.
-                    if let Some(result) = self.result(None)
-                        && super::page_result(ui, &result)
-                    {
-                        self.undo_discard();
-                    }
                     return;
                 };
+                // A later result on the repaired note replaces `Note repaired.`.
+                if self.repaired == Some(item.entry.id)
+                    && self.reader.has_change_result(campaign, &item.entry.path)
+                {
+                    self.repaired = None;
+                }
+                // Every result, reason and Undo of the open note sits in the pane's footer,
+                // pinned below the reader, so none of them moves the note (round 26).
+                let page = self.result(Some(item.entry.id));
+                let lines = self.reader.footer_lines(item, index, Some(campaign), page.as_ref());
+                match super::draw_footer(ui, "world_footer", &lines) {
+                    Some(super::FooterAct::Page) => self.undo_discard(),
+                    Some(act) => nav = self.reader.footer_act(act, item, campaign),
+                    None => {}
+                }
                 // As in Library, a wide table may use the pane; prose keeps its measure.
                 crate::markdown_view::with_wide_tables(ui, |ui| {
                     egui::ScrollArea::vertical()
                         .id_salt(("world_reader", item.entry.id))
                         .auto_shrink([false, false])
                         .show(ui, |ui| {
-                            // A later result on the repaired note replaces `Note repaired.`.
-                            if self.repaired == Some(item.entry.id)
-                                && self.reader.has_change_result(campaign, &item.entry.path)
-                            {
-                                self.repaired = None;
-                            }
-                            self.reader.page_result = self.result(Some(item.entry.id));
                             let read = self.reader.read(ui, item, index, Some(campaign));
-                            self.reader.page_result = None;
-                            if std::mem::take(&mut self.reader.page_result_undo) {
-                                self.undo_discard();
-                            }
                             nav = nav.take().or(read);
                         });
                 });

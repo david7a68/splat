@@ -1401,13 +1401,6 @@ impl ChangeKind {
         }
     }
 
-    /// A relationship row shows its own change when there is room beside it.
-    fn has_row(self) -> bool {
-        matches!(
-            self,
-            Self::Place | Self::PartOf | Self::StatBlock | Self::Status
-        )
-    }
 }
 
 impl Change {
@@ -1869,11 +1862,6 @@ pub struct Reader {
     /// The session being played and the day, as a Log line begins: `[[Session 1]], Day 1`.
     /// With no session, a change writes no Log line.
     pub log_as: Option<String>,
-    /// The World page's result for this draw. It sits where every World result sits: below the
-    /// file line, so the title never moves.
-    pub page_result: Option<PageResult>,
-    /// The page result's Undo was pressed in the last draw.
-    pub page_result_undo: bool,
 }
 
 /// A result that the World page owns, drawn by the reader in the one place for results.
@@ -1889,15 +1877,132 @@ pub enum PageResult {
 /// already held the changes, a discarded draft) keeps the info tone.
 pub(crate) const CHANGED: Tone = Tone::Success;
 
-/// The one message form for a World result. Returns true when its Undo is pressed.
-pub(crate) fn page_result(ui: &mut egui::Ui, result: &PageResult) -> bool {
-    match result {
-        PageResult::Repaired => {
-            design::message(ui, CHANGED, "Note repaired.");
-            false
+impl PageResult {
+    /// The page's result as a footer line. Its Undo is the page's (`FooterAct::Page`).
+    pub(crate) fn line(&self) -> FooterLine {
+        match self {
+            Self::Repaired => {
+                FooterLine::new(FooterRank::Notice, CHANGED, "Note repaired.", FooterKind::Plain)
+            }
+            Self::Discarded(name) => FooterLine::discarded(name, FooterAct::Page),
         }
-        PageResult::Discarded(name) => design::draft_discarded(ui, name),
     }
+}
+
+/// Where a footer line stands: a result with a live Undo, a reason, or another notice.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum FooterRank {
+    Undo,
+    Reason,
+    Notice,
+}
+
+/// What a footer line's action does. The pane takes it after the footer draws.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum FooterAct {
+    /// Undo the value, edit-form or row change (`Reader::undo`).
+    Change,
+    FileRename,
+    Name,
+    Identity,
+    /// Bring back the edit draft that Discard let go.
+    Discarded,
+    /// The page result's Undo: the page owns it.
+    Page,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum FooterKind {
+    Plain,
+    Undo {
+        label: &'static str,
+        act: FooterAct,
+    },
+    /// `<name> draft discarded.` with `Undo discard`, named for its draft.
+    Discarded { name: String, act: FooterAct },
+    /// An action's error, with `Edit in Obsidian` for this file when an editor can open it.
+    Error { editor: Option<std::path::PathBuf> },
+}
+
+/// One World or Lookup message for its pane's footer (round 26): a result, reason or notice
+/// that comes and goes. It sits below the pane's scroll area, so it never moves the note.
+#[derive(Clone)]
+pub(crate) struct FooterLine {
+    pub rank: FooterRank,
+    pub tone: Tone,
+    pub words: String,
+    pub kind: FooterKind,
+}
+
+impl FooterLine {
+    pub(crate) fn new(rank: FooterRank, tone: Tone, words: &str, kind: FooterKind) -> Self {
+        Self {
+            rank,
+            tone,
+            words: words.to_owned(),
+            kind,
+        }
+    }
+
+    pub(super) fn discarded(name: &str, act: FooterAct) -> Self {
+        Self::new(
+            FooterRank::Undo,
+            Tone::Info,
+            &format!("{name} draft discarded."),
+            FooterKind::Discarded {
+                name: name.to_owned(),
+                act,
+            },
+        )
+    }
+
+    fn draw(&self, ui: &mut egui::Ui) -> Option<FooterAct> {
+        match &self.kind {
+            FooterKind::Plain => {
+                design::message(ui, self.tone, &self.words);
+                None
+            }
+            FooterKind::Undo { label, act } => {
+                design::undo_message(ui, self.tone, &self.words, label).then_some(*act)
+            }
+            FooterKind::Discarded { name, act } => {
+                design::draft_discarded(ui, name).then_some(*act)
+            }
+            FooterKind::Error { editor } => {
+                ui.horizontal_wrapped(|ui| {
+                    design::message(ui, self.tone, &self.words);
+                    if let Some(path) = editor
+                        && design::link(ui, "Edit in Obsidian").clicked()
+                    {
+                        ui.ctx()
+                            .open_url(egui::OpenUrl::new_tab(obsidian_url(path)));
+                    }
+                });
+                None
+            }
+        }
+    }
+}
+
+/// Draw a pane's footer lines, pinned below what the pane draws next, in the footer's order:
+/// results with a live Undo, then reasons, then notices. `id` is the pane instance's own.
+/// Returns the action pressed.
+pub(crate) fn draw_footer(
+    ui: &mut egui::Ui,
+    id: impl std::hash::Hash,
+    lines: &[FooterLine],
+) -> Option<FooterAct> {
+    let mut lines: Vec<_> = lines.iter().collect();
+    lines.sort_by_key(|line| line.rank);
+    let pressed = std::cell::Cell::new(None);
+    // Until the shared footer lands, the lines draw in place, in order.
+    let _ = id;
+    for line in lines {
+        if let Some(act) = line.draw(ui) {
+            pressed.set(Some(act));
+        }
+    }
+    pressed.get()
 }
 
 impl Reader {
@@ -1964,13 +2069,9 @@ impl Reader {
     }
 
     /// Draw any item: a plain note, a world entry, or an entry of another kind.
-    pub fn read(
-        &mut self,
-        ui: &mut egui::Ui,
-        item: &Item,
-        index: &ContentIndex,
-        campaign: Option<&Campaign>,
-    ) -> Option<Nav> {
+    /// A newly opened note starts with its own state: the last note's change, kept form,
+    /// error and pickers end here. Both the footer and the body call it first.
+    fn prepare(&mut self, item: &Item) {
         if self.showing != Some(item.entry.id) {
             self.undo = None;
             self.kept = None;
@@ -1993,6 +2094,16 @@ impl Reader {
             self.picker = None;
             self.error = None;
         }
+    }
+
+    pub fn read(
+        &mut self,
+        ui: &mut egui::Ui,
+        item: &Item,
+        index: &ContentIndex,
+        campaign: Option<&Campaign>,
+    ) -> Option<Nav> {
+        self.prepare(item);
         if self.undo.as_ref().is_some_and(|change| {
             campaign.is_none_or(|campaign| {
                 fs::read_to_string(campaign.path.join(&change.path))
@@ -2021,14 +2132,6 @@ impl Reader {
         // A request lasts one draw, so it cannot reach a heading on another page.
         crate::markdown_view::want_heading(ui.ctx(), None);
         go.and_then(|go| self.settle(go))
-    }
-
-    fn draw_page_result(&mut self, ui: &mut egui::Ui) {
-        if let Some(result) = self.page_result.take()
-            && page_result(ui, &result)
-        {
-            self.page_result_undo = true;
-        }
     }
 
     fn draw(
@@ -2137,38 +2240,17 @@ impl Reader {
             .as_ref()
             .filter(|fault| !editing && fault.id == id)
             .is_some_and(|fault| fault.unread.is_some());
-        // A refused Part of write shows as the unread warning below the file line.
-        if let Some(error) = &self.error
-            && !(self.group_error && has_unread)
-        {
-            ui.horizontal_wrapped(|ui| {
-                design::message(ui, Tone::Error, error);
-                // A file that Splat cannot read, no editor can open either.
-                if self.group_error
-                    && !self.group_error_unread_file
-                    && let Some(campaign) = campaign
-                    && design::link(ui, "Edit in Obsidian").clicked()
-                {
-                    ui.ctx().open_url(egui::OpenUrl::new_tab(obsidian_url(
-                        &campaign.path.join(&item.entry.path),
-                    )));
-                }
-            });
-        }
+        // The error, the results and their Undo are in the pane's footer (`footer_lines`).
+        let _ = has_unread;
         if let Some(campaign) = campaign
             && editing
         {
-            // The form has no file line, so the result sits below the title.
-            self.draw_page_result(ui);
             if self.has_lost_edits(index) {
                 design::reader::measure(ui, |ui| self.lost_edits(ui, index));
             }
             return self.edit_form(ui, item, index, campaign);
         }
 
-        if let Some(campaign) = campaign {
-            self.discarded_notice(ui, campaign, id);
-        }
         let file_line = !self.compact
             && (item.is_world_note() || item.entry.kind == "world")
             && item.is_private();
@@ -2323,62 +2405,6 @@ impl Reader {
                             Err(error) => self.error = Some(error),
                         }
                     }
-                }
-                if let Some(rename) = &self.file_undo
-                    && rename.shows_on(campaign, &item.entry.path)
-                    && design::undo_message(ui, CHANGED, &rename.message(), "Undo file rename")
-                {
-                    match rename.undo(campaign) {
-                        Ok(()) => {
-                            self.file_undo = None;
-                            return Some(Go::Reload(item.entry.id));
-                        }
-                        Err(error) => self.error = Some(error),
-                    }
-                }
-                if let Some(change) = &self.name_undo
-                    && change.shows_on(campaign, &item.entry.path)
-                    && design::undo_message(ui, CHANGED, &change.word, "Undo name change")
-                {
-                    match change.undo(campaign) {
-                        Ok(()) => {
-                            self.name_undo = None;
-                            return Some(Go::Reload(item.entry.id));
-                        }
-                        Err(error) => self.error = Some(error),
-                    }
-                }
-            }
-            if self
-                .identity_undo
-                .as_ref()
-                .is_some_and(|(id, _)| *id != campaign.id)
-            {
-                self.identity_undo = None;
-            }
-            // Every World result sits here, where the separate-note result sits.
-            self.draw_page_result(ui);
-            // The edit form's save result names no row value, so it is a page result too.
-            if edit::editable(item, index) {
-                self.kept_notice(ui, item);
-                if let Some(change) = &self.undo
-                    && change.shows_on(campaign, &item.entry.path)
-                    && change.kind == ChangeKind::Edit
-                    && Self::change_notice(ui, &change.word, change.kind)
-                {
-                    return self.undo_change(campaign, item.entry.id);
-                }
-            }
-            if let Some((_, undo)) = &self.identity_undo
-                && design::undo_message(ui, CHANGED, undo.message(), undo.identity_undo_label())
-            {
-                match undo.undo(campaign) {
-                    Ok(()) => {
-                        let id = note_id(&undo.path);
-                        self.identity_undo = None;
-                        return Some(Go::Reload(id));
-                    }
-                    Err(error) => self.error = Some(error),
                 }
             }
             if let Some(paths) = index.duplicate_world.get(&item.entry.path) {
@@ -3000,15 +3026,14 @@ impl Reader {
         label: &str,
         width: f32,
         value: impl FnOnce(&mut egui::Ui),
-        notice: Option<(&str, ChangeKind)>,
         blocked: Option<&str>,
-    ) -> (bool, bool) {
+    ) -> bool {
         let name = format!("Change {label}");
         let change = Action::quiet("Change")
             .density(design::Density::Scan)
             .name(&name)
             .blocked(blocked);
-        Self::value_row(ui, label, width, value, notice, Some(change))
+        Self::value_row(ui, label, width, value, Some(change))
     }
 
     /// A duplicate note's values, read only until its repair is done. Each reads as every
@@ -3093,7 +3118,6 @@ impl Reader {
                         }
                     },
                     None,
-                    None,
                 );
             }
         });
@@ -3107,9 +3131,8 @@ impl Reader {
         label: &str,
         width: f32,
         value: impl FnOnce(&mut egui::Ui),
-        notice: Option<(&str, ChangeKind)>,
         change: Option<Action<'_>>,
-    ) -> (bool, bool) {
+    ) -> bool {
         let stacked = Self::stacked(ui);
         let change_width = change
             .as_ref()
@@ -3120,8 +3143,7 @@ impl Reader {
             ui.add_space(design::S);
             ui.label(Type::Small.rich(ui, label).color(colors().muted));
         }
-        let mut undo = false;
-        let clicked = ui
+        ui
             .horizontal(|ui| {
                 ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
                     if !stacked {
@@ -3149,74 +3171,13 @@ impl Reader {
                         return false;
                     };
                     ui.add_space((design::L - ui.spacing().item_spacing.x).max(0.0));
-                    let clicked = change.show(ui).clicked();
-                    if let Some((word, kind)) = notice {
-                        ui.allocate_ui_with_layout(
-                            egui::vec2(ui.available_width(), Density::Scan.control()),
-                            egui::Layout::left_to_right(egui::Align::Center),
-                            |ui| {
-                                undo = Self::change_notice(ui, word, kind);
-                            },
-                        );
-                    }
-                    clicked
+                    change.show(ui).clicked()
                 })
                 .inner
             })
-            .inner;
-        (clicked, undo)
+            .inner
     }
 
-    fn notice_fits(ui: &egui::Ui, value_width: f32, word: &str, kind: ChangeKind) -> bool {
-        // A stacked label stands above its row, so the row has no label column.
-        let label = if Self::stacked(ui) {
-            0.0
-        } else {
-            design::XXL * 3.0 + design::S
-        };
-        ui.available_width()
-            >= label
-                + value_width
-                + Action::quiet("Change")
-                    .density(Density::Scan)
-                    .natural_width(ui)
-                // The `L` gap after Change, as `value_row` draws it.
-                + design::L
-                + design::number_width(ui, word, &Type::Body.font(ui))
-                + design::S
-                + design::HAIRLINE_WIDTH
-                // The icon of `CHANGED`, the tone of the notice, and the `XS` after it.
-                + design::number_width(ui, design::icons::SUCCESS, &Type::Body.font(ui))
-                + design::XS
-                + Action::quiet(kind.undo_label())
-                    .icon(design::icons::UNDO)
-                    .density(Density::Read)
-                    .natural_width(ui)
-                + ui.spacing().item_spacing.x * 6.0
-    }
-
-    fn change_notice(ui: &mut egui::Ui, word: &str, kind: ChangeKind) -> bool {
-        design::undo_message(ui, CHANGED, word, kind.undo_label())
-    }
-
-    /// The change to show beside this row, when it is this row's and there is room.
-    fn row_notice(
-        &self,
-        ui: &egui::Ui,
-        campaign: &Campaign,
-        item: &Item,
-        kind: ChangeKind,
-        value_width: f32,
-    ) -> Option<(String, ChangeKind)> {
-        self.undo
-            .as_ref()
-            .filter(|change| {
-                change.shows_on(campaign, &item.entry.path)
-                    && change.kind == kind
-                    && Self::notice_fits(ui, value_width, &change.word, kind)
-            })
-            .map(|change| (change.word.clone(), kind))
-    }
 
     /// A change result on this note. It is newer than the page's repair result, so it takes
     /// the one place for results.
@@ -3236,15 +3197,137 @@ impl Reader {
         self.kept = None;
     }
 
-    /// The form closed because the note already held every change. Nothing to undo.
-    fn kept_notice(&self, ui: &mut egui::Ui, item: &Item) {
-        if self
-            .kept
+    /// This reader's messages for the open note, for its pane's footer (round 26): the error
+    /// of the last action, then every result with its Undo. Each keeps its owner and its end
+    /// event: a change, a kept form and an error belong to the open note and end when another
+    /// note opens (`prepare`), a later change replaces them, and Undo ends them; a rename,
+    /// a name change and a separate note end at their Undo or the next of their kind; the
+    /// page's result is the page's (`page`). Draw them with `draw_footer`, before the
+    /// body, and take its action with `footer_act`.
+    pub(crate) fn footer_lines(
+        &mut self,
+        item: &Item,
+        index: &ContentIndex,
+        campaign: Option<&Campaign>,
+        page: Option<&PageResult>,
+    ) -> Vec<FooterLine> {
+        self.prepare(item);
+        let id = item.entry.id;
+        let editing = campaign.is_some_and(|campaign| self.editing(id, campaign));
+        let mut lines = Vec::new();
+        let has_unread = self
+            .group_fault
             .as_ref()
-            .is_some_and(|(path, _)| *path == item.entry.path)
+            .filter(|fault| !editing && fault.id == id)
+            .is_some_and(|fault| fault.unread.is_some());
+        // A refused Part of write shows as the unread warning below the file line instead.
+        if let Some(error) = &self.error
+            && !(self.group_error && has_unread)
         {
-            design::message(ui, Tone::Info, edit::ALREADY_SAVED);
+            // A file that Splat cannot read, no editor can open either.
+            let editor = campaign
+                .filter(|_| self.group_error && !self.group_error_unread_file)
+                .map(|campaign| campaign.path.join(&item.entry.path));
+            lines.push(FooterLine::new(FooterRank::Reason, Tone::Error, error, FooterKind::Error { editor }));
         }
+        let Some(campaign) = campaign else {
+            return lines;
+        };
+        if self
+            .identity_undo
+            .as_ref()
+            .is_some_and(|(owner, _)| *owner != campaign.id)
+        {
+            self.identity_undo = None;
+        }
+        if editing {
+            lines.extend(page.map(|page| page.line()));
+            return lines;
+        }
+        let undo = |words: &str, label: &'static str, act| {
+            FooterLine::new(FooterRank::Undo, CHANGED, words, FooterKind::Undo { label, act })
+        };
+        if let Some(change) = self.undo.as_ref().filter(|change| change.shows_on(campaign, &item.entry.path)) {
+            lines.push(undo(&change.word, change.kind.undo_label(), FooterAct::Change));
+        }
+        lines.extend(self.discarded_line(campaign, id));
+        if item.entry.kind == "world" && !index.duplicate_world.contains_key(&item.entry.path) {
+            if let Some(rename) = self.file_undo.as_ref().filter(|rename| rename.shows_on(campaign, &item.entry.path)) {
+                lines.push(undo(&rename.message(), "Undo file rename", FooterAct::FileRename));
+            }
+            if let Some(change) = self.name_undo.as_ref().filter(|change| change.shows_on(campaign, &item.entry.path)) {
+                lines.push(undo(&change.word, "Undo name change", FooterAct::Name));
+            }
+        }
+        if let Some((_, change)) = &self.identity_undo {
+            lines.push(undo(change.message(), change.identity_undo_label(), FooterAct::Identity));
+        }
+        lines.extend(page.map(|page| page.line()));
+        // The form closed because the note already held every change. Nothing to undo.
+        if edit::editable(item, index)
+            && self
+                .kept
+                .as_ref()
+                .is_some_and(|(path, _)| *path == item.entry.path)
+        {
+            lines.push(FooterLine::new(FooterRank::Notice, Tone::Info, edit::ALREADY_SAVED, FooterKind::Plain));
+        }
+        lines
+    }
+
+    /// Take a footer line's action on the open note. `FooterAct::Page` is the page's.
+    pub(crate) fn footer_act(
+        &mut self,
+        act: FooterAct,
+        item: &Item,
+        campaign: &Campaign,
+    ) -> Option<Nav> {
+        let go = match act {
+            FooterAct::Change => self.undo_change(campaign, item.entry.id),
+            FooterAct::FileRename => match self.file_undo.as_ref()?.undo(campaign) {
+                Ok(()) => {
+                    self.file_undo = None;
+                    Some(Go::Reload(item.entry.id))
+                }
+                Err(error) => {
+                    self.error = Some(error);
+                    None
+                }
+            },
+            FooterAct::Name => match self.name_undo.as_ref()?.undo(campaign) {
+                Ok(()) => {
+                    self.name_undo = None;
+                    Some(Go::Reload(item.entry.id))
+                }
+                Err(error) => {
+                    self.error = Some(error);
+                    None
+                }
+            },
+            FooterAct::Identity => {
+                let (_, undo) = self.identity_undo.as_ref()?;
+                match undo.undo(campaign) {
+                    Ok(()) => {
+                        let id = note_id(&undo.path);
+                        self.identity_undo = None;
+                        Some(Go::Reload(id))
+                    }
+                    Err(error) => {
+                        self.error = Some(error);
+                        None
+                    }
+                }
+            }
+            FooterAct::Discarded => {
+                if let Some((id, draft)) = self.discarded.take() {
+                    self.edits.insert(id, draft);
+                }
+                None
+            }
+            // The page takes its own result's Undo.
+            FooterAct::Page => None,
+        };
+        go.and_then(|go| self.settle(go))
     }
 
     fn undo_change(&mut self, campaign: &Campaign, id: Uuid) -> Option<Go> {
@@ -3282,9 +3365,8 @@ impl Reader {
             if key != "creature" && reader_field(&item.entry, key).is_none_or(Value::is_null) {
                 continue;
             }
-            let notice = self.row_notice(ui, campaign, item, ChangeKind::of_key(key), value_width);
             ui.push_id(key, |ui| {
-                let (changed, undo) = Self::relationship_row(
+                let changed = Self::relationship_row(
                     ui,
                     label,
                     value_width,
@@ -3309,7 +3391,6 @@ impl Reader {
                             ui.label(Type::Small.rich(ui, "not set").color(colors().muted));
                         }
                     },
-                    notice.as_ref().map(|(word, kind)| (word.as_str(), *kind)),
                     None,
                 );
                 if changed {
@@ -3318,9 +3399,6 @@ impl Reader {
                         focus: true,
                         ..Default::default()
                     });
-                }
-                if undo {
-                    go = self.undo_change(campaign, item.entry.id);
                 }
             });
             if key == "in" && self.place_choices_open {
@@ -3333,12 +3411,11 @@ impl Reader {
             }
         }
         let groups = index.groups_of(&item.entry);
-        let notice = self.row_notice(ui, campaign, item, ChangeKind::PartOf, value_width);
         // An unread list keeps its row: `not read`, with Change blocked by the reason.
         let unread = self.unread_groups(item.entry.id);
         if !groups.is_empty() || unread.is_some() {
             ui.push_id("part_of", |ui| {
-                let (changed, undo) = Self::relationship_row(
+                let changed = Self::relationship_row(
                     ui,
                     "Part of",
                     value_width,
@@ -3364,7 +3441,6 @@ impl Reader {
                             }
                         }
                     },
-                    notice.as_ref().map(|(word, kind)| (word.as_str(), *kind)),
                     unread.as_deref(),
                 );
                 if changed {
@@ -3373,9 +3449,6 @@ impl Reader {
                         focus: true,
                         ..Default::default()
                     });
-                }
-                if undo {
-                    go = self.undo_change(campaign, item.entry.id);
                 }
             });
         }
@@ -3577,13 +3650,6 @@ impl Reader {
                     }
                 }
             }
-            if let Some(change) = &self.undo
-                && change.shows_on(campaign, &item.entry.path)
-                && change.kind != ChangeKind::Edit
-                && Self::change_notice(ui, &change.word, change.kind)
-            {
-                return self.undo_change(campaign, item.entry.id);
-            }
             if index.place_of(item.entry.id).is_none()
                 && index.place_choices(item.entry.id).is_empty()
                 && let Some(place) = reader_field(&item.entry, "in").and_then(Value::as_str)
@@ -3606,8 +3672,7 @@ impl Reader {
             {
                 let value = status(&item.entry);
                 let unread = status_unread(&item.entry);
-                let notice = self.row_notice(ui, campaign, item, ChangeKind::Status, value_width);
-                let (changed, undo) = Self::relationship_row(
+                let changed = Self::relationship_row(
                     ui,
                     "Status",
                     value_width,
@@ -3623,12 +3688,8 @@ impl Reader {
                         };
                         ui.label(role.rich(ui, words).color(color));
                     },
-                    notice.as_ref().map(|(word, kind)| (word.as_str(), *kind)),
                     None,
                 );
-                if undo {
-                    return self.undo_change(campaign, item.entry.id);
-                }
                 if changed {
                     self.status_editing = true;
                 }
@@ -3663,26 +3724,6 @@ impl Reader {
                     }
                 }
             }
-        }
-        if !self.compact
-            && let Some(change) = &self.undo
-            && change.shows_on(campaign, &item.entry.path)
-            // A change that names a row value shows beside its row when it fits, and here,
-            // below the row block, when it does not. Every other result is a page result.
-            && change.kind.has_row()
-            && (!Self::notice_fits(
-                ui,
-                self.relationship_value_width(ui, item, index),
-                &change.word,
-                change.kind,
-            ) || (change.kind == ChangeKind::Status && (self.status_editing || status(&item.entry).is_empty()))
-                || (change.kind == ChangeKind::Place && reader_field(&item.entry, "in").is_none())
-                || (change.kind == ChangeKind::PartOf && index.groups_of(&item.entry).is_empty()))
-            && ui
-                .horizontal_wrapped(|ui| Self::change_notice(ui, &change.word, change.kind))
-                .inner
-        {
-            return self.undo_change(campaign, item.entry.id);
         }
         if !fights(&item.entry) {
             return None;
@@ -4394,11 +4435,16 @@ mod tests {
         ctx.enable_accesskit();
         let output = ctx.run(Default::default(), |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
-                Reader::change_notice(
-                    ui,
+                let line = FooterLine::new(
+                    FooterRank::Undo,
+                    CHANGED,
                     "In set to North Gate. It was Watch House.",
-                    ChangeKind::Place,
+                    FooterKind::Undo {
+                        label: ChangeKind::Place.undo_label(),
+                        act: FooterAct::Change,
+                    },
                 );
+                draw_footer(ui, "test_footer", &[line]);
             });
         });
         let nodes = output.platform_output.accesskit_update.unwrap().nodes;
@@ -4737,7 +4783,6 @@ mod tests {
                                     |ui| {
                                         ui.label(Type::Small.rich(ui, value));
                                     },
-                                    None,
                                     None,
                                 );
                             }
