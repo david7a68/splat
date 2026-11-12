@@ -8546,6 +8546,8 @@ mod tests {
         setup.history.push(setup.state.clone());
         setup.history_labels.push(format!("initiative for {name}"));
         setup.history_from_sheet.push(false);
+        setup.lookup_open = true;
+        setup.hide_panel = true;
         let full = format!("Undo: initiative for {name}");
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(454.0, 640.0))

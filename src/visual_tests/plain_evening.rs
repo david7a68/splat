@@ -2090,7 +2090,7 @@ mod allowed_classes {
         /// its words and shows more, paired in the same view.
         pub(super) fn name_form(d: &Difference, rows: &[AllowedRow]) -> bool {
             let Some((own, place, new)) = form(d) else {
-                return false;
+                return paired_away(d, rows);
             };
             view_narrowing(d, rows).is_some()
                 && rows.iter().any(|row| {
@@ -2105,6 +2105,27 @@ mod allowed_classes {
                                     extends(other, own)
                                 }
                         })
+                })
+        }
+
+        /// The comparison pairs the heading's old form with the same words elsewhere in the
+        /// view (the dock's selected name), as `resized` away from the header's line; that
+        /// item, still in its place, then reads as `gone` there. Only with such a pair, whose
+        /// header half is the name's old form.
+        fn paired_away(d: &Difference, rows: &[AllowedRow]) -> bool {
+            let Some(was) = rect_of(&d.detail, "was ") else {
+                return false;
+            };
+            d.change == "gone"
+                && d.name.ends_with('…')
+                && was[1] >= HEADER
+                && rows.iter().any(|row| {
+                    let o = &row.difference;
+                    same_view(o, d)
+                        && o.change == "resized"
+                        && (&o.what, &o.name) == (&d.what, &d.name)
+                        && before_after(o).is_some_and(|(_, after)| after == was)
+                        && name_form(o, rows)
                 })
         }
 
@@ -4778,6 +4799,7 @@ mod allowed_classes {
             detail: "appeared - Close run | appeared - N".into(),
             ..act.clone()
         };
+        let dock_gone = view("text", "gone", "Ashfang,…", "was 156 570 69.2x18");
         let lone_digit = Difference {
             detail: "appeared - 1".into(),
             ..act.clone()
@@ -4788,6 +4810,7 @@ mod allowed_classes {
             (r3b(25, &down), header.clone()),
             (r3b(25, &row_below), header.clone()),
             (r3b(25, &shorter), header.clone()),
+            (r3b(25, &dock_gone), header.clone()),
             (r3b(25, &add), vec![r3b(25, &add), r3b(25, &next)]),
             (
                 r3b(26, &other_digit),
