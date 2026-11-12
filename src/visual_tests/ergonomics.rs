@@ -89,7 +89,11 @@ pub fn compare_app_vs_chrome(
     (worse, stale)
 }
 
-pub const CHECKS: [&str; 12] = [
+/// Help is `design::help`: `Small` muted words that wrap at `READER_MEASURE`. A muted `Small`
+/// text wider than that measure is help that skipped it.
+pub const HELP_MEASURE: &str = "help-measure";
+
+pub const CHECKS: [&str; 13] = [
     "target-size",
     "accessible-name",
     "in-viewport",
@@ -102,6 +106,7 @@ pub const CHECKS: [&str; 12] = [
     APP_VS_CHROME,
     "workflow",
     "missing-glyph",
+    HELP_MEASURE,
 ];
 
 #[derive(Clone, Debug, Serialize)]
@@ -698,6 +703,75 @@ pub fn missing_glyphs(
             role: "Text".into(),
             rect: [rect.left(), rect.top(), rect.width(), rect.height()],
             detail: format!("No glyph for U+{:04X} in {words:?}", character as u32),
+        })
+        .collect()
+}
+
+/// Every painted text that is all muted `Small` words and wider than `READER_MEASURE`: help that
+/// does not wrap at the reader's measure (`design::help`). A text with any other size, family
+/// or colour in it (a status word, a link, a value) is not help.
+pub fn wide_help(
+    ctx: &egui::Context,
+    shapes: &[egui::epaint::ClippedShape],
+    scenario: &str,
+    state: &str,
+    window: &str,
+) -> Vec<Violation> {
+    use crate::design::{READER_MEASURE, Type, colors};
+    let small = ctx.style().text_styles.get(&Type::Small.style()).cloned();
+    let muted = colors().muted;
+    let help = |text: &egui::epaint::TextShape| {
+        let sections = &text.galley.job.sections;
+        !sections.is_empty()
+            && sections.iter().all(|section| {
+                let color = if section.format.color == egui::Color32::PLACEHOLDER {
+                    text.fallback_color
+                } else {
+                    section.format.color
+                };
+                Some(&section.format.font_id) == small.as_ref() && color == muted
+            })
+    };
+    fn visit(
+        shape: &egui::Shape,
+        clip: egui::Rect,
+        help: &dyn Fn(&egui::epaint::TextShape) -> bool,
+        found: &mut Vec<(String, egui::Rect)>,
+    ) {
+        match shape {
+            egui::Shape::Vec(shapes) => {
+                for shape in shapes {
+                    visit(shape, clip, help, found);
+                }
+            }
+            egui::Shape::Text(text)
+                if text.visual_bounding_rect().intersects(clip)
+                    && text.visual_bounding_rect().width() > READER_MEASURE + OVERLAP_TOLERANCE
+                    && help(text) =>
+            {
+                found.push((text.galley.job.text.clone(), text.visual_bounding_rect()));
+            }
+            _ => {}
+        }
+    }
+    let mut found = Vec::new();
+    for shape in shapes {
+        visit(&shape.shape, shape.clip_rect, &help, &mut found);
+    }
+    found
+        .into_iter()
+        .map(|(words, rect)| Violation {
+            check: HELP_MEASURE.into(),
+            scenario: scenario.into(),
+            state: state.into(),
+            window: window.into(),
+            node: words.chars().take(40).collect(),
+            role: "Text".into(),
+            rect: [rect.left(), rect.top(), rect.width(), rect.height()],
+            detail: format!(
+                "Muted Small words {:.0} wide, past the {READER_MEASURE:.0} reader measure. Use design::help: {words}",
+                rect.width()
+            ),
         })
         .collect()
 }
@@ -1363,6 +1437,48 @@ mod tests {
         assert_eq!(found.len(), 1, "{found:?}");
         assert_eq!(found[0].check, "missing-glyph");
         assert!(found[0].detail.contains("U+0378"));
+    }
+
+    /// A muted `Small` label 560 px wide fails; the same words through `design::help` wrap at
+    /// the reader measure and pass; muted `Body` words and a `Small` status colour are not help.
+    #[test]
+    fn help_measure_fails_on_a_wide_muted_small_label() {
+        use crate::design::{Type, colors};
+        let words = "Splat fills the template with the session’s name, its date and its number. ";
+        let words = words.repeat(4);
+        let mut harness = Harness::builder()
+            .with_size(egui::vec2(1200.0, 600.0))
+            .build_ui(move |ui| {
+                // The fault: muted Small words in a 560 px scope, past the measure.
+                ui.scope(|ui| {
+                    ui.set_max_width(560.0);
+                    ui.add(
+                        egui::Label::new(Type::Small.rich(ui, &words).color(colors().muted)).wrap(),
+                    );
+                });
+                crate::design::help(ui, &words);
+                ui.add(egui::Label::new(
+                    Type::Body.rich(ui, &words).color(colors().muted),
+                ));
+                ui.add(egui::Label::new(
+                    Type::Small.rich(ui, &words).color(colors().result.warning),
+                ));
+            });
+        crate::design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        let found = wide_help(
+            &harness.ctx,
+            &harness.output().shapes,
+            "seeded",
+            "state",
+            "1200x600",
+        );
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].check, HELP_MEASURE);
+        assert!(
+            found[0].rect[2] > 488.0 + OVERLAP_TOLERANCE && found[0].rect[2] <= 560.0,
+            "the 560 px label is the one found: {found:?}"
+        );
     }
 
     /// Every check can fail. A check that is 0 everywhere looks the same as a broken one.

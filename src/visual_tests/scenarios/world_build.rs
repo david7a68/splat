@@ -4587,10 +4587,17 @@ pub fn package_rename(d: &mut Driver<'_>) {
     let b_result_shown = d.has_containing(&format!("Links now say “{LAMP}”."));
     let b_result_alone = !d.has_containing("Links now say “Ash Wolf”");
     let b_with_result = editor_below_read(d);
-    // Astra re-check 2: B's long result scrolls by keyboard and by wheel, and its Undo keeps
-    // clear of every scroll bar, splitter and other target at 960, 1200 and 1920.
+    // Astra re-check 2: B's long result is reached by keyboard and by wheel, and its Undo keeps
+    // clear of every scroll bar, splitter and other target at 960, 1200 and 1920. Round 26: the
+    // message footer is as tall as what it holds, so a result that fits needs no scroll; it must
+    // still be reached, with its Undo, at each size.
     let b_message = format!("Links now say “{LAMP}”.");
-    let (tabbed, keyed, wheeled, ring) = fixed_part_scrolls(d, &b_message);
+    let (tabbed, _, _, ring) = fixed_part_scrolls(d, &b_message);
+    let reached = space_reaches(d, &b_message, Some("Undo link update"));
+    let (keyed, wheeled) = (
+        reached.iter().all(|(keyboard, _)| *keyboard),
+        reached.iter().all(|(_, pointer)| *pointer),
+    );
     let undo_clear = [SMALL, DEFAULT, LARGE].map(|size| {
         d.at_size(size, |d| {
             let lanes = d.chrome_lanes();
@@ -4609,7 +4616,7 @@ pub fn package_rename(d: &mut Driver<'_>) {
         "iter-24-L-part-keyboard-result",
         tabbed && keyed && wheeled && undo_clear.iter().all(|clear| *clear) && ring.iter().all(|r| *r),
         format!(
-            "B's result part: Tab {tabbed}, a key scrolls it {keyed}, the wheel scrolls it {wheeled}, Undo clear at 960, 1200, 1920 {undo_clear:?}, its focus ring clear {ring:?}"
+            "B's result part: Tab {tabbed}, the keys reach it {keyed}, the wheel reaches it {wheeled}, Undo clear at 960, 1200, 1920 {undo_clear:?}, its focus ring clear {ring:?}"
         ),
     );
     d.observe(
@@ -4955,12 +4962,14 @@ fn check_repair_reason(d: &mut Driver<'_>, manifest: bool) {
         .input_frame("Markdown editor")
         .expect("The source editor is visible")
         .0;
+    // Round 26 lead ruling: the error is in the pane's message footer, below the source, so it
+    // never moves the source, which starts directly below Save.
     d.observe(
         "iter-9-E-FD9",
-        error.top() >= save.bottom()
-            && error.top() - save.bottom() <= design::S * 2.0
-            && editor.top() > error.bottom(),
-        "The error fills the reason line directly below Save and above the source",
+        editor.top() >= save.bottom()
+            && editor.top() - save.bottom() <= design::S * 2.0
+            && error.top() >= editor.bottom() + design::S - 1.0,
+        "The source starts directly below Save, and the error is in the footer below it",
     );
     if manifest {
         let action = d
@@ -5063,6 +5072,8 @@ pub fn package_about(d: &mut Driver<'_>) {
         })
     };
     let no_result = editor_below_read(d);
+    // Round 26 A: with nothing to say, the editor has no footer and runs to the pane's bottom.
+    let footer_empty = footer_in_order(d, &[]);
     let original = d.editor_text().unwrap();
     let renamed = crate::content_workspace::patch_fields(
         &original,
@@ -5173,15 +5184,35 @@ pub fn package_about(d: &mut Driver<'_>) {
         .all(|(keyboard, pointer)| *keyboard && *pointer)
     };
     let refused = (kept(d), editor_below_read(d));
+    // Round 26 A: the footer's one order. The write result's live Undo first, then Save's reason.
+    const WRITTEN: &str = "Module.md was written again.";
+    const REASON: &str = "opens a list";
+    let footer_refused = footer_in_order(d, &[WRITTEN, REASON]);
+    d.state("manifest-footer-undo-then-reason", Sizes::All);
     d.click("Discard");
     assert_eq!(d.editor_text().as_deref(), Some(written.as_str()));
     let discarded = (
         kept(d) && d.has_containing("Undo discard"),
         editor_below_read(d),
     );
+    // Two live Undo results, newest first: Discard's, then the write's. No reason is left.
+    let footer_discarded = footer_in_order(d, &["draft discarded.", WRITTEN]);
+    let reason_gone = !d.has_containing(REASON);
+    d.state("manifest-footer-two-undo-results", Sizes::All);
     d.click_starting("Undo discard");
     assert_eq!(d.editor_text().as_deref(), Some(invalid.as_str()));
     let undone = (kept(d), editor_below_read(d));
+    let footer_undone = footer_in_order(d, &[WRITTEN, REASON]);
+    d.observe(
+        "iter-26-A-footer-order",
+        [&footer_empty, &footer_refused, &footer_discarded, &footer_undone]
+            .iter()
+            .all(|sizes| sizes.iter().all(|ok| *ok))
+            && reason_gone,
+        format!(
+            "Edit Markdown's footer at 960, 1200, 1920: none with nothing to say {footer_empty:?}; the write's Undo, then the reason {footer_refused:?}; Discard's Undo, then the write's {footer_discarded:?}; after Undo discard {footer_undone:?}"
+        ),
+    );
     d.observe(
         "iter-24-L-FB3-states",
         [&refused, &discarded, &undone]
@@ -5232,7 +5263,14 @@ pub fn package_about(d: &mut Driver<'_>) {
             sizes.push((text.pos, text.galley.size(), clip));
         }
     });
-    let (tabbed, keyed, wheeled, ring) = fixed_part_scrolls(d, &space);
+    // Round 26: the footer is as tall as what it holds, so the reason is reached whether or not
+    // it needs to scroll.
+    let (tabbed, _, _, ring) = fixed_part_scrolls(d, &space);
+    let reached = space_reaches(d, &message, None);
+    let (keyed, wheeled) = (
+        reached.iter().all(|(keyboard, _)| *keyboard),
+        reached.iter().all(|(_, pointer)| *pointer),
+    );
     let clear = [SMALL, DEFAULT, LARGE].map(|size| {
         d.at_size(size, |d| {
             let lanes = d.chrome_lanes();
@@ -5252,7 +5290,7 @@ pub fn package_about(d: &mut Driver<'_>) {
         "iter-24-L-part-keyboard-reason",
         tabbed && keyed && wheeled && clear.iter().all(|clear| *clear) && ring.iter().all(|r| *r),
         format!(
-            "The reason part: Tab {tabbed}, a key scrolls it {keyed}, the wheel scrolls it {wheeled}, its words clear of bars and splitters at 960, 1200, 1920 {clear:?}, its focus ring clear {ring:?}; painted {sizes:?}"
+            "The reason part: Tab {tabbed}, the keys reach it {keyed}, the wheel reaches it {wheeled}, its words clear of bars and splitters at 960, 1200, 1920 {clear:?}, its focus ring clear {ring:?}; painted {sizes:?}"
         ),
     );
     d.click("Discard");
@@ -6681,6 +6719,49 @@ pub(super) fn reader_title_tops(d: &mut Driver<'_>, title: &str) -> Vec<Option<f
         .into_iter()
         .map(|size| d.at_size(size, |d| reader_title(d, title).map(|rect| rect.top())))
         .collect()
+}
+
+/// The Markdown editor's message footer at 960, 1200 and 1920 (round 26 lead ruling: one footer
+/// per pane, pinned below the editor). With `words`, at each size: one footer holds them all, it
+/// starts at least `S` below the editor frame and ends in the window, it is at most a third of
+/// the window high, and each of `words` is painted inside it, in this order from the top. With
+/// no `words`: no footer, and the editor runs to the pane's bottom.
+fn footer_in_order(d: &mut Driver<'_>, words: &[&str]) -> [bool; 3] {
+    [SMALL, DEFAULT, LARGE].map(|size| {
+        d.at_size(size, |d| {
+            let Some((editor, _)) = d.input_frame("Markdown editor") else {
+                return false;
+            };
+            let below: Vec<_> = d
+                .nodes()
+                .into_iter()
+                .filter(|node| {
+                    node.role == Role::GenericContainer
+                        && !node.name.is_empty()
+                        && node.rect.is_positive()
+                        && node.rect.top() > editor.bottom()
+                })
+                .collect();
+            if words.is_empty() {
+                return below.is_empty() && editor.bottom() > size.1 - crate::design::XXL * 2.0;
+            }
+            let Some(footer) = below
+                .iter()
+                .find(|node| words.iter().all(|word| node.name.contains(word)))
+            else {
+                return false;
+            };
+            let tops: Vec<_> = words
+                .iter()
+                .map(|word| d.painted_rect_in(word, footer.rect).map(|rect| rect.top()))
+                .collect();
+            footer.rect.top() >= editor.bottom() + crate::design::S - 1.0
+                && footer.rect.bottom() <= size.1
+                && footer.rect.height() <= size.1 / 3.0
+                && tops.iter().all(Option::is_some)
+                && tops.windows(2).all(|pair| pair[0] < pair[1])
+        })
+    })
 }
 
 /// The Markdown editor frame's top at 960, 1200 and 1920. Round 25: the one message space below
