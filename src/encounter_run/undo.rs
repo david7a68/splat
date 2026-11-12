@@ -209,6 +209,7 @@ impl Step {
             random,
             loot,
             roll_results: _,
+            damage: _,
             cast: _,
         } = before;
         let rows = participants
@@ -323,6 +324,7 @@ impl Step {
             random: self.random,
             loot: self.loot,
             roll_results: BTreeMap::new(),
+            damage: BTreeMap::new(),
             cast: None,
         };
         super::valid_state(&state).then_some(state)

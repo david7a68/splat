@@ -1195,21 +1195,15 @@ impl Run {
     }
 
     /// A row marked Conc that the newest step damaged: the DC of its save, 10 or half the
-    /// damage if that is more, and at most 30. It is read from the newest Undo step, so it
-    /// lasts until the next step and the run file gains no field. Splat does not roll it.
+    /// damage dealt if that is more, and at most 30. The step keeps its own damage in memory,
+    /// so the DC lasts until the next step; the run file gains no field, and after a restart
+    /// the row has no DC. Splat does not roll it.
     pub(super) fn conc_save_dc(&self, index: usize) -> Option<u32> {
         let p = self.state.participants.get(index)?;
-        let before = self.history.last()?.participants.get(index)?;
-        let damage_step = self
-            .history_labels
-            .last()
-            .is_some_and(|label| label.contains(" damage"));
-        if !p.concentration || !damage_step || self.history_from_sheet.last() == Some(&true) {
-            return None;
-        }
-        let total = |p: &Participant| p.hp.unwrap_or(0).saturating_add(p.temporary_hp);
-        let damage = total(before).saturating_sub(total(p));
-        (damage > 0 && before.key == p.key).then(|| (damage / 2).clamp(10, 30) as u32)
+        // The newest step's own damage to this row, as dealt: nothing is read from words.
+        let damage = *self.state.damage.get(&index)?;
+        (p.concentration && damage > 0 && self.history_from_sheet.last() != Some(&true))
+            .then(|| (damage / 2).clamp(10, 30) as u32)
     }
 
     /// Every row's layout at this width. Rows with only a name can give up height when

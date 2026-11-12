@@ -668,6 +668,10 @@ struct State {
     /// belongs to the step, so Undo takes it back with the HP. Not saved.
     #[serde(skip)]
     roll_results: BTreeMap<usize, String>,
+    /// The damage the step dealt each row, before temporary HP or 0 HP took any of it: a
+    /// concentrating row's save DC comes from it. It belongs to the step. Not saved.
+    #[serde(skip)]
+    damage: BTreeMap<usize, i64>,
     /// The save as it stood before the next step applied its damage, so Undo of that step
     /// arms the save again with its results. Only the state before a save's damage step has
     /// one. Not saved.
@@ -1218,6 +1222,7 @@ impl Run {
                 last_change: None,
                 loot: BTreeMap::new(),
                 roll_results: BTreeMap::new(),
+                damage: BTreeMap::new(),
                 cast: None,
                 random: Random::seeded(seed),
             },
@@ -2087,6 +2092,7 @@ impl Run {
         let undo_label = self.describe(&command);
         // A save's damage names each target's own result once it is applied.
         let roll_results = self.save_results(&command);
+        let damage: BTreeMap<usize, i64> = rolling::damage_shares(&command).into_iter().collect();
         let cast = self.finished_cast(&roll_results);
         // Work on a copy so failed commands cannot partly change the run or dice stream.
         let began = matches!(command, Command::Begin);
@@ -2346,6 +2352,7 @@ impl Run {
             next.roll_results.clear();
         }
         next.roll_results.extend(roll_results);
+        next.damage = damage;
         next.cast = None;
         next.last_change = Some(Self::change_with_result(&next, &undo_label));
         self.notice = None;
@@ -5701,6 +5708,16 @@ mod tests {
         }
         run.apply(Command::Note(1, "Next step".into())).unwrap();
         assert_eq!(run.conc_save_dc(2), None, "until the next step");
+        // The damage dealt, not the HP it could take: 40 against 17 HP and 3 temporary HP is
+        // DC 20. A correction is not damage, whatever the row's name says (review of PR 276).
+        run.apply(Command::Concentration(1, true)).unwrap();
+        run.apply(Command::Damage(1, 40)).unwrap();
+        assert_eq!(run.conc_save_dc(1), Some(20));
+        run.state.participants[0].name = "Guard damage bearer".into();
+        run.apply(Command::Concentration(0, true)).unwrap();
+        let max = run.state.participants[0].max_hp;
+        run.apply(Command::Health(0, Some(5), max)).unwrap();
+        assert_eq!(run.conc_save_dc(0), None);
     }
 
     #[test]
