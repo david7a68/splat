@@ -1970,6 +1970,16 @@ mod allowed_classes {
         /// The run header's first line ends above this.
         const HEADER: f32 = 48.0;
         const NEXT: &str = "Button: Next turn";
+        /// What lies on the header's line up to Next turn's right edge and moves with its
+        /// narrowing: Next turn's icon and words, and `Add to fight` with its icon and words.
+        const SHIFTED: [&str; 6] = [
+            "Button: Add to fight",
+            "Add to fight",
+            "Add",
+            "Next turn",
+            "\u{e13a}",
+            "\u{e3d4}",
+        ];
 
         fn run_view(d: &Difference) -> bool {
             d.screen.starts_with("run-")
@@ -2038,7 +2048,7 @@ mod allowed_classes {
             };
             ["control", "text"].contains(&d.what.as_str())
                 && d.change == "moved"
-                && d.name != NEXT
+                && SHIFTED.contains(&d.name.as_str())
                 && b[1] < HEADER
                 && b[1] == a[1]
                 && (b[2], b[3]) == (a[2], a[3])
@@ -2074,10 +2084,27 @@ mod allowed_classes {
             let (place, new) = match d.change.as_str() {
                 "new" => (rect_of(&d.detail, "at ")?, true),
                 "gone" => (rect_of(&d.detail, "was ")?, false),
+                // Resized away only to where the comparison pairs it with the same words that
+                // stay in place and read as gone there (`paired_away`).
                 "resized" => (before_after(d)?.0, false),
                 _ => return None,
             };
             (shown && place[1] < HEADER).then_some((words(&d.name), place, new))
+        }
+
+        /// A `resized` name form is the comparison's pairing: its new place is exactly where the
+        /// same words are reported gone in the same view.
+        fn resized_to_its_pair(d: &Difference, rows: &[AllowedRow]) -> bool {
+            d.change != "resized"
+                || before_after(d).is_some_and(|(_, after)| {
+                    rows.iter().any(|row| {
+                        let o = &row.difference;
+                        same_view(o, d)
+                            && o.change == "gone"
+                            && (&o.what, &o.name) == (&d.what, &d.name)
+                            && rect_of(&o.detail, "was ") == Some(after)
+                    })
+                })
         }
 
         /// The new form keeps the old form's words and adds more after them.
@@ -2093,6 +2120,7 @@ mod allowed_classes {
                 return paired_away(d, rows);
             };
             view_narrowing(d, rows).is_some()
+                && resized_to_its_pair(d, rows)
                 && rows.iter().any(|row| {
                     let o = &row.difference;
                     same_view(o, d)
@@ -4800,6 +4828,19 @@ mod allowed_classes {
             ..act.clone()
         };
         let dock_gone = view("text", "gone", "Ashfang,…", "was 156 570 69.2x18");
+        // The review of R3b: a name form resized anywhere, and another header item moved.
+        let thrown = view(
+            "text",
+            "resized",
+            "Ashfang,…",
+            "241 15 83.8x22 -> 900 600 1x1",
+        );
+        let round = view(
+            "control",
+            "moved",
+            "Label: Round 2",
+            "200 15 30x22 -> 216.5 15 30x22",
+        );
         let lone_digit = Difference {
             detail: "appeared - 1".into(),
             ..act.clone()
@@ -4811,6 +4852,8 @@ mod allowed_classes {
             (r3b(25, &row_below), header.clone()),
             (r3b(25, &shorter), header.clone()),
             (r3b(25, &dock_gone), header.clone()),
+            (r3b(25, &thrown), header.clone()),
+            (r3b(25, &round), header.clone()),
             (r3b(25, &add), vec![r3b(25, &add), r3b(25, &next)]),
             (
                 r3b(26, &other_digit),
