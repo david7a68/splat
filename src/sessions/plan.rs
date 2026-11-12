@@ -409,7 +409,7 @@ fn unlink_planned_fight(body: &str, name: &str, occurrence: usize) -> String {
                         if matches!(
                             prefix,
                             "" | "-" | "*" | "- [ ]" | "- [x]" | "- [X]" | "* [ ]" | "* [x]"
-                        ) && checks::RoadMark::bare(&line[end..]).trim().is_empty()
+                        ) && checks::marked(&line[end..]).words.trim().is_empty()
                         {
                             return None;
                         }
@@ -1532,12 +1532,15 @@ fn road_days(
     session: Option<Uuid>,
     fights: &[PlanFight],
 ) -> RoadDays {
+    let starts = timeline::clock(events);
     plan_links(body, events, session, fights)
         .into_iter()
         .filter(|(_, _, waiting)| *waiting)
         .map(|(at, fight, _)| {
             let line = body[at..].lines().next().unwrap_or_default();
-            let day = checks::RoadMark::read(line).and_then(|mark| mark.day_words(events, session));
+            let day = checks::marked(line)
+                .mark
+                .and_then(|mark| mark.ok()?.day_words(events, &starts, session));
             (fight.name.to_lowercase(), day)
         })
         .collect()
@@ -2089,49 +2092,29 @@ impl Sessions {
         (at, start)
     }
 
-    /// Where a fight that begins now is played, when its plan line came from a journey's check:
-    /// `Some(Ok)` at that check; `Some(Err)` when the journey or the check changed or went
-    /// since. `None` for a fight planned another way. Its line is the one that its event takes
-    /// by the plan's rule, read from the note as it is now.
-    pub fn road_place(
+    /// The mark of the plan line that a fight beginning now takes by the plan's rule, read from
+    /// the session note as the file holds it at this moment. `None` for a line with no mark.
+    pub fn road_mark(
         &self,
         session: Option<Uuid>,
         name: &str,
-        book: &Book,
-    ) -> Option<Result<timeline::Within, ()>> {
+        events: &[timeline::Event],
+    ) -> Option<Result<checks::RoadMark, checks::OffRoad>> {
         let note = self.notes.iter().find(|note| Some(note.id) == session)?;
-        let text = match &self.draft {
-            Some(draft) if draft.path == note.path => draft.body.clone(),
-            _ => std::fs::read_to_string(&note.path).ok()?,
+        let Ok(text) = std::fs::read_to_string(&note.path) else {
+            return Some(Err(checks::OffRoad::NotRead));
         };
-        let played = book
-            .events
-            .iter()
-            .filter(|event| {
-                event.is_in(session)
-                    && event.run.is_some()
-                    && event.title.eq_ignore_ascii_case(name)
-            })
-            .count();
-        let mut inside = false;
-        let line = text
-            .lines()
-            .filter(|line| {
-                if !inside || line.starts_with("## ") {
-                    inside = line.trim_end() == "## Plan for tonight";
-                    return false;
-                }
-                true
-            })
-            .flat_map(|line| {
-                each_linked_name(line)
-                    .into_iter()
-                    .filter(|linked| linked.eq_ignore_ascii_case(name))
-                    .map(move |_| line)
-            })
-            .nth(played)?;
-        let mark = checks::RoadMark::read(line)?;
-        Some(mark.place(&book.events, session).ok_or(()))
+        let fight = [PlanFight {
+            saved: None,
+            name: name.to_owned(),
+            path: String::new(),
+            summary: String::new(),
+            difficulty: Default::default(),
+        }];
+        let (at, _, _) = plan_links(&text, events, session, &fight)
+            .into_iter()
+            .find(|(_, _, waiting)| *waiting)?;
+        checks::marked(text[at..].lines().next().unwrap_or_default()).mark
     }
 
     /// The days on the road of the fights still to come, read again only when what they are
@@ -3954,6 +3937,157 @@ mod tests {
             summary: String::new(),
             difficulty: Default::default(),
         }
+    }
+
+    /// Review of PR 284, finding 1: the mark is one whole comment and nothing else. The DM's
+    /// words after it stay in Read, in `Remove from tonight` and in the line acts that treat the
+    /// line as its text; half a mark is no mark, and its line shows as it is.
+    #[test]
+    fn pr284_review_words_after_the_mark_stay() {
+        let mark = "<!-- splat:check journey=t-road at=24 sum=12345678 -->";
+        let body =
+            format!("## Plan for tonight\n- [[Bridge Ambush]] {mark} Bring silver weapons.\n");
+        let fights = [planned_fight(
+            "Bridge Ambush",
+            "Encounters/Bridge Ambush.md",
+        )];
+        let removed = unlink_planned_fight(&body, "Bridge Ambush", 0);
+        assert_eq!(
+            removed,
+            body.replace("[[Bridge Ambush]]", "Bridge Ambush"),
+            "Remove from tonight keeps the line's words"
+        );
+        let shown = super::super::compact_plan_for_reading(&body, &fights, &[], &[], true);
+        assert!(shown.contains("Bring silver weapons."), "{shown:?}");
+        // An isolated marked line is a planned link: Read folds it, Remove takes it whole.
+        let alone = format!("## Plan for tonight\n- [[Bridge Ambush]] {mark}\n");
+        assert_eq!(
+            unlink_planned_fight(&alone, "Bridge Ambush", 0),
+            "## Plan for tonight\n"
+        );
+        let folded = super::super::compact_plan_for_reading(&alone, &fights, &[], &[], true);
+        assert!(!folded.contains("Bridge"), "{folded:?}");
+        let half = "## Plan for tonight\n- [[Bridge Ambush]] <!-- splat:check journey=t-road\n";
+        assert_eq!(
+            super::super::compact_plan_for_reading(half, &fights, &[], &[], true),
+            half,
+            "half a mark is the line's own text"
+        );
+        // The done box, a rename by `Edit encounter`, and a line change keep the rest byte for
+        // byte: they act on the line as its text.
+        let line = format!("- [ ] [[Bridge Ambush]] {mark} Bring silver weapons.");
+        assert_eq!(
+            crate::sessions::ticked(&line, true),
+            line.replacen("[ ]", "[x]", 1)
+        );
+        let mut renamed = line.clone();
+        crate::sessions::rename_links(&mut renamed, "Bridge Ambush", "Ford Ambush");
+        assert_eq!(renamed, line.replace("Bridge", "Ford"));
+    }
+
+    /// Review finding 2: Begin reads the session note as the file holds it at that moment, not
+    /// the open draft, which can be older.
+    #[test]
+    fn pr284_review_begin_reads_current_note() {
+        use crate::sessions::{Draft, NewNote, create_note};
+        let dir = tempfile::tempdir().unwrap();
+        let note = create_note(
+            dir.path(),
+            &NewNote {
+                number: 1,
+                title: "Road",
+                date: "2026-11-12",
+                campaign: "Marches",
+                template: "## Plan for tonight\n",
+            },
+        )
+        .unwrap();
+        let session = Some(note.id);
+        let mut b = Book::default();
+        b.add(Kind::Day, session);
+        let road = b.add(Kind::Travel, session);
+        let e = b.event_mut(&road).unwrap();
+        e.duration = "2 days".into();
+        e.checks = vec![timeline::Check::new(
+            24,
+            "16 · [[Bridge Ambush]] waits.".into(),
+        )];
+        let mark = checks::RoadMark::new(&road, &e.checks[0]).unwrap();
+        let text = fs::read_to_string(&note.path).unwrap().replace(
+            "## Plan for tonight",
+            &format!(
+                "## Plan for tonight\n- [[Bridge Ambush]] {}",
+                mark.comment()
+            ),
+        );
+        fs::write(&note.path, &text).unwrap();
+        let sessions = Sessions {
+            selected: session,
+            notes: vec![note.clone()],
+            draft: Some(Draft::open(&note.path).unwrap()),
+            ..Sessions::default()
+        };
+        assert_eq!(
+            sessions.road_mark(session, "Bridge Ambush", &b.events),
+            Some(Ok(mark.clone()))
+        );
+        // Obsidian takes the mark off this plan line before Begin combat.
+        fs::write(&note.path, text.replace(&mark.comment(), "")).unwrap();
+        assert_eq!(
+            sessions.road_mark(session, "Bridge Ambush", &b.events),
+            None
+        );
+        fs::remove_file(&note.path).unwrap();
+        assert_eq!(
+            sessions.road_mark(session, "Bridge Ambush", &b.events),
+            Some(Err(checks::OffRoad::NotRead))
+        );
+    }
+
+    /// Review of PR 284: the day never changes a planned row's height, at any width.
+    #[test]
+    fn pr284_review_row_height_and_long_journey_name() {
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let rating = crate::difficulty::above_high();
+        let summary = "5 party · 2 × Ember Cultist";
+        let day = "Day 2 of The road to the ford beyond the old northern quarry";
+        let (mut full, mut short, mut hidden) = (0, 0, 0);
+        let _ = ctx.run(Default::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                for width in (120..=600).step_by(5) {
+                    let plain = ui
+                        .scope(|ui| {
+                            ui.set_width(width as f32);
+                            planned_summary(ui, summary, Some(&rating));
+                        })
+                        .response
+                        .rect
+                        .height();
+                    let road = ui
+                        .scope(|ui| {
+                            ui.set_width(width as f32);
+                            let words = on_road(ui, summary, Some(day));
+                            if words.contains("of The road") {
+                                full += 1;
+                            } else if words.contains("Day 2") {
+                                short += 1;
+                            } else {
+                                hidden += 1;
+                            }
+                            planned_summary(ui, &words, Some(&rating));
+                        })
+                        .response
+                        .rect
+                        .height();
+                    assert_eq!(road, plain, "the day adds no height at {width} px");
+                }
+            });
+        });
+        assert!(
+            full > 0 && short > 0 && hidden > 0,
+            "{full} {short} {hidden}"
+        );
     }
 
     #[test]

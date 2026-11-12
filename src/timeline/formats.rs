@@ -510,13 +510,11 @@ pub fn patch(
             for line in &row.lines {
                 edits.push((line.range.clone(), String::new()));
             }
-            // The blank line before the event goes with it, so no two blank lines are left
-            // and a removal gives back the file as it was before the event came in.
+            // A fight placed in a journey came in after the journey's last line as a line break
+            // and its own lines (below): its removal takes that line break back too, so its
+            // Undo gives back the file as it was, with or without blank lines between events.
             let start = row.head.range.start;
-            let end = row.lines.last().map_or(row.head.range.end, |l| l.range.end);
-            if text[..start].ends_with(&format!("{newline}{newline}"))
-                && (end == text.len() || text[end..].starts_with(newline))
-            {
+            if row.event.within.is_some() && text[..start].ends_with(&newline.repeat(2)) {
                 edits.push((start - newline.len()..start, String::new()));
             }
             continue;

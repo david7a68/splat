@@ -694,7 +694,7 @@ fn compact_plan_for_reading(
     let lines: Vec<_> = plan
         .lines()
         .filter(|line| !line.trim().is_empty())
-        .map(crate::timeline::checks::RoadMark::bare)
+        .map(|line| crate::timeline::checks::marked(line).words)
         .collect();
     let only_planned_links = !lines.is_empty()
         && lines.iter().all(|line| {

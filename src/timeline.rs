@@ -506,6 +506,9 @@ fn walk(events: &[Event]) -> (Vec<Option<u64>>, Option<u64>) {
     for event in events {
         if let Some(start) = inside_journey(&events[..starts.len()], &starts, event) {
             starts.push(start);
+            // The clock after a journey with fights in it is the later of the journey's end
+            // and each fight's end, so a long fight never ends after `Now`.
+            now = now.max(start.map(|start| start.saturating_add(event.minutes())));
             continue;
         }
         if event.kind == Kind::Day {
@@ -518,15 +521,19 @@ fn walk(events: &[Event]) -> (Vec<Option<u64>>, Option<u64>) {
     (starts, now)
 }
 
-/// A fight inside a journey starts at its check and moves the clock no further, as the
-/// journey's length holds it: while the journey is before it and still covers that check.
+/// A fight inside a journey starts at its check: while it is a fight that names a journey
+/// before it in the list, and that journey still covers the check. Any other event, or a fight
+/// whose journey no longer holds it, is an ordinary event in the sequence.
 fn inside_journey(before: &[Event], starts: &[Option<u64>], event: &Event) -> Option<Option<u64>> {
-    let within = event.within.as_ref()?;
+    let within = event
+        .within
+        .as_ref()
+        .filter(|_| event.kind == Kind::Encounter)?;
     let at = before
         .iter()
         .position(|journey| journey.id == within.journey && journey.kind == Kind::Travel)?;
     let offset = within.at.checked_mul(HOUR)?;
-    (offset == 0 || offset < before[at].minutes())
+    checks::covers(&before[at], within.at)
         .then(|| starts[at].map(|start| start.saturating_add(offset)))
 }
 
@@ -1307,15 +1314,41 @@ impl Book {
 
     /// Add after the session's last event, or at the end. A rest found in an old recording
     /// belongs with its session, not after what happened since.
-    pub fn add(&mut self, kind: Kind, session: Option<Uuid>) -> String {
-        let id = new_id();
-        let at = session
+    /// Where a new event of this session goes: after the session's last event.
+    fn session_end(&self, session: Option<Uuid>) -> usize {
+        session
             .and_then(|session| {
                 self.events
                     .iter()
                     .rposition(|event| event.session == Some(session))
             })
-            .map_or(self.events.len(), |index| index + 1);
+            .map_or(self.events.len(), |index| index + 1)
+    }
+
+    /// The events as `Timeline.md` holds them on disk now, when it can be read.
+    pub fn on_disk(&self) -> Option<Vec<Event>> {
+        let text = fs::read_to_string(self.path.as_ref()?).ok()?;
+        parse(&text).ok()?;
+        Some(formats::parse_with_sessions(&text, &self.session_links).0)
+    }
+
+    /// A run's fight that was placed in a journey goes after its session's last event, as any
+    /// fight does, and is saved: its check changed in the merge of the save that placed it.
+    pub fn leave_journey(&mut self, run: Uuid) {
+        let Some(from) = self.events.iter().position(|event| event.run == Some(run)) else {
+            return;
+        };
+        let mut event = self.events.remove(from);
+        event.within = None;
+        let at = self.session_end(event.session);
+        self.events.insert(at, event);
+        self.touch();
+        self.save();
+    }
+
+    pub fn add(&mut self, kind: Kind, session: Option<Uuid>) -> String {
+        let id = new_id();
+        let at = self.session_end(session);
         self.events.insert(
             at,
             Event {
@@ -2601,6 +2634,143 @@ mod tests {
             before.replace("- Short rest ^", "- Short rest: **Breather** ^")
         );
         assert_eq!(book.events[1], journey_before);
+    }
+
+    /// Review of PR 284, finding 2: Begin decides from the file on disk, and a change that lands
+    /// after that read meets the check again after the save's merge. Either way the fight is an
+    /// ordinary one, never at the old day.
+    #[test]
+    fn pr284_review_stale_check_at_begin() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut b = book(dir.path());
+        let session = Some(Uuid::from_u128(1));
+        b.add(Kind::Day, session);
+        let road = b.add(Kind::Travel, session);
+        let e = b.event_mut(&road).unwrap();
+        e.duration = "2 days".into();
+        e.checks = vec![Check::new(24, "16 · [[Bridge Ambush]] waits.".into())];
+        let mark = checks::RoadMark::new(&road, &e.checks[0]).unwrap();
+        b.save();
+        let path = dir.path().join(FILE);
+        let disk = fs::read_to_string(&path).unwrap();
+        fs::write(
+            &path,
+            disk.replace("16 · [[Bridge Ambush]] waits.", "17 · Nothing happens."),
+        )
+        .unwrap();
+        assert_eq!(
+            mark.place(&b.on_disk().unwrap(), session),
+            Err(checks::OffRoad::Changed),
+            "the file on disk has another check"
+        );
+        // The change lands after Begin read the file: the save merges it, and the check after
+        // the merge sends the fight after the session's last event.
+        let within = mark.place(&b.events, session).unwrap();
+        let running = fact(RunState::Running);
+        b.record_change(
+            Some(&fact(RunState::Setup)),
+            &running,
+            session,
+            Some(&within),
+        );
+        b.save();
+        assert!(b.error.is_none(), "the outside edit merged");
+        assert_eq!(
+            mark.place(&b.events, session),
+            Err(checks::OffRoad::Changed)
+        );
+        b.leave_journey(running.id);
+        let fight = b.events.iter().position(|e| e.run.is_some()).unwrap();
+        assert_eq!(
+            clock(&b.events)[fight],
+            Some(2 * DAY),
+            "Day 3, not the old Day 2"
+        );
+        let text = fs::read_to_string(path).unwrap();
+        assert!(text.contains("17 · Nothing happens.") && !text.contains("journey="));
+    }
+
+    /// Review finding 3: the place inside a journey holds only for a fight; an event whose kind
+    /// changed is an ordinary event in the sequence.
+    #[test]
+    fn pr284_review_changed_kind_uses_ordinary_clock() {
+        let mut road = event(Kind::Travel, "2 days");
+        road.id = "t-road".into();
+        let mut changed = event(Kind::Day, "");
+        changed.within = Some(Within {
+            journey: road.id.clone(),
+            at: 24,
+        });
+        let events = [event(Kind::Day, ""), road, changed];
+        assert_eq!(clock(&events)[2], Some(3 * DAY));
+    }
+
+    /// Review finding 3: the clock after a journey is the later of its end and each fight's
+    /// end inside it, so a fight never ends after `Now`.
+    #[test]
+    fn pr284_review_duration_beyond_journey() {
+        let mut road = event(Kind::Travel, "2 days");
+        road.id = "t-road".into();
+        let mut fight = event(Kind::Encounter, "2 days");
+        fight.within = Some(Within {
+            journey: road.id.clone(),
+            at: 24,
+        });
+        let mut events = vec![event(Kind::Day, ""), road, fight];
+        assert_eq!(clock(&events)[2], Some(DAY));
+        assert_eq!(
+            clock_now(&events),
+            Some(3 * DAY),
+            "the fight ends Day 4, 00:00"
+        );
+        events[2].duration = "1 hour".into();
+        assert_eq!(clock_now(&events), Some(2 * DAY), "the journey ends later");
+    }
+
+    /// Review finding 5: the road fight's Undo gives back a valid file with no blank line
+    /// between events to the byte, as it does a file with blank lines (the test above).
+    #[test]
+    fn pr284_review_compact_file_exact_undo() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut b = book(dir.path());
+        let session = Some(Uuid::from_u128(1));
+        b.add(Kind::Day, session);
+        let road = b.add(Kind::Travel, session);
+        b.event_mut(&road).unwrap().duration = "2 days".into();
+        b.add(Kind::ShortRest, session);
+        b.save();
+        let path = dir.path().join(FILE);
+        let before = fs::read_to_string(&path).unwrap().replace("\n\n- ", "\n- ");
+        fs::write(&path, &before).unwrap();
+        b = book(dir.path());
+        let run = fact(RunState::Running);
+        let road = Within {
+            journey: road,
+            at: 24,
+        };
+        b.record_change(Some(&fact(RunState::Setup)), &run, session, Some(&road));
+        b.save();
+        assert!(b.events.iter().any(|e| e.run == Some(run.id)));
+        b.record_change(Some(&run), &fact(RunState::Setup), session, None);
+        b.save();
+        assert_eq!(fs::read_to_string(path).unwrap(), before);
+    }
+
+    /// Review finding 5: an ordinary add and its Undo write the bytes that `main` writes. The
+    /// removal leaves the line break that the add brought; only a road fight takes its own.
+    #[test]
+    fn pr284_review_plain_add_undo_bytes() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut b = book(dir.path());
+        b.add(Kind::Day, None);
+        b.save();
+        let path = dir.path().join(FILE);
+        let before = fs::read_to_string(&path).unwrap();
+        let id = b.add(Kind::ShortRest, None);
+        b.save();
+        b.undo_add(&id);
+        b.save();
+        assert_eq!(fs::read_to_string(&path).unwrap(), format!("{before}\n"));
     }
 
     /// A fight inside a journey that the DM later shortened, or moved before it, follows the

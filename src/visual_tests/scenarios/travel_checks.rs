@@ -558,8 +558,9 @@ pub fn run(d: &mut Driver<'_>) {
 
 /// W5-D1: a fight planned from the day-two check of a two-day journey is played on Day 2. A
 /// fresh run begun from its plan row enters the Timeline at Day 2, 00:00, inside the journey,
-/// and the journey keeps its days; `Undo: begin combat` gives the file back as it was. When the
-/// check changed before the fight began, the fight follows the last event and the run says so.
+/// and the journey keeps its days; `Undo: begin combat` gives the file back as it was, also
+/// after a restart. When the check changed on disk before the fight began, the fight follows
+/// the last event and the run says so.
 fn road_fight_keeps_its_day(d: &mut Driver<'_>, dir: &Path) {
     const PLAN_SHRINE: &str = "Plan “Shrine of Cinders”";
     d.click(NAV_SESSIONS);
@@ -598,7 +599,7 @@ fn road_fight_keeps_its_day(d: &mut Driver<'_>, dir: &Path) {
         "The planned fight's row says the day it is played on, also after a restart",
     );
     d.state("travel-checks-road-day", Sizes::All);
-    d.state_prepared("travel-checks-road-day-lookup", Sizes::Small, |d| {
+    d.state_prepared("travel-checks-road-day-lookup", Sizes::Standard, |d| {
         if !d.has("Close Lookup") {
             d.click(NAV_LOOKUP);
         }
@@ -649,7 +650,10 @@ fn road_fight_keeps_its_day(d: &mut Driver<'_>, dir: &Path) {
         d.visible_text("Starts: Day 1, 00:00") && d.visible_text("Ends: Day 3, 00:00"),
         "The journey still runs from Day 1 to Day 3",
     );
+    // Review of PR 284: a restart between the fight's begin and its Undo.
     d.click(BACK_TO_RUN);
+    d.restart();
+    d.expect("Undo: begin combat");
     d.click("Undo: begin combat");
     d.app_mut().timeline.save();
     d.observe(
@@ -657,20 +661,15 @@ fn road_fight_keeps_its_day(d: &mut Driver<'_>, dir: &Path) {
         road_fight(d).is_none() && timeline_file(dir) == before,
         "Undo: begin combat gives Timeline.md back as it was",
     );
-    // The check changed before the fight began: it follows the last event, and the run says so.
-    d.click(NAV_SESSIONS);
-    show_plan(d);
-    if !d.has("Clear the check for Day 2") {
-        d.click("Travel");
-    }
-    d.click("Clear the check for Day 2");
-    d.expect("Check cleared.");
-    d.observe(
-        "W5-D1",
-        !d.has_containing("Day 2 of Travel"),
-        "With its check gone, the planned row names no day",
-    );
-    d.click(BACK_TO_RUN);
+    // Review finding 2: the check changes on disk a moment before Begin, while an edit waits
+    // for its pause, so Splat has not read the file. Begin reads it: an ordinary fight, and the
+    // run says why.
+    fs::write(
+        dir.join("Timeline.md"),
+        timeline_file(dir).replace("\"18 · A toll gang", "\"19 · A toll gang"),
+    )
+    .unwrap();
+    d.app_mut().timeline.touch();
     d.click("Begin combat");
     let events = d.app().timeline.events.clone();
     let last = events
@@ -681,10 +680,19 @@ fn road_fight_keeps_its_day(d: &mut Driver<'_>, dir: &Path) {
         "W5-D1",
         d.has_containing("Its travel check changed, so this fight follows the last event.")
             && placed.is_some_and(|(at, _)| Some(at) > last)
-            && events.iter().all(|event| event.within.is_none()),
-        format!("A changed check gives an ordinary fight, and the run says so: {placed:?}"),
+            && events.iter().all(|event| event.within.is_none())
+            && timeline_file(dir).contains("\"19 · A toll gang"),
+        format!("A check changed on disk gives an ordinary fight, and the run says so: {placed:?}"),
     );
     d.click("Undo: begin combat");
+    d.app_mut().timeline.save();
+    d.click(NAV_SESSIONS);
+    show_plan(d);
+    d.observe(
+        "W5-D1",
+        !d.has_containing("Day 2 of Travel"),
+        "With its check changed, the planned row names no day",
+    );
 }
 
 /// Shrine of Cinders' setup, as the DM plays it: the NPCs' rolls, the players' numbers, and

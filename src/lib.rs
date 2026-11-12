@@ -234,8 +234,6 @@ const LIBRARY_DRAFT: &str = "Library draft";
 const WORLD_DRAFT: &str = "World draft";
 const WORLD_REPAIR_DRAFT: &str = "World repair draft";
 const CAMPAIGN_DRAFT: &str = "Campaign draft";
-/// The run's notice when a fight planned from a journey's check begins after that check changed.
-const ROAD_CHANGED: &str = "Its travel check changed, so this fight follows the last event.";
 
 impl Page {
     fn name(self) -> &'static str {
@@ -352,9 +350,13 @@ impl Splat {
     }
 
     /// F9, W5-D1: a fight that enters the Timeline now, from a plan line that a journey's check
-    /// wrote, is played at that check. When the journey or the check changed since, it goes
-    /// after the session's last event as any fight does, and the run's notice line says so.
-    fn road_of_entering_fight(&mut self, fact: &timeline::RunFact) -> Option<timeline::Within> {
+    /// wrote, is played at that check, while the note and `Timeline.md` on disk, and the
+    /// Timeline as Splat holds it, all have that check. Else it goes after the session's last
+    /// event as any fight does, and the run's notice line says why.
+    fn road_of_entering_fight(
+        &mut self,
+        fact: &timeline::RunFact,
+    ) -> Option<(timeline::checks::RoadMark, timeline::Within)> {
         let entering = fact.state == timeline::RunState::Running
             && !self.timeline.events.iter().any(|event| {
                 event.run == Some(fact.id)
@@ -364,17 +366,34 @@ impl Splat {
             return None;
         }
         let session = self.sessions.current();
-        match self
+        let mark = self
             .sessions
-            .road_place(session, &fact.name, &self.timeline)?
-        {
-            Ok(within) => Some(within),
-            Err(()) => {
-                if let Some(run) = self.encounters.run_mut() {
-                    run.tell(ROAD_CHANGED.to_owned());
-                }
-                None
-            }
+            .road_mark(session, &fact.name, &self.timeline.events)?;
+        let placed = mark.and_then(|mark| {
+            let disk = self
+                .timeline
+                .on_disk()
+                .ok_or(timeline::checks::OffRoad::NotRead)?;
+            mark.place(&disk, session)?;
+            let within = mark.place(&self.timeline.events, session)?;
+            Ok((mark, within))
+        });
+        placed.inspect_err(|why| self.tell_run(why.words())).ok()
+    }
+
+    /// The fight just placed is saved at once, and checked again against the Timeline that the
+    /// save merged with the file: a check that changed there makes it an ordinary fight.
+    fn confirm_road(&mut self, run: uuid::Uuid, mark: &timeline::checks::RoadMark) {
+        self.timeline.save();
+        if let Err(why) = mark.place(&self.timeline.events, self.sessions.current()) {
+            self.timeline.leave_journey(run);
+            self.tell_run(why.words());
+        }
+    }
+
+    fn tell_run(&mut self, words: &str) {
+        if let Some(run) = self.encounters.run_mut() {
+            run.tell(words.to_owned());
         }
     }
 
@@ -2686,8 +2705,11 @@ impl eframe::App for Splat {
                         self.run_fact.as_ref(),
                         fact,
                         self.sessions.current(),
-                        road.as_ref(),
+                        road.as_ref().map(|(_, within)| within),
                     );
+                    if let Some((mark, _)) = &road {
+                        self.confirm_road(fact.id, mark);
+                    }
                 }
                 // The run closed, so its last result goes to the file now and not after the
                 // pause.
