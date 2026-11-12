@@ -897,9 +897,8 @@ impl Campaigns {
             });
         });
         design::blocked_reason(ui, blocked);
-        if let Some(error) = &self.error {
-            design::message(ui, Tone::Error, error);
-        }
+        // Round 26: the list's errors and results sit in the Settings footer
+        // (`footer_messages`).
         let unwritable =
             blocked.or((!self.writable).then_some("Reload valid campaign settings first."));
         design::locked(ui, unwritable, |ui| {
@@ -1054,34 +1053,6 @@ impl Campaigns {
             if let Some(id) = open {
                 self.select(Some(id));
             }
-            if let Some(added) = self.added.clone() {
-                if self.campaign_copy.is_some() {
-                    // The registration result and its Undo are one message. Build an encounter
-                    // is another choice: it starts below, at the message words, with the same
-                    // border as after a plain add. Only Undo is quiet.
-                    if design::undo_message(ui, Tone::Success, &added, "Undo register campaign")
-                        && let Err(error) = self.undo_campaign_copy()
-                    {
-                        self.error = Some(error);
-                    }
-                    let build = design::message_choice_row(ui, Tone::Success, |ui| {
-                        Action::secondary("Build an encounter")
-                            .density(Density::Read)
-                            .show(ui)
-                            .clicked()
-                    });
-                    if build {
-                        self.build_encounter();
-                    }
-                } else if design::message_with_action(
-                    ui,
-                    Tone::Success,
-                    &added,
-                    "Build an encounter",
-                ) {
-                    self.build_encounter();
-                }
-            }
             ui.add_space(design::S);
             dndbeyond.show_import(ui, session.clone(), self);
             if self.editing.is_none() && self.remote.is_none() {
@@ -1101,6 +1072,105 @@ impl Campaigns {
         };
         room.min(design::LIST_MEASURE)
             .min(content.max(design::FORM_WIDTH))
+    }
+
+    /// Round 26: the campaign form's and the campaign list's messages, in the footer of the pane
+    /// that shows them (Settings, or Campaign → Link and folder), so none of them moves the form
+    /// or the rows. A discarded details draft with its live Undo first (while its form is open:
+    /// it ends with an edit, Save, Cancel or the next Discard), then a registered copy with
+    /// `Undo register campaign`; then the error and its own recovery; then the plain add result.
+    /// `list` is true in Settings, where the add results belong.
+    pub fn footer_messages<'a>(
+        me: &'a std::cell::RefCell<&mut Campaigns>,
+        footer: &mut design::Footer<'a>,
+        list: bool,
+    ) {
+        const DISCARDED: &str = "Campaign details draft discarded.";
+        let (discarded, added, copy, error) = {
+            let this = me.borrow();
+            (
+                this.editing.is_some() && this.discarded_details.is_some(),
+                this.added.clone().filter(|_| list),
+                this.campaign_copy.is_some(),
+                this.error.clone(),
+            )
+        };
+        if discarded {
+            footer.result(DISCARDED, true, move |ui| {
+                if design::draft_discarded(ui, "Campaign details") {
+                    let mut this = me.borrow_mut();
+                    if let Some((name, path)) = this.discarded_details.take() {
+                        this.name = name;
+                        this.path = path;
+                    }
+                }
+            });
+        }
+        if let Some(added) = added.clone().filter(|_| copy) {
+            footer.result(added.clone(), true, move |ui| {
+                // The registration result and its Undo are one message. Build an encounter is
+                // another choice: it starts below, at the message words. Only Undo is quiet.
+                if design::undo_message(ui, Tone::Success, &added, "Undo register campaign") {
+                    let mut this = me.borrow_mut();
+                    if let Err(error) = this.undo_campaign_copy() {
+                        this.error = Some(error);
+                    }
+                }
+                let build = design::message_choice_row(ui, Tone::Success, |ui| {
+                    Action::secondary("Build an encounter")
+                        .density(Density::Read)
+                        .show(ui)
+                        .clicked()
+                });
+                if build {
+                    me.borrow_mut().build_encounter();
+                }
+            });
+        }
+        if let Some(error) = error {
+            footer.reason(error.clone(), move |ui| Self::draw_error(me, ui, &error));
+        }
+        if let Some(added) = added.filter(|_| !copy) {
+            footer.result(added.clone(), false, move |ui| {
+                if design::message_with_action(ui, Tone::Success, &added, "Build an encounter") {
+                    me.borrow_mut().build_encounter();
+                }
+            });
+        }
+    }
+
+    /// An error, and its own recovery after it.
+    fn draw_error(me: &std::cell::RefCell<&mut Campaigns>, ui: &mut egui::Ui, error: &str) {
+        design::message(ui, Tone::Error, error);
+        if error.contains("registered at another folder") {
+            let reason = me
+                .borrow()
+                .name
+                .trim()
+                .is_empty()
+                .then_some("Type a name first.");
+            if Action::secondary("Register as a new campaign")
+                .blocked(reason)
+                .show(ui)
+                .clicked()
+            {
+                let mut this = me.borrow_mut();
+                if let Err(error) = this.register_campaign_copy() {
+                    this.error = Some(error);
+                }
+            }
+            design::blocked_reason(ui, reason);
+        }
+    }
+
+    /// The form's error where its page has no footer: the first campaign's form on an empty
+    /// page, which has no scroll area, so nothing below it can move.
+    pub fn form_error_inline(&mut self, ui: &mut egui::Ui) {
+        let error = self.error.clone();
+        let cell = std::cell::RefCell::new(self);
+        if let Some(error) = error {
+            Self::draw_error(&cell, ui, &error);
+        }
     }
 
     pub fn importing(&self, remote: &str) -> bool {
@@ -1269,33 +1339,6 @@ impl Campaigns {
                         Ok(()) => added = !editing,
                         Err(error) => self.error = Some(error),
                     }
-                }
-                // Round 25 FG5: one message space below the save row, two lines high whatever it
-                // holds: the discard result with its live Undo first, then Save's error. So
-                // neither moves the rows below the form.
-                const DISCARDED: &str = "Campaign details draft discarded.";
-                let mut space = design::MessageSpace::new("campaign_form_message", ui.available_width());
-                if self.discarded_details.is_some() {
-                    space = space.result(DISCARDED, true, |ui| design::draft_discarded(ui, "Campaign details"));
-                }
-                if let Some(error) = self.error.as_deref() {
-                    space = space.reason(error, move |ui| {
-                        design::message(ui, Tone::Error, error);
-                    });
-                }
-                let undo = space.show(ui);
-                if undo == Some(true)
-                    && let Some((name, path)) = self.discarded_details.take()
-                {
-                    self.name = name;
-                    self.path = path;
-                }
-                // The error’s own recovery follows the space.
-                if self.error.as_deref().is_some_and(|error| error.contains("registered at another folder")) {
-                    let reason = self.name.trim().is_empty().then_some("Type a name first.");
-                    if Action::secondary("Register as a new campaign").blocked(reason).show(ui).clicked()
-                        && let Err(error) = self.register_campaign_copy() { self.error = Some(error); }
-                    design::blocked_reason(ui, reason);
                 }
             };
             let form = if direct {

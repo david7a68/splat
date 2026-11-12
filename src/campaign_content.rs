@@ -206,7 +206,9 @@ pub struct CampaignContent {
     /// What `Discard` last dropped, for one step of undo, and the Campaign.md text it was a draft
     /// of. A missing or changed Campaign.md ends it.
     discarded_selections: Option<(Vec<PackageSelection>, Option<String>)>,
-    discarded_repair: Option<(String, String)>,
+    /// Each repair's discarded draft (its path and words), newest first. Round 26: one per
+    /// repair, so a second repair's Discard keeps the first one's Undo.
+    discarded_repairs: Vec<(String, String)>,
     /// The repair the DM edited or focused last. It owns the primary Save while it is open and
     /// changed; other changed repairs keep their drafts with a secondary Save.
     active_repair: Option<String>,
@@ -354,6 +356,52 @@ fn removed_suffix(names: usize) -> &'static str {
         "now has creatures Splat cannot find."
     } else {
         "now have creatures Splat cannot find."
+    }
+}
+
+/// A faulty manifest's warning, in the page's footer.
+fn manifest_message(package: &str, problem: &str) -> String {
+    format!(
+        "{package}: {problem}{}",
+        if problem == crate::content_workspace::DELETED_MANIFEST {
+            ""
+        } else {
+            ". Entries are still available."
+        }
+    )
+}
+
+/// A chosen package that is not available, and what Splat knows about where it went.
+struct Unavailable {
+    index: usize,
+    selection: PackageSelection,
+    registered: Option<Module>,
+    known: Option<Module>,
+    unregistered: bool,
+    relocated: Option<Module>,
+    message: String,
+}
+
+/// The page's package warnings, gathered once a frame (round 26 FD1).
+#[derive(Default)]
+struct PackageWarnings {
+    /// Each faulty manifest's words.
+    manifests: Vec<String>,
+    unavailable: Vec<Unavailable>,
+}
+
+impl PackageWarnings {
+    fn is_empty(&self) -> bool {
+        self.manifests.is_empty() && self.unavailable.is_empty()
+    }
+
+    fn words(&self) -> String {
+        self.manifests
+            .iter()
+            .chain(self.unavailable.iter().map(|u| &u.message))
+            .map(String::as_str)
+            .collect::<Vec<_>>()
+            .join(" ")
     }
 }
 
@@ -633,7 +681,7 @@ impl CampaignContent {
     fn forget_discards_of_other_campaigns(&mut self, campaign: &Campaign) {
         if self.active.as_ref().is_none_or(|old| old.id != campaign.id) {
             self.discarded_selections = None;
-            self.discarded_repair = None;
+            self.discarded_repairs.clear();
             self.removed_package = None;
             self.campaign_write = None;
         }
@@ -729,11 +777,9 @@ impl CampaignContent {
                     self.repairs = repairs;
                     // A repair's discard result ends with its repair: Saved, fixed in World or
                     // deleted. It lives through a reload that finds the repair again.
-                    if self.discarded_repair.as_ref().is_some_and(|(path, _)| {
-                        !self.repairs.iter().any(|repair| &repair.path == path)
-                    }) {
-                        self.discarded_repair = None;
-                    }
+                    let repairs = &self.repairs;
+                    self.discarded_repairs
+                        .retain(|(path, _)| repairs.iter().any(|repair| &repair.path == path));
                     self.forget_discard_of_changed_file(result.as_ref().map(|s| &s.document));
                     match result {
                         Ok(snapshot) => {
@@ -761,21 +807,30 @@ impl CampaignContent {
         // Round 25 review: the page scrolls, as the other pages do, so every repair and its Save
         // stay in reach at any window size. The page keeps the scroll bar's lane whether or not
         // the bar shows, so nothing moves when it starts to scroll.
-        let page_height = ui.available_height();
         let width = ui.available_width() - ui.spacing().scroll.allocated_width();
-        egui::ScrollArea::vertical()
-            .id_salt("campaign_packages_page")
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                // egui gives the content only the visible height, so a scroll area inside it (a
-                // repair editor, a list) would shrink below the fold. The page's content has all
-                // the height it needs; the page scrolls instead.
-                ui.allocate_ui(egui::vec2(width, f32::INFINITY), |ui| {
-                    self.editor_rects.clear();
-                    self.page(ui, campaigns, &active, page_height);
-                    self.scroll_to_focus(ui);
+        // Round 26: the page's results, reasons and package warnings sit in one footer pinned
+        // at the bottom of the page, below its scroll area, so none of them moves the save
+        // rows, the repairs or the package list.
+        // The footer and the page share a child `Ui` that starts here: the footer shortens what
+        // is left of it, and the header and tabs above stay where they are.
+        let rest = ui.available_rect_before_wrap();
+        ui.scope_builder(egui::UiBuilder::new().max_rect(rest), |ui| {
+            self.page_footer(ui, campaigns, &active, width.min(design::LIST_MEASURE));
+            let page_height = ui.available_height();
+            egui::ScrollArea::vertical()
+                .id_salt("campaign_packages_page")
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    // egui gives the content only the visible height, so a scroll area inside it
+                    // (a repair editor, a list) would shrink below the fold. The page's content
+                    // has all the height it needs; the page scrolls instead.
+                    ui.allocate_ui(egui::vec2(width, f32::INFINITY), |ui| {
+                        self.editor_rects.clear();
+                        self.page(ui, campaigns, &active, page_height);
+                        self.scroll_to_focus(ui);
+                    });
                 });
-            });
+        });
     }
 
     /// Keyboard and screen-reader focus bring the focused control into view. egui scrolls to a
@@ -821,11 +876,6 @@ impl CampaignContent {
             self.selection_bar(ui, campaigns, &active);
         }
         self.repair_section(ui, campaigns, &active);
-        // With the selection save row, the page's results and errors sit in its message space.
-        // Without it (nothing loaded), nothing below them can move.
-        if self.snapshot.is_none() {
-            self.inline_messages(ui, campaigns, &active);
-        }
         if !active.path.exists() {
             design::message(
                 ui,
@@ -863,15 +913,128 @@ impl CampaignContent {
         }
     }
 
-    /// Results and errors when no selection save row is on the page.
-    fn inline_messages(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
-        let mut write = false;
-        self.draw_reason(ui, campaigns, active, &mut write);
-        if write {
-            self.write_campaign(campaigns, active);
+    /// The page's one message footer (round 26): results with a live Undo first (the page's,
+    /// newest first, then a repair's discarded draft), then reasons (each repair's failed Save
+    /// or refusal, then the page's errors), then the plain results and the package warnings.
+    /// Each message keeps its owner and end event: a repair's messages name its file and end with
+    /// that repair's state, as before.
+    fn page_footer(
+        &mut self,
+        ui: &mut egui::Ui,
+        campaigns: &Campaigns,
+        active: &Campaign,
+        width: f32,
+    ) {
+        use std::cell::{Cell, RefCell};
+        let locked = self
+            .dirty()
+            .then_some("Save or discard campaign changes first.");
+        let results = self.live_results(active);
+        let reason = self.reason_words(campaigns, active);
+        let warnings = self.package_warnings_of(campaigns);
+        let warning_words = warnings.words();
+        let discarded: Vec<String> = self
+            .discarded_repairs
+            .iter()
+            .map(|(path, _)| path.clone())
+            .collect();
+        // What each repair says, by its file.
+        let repair_messages: Vec<(String, String, Option<String>, Option<String>)> = self
+            .repairs
+            .iter()
+            .map(|repair| {
+                let name = repair
+                    .path
+                    .rsplit('/')
+                    .next()
+                    .unwrap_or(&repair.path)
+                    .to_owned();
+                (
+                    repair.path.clone(),
+                    name,
+                    repair.refusal.clone(),
+                    repair.failure.clone(),
+                )
+            })
+            .collect();
+        let press = Cell::new(None);
+        let write = Cell::new(false);
+        let undo_repair = Cell::new(None);
+        let me = RefCell::new(&mut *self);
+        {
+            let mut footer = design::Footer::new(("campaign_page_footer", active.id), width);
+            for kind in results.iter().copied().filter(|kind| kind.has_undo()) {
+                let words = me.borrow().words_of(kind);
+                let (me, press) = (&me, &press);
+                footer.result(words, true, move |ui| {
+                    if let Some(pressed) = me.borrow().draw_one(ui, kind, locked) {
+                        press.set(Some((kind, pressed)));
+                    }
+                });
+            }
+            for path in &discarded {
+                let Some((_, name, _, _)) = repair_messages.iter().find(|(p, ..)| p == path) else {
+                    continue;
+                };
+                let undo_repair = &undo_repair;
+                footer.result(format!("{name} draft discarded."), true, move |ui| {
+                    if design::draft_discarded(ui, name) {
+                        undo_repair.set(Some(path.clone()));
+                    }
+                });
+            }
+            for (_, name, refusal, failure) in &repair_messages {
+                // A failed Save or a refusal belongs to its repair: its words name the file.
+                let words = if let Some(failure) = failure {
+                    format!("{name} is not saved. {failure}")
+                } else if let Some(refusal) = refusal {
+                    format!("{name}: {refusal}")
+                } else {
+                    continue;
+                };
+                footer.reason(words.clone(), move |ui| {
+                    design::message(ui, Tone::Error, &words);
+                });
+            }
+            if !reason.is_empty() {
+                let (me, write) = (&me, &write);
+                footer.reason(reason, move |ui| {
+                    let mut wants = false;
+                    me.borrow().draw_reason(ui, campaigns, active, &mut wants);
+                    write.set(wants);
+                });
+            }
+            for kind in results.iter().copied().filter(|kind| !kind.has_undo()) {
+                let words = me.borrow().words_of(kind);
+                let (me, press) = (&me, &press);
+                footer.result(words, false, move |ui| {
+                    if let Some(pressed) = me.borrow().draw_one(ui, kind, locked) {
+                        press.set(Some((kind, pressed)));
+                    }
+                });
+            }
+            if !warnings.is_empty() {
+                let me = &me;
+                footer.notice(warning_words, move |ui| {
+                    me.borrow_mut()
+                        .package_warnings(ui, campaigns, active, warnings.unavailable);
+                });
+            }
+            footer.show(ui);
         }
-        let press = self.draw_result(ui, active, None);
-        self.press_result(press);
+        let this = me.into_inner();
+        this.press_result(press.take());
+        if write.get() {
+            this.write_campaign(campaigns, active);
+        }
+        if let Some(path) = undo_repair.take()
+            && let Some(at) = this.discarded_repairs.iter().position(|(p, _)| *p == path)
+            && let (_, text) = this.discarded_repairs.remove(at)
+            && let Some(repair) = this.repairs.iter_mut().find(|repair| repair.path == path)
+        {
+            repair.draft = text;
+            repair.draft_changed(active, &mut this.repair_checks);
+        }
     }
 
     /// The page's errors, in one part: Save's or a load's error and the change check's error.
@@ -952,16 +1115,6 @@ impl CampaignContent {
         results
     }
 
-    /// The words of every live result, newest first, and whether any has a live Undo.
-    fn result_words(&self, active: &Campaign) -> Option<(String, bool)> {
-        let results = self.live_results(active);
-        if results.is_empty() {
-            return None;
-        }
-        let words: Vec<String> = results.iter().map(|kind| self.words_of(*kind)).collect();
-        Some((words.join(" "), results.iter().any(|kind| kind.has_undo())))
-    }
-
     /// One live result's words.
     fn words_of(&self, kind: PageResult) -> String {
         match kind {
@@ -991,23 +1144,8 @@ impl CampaignContent {
         }
     }
 
-    /// Draw every live result, newest first. While a draft waits, a manifest write's Undo greys
-    /// (`locked`): the write happened, so its words keep the text colour.
-    fn draw_result(
-        &self,
-        ui: &mut egui::Ui,
-        active: &Campaign,
-        locked: Option<&str>,
-    ) -> Option<(PageResult, ResultPress)> {
-        let mut press = None;
-        for kind in self.live_results(active) {
-            if let Some(pressed) = self.draw_one(ui, kind, locked) {
-                press = Some((kind, pressed));
-            }
-        }
-        press
-    }
-
+    /// Draw one live result. While a draft waits, a manifest write's Undo greys (`locked`): the
+    /// write happened, so its words keep the text colour.
     fn draw_one(
         &self,
         ui: &mut egui::Ui,
@@ -1411,17 +1549,14 @@ impl CampaignContent {
                                     // would refuse it, the state says Invalid and Save names the cause.
                                     let c = colors();
                                     // An action-time failure on the disk holds this repair's slot until its
-                                    // draft changes or a Save of it works.
-                                    let failed = repair
-                                        .failure
-                                        .as_ref()
-                                        .map(|reason| format!("Not saved. {reason}"));
+                                    // draft changes or a Save of it works. Round 26 FA3: the slot holds
+                                    // the state word; the cause is a reason in the page's footer.
                                     design::save_row_state(
                                         ui,
-                                        if let Some(failed) = &failed {
+                                        if repair.failure.is_some() {
                                             design::Status {
                                                 icon: icons::ERROR,
-                                                word: failed,
+                                                word: "Not saved",
                                                 color: c.document.invalid,
                                             }
                                         } else if repair.refusal.is_some() {
@@ -1452,18 +1587,15 @@ impl CampaignContent {
                                             .show(ui)
                                             .clicked()
                                     {
-                                        self.discarded_repair =
-                                            Some((path.clone(), repair.draft.clone()));
+                                        self.discarded_repairs.retain(|(p, _)| p != path);
+                                        self.discarded_repairs
+                                            .insert(0, (path.clone(), repair.draft.clone()));
                                         repair.draft = repair.baseline.clone();
                                         repair.draft_changed(active, checks);
                                     }
-                                    if repair.dirty()
-                                        && self
-                                            .discarded_repair
-                                            .as_ref()
-                                            .is_some_and(|(p, _)| p == path)
-                                    {
-                                        self.discarded_repair = None;
+                                    // This repair's next edit ends its own result only.
+                                    if repair.dirty() {
+                                        self.discarded_repairs.retain(|(p, _)| p != path);
                                     }
                                     if repair.dirty() {
                                         // Save refuses the draft: Discard is the one way to switch.
@@ -1480,37 +1612,6 @@ impl CampaignContent {
                             );
                         });
                     });
-                    // Round 25 FD1: one message space below the save row, two lines high
-                    // whatever it holds, as Library and World have. A result with a live Undo
-                    // comes first and Save's reason follows it in the same part (lead ruling).
-                    // Discard returns to the unreadable file, so its reason follows the discard
-                    // result. The result lives from Discard to this draft's next edit, its Undo,
-                    // a Save, a reload or another campaign; then the reason leads.
-                    let name = path.rsplit('/').next().unwrap_or(path);
-                    // Only whether the result lives: its text is taken on Undo, never per frame.
-                    let discarded = self
-                        .discarded_repair
-                        .as_ref()
-                        .is_some_and(|(p, _)| p == path);
-                    let result = discarded.then(|| format!("{name} draft discarded."));
-                    let id = format!("campaign_repair_message {path}");
-                    let mut space = design::MessageSpace::new(&id, ui.available_width());
-                    if let Some(words) = &result {
-                        // Its Undo is live while the result shows, so it comes first.
-                        space = space.result(words, true, |ui| design::draft_discarded(ui, name));
-                    }
-                    if let Some(refusal) = &repair.refusal {
-                        space = space.reason(refusal, |ui| {
-                            design::message(ui, Tone::Error, refusal);
-                        });
-                    }
-                    let undo = space.show(ui);
-                    if undo == Some(true)
-                        && let Some((_, text)) = self.discarded_repair.take()
-                    {
-                        repair.draft = text;
-                        repair.draft_changed(active, checks);
-                    }
                 });
             }
         }
@@ -1665,51 +1766,106 @@ impl CampaignContent {
                 });
             });
         }
-        // Round 25 review: one message space below the save row holds the page's latest result
-        // (first while its Undo is live) and its errors: Save's or a load's, and the change
-        // check's. So no result or error moves the repairs or the package list below.
-        let locked = self
-            .dirty()
-            .then_some("Save or discard campaign changes first.");
-        let reason = self.reason_words(campaigns, active);
-        let result = self.result_words(active);
-        let mut write = false;
-        let mut space = design::MessageSpace::new("campaign_page_message", ui.available_width());
-        if let Some((words, has_undo)) = &result {
-            space = space.result(words, *has_undo, |ui| self.draw_result(ui, active, locked));
-        }
-        if !reason.is_empty() {
-            space = space.reason(&reason, |ui| {
-                self.draw_reason(ui, campaigns, active, &mut write);
-            });
-        }
-        let press = space.show(ui).flatten();
-        self.press_result(press);
-        if write {
-            self.write_campaign(campaigns, active);
-        }
         if reload {
             self.reload(ui.ctx(), campaigns, active.clone());
         }
     }
 
-    fn packages(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
-        ui.scope(|ui| {
-            ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
-            self.packages_content(ui, campaigns, active);
-        });
+    /// Round 26 FD1: the package warnings (a faulty manifest, a chosen package that is not
+    /// available) sit in the page's footer, so none of them moves the package list. Gathered once
+    /// a frame, for the footer's words and for drawing.
+    fn package_warnings_of(&self, campaigns: &Campaigns) -> PackageWarnings {
+        let Some(snapshot) = &self.snapshot else {
+            return PackageWarnings::default();
+        };
+        let catalogue = &snapshot.catalogue;
+        let manifests = campaigns
+            .modules()
+            .iter()
+            .filter_map(|module| {
+                catalogue
+                    .manifest_problems
+                    .get(&module.id)
+                    .map(|problem| manifest_message(&module.name, problem))
+            })
+            .collect();
+        let unavailable = snapshot
+            .document
+            .selections
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| {
+                catalogue
+                    .resolve_ref(&s.package)
+                    .ok()
+                    .is_none_or(|id| !catalogue.modules.iter().any(|m| m.id == id))
+            })
+            .map(|(index, selection)| {
+                let mut selection = selection.clone();
+                let registered = campaigns
+                    .modules()
+                    .iter()
+                    .find(|module| selection.package.id == Some(module.id))
+                    .cloned();
+                if let Some(module) = &registered {
+                    selection.name = Some(module.name.clone());
+                }
+                let known = registered.clone().or_else(|| {
+                    selection
+                        .package
+                        .id
+                        .and_then(|id| campaigns.unregistered_module(id).cloned())
+                });
+                let unregistered = registered.is_none() && known.is_some();
+                let relocated = known
+                    .as_ref()
+                    .filter(|known| !known.path.is_dir())
+                    .and_then(|known| relocated_package(known, campaigns.modules()));
+                let message = if let (Some(old), Some(moved)) = (&known, &relocated) {
+                    format!(
+                        "{} moved from {}/ to {}/.",
+                        moved.name,
+                        folder_words(&old.path),
+                        folder_words(&moved.path)
+                    )
+                } else if unregistered {
+                    format!("{} is not registered.", selection.display_name())
+                } else {
+                    selection.unavailable_message()
+                };
+                Unavailable {
+                    index,
+                    selection,
+                    registered,
+                    known,
+                    unregistered,
+                    relocated,
+                    message,
+                }
+            })
+            .collect();
+        PackageWarnings {
+            manifests,
+            unavailable,
+        }
     }
 
-    fn packages_content(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
+    /// Draw the package warnings, in the page's footer.
+    fn package_warnings(
+        &mut self,
+        ui: &mut egui::Ui,
+        campaigns: &Campaigns,
+        active: &Campaign,
+        unavailable: Vec<Unavailable>,
+    ) {
         let manifest_locked = self
             .dirty()
             .then_some("Save or discard campaign changes first.");
-        let snapshot = self.snapshot.as_mut().unwrap();
+        let Some(snapshot) = self.snapshot.as_mut() else {
+            return;
+        };
         let catalogue = &snapshot.catalogue;
         let document = &mut snapshot.document;
-        let closure = &snapshot.closure.1;
-        let c = colors();
-
         for module in campaigns.modules() {
             if let Some(problem) = catalogue.manifest_problems.get(&module.id) {
                 let path = &catalogue.entries[&module.id].entry.path;
@@ -1719,15 +1875,7 @@ impl CampaignContent {
                 } else {
                     "Write the manifest again".into()
                 };
-                let message = format!(
-                    "{}: {problem}{}",
-                    module.name,
-                    if problem == crate::content_workspace::DELETED_MANIFEST {
-                        ""
-                    } else {
-                        ". Entries are still available."
-                    }
-                );
+                let message = manifest_message(&module.name, problem);
                 let mut open = false;
                 let tone = crate::content_workspace::manifest_fault_tone(exists);
                 let pressed = if exists {
@@ -1772,6 +1920,172 @@ impl CampaignContent {
                 }
             }
         }
+        // Unavailable registrations and references remain explicit and editable.
+        let mut remove = None;
+        for Unavailable {
+            index: i,
+            selection,
+            registered,
+            known,
+            unregistered,
+            relocated,
+            message,
+        } in unavailable
+        {
+            ui.push_id(i, |ui| {
+                let text = design::message(ui, Tone::Warning, &message);
+                let remaining = egui::Rect::from_min_max(
+                    egui::pos2(text.rect.left(), ui.cursor().top()),
+                    ui.max_rect().max,
+                );
+                ui.scope_builder(egui::UiBuilder::new().max_rect(remaining), |ui| {
+                    let users = selection.campaign_users(catalogue);
+                    if !users.is_empty() {
+                        let names: Vec<_> = users.iter().map(|(_, name)| name.as_str()).collect();
+                        if let Some(at) = design::linked_sentence(
+                            ui,
+                            &names,
+                            if names.len() == 1 {
+                                "uses its creatures."
+                            } else {
+                                "use its creatures."
+                            },
+                        ) {
+                            self.open_lookup = Some(users[at].0);
+                        }
+                    }
+                    if relocated.is_none()
+                        && let Some(known) = &known
+                    {
+                        design::help(ui, &format!("It was in {}/.", folder_words(&known.path)));
+                    }
+                    ui.horizontal_wrapped(|ui| {
+                        if let Some(module) = &relocated
+                            && Action::secondary("Use this folder")
+                                .blocked(manifest_locked)
+                                .density(Density::Read)
+                                .show(ui)
+                                .clicked()
+                        {
+                            new_result!(self, PageResult::Recovered(module.id));
+                            self.recovered.retain(|(id, _)| *id != module.id);
+                            self.recovered
+                                .push((module.id, (module.clone(), registered.clone())));
+                            self.found_package = Some(module.clone());
+                        }
+                        if unregistered
+                            && relocated.is_none()
+                            && Action::secondary("Register it again")
+                                .blocked(manifest_locked)
+                                .density(Density::Read)
+                                .show(ui)
+                                .clicked()
+                            && let Some(known) = &known
+                        {
+                            match find_package_folder(
+                                &selection.package,
+                                selection.name.as_deref(),
+                                &known.path,
+                            ) {
+                                Ok(module) => {
+                                    new_result!(self, PageResult::Recovered(module.id));
+                                    self.recovered.retain(|(id, _)| *id != module.id);
+                                    self.recovered
+                                        .push((module.id, (module.clone(), registered.clone())));
+                                    self.found_package = Some(module);
+                                }
+                                Err(error) => self.error = Some(error),
+                            }
+                        }
+                        // Round 25 family: a message action without an icon has the
+                        // secondary border, beside `Use this folder` too.
+                        if Action::secondary("Find the folder…")
+                            .blocked_if(
+                                document.selections != self.saved_selections
+                                    || self.repairs.iter().any(Repair::dirty),
+                                "Save or discard changes before finding the folder.",
+                            )
+                            .density(Density::Read)
+                            .show(ui)
+                            .clicked()
+                            && let Some(folder) = crate::hermetic::pick_folder_from(
+                                known.as_ref().and_then(|module| module.path.parent()),
+                            )
+                        {
+                            match find_package_folder(
+                                &selection.package,
+                                selection.name.as_deref(),
+                                &folder,
+                            ) {
+                                Ok(module) => {
+                                    new_result!(self, PageResult::Recovered(module.id));
+                                    self.recovered.retain(|(id, _)| *id != module.id);
+                                    self.recovered
+                                        .push((module.id, (module.clone(), registered.clone())));
+                                    self.found_package = Some(module);
+                                }
+                                Err(error) => self.error = Some(error),
+                            }
+                        }
+                        if Action::secondary("Remove from this campaign")
+                            .density(Density::Read)
+                            .show(ui)
+                            .clicked()
+                        {
+                            remove = Some(i);
+                        }
+                    });
+                    design::quiet_section(ui, "Technical details", |ui| {
+                        ui.label(Type::Mono.rich(
+                            ui,
+                            format!("Package reference: {}", selection.package.label()),
+                        ));
+                    });
+                });
+            });
+        }
+        if let Some(i) = remove {
+            let selection = document.selections[i].clone();
+            let before = document.selections.clone();
+            let users = selection.campaign_users(catalogue);
+            document.selections.remove(i);
+            match document.save() {
+                Ok(()) => {
+                    self.saved_selections = document.selections.clone();
+                    new_result!(self, PageResult::Removed);
+                    self.removal_text_preparations += 1;
+                    let name = selection.display_name().to_owned();
+                    self.removed_package = Some(RemovedPackage {
+                        campaign: active.id,
+                        words: removal_words(&name, &users),
+                        before,
+                        after: document.selections.clone(),
+                        users,
+                    });
+                    self.reconcile.checked_at = None;
+                }
+                Err(error) => {
+                    document.selections = before;
+                    self.error = Some(error);
+                }
+            }
+        }
+    }
+
+    fn packages(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
+        ui.scope(|ui| {
+            ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
+            self.packages_content(ui, campaigns, active);
+        });
+    }
+
+    fn packages_content(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
+        let snapshot = self.snapshot.as_mut().unwrap();
+        let catalogue = &snapshot.catalogue;
+        let document = &mut snapshot.document;
+        let closure = &snapshot.closure.1;
+        let c = colors();
+
         let affected: Vec<_> = catalogue
             .entries
             .values()
@@ -1965,197 +2279,6 @@ impl CampaignContent {
                         });
                 });
             design::named(ui, &issues.header_response, &heading);
-        }
-        // Unavailable registrations and references remain explicit and editable.
-        let unavailable: Vec<_> = document
-            .selections
-            .iter()
-            .enumerate()
-            .filter(|(_, s)| {
-                catalogue
-                    .resolve_ref(&s.package)
-                    .ok()
-                    .is_none_or(|id| !catalogue.modules.iter().any(|m| m.id == id))
-            })
-            .map(|(i, selection)| {
-                let mut selection = selection.clone();
-                if let Some(module) = campaigns
-                    .modules()
-                    .iter()
-                    .find(|module| selection.package.id == Some(module.id))
-                {
-                    selection.name = Some(module.name.clone());
-                }
-                (i, selection)
-            })
-            .collect();
-        let mut remove = None;
-        for (i, selection) in unavailable {
-            let registered = campaigns
-                .modules()
-                .iter()
-                .find(|module| selection.package.id == Some(module.id))
-                .cloned();
-            let known = registered.clone().or_else(|| {
-                selection
-                    .package
-                    .id
-                    .and_then(|id| campaigns.unregistered_module(id).cloned())
-            });
-            let unregistered = registered.is_none() && known.is_some();
-            let relocated = known
-                .as_ref()
-                .filter(|known| !known.path.is_dir())
-                .and_then(|known| relocated_package(known, campaigns.modules()));
-            ui.push_id(i, |ui| {
-                let message = if let (Some(old), Some(moved)) = (&known, &relocated) {
-                    format!(
-                        "{} moved from {}/ to {}/.",
-                        moved.name,
-                        folder_words(&old.path),
-                        folder_words(&moved.path)
-                    )
-                } else if unregistered {
-                    format!("{} is not registered.", selection.display_name())
-                } else {
-                    selection.unavailable_message()
-                };
-                let text = design::message(ui, Tone::Warning, &message);
-                let remaining = egui::Rect::from_min_max(
-                    egui::pos2(text.rect.left(), ui.cursor().top()),
-                    ui.max_rect().max,
-                );
-                ui.scope_builder(egui::UiBuilder::new().max_rect(remaining), |ui| {
-                    let users = selection.campaign_users(catalogue);
-                    if !users.is_empty() {
-                        let names: Vec<_> = users.iter().map(|(_, name)| name.as_str()).collect();
-                        if let Some(at) = design::linked_sentence(
-                            ui,
-                            &names,
-                            if names.len() == 1 {
-                                "uses its creatures."
-                            } else {
-                                "use its creatures."
-                            },
-                        ) {
-                            self.open_lookup = Some(users[at].0);
-                        }
-                    }
-                    if relocated.is_none()
-                        && let Some(known) = &known
-                    {
-                        design::help(ui, &format!("It was in {}/.", folder_words(&known.path)));
-                    }
-                    ui.horizontal_wrapped(|ui| {
-                        if let Some(module) = &relocated
-                            && Action::secondary("Use this folder")
-                                .blocked(manifest_locked)
-                                .density(Density::Read)
-                                .show(ui)
-                                .clicked()
-                        {
-                            new_result!(self, PageResult::Recovered(module.id));
-                            self.recovered.retain(|(id, _)| *id != module.id);
-                            self.recovered
-                                .push((module.id, (module.clone(), registered.clone())));
-                            self.found_package = Some(module.clone());
-                        }
-                        if unregistered
-                            && relocated.is_none()
-                            && Action::secondary("Register it again")
-                                .blocked(manifest_locked)
-                                .density(Density::Read)
-                                .show(ui)
-                                .clicked()
-                            && let Some(known) = &known
-                        {
-                            match find_package_folder(
-                                &selection.package,
-                                selection.name.as_deref(),
-                                &known.path,
-                            ) {
-                                Ok(module) => {
-                                    new_result!(self, PageResult::Recovered(module.id));
-                                    self.recovered.retain(|(id, _)| *id != module.id);
-                                    self.recovered
-                                        .push((module.id, (module.clone(), registered.clone())));
-                                    self.found_package = Some(module);
-                                }
-                                Err(error) => self.error = Some(error),
-                            }
-                        }
-                        // Round 25 family: a message action without an icon has the
-                        // secondary border, beside `Use this folder` too.
-                        if Action::secondary("Find the folder…")
-                            .blocked_if(
-                                document.selections != self.saved_selections
-                                    || self.repairs.iter().any(Repair::dirty),
-                                "Save or discard changes before finding the folder.",
-                            )
-                            .density(Density::Read)
-                            .show(ui)
-                            .clicked()
-                            && let Some(folder) = crate::hermetic::pick_folder_from(
-                                known.as_ref().and_then(|module| module.path.parent()),
-                            )
-                        {
-                            match find_package_folder(
-                                &selection.package,
-                                selection.name.as_deref(),
-                                &folder,
-                            ) {
-                                Ok(module) => {
-                                    new_result!(self, PageResult::Recovered(module.id));
-                                    self.recovered.retain(|(id, _)| *id != module.id);
-                                    self.recovered
-                                        .push((module.id, (module.clone(), registered.clone())));
-                                    self.found_package = Some(module);
-                                }
-                                Err(error) => self.error = Some(error),
-                            }
-                        }
-                        if Action::secondary("Remove from this campaign")
-                            .density(Density::Read)
-                            .show(ui)
-                            .clicked()
-                        {
-                            remove = Some(i);
-                        }
-                    });
-                    design::quiet_section(ui, "Technical details", |ui| {
-                        ui.label(Type::Mono.rich(
-                            ui,
-                            format!("Package reference: {}", selection.package.label()),
-                        ));
-                    });
-                });
-            });
-        }
-        if let Some(i) = remove {
-            let selection = document.selections[i].clone();
-            let before = document.selections.clone();
-            let users = selection.campaign_users(catalogue);
-            document.selections.remove(i);
-            match document.save() {
-                Ok(()) => {
-                    self.saved_selections = document.selections.clone();
-                    new_result!(self, PageResult::Removed);
-                    self.removal_text_preparations += 1;
-                    let name = selection.display_name().to_owned();
-                    self.removed_package = Some(RemovedPackage {
-                        campaign: active.id,
-                        words: removal_words(&name, &users),
-                        before,
-                        after: document.selections.clone(),
-                        users,
-                    });
-                    self.reconcile.checked_at = None;
-                }
-                Err(error) => {
-                    document.selections = before;
-                    self.error = Some(error);
-                }
-            }
         }
         design::rule(ui);
         design::Column::left("campaign_modules", 236.0, 180.0..=420.0)
@@ -2993,15 +3116,19 @@ mod tests {
         let mut content = CampaignContent {
             active: Some(first.clone()),
             discarded_selections: Some((Vec::new(), None)),
-            discarded_repair: Some(("note.md".into(), "words".into())),
+            // Round 26: two repairs' discards, each with its own Undo.
+            discarded_repairs: vec![
+                ("note.md".into(), "words".into()),
+                ("other.md".into(), "more".into()),
+            ],
             ..Default::default()
         };
         content.reload(&ctx, &campaigns, first);
         assert!(content.discarded_selections.is_some(), "a refresh keeps it");
-        assert!(content.discarded_repair.is_some(), "a refresh keeps it");
+        assert_eq!(content.discarded_repairs.len(), 2, "a refresh keeps both");
         content.reload(&ctx, &campaigns, second);
         assert!(content.discarded_selections.is_none());
-        assert!(content.discarded_repair.is_none());
+        assert!(content.discarded_repairs.is_empty());
 
         // Round 23 FA8: the discard belongs to Campaign.md as it was read. The same file keeps
         // it; a changed or missing file ends it.

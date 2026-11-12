@@ -1585,7 +1585,7 @@ impl CombatSync {
             });
             return;
         };
-        use crate::design::{self, Tone, Type, colors, icons};
+        use crate::design::{self, Type, colors, icons};
         let max_hp = remote.max_hp;
         let writable = remote.can_edit;
         // Say once, at the top, which values can change and what a change does.
@@ -1607,27 +1607,8 @@ impl CombatSync {
             // Round 25 review: help keeps the reader measure.
             design::help(ui, words);
         });
-        // Round 25 review: a rest's result has a reserved place above the fields, two lines high
-        // whatever it holds, so neither the result nor its dismissal or the next read moves them.
-        // Round 25 FD3: a dismiss is the close icon at the message end, in the one Party form.
-        let mut space = design::MessageSpace::<bool>::new(
-            "combat_sync_result",
-            ui.available_width().min(design::LIST_MEASURE),
-        );
-        if let Some(notice) = &self.action_notice {
-            let (tone, words) = match notice {
-                ActionNotice::Taken(words) => (Tone::Success, words.as_str()),
-                ActionNotice::Failed(words) => (Tone::Error, words.as_str()),
-            };
-            space = space.result(words, false, move |ui| {
-                crate::party::dismissable(ui, |ui| {
-                    design::message(ui, tone, words);
-                })
-            });
-        }
-        if space.show(ui) == Some(true) {
-            self.action_notice = None;
-        }
+        // Round 26: an action's result sits in the sheet's footer (`footer_messages`), so neither
+        // the result nor its dismissal or the next read moves the fields.
         let wells = self.wells(ui, max_hp);
         let before = self.desired.groups.clone();
         ui.add_enabled_ui(writable, |ui| {
@@ -1647,6 +1628,26 @@ impl CombatSync {
             ui,
             "Concentration, custom effects, initiative and DM notes stay in Splat. D&D Beyond has no place for them.",
         );
+    }
+    /// Round 26: a sync action's result (a rest taken, or why it failed), in the footer of the
+    /// sheet pane. It lives until its dismiss, the next action or another character; the
+    /// dismiss is the close icon at the message end, in the one Party form.
+    pub fn footer_messages<'a>(&'a mut self, footer: &mut crate::design::Footer<'a>) {
+        use crate::design::{self, Tone};
+        let Some((tone, words)) = self.action_notice.as_ref().map(|notice| match notice {
+            ActionNotice::Taken(words) => (Tone::Success, words.clone()),
+            ActionNotice::Failed(words) => (Tone::Error, words.clone()),
+        }) else {
+            return;
+        };
+        let notice = &mut self.action_notice;
+        footer.result(words.clone(), false, move |ui| {
+            if crate::party::dismissable(ui, |ui| {
+                design::message(ui, tone, &words);
+            }) {
+                *notice = None;
+            }
+        });
     }
     /// The conflict heading for a group: its name on the sheet, where it has one.
     fn group_name(&self, key: &str) -> String {

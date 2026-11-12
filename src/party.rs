@@ -748,16 +748,27 @@ impl Party {
             ui.label(Type::Small.rich(ui, class_line(record)).color(c.muted));
         }
         let Some(record) = newer(self.combat.record(), self.reader.sheets.get(id)) else {
-            if session.is_some() && self.sync_heading(ui) {
-                self.sync_panel(ui);
-            }
-            if !self.reader.loading() {
-                ui.label(
-                    Type::Body
-                        .rich(ui, "No local copy is available for this character.")
-                        .color(c.muted),
-                );
-            }
+            // Round 26: the sync panel's result sits in the sheet's footer, in a child `Ui` that
+            // starts here, so what is above stays.
+            let rest = ui.available_rect_before_wrap();
+            ui.scope_builder(egui::UiBuilder::new().max_rect(rest), |ui| {
+                let width = ui.available_width().min(design::LIST_MEASURE);
+                let mut footer = design::Footer::new(("party_sheet_footer", id), width);
+                if session.is_some() {
+                    self.combat.footer_messages(&mut footer);
+                }
+                footer.show(ui);
+                if session.is_some() && self.sync_heading(ui) {
+                    self.sync_panel(ui);
+                }
+                if !self.reader.loading() {
+                    ui.label(
+                        Type::Body
+                            .rich(ui, "No local copy is available for this character.")
+                            .color(c.muted),
+                    );
+                }
+            });
             return;
         };
         let before = self.page;
@@ -798,45 +809,59 @@ impl Party {
                 .map(|entry| splat::character::check::review(record, entry));
             self.content_entry = Some((record.source.content_hash.clone(), entry));
         }
-        egui::ScrollArea::vertical()
-            .id_salt((id, self.page))
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                // The heading and its body are one block, below the tabs: the tabs never sit
-                // between them. Both scroll with the sheet, as one scroll is easier at the table
-                // than a scroll inside a scroll.
-                if session.is_some() && self.sync_heading(ui) {
-                    self.sync_panel(ui);
+        // The footer and the sheet share a child `Ui` that starts below the tabs.
+        let rest = ui.available_rect_before_wrap();
+        ui.scope_builder(egui::UiBuilder::new().max_rect(rest), |ui| {
+            // Round 26: the sync panel's result sits in the sheet's footer, below its scroll area.
+            {
+                let width = ui.available_width().min(design::LIST_MEASURE);
+                let mut footer = design::Footer::new(("party_sheet_footer", id), width);
+                if session.is_some() {
+                    self.combat.footer_messages(&mut footer);
                 }
-                let Some(record) = newer(self.combat.record(), self.reader.sheets.get(id)) else {
-                    return;
-                };
-                // One person has one HP on this page: the list's, while tonight's fights count.
-                let live = self
-                    .tonight_values(record)
-                    .map(|(hp, temporary_hp)| LiveValues {
-                        hp: Some(hp),
-                        max_hp: record.stat("max_hp"),
-                        temporary_hp,
-                        death_saves: record.initial.death_saves.clone(),
-                        death_saves_shown: false,
-                        conditions: sheet_conditions(record),
-                    });
-                sheet_page(ui, record, self.page, &self.search, live.as_ref());
-                if self.page == 0 {
-                    ui.add_space(design::M);
-                    design::quiet_section(ui, "Technical details", |ui| {
-                        source_and_parity(
-                            ui,
-                            record,
-                            self.content_entry.as_ref().map(|(_, entry)| entry),
-                            self.character_review.as_ref(),
-                            self.reader.campaign_path(),
-                            self.reader.local_scope(),
-                        );
-                    });
-                }
-            });
+                footer.show(ui);
+            }
+            egui::ScrollArea::vertical()
+                .id_salt((id, self.page))
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    // The heading and its body are one block, below the tabs: the tabs never sit
+                    // between them. Both scroll with the sheet, as one scroll is easier at the table
+                    // than a scroll inside a scroll.
+                    if session.is_some() && self.sync_heading(ui) {
+                        self.sync_panel(ui);
+                    }
+                    let Some(record) = newer(self.combat.record(), self.reader.sheets.get(id))
+                    else {
+                        return;
+                    };
+                    // One person has one HP on this page: the list's, while tonight's fights count.
+                    let live = self
+                        .tonight_values(record)
+                        .map(|(hp, temporary_hp)| LiveValues {
+                            hp: Some(hp),
+                            max_hp: record.stat("max_hp"),
+                            temporary_hp,
+                            death_saves: record.initial.death_saves.clone(),
+                            death_saves_shown: false,
+                            conditions: sheet_conditions(record),
+                        });
+                    sheet_page(ui, record, self.page, &self.search, live.as_ref());
+                    if self.page == 0 {
+                        ui.add_space(design::M);
+                        design::quiet_section(ui, "Technical details", |ui| {
+                            source_and_parity(
+                                ui,
+                                record,
+                                self.content_entry.as_ref().map(|(_, entry)| entry),
+                                self.character_review.as_ref(),
+                                self.reader.campaign_path(),
+                                self.reader.local_scope(),
+                            );
+                        });
+                    }
+                });
+        });
     }
 }
 

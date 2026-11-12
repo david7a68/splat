@@ -279,6 +279,17 @@ fn is_icon(text: &str) -> bool {
 /// Where a control's words start: the leftmost text painted inside its press area. An icon
 /// before the words does not count: `line_start` hangs it in the gutter, so the words start at
 /// the text edge.
+/// Round 26: the pane footer whose words hold `words`: the smallest named group that holds them.
+fn footer_with(d: &Driver<'_>, words: &str) -> Option<egui::Rect> {
+    d.nodes()
+        .into_iter()
+        .filter(|node| {
+            node.role == egui::accesskit::Role::GenericContainer && node.name.contains(words)
+        })
+        .map(|node| node.rect)
+        .min_by(|a, b| a.area().total_cmp(&b.area()))
+}
+
 fn words_left_in(d: &Driver<'_>, area: egui::Rect) -> Option<f32> {
     let mut left = None::<f32>;
     d.each_painted_text(|text, _| {
@@ -1970,17 +1981,16 @@ pub mod campaign_content {
             },
         );
         // FD2: one rule separates the open repair from the package list, an `L` gap below the
-        // repair. Round 25 FD1: the repair ends with its message space below Save repaired note,
-        // so the gap is below that space. The rule must sit above the first thing drawn after
-        // the repair.
+        // repair. Round 26: the repair's messages are in the page's footer, so the repair ends
+        // with its save row. The rule must sit above the first thing drawn after the repair.
         d.observe_both(
             "iter-14-E-FD2",
-            "One rule, an L gap below the repair's message space, separates the repair from the list",
+            "One rule, an L gap below the repair's save row, separates the repair from the list",
             |d| {
                 let Some(save) = d.place_of("Save repaired note") else {
                     return false;
                 };
-                let end = save.bottom() + crate::design::message_space_height();
+                let end = save.bottom();
                 let Some(next) = d
                     .nodes()
                     .into_iter()
@@ -2180,7 +2190,9 @@ pub mod campaign_content {
         set_read_only(true);
         d.click("Save repaired note");
         d.settle();
-        const READ_ONLY: &str = "Not saved. This file is read only.";
+        // Round 26 FA3: the state slot says `Not saved`; the cause is a reason in the page's
+        // footer, where a parse cause also sits, and it names its repair's file.
+        const READ_ONLY: &str = "Broken.md is not saved. This file is read only.";
         const NOT_SAVED_TWICE: &str = "The repair has not been saved";
         let unchanged = std::fs::read(&file).unwrap() == on_disk;
         d.observe(
@@ -2192,9 +2204,42 @@ pub mod campaign_content {
                 d.visible_text("Unsaved")
             ),
         );
+        for size in REPAIR_SIZES {
+            let placed = d.at_size(size, |d| {
+                let save = d.place_of("Save repaired note")?;
+                // The save row's state: the painted text on Save's line that says Not saved.
+                let mut slot = None;
+                d.each_painted_text(|text, _| {
+                    let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                    if text.galley.job.text.contains("Not saved")
+                        && (rect.center().y - save.center().y).abs() <= crate::design::S
+                    {
+                        slot = Some(text.galley.job.text.clone());
+                    }
+                });
+                let footer = footer_with(d, READ_ONLY)?;
+                let cause = d.painted_rect_in(READ_ONLY, egui::Rect::EVERYTHING)?;
+                Some((slot?, footer, cause, save, d.window_size().1))
+            });
+            d.observe(
+                "iter-26-C-FA3",
+                placed
+                    .as_ref()
+                    .is_some_and(|(slot, footer, cause, save, height)| {
+                        slot.trim_start_matches(|c: char| !c.is_alphabetic()) == "Not saved"
+                            && footer.contains(cause.center())
+                            && footer.top() > save.bottom()
+                            && footer.bottom() >= *height - crate::design::XXL
+                    }),
+                format!(
+                    "At {size:?}: the slot says only Not saved, and the cause is in the footer at \
+                     the pane's bottom (slot, footer, cause, Save, window height): {placed:?}"
+                ),
+            );
+        }
         // Round 24 FD1, AD3, SD1: the failed Save stays open for a retry, but does not own the
-        // primary. FD9: the failure shows once, in the state slot; the message above stops at
-        // the way to fix the file.
+        // primary. FD9: the failure shows once, in the footer; the message above stops at the
+        // way to fix the file.
         d.observe_both(
             "iter-24-C-FD1",
             "After a read-only Save, Save repaired note is open, secondary and the failure shows once",
@@ -2225,34 +2270,26 @@ pub mod campaign_content {
         );
         set_read_only(false);
         d.click("Discard");
-        // Round 25 FD1: the discard result sits in the message space below the save row. Its
-        // Undo is live, so it comes first, on the space's first line, and the invalid file's
-        // reason follows it in the same part. The editor keeps its top through the result, Undo
-        // discard, an invalid draft and a valid one, at every size.
+        // Round 25 FD1, round 26: the discard result sits in the page's footer. Its Undo is live,
+        // so it comes first, and the invalid file's reason follows it. The editor keeps its top
+        // through the result, Undo discard, an invalid draft and a valid one, at every size.
         const DISCARDED: &str = "Broken.md draft discarded.";
         const UNDO_DISCARD: &str = "Undo discard of Broken.md";
         let discarded_tops = editor_tops(d);
         let first_line = REPAIR_SIZES.map(|size| {
             d.at_size(size, |d| {
-                let save = d
-                    .nodes()
-                    .into_iter()
-                    .filter(|node| node.name == "Save repaired note")
-                    .map(|node| node.rect)
-                    .next();
+                let footer = footer_with(d, DISCARDED);
                 let undo = d.place_of(UNDO_DISCARD);
                 let reason = d.painted_rect_in("Line 3 opens a list", egui::Rect::EVERYTHING);
-                // The space starts below the save row; its first line is one Body line deep.
-                save.zip(undo)
-                    .zip(reason)
-                    .is_some_and(|((save, undo), reason)| {
-                        undo.top() >= save.bottom()
-                            && undo.center().y
-                                < save.bottom()
-                                    + crate::design::Type::Body.line()
-                                    + crate::design::S
+                let editor = d.place_of("Note text: Notes/Broken.md");
+                footer.zip(undo).zip(reason).zip(editor).is_some_and(
+                    |(((footer, undo), reason), editor)| {
+                        footer.contains_rect(undo)
+                            && footer.contains(reason.center())
                             && reason.top() > undo.center().y
-                    })
+                            && footer.top() > editor.top()
+                    },
+                )
             })
         });
         d.observe(
@@ -2263,7 +2300,7 @@ pub mod campaign_content {
                 && d.visible_text(DISCARDED)
                 && d.visible_text("Invalid"),
             format!(
-                "Editor tops: clean {clean_tops:?}, after Discard {discarded_tops:?}; Undo on the first line, reason after it, at 960/1200/1920: {first_line:?}"
+                "Editor tops: clean {clean_tops:?}, after Discard {discarded_tops:?}; Undo first in the footer, the reason after it, at 960/1200/1920: {first_line:?}"
             ),
         );
         d.click(UNDO_DISCARD);
@@ -2381,10 +2418,11 @@ pub mod campaign_content {
         assert!(manifest.exists());
     }
 
-    /// Round 25 review: a repair whose discard result and cause need more than the message
-    /// space's two lines. The part stays two lines high; its words scroll inside it by keyboard
-    /// and wheel; Tab reaches it by its whole message, and its focus ring stays clear of its
-    /// scroll bar. At 960, 1200 and 1920. Starts and ends with only Broken.md's repair.
+    /// Round 25 review, round 26: a repair whose discard result and cause are long. They sit in
+    /// the page's footer, which is as tall as its words up to a third of the pane; Tab reaches it
+    /// by its whole message and its focus ring stays clear of its scroll bar. When the words need
+    /// more than that third, they scroll inside by keyboard and wheel; otherwise every word is in
+    /// view. At 960, 1200 and 1920. Starts and ends with only Broken.md's repair.
     fn message_space_overflows_and_scrolls(d: &mut Driver<'_>) {
         const NAME: &str = "The ledger of the toll keeper at the old Ashford bridge and every name he wrote down.md";
         let path = format!("Notes/{NAME}");
@@ -2398,10 +2436,10 @@ pub mod campaign_content {
         let editor = crate::world::repair::editor_name(&path);
         d.replace_text_in(&editor, &format!("{broken}extra\n"));
         d.click_below(&message, "Discard");
-        let words =
-            format!("{NAME} draft discarded. Line 3 opens a list with [ that never closes.");
+        let result = format!("{NAME} draft discarded.");
+        let cause = format!("{NAME}: Line 3 opens a list with [ that never closes.");
         let base = d.window_size();
-        // The part's own scroll bar lane, as `design::fixed_part` keeps it.
+        // The footer's own scroll bar lane.
         let lane = {
             let style = d.app_style();
             style.spacing.scroll.bar_width + style.spacing.scroll.bar_outer_margin
@@ -2409,85 +2447,76 @@ pub mod campaign_content {
         let mut results = Vec::new();
         for size in [SMALL, DEFAULT, LARGE] {
             d.set_base(size);
-            // Tab first: focus scrolls the page to the part. Then back to the part's start.
-            let focused = d.tab_to(&words);
-            for _ in 0..4 {
+            let footer = |d: &Driver<'_>| {
+                d.nodes().into_iter().find(|node| {
+                    node.role == egui::accesskit::Role::GenericContainer
+                        && node.name.contains(&result)
+                        && node.name.contains(&cause)
+                })
+            };
+            let Some(name) = footer(d).map(|node| node.name) else {
+                results.push((size, false, false, None, false));
+                continue;
+            };
+            let focused = d.tab_to(&name);
+            for _ in 0..8 {
                 d.press(Key::ArrowUp);
             }
-            // The part's texts, by their clip inside it: the result's top and the content's
-            // bottom, measured from the part's top.
+            let part = footer(d).map(|node| node.rect).unwrap();
+            // The footer's texts, by their clip inside it: the result's top and the content's
+            // bottom, measured from the footer's top.
             let inside = |d: &Driver<'_>| {
-                let part = d.nodes().into_iter().find(|node| node.name == words)?.rect;
-                let (mut result, mut bottom) = (None, f32::MIN);
+                let (mut top, mut bottom) = (None, f32::MIN);
                 d.each_painted_text(|text, clip| {
-                    // The part's scroll area clips its texts to the part's lines (its clip is
-                    // wider than the part).
-                    if (clip.top() - part.top()).abs() <= 4.0
-                        && (clip.bottom() - part.bottom()).abs() <= 4.0
-                        && part.x_range().contains(text.pos.x)
-                    {
+                    if part.contains(clip.center()) && part.x_range().contains(text.pos.x) {
                         let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
                         bottom = bottom.max(rect.bottom() - part.top());
                         if text.galley.job.text.contains("draft discarded.") {
-                            result = Some(rect.top() - part.top());
+                            top = Some(rect.top() - part.top());
                         }
                     }
                 });
-                Some((part, result, bottom))
+                (top, bottom)
             };
-            // Where the result's first line sits in the part: `Some(None)` once it has scrolled
-            // out of the part's view (a line out of view is not painted); `None` without a part.
-            let top = |d: &Driver<'_>| inside(d).map(|(_, top, _)| top);
-            let Some((part, Some(before), bottom)) = inside(d) else {
-                results.push((size, false, focused, None, None, None, None, None));
-                continue;
-            };
-            // The words need more than two lines: they end below the part's end.
-            let overflows = (part.height() - crate::design::message_space_height()).abs() < 1.0
-                && bottom > part.height() + 1.0;
+            let (before, bottom) = inside(d);
+            let overflows = bottom > part.height() + 1.0;
             let ring = d
                 .focus_rings()
                 .into_iter()
                 .find(|(ring, _)| part.expand(2.0).contains_rect(*ring))
-                .map(|(ring, _)| ring);
-            let ring_clear = ring.is_some_and(|ring| ring.right() <= part.right() - lane + 1.0);
-            d.press(Key::ArrowDown);
-            let keyboard = top(d);
-            for _ in 0..4 {
-                d.press(Key::ArrowUp);
-            }
-            d.press(Key::Escape);
-            let wheel_start = top(d);
-            d.scroll_at(part.center(), 1);
-            let wheel = top(d);
-            results.push((
-                size,
-                overflows,
-                focused,
-                ring.filter(|_| ring_clear),
-                Some(Some(before)),
-                keyboard,
-                wheel_start,
-                wheel,
-            ));
+                .map(|(ring, _)| ring)
+                .filter(|ring| ring.right() <= part.right() - lane + 1.0);
+            let readable = if overflows {
+                d.press(Key::ArrowDown);
+                let keyboard = inside(d).0;
+                for _ in 0..8 {
+                    d.press(Key::ArrowUp);
+                }
+                d.press(Key::Escape);
+                let start = inside(d).0;
+                d.scroll_at(part.center(), 1);
+                let wheel = inside(d).0;
+                let moved = |from: Option<f32>, to: Option<f32>| match (from, to) {
+                    (Some(from), Some(to)) => to < from,
+                    (Some(_), None) => true,
+                    _ => false,
+                };
+                moved(before, keyboard) && moved(start, wheel)
+            } else {
+                d.press(Key::Escape);
+                d.visible_text(&result) && d.visible_text(&cause)
+            };
+            results.push((size, overflows, focused, ring, readable));
         }
         d.set_base(base);
-        // Moved up inside the part, or out of its view; the part itself is still there.
-        let moved = |from: Option<Option<f32>>, to: Option<Option<f32>>| match (from, to) {
-            (Some(Some(from)), Some(Some(to))) => to < from,
-            (Some(Some(_)), Some(None)) => true,
-            _ => false,
-        };
         d.observe(
             "iter-25-C-space-overflow",
-            results.iter().all(|(_, overflows, focused, ring, before, keyboard, start, wheel)| {
-                *overflows
-                    && *focused
-                    && ring.is_some()
-                    && moved(*before, *keyboard)
-                    && moved(*start, *wheel)
-            }),
-            format!("Per size (overflows, Tab, ring clear of the bar, result top before, after ArrowDown, before wheel, after wheel): {results:?}"),
+            results
+                .iter()
+                .all(|(_, _, focused, ring, readable)| *focused && ring.is_some() && *readable),
+            format!(
+                "Per size (overflows, Tab, ring clear of the bar, every word readable): {results:?}"
+            ),
         );
         std::fs::remove_file(&file).unwrap();
         d.click(RELOAD);
@@ -2763,9 +2792,10 @@ pub mod campaign_content {
         );
 
         // Round 23 review: a failed Save belongs to its own repair. A's cause stays through B's
-        // edit, B's Save and B's own failed Save; B's state is its own.
-        const READ_ONLY: &str = "Not saved. This file is read only.";
-        const CHANGED_ON_DISK: &str = "Not saved. This entry changed on disk.";
+        // edit, B's Save and B's own failed Save; B's state is its own. Round 26 FA3: each
+        // repair's slot says `Not saved`; each cause is in the page's footer and names its file.
+        const READ_ONLY: &str = "Broken.md is not saved. This file is read only.";
+        const CHANGED_ON_DISK: &str = "Cracked.md is not saved. This entry changed on disk.";
         const B_MESSAGE: &str = "Notes/Cracked.md cannot be read";
         let top_of = |d: &Driver<'_>, words: &str| {
             d.nodes()
@@ -2776,11 +2806,17 @@ pub mod campaign_content {
                 .map(|node| node.rect.top())
                 .collect::<Vec<_>>()
         };
-        // A's cause sits above B's message; B's state sits below it.
+        // A's state sits above B's message and A's cause is in the footer, once; B's state sits
+        // below B's message.
         let a_owns = |d: &Driver<'_>| {
             let message = top_of(d, B_MESSAGE);
-            let cause = top_of(d, READ_ONLY);
-            message.len() == 1 && cause.len() == 1 && cause[0] < message[0]
+            let state = top_of(d, "Not saved");
+            message.len() == 1
+                && state.iter().any(|top| *top < message[0])
+                && d.painted_in(egui::Rect::EVERYTHING)
+                    .matches(READ_ONLY)
+                    .count()
+                    == 1
         };
         let b_state = |d: &Driver<'_>, word: &str| {
             let message = top_of(d, B_MESSAGE);
@@ -2840,16 +2876,61 @@ pub mod campaign_content {
         d.settle();
         d.observe(
             "iter-23-C-own-failure-fail",
-            a_owns(d) && b_state(d, CHANGED_ON_DISK) && !b_file.exists(),
+            a_owns(d)
+                && b_state(d, "Not saved")
+                && d.visible_text(CHANGED_ON_DISK)
+                && !b_file.exists(),
             format!(
-                "After B's Save fails: A's cause {}, B's own cause {}",
+                "After B's Save fails: A's cause {}, B's own state {} and cause {}",
                 a_owns(d),
-                b_state(d, CHANGED_ON_DISK)
+                b_state(d, "Not saved"),
+                d.visible_text(CHANGED_ON_DISK)
             ),
         );
         set_read_only(&a_file, false);
-        d.click("Discard");
-        d.click("Discard");
+        // Round 26, brief revision 18: two results of one kind. A's Discard, then B's Discard:
+        // both results are listed in the footer, each with its Undo. Undo A brings back A's
+        // draft; B's result and B's discarded state stay. Neither result moves B's editor.
+        const A_DISCARDED: &str = "Broken.md draft discarded.";
+        const B_DISCARDED: &str = "Cracked.md draft discarded.";
+        const A_MESSAGE: &str = "Notes/Broken.md cannot be read";
+        let b_top = |d: &Driver<'_>| d.place_of(&b_editor).map(|rect| rect.top());
+        let a_draft = d.field_text(&a_editor).unwrap_or_default();
+        let before = b_top(d);
+        d.click_below(A_MESSAGE, "Discard");
+        let a_discarded = d.field_text(&a_editor) != Some(a_draft.clone());
+        let after_a = b_top(d);
+        d.click_below(B_MESSAGE, "Discard");
+        let b_baseline = d.field_text(&b_editor).unwrap_or_default();
+        let both = d.visible_text(A_DISCARDED) && d.visible_text(B_DISCARDED);
+        let after_b = b_top(d);
+        d.click("Undo discard of Broken.md");
+        let a_back = d.field_text(&a_editor) == Some(a_draft.clone());
+        let b_kept = d.visible_text(B_DISCARDED)
+            && !d.visible_text(A_DISCARDED)
+            && d.field_text(&b_editor) == Some(b_baseline.clone())
+            && !b_baseline.contains("B again.");
+        let after_undo = b_top(d);
+        d.observe(
+            "iter-26-C-two-discards",
+            a_discarded && both && a_back && b_kept,
+            format!(
+                "A discarded {a_discarded}; both results listed {both}; Undo A restores A \
+                 {a_back}; B's result and discarded state kept {b_kept}"
+            ),
+        );
+        d.observe(
+            "iter-26-C-two-discards-still",
+            before.is_some()
+                && [after_a, after_b, after_undo]
+                    .iter()
+                    .all(|top| *top == before),
+            format!(
+                "B's editor top before {before:?}, after A's discard {after_a:?}, after B's \
+                 {after_b:?}, after Undo A {after_undo:?}"
+            ),
+        );
+        d.click_below(A_MESSAGE, "Discard");
         let _ = std::fs::remove_file(d.root.join(SECOND));
         d.click(RELOAD);
         d.settle();
@@ -4052,6 +4133,16 @@ pub mod settings {
                 .is_some_and(|(button, field)| (button.right() - field.right()).abs() < 1.0)
         });
         d.state("cookie-entered", Sizes::Default);
+        // Round 26 FG2: the failure's cause is in the footer, so the cookie field and Connect
+        // keep their place, under the pointer, where the window had room for the footer.
+        let places = |d: &mut Driver<'_>| {
+            [DEFAULT, LARGE].map(|size| {
+                d.at_size(size, |d| {
+                    Some((d.place_of(COOKIE_FIELD)?.top(), d.place_of(CONNECT)?.top()))
+                })
+            })
+        };
+        let entered = places(d);
         d.click(CONNECT);
         d.expect(OFFLINE_ERROR);
         // Round 23 SF1: the failure scrolls the form so its cause, the kept cookie and the retry
@@ -4075,6 +4166,18 @@ pub mod settings {
                 fully(d, OFFLINE_ERROR, false),
                 fully(d, COOKIE_FIELD, true),
                 fully(d, CONNECT, true)
+            ),
+        );
+        // Measured after the 960 check above: a resize ends that scroll.
+        let failed = places(d);
+        d.observe(
+            "iter-26-C-FG2",
+            entered.iter().all(Option::is_some)
+                && entered == failed
+                && footer_with(d, OFFLINE_ERROR).is_some(),
+            format!(
+                "Cookie field and Connect tops at 1200 and 1920 before {entered:?} and after \
+                 {failed:?} a failed Connect; the cause is in the footer"
             ),
         );
         // Round 23 FM4: the trust text uses the DM's words, not the code's.
