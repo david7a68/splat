@@ -1876,7 +1876,76 @@ mod allowed_classes {
             name: "P7 c: an act's words of these classes",
             fits: |d, _| rewards::act_words(d),
         },
+        // P4, F2: row 6. The dock's `Effect` is new, in the room after Absent; nothing of
+        // today's dock moves, so no class here allows a move.
+        Class {
+            row: 6,
+            name: "P4 a: the dock's new `Effect`",
+            fits: |d, _| effect::control(d),
+        },
+        Class {
+            row: 6,
+            name: "P4 b: `Effect`'s own words, inside it",
+            fits: effect::words,
+        },
+        Class {
+            row: 6,
+            name: "P4 c: an act shows or hides only `Effect`'s words",
+            fits: |d, _| effect::act_words(d),
+        },
     ];
+
+    /// P4's classes: the dock's `Effect`, its icon, word and key letter, and acts that show or
+    /// hide only those. Each is new; none lets an item of today go, move, narrow or be cut.
+    mod effect {
+        use super::super::{AllowedRow, Difference};
+        use super::rect_of;
+
+        const NAME: &str = "Button: Effect: words for this row";
+        const WORDS: [&str; 3] = ["\u{e3e2}", "Effect", "E"];
+
+        fn run_view(d: &Difference) -> bool {
+            d.screen.starts_with("run-")
+        }
+
+        pub(super) fn control(d: &Difference) -> bool {
+            run_view(d) && d.what == "control" && d.change == "new" && d.name == NAME
+        }
+
+        /// A word of `Effect` that lies inside a new `Effect` of the same view.
+        pub(super) fn words(d: &Difference, rows: &[AllowedRow]) -> bool {
+            let Some(at) = rect_of(&d.detail, "at ") else {
+                return false;
+            };
+            run_view(d)
+                && d.what == "text"
+                && d.change == "new"
+                && WORDS.contains(&d.name.as_str())
+                && rows.iter().any(|row| {
+                    let o = &row.difference;
+                    control(o)
+                        && (&o.screen, &o.view) == (&d.screen, &d.view)
+                        && rect_of(&o.detail, "at ").is_some_and(|button| {
+                            at[0] >= button[0]
+                                && at[1] >= button[1]
+                                && at[0] + at[2] <= button[0] + button[2]
+                                && at[1] + at[3] <= button[1] + button[3]
+                        })
+                })
+        }
+
+        /// Every part of the act is a word of `Effect` that this evening shows or hides.
+        pub(super) fn act_words(d: &Difference) -> bool {
+            d.what == "act"
+                && d.change == "changed"
+                && d.detail.split(" | ").all(|part| {
+                    ["appeared + ", "went + "]
+                        .iter()
+                        .find_map(|prefix| part.strip_prefix(prefix))
+                        .is_some_and(|word| WORDS.contains(&word))
+                })
+        }
+    }
 
     /// P6's classes. Each proves itself from the geometry of its view: Add to Log is new only in a
     /// reader, after what the header shows today; a glyph matched by its order pairs with a new
@@ -3514,6 +3583,50 @@ mod allowed_classes {
         for fault in rewards_faults {
             let row = AllowedRow {
                 row: 10,
+                why: String::new(),
+                difference: fault,
+            };
+            assert!(
+                class_of(&row, &allowed.rows).is_none(),
+                "a class allows {}",
+                row.difference
+            );
+        }
+        // P4's classes refuse a dock control of today that moved or went, Effect's words
+        // outside Effect, and an act that shows or hides another word.
+        let effect = |change: &str, what: &str, name: &str, detail: &str| Difference {
+            screen: "run-conditions".into(),
+            view: "1200x800 Lookup closed".into(),
+            what: what.into(),
+            change: change.into(),
+            name: name.into(),
+            detail: detail.into(),
+        };
+        for fault in [
+            effect(
+                "moved",
+                "control",
+                "Button: Absent",
+                "618.8 725 80.9x28 -> 650.8 725 80.9x28",
+            ),
+            effect(
+                "gone",
+                "control",
+                "Button: Conditions for this participant",
+                "was 1 2 3x4",
+            ),
+            effect("new", "text", "Effect", "at 10 730 37.1x18"),
+            effect("new", "text", "Conc", "at 574.1 730 37.1x18"),
+            effect(
+                "changed",
+                "act",
+                "select Brannoch",
+                "appeared + E | went - Conditions",
+            ),
+            effect("changed", "act", "select Brannoch", "appeared - Effect"),
+        ] {
+            let row = AllowedRow {
+                row: 6,
                 why: String::new(),
                 difference: fault,
             };

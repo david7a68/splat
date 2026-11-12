@@ -528,6 +528,24 @@ fn during_the_session(a: &mut Audit<'_, '_>) {
     });
     a.act(Panel, "close Lookup", |d| d.press(Key::Escape));
 
+    // F2, a new task: the DM gives the condition a time. Words already on the row change their
+    // time and add nothing.
+    a.task("A wolf frightens Oren for 10 rounds: give the condition its count");
+    a.act(Find, "select Oren", |d| d.click_row("Oren Thistlewick"));
+    a.act(Do, "Effect with E", |d| d.press(Key::E));
+    a.act(Do, "type the effect", |d| {
+        d.type_text("Frightened 10 rounds")
+    });
+    a.act(Do, "add with Enter", |d| d.press(Key::Enter));
+    a.fact(format!(
+        "the row holds one Frightened, with its count: {}",
+        a.d.nodes()
+            .iter()
+            .any(|node| node.name.starts_with("Oren Thistlewick,")
+                && node.name.contains("Frightened 10")
+                && node.name.matches("Frightened").count() == 1)
+    ));
+
     a.task("Iselle starts concentrating: mark it");
     a.act(Find, "select Iselle", |d| d.click_row("Iselle Marrowind"));
     a.click(Do, "Concentrating");

@@ -1,9 +1,9 @@
 Phase totals
 phase	tasks	transitions	interactions	nav	sub	panel	find	do
 before	9	5	35	5	0	1	7	22
-during	31	9	193	9	2	15	44	123
+during	32	9	197	9	2	15	45	126
 after	9	5	26	5	4	2	1	14
-total	49	19	254	19	6	18	52	159
+total	50	19	258	19	6	18	53	162
 
 Tasks
 phase	task	transitions	interactions	overhead	path
@@ -29,6 +29,7 @@ during	Fireball hits three enemies: apply half to one, full to two	0	6	3	Run
 during	The table rules that the Fireball missed: undo it	0	1	0	Run
 during	A wolf frightens Oren: mark the condition	0	3	2	Run
 during	What does Frightened do?	0	2	2	Run
+during	A wolf frightens Oren for 10 rounds: give the condition its count	0	4	1	Run
 during	Iselle starts concentrating: mark it	0	2	1	Run
 during	Combat: round 2	0	32	8	Run
 during	Check Iselle's spell save DC and spell list	0	3	3	Run
@@ -86,6 +87,7 @@ during / Note what the party decides: the words reached the note: true
 during / Check the road for encounters: the journey holds one check: true
 during / Ambush: read the read-aloud text and start the fight: setup shows the read-aloud text: true
 during / Fireball hits three enemies: apply half to one, full to two: one step of undo for all three: true
+during / A wolf frightens Oren for 10 rounds: give the condition its count: the row holds one Frightened, with its count: true
 during / Roll a save for a monster: the roll is beside the amount, with the stat block or sheet in view: true
 during / A player asks what the miller said last session: Lookup finds last session's notes: true
 during / End the fight: after the fight, the page is Session

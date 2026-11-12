@@ -1389,7 +1389,7 @@ remove, two effect words and target. Concentration Undo says start concentration
 the target. Exhaustion Undo keeps both levels, such as `exhaustion 2 → 3 on Oren`. Exhaustion level uses the shared `stepper` at Scan height. One drag on the level is one Undo step, from the level where the drag started, committed when the drag ends; each − or + press is one step. At a limit the button says `Exhaustion stops at 6.` or `Exhaustion is already 0.` Hover and accessibility keep full text.
 
 The dock has a fixed place above the footer: Amount, Damage, Heal, Temp HP, selected name, Conditions, Conc,
-Absent. Off toggles use text colour; disabled controls stay muted. Enter applies damage. The dock's and footer's
+Absent, Effect. Off toggles use text colour; disabled controls stay muted. Enter applies damage. The dock's and footer's
 background uses roster width; panels never cover them. The dock's controls are one block at the left, no wider than
 `LIST_MEASURE`: the dice end at the block's edge, and Conditions, Conc and Absent follow the selected name's slot after
 an `L` gap, not at the roster's far edge. The slot has one width for the whole fight (the widest roster name in
@@ -1399,6 +1399,41 @@ total beside the dice, the total (the dice icon and the number, named `Rolled 4`
 the dice, never before the name. Fit whole words, retain a distinguishing last word or copy number or
 letter, end shortened names with an ellipsis and drop trailing joining words. Hover and accessibility keep
 full names.
+
+### Effects and turn reminders
+
+An effect is words that the DM pins to one row, with or without a time. The dock's second line has a quiet
+`Effect` (`Action::quiet`, key `E`, icon `PIN`) `L` after Absent, in the room that is spare there, so no
+control of the line moves. It shows with its word while that room holds it and the selected name keeps its
+size and its words; else with its icon; and not at all otherwise. With several rows selected it is absent.
+`Effect` makes line two one `add_field`, `Effect on <name>, such as Bless 10 rounds`, that belongs to its row:
+Enter adds and Escape clears, and both put focus in Amount; another selection or Next turn closes it, and its
+words wait for that row. `E` opens that field, or the Conditions tab's `Other effect…` field with focus when
+`Effect` has no room. Both fields read one rule: `10 rounds`; `1 minute`, as 10 rounds; `on its turn`; `3 uses`;
+`recharge 6`, `recharge 5–6` or `recharge 5-6` at the end. Anything else stays words. An official condition's
+name with a time is that condition with a count, and words already on the row change their time.
+
+A row's effects never add a line or change its height: the row has the lines and the height of the same row
+with no effect. They take the conditions' place in today's order, before plain conditions; every other word
+keeps its place. Each effect shows whole while the line has room; else the first ones and a count of the rest,
+`⚑ +2`; else the first one's words shortened from their end and the count; else the count of all, `⚑ 3`; else
+nothing on the row. A count has a slot as wide as its widest form (`10`, `· last round`, `· ⚠ time is up`), so a
+change of count moves no word, and its underline stops at its last letter. Words read `Bless 9`, `Bless · last
+round`, `Bless · time is up` (the `result.warning` icon, words in `text`), `Legendary actions 2 of 3`, `Fire
+Breath ready`, `Fire Breath spent ⚄`. An official condition's name opens its rule; the count is its own
+target of at least `XL`: a running count or words shown on each turn open Conditions, `time is up` removes,
+uses spend one (at none, give all back), a ready recharge is marked spent and a spent one rolls 1d6. The row's
+hover and accessible name hold every whole word. After damage to a row marked Conc, `Conc save DC 12` ends
+its second line until the next step, only in the room that the effects leave; else only in the hover and the
+accessible name. Conditions lists each effect with its whole words. An ended run shows them as words, and a
+click does nothing.
+
+The notice line has a third part after the state notice and the sheet summary: the current turn's reminders,
+from effects with a time, `Tone::Info` icon `PIN` and `text` words. They show whole in the room that the state
+notice, the summary and today's Undo label leave; else their count; else not at all, and the row has them.
+`Next:` gives way to them. No reminder makes Undo shorter or a state notice lose a word. A conflict's name
+wider than the line beside the bare Undo shortens as the dock's name does; the icon, `Conflict` and Review
+stay.
 
 Overflow clips above a separate page-filled band and hairline. Count rows above and below, including rows cut
 by the edge, and their Conflict, 0 HP and Bloodied states. Each turn scrolls current and next rows into view.
@@ -2175,7 +2210,8 @@ with the campaign.
 Use `egui-phosphor` (MIT, Phosphor Regular). `.gitignore` forbids committed images, so icons are glyphs or
 painter shapes. All icons come from `design::icons`, which names only glyphs in use. Never pass raw symbols as
 widget text. Icons support words; replace words only for universal meanings, with accessible names and
-tooltips.
+tooltips. `PIN` marks an effect with a time: the dock's `Effect`, a row's count of effects and the notice
+line's reminders.
 
 ## Tests
 
