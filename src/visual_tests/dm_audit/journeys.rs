@@ -53,6 +53,8 @@ const WATCH: &str = "Ember Watch";
 const GATE: &str = "Gate Watch";
 const PATROL: &str = "Ford Patrol";
 const VERORI: &str = "Verori";
+/// The dock's `Effect`, by its accessible name.
+const EFFECT: &str = "Effect: words for this row";
 
 fn campaign_root(d: &mut Driver<'_>) -> PathBuf {
     d.app_mut()
@@ -190,22 +192,34 @@ fn counted_end(a: &mut Audit<'_, '_>, outcome: Option<&str>) {
     }
 }
 
-/// `Add rewards` for this played fight: on its row, or the last link of the opened row when
-/// the title takes the row's width.
+/// `Add rewards` for this played fight, where the fit rule puts it: on the row, else the last
+/// link of the opened row, else a line of the row's menu (section 2.5, row 10).
 fn add_rewards(a: &mut Audit<'_, '_>, fight: &str) {
     let on_row = format!("Add rewards: {fight}");
-    if !a.d.has(&on_row) {
-        a.act(Find, &format!("open the row of {fight}"), |d| {
-            d.click(fight)
+    if a.d.has(&on_row) {
+        a.click(Do, &on_row);
+        return;
+    }
+    if !a.d.has("Add rewards") {
+        a.click(Find, &format!("More actions for {fight}"));
+    }
+    a.click(Do, "Add rewards");
+}
+
+/// The length of a journey whose checks were just added. The design puts the focus in `How
+/// long`; when it is not there, the DM clicks the field first.
+fn type_length(a: &mut Audit<'_, '_>) {
+    let focus = a.d.focused_name();
+    a.fact(format!(
+        "after Roll for encounters, the focus is in {focus:?}"
+    ));
+    if focus.as_deref() == Some("How long") {
+        a.act(Do, "type the length", |d| d.type_text("2 days"));
+    } else {
+        a.act(Do, "click How long, and type the length", |d| {
+            d.type_into("How long", "2 days");
         });
     }
-    a.act(Do, "Add rewards", |d| {
-        d.click(if d.has(&on_row) {
-            &on_row
-        } else {
-            "Add rewards"
-        });
-    });
 }
 
 /// J2, section 2.2: the party skips the planned fight, talks to a planned NPC and then attacks
@@ -246,11 +260,6 @@ fn improvised_evening(a: &mut Audit<'_, '_>) {
             );
         },
     );
-    a.setup("last week's paused fight was closed", |d| {
-        d.click_starting("Paused run · ");
-        close_run(d);
-        d.click(NAV_SESSIONS);
-    });
     a.setup("save, quit and open the app at the table", restart);
     a.phase = "during";
     a.fact(format!(
@@ -323,7 +332,7 @@ fn improvised_evening(a: &mut Audit<'_, '_>) {
     a.click(Do, "Add Travel");
     a.click(Find, "More actions for Travel");
     a.click(Do, "Roll for encounters");
-    a.act(Do, "type the length", |d| d.type_text("2 days"));
+    type_length(a);
     a.click(Do, "Roll all 2");
     let timeline = timeline_file(a.d);
     a.fact(format!(
@@ -416,11 +425,24 @@ fn broken_evening(a: &mut Audit<'_, '_>) {
         a.d.has_containing("Round 2")
     ));
 
+    // At 960x640 with Lookup open, the dock has no room for `Effect`, and `E` is off while
+    // Lookup is open: the Conditions tab's `Other effect` field is the way.
     a.task("Pin Poisoned 3 rounds to a wolf");
     a.act(Find, "select the wolf", |d| d.click_row("Cinder Wolf 2"));
-    a.click(Do, "Effect");
-    a.act(Do, "type the effect", |d| d.type_text("Poisoned 3 rounds"));
+    if a.d.has(EFFECT) {
+        a.click(Do, EFFECT);
+        a.act(Do, "type the effect", |d| d.type_text("Poisoned 3 rounds"));
+    } else {
+        a.click(Sub, CONDITIONS);
+        a.act(Do, "type the effect in Other effect", |d| {
+            d.type_into("Other effect", "Poisoned 3 rounds");
+        });
+    }
     a.act(Do, "add with Enter", |d| d.press(Key::Enter));
+    a.fact(format!(
+        "Lookup is open after the effect: {}",
+        a.d.app().lookup.open
+    ));
 
     a.task("Play on into round 3");
     for _ in 0..8 {
@@ -577,7 +599,18 @@ fn the_race(a: &mut Audit<'_, '_>) {
     counted_roll_and_begin(a);
 
     a.task("The crowd loves a move in the fight: mark Crowd Favor");
+    a.fact(format!(
+        "in the fight, before Ctrl+T: Trackers in view {}, Lookup open {}, on Trackers {}",
+        a.d.has("Crowd loves it"),
+        a.d.app().lookup.open,
+        a.d.app().lookup.on_trackers()
+    ));
     a.act(Panel, "Ctrl+T", |d| d.press_ctrl(Key::T));
+    if !a.d.has("Crowd loves it") {
+        a.act(Panel, "Ctrl+T again: Trackers is not in view", |d| {
+            d.press_ctrl(Key::T);
+        });
+    }
     a.click(Do, "Crowd loves it");
     a.act(Panel, "Ctrl+T", |d| d.press_ctrl(Key::T));
 
@@ -710,17 +743,27 @@ fn week_between(a: &mut Audit<'_, '_>) {
     a.phase = "after the last fight";
 
     a.task("The party searches the last fight");
-    a.click(Do, "Roll all 2");
+    a.click(Do, &format!("Roll 2 × gems for {WATCH}"));
 
     a.task("Verori died here");
     a.act(Panel, "open Lookup", |d| d.press_ctrl(Key::K));
     a.act(Find, "search: verori", |d| d.type_text("verori"));
-    a.click(Do, "Change Status");
-    a.act(Do, "type the status", |d| d.type_text("dead"));
-    a.act(Do, "save with Enter", |d| d.press(Key::Enter));
+    // Lookup's reader is compact and has no `Change` rows: the status goes by `Edit`.
+    if a.d.has("Change Status") {
+        a.click(Do, "Change Status");
+        a.act(Do, "type the status", |d| d.type_text("dead"));
+        a.act(Do, "save with Enter", |d| d.press(Key::Enter));
+    } else {
+        a.click(Do, &format!("Edit {VERORI}"));
+        a.act(Do, "change the status", |d| {
+            d.replace_text_in("Status", "dead")
+        });
+        a.click(Do, "Save changes");
+    }
     a.fact(format!(
-        "his note holds the status and its Log line: {}",
-        file(a.d, "NPCs/Verori.md").contains("status: dead")
+        "his note holds the status: {}, and a Log line for it: {}",
+        file(a.d, "NPCs/Verori.md").contains("status: dead"),
+        file(a.d, "NPCs/Verori.md").contains("→ dead")
     ));
 
     a.task("He gave the gate key away first");
@@ -798,13 +841,16 @@ fn week_between(a: &mut Audit<'_, '_>) {
         a.click(Find, GATE);
     }
 
+    // The plan has no way into the encounter editor: the DM goes by Encounters.
     a.task("The Gate Watch is too easy: add a creature in the encounter editor");
-    a.click(Find, GATE);
-    a.click(Nav, "Edit encounter");
+    a.click(Nav, NAV_ENCOUNTERS);
+    a.act(Find, "Edit beside Gate Watch", |d| {
+        d.click_beside_exact(GATE, EDIT_ENCOUNTER);
+    });
     a.act(Find, "search: ogre", |d| d.type_into(FIND_CREATURE, "ogre"));
     a.act(Do, "add an Ogre", |d| d.click_first(ADD));
     a.click(Do, SAVE_ENCOUNTER);
-    a.act(Nav, "Back to session", |d| d.click("Back to session"));
+    a.click(Nav, NAV_SESSIONS);
     a.fact(format!("the row's word after the change: {:?}", words(a.d)));
 
     a.task("Prepare the road: a Travel row with its checks");
@@ -814,7 +860,7 @@ fn week_between(a: &mut Audit<'_, '_>) {
     a.click(Do, "Add Travel");
     a.click(Find, "More actions for Travel");
     a.click(Do, "Roll for encounters");
-    a.act(Do, "type the length", |d| d.type_text("2 days"));
+    type_length(a);
     a.act(Do, "keep it with Enter", |d| d.press(Key::Enter));
 
     a.task("Start the first fight");
