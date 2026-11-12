@@ -49,19 +49,35 @@ pub fn wanted_heading(ctx: &egui::Context, heading: &str) -> bool {
 
 #[cfg(test)]
 pub fn show(ui: &mut egui::Ui, markdown: &str) {
-    show_with_density(ui, markdown, false, ShortLinks::Prose);
+    show_with_density(ui, markdown, false, ShortLinks::Prose, None);
 }
 
 /// The Reader's Markdown.
 pub fn show_reader(ui: &mut egui::Ui, markdown: &str) {
-    ui.scope(|ui| show_with_density(ui, markdown, false, ShortLinks::Prose));
+    ui.scope(|ui| show_with_density(ui, markdown, false, ShortLinks::Prose, None));
+}
+
+/// A plan row's words, such as a scene's line: the plan row title's type (`Body`) at every
+/// width, with the Reader's links and emphasis. Each line is `XL` tall, as a fight's title
+/// link is, so the row's second line keeps a fight row's pitch, and no space follows the words.
+/// A done scene's words and links take the muted colour; a link keeps its underline.
+pub fn show_row_words(ui: &mut egui::Ui, markdown: &str, muted: bool) {
+    ui.scope(|ui| {
+        show_with_density(
+            ui,
+            markdown,
+            false,
+            ShortLinks::Prose,
+            Some(RowWords { muted }),
+        );
+    });
 }
 
 /// The Reader's Markdown, as compact field rows.
 pub fn show_compact(ui: &mut egui::Ui, markdown: &str) {
     ui.scope(|ui| {
         ui.spacing_mut().item_spacing.y = 3.0;
-        show_with_density(ui, markdown, true, ShortLinks::Prose);
+        show_with_density(ui, markdown, true, ShortLinks::Prose, None);
     });
 }
 
@@ -70,8 +86,14 @@ pub fn show_compact(ui: &mut egui::Ui, markdown: &str) {
 pub fn show_skills(ui: &mut egui::Ui, markdown: &str) {
     ui.scope(|ui| {
         ui.spacing_mut().item_spacing.y = 3.0;
-        show_with_density(ui, markdown, true, ShortLinks::Entries);
+        show_with_density(ui, markdown, true, ShortLinks::Entries, None);
     });
+}
+
+/// Markdown drawn as a plan row's words (`show_row_words`), not as the Reader's prose.
+#[derive(Clone, Copy)]
+struct RowWords {
+    muted: bool,
 }
 
 /// How a paragraph lays out a link whose words are narrower than `XL`.
@@ -134,17 +156,37 @@ fn linked_markdown(
     })
 }
 
-fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool, short_links: ShortLinks) {
+fn show_with_density(
+    ui: &mut egui::Ui,
+    markdown: &str,
+    dense: bool,
+    short_links: ShortLinks,
+    row: Option<RowWords>,
+) {
     let prose = if dense {
         Type::Stat
+    } else if row.is_some() {
+        Type::Body
     } else {
         design::reader::prose_type(ui)
+    };
+    let line = if row.is_some() {
+        design::XL
+    } else {
+        prose.line()
+    };
+    // A done scene's words and links are muted; a link keeps its underline.
+    let (text_color, link_color) = if row.is_some_and(|row| row.muted) {
+        (colors().muted, colors().muted)
+    } else {
+        (colors().text, colors().accent)
     };
     let mut job = LayoutJob::default();
     let mut heading = None;
     let mut inventory_table = false;
     let mut target = Targets {
         short_links,
+        row: row.is_some(),
         ..Targets::default()
     };
     let mut link = None;
@@ -441,11 +483,11 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool, short_links
                     {
                         for section in &mut job.sections {
                             if section.byte_range.start >= start {
-                                section.format.color = colors().accent;
+                                section.format.color = link_color;
                                 section.format.underline =
-                                    egui::Stroke::new(design::HAIRLINE_WIDTH, colors().accent);
+                                    egui::Stroke::new(design::HAIRLINE_WIDTH, link_color);
                                 if section.format.strikethrough != egui::Stroke::NONE {
-                                    section.format.strikethrough.color = colors().accent;
+                                    section.format.strikethrough.color = link_color;
                                 }
                             }
                         }
@@ -497,7 +539,7 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool, short_links
                     0.0,
                     egui::TextFormat {
                         font_id: prose.font(ui),
-                        line_height: Some(prose.line()),
+                        line_height: Some(line),
                         color: colors().muted,
                         ..Default::default()
                     },
@@ -522,7 +564,7 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool, short_links
                         0.0,
                         egui::TextFormat {
                             font_id: prose.font(ui),
-                            line_height: Some(prose.line()),
+                            line_height: Some(line),
                             color: colors().muted,
                             ..Default::default()
                         },
@@ -542,7 +584,7 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool, short_links
                     0.0,
                     egui::TextFormat {
                         font_id: prose.font(ui),
-                        line_height: Some(prose.line()),
+                        line_height: Some(line),
                         color: colors().muted,
                         ..Default::default()
                     },
@@ -562,7 +604,7 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool, short_links
                 0.0,
                 egui::TextFormat {
                     font_id: prose.font(ui),
-                    line_height: Some(prose.line()),
+                    line_height: Some(line),
                     ..Default::default()
                 },
             ),
@@ -571,7 +613,7 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool, short_links
                 0.0,
                 egui::TextFormat {
                     font_id: prose.font(ui),
-                    line_height: Some(prose.line()),
+                    line_height: Some(line),
                     ..Default::default()
                 },
             ),
@@ -582,7 +624,7 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool, short_links
                     font_id: Type::Mono.font(ui),
                     // Mono's own line puts code on the baseline of the serif beside it.
                     line_height: Some(Type::Mono.line()),
-                    color: colors().text,
+                    color: text_color,
                     background: design::reader::inline_code_fill(),
                     ..Default::default()
                 },
@@ -602,10 +644,12 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool, short_links
                 } else if strong > 0 {
                     if dense {
                         Type::StatLabel
+                    } else if row.is_some() {
+                        Type::Strong
                     } else {
                         Type::ProseStrong
                     }
-                } else if (italic || !target.quotes.is_empty()) && !dense {
+                } else if (italic || !target.quotes.is_empty()) && !dense && row.is_none() {
                     Type::ProseItalic
                 } else {
                     prose
@@ -618,9 +662,9 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool, short_links
                 let color = if matches!(link, Some((_, LinkTarget::Missing))) {
                     colors().muted
                 } else if link.is_some() {
-                    colors().accent
+                    link_color
                 } else {
-                    colors().text
+                    text_color
                 };
                 job.append(
                     &text,
@@ -630,7 +674,7 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool, short_links
                         line_height: Some(if heading.is_some() || code {
                             role.line()
                         } else {
-                            prose.line()
+                            line
                         }),
                         color,
                         underline: if link.is_some()
@@ -645,6 +689,8 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool, short_links
                         } else {
                             egui::Stroke::NONE
                         },
+                        // The UI face has no italic of its own: a row's emphasis slants.
+                        italics: row.is_some() && italic,
                         ..Default::default()
                     },
                 );
@@ -1149,6 +1195,8 @@ struct Targets {
     /// The bottom of the last words drawn in a quote, where its bar stops.
     quote_bottom: f32,
     short_links: ShortLinks,
+    /// A plan row's words: no space follows them.
+    row: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -2016,7 +2064,9 @@ fn flush(ui: &mut egui::Ui, job: &mut LayoutJob, target: &mut Targets) {
             .rect;
         target.quote_bottom = rect.bottom();
     }
-    ui.add_space(design::S);
+    if !target.row {
+        ui.add_space(design::S);
+    }
 }
 
 #[cfg(test)]

@@ -1895,6 +1895,9 @@ pub struct Reader {
     pub start_fight: Option<StartFight>,
     /// Why no fight can start now, as the encounter editor's `Start fight` says it.
     pub start_blocked: Option<&'static str>,
+    /// The encounter editor is the page beside this reader: its own primary `Start fight` is the
+    /// one there, so the header offers none.
+    pub beside_editor: bool,
     pub open_timeline: Option<String>,
     pub sides: RunSides,
     /// A run is in live play and owns `Next turn`, the screen's primary action.
@@ -2113,9 +2116,11 @@ impl Reader {
             )
         };
         // While a run is open, an NPC has Add to fight below, and Arrivals adds a creature.
-        let start = (self.sides.is_none() && !campaign.is_some_and(|c| self.editing(id, c)))
-            .then(|| start_fight(item, index))
-            .flatten();
+        let start = (self.sides.is_none()
+            && !self.beside_editor
+            && !campaign.is_some_and(|c| self.editing(id, c)))
+        .then(|| start_fight(item, index))
+        .flatten();
         ui.horizontal_top(|ui| {
             let edit_action = Action::quiet("Edit")
                 .icon(design::icons::EDIT)

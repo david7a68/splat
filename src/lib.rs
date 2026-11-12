@@ -1196,6 +1196,10 @@ impl Splat {
         });
         let start_blocked = self.encounters.plan_blocked();
         let mut start_fight = None;
+        // Beside the encounter editor, Lookup's reader offers no Start fight: the editor's own
+        // primary Start fight is the one there.
+        self.lookup.reader.beside_editor =
+            self.page == Page::Encounters && self.encounters.editor_open();
         for reader in [&mut self.world_page.reader, &mut self.lookup.reader] {
             reader.start_blocked = start_blocked;
             if let Some(fight) = reader.start_fight.take() {

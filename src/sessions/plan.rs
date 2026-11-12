@@ -268,7 +268,8 @@ fn plan_row(
     );
 }
 
-/// A plan row whose start is `lead`: a fight's caret, or a scene's box.
+/// A plan row whose start is `lead`: a fight's caret, or a scene's box. Every row has the one
+/// leading slot, so every row's words start at one column.
 fn plan_row_with(
     ui: &mut egui::Ui,
     widths: &[f32],
@@ -279,7 +280,14 @@ fn plan_row_with(
 ) {
     ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = design::S;
-        lead(ui);
+        let (_, slot) = ui.allocate_space(egui::vec2(lead_width(), design::XL));
+        lead(
+            &mut ui.new_child(
+                egui::UiBuilder::new()
+                    .max_rect(slot)
+                    .layout(egui::Layout::top_down(egui::Align::Min)),
+            ),
+        );
         ui.vertical(|ui| {
             let left = ui.cursor().min;
             let title_width = (ui.available_width() - widths[1] - design::S).max(design::XL);
@@ -343,14 +351,33 @@ fn plan_link(ui: &mut egui::Ui, label: &str, open: bool) -> egui::Response {
 /// so the underline covers only the words, as in `status_link`. The press target covers both, at
 /// least 24 px, and the accessible name is the words.
 fn plan_run_link(ui: &mut egui::Ui, word: &str) -> egui::Response {
+    glyph_link(ui, icons::RUN, colors().accent, Type::Small, word)
+}
+
+/// Link words with a glyph of their own before them, in `glyph_color`. The underline covers only
+/// the words; the press target covers both, at least 24 px, and the accessible name is the words.
+fn glyph_link(
+    ui: &mut egui::Ui,
+    glyph: &str,
+    glyph_color: egui::Color32,
+    role: Type,
+    word: &str,
+) -> egui::Response {
     let c = colors();
     let plain = egui::TextFormat {
-        font_id: Type::Small.font(ui),
+        font_id: role.font(ui),
         color: c.accent,
         ..Default::default()
     };
     let mut job = egui::text::LayoutJob::default();
-    job.append(icons::RUN, 0.0, plain.clone());
+    job.append(
+        glyph,
+        0.0,
+        egui::TextFormat {
+            color: glyph_color,
+            ..plain.clone()
+        },
+    );
     job.append(" ", 0.0, plain.clone());
     job.append(
         word,
@@ -453,9 +480,12 @@ fn read_encounter(ui: &mut egui::Ui, rating: Option<&crate::difficulty::Rating>)
     link
 }
 
-fn plan_rule(ui: &mut egui::Ui) {
+/// The rule below a row. Returns its height, which the scenes' fold counts with the row's.
+fn plan_rule(ui: &mut egui::Ui) -> f32 {
+    let top = ui.cursor().top();
     ui.add_space(design::S);
     design::rule(ui);
+    ui.cursor().top() - top
 }
 
 /// The words of one of the plan's add menus.
@@ -744,28 +774,39 @@ pub(super) struct Fault {
 
 /// What the scenes' fold measured on the last frame. Scenes fold first when the plan's rows do
 /// not fit its pane, so that nothing else in the plan moves or narrows because scenes exist.
+/// The fold measures each row as it is when closed: an opened row's details, the Scene field and
+/// its suggestions, and the plan's messages do not fold the scenes.
 #[derive(Default)]
 struct Fold {
     /// The pane's height, once a frame measured it.
     viewport: Option<f32>,
-    /// The rows' height without the scenes, and the scenes' own height when last shown.
+    /// The closed rows' height without the scenes, and the scenes' own height when last shown.
     without: f32,
     scenes: f32,
     /// The DM opened (`true`) or closed (`false`) the folded scenes in this session.
     open: Option<bool>,
+    /// Whether the rows did not fit, as last decided. It holds while the DM types a scene.
+    overflow: bool,
 }
 
 impl Fold {
-    /// Whether the scenes fold now, and whether the heading offers `N scenes`.
-    fn state(&self, count: usize) -> (bool, bool) {
+    /// Whether the closed rows, with the scenes, are taller than the pane.
+    fn measured(&self) -> bool {
+        self.viewport
+            .is_some_and(|viewport| self.without + self.scenes > viewport + 0.5)
+    }
+
+    /// Whether the scenes fold now, and whether the heading offers `N scenes`. While `hold`, the
+    /// fold stays as it was, so a scene that the DM just added stays where the DM sees it.
+    fn state(&mut self, count: usize, hold: bool) -> (bool, bool) {
+        if !hold {
+            self.overflow = self.measured();
+        }
         if count == 0 {
             return (false, false);
         }
-        let overflow = self
-            .viewport
-            .is_some_and(|viewport| self.without + self.scenes > viewport + 0.5);
-        let folded = self.open.map_or(overflow, |open| !open);
-        (folded, overflow || self.open.is_some())
+        let folded = self.open.map_or(self.overflow, |open| !open);
+        (folded, self.overflow || self.open.is_some())
     }
 }
 
@@ -777,12 +818,14 @@ pub(super) struct Scenes {
     field: Option<design::AddField>,
     /// `Scene added to tonight.`
     pub(super) added: Option<NoteUndo>,
-    /// A scene taken out of tonight: its place among the rows, its words, and its Undo.
-    removed: Option<(Slot, String, NoteUndo)>,
+    /// A scene taken out of tonight: its line's place among the plan's lines, its words, and
+    /// its Undo. The place is the line that now follows it, which stays while the note is as the
+    /// act left it, also when a fight before it is played.
+    removed: Option<(usize, String, NoteUndo)>,
     pub(super) fault: Option<Fault>,
     fold: Fold,
-    /// The scenes' height drawn in this frame.
-    drawn: f32,
+    /// The Scene field had focus on the last frame.
+    typing: bool,
 }
 
 impl Scenes {
@@ -828,22 +871,25 @@ impl Scenes {
 enum SceneAct {
     Add(String),
     Tick(Slot, TaskLine),
-    Remove(Slot, TaskLine),
+    /// The row's place, and its line's place among the plan's lines.
+    Remove(Slot, usize, TaskLine),
     UndoAdd,
-    UndoRemove,
+    /// Where its Undo was drawn, for what it could not do.
+    UndoRemove(Place),
     StartFight(crate::world::StartFight),
 }
 
-/// One scene: its box where a fight has its caret, its words as the Reader draws them, its
-/// entry's kind, status and place, and its menu.
+/// One scene: its box where a fight has its caret, its words at a plan row title's size, its
+/// entry's kind, status and place, and its menu. Returns the row's height, as the fold
+/// measures it.
 fn scene_row(
     ui: &mut egui::Ui,
     width: f32,
     scene: &Scene,
-    slot: Slot,
+    (slot, line): (Slot, usize),
     plan: &Plan<'_>,
     act: &mut Option<SceneAct>,
-) {
+) -> f32 {
     let c = colors();
     let task = &scene.task;
     let plain = plain_links(&task.words);
@@ -854,26 +900,19 @@ fn scene_row(
     let mut tick = false;
     let mut remove = false;
     let mut start = None;
+    let top = ui.cursor().top();
     ui.push_id(("scene", task.at, &task.line), |ui| {
         plan_row_with(
             ui,
             &widths,
             |ui| {
                 let mut done = task.done;
-                let size = egui::vec2(design::XL, design::XL);
-                let response = ui.add_sized(size, egui::Checkbox::without_text(&mut done));
+                let response = scene_box(ui, &mut done);
                 let state = if task.done { "Done" } else { "Open" };
                 design::named(ui, &response, &format!("{state}: {plain}"));
                 tick = response.clicked();
             },
-            |ui| {
-                ui.scope(|ui| {
-                    if task.done {
-                        ui.visuals_mut().override_text_color = Some(c.muted);
-                    }
-                    crate::markdown_view::show_reader(ui, &task.words);
-                });
-            },
+            |ui| crate::markdown_view::show_row_words(ui, &task.words, task.done),
             |ui| {
                 if let Some(detail) = scene
                     .entry
@@ -885,10 +924,7 @@ fn scene_row(
             },
             |ui| {
                 design::row_menu(ui, &plain, |ui| {
-                    if Action::quiet("Remove from tonight").show(ui).clicked() {
-                        remove = true;
-                        ui.close();
-                    }
+                    // The act that starts something comes first; the removal is last.
                     // While a run is open, the reader's Add to fight is the way in.
                     if plan.open_run.is_none()
                         && let Some(fight) =
@@ -908,6 +944,14 @@ fn scene_row(
                             wrapped_words(ui, Type::Small, reason, c.muted);
                         }
                     }
+                    if Action::quiet("Remove from tonight")
+                        .icon(icons::REMOVE)
+                        .show(ui)
+                        .clicked()
+                    {
+                        remove = true;
+                        ui.close();
+                    }
                 });
             },
         );
@@ -916,10 +960,40 @@ fn scene_row(
     if tick {
         *act = Some(SceneAct::Tick(slot, task.clone()));
     } else if remove {
-        *act = Some(SceneAct::Remove(slot, task.clone()));
+        *act = Some(SceneAct::Remove(slot, line, task.clone()));
     } else if let Some(fight) = start {
         *act = Some(SceneAct::StartFight(fight));
     }
+    ui.cursor().top() - top
+}
+
+/// A scene's box, the theme's checkbox with a 24 px target, in the leading slot that a fight's
+/// caret has. Its target ends where the words start, so the words take the fights' title column;
+/// it reaches `box_hang` into the margin before the rows.
+fn scene_box(ui: &mut egui::Ui, done: &mut bool) -> egui::Response {
+    let slot = ui.max_rect();
+    let rect = egui::Rect::from_min_size(
+        egui::pos2(slot.right() + design::S - design::XL, slot.top()),
+        egui::vec2(design::XL, design::XL),
+    );
+    let mut cell = ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(rect)
+            .layout(egui::Layout::left_to_right(egui::Align::Center)),
+    );
+    cell.spacing_mut().interact_size.y = design::XL;
+    cell.add(egui::Checkbox::without_text(done))
+}
+
+/// How far a scene's box reaches before the rows: its target, less the leading slot and the gap
+/// after it.
+fn box_hang() -> f32 {
+    (design::XL - lead_width() - design::S).max(0.0)
+}
+
+/// Every plan row's leading slot: a fight's caret, a group's icon, a scene's box.
+fn lead_width() -> f32 {
+    Type::Body.size()
 }
 
 /// Each link to a fight under the plan's heading, in order: where its line starts in the words,
@@ -1233,13 +1307,23 @@ impl Sessions {
             .data(|data| data.get_temp::<Arc<ContentIndex>>(egui::Id::new("reader_link_index")));
         let model = self.plan_model(index.as_deref(), plan);
         let mut planned: Vec<&PlanFight> = Vec::new();
-        let mut scenes: Vec<Vec<&Scene>> = vec![Vec::new()];
-        for line in &model.lines {
+        // Each scene with its line's place among the plan's lines.
+        let mut scenes: Vec<Vec<(usize, &Scene)>> = vec![Vec::new()];
+        // Where a removed scene's row stood: before the line that now follows it.
+        let removed_line = self.scenes.removed.as_ref().map(|(line, ..)| *line);
+        let mut removed_slot = None;
+        let place_now = |scenes: &Vec<Vec<(usize, &Scene)>>| {
+            (scenes.len() - 1, scenes.last().map_or(0, Vec::len))
+        };
+        for (at, line) in model.lines.iter().enumerate() {
+            if removed_line == Some(at) {
+                removed_slot = Some(place_now(&scenes));
+            }
             match line {
                 ModelLine::Scene(scene) => scenes
                     .last_mut()
                     .expect("one list of scenes for each place")
-                    .push(scene),
+                    .push((at, scene)),
                 ModelLine::Fights(names) => {
                     for name in names {
                         let Some(fight) = plan.fights.iter().find(|fight| fight.name == *name)
@@ -1257,15 +1341,25 @@ impl Sessions {
                 }
             }
         }
+        if removed_line == Some(model.lines.len()) {
+            removed_slot = Some(place_now(&scenes));
+        }
         let open_scenes = scenes
             .iter()
             .flatten()
-            .filter(|scene| !scene.task.done)
+            .filter(|(_, scene)| !scene.task.done)
             .count();
         let scene_count = scenes.iter().map(Vec::len).sum::<usize>();
-        let (folded, fold_line) = self.scenes.fold.state(scene_count);
-        self.scenes.drawn = 0.0;
+        // While the DM types a scene, the fold holds.
+        let hold =
+            self.scenes.typing || self.scenes.field.as_ref().is_some_and(|field| field.focus);
+        let (folded, fold_line) = self.scenes.fold.state(scene_count, hold);
+        // The removed scene's words and Undo show at its row's place while that place is drawn.
+        let removed_slot = removed_slot.filter(|_| !folded);
         let mut scene_act = None;
+        // The closed rows' heights, without and with the scenes, for the next frame's fold.
+        let mut closed = 0.0;
+        let mut closed_scenes = 0.0;
         let planned_groups: Vec<_> = linked_names(&body)
             .iter()
             .filter(|name| {
@@ -1355,7 +1449,7 @@ impl Sessions {
             })
             .collect();
         self.plan_messages(ui, book, session, plan, &planned_results);
-        self.scene_messages(ui, folded, &mut scene_act);
+        self.scene_messages(ui, folded, removed_slot, &mut scene_act);
         if let Some(id) = &added {
             if let Some(event) = book.events.iter_mut().find(|event| event.id == *id) {
                 event.title = event.kind.word().to_owned();
@@ -1431,8 +1525,20 @@ impl Sessions {
             // The rows leave the scroll bar's lane free whether or not the bar shows, so a row's
             // actions keep their x when the plan grows long enough to scroll.
             let lane_width = ui.available_width() - ui.spacing().scroll.allocated_width();
+            // A scene's box reaches `box_hang` before the rows, so that every row's words start
+            // at one column (`scene_box`). The scroll area starts that much before the rows, so
+            // the box lies whole inside it, and the rows keep their place.
+            let hang = box_hang();
+            let area = ui.max_rect().with_min_x(ui.max_rect().left() - hang);
+            let clip = ui.clip_rect().with_min_x(area.left());
+            let mut area = ui.new_child(egui::UiBuilder::new().max_rect(area).layout(*ui.layout()));
+            area.set_clip_rect(clip);
             let output = egui::ScrollArea::vertical().id_salt(("session_plan", session))
-                .auto_shrink([false, false]).show(ui, |ui| {
+                .auto_shrink([false, false]).show(&mut area, |outer| {
+                let mut rows = outer.new_child(egui::UiBuilder::new()
+                    .max_rect(outer.max_rect().with_min_x(outer.max_rect().left() + hang))
+                    .layout(*outer.layout()));
+                let ui = &mut rows;
                 ui.set_max_width(lane_width);
                 let width = lane_width.min(ui.available_width()) - design::M;
                 let action_width = [Action::primary("Start fight").icon(icons::RUN), Action::primary("Resume").icon(icons::RUN), Action::quiet("Add to notes"), Action::secondary("Arrivals").icon(icons::GROUP)]
@@ -1469,6 +1575,7 @@ impl Sessions {
                         let row_widths = if event.run.is_some() && (running || saved.is_none()) {
                             [width - Density::Read.control() - design::S, Density::Read.control()]
                         } else { widths };
+                        let top = ui.cursor().top();
                         plan_row(ui, &row_widths, if is_open { icons::DOWN } else { icons::NEXT }, |ui| {
                             if plan_link(ui, &label, is_open).clicked() { toggle = Some(event.id.clone()); }
                         }, |ui| {
@@ -1524,6 +1631,7 @@ impl Sessions {
                                 }
                             }
                         });
+                        closed += ui.cursor().top() - top;
                         if is_open {
                             plan_details(ui, |ui| {
                             if running {
@@ -1550,7 +1658,7 @@ impl Sessions {
                             ui.add_space(design::S);
                             self.deleted_run_message(ui);
                         }
-                        plan_rule(ui);
+                        closed += plan_rule(ui);
                     });
                     // The opened row and the next row stay in reach.
                     if is_open && std::mem::take(&mut self.reveal_event) { row.response.scroll_to_me(Some(egui::Align::TOP)); }
@@ -1562,7 +1670,7 @@ impl Sessions {
                 for (position, fight) in planned.iter().enumerate() {
                     self.removed_fight_message(ui, session, position);
                     if !folded {
-                        self.scene_rows(ui, width, &scenes[position], position, plan, &mut scene_act);
+                        closed_scenes += self.scene_rows(ui, width, &scenes[position], position, removed_slot, plan, &mut scene_act);
                     }
                     any = true;
                     let running = plan.open_run.is_some() && plan.open_encounter == Some(fight.name.as_str());
@@ -1571,6 +1679,7 @@ impl Sessions {
                         let row_widths = if running {
                             [width - Density::Read.control() - design::S, Density::Read.control()]
                         } else { widths };
+                        let top = ui.cursor().top();
                         plan_row(ui, &row_widths, if self.open_planned.as_ref() == Some(&fight.path) { icons::DOWN } else { icons::NEXT }, |ui| {
                             if plan_link(ui, &fight.name, self.open_planned.as_ref() == Some(&fight.path)).clicked() {
                                 self.open_planned = (self.open_planned.as_ref() != Some(&fight.path)).then(|| fight.path.clone());
@@ -1614,6 +1723,7 @@ impl Sessions {
                                 }
                             }
                         });
+                        closed += ui.cursor().top() - top;
                         if self.row_notice == Some((session, event_count + position)) && self.deleted_run.is_some() {
                             ui.add_space(design::S);
                             self.deleted_run_message(ui);
@@ -1623,12 +1733,12 @@ impl Sessions {
                                 if read_encounter(ui, fight.difficulty.rating.as_ref().filter(|_| !running && saved.is_none())).clicked() { self.wants_lookup = Some(fight.name.clone()); }
                             });
                         }
-                        plan_rule(ui);
+                        closed += plan_rule(ui);
                     });
                 }
                 self.removed_fight_message(ui, session, planned.len());
                 if !folded {
-                    self.scene_rows(ui, width, &scenes[planned.len()], planned.len(), plan, &mut scene_act);
+                    closed_scenes += self.scene_rows(ui, width, &scenes[planned.len()], planned.len(), removed_slot, plan, &mut scene_act);
                 }
                 any |= scenes.iter().any(|scenes| !scenes.is_empty());
                 for (position, group) in planned_groups.iter().enumerate() {
@@ -1643,6 +1753,7 @@ impl Sessions {
                         let group_action = if joins_fight { Action::quiet(ADD_TO_FIGHT).icon(icons::ADD) } else { Action::quiet(edit_word) };
                         let action_width = group_action.density(Density::Read).natural_width(ui) + Density::Read.control() + design::S;
                         let group_widths = [width - action_width - design::S, action_width];
+                        let top = ui.cursor().top();
                         plan_row(ui, &group_widths, icons::GROUP, |ui| {
                             if design::wrapped_link(ui, &group.name).clicked() { read_group = true; }
                         }, |ui| {
@@ -1683,8 +1794,9 @@ impl Sessions {
                                 self.wants_group = Some(group.path.clone()); self.group_session = self.selected;
                             }
                         });
+                        closed += ui.cursor().top() - top;
                         if read_group { self.wants_group = Some(group.path.clone()); self.group_session = self.selected; }
-                        plan_rule(ui);
+                        closed += plan_rule(ui);
                     });
                     if let Some((at, _, height)) = &mut remove_group && *at == position { *height = row.response.rect.height(); }
                 }
@@ -1694,11 +1806,14 @@ impl Sessions {
                         "Use Add to plan a fight, a group, or an event.", |_| {});
                 }
                 self.scene_field(ui, index.as_deref(), &mut scene_act);
+                let drawn = ui.min_rect();
+                outer.advance_cursor_after_rect(drawn);
             });
-            pane = Some((output.inner_rect.height(), output.content_size.y));
+            ui.advance_cursor_after_rect(area.min_rect());
+            pane = Some(output.inner_rect.height());
         });
-        if let Some((viewport, content)) = pane {
-            self.measure_fold(ui.ctx(), scene_count, folded, viewport, content);
+        if let Some(viewport) = pane {
+            self.measure_fold(ui.ctx(), folded, viewport, closed, closed_scenes, hold);
         }
         if let Some(target) = crate::markdown_view::take_note_link(ui.ctx()) {
             self.open_note_link(target);
@@ -1825,24 +1940,34 @@ impl Sessions {
         }
     }
 
-    /// The scenes at one place among the plan's rows, each with its removal's Undo in its place.
+    /// The scenes at one place among the plan's rows, with a removal's Undo at its row's place.
+    /// Returns the rows' height when closed, without the messages, for the fold.
+    #[allow(clippy::too_many_arguments)]
     fn scene_rows(
         &mut self,
         ui: &mut egui::Ui,
         width: f32,
-        scenes: &[&Scene],
+        scenes: &[(usize, &Scene)],
         position: usize,
+        removed: Option<Slot>,
         plan: &Plan<'_>,
         act: &mut Option<SceneAct>,
-    ) {
-        let top = ui.cursor().top();
-        for (at, scene) in scenes.iter().enumerate() {
-            self.removed_scene_message(ui, (position, at), act);
-            scene_row(ui, width, scene, (position, at), plan, act);
+    ) -> f32 {
+        let mut height = 0.0;
+        for (at, (line, scene)) in scenes.iter().enumerate() {
+            if removed == Some((position, at)) {
+                self.removed_scene_message(ui, Place::Row((position, at)), act);
+            }
+            height += scene_row(ui, width, scene, ((position, at), *line), plan, act);
             self.row_fault(ui, Place::Row((position, at)));
         }
-        self.removed_scene_message(ui, (position, scenes.len()), act);
-        self.scenes.drawn += ui.cursor().top() - top;
+        let end = (position, scenes.len());
+        if removed == Some(end) {
+            self.removed_scene_message(ui, Place::Row(end), act);
+        }
+        // An Undo pressed at the end of these scenes says here what it could not do.
+        self.row_fault(ui, Place::Row(end));
+        height
     }
 
     /// The scene act's words under the place where the DM acted.
@@ -1856,7 +1981,8 @@ impl Sessions {
     }
 
     /// `N scenes` on the heading's line, in room that is spare there, so it moves no row: a link
-    /// with the expanded state, which opens the folded scenes in place and closes them again.
+    /// with the expanded state, after the section caret that a folded section has, which opens
+    /// the folded scenes in place and closes them again.
     fn fold_line(&mut self, ui: &mut egui::Ui, heading: egui::Rect, count: usize, folded: bool) {
         let rect = egui::Rect::from_min_max(
             egui::pos2(
@@ -1871,30 +1997,34 @@ impl Sessions {
                 .layout(egui::Layout::left_to_right(egui::Align::Center)),
         );
         let words = design::count(count, "scene", "scenes");
-        if plan_link(&mut line, &words, !folded).clicked() {
+        let caret = if folded { icons::NEXT } else { icons::DOWN };
+        let link = glyph_link(&mut line, caret, colors().muted, Type::Body, &words);
+        line.ctx()
+            .accesskit_node_builder(link.id, |node| node.set_expanded(!folded));
+        if link.clicked() {
             self.scenes.fold.open = Some(folded);
         }
     }
 
-    /// What the plan's pane and rows measured in this frame, for the next frame's fold.
+    /// What the pane and the closed rows measured in this frame, for the next frame's fold. The
+    /// scenes keep the height they had when last shown.
     fn measure_fold(
         &mut self,
         ctx: &egui::Context,
-        count: usize,
         folded: bool,
         viewport: f32,
-        content: f32,
+        closed: f32,
+        scenes: f32,
+        hold: bool,
     ) {
         let fold = &mut self.scenes.fold;
         fold.viewport = Some(viewport);
-        if folded {
-            fold.without = content;
-        } else {
-            fold.scenes = self.scenes.drawn;
-            fold.without = content - self.scenes.drawn;
+        fold.without = closed;
+        if !folded {
+            fold.scenes = scenes;
         }
         // The fold settles on the next frame without waiting for input.
-        if fold.state(count).0 != folded {
+        if !hold && fold.measured() != fold.overflow {
             ctx.request_repaint();
         }
     }
@@ -1938,42 +2068,50 @@ impl Sessions {
         Arc::clone(cache.model.as_ref().expect("the model was just built"))
     }
 
-    fn removed_scene_message(&self, ui: &mut egui::Ui, slot: Slot, act: &mut Option<SceneAct>) {
-        let Some((at, words, undo)) = &self.scenes.removed else {
+    /// `Removed “…” from tonight.` with `Undo remove`, at `place`, while the note is as the
+    /// removal left it. A finished change: the success tone.
+    fn removed_scene_message(&self, ui: &mut egui::Ui, place: Place, act: &mut Option<SceneAct>) {
+        let Some((_, words, undo)) = &self.scenes.removed else {
             return;
         };
-        if *at != slot || self.draft.as_ref().is_none_or(|draft| !undo.live(draft)) {
+        if self.draft.as_ref().is_none_or(|draft| !undo.live(draft)) {
             return;
         }
         ui.add_space(design::S);
         if design::undo_message(
             ui,
-            Tone::Info,
+            Tone::Success,
             &format!("Removed “{words}” from tonight."),
             "Undo remove",
         ) {
-            *act = Some(SceneAct::UndoRemove);
+            *act = Some(SceneAct::UndoRemove(place));
         }
     }
 
-    /// The scenes' results in the plan's message place, below the Add strip.
-    fn scene_messages(&mut self, ui: &mut egui::Ui, folded: bool, act: &mut Option<SceneAct>) {
+    /// The scenes' results in the plan's message place, below the Add strip: a row's words when
+    /// the scenes fold, and a removal whose row's place is not drawn (folded, or no longer among
+    /// the rows). The Undo stays the note's, so it stays in reach.
+    fn scene_messages(
+        &mut self,
+        ui: &mut egui::Ui,
+        folded: bool,
+        removed: Option<Slot>,
+        act: &mut Option<SceneAct>,
+    ) {
         // A row's words show under the row; a folded row's show here.
         if let Some(fault) = &self.scenes.fault
             && (fault.place == Place::Strip || folded && matches!(fault.place, Place::Row(_)))
         {
             design::message(ui, Tone::Warning, &fault.words);
         }
-        if let Some(undo) = &self.scenes.added
-            && self.draft.as_ref().is_some_and(|draft| undo.live(draft))
-            && design::undo_message(ui, Tone::Success, "Scene added to tonight.", "Undo scene")
-        {
-            *act = Some(SceneAct::UndoAdd);
+        if removed.is_none() {
+            self.removed_scene_message(ui, Place::Strip, act);
         }
     }
 
     /// `Scene`'s field at the end of the plan. Enter adds a scene and keeps the field open for
-    /// the next; Escape clears and closes it.
+    /// the next; Escape clears and closes it. What the field did shows directly under it, and
+    /// stays in that place when the field closes, so the field never moves for its own result.
     fn scene_field(
         &mut self,
         ui: &mut egui::Ui,
@@ -1981,6 +2119,8 @@ impl Sessions {
         act: &mut Option<SceneAct>,
     ) {
         let Some(state) = &mut self.scenes.field else {
+            self.scenes.typing = false;
+            self.field_result(ui, None, act);
             return;
         };
         let reveal = state.focus;
@@ -2015,12 +2155,10 @@ impl Sessions {
                 }]
             },
         );
-        if reveal {
-            result.field.scroll_to_me(None);
-        }
         let typed = state.words.trim().to_owned();
         let emptied = state.words.is_empty();
-        self.row_fault(ui, Place::Field);
+        self.scenes.typing = result.field.has_focus();
+        self.field_result(ui, reveal.then_some(result.field.rect), act);
         if let Some(link) = result.chosen {
             *act = Some(SceneAct::Add(link));
         } else if result.enter && !typed.is_empty() {
@@ -2031,6 +2169,29 @@ impl Sessions {
             && emptied
         {
             self.scenes.field = None;
+        }
+    }
+
+    /// The Scene field's fault, and `Scene added to tonight.` with `Undo scene`, under the field.
+    /// With `reveal`, the field's rectangle, the field and its words scroll into view together.
+    fn field_result(
+        &self,
+        ui: &mut egui::Ui,
+        reveal: Option<egui::Rect>,
+        act: &mut Option<SceneAct>,
+    ) {
+        self.row_fault(ui, Place::Field);
+        if let Some(undo) = &self.scenes.added
+            && self.draft.as_ref().is_some_and(|draft| undo.live(draft))
+        {
+            ui.add_space(design::XS);
+            if design::undo_message(ui, Tone::Success, "Scene added to tonight.", "Undo scene") {
+                *act = Some(SceneAct::UndoAdd);
+            }
+        }
+        if let Some(field) = reveal {
+            let bottom = ui.cursor().top().max(field.bottom());
+            ui.scroll_to_rect(field.with_max_y(bottom), None);
         }
     }
 
@@ -2073,23 +2234,26 @@ impl Sessions {
                     .map(drop),
                 Place::Row(slot),
             ),
-            SceneAct::Remove(slot, task) => {
+            SceneAct::Remove(slot, line, task) => {
                 let result = draft.apply(note, Apply::Now, |text| {
                     change_line(text, task.at, &task.line, None)
                 });
                 if let Ok(undo) | Err(ActFault::NotSaved(_, undo)) = &result {
-                    scenes.removed = Some((slot, plain_links(&task.words), undo.clone()));
+                    scenes.removed = Some((line, plain_links(&task.words), undo.clone()));
                 }
                 (result.map(drop), Place::Row(slot))
             }
             SceneAct::UndoAdd => (
                 scenes.added.take().map_or(Ok(()), |undo| undo.undo(draft)),
-                Place::Strip,
+                Place::Field,
             ),
-            SceneAct::UndoRemove => match scenes.removed.take() {
-                Some((slot, _, undo)) => (undo.undo(draft), Place::Row(slot)),
-                None => (Ok(()), Place::Strip),
-            },
+            SceneAct::UndoRemove(place) => (
+                scenes
+                    .removed
+                    .take()
+                    .map_or(Ok(()), |(_, _, undo)| undo.undo(draft)),
+                place,
+            ),
         };
         if let Err(fault) = result {
             scenes.fault = Some(Fault {
@@ -3074,6 +3238,119 @@ mod tests {
         harness.run_steps(2);
         assert_eq!(read(), outside);
         assert_eq!(harness.state().1.events.len(), 1, "the other act stays");
+
+        // App round 1. A scene's words are drawn at a plan row title's size; a done scene's are
+        // muted, an open scene's are not (V1, V8).
+        let painted = |harness: &egui_kittest::Harness<'_, (Sessions, Book)>, words: &str| {
+            fn walk(shape: &egui::Shape, out: &mut Vec<(egui::Rect, Arc<egui::Galley>)>) {
+                match shape {
+                    egui::Shape::Vec(shapes) => shapes.iter().for_each(|shape| walk(shape, out)),
+                    egui::Shape::Text(text) => {
+                        out.push((
+                            text.galley.rect.translate(text.pos.to_vec2()),
+                            text.galley.clone(),
+                        ));
+                    }
+                    _ => {}
+                }
+            }
+            let mut all = Vec::new();
+            for clipped in &harness.output().shapes {
+                walk(&clipped.shape, &mut all);
+            }
+            all.into_iter()
+                .filter(|(_, galley)| galley.job.text == words)
+                .collect::<Vec<_>>()
+        };
+        let format = |harness: &egui_kittest::Harness<'_, (Sessions, Book)>, words: &str| {
+            let found = painted(harness, words);
+            assert_eq!(found.len(), 1, "{words} is painted once");
+            found[0].1.job.sections[0].format.clone()
+        };
+        let c = colors();
+        let done = format(&harness, "The miller is the informer");
+        let open = format(&harness, "Pay the toll");
+        assert_eq!(
+            (done.color, open.color),
+            (c.muted, c.text),
+            "a done scene's words are muted, an open scene's are not"
+        );
+        assert_eq!(
+            (done.font_id.size, open.font_id.size),
+            (Type::Body.size(), Type::Body.size()),
+            "a scene's words are drawn at a plan row title's size"
+        );
+
+        // W6-D1: the removal's Undo is the note's. A, the scene after the planned fight goes;
+        // B, that fight is begun, so its row and the scene's place among the fights to come go;
+        // the DM comes back to the session. Undo remove is in reach and puts back only the scene.
+        harness
+            .get_by_label("More actions for Captain Varra")
+            .click();
+        harness.run_steps(2);
+        harness.get_by_label("Remove from tonight").click();
+        harness.run_steps(2);
+        let removed = "Removed “Captain Varra” from tonight.";
+        // V12: a finished change has the success tone.
+        let (words, _) = painted(&harness, removed)
+            .into_iter()
+            .next()
+            .expect("the removal says so");
+        assert!(
+            painted(&harness, icons::SUCCESS)
+                .iter()
+                .any(|(icon, _)| icon.y_range().intersects(words.y_range())),
+            "the removal's words have the success tone's icon"
+        );
+        let fight = harness.state_mut().1.add(Kind::Encounter, Some(note.id));
+        {
+            let book = &mut harness.state_mut().1;
+            let event = book.events.iter_mut().find(|e| e.id == fight).unwrap();
+            event.title = "Bridge".into();
+            event.run = Some(Uuid::from_u128(7));
+        }
+        harness.state_mut().0.left_page();
+        harness.run_steps(3);
+        assert!(
+            harness.query_by_label("Start fight: Bridge").is_none(),
+            "the fight is played"
+        );
+        assert!(
+            harness.query_by_label(removed).is_some(),
+            "the removal's Undo stays in reach after the fight before it began"
+        );
+        harness.get_by_label("Undo remove").click();
+        harness.run_steps(2);
+        assert_eq!(read(), outside, "Undo remove puts back only the scene");
+        assert!(
+            harness.state().1.events.iter().any(|e| e.id == fight),
+            "the fight stays"
+        );
+        harness.state_mut().1.events.retain(|e| e.id != fight);
+        harness.run_steps(2);
+        // The same Undo while the scenes fold shows in one place below the Add strip.
+        harness
+            .get_by_label("More actions for Captain Varra")
+            .click();
+        harness.run_steps(2);
+        harness.get_by_label("Remove from tonight").click();
+        harness.run_steps(2);
+        harness.set_size(egui::vec2(design::FORM_WIDTH, 200.0));
+        harness.run_steps(4);
+        assert!(
+            harness.query_by_label("Open: Pay the toll").is_none()
+                && harness.query_by_label("2 scenes").is_some(),
+            "the scenes fold"
+        );
+        assert!(
+            harness.query_by_label(removed).is_some(),
+            "the removal's Undo stays in reach while the scenes fold"
+        );
+        harness.get_by_label("Undo remove").click();
+        harness.run_steps(2);
+        assert_eq!(read(), outside);
+        harness.set_size(egui::vec2(design::FORM_WIDTH, 800.0));
+        harness.run_steps(4);
         // An act that changes the note's words ends that Undo.
         harness
             .get_by_label("More actions for Captain Varra")

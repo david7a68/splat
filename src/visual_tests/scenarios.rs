@@ -3559,6 +3559,31 @@ pub mod encounter_build {
                 format!("The rule follows Show 3 results with no empty row at {size:?}: {detail}"),
             );
         }
+        // App round 1, V19: beside the encounter editor, Lookup's reader offers no Start fight.
+        // The editor's own primary Start fight is the one there.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (one, detail) = d.at_size(size, |d| {
+                let starts: Vec<String> = d
+                    .nodes()
+                    .into_iter()
+                    .map(|node| node.name)
+                    .filter(|name| name.starts_with("Start a fight with ") || name == "Start fight")
+                    .collect();
+                (
+                    starts
+                        .iter()
+                        .all(|name| !name.starts_with("Start a fight with ")),
+                    format!("{starts:?}"),
+                )
+            });
+            d.observe(
+                "T12.15",
+                one,
+                format!(
+                    "At {size:?}, beside the editor the reader offers no Start fight: {detail}"
+                ),
+            );
+        }
         d.state("stat-block-beside-editor", Sizes::All);
         // The Cultist's Skills row in Lookup: `Deception +2, Religion +2`.
         check_skills_row(

@@ -2585,6 +2585,10 @@ impl Encounters {
     pub(crate) fn difficulty_counts(&self) -> (usize, usize) {
         self.difficulty_counts
     }
+    /// The encounter editor is what the Encounters page shows.
+    pub fn editor_open(&self) -> bool {
+        self.group_draft.is_none() && self.draft.is_some()
+    }
     pub fn draft_name(&self) -> Option<String> {
         self.draft
             .as_ref()

@@ -588,8 +588,12 @@ fn during_the_session(a: &mut Audit<'_, '_>) {
     // F3 of the session-cycle design: the same fight from the book's Bandit in Lookup.
     a.task("A fight that nobody planned, with a Bandit from the book, then talk");
     a.act(Panel, "open Lookup", |d| d.press_ctrl(Key::K));
+    // Fresh words open the first result in the reader, and the Bandit ranks first: no click.
     a.act(Find, "search: bandit", |d| d.type_text("bandit"));
-    a.act(Find, "open the Bandit", |d| d.click_starting("Bandit · "));
+    a.fact(format!(
+        "the first result opened by itself: {}",
+        a.d.has("Start a fight with Bandit")
+    ));
     a.click(Nav, "Start a fight with Bandit");
     a.fact(format!(
         "the run of Fight with Bandit is open: {}",
