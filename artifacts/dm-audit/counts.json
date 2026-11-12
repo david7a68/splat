@@ -51,6 +51,13 @@
       "path": "Encounters > Session"
     },
     {
+      "phase": "before",
+      "task": "Is each planned fight right for this party?",
+      "transitions": 0,
+      "interactions": 0,
+      "path": "Session"
+    },
+    {
       "phase": "during",
       "task": "Start recording",
       "transitions": 0,

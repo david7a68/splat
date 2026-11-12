@@ -417,26 +417,57 @@ fn chosen_inspiration(
     rules.iter().any(|rule| rule.id == id).then_some(id)
 }
 
+/// The rule entries the campaign uses, its own notes and its packages': each with its ID,
+/// whether it is the campaign's own note, the entry, and its rule.
+fn rules_in_use<'a>(
+    campaign: &'a Campaign,
+    catalogue: &'a Catalogue,
+    document: &CampaignDocument,
+) -> impl Iterator<Item = (Uuid, bool, &'a Entry, &'a Value)> {
+    let closure = catalogue.closure(&document.selections, campaign.id);
+    catalogue.entries.iter().filter_map(move |(id, e)| {
+        let own = e.private && e.owner == campaign.id;
+        (own || closure.direct.contains(id) || closure.required.contains_key(id)).then_some((
+            *id,
+            own,
+            &e.entry,
+            e.entry.fields.get("splat_rule")?,
+        ))
+    })
+}
+
+/// The XP budget per character from the rules the campaign uses: its only table or, of several,
+/// the only one in the campaign's own notes. `None` when no one table is that.
+pub fn xp_budgets(
+    campaign: &Campaign,
+    catalogue: &Catalogue,
+    document: &CampaignDocument,
+) -> Option<crate::difficulty::Budgets> {
+    let tables: Vec<_> = rules_in_use(campaign, catalogue, document)
+        .filter_map(|(_, own, _, rule)| Some((own, crate::difficulty::Budgets::of_rule(rule)?)))
+        .collect();
+    let only = |own_only: bool| {
+        let mut found = tables.iter().filter(|(own, _)| *own || !own_only);
+        match (found.next(), found.next()) {
+            (Some((_, table)), None) => Some(table.clone()),
+            _ => None,
+        }
+    };
+    only(false).or_else(|| only(true))
+}
+
 /// The inspiration rules a campaign can use: its own notes, and its packages' entries.
 fn inspiration_rules(
     campaign: &Campaign,
     catalogue: &Catalogue,
     document: &CampaignDocument,
 ) -> Vec<InspirationRule> {
-    let closure = catalogue.closure(&document.selections, campaign.id);
-    let mut rules: Vec<_> = catalogue
-        .entries
-        .iter()
-        .filter(|(id, e)| {
-            (e.private && e.owner == campaign.id)
-                || closure.direct.contains(*id)
-                || closure.required.contains_key(*id)
-        })
-        .filter_map(|(id, e)| {
-            let effect = Inspiration::from_rule(e.entry.fields.get("splat_rule")?)?.ok()?;
+    let mut rules: Vec<_> = rules_in_use(campaign, catalogue, document)
+        .filter_map(|(id, _, entry, rule)| {
+            let effect = Inspiration::from_rule(rule)?.ok()?;
             Some(InspirationRule {
-                id: *id,
-                name: e.entry.name.clone(),
+                id,
+                name: entry.name.clone(),
                 effect,
             })
         })
@@ -567,6 +598,35 @@ mod tests {
             chosen_inspiration(Some(&saved(kept)), &catalogue, &left.inspiration_rules),
             Some(kept)
         );
+    }
+
+    #[test]
+    fn the_xp_budget_comes_from_the_rules_the_campaign_uses() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let budgets = || {
+            let catalogue = Catalogue::load(&[], Some(&campaign)).unwrap();
+            let document = CampaignDocument::load(&campaign).unwrap();
+            xp_budgets(&campaign, &catalogue, &document)
+        };
+        let party = |budgets| crate::difficulty::Scale {
+            budgets,
+            party: crate::difficulty::party_of(&[3; 5]),
+        };
+        let rated = |budgets| party(budgets).weigh(&[], [Some(800)]).rating.unwrap();
+        // A new campaign uses the SRD 5.2.1 package's table: 5 at level 3 have Low 750.
+        let package = budgets().expect("the package has the table");
+        assert_eq!(rated(Some(package.clone())).budgets, [750, 1125, 2000]);
+        // A house rule in the campaign's own notes takes the place of the package's.
+        let house = "{implementation: dnd2024:rules_combat_encounters_step_2_determine_your_xp_budget, parameters: {per_character_xp: [{level: 3, low: 200, moderate: 300, high: 500}]}}";
+        inspiration_note(dir.path(), "House budget", house);
+        assert_eq!(rated(budgets()).budgets, [1000, 1500, 2500]);
+        // Two house tables and no way to tell which: no table, so no word.
+        inspiration_note(dir.path(), "Second budget", house);
+        assert_eq!(budgets(), None);
+        fs::remove_file(dir.path().join("Rules/Second budget.md")).unwrap();
+        fs::remove_file(dir.path().join("Rules/House budget.md")).unwrap();
+        assert_eq!(budgets(), Some(package));
     }
 
     fn campaign(root: &Path) -> Campaign {
