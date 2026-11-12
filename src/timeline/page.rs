@@ -522,7 +522,7 @@ pub fn problems(ui: &mut egui::Ui, book: &mut Book) -> bool {
         design::message_with_actions(
             ui,
             Tone::Warning,
-            "Timeline.md changed on disk. Your draft is safe until you choose.",
+            crate::timeline::CHANGED_UNDER_DRAFT,
             |ui| {
                 ui.horizontal_wrapped(|ui| {
                     if Action::secondary("Overwrite with my timeline")

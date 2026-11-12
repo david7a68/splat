@@ -661,8 +661,8 @@ the count starts on Day 1). Its proposed changes name their tracker, and `for:` 
 `per`. Raising a day notice writes nothing. Days of one mark that are due together, after a long journey or while
 Splat was closed, are one row (`End of month ×3`) with **Next**, which ends the oldest day, and **Dismiss all** in
 its menu. When the clock goes back, for example by the Timeline's Undo, a day no longer reached leaves the Due
-list; a day already done stays done. While `Timeline.md` cannot be read, no day notice shows, the Due list says so,
-and no act on one is recorded.
+list; a day already done stays done. While `Timeline.md` cannot be read, or it changed under a Timeline edit that is
+not saved yet, no day notice shows, the Due list says so, and no act on one is recorded; your edit is kept.
 
 Every act is one entry in `Trackers.md` in the campaign's root folder, written at once. The result line names the
 last act of the session being played, with **Undo: <label>**, which steps back newest first, also after a

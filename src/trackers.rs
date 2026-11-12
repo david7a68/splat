@@ -704,10 +704,21 @@ impl Default for Today {
     }
 }
 
-/// The day count of this Timeline.
+/// The one answer to "what is the day count now, or why is it not known": the view, the rail's
+/// count and every act read it. Not known while `Timeline.md` cannot be read, while it changed
+/// or cannot be read under an edit that waits to be saved, and while that waits for the DM's
+/// choice; then no day notice shows, and the Timeline keeps the draft.
 fn today(book: &crate::timeline::Book) -> Today {
-    match &book.unreadable {
-        Some(why) => Today::NotRead(why.clone()),
+    let why = book
+        .unreadable
+        .clone()
+        .or_else(|| book.moved_under_edit.clone())
+        .or_else(|| {
+            book.conflict
+                .then(|| crate::timeline::CHANGED_UNDER_DRAFT.to_owned())
+        });
+    match why {
+        Some(why) => Today::NotRead(why),
         None => Today::Day(crate::timeline::day_now(&book.events).unwrap_or(0)),
     }
 }
@@ -1335,7 +1346,7 @@ pub struct Trackers {
     /// The campaign's day count, as the Timeline held it when its count of changes was
     /// `clock_seen`. The shell reads it again at each act, so an act uses the day at the click.
     today: Today,
-    clock_seen: Option<u64>,
+    clock_seen: Option<(u64, bool, Option<String>)>,
     /// `Undo add` of this event.
     pub wants_undo_add: Option<String>,
     pub(crate) view: view::ViewState,
@@ -1398,10 +1409,15 @@ impl Trackers {
     /// Follow the campaign's day count. The Timeline's count of changes says when it can have
     /// moved, so the day is worked out again only then, never in each frame.
     pub fn follow_clock(&mut self, timeline: &crate::timeline::Book) {
-        if self.clock_seen == Some(timeline.changes()) {
+        let seen = (
+            timeline.changes(),
+            timeline.conflict,
+            timeline.moved_under_edit.clone(),
+        );
+        if self.clock_seen.as_ref() == Some(&seen) {
             return;
         }
-        self.clock_seen = Some(timeline.changes());
+        self.clock_seen = Some(seen);
         let today = today(timeline);
         if today != self.today {
             self.today = today;
@@ -2235,29 +2251,56 @@ mod tests {
         let month = app.trackers.state.due[0].clone();
         let before = file(&race);
         // A Timeline edit waits for its pause, and under it the file changes on disk, or
-        // cannot be read: the day count at the click is not known, and nothing is recorded.
+        // cannot be read: the day count is not known. One answer serves the act and the view:
+        // the click records nothing, no day row shows, the Due list says why, and the draft is
+        // kept. When the file reads as it was, the rows come back.
         let saved = fs::read(&timeline).unwrap();
         let edited = app.timeline.events[0].id.clone();
         app.timeline.event_mut(&edited).unwrap().title = "Dawn".into();
         app.timeline.touch();
         let mut outside = String::from_utf8(saved.clone()).unwrap();
         outside.push_str("\nWritten in Obsidian.\n");
-        for (change, mode) in [(Some(outside), 0o644), (None, 0o000)] {
-            if let Some(text) = change {
-                fs::write(&timeline, text).unwrap();
-            }
+        let day_rows = |t: &Trackers| {
+            t.state
+                .due
+                .iter()
+                .filter(|n| matches!(n.id, NoticeRef::Day { .. }))
+                .count()
+        };
+        let value_rows = app.trackers.due() - day_rows(&app.trackers);
+        for (text, mode, why) in [
+            (
+                outside.as_bytes(),
+                0o644,
+                crate::timeline::CHANGED_UNDER_DRAFT,
+            ),
+            (&saved[..], 0o000, "Timeline.md could not be read."),
+        ] {
+            fs::write(&timeline, text).unwrap();
             fs::set_permissions(&timeline, fs::Permissions::from_mode(mode)).unwrap();
             app.trackers.press_done_in_view(&month, vec![true]);
             app.apply_tracker_act();
             fs::set_permissions(&timeline, fs::Permissions::from_mode(0o644)).unwrap();
+            let t = &app.trackers;
+            let shown = t.state.clock_not_read.clone().unwrap_or_default();
+            assert!(shown.starts_with(why), "{shown}");
             assert_eq!(
-                app.trackers.reason,
-                Some(Unrecorded::Refused(view::DAY_NOT_KNOWN.into()))
+                t.reason,
+                Some(Unrecorded::Refused(format!(
+                    "{shown} Nothing was recorded."
+                )))
             );
+            assert_eq!((day_rows(t), t.due()), (0, value_rows), "{why}");
             assert_eq!(file(&race), before);
+            assert!(app.timeline.unsaved() && app.timeline.events[0].title == "Dawn");
+            // The file reads as it was: the rows come back, with the draft still waiting.
+            fs::write(&timeline, &saved).unwrap();
+            app.timeline.read_if_changed();
+            app.trackers.follow_clock(&app.timeline);
+            let t = &app.trackers;
+            assert_eq!(t.state.clock_not_read, None);
+            assert_eq!(t.state.due[0].days, [122, 152]);
         }
-        assert_eq!(app.timeline.events[0].title, "Dawn", "the edit waits, kept");
-        fs::write(&timeline, &saved).unwrap();
         app.timeline.save();
         app.timeline.read_if_changed();
         let mut back = Book::default();

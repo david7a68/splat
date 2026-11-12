@@ -985,11 +985,15 @@ Timeline has reached its day and no ledger entry ends it; raising it writes noth
 [World and house rules](world-and-house-rules.md) says: `End of month ×3. Next: Day 32. …`, with `Next` in the place
 of `Done` (it ends the oldest day) and `Dismiss all` in the row's menu. Day rows come first, oldest day first, then
 the notices of marks at a value. The Due count counts rows, so a row of three days is `Due 1`. The result line says
-`End of month, Day 32 done.` and `Undo: End of month, Day 32 done`, or `Undo: End of month ×3 dismissed`. While
-`Timeline.md` cannot be read, no day row shows and the top of the scroll area says the Timeline's words and `Day marks
-wait until it can be read.` An act on a day row reads the Timeline again at the click; when the row's day is no
-longer due, or the days of `Dismiss all` changed, it writes nothing and says so on the result line. So does
-an act on a day row while a Timeline edit waits to be saved and the file changed, or cannot be read, under it. The rail's
+`End of month, Day 32 done.` and `Undo: End of month, Day 32 done`, or `Undo: End of month ×3 dismissed`. The day
+count has one answer, which the view, the rail's count and every act read (`trackers::today`). It is not known while
+`Timeline.md` cannot be read, while a Timeline edit waits to be saved and the file changed, or cannot be read, under
+it, and while the Timeline waits for the DM's choice. Then no day row shows, the top of the scroll area says the
+Timeline's words (`Timeline.md changed on disk. Your draft is safe until you choose.`, or why it cannot be read)
+and `No day mark shows until the Timeline is read.`, no act on a day row records, and the draft is kept. When the
+file reads again or the choice is made, the rows come back. An act on a day row reads the Timeline again at the
+click; when the row's day is no longer due, or the days of `Dismiss all` changed, it writes nothing and says so on
+the result line. The rail's
 `Due N` counts day rows too; the run shows nothing more.
 
 **Not built, and why.** Any tracker part in a run (the owner accepted this cost; section 7). The parts in

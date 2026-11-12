@@ -1356,11 +1356,11 @@ impl Splat {
     /// the Timeline reads its file again if it changed, and Trackers follows it.
     fn apply_tracker_act(&mut self) {
         if self.trackers.pressed() {
-            // An edit waiting for its pause is newer than the file; when the file changed or
-            // cannot be read under it, the day count at the click is not known.
-            let known = self.timeline.read_if_changed();
+            // When the file changed or cannot be read under an edit that waits for its pause,
+            // the Timeline says so, and the day count is not known: no day act records.
+            self.timeline.read_if_changed();
             self.trackers.follow_clock(&self.timeline);
-            self.trackers.apply_pressed(known);
+            self.trackers.apply_pressed();
         }
     }
 

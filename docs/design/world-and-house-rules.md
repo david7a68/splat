@@ -481,8 +481,9 @@ must not change this clock.
   the clock, because a fight is minutes.
 - **If `Timeline.md` cannot be read,** the clock and the day marks freeze when day marks exist, and the Due list says
   why. They do not treat this as a timeline with no events. As built (P11): no day notice shows, never an old one;
-  the top of the Due list says the Timeline's own words and `Day marks wait until it can be read.`; an act on a day
-  notice writes nothing and says so; the notices of marks at a value still show and act.
+  the top of the Due list says the Timeline's own words and `No day mark shows until the Timeline is read.`; an act on a
+  day notice writes nothing and says so; the notices of marks at a value still show and act. The same holds while a
+  Timeline edit waits to be saved and the file changed, or cannot be read, under it: the draft is kept.
 
 **Day marks** are built (P11). A mark can use the day count. This is the same mechanism, with `at` or `every` in days:
 

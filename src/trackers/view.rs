@@ -44,9 +44,8 @@ impl ViewState {
     }
 }
 
-/// Why an act on a day notice recorded nothing when the Timeline's file changed, or cannot be
-/// read, under an edit that waits to be saved.
-pub(crate) const DAY_NOT_KNOWN: &str = "Timeline.md changed on disk, or cannot be read, while a Timeline edit waits to be saved. The day count is not known, so nothing was recorded.";
+/// The Due list's words after the Timeline's own, while the day count is not known.
+pub(crate) const DAY_MARKS_WAIT: &str = "No day mark shows until the Timeline is read.";
 
 /// One act the DM asked for in this frame.
 pub(crate) enum Act {
@@ -77,25 +76,12 @@ impl Trackers {
         self.view.pressed.is_some()
     }
 
-    /// Apply the act pressed in the view. The shell calls it after `follow_clock`.
-    /// `day_known` is false when the Timeline could not give the day count at the click: then
-    /// an act on a day notice records nothing and says why. Other acts do not use the day.
-    pub fn apply_pressed(&mut self, day_known: bool) {
-        let Some(act) = self.view.pressed.take() else {
-            return;
-        };
-        let on_a_day = match &act {
-            Act::Roll(notice, _)
-            | Act::Done(notice, _)
-            | Act::Dismiss(notice)
-            | Act::DismissAll(notice) => matches!(notice.id, NoticeRef::Day { .. }),
-            _ => false,
-        };
-        if on_a_day && !day_known {
-            self.reason = Some(Unrecorded::Refused(DAY_NOT_KNOWN.into()));
-            return;
+    /// Apply the act pressed in the view. The shell calls it after `follow_clock`, so an act
+    /// on a day notice reads the day count's one answer, also when it is not known.
+    pub fn apply_pressed(&mut self) {
+        if let Some(act) = self.view.pressed.take() {
+            apply(self, act);
         }
-        apply(self, act);
     }
 
     /// `Done` or `Next` pressed on this row, as a click in the view leaves it for the shell.
@@ -221,11 +207,7 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
     }
     // A day count that is not known shows no day notice, never an old one, and says why.
     if let Some(why) = &state.clock_not_read {
-        design::small_message(
-            ui,
-            Tone::Error,
-            &format!("{why} Day marks wait until it can be read."),
-        );
+        design::small_message(ui, Tone::Error, &format!("{why} {DAY_MARKS_WAIT}"));
     }
     if !state.due.is_empty() {
         design::group_heading(ui, "Due", state.due.len());

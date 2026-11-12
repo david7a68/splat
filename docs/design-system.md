@@ -602,8 +602,9 @@ proposed change, ticked, and a quiet `Done` with the row's menu (`Dismiss`) at t
 line when they fit there, else on a line of their own. A day mark's row starts with its day (`Day 32: …`); days of
 one mark that are due together are one row, `End of month ×3. Next: Day 32. …`, whose quiet `Next` takes the
 place of `Done` and ends the oldest day, and whose menu adds `Dismiss all`. Day rows come first, oldest day first,
-then the notices of marks at a value. While day marks are in play and `Timeline.md` cannot be read, the top of the
-scroll area says so as a small error (`… Day marks wait until it can be read.`) and no day row shows. With `for:` each roll is for the next name; after the
+then the notices of marks at a value. While day marks are in play and the day count is not known (`Timeline.md` cannot be read, or it changed under a
+Timeline edit that is not saved), the top of the scroll area says so as a small error in the Timeline's words, then
+`No day mark shows until the Timeline is read.`, and no day row shows. With `for:` each roll is for the next name; after the
 last name the button is off and says `Each name has its roll.` beside it. A tracker's line is its name, its value
 in `Numeral` right-aligned in a column (`value / goal` with a goal), then its quick actions (`Action::secondary`,
 Read), which wrap below. A tracker with `per` has a line for each instance, under its name. `add: ask` puts a
