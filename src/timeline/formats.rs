@@ -513,8 +513,13 @@ pub fn patch(
             // A fight placed in a journey came in after the journey's last line as a line break
             // and its own lines (below): its removal takes that line break back too, so its
             // Undo gives back the file as it was, with or without blank lines between events.
+            // At the file's end with no line break after it, the fight's own last line break
+            // stands in place of the one the file did not have.
             let start = row.head.range.start;
-            if row.event.within.is_some() && text[..start].ends_with(&newline.repeat(2)) {
+            let end = row.lines.last().map_or(row.head.range.end, |l| l.range.end);
+            let gap = text[..start].ends_with(&newline.repeat(2))
+                || (end == text.len() && text[..start].ends_with(newline));
+            if row.event.within.is_some() && gap {
                 edits.push((start - newline.len()..start, String::new()));
             }
             continue;

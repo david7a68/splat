@@ -350,9 +350,8 @@ impl Splat {
     }
 
     /// F9, W5-D1: a fight that enters the Timeline now, from a plan line that a journey's check
-    /// wrote, is played at that check, while the note and `Timeline.md` on disk, and the
-    /// Timeline as Splat holds it, all have that check. Else it goes after the session's last
-    /// event as any fight does, and the run's notice line says why.
+    /// wrote, is played at that check (`Sessions::road_at_begin`). Else it goes after the
+    /// session's last event as any fight does, and the run's notice line says why.
     fn road_of_entering_fight(
         &mut self,
         fact: &timeline::RunFact,
@@ -366,27 +365,20 @@ impl Splat {
             return None;
         }
         let session = self.sessions.current();
-        let mark = self
-            .sessions
-            .road_mark(session, &fact.name, &self.timeline.events)?;
-        let placed = mark.and_then(|mark| {
-            let disk = self
-                .timeline
-                .on_disk()
-                .ok_or(timeline::checks::OffRoad::NotRead)?;
-            mark.place(&disk, session)?;
-            let within = mark.place(&self.timeline.events, session)?;
-            Ok((mark, within))
-        });
-        placed.inspect_err(|why| self.tell_run(why.words())).ok()
+        self.sessions
+            .road_at_begin(&self.timeline, session, &fact.name)?
+            .inspect_err(|why| self.tell_run(why.words()))
+            .ok()
     }
 
-    /// The fight just placed is saved at once, and checked again against the Timeline that the
-    /// save merged with the file: a check that changed there makes it an ordinary fight.
-    fn confirm_road(&mut self, run: uuid::Uuid, mark: &timeline::checks::RoadMark) {
-        self.timeline.save();
-        if let Err(why) = mark.place(&self.timeline.events, self.sessions.current()) {
-            self.timeline.leave_journey(run);
+    /// The fight just placed is saved and checked again after the merge
+    /// (`Sessions::confirm_road`).
+    fn confirm_road(&mut self, fact: &timeline::RunFact, mark: &timeline::checks::RoadMark) {
+        let session = self.sessions.current();
+        if let Some(why) =
+            self.sessions
+                .confirm_road(&mut self.timeline, session, fact.id, &fact.name, mark)
+        {
             self.tell_run(why.words());
         }
     }
@@ -2708,7 +2700,7 @@ impl eframe::App for Splat {
                         road.as_ref().map(|(_, within)| within),
                     );
                     if let Some((mark, _)) = &road {
-                        self.confirm_road(fact.id, mark);
+                        self.confirm_road(fact, mark);
                     }
                 }
                 // The run closed, so its last result goes to the file now and not after the

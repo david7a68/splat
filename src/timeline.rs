@@ -2636,6 +2636,68 @@ mod tests {
         assert_eq!(book.events[1], journey_before);
     }
 
+    /// Review round 2, finding 5: the road fight's Undo gives back the file to the byte, with LF
+    /// or CRLF and with or without a final line break, after a restart, an act B and an outside
+    /// edit.
+    #[test]
+    fn pr284_r2_undo_matrix() {
+        let mut failures = Vec::new();
+        for crlf in [false, true] {
+            for final_lf in [false, true] {
+                let dir = tempfile::tempdir().unwrap();
+                let mut b = book(dir.path());
+                let session = Some(Uuid::from_u128(1));
+                b.add(Kind::Day, session);
+                let road = b.add(Kind::Travel, session);
+                b.event_mut(&road).unwrap().duration = "2 days".into();
+                b.save();
+                let path = dir.path().join(FILE);
+                let mut before = fs::read_to_string(&path).unwrap();
+                if !final_lf {
+                    before = before.trim_end_matches('\n').to_owned();
+                }
+                if crlf {
+                    before = before.replace('\n', "\r\n");
+                }
+                fs::write(&path, &before).unwrap();
+                b = book(dir.path());
+                let run = fact(RunState::Running);
+                let within = Within {
+                    journey: road.clone(),
+                    at: 24,
+                };
+                b.record_change(Some(&fact(RunState::Setup)), &run, session, Some(&within));
+                b.save();
+                assert!(b.error.is_none() && b.events.iter().any(|e| e.run == Some(run.id)));
+                // Restart; act B names the journey; an outside edit gives it a place.
+                b = book(dir.path());
+                b.event_mut(&road).unwrap().title = "Northern road".into();
+                b.touch();
+                b.save();
+                let disk = fs::read_to_string(&path).unwrap();
+                let mut outside = parse(&disk).unwrap();
+                outside.iter_mut().find(|e| e.id == road).unwrap().place = "The ford".into();
+                let text = formats::patch(&disk, &outside, &b.session_links, false).unwrap();
+                fs::write(&path, text).unwrap();
+                b.record_change(Some(&run), &fact(RunState::Setup), session, None);
+                b.save();
+                assert!(b.error.is_none(), "{:?}", b.error);
+                let mut expected = parse(&before).unwrap();
+                let journey = expected.iter_mut().find(|e| e.id == road).unwrap();
+                journey.title = "Northern road".into();
+                journey.place = "The ford".into();
+                let expected = formats::patch(&before, &expected, &b.session_links, false).unwrap();
+                let actual = fs::read_to_string(&path).unwrap();
+                if actual != expected {
+                    failures.push(format!(
+                        "crlf={crlf}, final_lf={final_lf}: expected {expected:?}, got {actual:?}"
+                    ));
+                }
+            }
+        }
+        assert!(failures.is_empty(), "{}", failures.join("\n"));
+    }
+
     /// Review of PR 284, finding 2: Begin decides from the file on disk, and a change that lands
     /// after that read meets the check again after the save's merge. Either way the fight is an
     /// ordinary one, never at the old day.

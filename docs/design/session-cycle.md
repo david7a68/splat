@@ -1536,18 +1536,24 @@ first.` So a wrong `Roll for encounters` can go at any time.
   row and has the primary `Start fight`. The line ends with a mark that no reader shows, the journey and the check as read
   (`<!-- splat:check journey=t-5c1d2e3f4a at=24 sum=1a2b3c4d5e6f7a8b -->`: the event, the offset, and 64 bits of
   the words' SHA-256). The mark is one whole comment and nothing else: every reader and writer of the line
-  keeps the words before and after it byte for byte, and half a comment is no mark. And the row's second line says the day the fight is played on, `… · Day 2 of Road to the ford`; as the
+  keeps the words before and after it byte for byte; every reader that shows or copies the line's words shows
+  them without it. Half a comment is no mark, and a whole one whose terms cannot be read is no mark either: an
+  ordinary line and an ordinary fight, with no notice. And the row's second line says the day the fight is played on, `… · Day 2 of Road to the ford`; as the
   rating word does, the journey's name goes, then the day, so the row keeps its lines. **When that fight
   begins, its event goes in the journey at that check** (by the lead's ruling after app round 2, W5-D1): it
   follows the journey in the list, the clock starts it at the check (`Day 4, 08:00`), and the journey keeps its
-  length and its checks. Its run's `Undo: begin combat` takes the event out, so the file is as it was, also
-  after a restart. `Begin combat` decides from the note and `Timeline.md` as they are on disk at that moment
-  and from the Timeline as Splat holds it, saves the fight at once, and checks again after that save's merge.
+  length and its checks. Its run's `Undo: begin combat` takes the event out, so the file is as it was to the
+  byte (with or without blank lines between events and a final line break), also after a restart. `Begin
+  combat` decides from one read of the note and `Timeline.md` as they are on disk at that moment: the played
+  fights in the file give the plan line this fight takes, and the file and the Timeline as Splat holds it must
+  both have its journey and check. It saves the fight at once, and after that save's merge reads the plan line
+  and the check again.
   When the journey or the check changed or went (rolled again, cleared, edited in Obsidian, a shorter
   journey), the fight goes after the session's last event as any fight does, and the run's notice line says
   `Its travel check changed, so this fight follows the last event.`; for a line carried over or copied to
   another session's note, `Its journey is in an earlier session, so this fight follows the last event.`; when
-  a file cannot be read, `Splat cannot read its travel check now, so this fight follows the last event.` One
+  `Timeline.md` cannot be read, `Splat cannot read its travel check now, so this fight follows the last event.`
+  A note that cannot be read gives no mark, so an ordinary fight and no notice. One
   rule (`checks::covers`) says whether a journey covers a check, for the block, for Begin and for the clock: a
   journey made zero long covers none. A fight planned any other
   way has no mark and is as before. Then the line says `In the plan`, while the plan has a row still to
@@ -1574,8 +1580,8 @@ journey`. `Clear`. `Plan “Wolf Pack”`. `In the plan`. `Outside this journey 
 added to this journey.` `Undo checks`; `2 travel checks rolled.` `Undo roll`; `Check cleared.` `Undo clear`;
 `“Wolf Pack” is in tonight’s plan.` `Undo plan line`. The planned row: `· Day 2 of Road to the ford`. The run's notice
 when the check changed: `Its travel check changed, so this fight follows the last event.`; carried over: `Its
-journey is in an earlier session, so this fight follows the last event.`; a file not read: `Splat cannot read its
-travel check now, so this fight follows the last event.`
+journey is in an earlier session, so this fight follows the last event.`; `Timeline.md` not read: `Splat cannot read
+its travel check now, so this fight follows the last event.`
 
 | State | What shows |
 |---|---|

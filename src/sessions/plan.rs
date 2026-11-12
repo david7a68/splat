@@ -1540,7 +1540,7 @@ fn road_days(
             let line = body[at..].lines().next().unwrap_or_default();
             let day = checks::marked(line)
                 .mark
-                .and_then(|mark| mark.ok()?.day_words(events, &starts, session));
+                .and_then(|mark| mark.day_words(events, &starts, session));
             (fight.name.to_lowercase(), day)
         })
         .collect()
@@ -2092,18 +2092,18 @@ impl Sessions {
         (at, start)
     }
 
-    /// The mark of the plan line that a fight beginning now takes by the plan's rule, read from
-    /// the session note as the file holds it at this moment. `None` for a line with no mark.
+    /// The mark of the plan line that a fight beginning now takes by the plan's rule (one played
+    /// event of `events` takes one link of its name), read from the session note as the file
+    /// holds it at this moment. `None` for a line with no mark, and for a note that cannot be
+    /// read: then nothing is said about travel.
     pub fn road_mark(
         &self,
         session: Option<Uuid>,
         name: &str,
         events: &[timeline::Event],
-    ) -> Option<Result<checks::RoadMark, checks::OffRoad>> {
+    ) -> Option<checks::RoadMark> {
         let note = self.notes.iter().find(|note| Some(note.id) == session)?;
-        let Ok(text) = std::fs::read_to_string(&note.path) else {
-            return Some(Err(checks::OffRoad::NotRead));
-        };
+        let text = std::fs::read_to_string(&note.path).ok()?;
         let fight = [PlanFight {
             saved: None,
             name: name.to_owned(),
@@ -2115,6 +2115,54 @@ impl Sessions {
             .into_iter()
             .find(|(_, _, waiting)| *waiting)?;
         checks::marked(text[at..].lines().next().unwrap_or_default()).mark
+    }
+
+    /// F9, W5-D1, at `Begin combat`: where a fight that enters the Timeline now is played. One
+    /// read of the files as they are on disk decides: `Timeline.md` gives the played fights,
+    /// so the plan line this fight takes, and the journey and its check; the Timeline as Splat
+    /// holds it must agree. `None` for a fight with no mark (an ordinary fight, no notice).
+    pub fn road_at_begin(
+        &self,
+        book: &Book,
+        session: Option<Uuid>,
+        name: &str,
+    ) -> Option<Result<(checks::RoadMark, timeline::Within), checks::OffRoad>> {
+        let disk = book.on_disk();
+        // With `Timeline.md` not read, the plan line is the one the Timeline in memory gives.
+        let mark = self.road_mark(session, name, disk.as_deref().unwrap_or(&book.events))?;
+        let placed = disk.ok_or(checks::OffRoad::NotRead).and_then(|disk| {
+            mark.place(&disk, session)?;
+            mark.place(&book.events, session)
+        });
+        Some(placed.map(|within| (mark, within)))
+    }
+
+    /// The fight just placed at `mark` is saved at once. After that save's merge with the file,
+    /// the plan line it takes and its check are read again; when either is not the one the mark
+    /// named, the fight goes after the session's last event, and the reason comes back.
+    pub fn confirm_road(
+        &self,
+        book: &mut Book,
+        session: Option<Uuid>,
+        run: Uuid,
+        name: &str,
+        mark: &checks::RoadMark,
+    ) -> Option<checks::OffRoad> {
+        book.save();
+        let others: Vec<_> = book
+            .events
+            .iter()
+            .filter(|event| event.run != Some(run))
+            .cloned()
+            .collect();
+        let why = match self.road_mark(session, name, &others) {
+            Some(read) if read == *mark => mark.place(&book.events, session).err(),
+            _ => Some(checks::OffRoad::Changed),
+        };
+        if why.is_some() {
+            book.leave_journey(run);
+        }
+        why
     }
 
     /// The days on the road of the fights still to come, read again only when what they are
@@ -3985,6 +4033,200 @@ mod tests {
         assert_eq!(renamed, line.replace("Bridge", "Ford"));
     }
 
+    /// A session note whose plan holds two marked lines for Bridge Ambush, at hours 0 and 24 of
+    /// one two-day journey, a played fight called Scouts, and the Timeline saved beside it.
+    fn two_marked_lines() -> (
+        tempfile::TempDir,
+        Sessions,
+        Book,
+        [checks::RoadMark; 2],
+        String,
+    ) {
+        use crate::sessions::{NewNote, create_note};
+        let dir = tempfile::tempdir().unwrap();
+        let note = create_note(
+            dir.path(),
+            &NewNote {
+                number: 1,
+                title: "Road",
+                date: "2026-11-12",
+                campaign: "Marches",
+                template: "## Plan for tonight\n",
+            },
+        )
+        .unwrap();
+        let session = Some(note.id);
+        let mut b = Book::default();
+        b.open(Some(dir.path()));
+        b.add(Kind::Day, session);
+        let road = b.add(Kind::Travel, session);
+        let e = b.event_mut(&road).unwrap();
+        e.duration = "2 days".into();
+        e.checks = [0, 24]
+            .map(|at| timeline::Check::new(at, "16 · [[Bridge Ambush]] waits.".into()))
+            .to_vec();
+        let marks = [0, 1].map(|at| checks::RoadMark::new(&road, &e.checks[at]).unwrap());
+        let text = fs::read_to_string(&note.path).unwrap().replace(
+            "## Plan for tonight",
+            &format!(
+                "## Plan for tonight\n- [[Bridge Ambush]] {}\n- [[Bridge Ambush]] {}",
+                marks[0].comment(),
+                marks[1].comment()
+            ),
+        );
+        fs::write(&note.path, text).unwrap();
+        let sessions = Sessions {
+            selected: session,
+            notes: vec![note],
+            ..Sessions::default()
+        };
+        let id = b.add(Kind::Encounter, session);
+        let played = b.event_mut(&id).unwrap();
+        played.title = "Scouts".into();
+        played.run = Some(Uuid::from_u128(123));
+        b.save();
+        (dir, sessions, b, marks, id)
+    }
+
+    /// Outside the app, Scouts becomes Bridge Ambush: under the plan's rule it takes the first
+    /// marked line.
+    fn rename_scouts_outside(dir: &std::path::Path, id: &str) {
+        let mut outside = Book::default();
+        outside.open(Some(dir));
+        outside.event_mut(id).unwrap().title = "Bridge Ambush".into();
+        outside.touch();
+        outside.save();
+    }
+
+    fn begin(b: &mut Book, session: Option<Uuid>, within: &timeline::Within) -> Uuid {
+        let setup = timeline::RunFact {
+            id: Uuid::from_u128(456),
+            copied_from: None,
+            name: "Bridge Ambush".into(),
+            round: 1,
+            state: timeline::RunState::Setup,
+            steps: 1,
+        };
+        let running = timeline::RunFact {
+            state: timeline::RunState::Running,
+            ..setup.clone()
+        };
+        b.record_change(Some(&setup), &running, session, Some(within));
+        running.id
+    }
+
+    fn fight_start(b: &Book, run: Uuid) -> Option<u64> {
+        let at = b.events.iter().position(|e| e.run == Some(run)).unwrap();
+        timeline::clock(&b.events)[at]
+    }
+
+    /// Review round 2, finding 1: Begin takes the plan line that the played fights on disk give,
+    /// in the same read that checks the journey, not a count kept in memory.
+    #[test]
+    fn pr284_r2_begin_uses_current_occurrence() {
+        let (dir, sessions, mut b, [_, second], id) = two_marked_lines();
+        let session = sessions.selected;
+        // A typed journey note waits for its pause, so the Timeline in memory is not read again.
+        let road = second.place(&b.events, session).unwrap().journey;
+        b.event_mut(&road).unwrap().notes = "Fog on the road.".into();
+        b.touch();
+        rename_scouts_outside(dir.path(), &id);
+        let (mark, within) = sessions
+            .road_at_begin(&b, session, "Bridge Ambush")
+            .unwrap()
+            .unwrap();
+        assert_eq!(mark, second, "the first line is taken by the renamed fight");
+        let run = begin(&mut b, session, &within);
+        assert_eq!(
+            sessions.confirm_road(&mut b, session, run, "Bridge Ambush", &mark),
+            None
+        );
+        assert!(b.error.is_none(), "{:?}", b.error);
+        assert_eq!(fight_start(&b, run), Some(1440), "Day 2, 00:00");
+    }
+
+    /// Review round 2, finding 4: a change that lands after Begin's read meets the production
+    /// check after the save's merge, which sends the fight after the session's last event. Here
+    /// the outside rename lands then: the fight's plan line is now the second one.
+    #[test]
+    fn pr284_r2_confirm_road_moves_a_fight_whose_line_changed_after_begin() {
+        let (dir, sessions, mut b, [first, _], id) = two_marked_lines();
+        let session = sessions.selected;
+        let (mark, within) = sessions
+            .road_at_begin(&b, session, "Bridge Ambush")
+            .unwrap()
+            .unwrap();
+        assert_eq!(mark, first);
+        let run = begin(&mut b, session, &within);
+        rename_scouts_outside(dir.path(), &id);
+        assert_eq!(
+            sessions.confirm_road(&mut b, session, run, "Bridge Ambush", &mark),
+            Some(checks::OffRoad::Changed)
+        );
+        assert_eq!(
+            fight_start(&b, run),
+            Some(2 * 1440),
+            "after the journey, not Day 1"
+        );
+        assert!(
+            !fs::read_to_string(dir.path().join("Timeline.md"))
+                .unwrap()
+                .contains("journey=")
+        );
+    }
+
+    /// Review round 2, finding 2: a fight with no mark gets nothing about travel, also when its
+    /// note cannot be read at Begin.
+    #[test]
+    fn pr284_r2_plain_fight_has_no_travel_notice() {
+        use crate::sessions::{Draft, NewNote, create_note};
+        let dir = tempfile::tempdir().unwrap();
+        let note = create_note(
+            dir.path(),
+            &NewNote {
+                number: 1,
+                title: "Plain evening",
+                date: "2026-11-12",
+                campaign: "Marches",
+                template: "## Plan for tonight\n- [[Bridge Ambush]]\n",
+            },
+        )
+        .unwrap();
+        let session = Some(note.id);
+        let sessions = Sessions {
+            selected: session,
+            notes: vec![note.clone()],
+            draft: Some(Draft::open(&note.path).unwrap()),
+            ..Sessions::default()
+        };
+        let book = Book::default();
+        assert_eq!(sessions.road_mark(session, "Bridge Ambush", &[]), None);
+        fs::remove_file(&note.path).unwrap();
+        assert_eq!(sessions.road_mark(session, "Bridge Ambush", &[]), None);
+        assert_eq!(
+            sessions.road_at_begin(&book, session, "Bridge Ambush"),
+            None,
+            "an ordinary fight must not get a travel notice when its note goes"
+        );
+    }
+
+    /// Review round 2, finding 3: a marked line that the DM turns into a done scene shows its
+    /// words, never the mark, in Add to Log's field; the line itself keeps the mark.
+    #[test]
+    fn pr284_r2_scene_log_hides_mark() {
+        let line = "- [x] [[Captain Varra]] <!-- splat:check journey=t-road at=24 sum=12345678 --> Bring silver weapons.";
+        let body = format!("## Plan for tonight\n{line}\n");
+        let model = PlanModel::build(&body, &[], &[], None);
+        let ModelLine::Scene(scene) = &model.lines[0] else {
+            panic!("a scene")
+        };
+        assert_eq!(
+            words_outside_links(&scene.task.words),
+            "Bring silver weapons."
+        );
+        assert_eq!(scene.task.line, line, "acts on the line keep it whole");
+    }
+
     /// Review finding 2: Begin reads the session note as the file holds it at that moment, not
     /// the open draft, which can be older.
     #[test]
@@ -4029,7 +4271,7 @@ mod tests {
         };
         assert_eq!(
             sessions.road_mark(session, "Bridge Ambush", &b.events),
-            Some(Ok(mark.clone()))
+            Some(mark.clone())
         );
         // Obsidian takes the mark off this plan line before Begin combat.
         fs::write(&note.path, text.replace(&mark.comment(), "")).unwrap();
@@ -4040,7 +4282,8 @@ mod tests {
         fs::remove_file(&note.path).unwrap();
         assert_eq!(
             sessions.road_mark(session, "Bridge Ambush", &b.events),
-            Some(Err(checks::OffRoad::NotRead))
+            None,
+            "a note that cannot be read says nothing about travel"
         );
     }
 

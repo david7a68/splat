@@ -95,10 +95,12 @@ impl OffRoad {
 }
 
 /// A plan line read for its mark: the line's own words, with the mark taken out and the text
-/// before and after it kept byte for byte, and its mark, if it has one. Half a mark is no mark.
+/// before and after it kept byte for byte, and its mark, if it has one. Half a comment is no
+/// mark and stays in the words; a whole one whose terms cannot be read is taken out of the
+/// words and is no mark either: an ordinary line, an ordinary fight, and no notice.
 pub struct MarkedLine {
     pub words: String,
-    pub mark: Option<Result<RoadMark, OffRoad>>,
+    pub mark: Option<RoadMark>,
 }
 
 /// The one reader of a plan line's mark.
@@ -126,7 +128,7 @@ pub fn marked(line: &str) -> MarkedLine {
     })();
     MarkedLine {
         words: format!("{before}{after}"),
-        mark: Some(mark.ok_or(OffRoad::Changed)),
+        mark,
     }
 }
 
@@ -978,12 +980,12 @@ mod tests {
         let read = marked(&line);
         assert_eq!(
             (read.words.as_str(), read.mark),
-            ("- [[Wolf Pack]] ", Some(Ok(mark.clone())))
+            ("- [[Wolf Pack]] ", Some(mark.clone()))
         );
         // Review of PR 284, finding 1: the DM's words after the mark are the line's words.
         let read = marked(&format!("{line} Bring silver weapons."));
         assert_eq!(read.words, "- [[Wolf Pack]]  Bring silver weapons.");
-        assert_eq!(read.mark, Some(Ok(mark.clone())));
+        assert_eq!(read.mark, Some(mark.clone()));
         // Half a mark is no mark: the line's words as they are.
         let half = "- [[Wolf Pack]] <!-- splat:check journey=t-road at=24";
         assert_eq!(
@@ -991,10 +993,11 @@ mod tests {
             (half, None)
         );
         assert_eq!(marked("- [[Wolf Pack]]").mark, None);
+        let unread = marked("- [[Wolf Pack]] <!-- splat:check at=x -->");
         assert_eq!(
-            marked("- [[Wolf Pack]] <!-- splat:check at=x -->").mark,
-            Some(Err(OffRoad::Changed)),
-            "a whole mark that cannot be read"
+            (unread.words.as_str(), unread.mark),
+            ("- [[Wolf Pack]] ", None),
+            "a whole mark that cannot be read is no mark, and no reader shows it"
         );
         let within = super::super::Within {
             journey: "t-road".into(),
