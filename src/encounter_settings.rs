@@ -734,6 +734,8 @@ mod tests {
         let rule = Entry::parse(rule, &source).unwrap();
         assert_eq!(splat::content::validate(&[rule]).warnings.len(), 0);
         let text = fs::read_to_string(dir.path().join("Campaign.md")).unwrap();
+        // A campaign with no house rule note gains no in-play key (F4).
+        assert!(!text.contains("splat_in_play"), "{text}");
         assert!(options.save(&campaign, &document.text).is_err());
         assert_eq!(
             fs::read_to_string(dir.path().join("Campaign.md")).unwrap(),
