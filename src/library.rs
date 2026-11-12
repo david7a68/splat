@@ -418,22 +418,65 @@ fn page_error<'a>(footer: &mut design::Footer<'a>, error: Option<&'a str>) {
     }
 }
 
+/// Each kept result as its own message in the pane's message footer, newest first by when the
+/// pane first saw it (`result_ages`), as Edit Markdown lists its results. `out` gathers what was
+/// pressed.
+fn add_results<'a>(
+    footer: &mut design::Footer<'a>,
+    results: &'a ReaderResults,
+    (ages, clock): (&mut std::collections::HashMap<String, u64>, &mut u64),
+    out: &'a std::cell::Cell<ResultPress>,
+) {
+    let items = results.items();
+    // With nothing to list, the ages stay as they are: another list in this frame owns them.
+    if items.is_empty() {
+        return;
+    }
+    let age = result_ages(
+        ages,
+        clock,
+        items.iter().map(|(_, words, _)| words.as_str()),
+    );
+    let mut order: Vec<usize> = (0..items.len()).collect();
+    order.sort_by_key(|at| std::cmp::Reverse(age[*at]));
+    for at in order {
+        let (kind, words, undo) = items[at].clone();
+        footer.result(words, undo, move |ui| {
+            let mut pressed = out.get();
+            show_result(ui, results, kind, &mut pressed);
+            out.set(pressed);
+        });
+    }
+}
+
 /// The pane's message footer when it has no reader: below a form, or below the empty state of a
 /// scope with no entries. It holds the page's results and its error. Returns what was pressed.
 fn form_footer(
     ui: &mut egui::Ui,
     id: &str,
     results: &ReaderResults,
-    form_error: Option<&str>,
-    error: Option<&str>,
-) -> ResultPress {
+    ages: (&mut std::collections::HashMap<String, u64>, &mut u64),
+    (form_error, error): (Option<&str>, Option<&str>),
+) -> (ResultPress, f32) {
     let pressed = std::cell::Cell::new(ResultPress::default());
     let mut footer = design::Footer::new(id, ui.available_width().min(design::READER_MEASURE));
-    add_results(&mut footer, results, &pressed);
+    add_results(&mut footer, results, ages, &pressed);
     page_error(&mut footer, form_error);
     page_error(&mut footer, error);
-    footer.show(ui);
-    pressed.get()
+    let bottom = footer.show(ui);
+    (pressed.get(), bottom)
+}
+
+/// The form above a form footer, in a scroll area that ends at the footer's top, so a long form
+/// never runs under the footer.
+fn above_footer<R>(ui: &mut egui::Ui, bottom: f32, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    let height = (bottom - ui.cursor().top()).max(0.0);
+    egui::ScrollArea::vertical()
+        .id_salt("library_form_body")
+        .max_height(height)
+        .auto_shrink([false, true])
+        .show(ui, add)
+        .inner
 }
 
 /// What the DM pressed in the reader's messages in the pane's message footer.
@@ -464,6 +507,7 @@ fn reader_messages<'a>(
     draft_reason: Option<&'static str>,
     dependencies: &'a [(Uuid, String, String)],
     dependency_results: &'a [(usize, String)],
+    ages: (&mut std::collections::HashMap<String, u64>, &mut u64),
     out: &'a mut ReaderPress,
 ) {
     let ReaderPress {
@@ -475,7 +519,7 @@ fn reader_messages<'a>(
         undo_dependency,
     } = out;
     let (heading_fix, heading_undo) = (&mut heading_out.0, &mut heading_out.1);
-    add_results(footer, results, results_out);
+    add_results(footer, results, ages, results_out);
     if let Some(result) = heading.and_then(|heading| heading.undo.as_deref()) {
         // The fix's result is a message, so its Undo keeps its icon on the message line.
         footer.result(result, true, |ui| {
@@ -2077,8 +2121,6 @@ struct PagePress {
 struct ReaderResults {
     /// The page's results, first.
     page: PageResults,
-    /// The kinds of the kept results, newest first, for the footer's order.
-    order: Vec<ResultKind>,
     /// Every entry in this package is now chosen for this campaign.
     package_use: bool,
     /// A manifest write's result and its Undo's words.
@@ -2115,9 +2157,30 @@ impl ReaderResults {
     }
 }
 
-/// A kept result with an Undo, for the order the footer lists them in: newest first.
+/// The age of each kept result by its words: the clock when it was first seen. Results first seen
+/// together take the next ticks in the order given. Results no longer
+/// shown leave, so a result that comes back is new again.
+fn result_ages<'a>(
+    ages: &mut std::collections::HashMap<String, u64>,
+    clock: &mut u64,
+    words: impl Iterator<Item = &'a str> + Clone,
+) -> Vec<u64> {
+    ages.retain(|known, _| words.clone().any(|words| words == known));
+    words
+        .map(|words| {
+            *ages.entry(words.to_owned()).or_insert_with(|| {
+                *clock += 1;
+                *clock
+            })
+        })
+        .collect()
+}
+
+/// One kept result of a pane, in the order `show_results` draws them in Read.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum ResultKind {
+    ScopeNotice,
+    LinkOffer,
     Links,
     Registration,
     Rosters,
@@ -2129,301 +2192,185 @@ enum ResultKind {
     Discarded,
 }
 
-impl ResultKind {
-    /// Every kind, in the order the footer lists kinds that `order` does not name.
-    const ALL: [ResultKind; 9] = [
-        ResultKind::Links,
-        ResultKind::Registration,
-        ResultKind::Rosters,
-        ResultKind::Unregistered,
-        ResultKind::PackageUse,
-        ResultKind::Manifest,
-        ResultKind::Identities,
-        ResultKind::Identity,
-        ResultKind::Discarded,
-    ];
-}
-
-/// Records that a kept result of `kind` was just made: it is now the newest. A free function, so
-/// a closure that holds other parts of the Library can call it.
-fn made(order: &mut Vec<ResultKind>, kind: ResultKind) {
-    order.retain(|known| *known != kind);
-    order.push(kind);
-}
-
-/// Each kept result as its own message in the pane's message footer, newest first (round 26
-/// review): `order` lists the kinds newest first; a kind it does not name follows in
-/// `ResultKind::ALL` order. The scope notice and the link offer are notices. `out` gathers what
-/// was pressed.
-fn add_results<'a>(
-    footer: &mut design::Footer<'a>,
-    results: &'a ReaderResults,
-    out: &'a std::cell::Cell<ResultPress>,
-) {
-    let page = &results.page;
-    let press = move |set: fn(&mut ResultPress, bool), pressed: bool| {
-        if pressed {
-            let mut all = out.get();
-            set(&mut all, true);
-            out.set(all);
-        }
-    };
-    let mut kinds: Vec<ResultKind> = results.order.clone();
-    kinds.extend(
-        ResultKind::ALL
-            .iter()
-            .filter(|kind| !results.order.contains(kind)),
-    );
-    for kind in kinds {
-        match kind {
-            ResultKind::Links => {
-                if let Some(words) = &page.links {
-                    // The result is a message, so its Undo keeps its icon on the message line.
-                    footer.result(words.as_str(), true, move |ui| {
-                        press(
-                            |p, v| p.page.links = v,
-                            design::undo_message(ui, Tone::Success, words, "Undo link update"),
-                        );
-                    });
-                }
+impl ReaderResults {
+    /// The results shown, in Read's order, each with its words and whether its Undo is live.
+    fn items(&self) -> Vec<(ResultKind, String, bool)> {
+        let page = &self.page;
+        let mut items = Vec::new();
+        let mut add = |kind, words: Option<String>, undo| {
+            if let Some(words) = words {
+                items.push((kind, words, undo));
             }
-            ResultKind::Registration => {
-                if let Some((words, blocked)) = &page.registration {
-                    footer.result(words.as_str(), true, move |ui| {
-                        // The Undo sits on the message line. After an outside change it stays
-                        // there, blocked, and the reason follows at the message words.
-                        press(
-                            |p, v| p.page.registration = v,
-                            kept_undo_message(
-                                ui,
-                                Tone::Success,
-                                words,
-                                "Undo package registration",
-                                *blocked,
-                                true,
-                            ),
-                        );
-                        // The other choice starts below, at the message words.
-                        if let Some(blocked) = page.use_copy {
-                            press(
-                                |p, v| p.page.use_copy = v,
-                                design::message_choice_row(ui, Tone::Success, |ui| {
-                                    Action::secondary(USE_COPY)
-                                        .density(Density::Read)
-                                        .blocked(blocked)
-                                        .show(ui)
-                                        .clicked()
-                                }),
-                            );
-                        }
-                    });
-                }
-            }
-            ResultKind::Rosters => {
-                if let Some(blocked) = page.rosters {
-                    footer.result(USE_COPY_RESULT, true, move |ui| {
-                        press(
-                            |p, v| p.page.rosters = v,
-                            kept_undo_message(
-                                ui,
-                                Tone::Success,
-                                USE_COPY_RESULT,
-                                "Undo source change",
-                                blocked,
-                                true,
-                            ),
-                        );
-                    });
-                }
-            }
-            ResultKind::Unregistered => {
-                if let Some(words) = &page.unregistered {
-                    footer.result(words.as_str(), true, move |ui| {
-                        press(
-                            |p, v| p.page.unregistered = v,
-                            design::undo_message(ui, Tone::Success, words, "Undo unregister"),
-                        );
-                    });
-                }
-            }
-            ResultKind::PackageUse => {
-                if results.package_use {
-                    footer.result(PACKAGE_USE_RESULT, true, move |ui| {
-                        press(
-                            |p, v| p.package_use = v,
-                            design::undo_message(
-                                ui,
-                                Tone::Success,
-                                PACKAGE_USE_RESULT,
-                                "Undo package choice",
-                            ),
-                        );
-                    });
-                }
-            }
-            ResultKind::Manifest => {
-                if let Some((words, action)) = &results.manifest {
-                    footer.result(words.as_str(), true, move |ui| {
-                        press(
-                            |p, v| p.manifest = v,
-                            kept_undo_message(
-                                ui,
-                                Tone::Success,
-                                words,
-                                action,
-                                results.locked,
-                                false,
-                            ),
-                        );
-                    });
-                }
-            }
-            ResultKind::Identities => {
-                if let Some(words) = &results.identities {
-                    footer.result(words.as_str(), true, move |ui| {
-                        press(
-                            |p, v| p.identities = v,
-                            kept_undo_message(
-                                ui,
-                                Tone::Success,
-                                words,
-                                "Undo separate entries",
-                                results.locked,
-                                false,
-                            ),
-                        );
-                    });
-                }
-            }
-            ResultKind::Identity => {
-                if let Some(words) = &results.identity {
-                    footer.result(words.as_str(), true, move |ui| {
-                        press(
-                            |p, v| p.identity = v,
-                            kept_undo_message(
-                                ui,
-                                Tone::Success,
-                                words,
-                                crate::world::SEPARATE_ENTRY_UNDO,
-                                results.locked,
-                                false,
-                            ),
-                        );
-                    });
-                }
-            }
-            ResultKind::Discarded => {
-                if let Some(name) = &results.discarded {
-                    footer.result(format!("{name} draft discarded."), true, move |ui| {
-                        press(|p, v| p.discarded = v, design::draft_discarded(ui, name));
-                    });
-                }
-            }
-        }
-    }
-    if let Some(words) = &page.scope_notice {
-        // It wrote nothing: the scope only widened to show the entry.
-        footer.notice(words.as_str(), move |ui| {
-            design::message(ui, Tone::Info, words);
-        });
-    }
-    if let Some((words, action)) = &page.link_offer {
-        // The offer names both names, so the DM can check the words before the write.
-        footer.notice(words.as_str(), move |ui| {
-            press(
-                |p, v| p.page.link_offer = v,
-                design::message_with_action(ui, Tone::Info, words, action),
-            );
-        });
+        };
+        add(ResultKind::ScopeNotice, page.scope_notice.clone(), false);
+        add(
+            ResultKind::LinkOffer,
+            page.link_offer.as_ref().map(|(words, _)| words.clone()),
+            false,
+        );
+        add(ResultKind::Links, page.links.clone(), true);
+        add(
+            ResultKind::Registration,
+            page.registration.as_ref().map(|(words, _)| words.clone()),
+            true,
+        );
+        add(
+            ResultKind::Rosters,
+            page.rosters.map(|_| USE_COPY_RESULT.to_owned()),
+            true,
+        );
+        add(ResultKind::Unregistered, page.unregistered.clone(), true);
+        add(
+            ResultKind::PackageUse,
+            self.package_use.then(|| PACKAGE_USE_RESULT.to_owned()),
+            true,
+        );
+        add(
+            ResultKind::Manifest,
+            self.manifest.as_ref().map(|(words, _)| words.clone()),
+            true,
+        );
+        add(ResultKind::Identities, self.identities.clone(), true);
+        add(ResultKind::Identity, self.identity.clone(), true);
+        add(
+            ResultKind::Discarded,
+            self.discarded
+                .as_ref()
+                .map(|name| format!("{name} draft discarded.")),
+            true,
+        );
+        items
     }
 }
 
 fn show_results(ui: &mut egui::Ui, results: &ReaderResults) -> ResultPress {
     let mut pressed = ResultPress::default();
-    let page = &results.page;
-    if let Some(words) = &page.scope_notice {
-        // It wrote nothing: the scope only widened to show the entry.
-        design::message(ui, Tone::Info, words);
-    }
-    if let Some((words, action)) = &page.link_offer {
-        // The offer names both names, so the DM can check the words before the write.
-        pressed.page.link_offer = design::message_with_action(ui, Tone::Info, words, action);
-    }
-    if let Some(words) = &page.links {
-        // The result is a message, so its Undo keeps its icon on the message line.
-        pressed.page.links = design::undo_message(ui, Tone::Success, words, "Undo link update");
-    }
-    if let Some((words, blocked)) = &page.registration {
-        // The Undo sits on the message line, as every Undo after a message does. After an
-        // outside change it stays there, blocked, and the reason follows at the message words.
-        // The result still happened, so its words keep the text colour.
-        pressed.page.registration = kept_undo_message(
-            ui,
-            Tone::Success,
-            words,
-            "Undo package registration",
-            *blocked,
-            true,
-        );
-        // The other choice starts below, at the message words. Only Undo is quiet.
-        if let Some(blocked) = page.use_copy {
-            pressed.page.use_copy = design::message_choice_row(ui, Tone::Success, |ui| {
-                Action::secondary(USE_COPY)
-                    .density(Density::Read)
-                    .blocked(blocked)
-                    .show(ui)
-                    .clicked()
-            });
-        }
-    }
-    if let Some(blocked) = page.rosters {
-        // After an outside change the Undo stays, blocked, and the reason follows.
-        pressed.page.rosters = kept_undo_message(
-            ui,
-            Tone::Success,
-            USE_COPY_RESULT,
-            "Undo source change",
-            blocked,
-            true,
-        );
-    }
-    if let Some(words) = &page.unregistered {
-        // A finished change: the package left this campaign's lists.
-        pressed.page.unregistered =
-            design::undo_message(ui, Tone::Success, words, "Undo unregister");
-    }
-    if results.package_use {
-        pressed.package_use =
-            design::undo_message(ui, Tone::Success, PACKAGE_USE_RESULT, "Undo package choice");
-    }
-    if let Some((words, action)) = &results.manifest {
-        pressed.manifest =
-            kept_undo_message(ui, Tone::Success, words, action, results.locked, false);
-    }
-    if let Some(words) = &results.identities {
-        pressed.identities = kept_undo_message(
-            ui,
-            Tone::Success,
-            words,
-            "Undo separate entries",
-            results.locked,
-            false,
-        );
-    }
-    if let Some(words) = &results.identity {
-        pressed.identity = kept_undo_message(
-            ui,
-            Tone::Success,
-            words,
-            crate::world::SEPARATE_ENTRY_UNDO,
-            results.locked,
-            false,
-        );
-    }
-    if let Some(name) = &results.discarded {
-        pressed.discarded = design::draft_discarded(ui, name);
+    for (kind, ..) in results.items() {
+        show_result(ui, results, kind, &mut pressed);
     }
     pressed
+}
+
+/// Draw one kept result, and note its press in `pressed`.
+fn show_result(
+    ui: &mut egui::Ui,
+    results: &ReaderResults,
+    kind: ResultKind,
+    pressed: &mut ResultPress,
+) {
+    let page = &results.page;
+    match kind {
+        ResultKind::ScopeNotice => {
+            if let Some(words) = &page.scope_notice {
+                // It wrote nothing: the scope only widened to show the entry.
+                design::message(ui, Tone::Info, words);
+            }
+        }
+        ResultKind::LinkOffer => {
+            if let Some((words, action)) = &page.link_offer {
+                // The offer names both names, so the DM can check the words before the write.
+                pressed.page.link_offer =
+                    design::message_with_action(ui, Tone::Info, words, action);
+            }
+        }
+        ResultKind::Links => {
+            if let Some(words) = &page.links {
+                // The result is a message, so its Undo keeps its icon on the message line.
+                pressed.page.links =
+                    design::undo_message(ui, Tone::Success, words, "Undo link update");
+            }
+        }
+        ResultKind::Registration => {
+            if let Some((words, blocked)) = &page.registration {
+                // The Undo sits on the message line, as every Undo after a message does. After
+                // an outside change it stays there, blocked, and the reason follows at the
+                // message words. The result still happened, so its words keep the text colour.
+                pressed.page.registration = kept_undo_message(
+                    ui,
+                    Tone::Success,
+                    words,
+                    "Undo package registration",
+                    *blocked,
+                    true,
+                );
+                // The other choice starts below, at the message words. Only Undo is quiet.
+                if let Some(blocked) = page.use_copy {
+                    pressed.page.use_copy = design::message_choice_row(ui, Tone::Success, |ui| {
+                        Action::secondary(USE_COPY)
+                            .density(Density::Read)
+                            .blocked(blocked)
+                            .show(ui)
+                            .clicked()
+                    });
+                }
+            }
+        }
+        ResultKind::Rosters => {
+            if let Some(blocked) = page.rosters {
+                // After an outside change the Undo stays, blocked, and the reason follows.
+                pressed.page.rosters = kept_undo_message(
+                    ui,
+                    Tone::Success,
+                    USE_COPY_RESULT,
+                    "Undo source change",
+                    blocked,
+                    true,
+                );
+            }
+        }
+        ResultKind::Unregistered => {
+            if let Some(words) = &page.unregistered {
+                // A finished change: the package left this campaign's lists.
+                pressed.page.unregistered =
+                    design::undo_message(ui, Tone::Success, words, "Undo unregister");
+            }
+        }
+        ResultKind::PackageUse => {
+            if results.package_use {
+                pressed.package_use = design::undo_message(
+                    ui,
+                    Tone::Success,
+                    PACKAGE_USE_RESULT,
+                    "Undo package choice",
+                );
+            }
+        }
+        ResultKind::Manifest => {
+            if let Some((words, action)) = &results.manifest {
+                pressed.manifest =
+                    kept_undo_message(ui, Tone::Success, words, action, results.locked, false);
+            }
+        }
+        ResultKind::Identities => {
+            if let Some(words) = &results.identities {
+                pressed.identities = kept_undo_message(
+                    ui,
+                    Tone::Success,
+                    words,
+                    "Undo separate entries",
+                    results.locked,
+                    false,
+                );
+            }
+        }
+        ResultKind::Identity => {
+            if let Some(words) = &results.identity {
+                pressed.identity = kept_undo_message(
+                    ui,
+                    Tone::Success,
+                    words,
+                    crate::world::SEPARATE_ENTRY_UNDO,
+                    results.locked,
+                    false,
+                );
+            }
+        }
+        ResultKind::Discarded => {
+            if let Some(name) = &results.discarded {
+                pressed.discarded = design::draft_discarded(ui, name);
+            }
+        }
+    }
 }
 
 /// The result of `Choose every entry`.
@@ -3515,9 +3462,6 @@ pub struct Library {
     /// package never shows it. Each ends on its own Undo, or on a reload that finds one of its
     /// files changed; other copies keep theirs (round 26 review).
     dependency_undos: Vec<DependencyUndo>,
-    /// The kinds of the kept results with an Undo in the order they were made, newest last.
-    /// The footer lists them newest first. A kind's own state says whether it still shows.
-    result_order: Vec<ResultKind>,
     selection_undo: Option<SelectionUndo>,
     /// The last reload found a registration file changed, so `Undo package registration` would
     /// refuse. The message stays for its other action; its Undo is blocked with the reason.
@@ -3528,6 +3472,10 @@ pub struct Library {
     /// The file, the draft before and after a stat fix, and its result message.
     vital_undo: Option<(String, String, String, String)>,
     heading_undo: Option<(String, String, String)>,
+    /// When the editor pane first saw each kept result, by its words, so the message footer can
+    /// list results with a live Undo newest first. A result ends its age when it leaves.
+    result_ages: std::collections::HashMap<String, u64>,
+    result_clock: u64,
 }
 /// Sort so that "Level 2" comes before "Level 18".
 fn natural_key(name: &str) -> Vec<(String, u64)> {
@@ -3697,7 +3645,6 @@ impl Library {
                 Some((document.campaign, document.path, before, document.text));
         }
         self.package_copy = Some(copy);
-        self.result_made(ResultKind::Registration);
         self.registration_changed = false;
         self.rosters_changed = false;
         self.copied_package = None;
@@ -3812,7 +3759,6 @@ impl Library {
             before,
             after: after.clone(),
         });
-        made(&mut self.result_order, ResultKind::Identity);
         let loaded = self.loaded.as_mut().unwrap();
         loaded.notes[index].entry = Some(updated);
         loaded.notes[index].text = after.clone();
@@ -3903,7 +3849,6 @@ impl Library {
         let draft = std::mem::take(&mut self.draft);
         self.draft_revision += 1;
         self.discarded = Some((note.owner.id(), note.path.clone(), draft));
-        made(&mut self.result_order, ResultKind::Discarded);
         if let Some(fault) = change.fault {
             // The note becomes the file as it is: unreadable, with its fault and no text.
             note.entry = None;
@@ -4757,20 +4702,23 @@ impl Library {
             // the form or the empty state.
             let results = ReaderResults {
                 page: std::mem::take(&mut self.page_results),
-                order: self.results_newest_first(),
                 ..Default::default()
             };
-            self.page_pressed = form_footer(
+            let (pressed, bottom) = form_footer(
                 ui,
                 "library_form_footer",
                 &results,
-                self.new_form.then_some(self.new_error.as_deref()).flatten(),
-                self.error.as_deref(),
-            )
-            .page;
+                (&mut self.result_ages, &mut self.result_clock),
+                (
+                    self.new_form.then_some(self.new_error.as_deref()).flatten(),
+                    self.error.as_deref(),
+                ),
+            );
+            self.page_pressed = pressed.page;
             if self.new_form {
-                self.new_entry(ui, dirty, campaigns);
+                above_footer(ui, bottom, |ui| self.new_entry(ui, dirty, campaigns));
             } else {
+                // The empty state is short; the pane already ends at the footer's top.
                 let mut can_use = false;
                 design::empty_state_with_body(
                     ui,
@@ -5300,43 +5248,37 @@ impl Library {
                 bottom: 0,
             }))
             .show_inside(ui, |ui| {
+                let mut form_bottom = f32::INFINITY;
                 if self.form || self.new_form {
                     // A form has no reader: the page's results sit in the pane's message footer,
                     // below the form, so they never move it (round 26).
                     let results = ReaderResults {
                         page: std::mem::take(&mut self.page_results),
-                        order: self.results_newest_first(),
                         ..Default::default()
                     };
-                    self.page_pressed = form_footer(
+                    let (pressed, bottom) = form_footer(
                         ui,
                         "library_form_footer",
                         &results,
-                        self.new_form.then_some(self.new_error.as_deref()).flatten(),
-                        self.error.as_deref(),
-                    )
-                    .page;
+                        (&mut self.result_ages, &mut self.result_clock),
+                        (
+                            self.new_form.then_some(self.new_error.as_deref()).flatten(),
+                            self.error.as_deref(),
+                        ),
+                    );
+                    self.page_pressed = pressed.page;
+                    form_bottom = bottom;
                 }
                 if self.form {
-                    self.package_form(ui, campaigns);
+                    above_footer(ui, form_bottom, |ui| self.package_form(ui, campaigns));
                 } else if self.new_form {
-                    self.new_entry(ui, dirty, campaigns);
+                    above_footer(ui, form_bottom, |ui| self.new_entry(ui, dirty, campaigns));
                 } else {
                     self.editor(ui, &subtitle, campaigns);
                 }
             });
         let pressed = std::mem::take(&mut self.page_pressed);
         self.apply_page_press(pressed, campaigns);
-    }
-
-    /// A kept result of `kind` was just made: it is now the newest.
-    fn result_made(&mut self, kind: ResultKind) {
-        made(&mut self.result_order, kind);
-    }
-
-    /// The kept results' kinds, newest first.
-    fn results_newest_first(&self) -> Vec<ResultKind> {
-        self.result_order.iter().rev().copied().collect()
     }
 
     /// The open entry's identity and root: what owns a link offer and its result.
@@ -5435,7 +5377,6 @@ impl Library {
                             old,
                             new,
                         });
-                        made(&mut self.result_order, ResultKind::Links);
                         self.stale = true;
                         self.content_changed =
                             campaigns.active_campaign().map(|campaign| campaign.path);
@@ -5492,7 +5433,6 @@ impl Library {
             match copy.use_in_rosters(&campaign) {
                 Ok(edits) => {
                     self.copied_rosters = Some(edits);
-                    self.result_made(ResultKind::Rosters);
                     self.rosters_changed = false;
                     self.content_changed = Some(campaign.path);
                     self.stale = true;
@@ -5693,7 +5633,6 @@ impl Library {
             match campaigns.unregister_module(module.id) {
                 Ok(()) => {
                     self.unregistered = Some(module);
-                    self.result_made(ResultKind::Unregistered);
                     self.scope = Scope::default();
                     self.stale = true;
                 }
@@ -6631,7 +6570,6 @@ impl Library {
                 .map(|write| (write.message(), format!("Undo write {}", write.path()))),
             locked: self.draft_reason(),
             page: std::mem::take(&mut self.page_results),
-            order: self.results_newest_first(),
             ..Default::default()
         };
         // With no entry open, the results and Remove's notice sit in the pane's message footer,
@@ -6665,9 +6603,16 @@ impl Library {
                     *undo = design::undo_message(ui, Tone::Info, words, "Undo remove");
                 });
             }
-            add_results(&mut footer, &results, &pressed);
+            add_results(
+                &mut footer,
+                &results,
+                (&mut self.result_ages, &mut self.result_clock),
+                &pressed,
+            );
             page_error(&mut footer, self.error.as_deref());
-            footer.show(ui);
+            // The empty reader below holds nothing past the cursor, so the pane ends at the
+            // footer's top.
+            let _ = footer.show(ui);
             self.apply_package_results(&pressed.get());
         }
         let recovery = self
@@ -7477,7 +7422,6 @@ impl Library {
                         if design::save_row_state(ui, state, dirty && !conflict, None) {
                             self.discarded =
                                 Some((note.owner.id(), note.path.clone(), self.draft.clone()));
-                            made(&mut self.result_order, ResultKind::Discarded);
                             self.draft = note.text.clone();
                             // The draft changed: a failed Save of the old words no longer owns it.
                             self.draft_revision += 1;
@@ -7542,7 +7486,8 @@ impl Library {
                 _ => Default::default(),
             };
             let broken = &broken_cache.0;
-            let results_shown = !choices_in_reader && results.any();
+            // In Read with a changed draft too: one list of kept results per footer.
+            let results_shown = results.any();
             let repair = recovery.as_ref().filter(|_| note.error.is_some());
             let waits = repair_problem.is_none()
                 && failed.is_none()
@@ -7560,32 +7505,80 @@ impl Library {
                 .map_or(Tone::Error, |(_, _, exists)| {
                     crate::content_workspace::manifest_fault_tone(*exists)
                 });
-            let (mut discard_undo, mut heading_undo, mut vital_undo) = (false, false, false);
             let (mut heading_fix, mut vital_use) = (false, None);
-            let mut footer = design::Footer::new("library_footer", editor_width);
-            // The fixes' results are messages, so each Undo keeps its icon on the line.
+            // Each kept result is its own footer message, with its own Undo: Discard's, the
+            // heading and stat fixes', and each of the reader's results. Results with a live Undo
+            // are listed newest first, by when this pane first saw each one. Results first seen in
+            // one frame take the next ticks in the order they are listed here (Discard, the fixes,
+            // then Read's order), so among them the last listed shows first.
+            #[derive(Clone, Copy)]
+            enum Kept {
+                Discard,
+                Heading,
+                Vital,
+                Reader(ResultKind),
+            }
+            let mut kept: Vec<(Kept, String, bool)> = Vec::new();
             if discard_shown {
-                let undo = &mut discard_undo;
-                footer.result(format!("{} draft discarded.", note.name()), true, |ui| {
-                    *undo = design::draft_discarded(ui, note.name());
-                });
+                kept.push((
+                    Kept::Discard,
+                    format!("{} draft discarded.", note.name()),
+                    true,
+                ));
             }
             if let Some(result) = heading.undo.as_deref() {
-                let undo = &mut heading_undo;
-                footer.result(result, true, |ui| {
-                    *undo = design::undo_message(ui, Tone::Success, result, "Undo heading change");
-                });
+                kept.push((Kept::Heading, result.to_owned(), true));
             }
             if let Some(result) = vital_result {
-                let undo = &mut vital_undo;
-                footer.result(result, true, |ui| {
-                    *undo = design::undo_message(ui, Tone::Success, result, "Undo stat change");
-                });
+                kept.push((Kept::Vital, result.to_owned(), true));
             }
-            // Round 26 review: each kept result is its own message, newest first.
-            let shown_cell = std::cell::Cell::new(ResultPress::default());
             if results_shown {
-                add_results(&mut footer, &results, &shown_cell);
+                kept.extend(
+                    results
+                        .items()
+                        .into_iter()
+                        .map(|(kind, words, undo)| (Kept::Reader(kind), words, undo)),
+                );
+            }
+            let ages = result_ages(
+                &mut self.result_ages,
+                &mut self.result_clock,
+                kept.iter().map(|(_, words, _)| words.as_str()),
+            );
+            let mut order: Vec<usize> = (0..kept.len()).collect();
+            order.sort_by_key(|at| std::cmp::Reverse(ages[*at]));
+            let (discard_undo, heading_undo, vital_undo) = (
+                std::cell::Cell::new(false),
+                std::cell::Cell::new(false),
+                std::cell::Cell::new(false),
+            );
+            let shown = std::cell::RefCell::new(None::<ResultPress>);
+            let mut footer = design::Footer::new("library_footer", editor_width);
+            for at in order {
+                let (which, words, undo) = &kept[at];
+                let (which, results) = (*which, &results);
+                let (discard_undo, heading_undo, vital_undo, shown) =
+                    (&discard_undo, &heading_undo, &vital_undo, &shown);
+                let heading_result = heading.undo.as_deref();
+                // The fixes' results are messages, so each Undo keeps its icon on the line.
+                footer.result(words.as_str(), *undo, move |ui| match which {
+                    Kept::Discard => discard_undo.set(design::draft_discarded(ui, note.name())),
+                    Kept::Heading => heading_undo.set(heading_result.is_some_and(|result| {
+                        design::undo_message(ui, Tone::Success, result, "Undo heading change")
+                    })),
+                    Kept::Vital => vital_undo.set(vital_result.is_some_and(|result| {
+                        design::undo_message(ui, Tone::Success, result, "Undo stat change")
+                    })),
+                    Kept::Reader(kind) => {
+                        let mut shown = shown.borrow_mut();
+                        show_result(
+                            ui,
+                            results,
+                            kind,
+                            shown.get_or_insert_with(Default::default),
+                        );
+                    }
+                });
             }
             // A repair draft's fault in its tone (a deleted manifest is a warning), or Save's
             // refusal before the write, a YAML fault in its own words.
@@ -7653,31 +7646,33 @@ impl Library {
                     );
                 });
             }
-            // Round 26 FC4: the duplicate warning and its choices join Edit Markdown's messages.
-            // In Read with a changed draft, the reader's results and campaign links join too
-            // (in Edit Markdown, the results are already there). The heading's warning and
-            // result are already there.
+            // Round 26 FC4: the duplicate warning and its choices join Edit Markdown's messages,
+            // with the campaign links in Read. The kept results and the heading's warning and
+            // result are already in the list above.
             reader_messages(
                 &mut footer,
                 None,
-                if choices_in_reader {
-                    &results
-                } else {
-                    &no_results
-                },
+                &no_results,
                 Some((self.loaded.as_ref().unwrap(), note, &duplicate_indices)),
                 draft_reason,
                 &dependencies,
                 &dependency_results,
+                (&mut self.result_ages, &mut self.result_clock),
                 &mut reader_press,
             );
             page_error(&mut footer, self.error.as_deref());
             body_bottom = footer.show(ui);
+            let (discard_undo, heading_undo, vital_undo, shown) = (
+                discard_undo.get(),
+                heading_undo.get(),
+                vital_undo.get(),
+                shown.into_inner(),
+            );
             if broken_taken && let Some((_, _, _, warnings)) = &mut self.broken_lines {
                 *warnings = broken_cache;
             }
-            if results_shown {
-                pressed = shown_cell.get();
+            if let Some(shown) = shown {
+                pressed = shown;
             }
             heading_pressed = (heading_fix, heading_undo);
             if discard_undo && let Some((_, _, text)) = self.discarded.take() {
@@ -7744,6 +7739,7 @@ impl Library {
                 draft_reason,
                 &dependencies,
                 &dependency_results,
+                (&mut self.result_ages, &mut self.result_clock),
                 &mut reader_press,
             );
             page_error(&mut footer, self.error.as_deref());
@@ -8087,7 +8083,6 @@ impl Library {
                 match crate::content_workspace::ManifestWrite::write_as(&module, &path, exists) {
                     Ok(write) => {
                         self.manifest_write = Some(write);
-                        self.result_made(ResultKind::Manifest);
                         self.stale = true;
                         self.content_changed = Some(module.path);
                     }
@@ -8279,7 +8274,6 @@ impl Library {
             match result {
                 Ok(undo) => {
                     self.selection_undo = Some(undo);
-                    self.result_made(ResultKind::PackageUse);
                     self.stale = true;
                     self.content_changed = Some(campaign.path);
                 }
@@ -8300,7 +8294,6 @@ impl Library {
                         design::count(paths.len(), "file", "files")
                     ),
                 ));
-                made(&mut self.result_order, ResultKind::Identities);
                 self.stale = true;
                 self.content_changed = Some(root);
             })

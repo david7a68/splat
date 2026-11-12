@@ -325,6 +325,46 @@ fn walk<'t>(
     }
 }
 
+/// What the last pass said about rows: the labels `design::row_detail` marked, and the rects
+/// that row components gave `design::register_row`.
+pub struct RowDetails {
+    marked: HashSet<egui::accesskit::NodeId>,
+    rows: Vec<egui::Rect>,
+}
+
+impl RowDetails {
+    pub fn of(ctx: &egui::Context) -> Self {
+        let marked: Vec<egui::Id> = ctx
+            .data(|data| {
+                data.get_temp::<(u64, Vec<egui::Id>)>(egui::Id::new(crate::design::ROW_DETAILS))
+            })
+            .map(|(_, items)| items)
+            .unwrap_or_default();
+        let rows: Vec<egui::Rect> = ctx
+            .data(|data| {
+                data.get_temp::<(u64, Vec<egui::Rect>)>(egui::Id::new(crate::design::ROW_RECTS))
+            })
+            .map(|(_, items)| items)
+            .unwrap_or_default();
+        Self {
+            marked: marked
+                .iter()
+                .map(|id| egui::accesskit::NodeId(id.value()))
+                .collect(),
+            rows,
+        }
+    }
+
+    /// A row's own detail line: marked, and inside a registered row. `rect` is in points.
+    pub fn owns(&self, id: egui::accesskit::NodeId, rect: egui::Rect) -> bool {
+        self.marked.contains(&id)
+            && self
+                .rows
+                .iter()
+                .any(|row| row.expand(OVERLAP_TOLERANCE).contains_rect(rect))
+    }
+}
+
 /// A `Label` node's words: egui puts them in its value.
 pub fn label_words(node: &AccessKitNode<'_>) -> Option<String> {
     (node.role() == Role::Label)
@@ -332,11 +372,18 @@ pub fn label_words(node: &AccessKitNode<'_>) -> Option<String> {
         .flatten()
 }
 
-/// The words of every `Label` node with no control around it, for `wide_help`. A label inside
-/// a control (a list row's second line) is that control's content, not help.
+/// The words of every `Label` node that is not a row's, for `wide_help`. A label inside a control
+/// is that control's content, and a label marked with `design::row_detail` that lies inside a
+/// registered row is that row's own second line; neither is help.
 pub fn label_texts(harness: &Harness<'_, Splat>) -> Vec<String> {
+    let rows = RowDetails::of(&harness.ctx);
+    let scale = 1.0 / harness.ctx.pixels_per_point();
     let mut found = Vec::new();
     visit_nodes(harness, |node, _| {
+        let access = node.accesskit_node();
+        if rect_of(&access).is_some_and(|rect| rows.owns(access.id(), rect * scale)) {
+            return;
+        }
         let mut parent = node.parent();
         while let Some(ancestor) = parent {
             if control_role(ancestor.accesskit_node().role()) {
@@ -731,12 +778,12 @@ pub fn missing_glyphs(
         .collect()
 }
 
-/// Every painted label (its words are those of a `Label` node in `labels`, one with no control
-/// around it) that is all muted
-/// `Small` words, may wrap, and is wider than `READER_MEASURE`: help that does not wrap at the
+/// Every painted label (its words are those of a `Label` node in `labels`: not a row's) that is
+/// all muted `Small` words and wider than `READER_MEASURE`: help that does not wrap at the
 /// reader's measure (`design::help`). A text with any other size, family or colour in it (a
-/// status word, a link, a value) is not help, nor is a one-line detail that its row cuts or fits
-/// (`truncate` or `extend`), nor words a row paints as its own second line.
+/// status word, a link, a value) is not help. A label that does not wrap (`truncate`, `extend`)
+/// and stands alone is help too: only a row's own detail line, proved by the control around it or
+/// marked with `design::row_detail`, passes.
 pub fn wide_help(
     ctx: &egui::Context,
     shapes: &[egui::epaint::ClippedShape],
@@ -750,10 +797,7 @@ pub fn wide_help(
     let muted = colors().muted;
     let help = |text: &egui::epaint::TextShape| {
         let sections = &text.galley.job.sections;
-        let wrap = &text.galley.job.wrap;
-        wrap.max_width.is_finite()
-            && wrap.max_rows > 1
-            && labels.contains(text.galley.job.text.as_str())
+        labels.contains(text.galley.job.text.as_str())
             && !sections.is_empty()
             && sections.iter().all(|section| {
                 let color = if section.format.color == egui::Color32::PLACEHOLDER {
@@ -1471,9 +1515,12 @@ mod tests {
         assert!(found[0].detail.contains("U+0378"));
     }
 
-    /// A muted `Small` label 560 px wide fails; the same words through `design::help` wrap at
-    /// the reader measure and pass; muted `Body` words, a `Small` status colour, words a row
-    /// paints itself and a one-line detail cut to fit its row are not help.
+    /// Muted `Small` help wider than the reader measure fails whether it wraps (in a 560 px scope),
+    /// is cut to fit (`truncate`) or keeps one line (`extend`). The same words through
+    /// `design::help` pass. Muted `Body` words, a `Small` status colour, words a row paints
+    /// itself, and a row's own detail line (marked with `design::row_detail` and inside a row given
+    /// to `design::register_row`, in either mode) are not help. A mark on a label outside every
+    /// row changes nothing.
     #[test]
     fn help_measure_fails_on_a_wide_muted_small_label() {
         use crate::design::{Type, colors};
@@ -1482,19 +1529,31 @@ mod tests {
         let mut harness = Harness::builder()
             .with_size(egui::vec2(1200.0, 600.0))
             .build_ui(move |ui| {
-                // The fault: muted Small words in a 560 px scope, past the measure.
+                let muted = |ui: &egui::Ui, lead: &str| {
+                    Type::Small
+                        .rich(ui, format!("{lead} {words}"))
+                        .color(colors().muted)
+                };
+                // The faults: help in a 560 px scope, help cut to fit, help on one line.
                 ui.scope(|ui| {
                     ui.set_max_width(560.0);
-                    ui.add(
-                        egui::Label::new(Type::Small.rich(ui, &words).color(colors().muted)).wrap(),
-                    );
+                    ui.add(egui::Label::new(muted(ui, "Wraps.")).wrap());
                 });
-                crate::design::help(ui, &words);
+                ui.scope(|ui| {
+                    ui.set_max_width(700.0);
+                    ui.add(egui::Label::new(muted(ui, "Cut.")).truncate());
+                });
+                ui.add(egui::Label::new(muted(ui, "One line.")).extend());
+                crate::design::help(ui, &format!("Help. {words}"));
                 ui.add(egui::Label::new(
-                    Type::Body.rich(ui, &words).color(colors().muted),
+                    Type::Body
+                        .rich(ui, format!("Body. {words}"))
+                        .color(colors().muted),
                 ));
                 ui.add(egui::Label::new(
-                    Type::Small.rich(ui, &words).color(colors().result.warning),
+                    Type::Small
+                        .rich(ui, format!("Status. {words}"))
+                        .color(colors().result.warning),
                 ));
                 // Words a row paints itself, not a label, are not help.
                 let galley = ui.painter().layout(
@@ -1505,23 +1564,30 @@ mod tests {
                 );
                 ui.painter().galley(ui.cursor().min, galley, colors().muted);
                 ui.add_space(Type::Small.line() * 2.0);
-                // A row's one-line detail, fitted by its row, is not help.
-                ui.add(
-                    egui::Label::new(Type::Small.rich(ui, &words).color(colors().muted)).extend(),
-                );
-                // A row's one-line detail, cut to fit its row, is not help.
-                ui.scope(|ui| {
-                    ui.set_max_width(700.0);
-                    ui.add(
-                        egui::Label::new(Type::Small.rich(ui, &words).color(colors().muted))
-                            .truncate(),
-                    );
+                // A mark alone owns nothing: a marked label outside every row is still help.
+                let alone = ui.add(egui::Label::new(muted(ui, "Marked alone.")).extend());
+                crate::design::row_detail(ui, &alone);
+                // A row's own detail line, in either mode, inside its registered row, is not help.
+                let row = ui.scope(|ui| {
+                    ui.label("Row name");
+                    let detail = ui.add(egui::Label::new(muted(ui, "Row on one line.")).extend());
+                    crate::design::row_detail(ui, &detail);
                 });
+                crate::design::register_row(ui, row.response.rect);
+                let row = ui.scope(|ui| {
+                    ui.set_max_width(700.0);
+                    ui.label("Row name");
+                    let detail = ui.add(egui::Label::new(muted(ui, "Row cut.")).truncate());
+                    crate::design::row_detail(ui, &detail);
+                });
+                crate::design::register_row(ui, row.response.rect);
             });
         crate::design::theme::install(&harness.ctx);
         harness.run_steps(2);
+        let rows = RowDetails::of(&harness.ctx);
         let names: Vec<String> = harness
             .query_all_by_role(Role::Label)
+            .filter(|node| !rows.owns(node.accesskit_node().id(), node.rect()))
             .filter_map(|node| label_words(&node.accesskit_node()))
             .collect();
         let labels = names.iter().map(String::as_str).collect();
@@ -1533,11 +1599,28 @@ mod tests {
             "state",
             "1200x600",
         );
-        assert_eq!(found.len(), 1, "{found:?}");
-        assert_eq!(found[0].check, HELP_MEASURE);
+        let leads: Vec<_> = found
+            .iter()
+            .map(|violation| violation.node.split('.').next().unwrap_or_default())
+            .collect();
+        assert_eq!(
+            leads,
+            ["Wraps", "Cut", "One line", "Marked alone"],
+            "{found:?}"
+        );
+        assert_eq!(
+            (rows.marked.len(), rows.rows.len()),
+            (3, 2),
+            "three marks, two registered rows"
+        );
+        assert!(
+            found
+                .iter()
+                .all(|violation| violation.check == HELP_MEASURE)
+        );
         assert!(
             found[0].rect[2] > 488.0 + OVERLAP_TOLERANCE && found[0].rect[2] <= 560.0,
-            "the 560 px label is the one found: {found:?}"
+            "the 560 px label is found at its width: {found:?}"
         );
     }
 
