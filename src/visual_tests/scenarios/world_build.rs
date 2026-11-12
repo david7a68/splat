@@ -6249,9 +6249,31 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     d.type_into("Replacement creature", "Guard");
     d.expect("Use Guard");
     d.state("deleted-package-entry-choose-replacement", Sizes::All);
+    // iter-26-B FA2: the replacement's result sits in the editor's footer, so the roster's
+    // heading and its first row keep their y with the result, at 960, 1200 and 1920.
+    let roster_tops = |d: &mut Driver<'_>| {
+        [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                // The heading, or the roster's tab where the panes are tabs.
+                ["ROSTER", "1. "].map(|start| {
+                    d.nodes()
+                        .into_iter()
+                        .find(|node| node.name.to_uppercase().starts_with(start))
+                        .map(|node| node.rect.top().round())
+                })
+            })
+        })
+    };
+    let before_result = roster_tops(d);
     d.click("Use Guard");
     d.expect("as\u{a0}Guard");
     d.expect("Undo replacement");
+    let with_result = roster_tops(d);
+    d.observe(
+        "iter-26-B-FA2",
+        before_result.iter().flatten().all(Option::is_some) && with_result == before_result,
+        format!("Roster heading and row 1 tops before {before_result:?} and with the result {with_result:?}"),
+    );
     assert!(!d.has_containing("Not found. Its package entry was deleted."));
     assert!(
         !d.has_containing("have no creature")

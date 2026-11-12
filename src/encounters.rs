@@ -1211,6 +1211,22 @@ fn editor_panes_width(ui: &egui::Ui) -> f32 {
         .min(ROSTER_MAX_WIDTH + add_width + design::S)
 }
 
+/// A pane's body between where the cursor is and its message footer's top (`bottom`, from
+/// `Footer::show`). Panels and scroll areas inside it end there: egui keeps a `Ui`'s own bottom
+/// below what it already holds, so the pane's `Ui` alone does not stop them.
+pub(super) fn body_above(ui: &mut egui::Ui, bottom: f32) -> egui::Ui {
+    let top = ui.cursor().top();
+    let rect = egui::Rect::from_min_max(
+        egui::pos2(ui.max_rect().left(), top),
+        egui::pos2(ui.max_rect().right(), bottom.max(top)),
+    );
+    ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(rect)
+            .layout(egui::Layout::top_down(egui::Align::Min)),
+    )
+}
+
 /// The width of the save state and Discard together: the widest state word with Discard. What
 /// follows them in the save row keeps its x when the first edit changes the word and brings
 /// Discard (FB5).
@@ -3561,7 +3577,9 @@ impl Encounters {
                 design::message(ui, Tone::Error, &error);
             });
         }
-        footer.show(ui);
+        let bottom = footer.show(ui);
+        let mut body = body_above(ui, bottom);
+        let ui = &mut body;
         // As wide as the pane: a form's fixed width would push the scroll bar past its edge.
         // AK2, FK3: `text_input` takes the frame's width, so the field ends where Save does.
         design::field(ui, "Name", None, None, |ui| {
@@ -5010,6 +5028,8 @@ impl Encounters {
         {
             draft.undo_removed_group();
         }
+        let mut body = body_above(ui, bottom);
+        let ui = &mut body;
         let Some(snapshot) = &self.snapshot else {
             crate::design::spinner(ui);
             return;
@@ -6249,7 +6269,12 @@ impl Encounters {
                     )
                     .inner
                 } else {
-                    ui.horizontal(|ui| save_state!(ui));
+                    // As tall as the one-row form, so the state keeps its y when the folder
+                    // changes.
+                    ui.horizontal(|ui| {
+                        ui.set_min_height(Density::Scan.control());
+                        save_state!(ui)
+                    });
                     ui.allocate_ui_with_layout(
                         egui::vec2(ui.available_width(), Density::Scan.control()),
                         egui::Layout::right_to_left(egui::Align::Center),

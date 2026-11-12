@@ -2232,7 +2232,7 @@ impl Encounters {
                 design::message(ui, Tone::Warning, &warning);
             });
         }
-        footer.show(ui);
+        let bottom = footer.show(ui);
         if let Some(kind) = pressed.get() {
             self.undo_kept(kind, Some((active, campaigns.modules())));
         }
@@ -2242,6 +2242,8 @@ impl Encounters {
             draft.undo_member_result();
             self.expanded = None;
         }
+        let mut body = super::body_above(ui, bottom);
+        let ui = &mut body;
         let Some(snapshot) = &self.snapshot else {
             design::spinner(ui);
             return;

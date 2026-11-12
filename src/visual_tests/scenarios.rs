@@ -6652,7 +6652,37 @@ pub mod run_folder_defect {
     pub fn run(d: &mut Driver<'_>) {
         go_campaign(d);
         d.click(TAB_RUN_SETTINGS);
+        // iter-26-B, FN2's sibling: the folder move's warning sits in the tab's footer, so the
+        // first letter typed moves no field and no save state, at 960, 1200 and 1920.
+        let form_tops = |d: &mut Driver<'_>| {
+            [SMALL, DEFAULT, LARGE].map(|size| {
+                d.at_size(size, |d| {
+                    let top = |name: &str| {
+                        d.nodes()
+                            .into_iter()
+                            .filter(|node| node.name.contains(name))
+                            .map(|node| node.rect.top().round())
+                            .reduce(f32::max)
+                    };
+                    let state = top("No changes").or(top("Unsaved"));
+                    [
+                        top("Roll NPC initiative"),
+                        top("Break initiative ties"),
+                        state,
+                    ]
+                })
+            })
+        };
+        let clean = form_tops(d);
         d.replace_text_in(RUN_FOLDER, "Elsewhere");
+        let typed = form_tops(d);
+        d.observe(
+            "iter-26-B-FN2-run-folder",
+            clean.iter().flatten().all(Option::is_some)
+                && typed == clean
+                && d.has_containing("From the new folder, Splat will not show"),
+            format!("Field and state tops clean {clean:?} and after typing {typed:?}"),
+        );
         d.observe_both(
             "iter-18-A-lock",
             "Run settings state the campaign switch lock",
@@ -13679,7 +13709,7 @@ pub mod encounter_groups {
         d.state("group-member-replacement-search", Sizes::Default);
         d.click("Use Ember Cultist");
         d.expect("Changes for Ember Cultist");
-        // Use gives a result and its Undo on the member result line, as Remove does.
+        // Use gives a result and its Undo in the editor's footer, as Remove does.
         const REPLACED: &str = "Replaced Unknown creature with Ember Cultist.";
         d.observe(
             "iter-23-B-FI1",
@@ -13712,6 +13742,21 @@ pub mod encounter_groups {
         );
         d.click("Discard");
         d.click("Back to encounters");
+        // iter-26-B FI1: the page's results sit in a footer below the list, so the headings and
+        // rows keep their y when a result comes or goes, at 960, 1200 and 1920.
+        let heading_tops = |d: &mut Driver<'_>| {
+            [SMALL, DEFAULT, LARGE].map(|size| {
+                d.at_size(size, |d| {
+                    ["IN PROGRESS", READY_TO_RUN, "GROUPS"].map(|heading| {
+                        d.nodes()
+                            .into_iter()
+                            .find(|node| node.name.starts_with(heading))
+                            .map(|node| node.rect.top().round())
+                    })
+                })
+            })
+        };
+        let one_result = heading_tops(d);
 
         // Removal and recovery are their own task, outside the build and arrival costs.
         d.begin_task();
@@ -13720,6 +13765,12 @@ pub mod encounter_groups {
         d.expect("Undo remove group");
         d.expect("Lost Patrol draft discarded.");
         assert!(d.has("Undo discard of Lost Patrol"));
+        let two_results = heading_tops(d);
+        // Newest first: the removal, then the older discard.
+        let order = d
+            .place_of("Undo remove group")
+            .zip(d.place_of("Undo discard of Lost Patrol"))
+            .map(|(removed, discarded)| (removed.top(), discarded.top()));
         d.state_prepared("group-removed", Sizes::All, |d| {
             // iter11-B-FT4: the discard notice is an Undo message, like the removal above it.
             let size = d.window_size();
@@ -13771,8 +13822,36 @@ pub mod encounter_groups {
             !d.has(&format!("Edit group {GROUP_GOBLINS}")),
             "Remove drops the saved group and offers Undo",
         );
+        // Undo of the older result while the newer one stays: the discarded draft comes back
+        // with its words, and the removal keeps its result and Undo. A discard again ends where
+        // this started.
+        let (older_undone, newer_kept) = d.aside(|d| {
+            d.click("Undo discard of Lost Patrol");
+            d.expect(&format!("Group name: {GROUP_LOST}"));
+            let back = d.visible_text("Arrive at dusk.");
+            d.click("Discard");
+            d.click("Back to encounters");
+            d.expect("Lost Patrol draft discarded.");
+            (
+                back,
+                d.has("Undo remove group") && !d.has(&format!("Edit group {GROUP_GOBLINS}")),
+            )
+        });
         d.click("Undo remove group");
         d.expect(&format!("Edit group {GROUP_GOBLINS}"));
+        let after_undo = heading_tops(d);
+        d.observe(
+            "iter-26-B-FI1",
+            one_result.iter().flatten().filter(|top| top.is_some()).count() >= 6
+                && two_results == one_result
+                && after_undo == one_result
+                && order.is_some_and(|(removed, discarded)| removed < discarded)
+                && older_undone
+                && newer_kept,
+            format!(
+                "Heading tops with one result {one_result:?}, two {two_results:?}, after Undo {after_undo:?}; removal above discard {order:?}; older Undo {older_undone}, newer kept {newer_kept}"
+            ),
+        );
         d.begin_task();
 
         // At the table: the panel, with members and XP.
@@ -14191,8 +14270,24 @@ pub mod encounter_history {
         );
         d.state("history-open", Sizes::All);
         d.check_tab_order("encounters, history open");
+        // iter-26-B FJ4: the deleted run's result sits in the page's footer, so the headings
+        // above the deleted row keep their y with it and after its Undo, at 960, 1200 and 1920.
+        let heading_tops = |d: &mut Driver<'_>| {
+            [SMALL, DEFAULT, LARGE].map(|size| {
+                d.at_size(size, |d| {
+                    ["IN PROGRESS", READY_TO_RUN].map(|heading| {
+                        d.nodes()
+                            .into_iter()
+                            .find(|node| node.name.starts_with(heading))
+                            .map(|node| node.rect.top().round())
+                    })
+                })
+            })
+        };
+        let no_result = heading_tops(d);
         delete_saved_run(d, RUN);
         d.expect("Undo delete run");
+        let with_result = heading_tops(d);
         d.observe(
             "T4.6",
             !d.has_containing(&format!("{RUN} · Round")),
@@ -14201,6 +14296,19 @@ pub mod encounter_history {
         d.state("run-deleted", Sizes::Default);
         d.click("Undo delete run");
         d.expect(&format!("{RUN} · Round"));
+        let undone = heading_tops(d);
+        // The deleted row was in In progress, so Ready to run below it moves up by that row; the
+        // heading above it moves nothing, and Undo puts every heading back.
+        d.observe(
+            "iter-26-B-FJ4",
+            no_result.iter().flatten().all(Option::is_some)
+                && with_result
+                    .iter()
+                    .zip(&no_result)
+                    .all(|(with, before)| with[0] == before[0])
+                && undone == no_result,
+            format!("Heading tops before {no_result:?}, with the result {with_result:?}, after Undo {undone:?}"),
+        );
         let before = d.app_mut().timeline.events.len();
         d.click_starting(OPEN_OLD);
         d.expect("Read-only");
@@ -14599,7 +14707,8 @@ pub mod encounter_owned_groups {
         // Invalid now and Save and Ctrl+S are blocked: nothing is written.
         let invalid = d.visible_text("Invalid")
             && !d.visible_text("Unsaved")
-            && d.is_disabled(SAVE_ENCOUNTER);
+            && d.is_disabled(SAVE_ENCOUNTER)
+            && d.visible_text(&format!("Add a creature to {NEW_NAME} first."));
         // A proof step that ends where it started: not part of the DM's task.
         let kept = d.aside(|d| {
             d.press_ctrl(Key::S);

@@ -250,9 +250,33 @@ pub fn run(d: &mut Driver<'_>) {
             format!("At {size:?}, the Rules and runs warning's file line: {placed:?}"),
         );
     }
+    // iter-26-B FC5: the warning sits in the tab's footer, so Roll NPC initiative and Save keep
+    // their y when Save clears it, at 960, 1200 and 1920.
+    let form_tops = |d: &mut Driver<'_>| {
+        [SMALL, DEFAULT, (1920.0, 1080.0)].map(|size| {
+            d.at_size(size, |d| {
+                ["Roll NPC initiative", "Save run settings"].map(|name| {
+                    d.nodes()
+                        .into_iter()
+                        .filter(|node| node.name.starts_with(name))
+                        .map(|node| node.rect.top().round())
+                        .reduce(f32::max)
+                })
+            })
+        })
+    };
+    let with_warning = form_tops(d);
     // The Ctrl+S that Save shows saves exactly when Save can.
     d.press_ctrl(Key::S);
     d.expect("No changes");
+    let repaired = form_tops(d);
+    d.observe(
+        "iter-26-B-FC5",
+        with_warning.iter().flatten().all(Option::is_some) && repaired == with_warning,
+        format!(
+            "Initiative and Save tops with the warning {with_warning:?} and after Save {repaired:?}"
+        ),
+    );
     d.observe(
         "iter-23-B-AA2",
         !d.has_containing("Imaginary initiative") && !d.visible_text(REPAIR_STATE),
