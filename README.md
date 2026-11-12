@@ -214,6 +214,10 @@ only when it resolves to an entry. Explicit Markdown and wiki links still work. 
 link in a paragraph in turn, and Enter or Space follows it. Each link, even a two-letter name, has its
 own press target at least 24 px square.
 
+A played fight that ended has `Add rewards`, on its row or as the opened row's last link. It writes the fight's
+link, an XP line and its loot under `## Loot and rewards` in the session note, with `Undo rewards`. The XP line
+follows the newest rewards block in the notes: delete it once to leave XP out from then on.
+
 A Travel row's menu has `Roll for encounters` while the campaign has a marked table. It adds encounter checks
 to that journey only: one roll a day (or as the table's `per` word says) on the chosen table, each result a
 quoted `Check at <hours>h` line of the event in `Timeline.md`. A result that links an encounter offers to plan it.

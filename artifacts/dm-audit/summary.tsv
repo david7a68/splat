@@ -2,8 +2,8 @@ Phase totals
 phase	tasks	transitions	interactions	nav	sub	panel	find	do
 before	8	5	36	5	0	1	9	21
 during	31	9	195	9	2	15	46	123
-after	7	5	21	5	4	0	1	11
-total	46	19	252	19	6	16	56	155
+after	8	5	22	5	4	0	1	12
+total	47	19	253	19	6	16	56	156
 
 Tasks
 phase	task	transitions	interactions	overhead	path
@@ -52,6 +52,7 @@ after	Process the recording and read the summary	0	4	3	Session
 after	Add a suggested event to the timeline	0	1	0	Session
 after	Write the wrap-up in the note	0	4	1	Session
 after	Link the fight in the note	2	6	2	Session > Timeline > Session
+after	Put the fight's rewards in the note	0	1	0	Session
 after	Check the party's HP for next time	1	1	1	Session > Party
 
 Set-up, not counted
@@ -93,4 +94,5 @@ during / A fight that nobody planned, with a Bandit from the book, then talk: cl
 after / Stop recording: the app reopened on Session
 after / Review how the fight went: log and final HP: final HP reads in place: true
 after / Link the fight in the note: the note holds the fight's link: true
+after / Put the fight's rewards in the note: the note holds the fight's rewards block: true
 after / Check the party's HP for next time: Kestrel on Party after the evening: [Kestrel Dunmoor · Level 5 Rogue · Per 11 · Ins 11 · HP 9/41 · AC 15 · Poisoned]

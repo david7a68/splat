@@ -17061,6 +17061,66 @@ pub mod run_loot {
             !refused.iter().any(|name| name == "Save encounter"),
             format!("A draft that Save refused: primaries {refused:?}"),
         );
+        d.click("Discard");
+        rewards_with_loot(d);
+    }
+
+    /// F7, T18.1: the ended fight's loot reaches the session note in 1: each roll's result in
+    /// its place, a roll not made as `(not rolled)`, and the downed guard's loot. The fight was
+    /// played before any session, so the DM gives it one on Timeline first.
+    fn rewards_with_loot(d: &mut Driver<'_>) {
+        if d.has("Close Lookup") {
+            d.click(NAV_LOOKUP);
+        }
+        d.click(NAV_SESSIONS);
+        new_session(d, "The Vault");
+        d.click(NAV_TIMELINE);
+        d.click_starting(&format!("{RUN_VAULT} ·"));
+        d.click("Session of this event");
+        d.click("Session 1: The Vault");
+        d.click("Open this session");
+        show_plan(d);
+        let action = format!("Add rewards: {RUN_VAULT}");
+        d.expect(&action);
+        d.state("rewards-for-loot", Sizes::All);
+        d.click(NAV_LOOKUP);
+        d.state("rewards-for-loot-beside-lookup", Sizes::Small);
+        d.click(NAV_LOOKUP);
+        let note = crate::sessions::list_notes(
+            &d.app()
+                .campaigns
+                .active_campaign()
+                .unwrap()
+                .path
+                .join(crate::sessions::DEFAULT_FOLDER),
+        )
+        .into_iter()
+        .find(|note| note.title == "The Vault")
+        .expect("the session's note")
+        .path;
+        d.begin_task();
+        d.click(&action);
+        d.audit_goal_within("T18.1", "put a fight's loot in the note", 1);
+        d.wait_for_text("In notes");
+        let written = std::fs::read_to_string(&note).unwrap();
+        let block = written
+            .split("## Loot and rewards\n\n")
+            .nth(1)
+            .and_then(|rest| rest.split("\n\n").next())
+            .unwrap_or_default()
+            .to_owned();
+        let lines: Vec<&str> = block.lines().skip(2).collect();
+        d.observe(
+            "T18.1",
+            block.contains(&format!("|{RUN_VAULT}]]\n  - XP "))
+                && lines.first() == Some(&"  - 120 gp in a locked coffer")
+                && lines.iter().filter(|line| line.contains("(not rolled)")).count() == 1
+                && lines.contains(&"  - Vault key")
+                && lines.len() == 5
+                && d.has_containing("1 loot roll was not made."),
+            format!("The block holds the encounter's loot with its rolls' results, and the guard's: {block:?}"),
+        );
+        d.state("rewards-with-loot-added", Sizes::All);
     }
 }
 
@@ -18659,6 +18719,107 @@ pub mod session_plan {
         );
     }
 
+    /// F7, T18.1: a played fight's rewards reach the note in 1, with its reference and one Undo,
+    /// and the note shows the block. Section 2.5, row 10: the action joins the played row, left
+    /// of its menu, at the action's own width, only while the title keeps its line; with Lookup
+    /// closed and open.
+    fn rewards_in_the_note(d: &mut Driver<'_>) {
+        let action = format!("Add rewards: {FIRST}");
+        let menu = format!("More actions for {FIRST}");
+        for lookup in [false, true] {
+            if lookup {
+                d.click(NAV_LOOKUP);
+            }
+            for size in [SMALL, DEFAULT, LARGE] {
+                let (fits, detail) = d.at_size(size, |d| {
+                    let (title, add, menu) =
+                        (d.place_of(FIRST), d.place_of(&action), d.place_of(&menu));
+                    let fits = title
+                        .zip(add)
+                        .zip(menu)
+                        .is_some_and(|((title, add), menu)| {
+                            title.right() < add.left()
+                                && add.right() <= menu.left()
+                                && (add.center().y - menu.center().y).abs() <= 0.5
+                                && title.height() <= crate::design::XL + 0.5
+                        });
+                    (
+                        fits,
+                        format!("title {title:?}, Add rewards {add:?}, menu {menu:?}"),
+                    )
+                });
+                d.observe(
+                    "T18.1",
+                    fits,
+                    format!("At {size:?}, Lookup open {lookup}: Add rewards is on the played row beside its one-line title. {detail}"),
+                );
+            }
+            if lookup {
+                d.state("rewards-offered-beside-lookup", Sizes::Small);
+                d.click(NAV_LOOKUP);
+            }
+        }
+        // Lookup closed, the row is `fight-in-place`.
+        let folder = d
+            .app()
+            .campaigns
+            .active_campaign()
+            .unwrap()
+            .path
+            .join(crate::sessions::DEFAULT_FOLDER);
+        let note = crate::sessions::list_notes(&folder)
+            .into_iter()
+            .find(|note| note.title == "The Crossing")
+            .expect("the session's note")
+            .path;
+        let before = std::fs::read_to_string(&note).unwrap();
+        // At 960x640 the note is behind its tab: the tab shows the block when the DM goes there.
+        let (written, shown, result) = d.act_at_size(SMALL, |d| {
+            d.begin_task();
+            d.click(&action);
+            d.audit_goal_within("T18.1", "put a played fight's rewards in the note", 1);
+            d.wait_for_text("In notes");
+            let result = d.has_containing("Rewards added under Loot and rewards. XP added. Delete that line to leave XP out from now on. XP tonight: ");
+            let written = std::fs::read_to_string(&note).unwrap();
+            // The counts assume the note in Write; this one shows as a reader.
+            write_note(d);
+            let shown = d
+                .painted_lines_in(egui::Rect::EVERYTHING)
+                .iter()
+                .any(|line| line.contains(&format!("|{FIRST}]]")));
+            d.click("Read");
+            show_plan(d);
+            (written, shown, result)
+        });
+        let block = written
+            .split("## Loot and rewards\n\n")
+            .nth(1)
+            .and_then(|rest| rest.split("\n\n").next())
+            .unwrap_or_default()
+            .to_owned();
+        d.observe(
+            "T18.1",
+            block.starts_with("- [[Timeline#^")
+                && block.contains(&format!("|{FIRST}]]\n  - XP "))
+                && written.replace(&format!("{block}\n\n"), "") == before
+                && result
+                && shown
+                && !d.has(&action),
+            format!("Add rewards writes one block under Loot and rewards: {block:?}; result {result}; the Note tab shows it: {shown}"),
+        );
+        d.state("rewards-added", Sizes::All);
+        d.click(NAV_LOOKUP);
+        d.state("rewards-added-beside-lookup", Sizes::Small);
+        d.click(NAV_LOOKUP);
+        d.click("Undo rewards");
+        d.expect(&action);
+        d.observe(
+            "T18.1",
+            std::fs::read_to_string(&note).unwrap() == before && !d.has("Undo rewards"),
+            "Undo rewards takes back exactly the block",
+        );
+    }
+
     /// FT1: the party bar says where its numbers come from whenever the room after the players
     /// holds it. Its words are the last fact of each player's accessible name.
     /// iter-23-S FK4: the plan's final HP grid reads in the party bar's order.
@@ -19447,6 +19608,7 @@ pub mod session_plan {
             d.visible_text("Kestrel 7/41") && d.page_title().as_deref() == Some("Session"),
             "Final HP names each character in the plan, with no run to reopen",
         );
+        rewards_in_the_note(d);
         d.click(FIRST);
 
         d.click(NAV_TIMELINE);

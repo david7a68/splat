@@ -318,6 +318,13 @@
     },
     {
       "phase": "after",
+      "task": "Put the fight's rewards in the note",
+      "transitions": 0,
+      "interactions": 1,
+      "path": "Session"
+    },
+    {
+      "phase": "after",
       "task": "Check the party's HP for next time",
       "transitions": 1,
       "interactions": 1,

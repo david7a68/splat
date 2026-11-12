@@ -384,7 +384,7 @@ today and its fit rule. No row adds a line, changes a row's height or takes widt
 | 7 | The Add strip's **More** menu | Its last line is `Scene` (F3) | `src/design/components.rs:2339`; `src/timeline/page.rs:89` | A menu line. The strip's visible actions are as today |
 | 8 | A campaign World entry's reader | `Add to Log` after `Edit` (F6) | The header: `src/world.rs:1733-1768` | Section 1.2: its word, then its icon, then not shown |
 | 9 | A campaign creature's or NPC's reader, with no run open | A quiet `Start fight` after `Add to Log` (F3) | The same header | Section 1.2: with its word, or not shown |
-| 10 | An ended fight's plan row | `Add rewards` (F7) | The action band: `plan.rs:692-694`; the opened row's links: `:1313-1321` | On the row only when the title keeps its lines beside the action's own width. Else the last link of the opened row, after `Timeline`. A fight whose reference an old note already has as a list line says `In notes` |
+| 10 | An ended fight's plan row | `Add rewards` (F7) | The action band: `plan.rs:692-694`; the opened row's links: `:1313-1321` | On the row only when the title keeps its width and its line breaks beside the action's own width. Else the last link of the opened row, after `Timeline`, while that line has room. Else the last line of the row's menu (measured in P7: the links with `Add rewards` take about 326 px, and the plan at 330 px gives them 296). A fight whose reference an old note already has as a list item says `In notes`, also in the menu |
 | 12 | A Travel row's menu | One more line, `Roll for encounters`, when the campaign has a marked table (F9) | `plan.rs:727-735`; `src/timeline/page.rs:875-877` | A menu line |
 | 13 | A **Ready to run** row's menu, for an encounter with no saved run | One more line, `Remove…` (F3) | `src/encounters/list.rs:560-565` | A menu line |
 
@@ -1183,17 +1183,28 @@ for player characters. Editing a Log line in Splat (Edit and Obsidian do it).
 
 **The note owns the rewards.** `Add rewards` writes one block in the session note: a list line that starts
 with the fight's Timeline reference, and under it an XP line and the loot lines. The run stores nothing about
-it. **A fight has its rewards in the notes when the note has a list line that starts with its reference,
+it. **A fight has its rewards in the notes when the note has a list item that starts with its reference,
 anywhere in the note.** The heading `## Loot and rewards` is only where a new block goes; a DM who renames it
-or moves the block loses nothing.
+or moves the block loses nothing. Splat reads the note's real Markdown blocks once (`outline` in
+`src/sessions.rs`), and the insertion, `In notes`, the XP choice and Undo all ask that one reading. **Text in a
+code fence is never a heading and never a block.** **A list item inside a callout or a quote is a block**, as
+the DM sees it: the row says `In notes`, the XP search reads it, and Undo leaves it, because it is no longer
+the item that the act wrote. **The act reads its own result again before it writes:** it writes only when the
+new words hold the fight's one block, exactly as the act made it, under the heading, so `In notes` is true
+after the write. Otherwise it writes nothing and says why under the row: `A code block in the note is not
+closed, so nothing was written. Close it, then add rewards.`, or, when no reason is known, `The note would not
+show these rewards as a list, so nothing was written.`
 
 **Where it lives.** On the Session page, on the plan row of a fight that has ended. That row's action band
 holds only the menu today (`src/sessions/plan.rs:692-694`), and its title has the rest of the line.
-`Add rewards` is a quiet action in that band, left of the menu, only when the title keeps the lines that it
-has today beside the action's own width. P7 works this out when the title or the width changes, not each
+`Add rewards` is a quiet action in that band, left of the menu, only when the title keeps the width and the
+line breaks that it has today beside the action's own width; the same number of lines is not enough. P7 works this out when the title or the width changes, not each
 frame. When the title uses the width, it is the last of the opened row's links: `Log · Whole run · Timeline ·
-Add rewards` (`:4918-4926`), so no link of today moves. After the act, the same place says `In notes`: the
-status that an event's row has today (`:4392`), or muted words in the opened row.
+Add rewards` (`:4918-4926`), so no link of today moves, while that line has room for it. Measured in P7, that
+line takes about 326 px and the plan at 330 px gives it 296, so there it is the last line of the row's menu
+(rule 2: a menu that exists in that place), and the opened row gains no line. After the act, the same place says `In notes`: the
+status that an event's row has today (`:4392`), muted words in the opened row, or the same status as the
+last line of the row's menu.
 
 ```text
 Case A, the plan at 330 px
@@ -1215,8 +1226,8 @@ Case A, the plan at 330 px
   also those marked absent at 0 HP, and each character's share. F1's function gives the numbers. The line
   names what it counted and what still stood, so the DM can change it. With nobody at 0 HP it says `XP 0 for 0
   at 0 HP`. When a creature at 0 HP has no XP that Splat knows (a made-up creature, an NPC with no stat
-  block), the line says so: `XP 450 for 3 at 0 HP. XP not known for Captain Varra: enter an award here.` It
-  is still an XP line, and the link and the loot are written. An amount that is not known is left out of
+  block), the line says so: `XP 450 for 3 at 0 HP. XP not known for Captain Varra: enter an award here.` The
+  count is of the creatures whose XP is summed. It is still an XP line, and the link and the loot are written. An amount that is not known is left out of
   every sum and is never counted as zero. This is the rule (section 7).
 - **Loot,** as lines under it: the encounter's loot and the loot of each creature at 0 HP. A roll that was
   made has its result. A roll that was not made is written with `(not rolled)`, as `Copy loot` writes it
@@ -1226,7 +1237,9 @@ Case A, the plan at 330 px
 newest rewards block: in this note first (the last block in its text), then in the note of each earlier
 session, newest first. A note
 with no block is passed. A note that cannot be read stops the search; P7 reads the notes in order and keeps
-an unreadable one in its place.
+an unreadable one in its place. A file that claims a session but whose properties cannot be read has no known
+place, so it stops the search right after this note. Splat finds these files with the same scan of the folder
+and its subfolders that finds the readable notes (built in P7: `earlier_notes`, `rewards_with_xp`).
 
 | The search finds | `Add rewards` writes | The result says |
 |---|---|---|
@@ -1284,8 +1297,17 @@ not made.`; with an award that is not known, `1 award is not known.` `Undo rewar
 The last line of the first block is one that the DM typed. An XP line is a line under a fight's line that
 starts with `XP`; the sum reads its first number, so `(XP 200)` is not counted.
 
-**Undo.** `Undo rewards` removes the block that the act added, when it still stands as Splat left it (section
-4.1). **Keyboard.** Tab reaches `Add rewards` in the row or among the opened row's links, and the result's
+**Undo.** `Undo rewards` acts only while the block is still the complete, unchanged list item that the act
+wrote: an item that the DM typed under it, also after a blank line, is part of it, as CommonMark reads it. The
+bytes from the start of the block's first line to the end of its last line must be exactly the bytes that the
+act wrote, so a quote mark, an indent or any other change refuses it.
+Then it removes that item, and the heading only when the act added the heading and nothing else is under it.
+When the block changed, Undo writes nothing: the result and its Undo end, and a press that meets the change
+on disk says `That line changed on disk.` under the row, the words of the other note acts. By the lead's
+ruling for P7 it is kept by the note's ID and the fight, not by the note's whole text: another act, an edit
+elsewhere in the note, another session or another page leaves it. When act A added the heading and act B
+wrote under it, Undo of A keeps the heading for B, and Undo of B keeps it too: only A's Undo knew that the
+heading was the act's, and its bytes are the same as a template's heading. **Keyboard.** Tab reaches `Add rewards` in the row or among the opened row's links, and the result's
 action after its words.
 
 **What stays with the DM.** Who earned XP, whether a creature that fled counts, how loot is shared, and when

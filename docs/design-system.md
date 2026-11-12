@@ -1699,6 +1699,34 @@ once on line two, then final party HP in a grid of two or three first-name cells
 (players the party no longer has come last), quiet Log, Whole run and
 Timeline links. Hover keeps full names and conditions; Remove stays in the name-aligned row menu.
 
+**Rewards (F7).** A played fight that ended has `Add rewards`, an `Action::quiet` in its row's action band left of
+the menu, only while its title keeps the width and the line breaks it has beside the menu alone at the action's
+own width; the fit is
+worked out when the title or the width changes, not each frame. Else it is the last link of the opened row,
+`Log · Whole run · Timeline · Add rewards`, while that line has room for it; else the last line of the row's
+menu. No line is added, and no link or menu line of today moves. It writes one block at the end of
+`## Loot and rewards` (the heading goes at the end of a note that has none): a list line with the fight's
+Timeline reference, then an XP line and the loot lines: the encounter's and each downed creature's, a roll's
+results in its place and a roll not made as `(not rolled)`, as `Copy loot` words them. XP has no switch: the
+newest rewards block that Splat can read, in this note and then in each earlier note, newest first, says whether
+the new one has an XP line; with no block, or a note that cannot be read before one, it has one, and the result
+says how to stop it. The XP comes from `Scale::weigh`; a creature at 0 HP whose XP is not known is named on the
+line, and its amount is left out of every sum. The result, an `undo_message` under the row, says `Rewards added
+under Loot and rewards.`, the XP choice, `XP tonight: <sum> for <n> fights.` from the note as it stands, and the
+loot rolls not made and the awards not known. `Undo rewards` takes back exactly that block while it is still the
+complete, unchanged list item that the act wrote, also after another act, an edit elsewhere in the note, another
+session or another page; it is kept by the note's ID and the fight. It takes the heading too only when the act
+added it and nothing else is under it. It compares whole lines: the bytes from the start of the block's first
+line to the end of its last line must be the act's. When the block changed, it writes nothing and says `That line
+changed on disk.` under the row. The act reads its new words again before it writes, and writes only when they
+hold the fight's one block under the heading; else it writes nothing and says why under the row (a code block
+that is not closed is named). A fight whose reference starts a list item anywhere in the note, also in a callout, says
+`In notes` (`design::status`, `icons::OK`, `document.saved`) in the action's place, in muted words in the opened
+row, or as the last line of the row's menu. Splat reads the note's Markdown blocks: text in a code fence is never
+a heading and never a block. The note beside the plan
+(in Write) scrolls to the block; behind its tab, the Note tab shows it. A run that cannot be read blocks the act
+with `Splat cannot read this fight’s run, so its rewards are not known.` under the row.
+
 An act that changes a session note's words goes through `Draft::apply`, the one path for a note act: it is for one
 session, by its ID, and the file must still hold that note; it reads the file first, changes one fragment, and its
 Undo lasts while that note's words are the words it left, with no time limit. The Undo follows the note when it is
