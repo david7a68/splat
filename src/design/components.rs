@@ -845,11 +845,20 @@ impl<'a> Action<'a> {
 fn starts_line(ui: &Ui) -> bool {
     use egui::UiKind;
     let layout = ui.layout();
-    if layout.prefer_right_to_left() || layout.horizontal_align() != Align::Min {
+    if layout.prefer_right_to_left() || layout.horizontal_placement() != Align::Min {
         return false;
     }
-    if ui.cursor().left() > ui.max_rect().left() + 0.5 {
-        return false;
+    // At the left edge of its own `Ui`, and of each enclosing `Ui` up to the content column
+    // (the nearest one of a kind: a panel, a frame, a scroll area, a section). A part that puts an
+    // action in a child `Ui` beside others (a title line, a column of a row) is not a line start.
+    let x = ui.cursor().left();
+    for frame in ui.stack().iter() {
+        if x > frame.max_rect.left() + 0.5 {
+            return false;
+        }
+        if frame.kind().is_some() {
+            break;
+        }
     }
     !ui.stack().iter().any(|frame| {
         matches!(
@@ -3217,6 +3226,17 @@ pub(super) fn undo_message_capped(
     action: &str,
     name: Option<&str>,
 ) -> bool {
+    undo_message_line(ui, tone, text, action, name).0
+}
+
+/// `undo_message_capped`, and the y of the centre of the words' first line.
+pub(super) fn undo_message_line(
+    ui: &mut Ui,
+    tone: Tone,
+    text: &str,
+    action: &str,
+    name: Option<&str>,
+) -> (bool, f32) {
     ui.scope(|ui| {
         ui.set_max_width(ui.available_width().min(LIST_MEASURE));
         undo_message_inside(ui, tone, text, action, name)
@@ -3230,7 +3250,7 @@ fn undo_message_inside(
     text: &str,
     action: &str,
     name: Option<&str>,
-) -> bool {
+) -> (bool, f32) {
     let button = Action::quiet(action)
         .icon(icons::UNDO)
         .density(Density::Read);
@@ -3247,23 +3267,33 @@ fn undo_message_inside(
     let text_width = number_width(ui, text, &Type::Body.font(ui)) + inset;
     let gap = ui.spacing().item_spacing.x;
     let mut pressed = false;
-    if ui.available_width() < text_width + gap + button_width {
-        tone_message(ui, tone, text);
+    let words = if ui.available_width() < text_width + gap + button_width {
+        let words = tone_message(ui, tone, text);
         ui.horizontal(|ui| {
             space(ui, inset);
             pressed = button.line_start_in_column().show(ui).clicked();
         });
+        words
     } else {
         ui.horizontal_top(|ui| {
             let width = (ui.available_width() - button_width - gap).max(0.0);
-            ui.allocate_ui_with_layout(vec2(width, 0.0), Layout::top_down(Align::Min), |ui| {
-                space(ui, (Density::Read.control() - Type::Body.line()) / 2.0);
-                tone_message(ui, tone, text)
-            });
+            let words = ui
+                .allocate_ui_with_layout(vec2(width, 0.0), Layout::top_down(Align::Min), |ui| {
+                    space(ui, (Density::Read.control() - Type::Body.line()) / 2.0);
+                    tone_message(ui, tone, text)
+                })
+                .inner;
             pressed = button.show(ui).clicked();
-        });
-    }
-    pressed
+            words
+        })
+        .inner
+    };
+    (pressed, first_line_centre(&words))
+}
+
+/// The y of the centre of a message's first line of words.
+pub(super) fn first_line_centre(words: &Response) -> f32 {
+    words.rect.top() + Type::Body.line() / 2.0
 }
 
 /// One dialog action line: red at the left, keep and commit at the right.
@@ -4638,6 +4668,10 @@ mod tests {
     /// icon and the padding hang left of it (`S + ICON_SLOT`); without one, only the padding.
     /// A normal quiet action keeps its icon and words inside its target from the edge.
     #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+    )]
     fn iter18_a_a_line_start_action_hangs_its_icon_and_padding() {
         const EDGE: f32 = 60.0;
         let mut harness = egui_kittest::Harness::builder()
@@ -4698,6 +4732,80 @@ mod tests {
                 && (words("Undo replacement") - (EDGE + S + ICON_SLOT)).abs() <= 0.5,
             "no-hang: words {}, target {normal:?}",
             words("Undo replacement")
+        );
+
+        // N4: the part finds a line's start by itself; no caller calls `line_start` here. First
+        // on its line (in a column and on a horizontal line), its words are at the text edge.
+        // After a label on its line, an icon on it, or in a menu, it keeps its padding.
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(vec2(400.0, 300.0))
+            .build_ui(|ui| {
+                ui.label("Edge");
+                let _ = Action::quiet("Death saves").show(ui);
+                ui.horizontal(|ui| {
+                    let _ = Action::quiet("Cancel run").show(ui);
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Progress");
+                    let _ = Action::quiet("Stop run").show(ui);
+                });
+                let _ = Action::quiet("Reload list").icon(icons::REFRESH).show(ui);
+                let _ = Action::secondary("Bordered").show(ui);
+                let popup = ui.label("Menu");
+                egui::Popup::new(
+                    Id::new("n4_menu"),
+                    ui.ctx().clone(),
+                    popup.rect,
+                    ui.layer_id(),
+                )
+                .kind(egui::PopupKind::Menu)
+                .open(true)
+                .show(|ui| {
+                    let _ = Action::quiet("Remove from list").show(ui);
+                });
+            });
+        super::super::theme::install(&harness.ctx);
+        harness.run_steps(3);
+        let texts = painted_texts(&harness);
+        let words = |label: &str| {
+            texts
+                .iter()
+                .find(|(text, _)| text == label)
+                .map(|(_, rect)| rect.left())
+                .unwrap_or_else(|| panic!("{label} is painted"))
+        };
+        let node = |name: &str| {
+            use egui_kittest::kittest::Queryable;
+            harness.get_by_label(name).rect()
+        };
+        let edge = words("Edge");
+        for label in ["Death saves", "Cancel run"] {
+            assert!(
+                (words(label) - edge).abs() <= 0.5
+                    && (node(label).left() - (edge - S)).abs() <= 0.5,
+                "n4-start {label}: words {}, edge {edge}",
+                words(label)
+            );
+        }
+        let after = node("Stop run");
+        assert!(
+            (words("Stop run") - (after.left() + S)).abs() <= 0.5 && after.left() > edge + S,
+            "n4-after: words {}, target {after:?}",
+            words("Stop run")
+        );
+        assert!(
+            (node("Reload list").left() - edge).abs() <= 0.5,
+            "n4-icon: an action with an icon keeps its padding outside a message"
+        );
+        assert!(
+            (node("Bordered").left() - edge).abs() <= 0.5,
+            "n4-secondary"
+        );
+        let menu = node("Remove from list");
+        assert!(
+            (words("Remove from list") - (menu.left() + S)).abs() <= 0.5,
+            "n4-menu: words {}, target {menu:?}",
+            words("Remove from list")
         );
     }
 
@@ -4811,6 +4919,11 @@ mod tests {
                 .build_ui(move |ui| {
                     if in_field {
                         field(ui, "Name", Some(HELP), None, |ui| ui.label("control"));
+                        // N3: the next field's label, with no space from the caller.
+                        field(ui, "Next label", None, Some("State the fix."), |ui| {
+                            ui.label("second control")
+                        });
+                        field(ui, "Last label", None, None, |ui| ui.label("third control"));
                     } else {
                         help(ui, HELP);
                     }
@@ -4826,6 +4939,68 @@ mod tests {
             assert!(
                 rect.width() <= READER_MEASURE + 0.5 && rect.height() > Type::Small.line(),
                 "field {in_field}: help {rect:?}"
+            );
+            if in_field {
+                // N3: a field adds `L` after its help and after its error, so neither reads as
+                // the next field's.
+                let top = |label: &str| {
+                    texts
+                        .iter()
+                        .find(|(text, _)| text == label)
+                        .map(|(_, rect)| rect.top())
+                        .unwrap_or_else(|| panic!("{label} is painted"))
+                };
+                let gap = top("Next label") - rect.bottom();
+                assert!((gap - L).abs() <= 0.5, "n3-help: {gap} from help to label");
+                let error = texts
+                    .iter()
+                    .find(|(text, _)| text == "State the fix.")
+                    .map(|(_, rect)| rect.bottom())
+                    .expect("the error is painted");
+                let gap = top("Last label") - error;
+                assert!(
+                    (gap - L).abs() <= 0.5,
+                    "n3-error: {gap} from error to label"
+                );
+            }
+        }
+    }
+
+    /// Row 86: a segment is as wide as its words in their widest state, so no word and no
+    /// segment moves when the choice changes.
+    #[test]
+    fn segments_keep_their_place_when_the_choice_changes() {
+        let place = |chosen: u8| {
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(vec2(600.0, 80.0))
+                .build_ui(move |ui| {
+                    let mut value = chosen;
+                    ui.horizontal(|ui| {
+                        segmented(
+                            ui,
+                            &mut value,
+                            &[(0, "Recordings"), (1, "Transcript"), (2, "Notes")],
+                        );
+                        ui.label("After");
+                    });
+                });
+            super::super::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            let texts = painted_texts(&harness);
+            ["Recordings", "Transcript", "Notes", "After"].map(|word| {
+                texts
+                    .iter()
+                    .find(|(text, _)| text == word)
+                    .map(|(_, rect)| rect.left())
+                    .unwrap_or_else(|| panic!("{word} is painted"))
+            })
+        };
+        let first = place(0);
+        for chosen in [1, 2] {
+            assert_eq!(
+                place(chosen),
+                first,
+                "row-86: words moved when {chosen} was chosen"
             );
         }
     }

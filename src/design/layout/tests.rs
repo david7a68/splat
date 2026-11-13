@@ -295,7 +295,7 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
         let next_row = pair[1].top() > pair[0].bottom() - 1.0;
         assert!(
             next_row || pair[1].left() > pair[0].right() - 1.0,
-            "in order"
+            "in order: {wrapped:?}"
         );
         if next_row {
             assert!(
@@ -617,4 +617,54 @@ fn the_gate_finds_two_live_widgets_with_one_id() {
     for case in 1..=5 {
         assert!(!clashes(case).is_empty(), "case {case} is found");
     }
+}
+
+/// N10: a search field draws its `Clear` while it holds text, inside its width; `Clear` empties
+/// it, gives the field its focus back and says so once. Empty, it has no `Clear` and takes the
+/// whole width.
+#[test]
+fn a_search_field_always_draws_its_clear() {
+    use egui_kittest::kittest::Queryable;
+    const SEARCH: FieldId = crate::field_id!("test_search");
+    #[derive(Default)]
+    struct State {
+        query: String,
+        cleared: usize,
+        width: f32,
+    }
+    let mut h = egui_kittest::Harness::builder()
+        .with_size(vec2(500.0, 120.0))
+        .build_ui_state(
+            |ui, state: &mut State| {
+                let search =
+                    SEARCH.search(ui, "Search", &mut state.query, "Search by name…", 300.0);
+                state.cleared += usize::from(search.cleared);
+                state.width = search.field.rect.width();
+            },
+            State {
+                query: "Wolf".to_owned(),
+                ..State::default()
+            },
+        );
+    theme::install(&h.ctx);
+    h.run_steps(2);
+    let clear = h.get_by_label("Clear").rect();
+    let field = h.get_by_label("Search").rect();
+    assert!(
+        clear.left() > field.right() && clear.right() <= field.left() + 300.0 + 0.5,
+        "n10-place: Clear {clear:?} after the field {field:?}, inside 300 px"
+    );
+    h.get_by_label("Clear").click();
+    h.run_steps(2);
+    assert!(h.state().query.is_empty() && h.state().cleared == 1);
+    assert!(
+        h.ctx.memory(|memory| memory.has_focus(SEARCH.id())),
+        "n10-focus: the field has its focus back"
+    );
+    assert!(h.query_by_label("Clear").is_none(), "n10-empty: no Clear");
+    assert!(
+        (h.state().width - 300.0).abs() <= 0.5,
+        "n10-width: {}",
+        h.state().width
+    );
 }

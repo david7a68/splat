@@ -1411,6 +1411,11 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "overflow_tabs",
             &[Ban::Layout(1)],
         ),
+        (
+            "src/design/components.rs",
+            "iter18_a_a_line_start_action_hangs_its_icon_and_padding",
+            &[Ban::Layout(1)],
+        ),
         ("src/design/components.rs", "row_menu", &[Ban::Layout(1)]),
         ("src/design/components.rs", "scroll_part", &[Ban::Layout(1)]),
         ("src/design/components.rs", "search_box", &[Ban::Layout(1)]),

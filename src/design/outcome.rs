@@ -20,8 +20,8 @@
 //! just before it that differs only in the forbidden part and compiles: the failure can only come
 //! from that part.
 use super::components::{
-    Action, FooterRank, icon_button, link, number_width, small_tone_message, tone_message,
-    undo_message_capped,
+    Action, FooterRank, first_line_centre, icon_button, link, number_width, small_tone_message,
+    tone_message, undo_message_line,
 };
 pub use super::components::{Footer, ResultOrder, Tone};
 use super::{extras::space, icons, tokens::*};
@@ -938,21 +938,21 @@ impl Body<'_> {
             .iter()
             .position(|choice| matches!(choice, MessageChoice::Dismiss(_)))
         else {
-            return self.draw_words(ui, place);
+            return self.draw_words(ui, place).0;
         };
         let size = Density::Read.control();
         let mut pressed = None;
         let words = ui
             .scope(|ui| {
                 ui.set_max_width(ui.available_width().min(LIST_MEASURE));
-                let (right, top) = (ui.max_rect().right(), ui.cursor().top());
-                let words = ui
+                let right = ui.max_rect().right();
+                let (words, line) = ui
                     .scope(|ui| {
                         ui.set_max_width(ui.available_width() - size - S);
                         self.draw_words(ui, place)
                     })
                     .inner;
-                let centre = egui::pos2(right - size / 2.0, top + Type::Body.line() / 2.0);
+                let centre = egui::pos2(right - size / 2.0, line);
                 let icon = ui.put(
                     Rect::from_center_size(centre, egui::Vec2::splat(size)),
                     |ui: &mut Ui| icon_button(ui, icons::CLOSE, DISMISS_NAME),
@@ -977,9 +977,10 @@ impl Body<'_> {
 
     /// The words, capped at `LIST_MEASURE`; an Undo alone beside them when it fits, else under
     /// them at their first letter; with choices, the Undo and then the choices on rows under the
-    /// words, from their first letter.
-    fn draw_words(&self, ui: &mut Ui, place: MessagePlace) -> Option<Pressed> {
+    /// words, from their first letter. Also the y of the centre of the words' first line.
+    fn draw_words(&self, ui: &mut Ui, place: MessagePlace) -> (Option<Pressed>, f32) {
         let mut pressed = None;
+        let mut line = ui.cursor().top() + Type::Body.line() / 2.0;
         let response = ui
             .scope(|ui| {
                 ui.set_max_width(ui.available_width().min(LIST_MEASURE));
@@ -987,20 +988,24 @@ impl Body<'_> {
                 if self.row_choices().next().is_none() {
                     match &self.undo {
                         None => {
-                            tone_message(ui, self.tone, words);
+                            line = first_line_centre(&tone_message(ui, self.tone, words));
                         }
                         Some(step) => {
                             let label = step.label();
                             let shown = self.undo_words(ui, step);
                             let name = (shown != label).then_some(label.as_str());
-                            if undo_message_capped(ui, self.tone, words, &shown, name) {
+                            let (undo, centre) =
+                                undo_message_line(ui, self.tone, words, &shown, name);
+                            if undo {
                                 pressed = Some(Pressed::Undo);
                             }
+                            line = centre;
                         }
                     }
                     return;
                 }
                 let message = tone_message(ui, self.tone, words);
+                line = first_line_centre(&message);
                 let inset = message.rect.left() - ui.cursor().left();
                 let gap = ui.spacing().item_spacing.x;
                 let undo = self.undo.as_ref().map(|step| {
@@ -1056,7 +1061,7 @@ impl Body<'_> {
             })
             .response;
         register(ui, response.rect, place, self.tone);
-        pressed
+        (pressed, line)
     }
 
     /// A choice's whole width, with the `L` before a red one.
@@ -1598,6 +1603,9 @@ mod tests {
                                     if took.0.0 == "party" {
                                         said =
                                             said.choice(MessageChoice::Choice("Add to Timeline"));
+                                    } else {
+                                        // N6: the part places the close icon.
+                                        said = said.choice(MessageChoice::Dismiss(Lost::Nothing));
                                     }
                                     said.into()
                                 },
@@ -1643,6 +1651,23 @@ mod tests {
             undo.left() < words && rects[1].0.contains_rect(undo),
             "Undo starts its line under the words, inside the message: {undo:?} {words} {rects:?}"
         );
+        // N6: the close icon sits at the right end of the message's first line, centred on it,
+        // inside the message's measure; its press is the message's own choice.
+        let dismiss = h.get_by_label(DISMISS_NAME).rect();
+        let line = h
+            .get_by_role_and_label(
+                egui::accesskit::Role::Label,
+                "Seals for Keyring changed to 2.",
+            )
+            .rect();
+        assert!(
+            (dismiss.center().y - line.center().y).abs() <= 1.0
+                && dismiss.left() > line.right()
+                && dismiss.height() >= 24.0,
+            "n6: icon {dismiss:?}, first line {line:?}"
+        );
+        h.get_by_label(DISMISS_NAME).click();
+        h.run_steps(2);
         h.get_all_by_label("Undo: Take seal")
             .nth(1)
             .unwrap()
@@ -1658,6 +1683,7 @@ mod tests {
         assert_eq!(
             h.state().pressed,
             [
+                ("keyring", Pressed::Choice(0)),
                 ("party", Pressed::Undo),
                 ("party", Pressed::Choice(0)),
                 ("keyring", Pressed::Undo)
