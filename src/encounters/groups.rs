@@ -3446,7 +3446,7 @@ mod tests {
         let field = ROW.of(Uuid::from_u128(7));
         let id = field.named_id("Display name");
         let mut value = Some(String::from("Wolf"));
-        let mut frame = |value: &mut Option<String>, events: Vec<egui::Event>| {
+        let frame = |value: &mut Option<String>, events: Vec<egui::Event>| {
             let input = egui::RawInput {
                 events,
                 ..Default::default()
