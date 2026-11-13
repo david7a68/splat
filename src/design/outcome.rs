@@ -1251,7 +1251,10 @@ impl<'f, A: 'static> Messages<'f, A> {
                 Some(ticket) => {
                     // The pane's footer (this `Ui`) and the ticket: one stored entry shown in two
                     // panes has two lines with their own ids.
-                    let id = egui::Id::new(("design_kept_line", ui.id(), ticket.order()));
+                    let pane = ui.ctx().data(|data| {
+                        data.get_temp::<egui::Id>(egui::Id::new("design_footer_drawing"))
+                    });
+                    let id = egui::Id::new(("design_kept_line", pane, ticket.order()));
                     ui.scope_builder(egui::UiBuilder::new().id(id), |ui| {
                         typed.body.draw(ui, MessagePlace::Footer)
                     })
@@ -2285,6 +2288,25 @@ mod tests {
             });
         }
 
+        pub(super) fn node_id(h: &Harness<'_, App>, name: &str) -> egui::accesskit::NodeId {
+            h.get_by_label(name).accesskit_node().id()
+        }
+
+        /// Two activations delivered in one frame, as one batch of AccessKit clicks.
+        pub(super) fn clicks(h: &mut Harness<'_, App>, targets: [egui::accesskit::NodeId; 2]) {
+            for target in targets {
+                h.event(egui::Event::AccessKitActionRequest(
+                    egui::accesskit::ActionRequest {
+                        action: egui::accesskit::Action::Click,
+                        target,
+                        data: None,
+                    },
+                ));
+            }
+            h.step();
+            h.run_steps(2);
+        }
+
         pub(super) fn two() -> App {
             let mut app = App::default();
             // Recorded at the action: the older link first.
@@ -2480,9 +2502,9 @@ mod tests {
         // The older line's Undo, then its choice, in one frame: the Undo, with its ticket.
         let mut h = harness(two());
         let older = order(h.state(), "older");
-        h.get_by_label("Register as a new campaign").click();
-        undo(&h, "older").click();
-        h.run_steps(1);
+        let register = node_id(&h, "Register as a new campaign");
+        let undo_older = node_id(&h, "Undo change older");
+        clicks(&mut h, [register, undo_older]);
         assert_eq!(h.state().presses, [(0, Act::Undo, older)]);
         assert_eq!(
             (h.state().acted.clone(), h.state().registered),
@@ -2493,17 +2515,17 @@ mod tests {
         app.two_choices = true;
         let mut h = harness(app);
         let older = order(h.state(), "older");
-        h.get_by_label("Rename the campaign").click();
-        h.get_by_label("Register as a new campaign").click();
-        h.run_steps(1);
+        let rename = node_id(&h, "Rename the campaign");
+        let register = node_id(&h, "Register as a new campaign");
+        clicks(&mut h, [rename, register]);
         assert_eq!(h.state().presses, [(0, Act::Register, older)]);
         assert_eq!((h.state().registered, h.state().renamed), (1, 0));
         // The newer line's Undo and its close icon: the Undo, drawn first.
         let mut h = harness(two());
         let newer = order(h.state(), "newer");
-        h.get_by_label(DISMISS_NAME).click();
-        undo(&h, "newer").click();
-        h.run_steps(1);
+        let dismiss = node_id(&h, DISMISS_NAME);
+        let undo_newer = node_id(&h, "Undo change newer");
+        clicks(&mut h, [dismiss, undo_newer]);
         assert_eq!(h.state().presses, [(0, Act::Undo, newer)]);
         assert_eq!(h.state().acted, [Ok("Folder saved")]);
     }

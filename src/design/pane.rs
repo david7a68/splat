@@ -209,9 +209,9 @@ struct Keep {
     pass: u64,
     now: Option<f32>,
     content: Option<f32>,
-    /// The keyboard focus at the press: a move of it ends the hold, so the hold never takes
-    /// back a scroll that brought the focused control into view.
-    focus: Option<Id>,
+    /// The control pressed: keyboard focus on any other control ends the hold, so the hold
+    /// never takes back a scroll that brought the focused control into view.
+    pressed: Id,
     /// The room's height at the press: a footer that comes or goes ends the hold.
     room: Option<f32>,
 }
@@ -237,10 +237,11 @@ fn with_held(ui: &Ui, change: impl FnOnce(&mut Held, u64)) {
         .data_mut(|data| change(data.get_temp_mut_or_default::<Held>(pane), pass));
 }
 
-/// The body pressed `control` (any stable key of it), whose top is `top`: hold it in place.
-pub fn hold_press(ui: &Ui, control: impl std::hash::Hash, top: f32) {
+/// The body pressed `pressed`, the control kept as `control` (any stable key of it, the same
+/// that `held_seen` gives): hold it in place.
+pub fn hold_press(ui: &Ui, control: impl std::hash::Hash, pressed: &egui::Response) {
     let control = Id::new(control);
-    let focus = ui.ctx().memory(|memory| memory.focused());
+    let (top, pressed) = (pressed.rect.top(), pressed.id);
     with_held(ui, |held, pass| {
         held.keep = Some(Keep {
             control,
@@ -248,7 +249,7 @@ pub fn hold_press(ui: &Ui, control: impl std::hash::Hash, top: f32) {
             pass,
             now: None,
             content: None,
-            focus,
+            pressed,
             room: None,
         });
     });
@@ -413,7 +414,7 @@ fn hold_place<R>(ui: &Ui, mut held: Held, output: &egui::scroll_area::ScrollArea
             Some("scrolled")
         } else if pass > keep.pass + KEEP_PASSES {
             Some("passes")
-        } else if focus != keep.focus {
+        } else if focus.is_some_and(|focus| focus != keep.pressed) {
             Some("focus moved")
         } else if room_changed {
             Some("room changed")
@@ -869,6 +870,9 @@ impl Footer<'_> {
                 Sense::CLICK,
             );
             // A whole-row cut has its own hairline; the footer draws one only for a line cut.
+            // The kept lines take their control ids from this pane's footer and their ticket.
+            ui.ctx()
+                .data_mut(|data| data.insert_temp(Id::new("design_footer_drawing"), id));
             self.draw_messages(ui, rect, cut && new_cut.is_none(), most, stored);
             if height > 0.0 {
                 footer = Some(rect);
@@ -935,7 +939,7 @@ mod hold_tests {
             let response = ui.button("Add a row above");
             held_seen(ui, "add", response.rect.top());
             if response.clicked() {
-                hold_press(ui, "add", response.rect.top());
+                hold_press(ui, "add", &response);
                 state.rows_above += 3;
             }
             for row in 0..60 {
@@ -969,7 +973,6 @@ mod hold_tests {
         crate::design::theme::install(&h.ctx);
         h.run_steps(4);
         h.get_by_label("Add a row above").click();
-        h.run_steps(1);
         h.get_by_label("Far control").focus();
         h.run_steps(8);
         assert_eq!(ended(&h), Some("focus moved"));

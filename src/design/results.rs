@@ -702,6 +702,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Results],
         ),
         (
+            "src/design/results.rs",
+            "a_result_shows_only_in_its_own_scope",
+            &[Ban::Results],
+        ),
+        (
             "src/library.rs",
             "editor_pane",
             &[Ban::Results, Ban::Layout(5), Ban::Extras(6), Ban::Pane(3)],
@@ -1857,6 +1862,10 @@ mod tests {
     /// A campaign switch hides a result and does not end it; one campaign never shows another's
     /// result, even for the same id.
     #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the test of the by-owner Undo, staged until its callers use `undo_by`"
+    )]
     fn a_result_shows_only_in_its_own_scope() {
         let mut results = Results::new();
         results.record(done(A, "A."));

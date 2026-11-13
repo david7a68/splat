@@ -734,7 +734,7 @@ fn quick_actions(
         let control = (&place.0, &place.1, &quick.label);
         held_seen(ui, control, response.rect.top());
         if response.clicked() {
-            hold_press(ui, control, response.rect.top());
+            hold_press(ui, control, &response);
             // Read on the click only: a dice amount is parsed to tell it from `ask`.
             if quick.asks() {
                 view.asking = Some((
@@ -832,7 +832,7 @@ fn amount_field(
         if enter && let Ok(amount) = typed.trim().parse::<i64>() {
             let (key, instance) = (key.clone(), instance.clone());
             // Enter is the press: the action keeps its place as a click's does.
-            hold_press(ui, (&key, &instance, label), response.rect.top());
+            hold_press(ui, (&key, &instance, label), &response);
             *act = Some(Act::Press {
                 key,
                 instance,
