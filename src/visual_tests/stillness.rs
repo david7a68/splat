@@ -1010,7 +1010,8 @@ pub fn lines(painted: &[(egui::epaint::TextShape, egui::Rect)]) -> Vec<Line> {
 /// N2: an icon control (a control that paints only icons) sits on the line of the text beside
 /// it: a text within `3 × L` to its left or right whose first row overlaps the control's height;
 /// of those, the row whose centre is nearest the control's. The control's centre is within 1 px
-/// of that row's centre. Text inside a text field counts as the field, whose box is the line.
+/// of that row's centre. Text inside a text field counts as the field, whose box is the line;
+/// text in a multi-line editor is left out.
 pub fn icon_centres(items: &[Item], lines: &[Line]) -> Vec<Raw> {
     let fields: Vec<&Item> = items
         .iter()
@@ -1027,6 +1028,13 @@ pub fn icon_centres(items: &[Item], lines: &[Line]) -> Vec<Raw> {
         let beside = lines
             .iter()
             .filter(|line| !inside(line) && !icon_only(&line.words))
+            // The file in a Markdown editor is not a line of the app's layout.
+            .filter(|line| {
+                !items.iter().any(|editor| {
+                    editor.role == Role::MultilineTextInput
+                        && editor.rect.contains(line.first.center())
+                })
+            })
             .map(|line| {
                 let field = fields
                     .iter()
@@ -1971,6 +1979,15 @@ mod tests {
         let low = item(Role::Button, "Back", at(340.0, 234.0, 24.0, 24.0), None);
         let low_arrow = line("\u{e058}", at(345.0, 238.0, 14.0, 16.0));
         assert_eq!(icon_centres(&[field, low], &[typed, low_arrow]).len(), 1);
+        // A Markdown editor's text beside the icon is the DM's file, not a line.
+        let editor = item(
+            Role::MultilineTextInput,
+            "Markdown editor",
+            at(372.0, 200.0, 130.0, 400.0),
+            None,
+        );
+        let file = line("# Session 1", at(380.0, 210.0, 100.0, 300.0));
+        assert!(icon_centres(&[editor, menu(222.0)], &[file, dots(222.0)]).is_empty());
         let far = item(Role::Button, "Close", at(900.0, 222.0, 24.0, 24.0), None);
         assert!(
             icon_centres(
