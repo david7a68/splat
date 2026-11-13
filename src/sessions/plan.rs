@@ -651,24 +651,6 @@ fn planned_summary(
     let missing = difficulty
         .filter(|difficulty| difficulty.rating.is_none())
         .and_then(|difficulty| difficulty.missing.as_ref());
-    let (full, short) = match missing {
-        // W1-D2, X1: whose input is not known, in the `XP not known` place: whole, else the
-        // first name shortened from its end, else the reason alone.
-        Some(missing) => {
-            let fitted = missing
-                .fitted(|words| rows(&with_form(summary, &words.replace(' ', "\u{a0}"))) <= lines)
-                .unwrap_or_else(|| missing.short().to_owned());
-            let form = nb(vec![(fitted, false)]);
-            (form.clone(), form)
-        }
-        None => {
-            let full = nb(parts);
-            let short = difficulty
-                .and_then(|difficulty| difficulty.rating.as_ref())
-                .map_or_else(|| full.clone(), |rating| nb(rating.parts(false)));
-            (full, short)
-        }
-    };
     // The summary's facts and members, each with the separator before it. It gives way by
     // whole ones, from its end: `5 party · 1 × Cinder Tyrant, …`.
     let mut units: Vec<(&str, &str)> = Vec::new();
@@ -689,6 +671,50 @@ fn planned_summary(
             .collect();
         format!("{kept}{}…", units[count].0)
     };
+    // The most whole facts and members before `form` that keep the lines, by halves.
+    let most = |form: &str| {
+        let (mut fits, mut over) = (0, units.len());
+        while over - fits > 1 {
+            let middle = (fits + over) / 2;
+            if rows(&with_form(&cut_at(middle), form)) <= lines {
+                fits = middle;
+            } else {
+                over = middle;
+            }
+        }
+        fits
+    };
+    let (full, short) = match missing {
+        // W1-D2, X1: whose input is not known, in the `XP not known` place: whole, else the
+        // first name shortened from its end. Where even its first letter has no room, the
+        // summary gives way first; the reason alone only where nothing else fits.
+        Some(missing) => {
+            let fits_with = |facts: &str, words: &str| {
+                rows(&with_form(facts, &words.replace(' ', "\u{a0}"))) <= lines
+            };
+            let short = missing.short();
+            let mut fitted = missing.fitted(|words| fits_with(summary, words));
+            if fitted.as_deref() == Some(short)
+                && let Some(first) = missing.names.first().and_then(|name| name.chars().next())
+            {
+                let least = format!("{short}: {first}…").replace(' ', "\u{a0}");
+                let kept = most(&least);
+                if kept > 0 {
+                    let facts = cut_at(kept);
+                    fitted = missing.fitted(|words| fits_with(&facts, words));
+                }
+            }
+            let form = nb(vec![(fitted.unwrap_or_else(|| short.to_owned()), false)]);
+            (form.clone(), form)
+        }
+        None => {
+            let full = nb(parts);
+            let short = difficulty
+                .and_then(|difficulty| difficulty.rating.as_ref())
+                .map_or_else(|| full.clone(), |rating| nb(rating.parts(false)));
+            (full, short)
+        }
+    };
     let whole = [&full, &short]
         .into_iter()
         .map(|parts| (with_form(summary, &joined(parts)), parts))
@@ -699,15 +725,7 @@ fn planned_summary(
         // The most whole facts and members that keep the lines, by halves; with none, the
         // form alone.
         let form = joined(&short);
-        let (mut fits, mut over) = (0, units.len());
-        while over - fits > 1 {
-            let middle = (fits + over) / 2;
-            if rows(&with_form(&cut_at(middle), &form)) <= lines {
-                fits = middle;
-            } else {
-                over = middle;
-            }
-        }
+        let fits = most(&form);
         let shown = if fits == 0 {
             form
         } else {

@@ -386,7 +386,31 @@ pub fn run(d: &mut Driver<'_>) {
                     "5 party · 1 × Nameless Thing",
                     "5 party · 1 × Cinder Tyrant",
                 ]
-                .map(|summary| plan_summary_line(d, summary))
+                .map(|summary| {
+                    // Nameless Visitor's members may give way to its reason (X1): its row is the
+                    // one that says it.
+                    if summary.contains("Nameless") {
+                        let mut found = None;
+                        d.each_painted_text(|text, clip| {
+                            let words = text
+                                .galley
+                                .job
+                                .text
+                                .replace('\u{a0}', " ")
+                                .replace('\n', " · ");
+                            if found.is_none()
+                                && clip.intersects(text.visual_bounding_rect())
+                                && words.starts_with("5 party")
+                                && words.contains(UNKNOWN_FORM)
+                            {
+                                found = Some(words);
+                            }
+                        });
+                        found
+                    } else {
+                        plan_summary_line(d, summary)
+                    }
+                })
             });
             // FB2: Mill Road's difficulty is on its row at every size; its members give way
             // first, by whole words, with `…`.
@@ -396,8 +420,9 @@ pub fn run(d: &mut Driver<'_>) {
                     low == format!("5 party · 2 × Ember Cultist · {LOW_FORM}")
                         || low == "5 party · 2 × Ember Cultist · XP 400 · Low"
                 }) && unknown.as_deref().is_some_and(|unknown| {
-                    unknown
-                        .starts_with(&format!("5 party · 1 × Nameless Thing · {UNKNOWN_FORM}: N"))
+                    // X1: the name keeps at least its first letter; the members give way first.
+                    unknown.starts_with("5 party")
+                        && unknown.contains(&format!(" · {UNKNOWN_FORM}: N"))
                 }) && high.as_deref().is_some_and(|high| {
                     high == format!("{HIGH_SUMMARY} · {HIGH_FORM}")
                         || high == format!("{HIGH_SUMMARY} · {HIGH_SHORT}")
@@ -528,7 +553,11 @@ pub fn run(d: &mut Driver<'_>) {
     d.observe(
         "W1-D1-edit",
         d.app().sessions.selected_path() == session.as_deref()
-            && line.as_deref() == Some("5 party · 3 × Ember Cultist · Low"),
+            && line.as_deref().is_some_and(|line| {
+                // iter-27-B FB6: the one difficulty form (the limit gives way where the row is short).
+                line == "5 party · 3 × Ember Cultist · XP 600 · Low (up to 2,800)"
+                    || line == "5 party · 3 × Ember Cultist · XP 600 · Low"
+            }),
         format!("Back in the same session, the row reads the saved roster: {line:?}"),
     );
     // Astra's review: the act names the encounter by its ID. When its file now holds another
