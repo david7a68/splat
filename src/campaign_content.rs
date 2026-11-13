@@ -982,17 +982,13 @@ impl CampaignContent {
         clippy::disallowed_methods,
         reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
     )]
-    #[allow(clippy::type_complexity)]
     fn page_footer<'a>(
         me: &'a std::cell::RefCell<&mut Self>,
         ui: &egui::Ui,
         campaigns: &'a Campaigns,
         active: &'a Campaign,
         width: f32,
-        (press, write): (
-            &'a std::cell::Cell<Option<(PageResult, ResultPress)>>,
-            &'a std::cell::Cell<bool>,
-        ),
+        (press, write): (&'a FooterPress, &'a std::cell::Cell<bool>),
     ) -> design::Footer<'a> {
         let this = me.borrow();
         let locked = this
@@ -2872,6 +2868,9 @@ pub(crate) fn load_snapshot(campaign: &Campaign, modules: &[Module]) -> Loaded {
     (repairs, result)
 }
 
+/// What the DM pressed in the Packages page's footer: the result and its press, done after the
+/// pane returns (`CampaignContent::press_result`).
+type FooterPress = std::cell::Cell<Option<(PageResult, ResultPress)>>;
 /// `needed by Ember Cultist, Arena Final`: the one form of what keeps an entry selected, in the
 /// package list's rows and in `Needed by your entries` (round 28 FB7).
 fn needed_by(reasons: impl Iterator<Item = String>) -> String {

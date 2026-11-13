@@ -401,8 +401,15 @@ impl Settings {
             data.insert_temp(egui::Id::new("account_heading_content_y"), heading_top)
         });
         design::group_heading(ui, "D&D Beyond account", 0);
+        // Round 28 FO3: a connected account opens its sign-in and Disconnect as a caret section,
+        // as the other inline forms on this page open (`Add campaign`).
+        let details = !open
+            && !matches!(
+                self.account(),
+                Account::NotConnected | Account::Failed | Account::RefreshFailing
+            );
         if open {
-            self.show_account(ui, false);
+            self.show_account(ui, false, true);
         } else {
             ui.horizontal(|ui| {
                 // A fixed slot: the action after the status stays in place when the state
@@ -424,29 +431,38 @@ impl Settings {
                             .color(colors().muted),
                     );
                 }
-                if design::Action::quiet(
-                    if matches!(self.account(), Account::NotConnected | Account::Failed) {
-                        "Connect…"
-                    } else if self.account() == Account::RefreshFailing {
-                        "Connect again…"
-                    } else {
-                        // Round 28 FO3: it names what it opens, the sign-in and its Disconnect.
-                        // `…`: a form follows (R12).
-                        "Sign-in details…"
-                    },
-                )
-                .show(ui)
-                .clicked()
+                if !details
+                    && design::Action::quiet(
+                        if matches!(self.account(), Account::NotConnected | Account::Failed) {
+                            "Connect…"
+                        } else {
+                            "Connect again…"
+                        },
+                    )
+                    .show(ui)
+                    .clicked()
                 {
                     open = true;
                 }
             });
+            if details {
+                let section = egui::CollapsingHeader::new("Sign-in details")
+                    .icon(design::section_icon)
+                    .id_salt("compact_sign_in_details")
+                    .show(ui, |ui| self.show_account(ui, false, false));
+                // egui gives a caret section no expanded state; screen readers need it.
+                let expanded = section.body_response.is_some();
+                ui.ctx()
+                    .accesskit_node_builder(section.header_response.id, |node| {
+                        node.set_expanded(expanded)
+                    });
+            }
         }
         ui.ctx().data_mut(|data| data.insert_temp(id, open));
     }
 
     pub fn show(&mut self, ui: &mut egui::Ui) {
-        self.show_account(ui, true);
+        self.show_account(ui, true, true);
     }
 
     /// The account's errors that are not a failed Connect (a failed removal, restore or worker),
@@ -472,7 +488,9 @@ impl Settings {
         self.reveal_rect.take()
     }
 
-    fn show_account(&mut self, ui: &mut egui::Ui, heading: bool) {
+    /// `status`: draw the account's status line (a caret section under the compact status line
+    /// does not say it again).
+    fn show_account(&mut self, ui: &mut egui::Ui, heading: bool, status: bool) {
         if heading {
             ui.allocate_ui_with_layout(
                 egui::vec2(ui.available_width(), Density::Read.control()),
@@ -489,7 +507,7 @@ impl Settings {
         });
         let account = self.account();
         let state = self.connection_status();
-        {
+        if status {
             ui.horizontal(|ui| {
                 design::status(ui, state);
             });
@@ -716,6 +734,47 @@ mod tests {
         settings.worker = Some(worker);
         settings.session = Some(Session::for_test(Duration::ZERO, expires_in));
         (settings, ctx, commands, results)
+    }
+
+    /// Round 28 FO3: in the compact layout a connected account opens `Sign-in details` as a
+    /// caret section, by keyboard too; its expanded state is in the accessible tree, and it
+    /// holds Disconnect.
+    #[test]
+    fn sign_in_details_is_a_caret_section_that_opens_by_keyboard() {
+        use egui_kittest::kittest::{NodeT, Queryable};
+        let mut settings = Settings::default();
+        settings.simulate(Account::Connected);
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(600.0, 600.0))
+            .build_ui_state(
+                |ui, settings: &mut Settings| settings.show_compact(ui),
+                settings,
+            );
+        design::theme::install(&harness.ctx);
+        harness.run_steps(3);
+        let expanded = |harness: &egui_kittest::Harness<'_, Settings>| {
+            harness
+                .get_by_label("Sign-in details")
+                .accesskit_node()
+                .data()
+                .is_expanded()
+        };
+        assert_eq!(expanded(&harness), Some(false));
+        assert!(harness.query_all_by_label("Disconnect").next().is_none());
+        harness.get_by_label("Sign-in details").focus();
+        harness.run_steps(2);
+        harness.key_press(egui::Key::Enter);
+        harness.run_steps(4);
+        assert_eq!(expanded(&harness), Some(true), "Enter opens the section");
+        assert!(
+            harness.query_all_by_label("Disconnect").next().is_some(),
+            "the open section holds Disconnect"
+        );
+        assert_eq!(
+            harness.query_all_by_label_contains("Connected").count(),
+            1,
+            "the status shows once"
+        );
     }
 
     #[test]

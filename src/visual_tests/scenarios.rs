@@ -10371,13 +10371,23 @@ pub mod signed_in {
             "With a session, the page and the rail both say Connected",
         );
         // Round 28 FO3: the compact account line names what it opens.
-        let named = d.at_size(SMALL, |d| {
-            d.in_view("Sign-in details…") && !d.has("Account…")
+        // Round 28 FO3 (review of PR 309): `Sign-in details` is a caret section, as `Add
+        // campaign` is. Tab to it and press Enter: Disconnect shows; Enter again closes it.
+        let named = d.in_view("Sign-in details") && !d.has("Account…");
+        let (opened, closed) = d.aside(|d| {
+            let reached = d.activate_by_keyboard("Sign-in details");
+            let opened = reached && d.in_view("Disconnect");
+            let again = d.activate_by_keyboard("Sign-in details");
+            let closed = again && !d.has("Disconnect");
+            (opened, closed)
         });
         d.observe(
             "iter-28-C-FO3",
-            named,
-            "At 960, the connected account line opens Sign-in details…, not Account…",
+            named && opened && closed,
+            format!(
+                "At 960, the caret section Sign-in details: named {named}, Enter opens it with \
+                 Disconnect {opened}, Enter closes it {closed}"
+            ),
         );
         // Settings / account-connected supplies the larger views. Keep this compact view.
         d.state_captured_at("settings-connected", Sizes::All, Sizes::Small);
