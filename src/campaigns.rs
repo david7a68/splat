@@ -48,6 +48,10 @@ const SELECTOR_HEIGHT: f32 = 44.0;
 pub(crate) const NO_CAMPAIGN_COPY: &str = "Campaign.md is missing, and Splat has no copy. You can write a new one with the default packages.";
 
 impl Default for Campaigns {
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn default() -> Self {
         let mut result = Self {
             store: None,
@@ -121,6 +125,10 @@ impl Campaigns {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn save_form(&mut self) -> Result<(), String> {
         if self.remote.is_some() && self.editing.is_none() {
             std::fs::create_dir_all(self.path.trim())
@@ -182,6 +190,10 @@ impl Campaigns {
         Ok(())
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn register_campaign_copy(&mut self) -> Result<(), String> {
         let path = PathBuf::from(self.path.trim());
         let found =
@@ -320,6 +332,10 @@ impl Campaigns {
     }
 
     #[cfg(test)]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     pub fn at(path: PathBuf) -> Self {
         let mut store = Store::at(path);
         let data = store.load().unwrap();
@@ -1093,6 +1109,10 @@ impl Campaigns {
     /// `list` is true in Settings, where the add results belong.
     /// `blocked` is the page's lock (a run, a recording, an unsaved draft): the footer is outside
     /// the list's lock, so an action here that changes the campaigns takes it too.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     pub fn footer_messages<'a>(
         me: &'a std::cell::RefCell<&mut Campaigns>,
         footer: &mut design::Footer<'a>,
@@ -1240,6 +1260,10 @@ impl Campaigns {
         self.editing.is_some() || self.form_open
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn form(&mut self, ui: &mut egui::Ui, _inline: bool, primary: bool) {
         let editing = self.editing.is_some();
         // Keep the add form's open state when Settings changes between one and two columns.
@@ -1778,6 +1802,10 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn one_to_one_links_replace_and_unlink_without_changing_other_campaigns() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("settings.json");

@@ -480,26 +480,26 @@ pub enum Pressed {
 
 /// A finished change, in the success tone: `<Verb past> <object>.`, then more sentences. Its
 /// Undo is made from the same `Verb` and object (`undo`), so the result and its Undo cannot
-/// have two verbs. It needs the order its action issued.
+/// have two verbs. It takes no order: a result reaches the footer only through
+/// `Footer::kept_outcome`, with the order its `Results` store issued at the action.
 ///
 /// ```
-/// use splat::outcome::{Done, ResultOrder, Verb};
-/// let _ = Done::new(ResultOrder::issue(), Verb::Remove, "Take seal").undo();
+/// use splat::outcome::{Done, Verb};
+/// let _ = Done::new(Verb::Remove, "Take seal").undo();
 /// ```
 /// ```compile_fail
-/// use splat::outcome::{Done, ResultOrder, Verb};
-/// let _ = Done::new(ResultOrder::issue(), Verb::Remove, "Take seal").undo("Undo discard");
+/// use splat::outcome::{Done, Verb};
+/// let _ = Done::new(Verb::Remove, "Take seal").undo("Undo discard");
 /// ```
 ///
-/// A result without its action's order does not compile:
+/// An order made by hand does not go in:
 ///
 /// ```compile_fail
 /// use splat::outcome::{Done, ResultOrder, Verb};
-/// let _ = Done::new(Verb::Remove, "Take seal");
+/// let _ = Done::new(ResultOrder::issue(), Verb::Remove, "Take seal");
 /// ```
-#[must_use = "give it to `Footer::outcome`"]
+#[must_use = "give it to `Footer::kept_outcome`"]
 pub struct Done<'a> {
-    order: ResultOrder,
     verb: Verb,
     object: String,
     more: Option<Sentence>,
@@ -508,9 +508,8 @@ pub struct Done<'a> {
 }
 
 impl<'a> Done<'a> {
-    pub fn new(order: ResultOrder, verb: Verb, object: impl Into<String>) -> Self {
+    pub fn new(verb: Verb, object: impl Into<String>) -> Self {
         Self {
-            order,
             verb,
             object: object.into(),
             more: None,
@@ -562,36 +561,34 @@ impl<'a> Done<'a> {
 /// A finished change in the domain's own words, in the success tone (`Seals for Party changed to
 /// 1.`). Its Undo is an `UndoStep`, never words. `Said` is the named escape for a result that is
 /// not a verb and an object: nothing ties its words to its Undo's verb, so
-/// `Said::new(order, sentence!("Removed Bell.")).undo(UndoStep::of(Verb::Delete, "Bell"))`
-/// compiles. Only `Done` holds one verb for both; a reviewer checks each `Said`.
+/// `Said::new(sentence!("Removed Bell.")).undo(UndoStep::of(Verb::Delete, "Bell"))` compiles.
+/// Only `Done` holds one verb for both; a reviewer checks each `Said`.
 ///
 /// ```
-/// use splat::outcome::{ResultOrder, Said, UndoStep};
-/// let _ = Said::new(ResultOrder::issue(), splat::sentence!("Bell is done.")).undo(UndoStep::act("Done"));
+/// use splat::outcome::{Said, UndoStep};
+/// let _ = Said::new(splat::sentence!("Bell is done.")).undo(UndoStep::act("Done"));
 /// ```
 /// ```compile_fail
-/// use splat::outcome::{ResultOrder, Said, UndoStep};
-/// let _ = Said::new(ResultOrder::issue(), splat::sentence!("Bell is done.")).undo("Undo: Done");
+/// use splat::outcome::{Said, UndoStep};
+/// let _ = Said::new(splat::sentence!("Bell is done.")).undo("Undo: Done");
 /// ```
 ///
-/// No outcome takes a tone:
+/// No message takes a tone:
 ///
 /// ```compile_fail
-/// use splat::outcome::{ResultOrder, Said, Tone, UndoStep};
-/// let _ = Said::new(ResultOrder::issue(), splat::sentence!("Bell is done.")).tone(Tone::Info);
+/// use splat::outcome::{Said, Tone, UndoStep};
+/// let _ = Said::new(splat::sentence!("Bell is done.")).tone(Tone::Info);
 /// ```
-#[must_use = "give it to `Footer::outcome`"]
+#[must_use = "give it to `Footer::kept_outcome`"]
 pub struct Said<'a> {
-    order: ResultOrder,
     words: Sentence,
     undo: Option<UndoStep>,
     choices: Vec<MessageChoice<'a>>,
 }
 
 impl<'a> Said<'a> {
-    pub fn new(order: ResultOrder, words: Sentence) -> Self {
+    pub fn new(words: Sentence) -> Self {
         Self {
-            order,
             words,
             undo: None,
             choices: Vec::new(),
@@ -609,12 +606,11 @@ impl<'a> Said<'a> {
     }
 }
 
-/// A notice in the info tone: guidance, why other actions wait, or a result that wrote nothing
-/// (`Draft discarded.`). With an Undo it is a result, and needs its action's order.
+/// A notice in the info tone: guidance, or why other actions wait. A notice with an Undo (a
+/// result that wrote nothing, `Draft discarded.`) is a kept result: `KeptOutcome::Notice`.
 #[must_use = "give it to `Footer::outcome`"]
 pub struct Notice<'a> {
     words: Sentence,
-    undo: Option<(ResultOrder, UndoStep)>,
     choices: Vec<MessageChoice<'a>>,
 }
 
@@ -622,14 +618,8 @@ impl<'a> Notice<'a> {
     pub fn new(words: Sentence) -> Self {
         Self {
             words,
-            undo: None,
             choices: Vec::new(),
         }
-    }
-
-    pub fn undo(mut self, order: ResultOrder, step: UndoStep) -> Self {
-        self.undo = Some((order, step));
-        self
     }
 
     pub fn choice(mut self, choice: MessageChoice<'a>) -> Self {
@@ -639,11 +629,11 @@ impl<'a> Notice<'a> {
 }
 
 /// A fault as a footer message: its tone comes from its `Severity`, its words from
-/// `fault_words`. A fault that left a way back (an event that waits in a draft) has an Undo.
+/// `fault_words`. A fault that left a way back (an event that waits in a draft) is a kept
+/// result: `KeptOutcome::Fault`.
 #[must_use = "give it to `Footer::outcome`"]
 pub struct FaultMessage<'a> {
     fault: &'a dyn Fault,
-    undo: Option<(ResultOrder, UndoStep)>,
     choices: Vec<MessageChoice<'a>>,
 }
 
@@ -651,14 +641,8 @@ impl<'a> FaultMessage<'a> {
     pub fn new(fault: &'a dyn Fault) -> Self {
         Self {
             fault,
-            undo: None,
             choices: Vec::new(),
         }
-    }
-
-    pub fn undo(mut self, order: ResultOrder, step: UndoStep) -> Self {
-        self.undo = Some((order, step));
-        self
     }
 
     pub fn choice(mut self, choice: MessageChoice<'a>) -> Self {
@@ -667,17 +651,17 @@ impl<'a> FaultMessage<'a> {
     }
 }
 
-/// Everything a pane's footer can hold. The variant decides the tone and the place in the
-/// footer's order:
+/// A footer message that is not a result: it has no order, and keeps the caller's order among
+/// its kind.
 ///
 /// | Variant | Tone | Place |
 /// |---|---|---|
-/// | `Done`, `Said` | success | first while its Undo is live, newest first; else after notices |
-/// | `Notice` | info | with notices; first, as a result, while its Undo is live |
 /// | `Refused` | warning | reasons |
-/// | `Fault` | from its `Severity` | reasons; first, as a result, while its Undo is live |
+/// | `Fault` | from its `Severity` | reasons |
+/// | `Notice` | info | notices |
 ///
-/// An `Outcome` has no public draw method; it reaches the screen only through `Footer::outcome`:
+/// An `Outcome` has no public draw method; it reaches the screen only through `Footer::outcome`.
+/// A result is not an `Outcome`:
 ///
 /// ```
 /// fn f(ui: &mut eframe::egui::Ui) {
@@ -689,28 +673,23 @@ impl<'a> FaultMessage<'a> {
 /// ```
 /// ```compile_fail
 /// fn f(ui: &mut eframe::egui::Ui) {
+///     let mut pressed = None;
+///     let mut footer = splat::outcome::Footer::new("f", 400.0);
+///     let done = splat::outcome::Done::new(splat::outcome::Verb::Remove, "Bell");
+///     footer.outcome(done, &mut pressed);
+///     let _ = footer.show(ui);
+/// }
+/// ```
+/// ```compile_fail
+/// fn f(ui: &mut eframe::egui::Ui) {
 ///     splat::outcome::Outcome::Refused(splat::sentence!("No.")).draw(ui);
 /// }
 /// ```
 pub enum Outcome<'a> {
-    Done(Done<'a>),
-    Said(Said<'a>),
     Notice(Notice<'a>),
     /// Why an act or Save wrote nothing: it does not fit the files now.
     Refused(Sentence),
     Fault(FaultMessage<'a>),
-}
-
-impl<'a> From<Done<'a>> for Outcome<'a> {
-    fn from(done: Done<'a>) -> Self {
-        Self::Done(done)
-    }
-}
-
-impl<'a> From<Said<'a>> for Outcome<'a> {
-    fn from(said: Said<'a>) -> Self {
-        Self::Said(said)
-    }
 }
 
 impl<'a> From<Notice<'a>> for Outcome<'a> {
@@ -725,6 +704,35 @@ impl<'a> From<FaultMessage<'a>> for Outcome<'a> {
     }
 }
 
+/// A result: what an action did, kept in a `design::Results` store. It reaches the footer only
+/// through `Footer::kept_outcome`, which takes the store's `Shown` view, so its order is the one
+/// the store issued at the action. Results go newest first; one with a live Undo leads the
+/// footer, one without follows the notices.
+///
+/// | Variant | Tone |
+/// |---|---|
+/// | `Done`, `Said` | success |
+/// | `Notice` (with its Undo) | info |
+/// | `Fault` (with its Undo) | from its `Severity` |
+pub enum KeptOutcome<'a> {
+    Done(Done<'a>),
+    Said(Said<'a>),
+    Notice(Notice<'a>, UndoStep),
+    Fault(FaultMessage<'a>, UndoStep),
+}
+
+impl<'a> From<Done<'a>> for KeptOutcome<'a> {
+    fn from(done: Done<'a>) -> Self {
+        Self::Done(done)
+    }
+}
+
+impl<'a> From<Said<'a>> for KeptOutcome<'a> {
+    fn from(said: Said<'a>) -> Self {
+        Self::Said(said)
+    }
+}
+
 /// A message as drawn: tone, words, Undo and choices.
 struct Body<'a> {
     tone: Tone,
@@ -734,15 +742,43 @@ struct Body<'a> {
 }
 
 impl<'a> Outcome<'a> {
-    /// The footer's rank and order, and what it draws.
-    fn parts(self) -> (FooterRank, Option<ResultOrder>, Body<'a>) {
-        let result = |undo: bool| {
-            if undo {
-                FooterRank::Undo
-            } else {
-                FooterRank::Notice
-            }
-        };
+    /// The footer's rank, and what it draws.
+    fn parts(self) -> (FooterRank, Body<'a>) {
+        match self {
+            Self::Notice(notice) => (
+                FooterRank::Notice,
+                Body {
+                    tone: Tone::Info,
+                    words: notice.words,
+                    undo: None,
+                    choices: notice.choices,
+                },
+            ),
+            Self::Refused(words) => (
+                FooterRank::Reason,
+                Body {
+                    tone: Tone::Warning,
+                    words,
+                    undo: None,
+                    choices: Vec::new(),
+                },
+            ),
+            Self::Fault(fault) => (
+                FooterRank::Reason,
+                Body {
+                    tone: fault.fault.severity().tone(),
+                    words: fault_words(fault.fault),
+                    undo: None,
+                    choices: fault.choices,
+                },
+            ),
+        }
+    }
+}
+
+impl<'a> KeptOutcome<'a> {
+    /// What it draws.
+    fn body(self) -> Body<'a> {
         match self {
             Self::Done(done) => {
                 let words = done.words();
@@ -753,86 +789,91 @@ impl<'a> Outcome<'a> {
                         None => step,
                     }
                 });
-                (
-                    result(undo.is_some()),
-                    Some(done.order),
-                    Body {
-                        tone: Tone::Success,
-                        words,
-                        undo,
-                        choices: done.choices,
-                    },
-                )
-            }
-            Self::Said(said) => (
-                result(said.undo.is_some()),
-                Some(said.order),
                 Body {
                     tone: Tone::Success,
-                    words: said.words,
-                    undo: said.undo,
-                    choices: said.choices,
-                },
-            ),
-            Self::Notice(notice) => {
-                let (rank, order, undo) = match notice.undo {
-                    Some((order, step)) => (FooterRank::Undo, Some(order), Some(step)),
-                    None => (FooterRank::Notice, None, None),
-                };
-                (
-                    rank,
-                    order,
-                    Body {
-                        tone: Tone::Info,
-                        words: notice.words,
-                        undo,
-                        choices: notice.choices,
-                    },
-                )
-            }
-            Self::Refused(words) => (
-                FooterRank::Reason,
-                None,
-                Body {
-                    tone: Tone::Warning,
                     words,
-                    undo: None,
-                    choices: Vec::new(),
-                },
-            ),
-            Self::Fault(fault) => {
-                let (rank, order, undo) = match fault.undo {
-                    Some((order, step)) => (FooterRank::Undo, Some(order), Some(step)),
-                    None => (FooterRank::Reason, None, None),
-                };
-                (
-                    rank,
-                    order,
-                    Body {
-                        tone: fault.fault.severity().tone(),
-                        words: fault_words(fault.fault),
-                        undo,
-                        choices: fault.choices,
-                    },
-                )
+                    undo,
+                    choices: done.choices,
+                }
             }
+            Self::Said(said) => Body {
+                tone: Tone::Success,
+                words: said.words,
+                undo: said.undo,
+                choices: said.choices,
+            },
+            Self::Notice(notice, step) => Body {
+                tone: Tone::Info,
+                words: notice.words,
+                undo: Some(step),
+                choices: notice.choices,
+            },
+            Self::Fault(fault, step) => Body {
+                tone: fault.fault.severity().tone(),
+                words: fault_words(fault.fault),
+                undo: Some(step),
+                choices: fault.choices,
+            },
         }
     }
 }
 
 impl<'a> Footer<'a> {
-    /// A typed message in this footer, at the place its variant gives it in the footer's order
-    /// (see `Outcome`). When the DM presses its Undo or a choice, `pressed` says which, after
-    /// `show`. The footer's own tests prove its order, place and press routing; a caller that
-    /// uses only this method repeats none of them.
+    /// A message that is not a result (a reason or a notice), at the place its variant gives it
+    /// in the footer's order. When the DM presses a choice, `pressed` says which, after `show`.
+    /// The footer's own tests prove its order, place and press routing; a caller that uses only
+    /// the typed entries repeats none of them.
     pub fn outcome(
         &mut self,
         outcome: impl Into<Outcome<'a>>,
         pressed: &'a mut Option<Pressed>,
     ) -> &mut Self {
-        let (rank, order, body) = outcome.into().parts();
+        let (rank, body) = outcome.into().parts();
         let words = Cow::Owned(body.words.as_str().to_owned());
-        self.push(rank, order, words, move |ui| {
+        self.push(rank, None, words, move |ui| {
+            if let Some(press) = body.draw(ui, MessagePlace::Footer) {
+                *pressed = Some(press);
+            }
+        })
+    }
+
+    /// A kept result from a `design::Results` store (`Results::get` or `newest_first`): `make`
+    /// turns the stored value into what the footer says, and the order is the one the store
+    /// issued at the action. When the DM presses its Undo or a choice, `pressed` says which.
+    pub fn kept_outcome<T>(
+        &mut self,
+        shown: crate::design::results::Shown<'a, T>,
+        make: impl FnOnce(&'a T) -> KeptOutcome<'a>,
+        pressed: &'a mut Option<Pressed>,
+    ) -> &mut Self {
+        let body = make(shown.value()).body();
+        let has_undo = body.undo.is_some();
+        let words: Cow<'a, str> = Cow::Owned(body.words.as_str().to_owned());
+        self.kept(
+            shown,
+            has_undo,
+            move |_| words,
+            move |_, ui| {
+                if let Some(press) = body.draw(ui, MessagePlace::Footer) {
+                    *pressed = Some(press);
+                }
+            },
+        )
+    }
+
+    /// The staged path for a result whose caller still issues its own `ResultOrder` (Wave 2
+    /// moves it into a `Results` store). The source lint counts its uses per file
+    /// (`raw-order`), so a new one shows in review.
+    pub fn outcome_at(
+        &mut self,
+        order: ResultOrder,
+        outcome: impl Into<KeptOutcome<'a>>,
+        pressed: &'a mut Option<Pressed>,
+    ) -> &mut Self {
+        let body = outcome.into().body();
+        let has_undo = body.undo.is_some();
+        let words = Cow::Owned(body.words.as_str().to_owned());
+        self.add_kept(order, words, has_undo, move |ui| {
             if let Some(press) = body.draw(ui, MessagePlace::Footer) {
                 *pressed = Some(press);
             }
@@ -1274,31 +1315,46 @@ mod tests {
         assert!(Severity::NotSaved.tone() == Tone::Error);
         assert!(Severity::NeedsFixing.tone() == Tone::Warning);
         let fault = Hp(Severity::CannotRead, Some(3));
-        let order = ResultOrder::issue();
-        let ranks = [
-            Outcome::from(Done::new(order, Verb::Remove, "Bell").undo()),
-            Outcome::from(Done::new(order, Verb::Remove, "Bell")),
+        let messages = [
             Outcome::Refused(crate::sentence!("No.")),
             Outcome::from(Notice::new(crate::sentence!("Wait."))),
             Outcome::from(FaultMessage::new(&fault)),
-            Outcome::from(FaultMessage::new(&fault).undo(order, UndoStep::verb(Verb::Add))),
         ]
         .map(|outcome| {
-            let (rank, order, body) = outcome.parts();
-            (rank, order.is_some(), body.tone)
+            let (rank, body) = outcome.parts();
+            (rank, body.tone)
         });
         assert!(
-            ranks
+            messages
                 == [
-                    (FooterRank::Undo, true, Tone::Success),
-                    (FooterRank::Notice, true, Tone::Success),
-                    (FooterRank::Reason, false, Tone::Warning),
-                    (FooterRank::Notice, false, Tone::Info),
-                    (FooterRank::Reason, false, Tone::Error),
-                    (FooterRank::Undo, true, Tone::Error),
+                    (FooterRank::Reason, Tone::Warning),
+                    (FooterRank::Notice, Tone::Info),
+                    (FooterRank::Reason, Tone::Error),
                 ],
-            "{:?}",
-            ranks.map(|(rank, order, _)| (rank, order))
+            "{messages:?}"
+        );
+        let results = [
+            KeptOutcome::from(Done::new(Verb::Remove, "Bell").undo()),
+            KeptOutcome::from(Done::new(Verb::Remove, "Bell")),
+            KeptOutcome::Notice(
+                Notice::new(crate::sentence!("Draft discarded.")),
+                UndoStep::verb(Verb::Discard),
+            ),
+            KeptOutcome::Fault(FaultMessage::new(&fault), UndoStep::verb(Verb::Add)),
+        ]
+        .map(|outcome| {
+            let body = outcome.body();
+            (body.undo.is_some(), body.tone)
+        });
+        assert!(
+            results
+                == [
+                    (true, Tone::Success),
+                    (false, Tone::Success),
+                    (true, Tone::Info),
+                    (true, Tone::Error),
+                ],
+            "{results:?}"
         );
     }
 
@@ -1348,14 +1404,14 @@ mod tests {
     /// steps apart, and drops whole words of the object.
     #[test]
     fn an_undo_keeps_its_verb_and_what_tells_it_apart() {
-        let done = Done::new(ResultOrder::issue(), Verb::Remove, "Take seal: Keyring +1.")
+        let done = Done::new(Verb::Remove, "Take seal: Keyring +1.")
             .more(crate::sentence!("With it: Bell is done."))
             .undo();
         assert_eq!(
             done.words().as_str(),
             "Removed Take seal: Keyring +1. With it: Bell is done."
         );
-        let (_, _, body) = Outcome::from(done).parts();
+        let body = KeptOutcome::from(done).body();
         assert_eq!(
             body.undo.unwrap().label(),
             "Undo remove Take seal: Keyring +1"
@@ -1377,39 +1433,96 @@ mod tests {
         });
     }
 
-    /// The footer's typed message: a press on its Undo and on its choice reach the caller, the
-    /// words are the footer's name, and the registry holds its rect with its place.
+    /// The footer's kept result: its order is the store's (newest first, also when drawn in
+    /// the other order), a press on its Undo and on its choice reach the caller, and the registry
+    /// holds its rect with its place.
     #[test]
     fn a_footer_outcome_reports_its_presses_and_registers_its_rect() {
+        use crate::design::results::{
+            DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results,
+        };
+        #[derive(Clone, PartialEq, Eq)]
+        struct Line(&'static str);
+        impl Owner for Line {
+            type Scope = str;
+            fn scope(&self) -> &str {
+                "campaign"
+            }
+        }
+        struct Took(Line, &'static str);
+        impl Kept for Took {
+            type Owner = Line;
+            const ENDS: Ends = Ends {
+                owner_changed: OwnerChanged::Ends,
+                disk_changed: DiskChanged::Stays,
+                press: Press::Undo,
+            };
+            fn owner(&self) -> Line {
+                self.0.clone()
+            }
+        }
         #[derive(Default)]
         struct State {
-            pressed: Vec<Pressed>,
+            results: Results<Line, Took>,
+            pressed: Vec<(&'static str, Pressed)>,
         }
+        let mut state = State::default();
+        // Recorded at the action: Party first, then Keyring.
+        state
+            .results
+            .record(Took(Line("party"), "Seals for Party changed to 1."));
+        state
+            .results
+            .record(Took(Line("keyring"), "Seals for Keyring changed to 2."));
         let mut h = Harness::builder()
             .with_size(egui::vec2(600.0, 400.0))
             .build_ui_state(
                 |ui, state: &mut State| {
-                    let mut pressed = None;
-                    let order = ResultOrder::default();
+                    let (mut party, mut keyring) = (None, None);
                     let mut footer = Footer::new("outcome_test", ui.available_width());
-                    footer.outcome(
-                        Said::new(order, crate::sentence!("Seals for Party changed to 1."))
-                            .undo(UndoStep::act("Take seal"))
-                            .choice(MessageChoice::Choice("Add to Timeline")),
-                        &mut pressed,
-                    );
+                    // Drawn oldest first; the footer puts them newest first by the store's order.
+                    for (line, pressed) in [("party", &mut party), ("keyring", &mut keyring)] {
+                        if let Some(shown) = state.results.get(&Line(line)) {
+                            footer.kept_outcome(
+                                shown,
+                                |took| {
+                                    let mut said = Said::new(Sentence::outside(took.1).unwrap())
+                                        .undo(UndoStep::act("Take seal"));
+                                    if took.0.0 == "party" {
+                                        said =
+                                            said.choice(MessageChoice::Choice("Add to Timeline"));
+                                    }
+                                    said.into()
+                                },
+                                pressed,
+                            );
+                        }
+                    }
                     let bottom = footer.show(ui);
                     ui.allocate_space(egui::vec2(10.0, (bottom - ui.cursor().top()).max(0.0)));
-                    state.pressed.extend(pressed);
+                    state.pressed.extend(party.map(|p| ("party", p)));
+                    state.pressed.extend(keyring.map(|p| ("keyring", p)));
                 },
-                State::default(),
+                state,
             );
         crate::design::theme::install(&h.ctx);
         h.run_steps(4);
         let rects = message_rects(&h.ctx);
         assert!(
-            rects.len() == 1 && rects[0].1 == MessagePlace::Footer,
+            rects.len() == 2
+                && rects
+                    .iter()
+                    .all(|(_, place, _)| *place == MessagePlace::Footer),
             "{rects:?}"
+        );
+        let top = |h: &Harness<'_, State>, words: &str| {
+            h.get_by_role_and_label(egui::accesskit::Role::Label, words)
+                .rect()
+                .top()
+        };
+        assert!(
+            top(&h, "Seals for Keyring changed to 2.") < top(&h, "Seals for Party changed to 1."),
+            "the newer result comes first"
         );
         let words = h
             .get_by_role_and_label(
@@ -1418,15 +1531,30 @@ mod tests {
             )
             .rect()
             .left();
-        let undo = h.get_by_label("Undo: Take seal").rect();
+        let undo = h.get_all_by_label("Undo: Take seal").nth(1).unwrap().rect();
         assert!(
-            undo.left() < words && rects[0].0.contains_rect(undo),
+            undo.left() < words && rects[1].0.contains_rect(undo),
             "Undo starts its line under the words, inside the message: {undo:?} {words} {rects:?}"
         );
-        h.get_by_label("Undo: Take seal").click();
+        h.get_all_by_label("Undo: Take seal")
+            .nth(1)
+            .unwrap()
+            .click();
         h.run_steps(2);
         h.get_by_label("Add to Timeline").click();
         h.run_steps(2);
-        assert_eq!(h.state().pressed, [Pressed::Undo, Pressed::Choice(0)]);
+        h.get_all_by_label("Undo: Take seal")
+            .next()
+            .unwrap()
+            .click();
+        h.run_steps(2);
+        assert_eq!(
+            h.state().pressed,
+            [
+                ("party", Pressed::Undo),
+                ("party", Pressed::Choice(0)),
+                ("keyring", Pressed::Undo)
+            ]
+        );
     }
 }

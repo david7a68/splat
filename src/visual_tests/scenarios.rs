@@ -400,6 +400,50 @@ fn click_by_focus(d: &mut Driver<'_>, name: &str) {
 }
 
 /// Round 26: the pane footer whose words hold `words`: the smallest named group that holds them.
+/// R3f X43, X44: a footer's button below a message starts at the message's words and is whole
+/// inside the footer. Its label is the name shortened, if at all, by whole words (the whole name
+/// is its hover and accessible name).
+fn move_at_words(d: &mut Driver<'_>, words: &str, name: &str) {
+    let text = d.painted_rect_in(words, egui::Rect::EVERYTHING);
+    let footer = d
+        .footer_bands()
+        .into_iter()
+        .find(|band| text.is_some_and(|text| band.contains_rect(text)));
+    let button = d
+        .nodes()
+        .into_iter()
+        .find(|node| node.name == name && node.role == egui::accesskit::Role::Button);
+    let label = button
+        .as_ref()
+        .map(|button| d.painted_in(button.rect))
+        .unwrap_or_default();
+    // Each word of the label, less a closing `…`, is a whole word of the name, in its order: the
+    // label shortens by whole words wherever it shortens (main's form shortens the arrival).
+    let mut of_name = name.split(' ');
+    let whole_words = !label.is_empty()
+        && label.split(' ').all(|shown| {
+            let shown = shown.strip_suffix('…').unwrap_or(shown);
+            of_name.any(|word| word == shown)
+        });
+    d.observe(
+        "r3f-X43-X44-move-at-words",
+        whole_words
+            && text
+                .zip(footer)
+                .zip(button.as_ref())
+                .is_some_and(|((text, footer), button)| {
+                    (button.rect.left() - text.left()).abs() < 1.0
+                        && button.fully_in_view()
+                        && footer.contains_rect(button.rect)
+                }),
+        format!(
+            "{name} {:?} reads `{label}`, starts at \"{words}\" {text:?}, whole in the footer's \
+             room {footer:?}",
+            button.as_ref().map(|button| (button.rect, button.shown))
+        ),
+    );
+}
+
 fn footer_with(d: &Driver<'_>, words: &str) -> Option<egui::Rect> {
     d.nodes()
         .into_iter()
@@ -11367,8 +11411,48 @@ pub mod world {
         d.state("world-new-menu", Sizes::Default);
         d.click("NPC…");
         d.expect("Type a name first.");
+        // Round 27 FH5, AH1, SH1: inline creation has one layout. Create NPC follows the Name
+        // field on its line, and the kept line below holds Cancel and the reason or the file:
+        // typing moves neither action.
+        let places = |d: &mut Driver<'_>| {
+            [SMALL, DEFAULT, LARGE].map(|size| {
+                d.at_size(size, |d| {
+                    let field = d
+                        .nodes()
+                        .into_iter()
+                        .find(|node| node.name == "Name" && node.role == Role::TextInput)
+                        .map(|node| node.rect);
+                    (d.place_of("Create NPC"), d.place_of("Cancel"), field)
+                })
+            })
+        };
+        let empty = places(d);
         d.type_into("Name", "Watchkeeper");
         d.wait_for_text("Will create NPCs/Watchkeeper.md");
+        let filled = places(d);
+        for (size, ((create, cancel, name), (create_after, cancel_after, _))) in
+            [SMALL, DEFAULT, LARGE]
+                .into_iter()
+                .zip(empty.into_iter().zip(filled))
+        {
+            let same = |a: Option<egui::Rect>, b: Option<egui::Rect>| {
+                a.zip(b)
+                    .is_some_and(|(a, b)| (a.min - b.min).length() < 0.5)
+            };
+            d.observe(
+                "iter-27-D-FH5",
+                same(create, create_after)
+                    && same(cancel, cancel_after)
+                    && create.zip(name).is_some_and(|(create, name)| {
+                        create.left() > name.right()
+                            && (create.center().y - name.center().y).abs() <= 0.5
+                    })
+                    && cancel.zip(name).is_some_and(|(cancel, name)| cancel.top() > name.bottom()),
+                format!(
+                    "At {size:?}, Create NPC {create:?} → {create_after:?} sits on the Name field's line {name:?}; Cancel {cancel:?} → {cancel_after:?} starts the line below"
+                ),
+            );
+        }
         d.state("world-new-npc-form", Sizes::All);
         d.click("Create NPC");
         d.expect("Watchkeeper");
@@ -16748,7 +16832,14 @@ pub mod encounter_groups {
             roster_places(d).len() == before + 1,
             "The valid member joins while the two unavailable members stay out",
         );
-        d.state("available-member-added", Sizes::All);
+        // R3f X43, X44: the footer's Move button starts at the message's words and is whole.
+        d.state_prepared("available-member-added", Sizes::All, |d| {
+            move_at_words(
+                d,
+                "Lost Patrol joined at",
+                "Move Lost Patrol before Ember Cultist",
+            );
+        });
         // FH1: a tied arrival is a finished change, so its message has the success bar.
         // FH6: its Move button names the group, as the message does, not one member.
         let tied = painted_paragraph(d, "Lost Patrol joined at");
@@ -16843,7 +16934,13 @@ pub mod encounter_groups {
             words.contains(" more") && counted,
             format!("{RIVAL_NAME}'s row at 1200: {words}"),
         );
-        d.state("group-added-with-a-total", Sizes::All);
+        d.state_prepared("group-added-with-a-total", Sizes::All, |d| {
+            move_at_words(
+                d,
+                "Rival Team joined at",
+                "Move Rival Team before Kestrel Dunmoor",
+            );
+        });
         d.observe(
             "T13.2",
             d.has_containing("Undo: add Rival Team")
@@ -24055,7 +24152,24 @@ fn icon_link_parts(d: &Driver<'_>, icon: &str, words: &str) -> Option<(bool, boo
 
 /// FT1: Lookup's `Show all N` is quiet, lists every match in place in a list of at most eight
 /// rows, and the list follows Tab and the arrow keys. Ends with `words` typed again.
-fn lookup_show_all(d: &mut Driver<'_>, words: &str) {
+fn lookup_show_all(d: &mut Driver<'_>, six: &str) {
+    // Round 27 FJ2: `Show all` takes a line as tall as a row, so six matches show as six rows
+    // in that room, with no `Show all` and every row in view.
+    let rows = lookup_results(d);
+    d.observe(
+        "iter-27-D-FJ2",
+        rows.len() == 6
+            && show_all_count(d).is_none()
+            && rows.iter().all(|row| row.fully_in_view()),
+        format!(
+            "Six matches for {six} show as six rows with no Show all: {} rows, Show all {:?}",
+            rows.len(),
+            show_all_count(d)
+        ),
+    );
+    // The Show all proof needs more than six matches, all in view once listed: `iron` has seven.
+    let words = "iron";
+    d.replace_text_in(SEARCH_LOOKUP, words);
     let before = lookup_results(d).len();
     let count = show_all_count(d);
     let label = format!("Show all {}", count.unwrap_or_default());

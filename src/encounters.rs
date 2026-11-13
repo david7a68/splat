@@ -555,6 +555,10 @@ impl Draft {
     /// the footer is drawn.
     /// `identity` is the creature search's separation result, if any: its stamp, words and
     /// Undo. It takes its place among the draft's results by when it was made (FF8).
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn results_into<'a>(
         &mut self,
         footer: &mut design::Footer<'a>,
@@ -2668,6 +2672,10 @@ struct DraftUndo {
 
 /// When a result was made: the footer's own order, issued when the action is done, so the
 /// newest result comes first.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+)]
 pub(super) fn result_stamp() -> design::ResultOrder {
     design::ResultOrder::issue()
 }
@@ -3799,6 +3807,10 @@ impl Encounters {
             }
         }
     }
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn save_draft(&mut self, ctx: &egui::Context, active: &Campaign, modules: &[Module]) {
         let Some(draft) = self.draft.as_mut() else {
             return;
@@ -3981,6 +3993,10 @@ impl Encounters {
     }
     /// Beside the roster, in place of the search. It says what this creature is, and only the
     /// numbers a DM most often changes have fields of their own.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn creature_pane(ui: &mut egui::Ui, editor: &mut CreatureEditor) -> Option<CreatureStep> {
         if editor.recovery.change.is_some() {
             if let Some(keep) =
@@ -4464,6 +4480,10 @@ impl Encounters {
     }
 
     /// A kept result of `kind` was just made: it is now the newest.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn stamp_kept(&mut self, kind: KeptResult) {
         self.kept_orders.insert(kind, design::ResultOrder::issue());
     }
@@ -4577,6 +4597,10 @@ impl Encounters {
 
     /// Put each kept result in a pane's footer, with its live Undo. A pressed Undo is recorded
     /// in `pressed` and applied by `undo_kept` after the footer is drawn.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn kept_into_footer<'a>(
         &self,
         footer: &mut design::Footer<'a>,
@@ -4685,6 +4709,10 @@ impl Encounters {
         });
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn ledger_view(
         &mut self,
         ui: &mut egui::Ui,
@@ -6559,6 +6587,10 @@ impl Encounters {
     }
 
     /// Run folder and initiative rule. These belong to the campaign, not to one encounter.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     pub fn run_settings(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns) {
         self.poll(ui.ctx(), campaigns);
         let Some(active) = campaigns.active_campaign() else {
@@ -7238,6 +7270,10 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn i20_w1_search_finds_a_hidden_duplicate_and_repairs_it_with_undo() {
         use egui_kittest::kittest::Queryable;
         let dir = tempfile::tempdir().unwrap();

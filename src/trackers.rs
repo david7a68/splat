@@ -1431,6 +1431,40 @@ fn press_op(
     Ok(stamp(entries, session))
 }
 
+/// The campaign and the session being played, which own the newest act's result. A campaign
+/// switch hides the result; switching back shows it again.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Played {
+    root: PathBuf,
+    session: Option<Uuid>,
+}
+
+impl crate::design::results::Owner for Played {
+    type Scope = std::path::Path;
+    fn scope(&self) -> &std::path::Path {
+        &self.root
+    }
+}
+
+/// The newest act of the played session, kept for its footer order; its words are worked out
+/// with the ledger (`Trackers::result`).
+pub(crate) struct NewestAct(Played);
+
+impl crate::design::results::Kept for NewestAct {
+    type Owner = Played;
+    const ENDS: crate::design::results::Ends = crate::design::results::Ends {
+        // No newest act left (all undone): it ends.
+        owner_changed: crate::design::results::OwnerChanged::Ends,
+        // A read of the ledger works the newest act out again (`settle_result`).
+        disk_changed: crate::design::results::DiskChanged::Stays,
+        // Undo takes the act out of the ledger; the next act, if any, is recorded then.
+        press: crate::design::results::Press::Undo,
+    };
+    fn owner(&self) -> Played {
+        self.0.clone()
+    }
+}
+
 /// A fault of the trackers' files or of a write, by kind. The kind decides its severity in one
 /// `match` (`Fault::severity`), and its words in one place, so every view that draws it (the
 /// Trackers view, a house rule note's reader, the footer) gives it one tone and one wording.
@@ -1541,8 +1575,9 @@ pub struct Trackers {
     newest: Vec<Entry>,
     /// The newest act's label and the result line's words, worked out with `newest`.
     pub(crate) result: Option<(String, Sentence)>,
-    /// When the newest act was done, for the footer's order: issued when `newest` changes.
-    pub(crate) result_order: crate::design::ResultOrder,
+    /// The newest act as a kept result, for the footer's order: recorded when `newest` changes,
+    /// so the store issues its order then and never at a draw.
+    pub(crate) results: crate::design::Results<Played, NewestAct>,
     last_check: Option<Instant>,
     /// Why the last act wrote nothing.
     pub reason: Option<Unrecorded>,
@@ -1720,9 +1755,7 @@ impl Trackers {
     /// The newest act of the session being played, and the result line's words for it.
     fn settle_result(&mut self) {
         let newest = undo_target(&self.ledger, self.played);
-        if newest != self.newest {
-            self.result_order = crate::design::ResultOrder::issue();
-        }
+        let changed = newest != self.newest;
         self.newest = newest;
         self.result = (!self.newest.is_empty()).then(|| {
             (
@@ -1730,6 +1763,22 @@ impl Trackers {
                 result_words(&self.rules, &self.ledger, &self.state, &self.newest),
             )
         });
+        let Some(owner) = self.played_owner() else {
+            return;
+        };
+        if self.result.is_none() {
+            self.results.owner_changed(&owner);
+        } else if changed || self.results.get(&owner).is_none() {
+            self.results.record(NewestAct(owner));
+        }
+    }
+
+    /// The campaign and the session being played: the owner of the newest act's result.
+    pub(crate) fn played_owner(&self) -> Option<Played> {
+        self.campaign.as_ref().map(|campaign| Played {
+            root: campaign.path.clone(),
+            session: self.played,
+        })
     }
 
     /// An act built from the values and notices of the file on disk. Why it wrote nothing

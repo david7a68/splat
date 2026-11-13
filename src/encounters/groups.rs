@@ -2084,6 +2084,10 @@ impl Encounters {
             .and_then(|(_, refusal)| refusal.clone())
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     pub(super) fn save_group_draft(
         &mut self,
         ctx: &egui::Context,
@@ -2174,6 +2178,10 @@ impl Encounters {
         self.message = None;
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     pub(super) fn group_editor_view(
         &mut self,
         ui: &mut egui::Ui,
@@ -2602,6 +2610,10 @@ fn column_right_id(path: &str) -> egui::Id {
 /// in `pressed` and applied with `undo_member_result` after the footer is drawn.
 /// FF8: the creature search's separation result takes its place beside it, newest first;
 /// its pressed Undo is recorded in `identity`.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+)]
 fn member_result_into<'a>(
     draft: &mut GroupDraft,
     footer: &mut design::Footer<'a>,

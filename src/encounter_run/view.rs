@@ -832,6 +832,10 @@ impl Run {
     /// never moves when one comes or goes. It is drawn in a child of `ui` over `rect`, at its
     /// bottom, and the y where the body above it ends is returned. A stat-block error is one
     /// of them: its whole fault wraps there, with its repair place under its words.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn message_footer(
         &mut self,
         ui: &mut egui::Ui,
@@ -1489,7 +1493,11 @@ impl Run {
                     let whole_row = row_top >= original_clip.top() - design::HAIRLINE_WIDTH
                         && row_top + layout.height(scale)
                             <= original_clip.bottom() + design::HAIRLINE_WIDTH;
-                    if overflow && !whole_row {
+                    // A row cut by the list's edge or by the message footer is not drawn: the
+                    // list ends at a whole row, and `1 below` counts the rest. It keeps its place,
+                    // and neither it nor any control of it is a target, a hover or a Tab stop.
+                    let hidden = (overflow || behind) && !whole_row;
+                    if hidden {
                         ui.set_clip_rect(Rect::NOTHING);
                     }
                     let selected = self.selected == index || self.also.contains(&index);
@@ -1512,6 +1520,9 @@ impl Run {
                         name.push_str(&format!(", {badge}"));
                     }
                     let response = ui.push_id(&p.key, |ui| {
+                        if hidden {
+                            ui.set_invisible();
+                        }
                         if self.live_initiative == Some(index) {
                             let (rect, _) = ui.allocate_exact_size(
                                 vec2(ui.available_width(), layout.height(scale)),
@@ -1601,6 +1612,19 @@ impl Run {
                         response.on_hover_text(side)
                     };
                     ui.set_clip_rect(original_clip);
+                    // Every other control of a hidden row (initiative, conditions, effects, the
+                    // half-damage mark) is built in one part that is not shown, takes no press or
+                    // hover, and is no Tab stop: one decision for the whole row.
+                    let mut hidden_part = hidden.then(|| {
+                        let mut part = ui
+                            .new_child(egui::UiBuilder::new().max_rect(ui.max_rect()).invisible());
+                        part.set_clip_rect(Rect::NOTHING);
+                        part
+                    });
+                    let ui = match hidden_part.as_mut() {
+                        Some(part) => part,
+                        None => &mut *ui,
+                    };
                     spans.push((rect.top() - origin, rect.bottom() - origin, index));
                     if response.clicked() {
                         clicked = Some((index, ui.input(|i| i.modifiers.command)));
@@ -2938,6 +2962,10 @@ impl Run {
     /// The campaign's encounter groups. A group is dragged to the initiative list, or added
     /// with its button, by the rule the campaign chose for initiative.
     /// Whatever joins a fight after it starts: one creature, or a prepared group.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn groups_tab(&mut self, ui: &mut egui::Ui) {
         let mut add = None;
         // FB1: the newest arrival's result, and a tie's Move button, sit in a footer pinned

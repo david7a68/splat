@@ -2883,6 +2883,8 @@ impl<'a> Footer<'a> {
             remember(ui, pane.bottom(), pane.bottom());
             return pane.bottom();
         }
+        #[cfg(test)]
+        record_band(ui, pane, rect);
         // egui's `set_max_height` also moves the cursor back to the top of `ui`, so it goes
         // back to where the body starts.
         ui.set_max_height((limit - top).max(0.0));
@@ -2948,6 +2950,31 @@ impl FooterBody {
         })?;
         (end <= self.limit - S).then(|| (end - self.top).max(0.0))
     }
+}
+
+/// For checks: the band each message footer took from its pane in this pass, from `S` above the
+/// footer to the pane's bottom, across the whole pane. A pane's content ends at its top.
+#[cfg(test)]
+fn record_band(ui: &Ui, pane: Rect, footer: Rect) {
+    let pass = ui.ctx().cumulative_pass_nr();
+    let band = Rect::from_min_max(pos2(pane.left(), footer.top() - S), pane.right_bottom());
+    ui.ctx().data_mut(|data| {
+        let bands = data.get_temp_mut_or_default::<(u64, Vec<Rect>)>(Id::new("footer_bands"));
+        if bands.0 != pass {
+            *bands = (pass, Vec::new());
+        }
+        bands.1.push(band);
+    });
+}
+
+/// The bands that the message footers of the last finished pass took from their panes.
+#[cfg(test)]
+pub(crate) fn footer_bands(ctx: &egui::Context) -> Vec<Rect> {
+    let last = ctx.cumulative_pass_nr().saturating_sub(1);
+    ctx.data(|data| data.get_temp::<(u64, Vec<Rect>)>(Id::new("footer_bands")))
+        .filter(|(pass, _)| *pass == last)
+        .map(|(_, bands)| bands)
+        .unwrap_or_default()
 }
 
 /// The same safe-first choice for a draft whose file changed on disk.
@@ -4951,6 +4978,10 @@ mod tests {
     /// of every word. The last Undo, reached by keyboard and by pointer, ends its own result only:
     /// the other 19 stay, with their Undo.
     #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn iter26_a_the_footer_keeps_the_body_top_and_reaches_its_last_message() {
         use egui_kittest::kittest::{NodeT, Queryable};
         use std::{cell::RefCell, rc::Rc};
@@ -5231,6 +5262,10 @@ mod tests {
     /// adds them in: A then B, B then A; removing a middle result keeps the others' places; A,
     /// B, Undo A, then A again is newer than B. A redraw or changed words issue nothing. A reason
     /// stays after the results, and a result with no live Undo after the notices.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn iter27_a_footer_results_go_newest_first_by_their_action() {
         // The words, top down, of a footer that holds `results` (added in this order) with a
         // reason and a notice added first.
@@ -5346,6 +5381,10 @@ mod tests {
     /// its content grows; the pane's own press area, which lies under a following footer, never
     /// takes the footer's press; a click on an outside field moves focus there and typing goes
     /// there; Tab reaches the last Undo of an overflowing footer, in view.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn iter27_a_the_footer_follows_a_short_body() {
         use egui_kittest::kittest::{NodeT, Queryable};
         use std::{

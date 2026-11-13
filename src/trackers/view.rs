@@ -6,8 +6,8 @@ use super::{
     mark_of,
 };
 use crate::design::outcome::{
-    Banner, Fault, FaultMessage, MessageChoice, Outcome, PagePlaceholder, Pressed, Said, Sentence,
-    UndoStep, Verb,
+    Banner, Fault, FaultMessage, KeptOutcome, MessageChoice, Outcome, PagePlaceholder, Pressed,
+    Said, Sentence, UndoStep, Verb,
 };
 use crate::design::{self, Action, Density, Type, colors, icons};
 use eframe::egui;
@@ -922,30 +922,26 @@ fn footer(ui: &mut egui::Ui, trackers: &Trackers, act: &mut Option<Act>) -> f32 
             }
             _ => {}
         }
-        let order = trackers.result_order;
-        match (result, added, &added_not_saved) {
-            (Some(_), Some(_), Some(fault)) => {
-                footer.outcome(
-                    FaultMessage::new(fault).undo(order, UndoStep::verb(Verb::Add)),
-                    &mut result_pressed,
-                );
-            }
-            (Some(_), Some(_), None) => {
-                footer.outcome(
-                    Said::new(order, crate::sentence!("Added to the Timeline."))
-                        .undo(UndoStep::verb(Verb::Add)),
-                    &mut result_pressed,
-                );
-            }
-            (Some((_, (label, words))), None, _) => {
-                footer.outcome(
-                    Said::new(order, words.clone())
+        let shown = trackers
+            .played_owner()
+            .and_then(|owner| trackers.results.get(&owner));
+        if let (Some(shown), Some((_, (label, words)))) = (shown, result) {
+            footer.kept_outcome(
+                shown,
+                |_| match (added, &added_not_saved) {
+                    (Some(_), Some(fault)) => {
+                        KeptOutcome::Fault(FaultMessage::new(fault), UndoStep::verb(Verb::Add))
+                    }
+                    (Some(_), None) => Said::new(crate::sentence!("Added to the Timeline."))
+                        .undo(UndoStep::verb(Verb::Add))
+                        .into(),
+                    (None, _) => Said::new(words.clone())
                         .undo(UndoStep::act(label.as_str()))
-                        .choice(MessageChoice::Choice(ADD_TO_TIMELINE)),
-                    &mut result_pressed,
-                );
-            }
-            (None, ..) => {}
+                        .choice(MessageChoice::Choice(ADD_TO_TIMELINE))
+                        .into(),
+                },
+                &mut result_pressed,
+            );
         }
     }
     let bottom = footer.show(ui);

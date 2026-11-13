@@ -1491,6 +1491,10 @@ impl Run {
     }
     /// Keep one more Undo step: the state before it, its name, and whether a sheet made it.
     /// Every step enters here, so the stack never holds more than the limit: the oldest goes.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn keep_step(&mut self, before: State, (label, target): Named, from_sheet: bool) {
         let extra = (self.history.len() + 1).saturating_sub(undo::LIMIT);
         self.saved_steps = self.saved_steps.saturating_sub(extra);
@@ -4464,6 +4468,10 @@ impl Run {
         }
     }
     /// A saved run with its Undo steps, to go on with it.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     pub fn open(path: &Path, campaign: Uuid) -> Result<Self, String> {
         let (mut run, saved_undo) = Self::load(path, campaign)?;
         match saved_undo.map(|saved| undo::read(&saved, &run.state)) {
@@ -5208,6 +5216,43 @@ impl Run {
     }
     pub fn simulate_error(&mut self, message: &str) {
         self.error = (!message.is_empty()).then(|| message.to_owned());
+    }
+    /// Copies of the last participant, until the run has `count` rows.
+    #[cfg(test)]
+    pub fn simulate_rows(&mut self, count: usize) {
+        while self.state.participants.len() < count {
+            let at = self.state.participants.len();
+            let mut copy = self
+                .state
+                .participants
+                .last()
+                .expect("a participant")
+                .clone();
+            copy.key = format!("simulated-row-{at}");
+            copy.name = format!("Guard {at}");
+            self.state.participants.push(copy);
+            self.state.order.push(at);
+        }
+    }
+    /// Every participant has this condition, by its word.
+    #[cfg(test)]
+    pub fn simulate_condition(&mut self, word: &str) {
+        for p in &mut self.state.participants {
+            p.conditions = vec![Condition::Label(word.into())];
+        }
+    }
+    /// The named participant takes the turn and is selected, with no scroll to it.
+    #[cfg(test)]
+    pub fn simulate_current(&mut self, name: &str) {
+        let at = self
+            .state
+            .participants
+            .iter()
+            .position(|p| p.name == name)
+            .expect("participant in this run");
+        self.state.cursor = self.state.order.iter().position(|i| *i == at).unwrap();
+        self.selected = at;
+        self.scroll_to_selected = false;
     }
     /// Show one participant in a sync state test builds cannot reach by themselves.
     pub fn simulate_sync_state(&mut self, name: &str, state: crate::combat_sync::SyncState) {

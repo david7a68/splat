@@ -1086,7 +1086,20 @@ pub fn run(d: &mut Driver<'_>) {
         &[DISMISS, NEXT_TURN],
         "",
     );
-    d.state("undo-steps-unread-beside-lookup", Sizes::All);
+    // R3f X39: with the warning in the footer, the roster ends at a whole row; a row it would
+    // cut is out of view and counted below, never half a row of letters.
+    d.state_prepared("undo-steps-unread-beside-lookup", Sizes::All, |d| {
+        let rows = roster_places(d);
+        let area = rows
+            .iter()
+            .fold(egui::Rect::NOTHING, |area, (_, rect)| area.union(*rect));
+        let cut = d.cut_texts_in(area);
+        d.observe(
+            "r3f-X39-whole-rows",
+            !rows.is_empty() && cut.is_empty(),
+            format!("Roster texts cut by the list's edge: {cut:?}"),
+        );
+    });
     // iter-26-R FI2: the warning is in the message footer below the roster, so Dismiss moves
     // no row, at every captured size.
     let tops = |d: &mut Driver<'_>| {
@@ -1130,6 +1143,132 @@ pub fn run(d: &mut Driver<'_>) {
             undo_step(d)
         ),
     );
+
+    // R3f, review round 1 of pull request 289: twelve rows at 960x640, the last whole row is
+    // current, then a three-line warning comes. Every row keeps its place; a row the footer
+    // hides has no target, no hover and no Tab stop, so a click on its blank strip opens nothing.
+    d.act_at_size(SMALL, |d| {
+        d.app_mut()
+            .encounters
+            .run_mut()
+            .expect("an open run")
+            .simulate_rows(12);
+        // Review round 2: a condition on every row, so a hidden row has condition links too.
+        d.app_mut()
+            .encounters
+            .run_mut()
+            .expect("an open run")
+            .simulate_condition("Prone");
+        d.app_mut().encounters.simulate_run_error("");
+        d.settle();
+        let last = d
+            .nodes()
+            .into_iter()
+            .rfind(|n| n.name.contains(", HP ") && n.name.contains(", AC ") && n.fully_in_view())
+            .and_then(|n| n.name.split(", ").next().map(str::to_owned))
+            .expect("a whole roster row");
+        d.click_row(&last);
+        d.app_mut()
+            .encounters
+            .run_mut()
+            .expect("an open run")
+            .simulate_current(&last);
+        d.settle();
+        let before = roster_places(d);
+        d.app_mut().encounters.simulate_run_error(
+            "The saved run could not be written because its folder changed outside Splat. Your \
+             current fight is still open. Restore the folder and try again.",
+        );
+        d.settle();
+        let after = roster_places(d);
+        // Rows whose name the list does not paint: the footer hides them.
+        let nodes = d.nodes();
+        let hidden: Vec<_> = nodes
+            .iter()
+            .filter(|row| row.name.contains(", HP ") && row.name.contains(", AC "))
+            .filter(|row| {
+                let name = row.name.split(", ").next().unwrap_or_default();
+                row.rect.top() < d.window_size().1 && d.painted_rect_in(name, row.rect).is_none()
+            })
+            .collect();
+        let live: Vec<_> = hidden
+            .iter()
+            .filter(|row| !row.disabled)
+            .map(|row| row.name.clone())
+            .chain(nodes.iter().filter(|link| !link.disabled).filter_map(|link| {
+                let name = link
+                    .name
+                    .strip_prefix("Change initiative for ")
+                    .or_else(|| link.name.strip_prefix("No initiative for "))?;
+                hidden
+                    .iter()
+                    .any(|row| row.name.starts_with(&format!("{name},")))
+                    .then(|| link.name.clone())
+            }))
+            .collect();
+        d.observe(
+            "r3f-X39-hidden-row-no-target",
+            before == after && !hidden.is_empty() && live.is_empty(),
+            format!(
+                "Rows keep their places ({}); hidden rows {:?}; live targets of hidden rows {live:?}",
+                before == after,
+                hidden.iter().map(|row| (&row.name, row.rect)).collect::<Vec<_>>()
+            ),
+        );
+        // Review round 2: a hidden row's condition links follow the row. They take no target,
+        // no Tab stop, no hover and no click, also on the strip the list's edge leaves.
+        let rules: Vec<_> = nodes
+            .iter()
+            .filter(|link| link.name == "Rule: Prone")
+            .filter(|link| hidden.iter().any(|row| row.rect.contains(link.rect.center())))
+            .collect();
+        let live_rules: Vec<_> = rules.iter().filter(|link| !link.disabled).collect();
+        let ids: Vec<_> = rules.iter().map(|link| link.id).collect();
+        let strip = rules
+            .iter()
+            .map(|link| egui::pos2(link.rect.center().x, link.rect.top() + 2.0))
+            .next();
+        let tabbed = d.tab_reaches(&ids, 80);
+        let tip = strip.is_some_and(|at| d.hover_shows(at, "Read the rule for Prone"));
+        let lookup = strip.is_some_and(|at| {
+            d.click_rect(
+                egui::Rect::from_center_size(at, egui::vec2(2.0, 2.0)),
+                "the strip of a hidden row's condition",
+            );
+            d.has(SEARCH_LOOKUP)
+        });
+        if lookup {
+            d.press_ctrl(Key::K);
+        }
+        d.observe(
+            "r3f-X39-hidden-condition-no-target",
+            !rules.is_empty() && live_rules.is_empty() && tabbed.is_empty() && !tip && !lookup,
+            format!(
+                "Hidden-row condition links {}: live {:?}; reached by Tab {tabbed:?}; tip on \
+                 hover {tip}; a click opens Lookup {lookup}",
+                rules.len(),
+                live_rules.iter().map(|link| link.rect).collect::<Vec<_>>()
+            ),
+        );
+        // A click where a hidden row's initiative number would be.
+        if let Some(row) = hidden.first() {
+            let name = row.name.split(", ").next().unwrap_or_default().to_owned();
+            let place = egui::Rect::from_center_size(
+                egui::pos2(row.rect.left() + 24.0, row.rect.center().y),
+                egui::vec2(8.0, 8.0),
+            );
+            d.click_rect(place, "the blank strip of a hidden row");
+            let field = format!("Initiative for {name}");
+            d.observe(
+                "r3f-X39-blank-click-no-editor",
+                !d.has(&field),
+                format!("A click on the hidden row of {name} opens {field}: {}", d.has(&field)),
+            );
+            d.press(Key::Escape);
+        }
+        d.app_mut().encounters.simulate_run_error("");
+        d.settle();
+    });
 
     // That fight was played after the vault's. History offers no Continue fight for the
     // vault and says why, where the control was.

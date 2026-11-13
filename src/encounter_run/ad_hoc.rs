@@ -292,10 +292,6 @@ impl Run {
 
     /// FJ5 (iter-27-R), for Lookup's `Add to fight`: why `stat_block` cannot join this fight now,
     /// or None. The same reasons as Arrivals' Add, for a creature that has no typed values.
-    #[allow(
-        dead_code,
-        reason = "package D of iter-27 draws Add to fight in Lookup with it"
-    )]
     pub(crate) fn add_to_fight_reason(&self, stat_block: &Entry) -> Option<String> {
         if !self.takes_arrivals() {
             return Some("This encounter has ended. Undo the ending to continue.".to_owned());
@@ -321,10 +317,6 @@ impl Run {
     /// stat block, as World's form adds it (`Command::AddGroup`). Each is one step, and the
     /// header's Undo (`Undo: add Guard`) takes it away. The run's page is not opened. Returns why
     /// it did not join (`add_to_fight_reason`, or the step's refusal).
-    #[allow(
-        dead_code,
-        reason = "package D of iter-27 draws Add to fight in Lookup with it"
-    )]
     pub(crate) fn add_entry_to_fight(
         &mut self,
         stat_block: Arc<Entry>,
