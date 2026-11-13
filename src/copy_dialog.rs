@@ -218,9 +218,11 @@ impl CopyDialog {
             {
                 crate::library::folder_field(ui, "Folder", &mut self.folder, &destination.3, None);
                 if !destination.0 && campaigns.active_campaign().is_some() {
-                    crate::library::use_checkbox(ui, &mut self.not_used, |_| {
-                        "Adds the copy to this campaign’s package choices."
-                    });
+                    crate::library::use_checkbox(
+                        ui,
+                        &mut self.not_used,
+                        |_| "Adds the copy to this campaign’s package choices.",
+                    );
                 }
             }
             let folder_changed = self.folder != old_folder;

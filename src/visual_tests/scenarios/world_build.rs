@@ -8994,7 +8994,10 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     // empty; Add folder's accessible description and hover keep `This folder is a copy.`
     let copy_reason_once = |d: &mut Driver<'_>, id: &str| {
         let line_empty = !d.visible_text("This folder is a copy.");
-        let described = d.descriptions().iter().any(|words| words == "This folder is a copy.");
+        let described = d
+            .descriptions()
+            .iter()
+            .any(|words| words == "This folder is a copy.");
         let hover = d.tooltip_contains("Add folder", "This folder is a copy.");
         d.observe(
             id,
@@ -9056,7 +9059,9 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     d.observe(
         "iter-27-L-FD2-still",
         empty.iter().all(Option::is_some) && empty == named,
-        format!("Register and Cancel keep their place when the name is typed: {empty:?} → {named:?}"),
+        format!(
+            "Register and Cancel keep their place when the name is typed: {empty:?} → {named:?}"
+        ),
     );
     d.expect("REGISTER A COPY");
     d.expect("This campaign keeps the original. The copy is registered but not chosen.");

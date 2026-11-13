@@ -6266,9 +6266,11 @@ impl Library {
                 if matches!(places[place], Owner::Package(_))
                     && campaigns.active_campaign().is_some()
                 {
-                    use_checkbox(ui, &mut self.new_not_used, |_| {
-                        "Adds this entry to the campaign’s package choices."
-                    });
+                    use_checkbox(
+                        ui,
+                        &mut self.new_not_used,
+                        |_| "Adds this entry to the campaign’s package choices.",
+                    );
                 }
                 let blocked = if dirty {
                     Some("Save or discard this entry first.")

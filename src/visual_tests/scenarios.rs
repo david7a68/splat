@@ -20966,12 +20966,18 @@ pub mod package_to_table {
         d.expect("Choose for this campaign");
         for size in [SMALL, DEFAULT, LARGE] {
             let gap = d.at_size(size, |d| {
-                help_to_label_gap(d, "Adds this entry to the campaign’s package choices.", "Folder")
+                help_to_label_gap(
+                    d,
+                    "Adds this entry to the campaign’s package choices.",
+                    "Folder",
+                )
             });
             d.observe(
                 "iter-27-L-FD8",
                 gap.is_some_and(|gap| (gap - crate::design::L).abs() <= 1.0),
-                format!("At {size:?}, the new entry's use help has L before the Folder label: {gap:?}"),
+                format!(
+                    "At {size:?}, the new entry's use help has L before the Folder label: {gap:?}"
+                ),
             );
         }
         d.state("new-entry-used-by-default", Sizes::All);
@@ -21163,7 +21169,9 @@ pub mod share_to_package {
             let field = d
                 .nodes()
                 .into_iter()
-                .find(|node| node.name == "Folder" && node.role == egui::accesskit::Role::TextInput)?
+                .find(|node| {
+                    node.name == "Folder" && node.role == egui::accesskit::Role::TextInput
+                })?
                 .rect;
             let painted = d.painted_rect_in(words, field.expand(1.0))?;
             Some(painted.top() - field.top())
