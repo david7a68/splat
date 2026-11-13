@@ -174,6 +174,10 @@ fn file_level(code: &str) -> FileLevel {
 /// The file of the module that holds the module in `path` (`src/a/b.rs` → `src/a.rs` or
 /// `src/a/mod.rs`; `src/a.rs` → `src/lib.rs` or `src/main.rs`).
 fn parents(path: &str) -> Vec<String> {
+    // A crate root has no parent module.
+    if path.ends_with("src/lib.rs") || path.ends_with("src/main.rs") {
+        return Vec::new();
+    }
     let dir = match path.strip_suffix("/mod.rs") {
         Some(module) => module.rsplit_once('/').map_or("", |(dir, _)| dir),
         None => path.rsplit_once('/').map_or("", |(dir, _)| dir),
@@ -198,6 +202,9 @@ fn inherits_allow(path: &str, levels: &BTreeMap<String, FileLevel>) -> bool {
         else {
             return false;
         };
+        if parent == at {
+            return false;
+        }
         if level.allows_children {
             return true;
         }
@@ -327,7 +334,7 @@ fn message_rules(path: &str, code: &str) -> Vec<&'static str> {
                 .lines()
                 .flat_map(string_literals)
                 .filter(|words| !words.is_empty())
-                .last();
+                .next_back();
             if last.is_some_and(|words| {
                 !words
                     .trim_end_matches(['”', '’', ')'])
