@@ -83,40 +83,78 @@ struct Lines {
 }
 
 fn panel_columns(d: &Driver<'_>) -> Lines {
+    let found = line_places(d);
+    lines_of(found.into_iter().map(Option::unwrap_or_default))
+}
+
+/// Each pinned line's name, value and first action, where it is painted now.
+fn line_places(d: &Driver<'_>) -> Vec<Option<(f32, Option<f32>, f32)>> {
+    let panel = d
+        .place_of(SEARCH_LOOKUP)
+        .map_or(f32::MAX, |field| field.left() - 1.0);
+    LINES
+        .iter()
+        .map(|(name, first)| {
+            let mut named = None;
+            d.each_painted_text(|text, _| {
+                let bounds = text.visual_bounding_rect();
+                if text.galley.job.text == *name && bounds.left() >= panel {
+                    named = Some(bounds);
+                }
+            });
+            let (named, action) = (named?, d.place_of(first)?);
+            let mut value: Option<egui::Rect> = None;
+            d.each_painted_text(|text, _| {
+                let bounds = text.visual_bounding_rect();
+                if (named.top()..named.bottom()).contains(&bounds.center().y)
+                    && bounds.left() > named.right()
+                    && value.is_none_or(|v| bounds.left() < v.left())
+                {
+                    value = Some(bounds);
+                }
+            });
+            Some((named.left(), value.map(|v| v.right()), action.left()))
+        })
+        .collect()
+}
+
+/// The lines found, in `LINES` order; a line not found is left out, so the check fails.
+fn lines_of(found: impl Iterator<Item = (f32, Option<f32>, f32)>) -> Lines {
     let mut lines = Lines {
         names: Vec::new(),
         values: Vec::new(),
         actions: Vec::new(),
     };
-    let panel = d
-        .place_of(SEARCH_LOOKUP)
-        .map_or(f32::MAX, |field| field.left() - 1.0);
-    for (name, first) in LINES {
-        let mut named = None;
-        d.each_painted_text(|text, _| {
-            let bounds = text.visual_bounding_rect();
-            if text.galley.job.text == name && bounds.left() >= panel {
-                named = Some(bounds);
-            }
-        });
-        let (Some(named), Some(action)) = (named, d.place_of(first)) else {
-            continue;
-        };
-        let mut value: Option<egui::Rect> = None;
-        d.each_painted_text(|text, _| {
-            let bounds = text.visual_bounding_rect();
-            if (named.top()..named.bottom()).contains(&bounds.center().y)
-                && bounds.left() > named.right()
-                && value.is_none_or(|v| bounds.left() < v.left())
-            {
-                value = Some(bounds);
-            }
-        });
-        lines.names.push(named.left());
-        lines.values.extend(value.map(|v| v.right()));
-        lines.actions.push(action.left());
+    for (name, value, action) in found.filter(|(_, _, action)| *action != 0.0) {
+        lines.names.push(name);
+        lines.values.extend(value);
+        lines.actions.push(action);
     }
     lines
+}
+
+/// `panel_columns` for a panel whose last lines are below its fold: the lines in view, then the
+/// view scrolled to the others, and back to its top. Only what the panel paints is measured;
+/// a column edge is the same at any scroll.
+fn panel_columns_scrolled(d: &mut Driver<'_>) -> Lines {
+    let mut found = line_places(d);
+    let wheel = d
+        .place_of(SEARCH_LOOKUP)
+        .map_or(egui::pos2(780.0, 300.0), |field| {
+            egui::pos2(field.center().x, field.bottom() + 200.0)
+        });
+    let mut scrolled = 0.0;
+    while found.iter().any(Option::is_none) && scrolled < 1200.0 {
+        d.scroll_points_at(wheel, 40.0);
+        scrolled += 40.0;
+        for (at, place) in line_places(d).into_iter().enumerate() {
+            found[at] = found[at].or(place);
+        }
+    }
+    if scrolled > 0.0 {
+        d.scroll_points_at(wheel, -scrolled);
+    }
+    lines_of(found.into_iter().map(Option::unwrap_or_default))
 }
 
 /// One edge for every pinned line with an action. A right-aligned number's text snaps to a
@@ -518,7 +556,9 @@ pub fn run(d: &mut Driver<'_>) {
     // value ends at one edge. Where every first action fits after the values (1200x800 and
     // 1920x1080) each first action starts at one edge after them; at 960x640 beside Lookup
     // `Enter room` does not, and every line's actions start under its name.
-    let small = panel_columns(d);
+    // At 960x640 the last lines are below the panel's fold: the view scrolls to them, and back.
+    // A proof step that comes back to the top: not part of the DM's task.
+    let small = d.aside(panel_columns_scrolled);
     let wide = d.at_size(DEFAULT, panel_columns);
     let big = d.at_size(LARGE, panel_columns);
     d.observe(
