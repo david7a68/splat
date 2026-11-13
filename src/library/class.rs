@@ -1,4 +1,5 @@
 //! Class reading layout. Keep source wording and raw definitions available.
+#![warn(deprecated)] // Its parent allows old message functions; this file does not.
 use super::{presentation, view::Links};
 use crate::design::{self, Type, colors, reader as style};
 use eframe::egui;

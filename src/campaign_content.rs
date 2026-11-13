@@ -1,5 +1,6 @@
 //! What a campaign uses: package selections, and the repair of invalid notes. This is
 //! a rare setup task, so it stays calm, with one scrolling list at 2,000+ rows.
+#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use crate::{
     campaigns::Campaigns,
     content_workspace::{

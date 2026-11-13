@@ -1,3 +1,4 @@
+#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use crate::{auth::Session, campaigns::Campaigns};
 use eframe::egui;
 use reqwest::{blocking::Client, redirect::Policy};

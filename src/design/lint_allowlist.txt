@@ -2,3 +2,46 @@
 # File content: the initiative rule note's YAML and the NPC generator's note text.
 src/encounter_settings.rs straight-apostrophe 1
 src/npc_generator.rs straight-apostrophe 3
+# Messages (round 28, package M). Each file that still calls an old message function holds one
+# `#![allow(deprecated)]`; a child module of such a file writes its own `#![warn(deprecated)]`, so
+# the compiler finds every call, import and alias. Wave 2 moves each file to `design::outcome` and
+# deletes its line. When none is left, the old functions become private. A count raised together
+# with its allowance passes this test: a reviewer reads every raised line.
+src/campaign_content.rs allow-deprecated 1
+src/campaigns.rs allow-deprecated 1
+src/combat_sync.rs allow-deprecated 1
+src/copy_dialog.rs allow-deprecated 1
+src/dndbeyond.rs allow-deprecated 1
+src/encounter_run/notice.rs allow-deprecated 1
+src/encounter_run/view.rs allow-deprecated 1
+src/encounters.rs allow-deprecated 1
+src/encounters/disk.rs allow-deprecated 1
+src/encounters/groups.rs allow-deprecated 1
+src/lib.rs allow-deprecated 1
+src/library.rs allow-deprecated 1
+src/library/view.rs allow-deprecated 1
+src/lookup.rs allow-deprecated 1
+src/loot_editor.rs allow-deprecated 1
+src/party.rs allow-deprecated 1
+src/processing/settings.rs allow-deprecated 1
+src/roll_table.rs allow-deprecated 1
+src/sessions/carry.rs allow-deprecated 1
+src/sessions/page.rs allow-deprecated 1
+src/sessions/plan.rs allow-deprecated 1
+src/sessions/slash.rs allow-deprecated 1
+src/settings.rs allow-deprecated 1
+src/timeline/checks.rs allow-deprecated 1
+src/timeline/page.rs allow-deprecated 1
+src/world.rs allow-deprecated 1
+src/world/edit.rs allow-deprecated 1
+src/world/page.rs allow-deprecated 1
+src/world/repair.rs allow-deprecated 1
+# Phrases outside their owner: the stat block's printed XP (core) is the creature's, not an
+# encounter's; the others move to their owner in Wave 2.
+crates/core/src/content/stat_blocks.rs phrase-owner 2
+src/campaign_content.rs phrase-owner 1
+src/encounter_run.rs phrase-owner 2
+src/encounter_run/loot.rs phrase-owner 2
+src/encounters.rs phrase-owner 1
+src/library.rs phrase-owner 1
+src/sessions/plan.rs phrase-owner 1

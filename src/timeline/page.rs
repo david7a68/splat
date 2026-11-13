@@ -1,4 +1,5 @@
 //! The Timeline page: the whole campaign in story order, apart from any one session.
+#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use super::{Book, Event, Kind, checks, clock, clock_now, clock_words, day_numbers, reference};
 use crate::design::{self, Action, Density, Status, Tone, Type, colors, icons};
 use eframe::egui;

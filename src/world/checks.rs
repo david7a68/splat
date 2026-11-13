@@ -1,5 +1,6 @@
 //! What the world's notes still need: the questions the DM left open, and the places where a
 //! fact has no home or has two. Every check only reads. See `docs/design/world-data.md`.
+#![warn(deprecated)] // Its parent allows old message functions; this file does not.
 use crate::lookup::{ContentIndex, Item};
 use std::collections::{BTreeMap, BTreeSet};
 

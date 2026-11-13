@@ -1,4 +1,6 @@
 //! Every token and component, in each state, for the `gallery` visual scenario.
+// It shows the old message functions until Wave 3 makes them private.
+#![allow(deprecated)]
 use super::{reader as style, *};
 use eframe::egui::{self, Color32};
 

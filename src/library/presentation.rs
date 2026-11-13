@@ -1,4 +1,5 @@
 //! Library navigation and reading order, independent of note storage.
+#![warn(deprecated)] // Its parent allows old message functions; this file does not.
 use crate::design;
 use pulldown_cmark::{Event, HeadingLevel, Parser, Tag};
 use splat::content::Entry;

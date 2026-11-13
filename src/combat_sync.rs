@@ -1,5 +1,6 @@
 //! Conflict-aware combat sheet synchronization with D&D Beyond.
 //! Writes use source identities and absolute values, followed by a raw read-back.
+#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use crate::auth::Session;
 use eframe::egui;
 use reqwest::{Method, blocking::Client, redirect::Policy};

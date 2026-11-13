@@ -6,10 +6,12 @@
 //! it raised, as Undo does, and it has one Undo, as the Timeline's removal has. The rows and the
 //! problems are worked out when the ledger or the definitions change; a folded section does no
 //! work, and an open one draws only the rows in view.
+use super::TrackerFault;
 use super::{
     NoticeRef, Rules, State, Today, Trackers, Unrecorded, label, ledger, place_name, replay,
     result_words, with_dependents,
 };
+use crate::design::outcome::PagePlaceholder;
 use crate::design::{self, Action, Density, Tone, Type, colors};
 use crate::world::{FooterAct, FooterKind, FooterLine, FooterRank};
 use eframe::egui;
@@ -77,7 +79,7 @@ pub fn rows(rules: &Rules, ledger: &Ledger, state: &State) -> HashMap<String, Ve
         PREPARED.with(|n| n.set(n.get() + 1));
         let one = std::slice::from_ref(entry);
         let words = if entry.notice.is_some() {
-            result_words(rules, ledger, state, one)
+            result_words(rules, ledger, state, one).to_string()
         } else {
             let place = entry
                 .instance
@@ -151,11 +153,13 @@ pub fn problems(rules: &Rules, state: &State) -> Vec<(Option<Uuid>, String)> {
         };
         out.push((
             None,
-            format!(
-                "{} in {} {names} {key}, which no house rule note in play has. {are} not counted.",
+            crate::sentence!(
+                "{} in {} {names} {key}, which no house rule note in play has.",
                 design::count(*count, "entry", "entries"),
                 ledger::FILE
-            ),
+            )
+            .then(crate::sentence!("{} not counted.", are))
+            .to_string(),
         ));
     }
     for tracker in &rules.trackers {
@@ -166,10 +170,11 @@ pub fn problems(rules: &Rules, state: &State) -> Vec<(Option<Uuid>, String)> {
             if value < min {
                 out.push((
                     Some(tracker.note),
-                    format!(
+                    crate::sentence!(
                         "{} is {value}, below its min of {min}.",
                         place_name(rules, &tracker.key, instance)
-                    ),
+                    )
+                    .to_string(),
                 ));
             }
         }
@@ -257,11 +262,11 @@ fn removal(
             names.push(name);
         }
     }
-    let mut words = format!("Removed {}.", names[0]);
+    let mut words = crate::sentence!("Removed {}.", names[0]);
     if names.len() > 1 {
-        words.push_str(&format!(" With it: {}.", names[1..].join("; ")));
+        words = words.then(crate::sentence!("With it: {}.", names[1..].join("; ")));
     }
-    Ok((placed, words))
+    Ok((placed, words.to_string()))
 }
 
 impl Trackers {
@@ -342,7 +347,7 @@ pub(crate) fn footer_lines(trackers: &Trackers, note: Uuid) -> Vec<FooterLine> {
     {
         let (tone, words) = match reason {
             Unrecorded::Refused(why) => (Tone::Warning, why.clone()),
-            Unrecorded::NotSaved(error) => (Tone::Error, super::view::not_saved(error)),
+            Unrecorded::NotSaved(error) => (Tone::Error, super::view::not_saved(error).to_string()),
         };
         lines.push(FooterLine::new(
             FooterRank::Reason,
@@ -370,6 +375,10 @@ pub(crate) fn footer_lines(trackers: &Trackers, note: Uuid) -> Vec<FooterLine> {
 
 /// The problems list and each member's folded history, in the reader of a house rule note in
 /// play. A file that cannot be read shows its name and no history or value.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "the history cannot show: a page placeholder; a member’s problem: a row fault"
+)]
 pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, note: &splat::content::Entry) {
     if !super::is_house_rule_note(note) || !trackers.in_play() {
         return;
@@ -377,11 +386,7 @@ pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, note: &splat::content::E
     let id = note.id;
     if let Some(error) = &trackers.rules.unreadable {
         ui.add_space(design::L);
-        design::message(
-            ui,
-            Tone::Error,
-            &format!("{error} Splat shows no tracker history until it can be read."),
-        );
+        let _ = PagePlaceholder::new(&TrackerFault::NotesUnreadable(error.clone())).show(ui);
         return;
     }
     if !in_play(&trackers.rules, id) {
@@ -389,14 +394,7 @@ pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, note: &splat::content::E
     }
     ui.add_space(design::L);
     if let Some(error) = &trackers.unreadable {
-        design::message(
-            ui,
-            Tone::Error,
-            &format!(
-                "{} cannot be read: {error} The history in the file is safe.",
-                ledger::FILE
-            ),
-        );
+        let _ = PagePlaceholder::new(&TrackerFault::LedgerUnreadable(error.clone())).show(ui);
         return;
     }
     for (_, problem) in trackers
@@ -404,7 +402,7 @@ pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, note: &splat::content::E
         .iter()
         .filter(|(owner, _)| *owner == Some(id))
     {
-        design::small_message(ui, Tone::Error, problem);
+        design::outcome::row_fault(ui, &TrackerFault::Problem(problem.clone()));
     }
     let mut pressed = None;
     let played = trackers.played;

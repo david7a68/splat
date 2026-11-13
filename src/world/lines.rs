@@ -1,6 +1,7 @@
 //! A note as lines: one list item, one paragraph or one table row each. A line that links to
 //! another page, or names it, is a fact about that page, and Splat shows it there. So a fact
 //! needs one home only. See `docs/design/world-data.md`.
+#![warn(deprecated)] // Its parent allows old message functions; this file does not.
 use super::each_link;
 
 /// The heading that holds an entry's history from play.

@@ -13,10 +13,35 @@
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Ban {
     Results,
+    /// Package M: `Sentence::outside`, the named escape for words from outside the app. Its rows
+    /// need not reach 0, but a new one is a visible change of this table.
+    Words,
+    /// Package M: the helpers of `sentence!` (only the macro and `outcome.rs` use them).
+    Sentence,
+    /// Package M: `Footer::outcome_at`, a result with a hand-issued order (staged).
+    Order,
+    /// Package M: the body places `banner`, `row_fault` and `PagePlaceholder::show`. A named
+    /// escape: a body message is a review decision.
+    Body,
 }
 
-/// Text that one of `Ban::Results`'s calls leaves in a function that still needs its allow.
-const RESULTS_CALLS: [&str; 3] = ["::issue", "save_row_state", ".result("];
+impl Ban {
+    /// Text that one of this ban's calls leaves in a function that still needs its allow.
+    fn calls(self) -> &'static [&'static str] {
+        match self {
+            Self::Results => &["::issue", "save_row_state", ".result("],
+            Self::Words => &["outside"],
+            Self::Sentence => &[
+                "__formatted",
+                "__literal",
+                "check_template",
+                "check_literal",
+            ],
+            Self::Order => &["outcome_at"],
+            Self::Body => &["banner", "row_fault", ".show("],
+        }
+    }
+}
 
 /// Lint names whose suppression also suppresses `clippy::disallowed_methods`.
 const COVERS: [&str; 4] = [
@@ -142,138 +167,55 @@ pub(crate) fn code_only(text: &str) -> String {
     out
 }
 
-/// The name of the function a line starts, if it starts one.
-fn fn_name(line: &str) -> Option<&str> {
-    let at = line.find("fn ")?;
-    let before = &line[..at];
-    let allowed = |word: &str| {
-        word.starts_with("pub")
-            || word.ends_with(')')
-            || ["const", "async", "unsafe", "extern", "\"C\"", "default"].contains(&word)
-    };
-    if !before.split_whitespace().all(allowed) {
-        return None;
-    }
-    let rest = &line[at + 3..];
-    let end = rest
-        .find(|c: char| !(c.is_alphanumeric() || c == '_'))
-        .unwrap_or(rest.len());
-    (end > 0).then(|| &rest[..end])
-}
-
-/// The line where the bracket opened on `from` (or after it) closes.
-fn close_of(code: &[&str], from: usize, open: char, close: char) -> usize {
-    let mut depth = 0i32;
-    let mut seen = false;
-    for (at, line) in code.iter().enumerate().skip(from) {
-        for c in line.chars() {
-            if c == open {
-                depth += 1;
-                seen = true;
-            } else if c == close {
-                depth -= 1;
-            }
-        }
-        if seen && depth <= 0 {
-            return at;
-        }
-    }
-    code.len().saturating_sub(1)
-}
-
 /// Every suppression of `clippy::disallowed_methods` in one file, and the faults of the ones on
-/// a place they may not be.
+/// a place they may not be. The attributes come from the shared `syn` reader
+/// (`design::attributes`), so a list across lines, `cfg_attr` and an attribute inside a macro's
+/// tokens all count.
 pub(crate) fn find(path: &str, text: &str) -> (Vec<Suppression>, Vec<String>) {
-    let code = code_only(text);
-    let code: Vec<&str> = code.lines().collect();
+    use crate::design::attributes::{Kind, read};
     let raw: Vec<&str> = text.lines().collect();
-    let (mut found, mut faults) = (Vec::new(), Vec::new());
-    for at in 0..code.len() {
-        let line = code[at].trim_start();
-        if !(line.starts_with("#[") || line.starts_with("#![")) {
-            continue;
-        }
-        let end = close_of(&code, at, '[', ']');
-        let attribute = code[at..=end].join(" ");
-        let words: Vec<&str> = attribute
-            .split(|c: char| !(c.is_alphanumeric() || c == '_' || c == ':'))
-            .filter(|word| !word.is_empty())
-            .map(|word| word.trim_matches(':'))
-            .collect();
-        let suppresses = words.iter().any(|w| *w == "allow" || *w == "expect");
-        if !(suppresses && words.iter().any(|w| COVERS.contains(w))) {
-            continue;
-        }
-        let place = format!("{path}:{}", at + 1);
-        if line.starts_with("#![") {
+    let found = match read(text) {
+        Ok(found) => found,
+        Err(error) => return (Vec::new(), vec![format!("{path}: does not parse: {error}")]),
+    };
+    let (mut kept, mut faults) = (Vec::new(), Vec::new());
+    for attribute in found.iter().filter(|found| found.lets_pass(&COVERS)) {
+        let place = format!("{path}:{}", attribute.line);
+        if attribute.inner {
             faults.push(format!(
                 "{place}: a suppression of `clippy::disallowed_methods` for a whole file or module. Put it on the one function that calls."
             ));
             continue;
         }
-        // The item: the first line after other attributes, blank lines and comments.
-        let mut target = end + 1;
-        while target < code.len() {
-            let next = code[target].trim();
-            if next.is_empty() {
-                target += 1;
-            } else if next.starts_with("#[") {
-                target = close_of(&code, target, '[', ']') + 1;
-            } else {
-                break;
+        let (first, last) = attribute.lines;
+        let body = raw[first.saturating_sub(1)..last.min(raw.len())].join("\n");
+        let item = match &attribute.kind {
+            Kind::Fn { nested } => {
+                if let Some(nested) = nested {
+                    faults.push(format!(
+                        "{place}: a suppression on `fn {}`, which holds `fn {nested}`: it frees the nested function too. Put it on the innermost function that calls.",
+                        attribute.item
+                    ));
+                }
+                attribute.item.clone()
             }
-        }
-        let Some(item_line) = code.get(target).map(|l| l.trim()) else {
-            continue;
-        };
-        let first = item_line
-            .split(|c: char| c.is_whitespace() || c == '<' || c == '!')
-            .find(|w| !(w.starts_with("pub") || *w == "unsafe"))
-            .unwrap_or_default();
-        if let Some(name) = fn_name(item_line) {
-            let close = close_of(&code, target, '{', '}');
-            if let Some(nested) = code[target + 1..close]
-                .iter()
-                .find_map(|l| fn_name(l.trim()))
-            {
+            Kind::Mod { .. } | Kind::Impl | Kind::Trait | Kind::MacroRules => {
                 faults.push(format!(
-                    "{place}: a suppression on `fn {name}`, which holds `fn {nested}`: it frees the nested function too. Put it on the innermost function that calls."
+                    "{place}: a suppression on `{}`. Put it on the one function that calls.",
+                    attribute.item
                 ));
+                continue;
             }
-            found.push(Suppression {
-                line: at + 1,
-                item: name.to_owned(),
-                body: raw[target..=close.min(raw.len() - 1)].join("\n"),
-            });
-        } else if ["mod", "impl", "trait", "macro_rules"].contains(&first) {
-            faults.push(format!(
-                "{place}: a suppression on `{item_line}`. Put it on the one function that calls."
-            ));
-        } else {
-            // A statement: named by the function or macro around it.
-            let indent = code[target].len() - code[target].trim_start().len();
-            let enclosing = (0..target)
-                .rev()
-                .filter(|&i| code[i].len() - code[i].trim_start().len() < indent)
-                .find_map(|i| {
-                    let l = code[i].trim();
-                    fn_name(l).map(str::to_owned).or_else(|| {
-                        l.strip_prefix("macro_rules!")
-                            .map(|m| format!("{}!", m.trim().trim_end_matches('{').trim()))
-                    })
-                })
-                .unwrap_or_else(|| "file".to_owned());
-            let close = (target..code.len())
-                .find(|&i| code[i].trim_end().ends_with(';'))
-                .unwrap_or(target);
-            found.push(Suppression {
-                line: at + 1,
-                item: format!("{enclosing} statement"),
-                body: raw[target..=close].join("\n"),
-            });
-        }
+            Kind::Statement => attribute.item.clone(),
+            Kind::File | Kind::Other => "file statement".to_owned(),
+        };
+        kept.push(Suppression {
+            line: attribute.line,
+            item,
+            body,
+        });
     }
-    (found, faults)
+    (kept, faults)
 }
 
 /// Every suppression in `files` against `table`: one row per suppression (file, item, bans).
@@ -290,8 +232,9 @@ pub(crate) fn check(files: &[(String, String)], table: &[(&str, &str, &[Ban])]) 
             match row {
                 Some(row) => {
                     let (_, _, bans) = rows.remove(row);
-                    if bans.contains(&Ban::Results)
-                        && !RESULTS_CALLS.iter().any(|call| suppression.body.contains(call))
+                    if !bans
+                        .iter()
+                        .any(|ban| ban.calls().iter().any(|call| suppression.body.contains(call)))
                     {
                         faults.push(format!(
                             "{path}:{}: the suppression on `{}` has no staged call left. Remove it and its row in `design::results::STAGED_ALLOWS`.",
@@ -395,5 +338,12 @@ mod tests {
             "#[allow(clippy::disallowed_methods, reason = \"staged: ]\")]\nfn order() {{\n    let _ = \"}}\"; // }}\n{call}}}\nfn other() {{}}\n"
         );
         assert!(check(&file(&quoted), &[("src/new.rs", "order", STAGED)]).is_empty());
+        // Package M's bans: a listed suppression whose function still calls its escape passes;
+        // a list across lines is read whole.
+        let order = "#[allow(\n    clippy::disallowed_methods,\n    reason = \"staged\"\n)]\nfn draw() {\n    footer.outcome_at(order, done, &mut pressed);\n}\n";
+        assert_eq!(check(&file(order), &[]).len(), 1, "{order}");
+        assert!(check(&file(order), &[("src/new.rs", "draw", &[Ban::Order])]).is_empty());
+        let words = "#[allow(clippy::disallowed_methods)]\nfn cause() {\n    let f = Sentence::outside;\n}\n";
+        assert!(check(&file(words), &[("src/new.rs", "cause", &[Ban::Words])]).is_empty());
     }
 }
