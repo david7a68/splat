@@ -12752,6 +12752,19 @@ pub mod session_notes {
                 }),
             format!("Create on the field's line, Cancel below at its start, same empty and filled: {filled:?}"),
         );
+        // The shared heading rule: the heading owns the `XS` below it, so the field's label
+        // starts `XS` under the heading, and the form adds no space of its own there.
+        let below_heading = d
+            .place_of("NEW TEMPLATE")
+            .zip(d.nodes().into_iter().find(|node| {
+                node.name == "Template name" && node.role == egui::accesskit::Role::Label
+            }))
+            .map(|(heading, label)| label.rect.top() - heading.bottom());
+        d.observe(
+            "round-28-S-template-heading-gap",
+            below_heading.is_some_and(|gap| (gap - crate::design::XS).abs() < 1.0),
+            format!("The field label starts XS under the New template heading: {below_heading:?}"),
+        );
         d.observe(
             "iter-13-S1",
             !d.has("New template") && d.has("Cancel"),
@@ -12997,6 +13010,23 @@ pub mod session_notes {
                 .is_some_and(|text| text.contains("Edited in the template.")),
             "A template edited a moment ago is what a new session starts from",
         );
+        // A form field's cursor and Undo belong to its session (the field's key is the session's
+        // id): edit Session 2's title, switch to Session 1, focus its title and undo. Session 1
+        // takes none of Session 2's words (its own history may still undo its own edits).
+        d.click("Edit session details");
+        d.type_into("Session title", " (draft)");
+        d.click_starting(&format!("Session 1: {TITLE} ·"));
+        d.click("Edit session details");
+        d.type_into("Session title", "");
+        d.press_ctrl(Key::Z);
+        let own = d.field_text("Session title");
+        d.observe(
+            "round-28-S-form-undo-per-session",
+            own.as_deref()
+                .is_some_and(|words| !words.contains("Tonight") && !words.contains("(draft)")),
+            format!("Undo in Session 1's title brings none of Session 2's words: {own:?}"),
+        );
+        d.click("Cancel");
         d.click_starting(&format!("Session 1: {TITLE} ·"));
         show_plan(d);
         d.observe(

@@ -560,6 +560,7 @@ pub fn run(d: &mut Driver<'_>) {
             && journey(d, "Journey B").checks_table.as_deref() == Some("road"),
         "Timeline: Undo roll takes back only this journey's roll",
     );
+    field_history_belongs_to_its_event(d);
     // The same on the plan.
     d.click(NAV_SESSIONS);
     show_plan(d);
@@ -639,6 +640,57 @@ pub fn run(d: &mut Driver<'_>) {
         "The newer length is the one after a restart",
     );
     road_fight_keeps_its_day(d, &dir);
+}
+
+/// Review of PR 313: egui keeps a field's cursor and text Undo under its id, so each event's
+/// **How long** and **Notes** have an id of their own. Edit journey A, open journey B, focus its
+/// field, press Ctrl+Z: B never gets A's words, and A keeps what it had.
+fn field_history_belongs_to_its_event(d: &mut Driver<'_>) {
+    const A_LENGTH: &str = "5 days";
+    const A_NOTES: &str = "Wolves on the road.";
+    d.click_starting("Travel ·");
+    let first = journey(d, "Travel");
+    d.replace_text_in("How long", A_LENGTH);
+    // Moving to Notes ends the length's draft, so journey A holds it.
+    d.type_into("Notes on this event", A_NOTES);
+    d.click_starting("Journey B ·");
+    d.observe(
+        "pr-313-field-owner",
+        d.has("How long") && journey(d, "Journey B").duration.is_empty(),
+        "Journey B is open with no length of its own",
+    );
+    d.type_into("How long", "");
+    d.press_ctrl(Key::Z);
+    let length = d.field_text("How long");
+    d.observe(
+        "pr-313-field-owner",
+        length.as_deref() == Some(""),
+        format!("Ctrl+Z in journey B's length gives it no words of journey A's: {length:?}"),
+    );
+    d.type_into("Notes on this event", "");
+    d.press_ctrl(Key::Z);
+    let notes = d.editor_text();
+    d.observe(
+        "pr-313-field-owner",
+        notes.as_deref().unwrap_or_default().is_empty(),
+        format!("Ctrl+Z in journey B's notes gives it no words of journey A's: {notes:?}"),
+    );
+    // Leaving B ends any draft it holds: what each journey holds is now settled.
+    d.click_starting("Travel ·");
+    let (a, b) = (journey(d, "Travel"), journey(d, "Journey B"));
+    d.observe(
+        "pr-313-field-owner",
+        a.duration == A_LENGTH && a.notes == A_NOTES && b.duration.is_empty() && b.notes.is_empty(),
+        format!(
+            "A keeps {:?} and {:?}; B holds {:?} and {:?}",
+            a.duration, a.notes, b.duration, b.notes
+        ),
+    );
+    // Back to the journey's first state, for the steps after this one.
+    d.replace_text_in("How long", &first.duration);
+    d.replace_text_in("Notes on this event", &first.notes);
+    d.click_starting("Journey B ·");
+    d.click_starting("Travel ·");
 }
 
 /// W5-D1: a fight planned from the day-two check of a two-day journey is played on Day 2. A

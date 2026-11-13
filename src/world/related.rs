@@ -4,7 +4,7 @@
 #![warn(deprecated)] // Its parent allows old message functions; this file does not.
 use super::{Go, Role, date_words, lines::Line, type_group, type_label, world_type};
 use crate::{
-    design::{self, Type, colors, reader as style},
+    design::{self, Type, colors},
     lookup::{ContentIndex, Item, Mention},
 };
 use eframe::egui;
@@ -70,6 +70,7 @@ fn page_row(ui: &mut egui::Ui, index: &ContentIndex, position: usize) -> bool {
     let pad = (design::XL - line) / 2.0;
     let (rect, row) =
         ui.allocate_exact_size(egui::vec2(width, lines + pad * 2.0), egui::Sense::hover());
+    design::register_row(ui, rect);
     let first = rect.top() + pad;
     let target = egui::Rect::from_min_size(rect.min, egui::vec2(target_width, design::XL));
     let response = ui.interact(target, row.id.with("link"), egui::Sense::click());
@@ -181,10 +182,6 @@ fn source_name(index: &ContentIndex, item: &Item, source: usize) -> String {
 
 /// The lines other pages hold about this one, by the kind of page and then by page.
 /// `listed` holds the pages that a list above already shows with their summaries.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn from_other_pages(
     ui: &mut egui::Ui,
     item: &Item,
@@ -229,8 +226,7 @@ fn from_other_pages(
         return None;
     }
     let mut go = None;
-    ui.add_space(design::S);
-    style::section_heading(ui, "From other notes");
+    design::heading(ui, design::Heading::Section("From other notes"));
     for ((_, title), pages) in &groups {
         let count: usize = pages.iter().map(|(_, facts)| facts.len()).sum();
         egui::CollapsingHeader::new(design::group_heading_text(ui, title, count))
@@ -284,17 +280,12 @@ fn from_other_pages(
 }
 
 /// What is here, who is part of this, its history, and what other pages say about it.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 pub(super) fn related(ui: &mut egui::Ui, item: &Item, index: &ContentIndex) -> Option<Go> {
     let mut go = None;
     let here = index.inside(&item.entry);
     let mut listed = here.clone();
     if !here.is_empty() {
-        ui.add_space(design::S);
-        style::section_heading(ui, "Here");
+        design::heading(ui, design::Heading::Section("Here"));
         for position in here {
             if page_row(ui, index, position) {
                 go = Some(Go::Item(position, None));
@@ -304,8 +295,7 @@ pub(super) fn related(ui: &mut egui::Ui, item: &Item, index: &ContentIndex) -> O
     let members = index.members(item.entry.id);
     listed.extend(members);
     if !members.is_empty() {
-        ui.add_space(design::S);
-        style::section_heading(ui, "Members");
+        design::heading(ui, design::Heading::Section("Members"));
         let mut groups: BTreeMap<(u8, String), Vec<usize>> = BTreeMap::new();
         for &position in members {
             groups
@@ -316,7 +306,13 @@ pub(super) fn related(ui: &mut egui::Ui, item: &Item, index: &ContentIndex) -> O
         let several = groups.len() > 1;
         for ((_, title), positions) in groups {
             if several {
-                design::group_heading(ui, &title, positions.len());
+                design::heading(
+                    ui,
+                    design::Heading::Group {
+                        title: &title,
+                        count: positions.len(),
+                    },
+                );
             }
             for position in positions {
                 if page_row(ui, index, position) {
@@ -328,8 +324,7 @@ pub(super) fn related(ui: &mut egui::Ui, item: &Item, index: &ContentIndex) -> O
     let history = index.history_of(item.entry.id);
     listed.extend(history);
     if !history.is_empty() {
-        ui.add_space(design::S);
-        style::section_heading(ui, "History");
+        design::heading(ui, design::Heading::Section("History"));
         if let Some(to) = history_rows(ui, index, history) {
             go = Some(to);
         }
