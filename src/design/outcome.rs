@@ -28,7 +28,7 @@ use super::components::{
 pub use super::components::{Footer, ResultOrder, Tone};
 pub use super::results::{ByTicket, Ticket};
 use super::{icons, tokens::*};
-use eframe::egui::{Rect, Response, Ui};
+use eframe::egui::{self, Rect, Response, Ui};
 use std::borrow::Cow;
 
 // ------------------------------------------------------------------------------------------------
@@ -948,6 +948,14 @@ pub struct PaneFrame {
 }
 
 impl PaneFrame {
+    /// A token with no `Ui`, for the design system's own tests.
+    #[cfg(test)]
+    pub(in crate::design) fn for_test() -> Self {
+        Self {
+            _not_static: std::marker::PhantomData,
+        }
+    }
+
     /// The token for a pane drawn in this frame, on `ui`.
     pub fn new(ui: &Ui) -> Self {
         let _ = ui;
@@ -1174,8 +1182,11 @@ impl<'f, A: 'static> Messages<'f, A> {
         let sink = PressSink(self.sink.0.clone());
         move |ui| {
             let pressed = match &ticket {
+                // A global id from the ticket: egui's child ids count the children before them,
+                // so a line added above would hand this line's focus and press to another.
                 Some(ticket) => {
-                    ui.push_id(("kept_line", ticket.order()), |ui| {
+                    let id = egui::Id::new(("design_kept_line", ticket.order()));
+                    ui.scope_builder(egui::UiBuilder::new().id(id), |ui| {
                         typed.body.draw(ui, MessagePlace::Footer)
                     })
                     .inner
@@ -2148,7 +2159,12 @@ mod tests {
             h.state_mut().in_body = Some(change);
             pointer(&mut h, at, false);
             h.run_steps(1);
-            assert_eq!(h.state().acted, [Err("gone")], "{change:?}");
+            // The old line's press reaches nothing: no press, or the store says it is gone.
+            let acted = &h.state().acted;
+            assert!(
+                acted.is_empty() || acted == &[Err("gone")],
+                "{change:?}: {acted:?}"
+            );
             h.run_steps(3);
             let results = &h.state().dndbeyond.results;
             assert!(results.get(&Campaign("newer")).is_some(), "B stays");

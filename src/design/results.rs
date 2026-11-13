@@ -288,6 +288,14 @@ impl Ticket {
     }
 }
 
+impl<T> Shown<'_, T> {
+    /// This entry's ticket, for the store's own tests.
+    #[cfg(test)]
+    pub(in crate::design) fn ticket_for_test(&self, _frame: &super::outcome::PaneFrame) -> Ticket {
+        Ticket { order: self.order }
+    }
+}
+
 /// What a store did with a ticket.
 #[derive(Debug, PartialEq, Eq)]
 pub enum ByTicket<E> {
@@ -1522,6 +1530,46 @@ mod tests {
         results.record(done(A, "Links now say “Ash Wolf”."));
         let (a, b) = tops(&results);
         assert!(a < b, "A again is newest: A {a}, B {b}");
+    }
+
+    /// A ticket names one entry: after its owner's later action replaced it, or an end event
+    /// ended it, the ticket's Undo is `Gone` and changes nothing; the other entries stay.
+    #[test]
+    fn a_ticket_reaches_only_its_own_entry() {
+        let mut results = Results::<Note, Done>::new();
+        let (a, b) = (A, B);
+        results.record(done(A, "A1"));
+        results.record(done(B, "B"));
+        let frame = super::super::outcome::PaneFrame::for_test();
+        let ticket = |results: &Results<Note, Done>, owner: &Note| {
+            results.get(owner).unwrap().ticket_for_test(&frame)
+        };
+        let old = ticket(&results, &a);
+        results.record(done(A, "A2"));
+        assert_eq!(
+            results.undo_by(old, |_| Ok::<_, ()>(())).err(),
+            Some(ByTicket::Gone)
+        );
+        assert_eq!(results.get(&a).map(|shown| shown.value().words), Some("A2"));
+        let old = ticket(&results, &a);
+        results.owner_changed(&a);
+        assert_eq!(
+            results.undo_by(old, |_| Ok::<_, ()>(())).err(),
+            Some(ByTicket::Gone)
+        );
+        let b_ticket = ticket(&results, &b);
+        // A failed Undo keeps its entry.
+        assert_eq!(
+            results.undo_by(b_ticket, |_| Err::<(), _>("no")).err(),
+            Some(ByTicket::Failed("no"))
+        );
+        let b_ticket = ticket(&results, &b);
+        assert_eq!(
+            results
+                .undo_by(b_ticket, |_| Ok::<_, ()>(()))
+                .map(|(done, ())| done.words),
+            Ok("B")
+        );
     }
 
     #[test]
