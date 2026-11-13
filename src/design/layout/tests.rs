@@ -589,6 +589,14 @@ fn the_gate_finds_two_live_widgets_with_one_id() {
                         let rect = Rect::from_min_size(pos2(300.0, 300.0), vec2(40.0, 30.0));
                         ui.interact(rect, NAME.with(RowIndex(0)).id(), Sense::click());
                     }
+                    // Two other widgets with one id at the right edge: only egui's warning finds
+                    // them, and it runs past the pane's clip.
+                    5 => {
+                        let a = Rect::from_min_size(pos2(440.0, 40.0), vec2(40.0, 24.0));
+                        let id = egui::Id::new("test_two_buttons");
+                        ui.interact(a, id, Sense::click());
+                        ui.interact(a.translate(vec2(0.0, 200.0)), id, Sense::click());
+                    }
                     // A field, then another widget with its id inside the field's rect: egui
                     // gives no warning here.
                     _ => {
@@ -602,7 +610,7 @@ fn the_gate_finds_two_live_widgets_with_one_id() {
         widget_id_clashes(&ctx, &output.shapes)
     };
     assert!(clashes(0).is_empty(), "two keys: {:?}", clashes(0));
-    for case in 1..=4 {
+    for case in 1..=5 {
         assert!(!clashes(case).is_empty(), "case {case} is found");
     }
 }
