@@ -128,8 +128,10 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
   fails the run, and so does a listed state with fewer lines, so the list only shrinks.
   Report-only: **G1b** for a control found again only by its id, **G2** a short header action at
   the widest size is gone or paints other words at a narrower size, **G4** one pane shows a
-  text of four or more words twice, and **G6** a message footer more than `S` below a body that
-  ends short of it. Until `src/design` registers message rects, G1a finds a message by what
+  text of four or more words twice, **G6** a message footer more than `S` below a body that
+  ends short of it, **N2** an icon control's centre more than 1 px off the text line beside it,
+  **N5** a text that starts with an icon and wrapped inside its own layout job, and **N8** one
+  word shown twice in a row (`Travel Travel`, `Day 1: Day`). Until `src/design` registers message rects, G1a finds a message by what
   `design::message` draws: the tone bar, the tone icon and the words.
 - `d.expect_moves("reason")` before a state where a move is the point (a reorder, an answered
   question that goes) is the one escape from G1a and G1b; it never covers G1c. Its findings
