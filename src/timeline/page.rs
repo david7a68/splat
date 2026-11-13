@@ -559,6 +559,7 @@ impl TimelinePage {
     }
 
     /// Where a new event goes, said before it happens. An encounter run goes there too.
+    #[allow(clippy::disallowed_methods)]
     fn new_events_line(
         &mut self,
         ui: &mut egui::Ui,
@@ -588,6 +589,7 @@ impl TimelinePage {
         }
     }
 
+    #[allow(clippy::disallowed_methods)]
     fn filters(&mut self, ui: &mut egui::Ui, sessions: &[SessionLink], current: Option<Uuid>) {
         let before = (self.filter, self.search.clone(), self.session);
         let tabs = |ui: &mut egui::Ui, filter: &mut Filter| {

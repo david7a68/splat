@@ -1374,6 +1374,7 @@ pub(super) fn of_encounter(
 
 /// Who a group is for, in its editor. An encounter being built is a choice before it is saved,
 /// and under the name it has now.
+#[allow(clippy::disallowed_methods)]
 fn belongs_to(
     ui: &mut egui::Ui,
     draft: &mut GroupDraft,
@@ -1635,6 +1636,7 @@ pub(super) fn show_form_when_it_opens(ui: &egui::Ui) {
 
 /// A number that can stay the same, be set, or change by an amount. Each control keeps the
 /// override valid on its own, so that the form never holds a block that it cannot read.
+#[allow(clippy::disallowed_methods)]
 fn change_row(
     ui: &mut egui::Ui,
     label: &str,

@@ -494,7 +494,7 @@ impl Party {
             .show_inside(ui, |ui| {
                 // Round 25 family: the list keeps the scroll bar's lane whether or not the bar
                 // shows, so no row or header column moves when the list starts to scroll.
-                let rows_width = ui.available_width() - design::lane_width(ui);
+                let rows_width = ui.available_width() - design::lane_width();
                 ui.scope(|ui| {
                     ui.set_max_width(rows_width);
                     member_header(ui);

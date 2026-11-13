@@ -1,39 +1,52 @@
 //! Layout parts: one place for each layout decision that screens kept making by hand.
 //!
 //! - [`ScrollColumn`]: a vertical scroll area that always keeps the scroll bar's lane, so no
-//!   control moves when the bar comes or goes (family F14).
+//!   control moves when the bar comes or goes (family F14). [`sideways_scroll`] is the sideways
+//!   table scroll.
 //! - [`Slot`] and [`status_slot`]: fixed room for a value that changes in place (F8).
-//! - [`TitleLine`]: a title and its actions; every action keeps its word, and all of them move
-//!   together under the title when they do not fit after it (F17).
+//! - [`TitleLine`] and [`title_placement`]: a title and its actions; every action keeps its word
+//!   (F17).
 //! - [`InlineCreate`]: the one inline creation layout (F15), built in a fixed order by its type.
 //! - [`FieldId`]: a text field's id that does not depend on its place in the layout, so a layout
 //!   branch cannot drop the field's focus or cursor (PR 297).
 //!
 //! `clippy.toml` disallows the raw egui calls these parts replace, outside `src/design/`.
 //!
-//! Each part's tests below prove its rule once. A caller that uses a part, with no layer, clip,
-//! `Area` or raw interaction of its own, has no duty left for that rule.
+//! Each part's tests (`layout/tests.rs`) prove its rule once. A caller that uses a part, with no
+//! layer, clip, `Area` or raw interaction of its own, has no duty left for that rule, except
+//! where a part's doc names one.
 use std::{hash::Hash, marker::PhantomData, ops::Range};
 
 use eframe::egui::{
-    self, Align, Id, Layout, Response, TextBuffer, TextEdit, Ui, scroll_area::ScrollAreaOutput,
-    vec2,
+    self, Align, Id, Layout, Rect, Response, Sense, TextBuffer, TextEdit, Ui, UiBuilder,
+    scroll_area::ScrollAreaOutput, vec2,
 };
 
 use super::{
-    Action, Density, FORM_WIDTH, L, S, Status, Type, XS, blocked_reason, colors, field, named,
-    number_width, placeholder,
+    Action, Density, FORM_WIDTH, L, M, PANEL_MIN_WIDTH, S, Status, Type, XS, colors, field, named,
+    number_width, placeholder, theme,
 };
 
-/// An action's word: a non-empty, sentence-case word or phrase. Make one with
-/// [`word!`](crate::word), which checks the literal when the program compiles.
+/// The longest word an action may have, in characters. With this limit and an icon, the widest
+/// letters fit on one line in the narrowest pane that holds a title line ([`NARROWEST_PANE`]);
+/// a part test proves it.
+pub const MAX_WORD_CHARS: usize = 20;
+
+/// The text width of the narrowest pane that holds a title line: a side panel (Lookup, Notes,
+/// the run's panel) at its minimum width, less its margins. The rail holds no title line.
+pub const NARROWEST_PANE: f32 = PANEL_MIN_WIDTH - 2.0 * M;
+
+/// An action's word: a non-empty, sentence-case word or phrase of at most [`MAX_WORD_CHARS`]
+/// characters. Make one with [`word!`](crate::word), which takes a string literal and checks it
+/// when the program compiles.
 ///
 /// ```
 /// const EDIT: splat::layout::Word = splat::word!("Edit");
 /// assert_eq!(EDIT.as_str(), "Edit");
 /// ```
 ///
-/// An empty word, or one that does not start with a capital, does not compile:
+/// An empty word, one that does not start with a capital, one with a space at its end and one
+/// longer than the limit do not compile:
 ///
 /// ```compile_fail,E0080
 /// let _ = splat::word!("");
@@ -47,17 +60,27 @@ use super::{
 /// let _ = splat::word!("Edit ");
 /// ```
 ///
-/// A word made at run time is not a `Word`:
+/// ```compile_fail,E0080
+/// let _ = splat::word!("Add every creature to the fight");
+/// ```
 ///
-/// ```compile_fail,E0435
+/// A word made at run time, or held in a constant, is not a literal:
+///
+/// ```compile_fail
 /// let name = String::from("Edit");
 /// let _ = splat::word!(name.as_str());
+/// ```
+///
+/// ```compile_fail
+/// const NAME: &str = "Edit";
+/// let _ = splat::word!(NAME);
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Word(&'static str);
 
 impl Word {
-    /// Use [`word!`](crate::word). Clippy disallows this call outside `src/design/`.
+    /// Use [`word!`](crate::word). Clippy disallows this call outside `src/design/`, so a call
+    /// by hand needs an allow that the lint counts.
     #[doc(hidden)]
     pub const fn checked(word: &'static str) -> Self {
         let bytes = word.as_bytes();
@@ -71,13 +94,19 @@ impl Word {
             "A word ends with no space."
         );
         let mut at = 0;
+        let mut chars = 0;
         while at < bytes.len() {
             assert!(
                 bytes[at] != b'\n' && bytes[at] != b'\t',
                 "A word is one line."
             );
+            // Count characters, not bytes: a UTF-8 continuation byte starts no character.
+            if bytes[at] & 0xC0 != 0x80 {
+                chars += 1;
+            }
             at += 1;
         }
+        assert!(chars <= MAX_WORD_CHARS, "A word has at most 20 characters.");
         Self(word)
     }
 
@@ -86,10 +115,10 @@ impl Word {
     }
 }
 
-/// A [`Word`], checked when the program compiles.
+/// A [`Word`] from a string literal, checked when the program compiles.
 #[macro_export]
 macro_rules! word {
-    ($word:expr) => {
+    ($word:literal) => {
         const {
             #[allow(clippy::disallowed_methods)]
             let word = $crate::layout::Word::checked($word);
@@ -98,30 +127,71 @@ macro_rules! word {
     };
 }
 
-/// A text field's id. It comes from a name in the source and an optional key (a row's id), never
-/// from the field's place in the layout, so a branch that changes the layout around the field
-/// keeps its focus, cursor and selection. Make one with [`field_id!`](crate::field_id); the
-/// source lint fails when two `field_id!` names are the same.
+mod sealed {
+    pub trait Sealed {}
+}
+
+/// A stable key that tells one field of many apart: a row's data, never its place on screen.
+/// Sealed: only the kinds below are keys. `egui::Id` is not one, so the layout cannot come back
+/// into a field's id through `FieldId::with`.
+pub trait RowKey: sealed::Sealed + Hash {}
+
+/// A row's place in its data (an entry's index in a saved list), as a [`RowKey`]. Give it a
+/// data index, not a value read from the layout.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct RowIndex(pub usize);
+
+macro_rules! row_keys {
+    ($($key:ty),*) => {$(
+        impl sealed::Sealed for $key {}
+        impl RowKey for $key {}
+    )*};
+}
+row_keys!(uuid::Uuid, RowIndex, str, String, std::path::Path);
+impl<K: RowKey + ?Sized> sealed::Sealed for &K {}
+impl<K: RowKey + ?Sized> RowKey for &K {}
+impl<K: RowKey> sealed::Sealed for Option<K> {}
+impl<K: RowKey> RowKey for Option<K> {}
+
+/// A text field's id. It comes from a name in the source and an optional [`RowKey`], never from
+/// the field's place in the layout, so a branch that changes the layout around the field keeps
+/// its focus, cursor and selection. Make one with [`field_id!`](crate::field_id), which takes a
+/// string literal; the source lint fails when two `field_id!` names are the same. Two live
+/// fields with one id (the same name and key) are the gate's `widget-id-clash` check.
 ///
 /// ```
-/// const NAME: splat::layout::FieldId = splat::field_id!("campaign_name");
-/// let row = NAME.with(7);
-/// assert_ne!(NAME.id(), row.id());
+/// use splat::layout::RowIndex;
+/// const NAME: splat::layout::FieldId = splat::field_id!("doc_name");
+/// assert_ne!(NAME.with(RowIndex(1)).id(), NAME.with(RowIndex(2)).id());
+/// ```
+///
+/// A key from the layout is not a [`RowKey`]:
+///
+/// ```compile_fail,E0277
+/// const NAME: splat::layout::FieldId = splat::field_id!("doc_name");
+/// let _ = NAME.with(eframe::egui::Id::new("place"));
 /// ```
 ///
 /// An id from the layout is not a `FieldId`:
 ///
 /// ```compile_fail,E0308
 /// fn take(_: splat::layout::FieldId) {}
-/// take(eframe::egui::Id::new("campaign_name"));
+/// take(eframe::egui::Id::new("doc_name"));
 /// ```
 ///
 /// ```compile_fail,E0423
-/// let _ = splat::layout::FieldId(eframe::egui::Id::new("campaign_name"));
+/// let _ = splat::layout::FieldId(eframe::egui::Id::new("doc_name"));
 /// ```
 ///
 /// ```compile_fail,E0080
 /// let _ = splat::field_id!("");
+/// ```
+///
+/// A name held in a constant escapes the lint's scan, so it does not compile:
+///
+/// ```compile_fail
+/// const NAME: &str = "doc_name";
+/// let _ = splat::field_id!(NAME);
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct FieldId {
@@ -147,7 +217,7 @@ impl FieldId {
     }
 
     /// The same field for one row, entry or draft of many.
-    pub fn with(self, key: impl Hash) -> Self {
+    pub fn with(self, key: impl RowKey) -> Self {
         let key = match self.key {
             Some(outer) => outer.with(key),
             None => Id::new(key),
@@ -164,7 +234,7 @@ impl FieldId {
     }
 
     /// A raw one-line `TextEdit` with this id, for a field no shared part draws (a password, a
-    /// code font). Do not give it another id.
+    /// code font). Clippy refuses another id on it outside `src/design/`.
     pub fn single_line(self, text: &mut dyn TextBuffer) -> TextEdit<'_> {
         TextEdit::singleline(text).id(self.id())
     }
@@ -175,10 +245,10 @@ impl FieldId {
     }
 }
 
-/// A [`FieldId`], checked when the program compiles.
+/// A [`FieldId`] from a string literal, checked when the program compiles.
 #[macro_export]
 macro_rules! field_id {
-    ($name:expr) => {
+    ($name:literal) => {
         const {
             #[allow(clippy::disallowed_methods)]
             let id = $crate::layout::FieldId::checked($name);
@@ -236,18 +306,30 @@ fn form_field(ui: &mut Ui, id: FieldId, label: &str, text: &mut String, width: f
     response
 }
 
-/// The width of a solid scroll bar and its margin: the lane a scroll column always keeps.
-pub fn lane_width(ui: &Ui) -> f32 {
-    ui.spacing().scroll.allocated_width()
+/// The lane a scroll column always keeps: the app's solid bar and its margin. It comes from the
+/// design's scroll style, which `ScrollColumn` sets on its own `Ui`, never from a caller's.
+pub fn lane_width() -> f32 {
+    theme::scroll_style().allocated_width()
 }
 
 /// A vertical scroll area that keeps the scroll bar's lane whether or not the bar shows: its
 /// content always ends one lane before the area's right edge, so nothing moves when the bar
-/// comes or goes. The caller has no lane to keep. Drawn in a pane's body (`Footer::pane`), it
-/// records its content's end there, so the pane's footer follows short content.
+/// comes or goes. It sets the app's solid scroll style on its own `Ui`, so a caller's style
+/// (floating bars that take no width) cannot remove the lane. The caller has no lane to keep.
+/// Drawn in a pane's body (`Footer::pane`), it records its content's end there, so the pane's
+/// footer follows short content.
+///
+/// ```
+/// fn list(ui: &mut eframe::egui::Ui) {
+///     splat::layout::ScrollColumn::new("list")
+///         .max_height(200.0)
+///         .show(ui, |ui| ui.label("Row"));
+/// }
+/// ```
+///
+/// There is no way to give the lane back:
 ///
 /// ```compile_fail,E0599
-/// // There is no way to give the lane back.
 /// let _ = splat::layout::ScrollColumn::new("list").without_lane();
 /// ```
 #[must_use = "call show"]
@@ -320,24 +402,37 @@ impl ScrollColumn {
         area
     }
 
-    /// The content's width: the width the column is given, less the lane.
-    fn content_width(ui: &Ui) -> f32 {
-        (ui.available_width() - lane_width(ui)).max(0.0)
+    /// Run `add` in a child `Ui` with the app's scroll style, and the content's width: the
+    /// width the column is given, less the lane.
+    fn styled<R>(
+        ui: &mut Ui,
+        add: impl FnOnce(&mut Ui, f32) -> ScrollAreaOutput<R>,
+    ) -> ScrollAreaOutput<R> {
+        // Drawn in a pane's body (`Footer::pane`), the column records its content's end there, so
+        // the pane's footer follows short content.
+        let start = super::pane::column_start(ui);
+        let output = ui
+            .scope(|ui| {
+                ui.spacing_mut().scroll = theme::scroll_style();
+                let width = (ui.available_width() - lane_width()).max(0.0);
+                add(ui, width)
+            })
+            .inner;
+        super::pane::column_drawn(ui, start, &output);
+        output
     }
 
     pub fn show<R>(self, ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> ScrollAreaOutput<R> {
-        let width = Self::content_width(ui);
         let sideways = self.sideways;
-        let start = super::pane::column_start(ui);
-        let output = self.area().show(ui, |ui| {
-            if !sideways {
-                ui.set_max_width(width);
-            }
-            ui.set_min_width(width);
-            add(ui)
-        });
-        super::pane::column_drawn(ui, start, &output);
-        output
+        Self::styled(ui, |ui, width| {
+            self.area().show(ui, |ui| {
+                if !sideways {
+                    ui.set_max_width(width);
+                }
+                ui.set_min_width(width);
+                add(ui)
+            })
+        })
     }
 
     /// For a long list of rows of one height: only the rows in view are drawn.
@@ -348,49 +443,59 @@ impl ScrollColumn {
         rows: usize,
         add: impl FnOnce(&mut Ui, Range<usize>) -> R,
     ) -> ScrollAreaOutput<R> {
-        let width = Self::content_width(ui);
-        let start = super::pane::column_start(ui);
-        let output = self.area().show_rows(ui, row_height, rows, |ui, range| {
-            ui.set_max_width(width);
-            ui.set_min_width(width);
-            add(ui, range)
-        });
-        super::pane::column_drawn(ui, start, &output);
-        output
+        Self::styled(ui, |ui, width| {
+            self.area().show_rows(ui, row_height, rows, |ui, range| {
+                ui.set_max_width(width);
+                ui.set_min_width(width);
+                add(ui, range)
+            })
+        })
     }
 
     /// For content that draws only what is in view of the given viewport.
     pub fn show_viewport<R>(
         self,
         ui: &mut Ui,
-        add: impl FnOnce(&mut Ui, egui::Rect) -> R,
+        add: impl FnOnce(&mut Ui, Rect) -> R,
     ) -> ScrollAreaOutput<R> {
-        let width = Self::content_width(ui);
-        let start = super::pane::column_start(ui);
-        let output = self.area().show_viewport(ui, |ui, viewport| {
-            ui.set_max_width(width);
-            ui.set_min_width(width);
-            add(ui, viewport)
-        });
-        super::pane::column_drawn(ui, start, &output);
-        output
+        Self::styled(ui, |ui, width| {
+            self.area().show_viewport(ui, |ui, viewport| {
+                ui.set_max_width(width);
+                ui.set_min_width(width);
+                add(ui, viewport)
+            })
+        })
     }
+}
+
+/// A sideways scroll for one wide table or strip: it never scrolls up and down, so it sits
+/// inside a page's own `ScrollColumn`.
+pub fn sideways_scroll<R>(
+    ui: &mut Ui,
+    id_salt: impl Hash,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> ScrollAreaOutput<R> {
+    egui::ScrollArea::horizontal()
+        .id_salt(Id::new(id_salt))
+        .auto_shrink([false, true])
+        .show(ui, add)
 }
 
 /// Fixed room for a text value that changes in place: as wide as the widest example in its
 /// type, so the next control never moves when the value changes. A value wider than every
 /// example is cut with an ellipsis (the gate's `cut_text` check finds it); it never pushes.
+/// The examples are an array whose length is checked when the program compiles, so a slot with
+/// none does not compile, at run time too.
 ///
 /// ```
 /// use splat::layout::{Slot, SlotType};
 /// const SAVES: Slot = Slot::new(&["0 of 3", "3 of 3"], SlotType::Small);
+/// let _ = Slot::new(&["Low"], SlotType::Body);
 /// ```
-///
-/// A slot with no example does not compile:
 ///
 /// ```compile_fail,E0080
 /// use splat::layout::{Slot, SlotType};
-/// const SAVES: Slot = Slot::new(&[], SlotType::Small);
+/// let _ = Slot::new(&[], SlotType::Small);
 /// ```
 #[derive(Clone, Copy, Debug)]
 pub struct Slot {
@@ -419,8 +524,12 @@ impl SlotType {
 }
 
 impl Slot {
-    pub const fn new(examples: &'static [&'static str], role: SlotType) -> Self {
-        assert!(!examples.is_empty(), "A slot has an example value.");
+    pub const fn new<const N: usize>(examples: &'static [&'static str; N], role: SlotType) -> Self {
+        // Evaluated for each `N` when the program compiles, whether the call is in a constant or
+        // not.
+        const {
+            assert!(N > 0, "A slot has an example value.");
+        }
         Self { examples, role }
     }
 
@@ -439,7 +548,7 @@ impl Slot {
         let role = self.role.role();
         let galley = super::one_line(ui, value, role.font(ui), color, width);
         let height = galley.size().y.max(role.line());
-        let (rect, response) = ui.allocate_exact_size(vec2(width, height), egui::Sense::hover());
+        let (rect, response) = ui.allocate_exact_size(vec2(width, height), Sense::hover());
         if ui.is_rect_visible(rect) {
             let top = rect.center().y - galley.size().y / 2.0;
             ui.painter()
@@ -489,8 +598,14 @@ enum TitleWeight {
 
 /// One action on a title line. It always shows its [`Word`]; an icon goes before the word.
 ///
+/// ```
+/// use splat::layout::TitleAction;
+/// let _ = TitleAction::quiet(splat::word!("Edit")).name("Edit Cinder Wolf");
+/// ```
+///
+/// A word is a checked `Word`, never a plain string:
+///
 /// ```compile_fail,E0308
-/// // A word is a checked `Word`, never a plain string.
 /// let _ = splat::layout::TitleAction::quiet("Edit");
 /// ```
 #[derive(Clone, Copy, Debug)]
@@ -537,7 +652,7 @@ impl<'a> TitleAction<'a> {
         self
     }
 
-    fn action(&self, line_start: bool) -> Action<'a> {
+    fn action(&self) -> Action<'a> {
         let mut action = match self.weight {
             TitleWeight::Quiet => Action::quiet(self.word.as_str()),
             TitleWeight::Secondary => Action::secondary(self.word.as_str()),
@@ -550,42 +665,57 @@ impl<'a> TitleAction<'a> {
         if let Some(name) = self.name {
             action = action.name(name);
         }
-        // A quiet action that starts its own line hangs its padding in the gutter. With an
-        // icon it would hang the icon too, so it keeps its place instead.
-        if line_start && self.weight == TitleWeight::Quiet && self.icon.is_none() {
-            action = action.line_start();
-        }
         action
     }
+}
+
+/// The space between two actions on a title line.
+pub const ACTION_GAP: f32 = XS;
+
+/// The space from the title's last letter to the first action's target. A quiet action's
+/// words and icon start `S` inside its target, so its icon sits `L` after the title; a bordered
+/// action's border sits `L` after it.
+pub fn title_lead_in(first_is_quiet: bool) -> f32 {
+    if first_is_quiet { L - S } else { L }
 }
 
 /// Where a title line's actions go. The rule (round 27, review of PR 300): no action vanishes or
 /// loses its word.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TitlePlacement {
-    /// First choice: the title and every action on one line, when they fit.
+    /// First choice: the title and every action on one line, when they fit beside the title.
     OnTitle,
-    /// Else every action on one row under the title, when that row fits the pane; only when one
-    /// row cannot fit, the rows wrap at whole actions, filled from the left. Each range is one
-    /// row of actions, in order; together they hold every action once.
+    /// Else every action on one row under the title, when that row fits the line under it; only
+    /// when one row cannot fit, the rows wrap at whole actions, filled from the left. Each range
+    /// is one row of actions, in order; together they hold every action once.
     Under(Vec<Range<usize>>),
 }
 
-/// The one decision of a title line's place, by measure: `title` is the title's width, `widths`
-/// each action's natural width, `gap` the space between two actions and `room` the pane's width.
-/// The title and its actions are `L` apart. An action wider than the pane has a row of its own;
-/// it is never dropped.
-pub fn title_placement(title: f32, widths: &[f32], gap: f32, room: f32) -> TitlePlacement {
-    let row =
-        |widths: &[f32]| widths.iter().sum::<f32>() + gap * widths.len().saturating_sub(1) as f32;
-    if widths.is_empty() || title + L + row(widths) <= room {
+/// The one decision of a title line's place, by measure. `title` is the width the title takes
+/// (with its context), `lead_in` the space before the first action ([`title_lead_in`]),
+/// `widths` each action's target width, `beside` the width the actions may use from the title's
+/// left edge on its line, and `under` the width of the line under the title. Actions are
+/// [`ACTION_GAP`] apart. An action wider than `under` has a row of its own; none is dropped.
+/// Callers measure each width once and draw with the same widths, so the measure and the draw
+/// cannot disagree.
+pub fn title_placement(
+    title: f32,
+    lead_in: f32,
+    widths: &[f32],
+    beside: f32,
+    under: f32,
+) -> TitlePlacement {
+    let row = |widths: &[f32]| {
+        widths.iter().sum::<f32>() + ACTION_GAP * widths.len().saturating_sub(1) as f32
+    };
+    if widths.is_empty() || title + lead_in + row(widths) <= beside {
         return TitlePlacement::OnTitle;
     }
     let mut rows = Vec::new();
     let mut start = 0;
-    for end in 1..=widths.len() {
+    for end in 1..widths.len() {
         // Close the row before the action that would not fit on it.
-        if end < widths.len() && row(&widths[start..=end]) > room {
+        if row(&widths[start..=end]) > under {
             rows.push(start..end);
             start = end;
         }
@@ -594,12 +724,15 @@ pub fn title_placement(title: f32, widths: &[f32], gap: f32, room: f32) -> Title
     TitlePlacement::Under(rows)
 }
 
-/// A title and its actions, placed by [`title_placement`]: after the title, `L` after it, when
-/// everything fits on one line; else on one row under the title; else on rows that wrap at
-/// whole actions. No action is ever dropped or shown without its word.
+/// A title and its actions, placed by [`title_placement`]: after the title when everything fits
+/// on its line; else on one row under the title; else on rows that wrap at whole actions. Every
+/// width is measured once, rounded up to a whole point, and the draw gives each piece exactly
+/// that width, so the measure and the draw agree. No action is dropped or shown without its
+/// word, and a word fits whole in the narrowest pane ([`MAX_WORD_CHARS`]).
 ///
-/// Duties left to the caller: none for place and fit. The caller handles each press
-/// ([`TitleLineResponse::clicked`]).
+/// Duty left to the caller: handle each press ([`TitleLineResponse::clicked`]). A caller-side
+/// `if` that leaves an action out is not something this part can see: the gate's G2 check
+/// ("header actions kept") owns it.
 #[must_use = "call show"]
 pub struct TitleLine<'a> {
     title: &'a str,
@@ -634,6 +767,21 @@ impl TitleLineResponse {
     }
 }
 
+/// A title line's widths, measured once per frame and used by both the placement and the draw.
+struct TitleMetrics {
+    title: f32,
+    /// The context's width, with the gap before it.
+    context: f32,
+    lead_in: f32,
+    widths: Vec<f32>,
+}
+
+impl TitleMetrics {
+    fn beside(&self) -> f32 {
+        self.title + self.context
+    }
+}
+
 impl<'a> TitleLine<'a> {
     pub fn new(title: &'a str) -> Self {
         Self {
@@ -649,7 +797,7 @@ impl<'a> TitleLine<'a> {
         self
     }
 
-    /// One muted `Small` state or count after the title, on its baseline.
+    /// One muted `Small` state or count after the title, `XS` after it.
     pub fn context(mut self, context: Option<&'a str>) -> Self {
         self.context = context;
         self
@@ -667,105 +815,207 @@ impl<'a> TitleLine<'a> {
         }
     }
 
-    /// The width of the title and its context on one line.
-    fn title_width(&self, ui: &Ui) -> f32 {
-        number_width(ui, self.title, &self.font().font(ui))
-            + self.context.map_or(0.0, |context| {
-                XS + number_width(ui, context, &Type::Small.font(ui))
-            })
-            // Rounding must not cut the title by a fraction of a point.
-            + 1.0
+    fn metrics(&self, ui: &Ui) -> TitleMetrics {
+        TitleMetrics {
+            title: number_width(ui, self.title, &self.font().font(ui)).ceil(),
+            context: self.context.map_or(0.0, |context| {
+                XS + number_width(ui, context, &Type::Small.font(ui)).ceil()
+            }),
+            lead_in: title_lead_in(
+                self.actions
+                    .first()
+                    .is_none_or(|action| action.weight == TitleWeight::Quiet),
+            ),
+            widths: self
+                .actions
+                .iter()
+                .map(|action| action.action().natural_width(ui).ceil())
+                .collect(),
+        }
     }
 
-    /// Each action's natural width, measured with the parts of the painted button.
-    fn widths(&self, ui: &Ui) -> Vec<f32> {
-        self.actions
-            .iter()
-            .map(|action| action.action(false).natural_width(ui))
-            .collect()
-    }
-
-    /// The width of every action on one row, with `XS` between two.
-    #[cfg(test)]
-    fn actions_width(&self, ui: &Ui) -> f32 {
-        let widths = self.widths(ui);
-        widths.iter().sum::<f32>() + XS * widths.len().saturating_sub(1) as f32
+    /// Draw one action in exactly its measured target.
+    fn action_at(&self, ui: &mut Ui, at: usize, rect: Rect) -> bool {
+        ui.scope_builder(
+            UiBuilder::new()
+                .max_rect(rect)
+                .layout(Layout::left_to_right(Align::Center)),
+            |ui| self.actions[at].action().show(ui).clicked(),
+        )
+        .inner
     }
 
     pub fn show(self, ui: &mut Ui) -> TitleLineResponse {
+        let metrics = self.metrics(ui);
+        let room = ui.available_width();
         let placement = title_placement(
-            self.title_width(ui),
-            &self.widths(ui),
-            XS,
-            ui.available_width(),
+            metrics.beside(),
+            metrics.lead_in,
+            &metrics.widths,
+            room,
+            room,
         );
-        let below = placement != TitlePlacement::OnTitle;
-        let mut pressed = None;
         let height = Density::Read.control();
-        let mut actions = |ui: &mut Ui, range: Range<usize>, line_start: bool| {
-            ui.spacing_mut().item_spacing.x = XS;
-            let first = range.start;
-            for at in range {
-                let action = &self.actions[at];
-                if action.action(line_start && at == first).show(ui).clicked() {
-                    pressed = Some(action.word);
-                }
-            }
-        };
-        let title = |ui: &mut Ui| {
-            let mut label = egui::Label::new(self.font().rich(ui, self.title).color(colors().text));
-            if below {
-                label = label.wrap();
-            }
-            ui.add(label);
-            if let Some(context) = self.context {
-                ui.add_space(XS);
-                ui.add(
-                    egui::Label::new(Type::Small.rich(ui, context).color(colors().muted))
-                        .truncate(),
-                )
-                .on_hover_text(context);
-            }
-        };
-        let rows = match &placement {
-            TitlePlacement::OnTitle => 0,
-            TitlePlacement::Under(rows) => rows.len(),
-        };
-        if let TitlePlacement::Under(rows) = placement {
-            ui.with_layout(
-                Layout::left_to_right(Align::Max).with_main_wrap(true),
-                title,
-            );
-            for row in rows {
-                ui.allocate_ui_with_layout(
-                    vec2(ui.available_width(), height),
-                    Layout::left_to_right(Align::Center),
-                    |ui| {
-                        ui.set_min_height(height);
-                        actions(ui, row, true);
-                    },
+        let mut pressed = None;
+        let font = self.font();
+        let title = egui::Label::new(font.rich(ui, self.title).color(colors().text));
+        let context = self.context.map(|context| {
+            (
+                context,
+                egui::Label::new(Type::Small.rich(ui, context).color(colors().muted)),
+            )
+        });
+        let rows = match placement {
+            TitlePlacement::OnTitle => {
+                let line_height = height.max(font.line());
+                let (line, _) = ui.allocate_exact_size(vec2(room, line_height), Sense::hover());
+                // The line's pieces go in a child that does not allocate in `ui` again.
+                let mut ui = ui.new_child(
+                    UiBuilder::new()
+                        .max_rect(line)
+                        .layout(Layout::left_to_right(Align::Center)),
                 );
-            }
-        } else {
-            ui.allocate_ui_with_layout(
-                vec2(ui.available_width(), height),
-                Layout::left_to_right(Align::Center),
-                |ui| {
-                    ui.set_min_height(height);
-                    title(ui);
-                    if !self.actions.is_empty() {
-                        ui.add_space((L - ui.spacing().item_spacing.x).max(0.0));
-                        actions(ui, 0..self.actions.len(), false);
+                let ui = &mut ui;
+                let mut x = line.left();
+                let mut piece = |width: f32| {
+                    let rect =
+                        Rect::from_min_size(egui::pos2(x, line.top()), vec2(width, line_height));
+                    x += width;
+                    rect
+                };
+                ui.put(piece(metrics.title), title.extend());
+                if let Some((words, context)) = context {
+                    let _ = piece(XS);
+                    ui.put(piece(metrics.context - XS), context.extend())
+                        .on_hover_text(words);
+                }
+                let _ = piece(metrics.lead_in);
+                for (at, width) in metrics.widths.iter().enumerate() {
+                    if at > 0 {
+                        let _ = piece(ACTION_GAP);
                     }
-                },
-            );
-        }
+                    if self.action_at(ui, at, piece(*width)) {
+                        pressed = Some(self.actions[at].word);
+                    }
+                }
+                0
+            }
+            TitlePlacement::Under(rows) => {
+                ui.horizontal_wrapped(|ui| {
+                    ui.spacing_mut().item_spacing.x = XS;
+                    ui.add(title.wrap());
+                    if let Some((words, context)) = context {
+                        ui.add(context.wrap()).on_hover_text(words);
+                    }
+                });
+                for row in &rows {
+                    let (line, _) = ui.allocate_exact_size(vec2(room, height), Sense::hover());
+                    let mut row_ui = ui.new_child(
+                        UiBuilder::new()
+                            .max_rect(line)
+                            .layout(Layout::left_to_right(Align::Center)),
+                    );
+                    let mut x = line.left();
+                    for at in row.clone() {
+                        if at > row.start {
+                            x += ACTION_GAP;
+                        }
+                        let width = metrics.widths[at];
+                        let rect =
+                            Rect::from_min_size(egui::pos2(x, line.top()), vec2(width, height));
+                        x += width;
+                        if self.action_at(&mut row_ui, at, rect) {
+                            pressed = Some(self.actions[at].word);
+                        }
+                    }
+                }
+                rows.len()
+            }
+        };
         TitleLineResponse {
             pressed,
-            below,
+            below: rows > 0,
             rows,
         }
     }
+}
+
+/// Every reason an [`InlineCreate`]'s Create can be blocked with. The kept line keeps room for
+/// the tallest of them, and Create's reason is one of them, so a reason that is not declared
+/// does not compile. Declare them with [`create_reasons!`](crate::create_reasons); the lint
+/// refuses an `impl CreateReasons` by hand, which could leave a reason out of `ALL`. When
+/// package M's `Sentence` lands, `words` returns a `Sentence` and the macro checks each
+/// literal with `sentence!`.
+pub trait CreateReasons: Copy + 'static {
+    const ALL: &'static [Self];
+    fn words(self) -> &'static str;
+}
+
+/// For a form whose Create is never blocked.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NoReason {}
+
+impl CreateReasons for NoReason {
+    const ALL: &'static [Self] = &[];
+    fn words(self) -> &'static str {
+        match self {}
+    }
+}
+
+/// Checks a creation reason's form when the program compiles: a capital first, a full stop,
+/// question mark or exclamation mark last.
+#[doc(hidden)]
+pub const fn reason_checked(words: &'static str) -> &'static str {
+    let bytes = words.as_bytes();
+    assert!(!bytes.is_empty(), "A reason is not empty.");
+    assert!(
+        bytes[0].is_ascii_uppercase(),
+        "A reason starts with a capital."
+    );
+    let last = bytes[bytes.len() - 1];
+    assert!(
+        last == b'.' || last == b'?' || last == b'!',
+        "A reason ends with a full stop."
+    );
+    words
+}
+
+/// Declare an enum of an [`InlineCreate`]'s reasons, with each variant's words. `ALL` holds every
+/// variant, by construction.
+///
+/// ```
+/// splat::create_reasons! {
+///     pub enum NewEntry {
+///         NoName => "Enter a name first.",
+///         Taken => "An entry with this name exists. Choose another name.",
+///     }
+/// }
+/// use splat::layout::CreateReasons;
+/// assert_eq!(NewEntry::ALL.len(), 2);
+/// ```
+///
+/// ```compile_fail,E0080
+/// splat::create_reasons! {
+///     pub enum NewEntry { NoName => "Enter a name first" }
+/// }
+/// let _ = splat::layout::CreateReasons::words(NewEntry::NoName);
+/// ```
+#[macro_export]
+macro_rules! create_reasons {
+    ($(#[$meta:meta])* $vis:vis enum $name:ident { $($variant:ident => $words:literal),+ $(,)? }) => {
+        $(#[$meta])*
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        $vis enum $name { $($variant),+ }
+
+        impl $crate::layout::CreateReasons for $name {
+            const ALL: &'static [Self] = &[$(Self::$variant),+];
+            fn words(self) -> &'static str {
+                match self {
+                    $(Self::$variant => const { $crate::layout::reason_checked($words) }),+
+                }
+            }
+        }
+    };
 }
 
 /// How the named Create action looks.
@@ -776,16 +1026,22 @@ enum CreateWeight {
 }
 
 /// The named Create action of an [`InlineCreate`]. Its word is a [`Word`], so it keeps its width
-/// while the DM types; a blocked Create's reason is the kept line's words.
+/// while the DM types; a blocked Create's reason is one of the form's declared reasons.
+///
+/// ```compile_fail,E0308
+/// use splat::layout::{Create, NoReason};
+/// let _: Create<NoReason> =
+///     Create::primary(splat::word!("Create")).blocked(Some("Enter a name first."));
+/// ```
 #[derive(Clone, Copy, Debug)]
 #[must_use]
-pub struct Create<'a> {
+pub struct Create<R: CreateReasons> {
     word: Word,
     weight: CreateWeight,
-    blocked: Option<&'a str>,
+    blocked: Option<R>,
 }
 
-impl<'a> Create<'a> {
+impl<R: CreateReasons> Create<R> {
     pub fn primary(word: Word) -> Self {
         Self {
             word,
@@ -802,18 +1058,18 @@ impl<'a> Create<'a> {
     }
 
     /// Disable Create and say why on the kept line below the field.
-    pub fn blocked(mut self, reason: Option<&'a str>) -> Self {
+    pub fn blocked(mut self, reason: Option<R>) -> Self {
         self.blocked = reason;
         self
     }
 
-    fn action(&self) -> Action<'a> {
+    fn action(&self) -> Action<'static> {
         match self.weight {
             CreateWeight::Primary => Action::primary(self.word.as_str()),
             CreateWeight::Secondary => Action::secondary(self.word.as_str()),
         }
         .density(Density::Read)
-        .blocked(self.blocked)
+        .blocked(self.blocked.map(R::words))
     }
 }
 
@@ -882,12 +1138,13 @@ impl<'a> CreateChoice<'a> {
 }
 
 /// The line below the last field: quiet Cancel at its start when there is something to cancel,
-/// then Create's blocked reason, or, once nothing blocks Create, the preview. It stays, as tall
-/// as a control, when it is empty.
+/// then Create's blocked reason, or, once nothing blocks Create, the preview. Its height is fixed
+/// for the life of the form: as tall as a control, or as the tallest declared reason wrapped
+/// beside Cancel at the form's width, whichever is taller.
 #[derive(Clone, Copy, Debug, Default)]
 #[must_use]
 pub struct KeptLine<'a> {
-    cancel: Option<Word>,
+    cancel: Option<(Word, bool)>,
     preview: Option<&'a str>,
 }
 
@@ -896,13 +1153,16 @@ impl<'a> KeptLine<'a> {
         Self::default()
     }
 
-    /// Quiet Cancel (or Clear) at the line's start, while there is something to cancel.
-    pub fn cancel(mut self, word: Option<Word>) -> Self {
-        self.cancel = word;
+    /// The form's Cancel (or Clear) word, and whether there is something to cancel now. The word
+    /// is given whether or not it shows, so the line keeps its room.
+    pub fn cancel(mut self, word: Word, shown: bool) -> Self {
+        self.cancel = Some((word, shown));
         self
     }
 
     /// What Create will make (`Will create NPCs/Watchkeeper.md`), shown once nothing blocks it.
+    /// It keeps one line: a long one gives way at its start, and its hover and accessible name
+    /// keep it whole.
     pub fn preview(mut self, preview: Option<&'a str>) -> Self {
         self.preview = preview;
         self
@@ -928,17 +1188,20 @@ pub struct Complete;
 /// The one inline creation layout: the fields (and choices) in order, the named Create after
 /// the last field on that field's line (after its side action), then one kept line below it,
 /// then the last field's help. Help under an earlier field has `L` before the next label.
-/// Nothing moves while the DM types: Create keeps its word, and the kept line keeps its height.
+/// Nothing moves while the DM types: Create keeps its word, and the kept line keeps its height
+/// for the life of the form.
 ///
 /// The order is in the type: `create` follows a text field, `kept_line` follows `create`, and
 /// only a complete form has `show`.
 ///
 /// ```
 /// use splat::layout::{Create, CreateField, InlineCreate, KeptLine};
+/// splat::create_reasons! { enum Reason { NoName => "Enter a name first." } }
 /// fn form(ui: &mut eframe::egui::Ui, name: &mut String) {
+///     let reason = name.is_empty().then_some(Reason::NoName);
 ///     let _ = InlineCreate::new()
-///         .field(CreateField::new(splat::field_id!("doc_name"), "Name", name))
-///         .create(Create::primary(splat::word!("Create")))
+///         .field(CreateField::new(splat::field_id!("doc_form_name"), "Name", name))
+///         .create(Create::primary(splat::word!("Create")).blocked(reason))
 ///         .kept_line(KeptLine::new())
 ///         .show(ui);
 /// }
@@ -947,46 +1210,46 @@ pub struct Complete;
 /// Create before any field does not compile:
 ///
 /// ```compile_fail,E0599
-/// use splat::layout::{Create, InlineCreate};
-/// let _ = InlineCreate::new().create(Create::primary(splat::word!("Create")));
+/// use splat::layout::{Create, InlineCreate, NoReason};
+/// let _ = InlineCreate::new().create(Create::<NoReason>::primary(splat::word!("Create")));
 /// ```
 ///
 /// Create after a choice, with no field after it, does not compile:
 ///
 /// ```compile_fail,E0599
-/// use splat::layout::{Create, CreateChoice, InlineCreate};
+/// use splat::layout::{Create, CreateChoice, InlineCreate, NoReason};
 /// let mut used = false;
 /// let _ = InlineCreate::new()
 ///     .choice(CreateChoice::new("Use", &mut used))
-///     .create(Create::primary(splat::word!("Create")));
+///     .create(Create::<NoReason>::primary(splat::word!("Create")));
 /// ```
 ///
 /// A field after Create does not compile:
 ///
 /// ```compile_fail,E0599
-/// use splat::layout::{Create, CreateField, InlineCreate};
+/// use splat::layout::{Create, CreateField, InlineCreate, NoReason};
 /// let (mut a, mut b) = (String::new(), String::new());
 /// let _ = InlineCreate::new()
 ///     .field(CreateField::new(splat::field_id!("doc_a"), "A", &mut a))
-///     .create(Create::primary(splat::word!("Create")))
+///     .create(Create::<NoReason>::primary(splat::word!("Create")))
 ///     .field(CreateField::new(splat::field_id!("doc_b"), "B", &mut b));
 /// ```
 ///
 /// A form with no kept line has no `show`:
 ///
 /// ```compile_fail,E0599
-/// use splat::layout::{Create, CreateField, InlineCreate};
+/// use splat::layout::{Create, CreateField, InlineCreate, NoReason};
 /// fn form(ui: &mut eframe::egui::Ui, name: &mut String) {
 ///     let _ = InlineCreate::new()
 ///         .field(CreateField::new(splat::field_id!("doc_name"), "Name", name))
-///         .create(Create::primary(splat::word!("Create")))
+///         .create(Create::<NoReason>::primary(splat::word!("Create")))
 ///         .show(ui);
 /// }
 /// ```
 #[must_use = "call show"]
-pub struct InlineCreate<'a, State> {
+pub struct InlineCreate<'a, State, R: CreateReasons> {
     parts: Vec<CreatePart<'a>>,
-    create: Option<Create<'a>>,
+    create: Option<Create<R>>,
     kept: KeptLine<'a>,
     state: PhantomData<State>,
 }
@@ -1002,8 +1265,8 @@ pub struct InlineCreateResponse {
     pub fields: Vec<Response>,
 }
 
-impl<'a, State> InlineCreate<'a, State> {
-    fn into<Next>(self) -> InlineCreate<'a, Next> {
+impl<'a, State, R: CreateReasons> InlineCreate<'a, State, R> {
+    fn into<Next>(self) -> InlineCreate<'a, Next, R> {
         InlineCreate {
             parts: self.parts,
             create: self.create,
@@ -1013,7 +1276,7 @@ impl<'a, State> InlineCreate<'a, State> {
     }
 }
 
-impl<'a> InlineCreate<'a, Empty> {
+impl<R: CreateReasons> InlineCreate<'_, Empty, R> {
     pub fn new() -> Self {
         Self {
             parts: Vec::new(),
@@ -1024,7 +1287,7 @@ impl<'a> InlineCreate<'a, Empty> {
     }
 }
 
-impl Default for InlineCreate<'_, Empty> {
+impl<R: CreateReasons> Default for InlineCreate<'_, Empty, R> {
     fn default() -> Self {
         Self::new()
     }
@@ -1032,13 +1295,13 @@ impl Default for InlineCreate<'_, Empty> {
 
 macro_rules! add_parts {
     ($($state:ty),*) => {$(
-        impl<'a> InlineCreate<'a, $state> {
-            pub fn field(mut self, field: CreateField<'a>) -> InlineCreate<'a, AfterField> {
+        impl<'a, R: CreateReasons> InlineCreate<'a, $state, R> {
+            pub fn field(mut self, field: CreateField<'a>) -> InlineCreate<'a, AfterField, R> {
                 self.parts.push(CreatePart::Text(field));
                 self.into()
             }
 
-            pub fn choice(mut self, choice: CreateChoice<'a>) -> InlineCreate<'a, AfterChoice> {
+            pub fn choice(mut self, choice: CreateChoice<'a>) -> InlineCreate<'a, AfterChoice, R> {
                 self.parts.push(CreatePart::Choice(choice));
                 self.into()
             }
@@ -1047,21 +1310,50 @@ macro_rules! add_parts {
 }
 add_parts!(Empty, AfterChoice, AfterField);
 
-impl<'a> InlineCreate<'a, AfterField> {
-    pub fn create(mut self, create: Create<'a>) -> InlineCreate<'a, Named> {
+impl<'a, R: CreateReasons> InlineCreate<'a, AfterField, R> {
+    pub fn create(mut self, create: Create<R>) -> InlineCreate<'a, Named, R> {
         self.create = Some(create);
         self.into()
     }
 }
 
-impl<'a> InlineCreate<'a, Named> {
-    pub fn kept_line(mut self, kept: KeptLine<'a>) -> InlineCreate<'a, Complete> {
+impl<'a, R: CreateReasons> InlineCreate<'a, Named, R> {
+    pub fn kept_line(mut self, kept: KeptLine<'a>) -> InlineCreate<'a, Complete, R> {
         self.kept = kept;
         self.into()
     }
 }
 
-impl InlineCreate<'_, Complete> {
+/// The kept line's fixed height in `room`: a control's, or the tallest declared reason's
+/// wrapped beside Cancel, whichever is taller. A reason drawn with Cancel hidden has more
+/// room, so it is never taller than this.
+fn kept_line_height<R: CreateReasons>(ui: &Ui, room: f32, cancel: Option<Word>) -> f32 {
+    let beside = cancel.map_or(0.0, |word| cancel_action(word).natural_width(ui) + L);
+    let width = (room - beside).max(1.0);
+    let font = Type::Small.font(ui);
+    R::ALL
+        .iter()
+        .map(|reason| {
+            ui.fonts_mut(|fonts| {
+                fonts
+                    .layout(
+                        reason.words().to_owned(),
+                        font.clone(),
+                        colors().muted,
+                        width,
+                    )
+                    .size()
+                    .y
+            })
+        })
+        .fold(Density::Read.control(), f32::max)
+}
+
+fn cancel_action(word: Word) -> Action<'static> {
+    Action::quiet(word.as_str()).density(Density::Read)
+}
+
+impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
     pub fn show(self, ui: &mut Ui) -> InlineCreateResponse {
         let mut out = InlineCreateResponse::default();
         let Some(create) = self.create else {
@@ -1127,27 +1419,29 @@ impl InlineCreate<'_, Complete> {
                 }
             }
         }
-        // The kept line: as tall as a control whether or not it holds anything.
-        ui.allocate_ui_with_layout(
-            vec2(room, Density::Read.control()),
-            Layout::left_to_right(Align::Center),
-            |ui| {
-                ui.set_min_height(Density::Read.control());
-                if let Some(cancel) = self.kept.cancel {
-                    out.cancel = Action::quiet(cancel.as_str())
-                        .density(Density::Read)
-                        .line_start()
-                        .show(ui)
-                        .clicked();
-                    ui.add_space((L - ui.spacing().item_spacing.x).max(0.0));
-                }
-                if create.blocked.is_some() {
-                    blocked_reason(ui, create.blocked);
-                } else if let Some(preview) = self.kept.preview {
-                    preview_line(ui, preview);
-                }
-            },
+        // The kept line: one fixed height for the life of the form, whatever it holds now.
+        let cancel = self.kept.cancel.map(|(word, _)| word);
+        let height = kept_line_height::<R>(ui, room, cancel);
+        let (line, _) = ui.allocate_exact_size(vec2(room, height), Sense::hover());
+        // Its content goes in a child that does not allocate in `ui` again.
+        let mut kept = ui.new_child(
+            UiBuilder::new()
+                .max_rect(line)
+                .layout(Layout::left_to_right(Align::Min)),
         );
+        kept.spacing_mut().item_spacing.x = 0.0;
+        if let Some((word, true)) = self.kept.cancel {
+            out.cancel = cancel_action(word).line_start().show(&mut kept).clicked();
+            kept.add_space(L);
+        }
+        if let Some(reason) = create.blocked {
+            let words = Type::Small
+                .rich(&kept, reason.words())
+                .color(colors().muted);
+            kept.add(egui::Label::new(words).wrap());
+        } else if let Some(preview) = self.kept.preview {
+            preview_line(&mut kept, preview);
+        }
         if let Some(help) = last_help {
             super::help(ui, help);
         }
@@ -1155,8 +1449,8 @@ impl InlineCreate<'_, Complete> {
     }
 }
 
-/// A preview that does not fit gives way at its start (`…/modules/copper_coast`); its hover and
-/// accessible name keep it whole.
+/// A preview keeps one line: one that does not fit gives way at its start
+/// (`…/modules/copper_coast`); its hover and accessible name keep it whole.
 fn preview_line(ui: &mut Ui, preview: &str) {
     let font = Type::Small.font(ui);
     let room = ui.available_width();
@@ -1173,9 +1467,7 @@ fn preview_line(ui: &mut Ui, preview: &str) {
         }
     }
     let response = ui
-        .add(egui::Label::new(
-            Type::Small.rich(ui, shown).color(colors().muted),
-        ))
+        .add(egui::Label::new(Type::Small.rich(ui, shown).color(colors().muted)).extend())
         .on_hover_text(preview);
     named(ui, &response, preview);
 }

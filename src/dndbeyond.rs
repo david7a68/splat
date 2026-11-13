@@ -389,6 +389,7 @@ impl DndBeyond {
         }
     }
 
+    #[allow(clippy::disallowed_methods)]
     pub fn show(
         &mut self,
         ui: &mut egui::Ui,

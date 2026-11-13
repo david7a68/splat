@@ -5581,6 +5581,7 @@ impl Library {
     }
 
     /// What the catalogue shows. Choosing here never changes the active campaign.
+    #[allow(clippy::disallowed_methods)]
     fn scope_menu(
         ui: &mut egui::Ui,
         compact: bool,

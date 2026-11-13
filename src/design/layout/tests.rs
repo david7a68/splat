@@ -4,25 +4,62 @@ use eframe::egui::{self, Rect, pos2, vec2};
 use super::*;
 use crate::design::theme;
 
-/// One frame at `size`, drawing `add` in a central panel. Returns the accessible nodes.
-fn frame(
+type Nodes = Vec<(egui::accesskit::NodeId, egui::accesskit::Node)>;
+
+/// A text the frame painted: its words, where, the clip it was painted in, and whether egui cut
+/// it to an ellipsis.
+struct Painted {
+    text: String,
+    rect: Rect,
+    clip: Rect,
+    elided: bool,
+}
+
+/// One frame at `size` with `events`, drawing `add` in a central panel.
+fn frame_with(
     ctx: &egui::Context,
     size: egui::Vec2,
-    add: impl FnMut(&mut Ui),
-) -> Vec<(egui::accesskit::NodeId, egui::accesskit::Node)> {
-    let mut add = add;
+    events: Vec<egui::Event>,
+    mut add: impl FnMut(&mut Ui),
+) -> (Nodes, Vec<Painted>) {
     let input = egui::RawInput {
         screen_rect: Some(Rect::from_min_size(pos2(0.0, 0.0), size)),
+        events,
         ..Default::default()
     };
     let output = ctx.run(input, |ctx| {
         egui::CentralPanel::default().show(ctx, |ui| add(ui));
     });
-    output
+    let mut painted = Vec::new();
+    fn walk(shape: &egui::Shape, clip: Rect, out: &mut Vec<Painted>) {
+        match shape {
+            egui::Shape::Text(text) => out.push(Painted {
+                text: text.galley.job.text.clone(),
+                rect: text.visual_bounding_rect(),
+                clip,
+                elided: text.galley.elided,
+            }),
+            egui::Shape::Vec(shapes) => {
+                for shape in shapes {
+                    walk(shape, clip, out);
+                }
+            }
+            _ => {}
+        }
+    }
+    for clipped in &output.shapes {
+        walk(&clipped.shape, clipped.clip_rect, &mut painted);
+    }
+    let nodes = output
         .platform_output
         .accesskit_update
         .map(|update| update.nodes)
-        .unwrap_or_default()
+        .unwrap_or_default();
+    (nodes, painted)
+}
+
+fn frame(ctx: &egui::Context, size: egui::Vec2, add: impl FnMut(&mut Ui)) -> Nodes {
+    frame_with(ctx, size, Vec::new(), add).0
 }
 
 fn context() -> egui::Context {
@@ -46,15 +83,32 @@ fn bounds(nodes: &[(egui::accesskit::NodeId, egui::accesskit::Node)], name: &str
     )
 }
 
-/// F14: the content's right edge is the same with and without the scroll bar.
+/// The words are painted whole: one text with exactly these words, not cut to an ellipsis, and
+/// inside the clip it was painted in.
+fn painted_whole(painted: &[Painted], words: &str) -> bool {
+    painted.iter().any(|text| {
+        text.text == words && !text.elided && text.clip.expand(0.5).contains_rect(text.rect)
+    })
+}
+
+/// F14: the content's right edge is the same with and without the scroll bar, also when the
+/// caller's style has floating bars that take no width, or solid bars wider than the lane.
 #[test]
 fn scroll_column_keeps_the_lane_with_and_without_the_bar() {
     let ctx = context();
-    let edge = |rows: usize| {
+    let edge = |rows: usize, style: usize| {
         let mut right = 0.0;
+        let mut given = 0.0;
         let mut overflows = false;
+        let mut inner = 0.0;
         frame(&ctx, vec2(600.0, 300.0), |ui| {
-            let output = ScrollColumn::new(("lane", rows))
+            match style {
+                1 => ui.spacing_mut().scroll = egui::style::ScrollStyle::floating(),
+                2 => ui.spacing_mut().scroll.bar_width = 24.0,
+                _ => {}
+            }
+            given = ui.max_rect().right();
+            let output = ScrollColumn::new(("lane", rows, style))
                 .max_height(200.0)
                 .show(ui, |ui| {
                     for row in 0..rows {
@@ -63,19 +117,29 @@ fn scroll_column_keeps_the_lane_with_and_without_the_bar() {
                     right = ui.max_rect().right();
                 });
             overflows = output.content_size.y > output.inner_rect.height();
+            inner = output.inner_rect.right();
         });
-        (right, overflows)
+        (right, given, overflows, inner)
     };
-    // Two frames each, so the bar's state settles.
-    edge(1);
-    let (short, short_bar) = edge(1);
-    edge(80);
-    let (tall, tall_bar) = edge(80);
-    assert!(
-        !short_bar && tall_bar,
-        "one column has a bar and one has none"
-    );
-    assert_eq!(short, tall, "the content ends at one edge");
+    assert!(lane_width() > 0.0);
+    for style in [0, 1, 2] {
+        // Two frames each, so the bar's state settles.
+        edge(1, style);
+        let (short, given, short_bar, _) = edge(1, style);
+        edge(80, style);
+        let (tall, _, tall_bar, inner) = edge(80, style);
+        // The bar starts where the area's inner rect ends: the content is clear of it.
+        assert!(
+            tall <= inner + 0.01,
+            "the bar does not cover the content (style {style})"
+        );
+        assert!(
+            !short_bar && tall_bar,
+            "one column has a bar and one has none"
+        );
+        assert_eq!(short, tall, "the content ends at one edge (style {style})");
+        assert_eq!(short, given - lane_width(), "the lane is kept");
+    }
 }
 
 /// F8: a value that changes in place keeps the next control still.
@@ -107,139 +171,179 @@ fn slot_and_status_slot_keep_the_next_control_still() {
     assert_eq!(after("3 of 3 saves and many more words", 1), narrow);
 }
 
-/// F17: the actions follow the title when they fit, by measure; else all of them move together
-/// to one line under the title, each with its word. None is ever dropped.
-#[test]
-fn title_line_keeps_every_action_and_its_word_at_every_width() {
-    const EDIT: Word = crate::word!("Edit");
-    const LOG: Word = crate::word!("Add to Log");
-    const START: Word = crate::word!("Start fight");
-    let ctx = context();
-    let line = || {
-        TitleLine::new("Cinder Wolf")
-            .role(TitleType::Section)
-            .action(TitleAction::quiet(EDIT).icon(crate::design::icons::EDIT))
-            .action(TitleAction::quiet(LOG))
-            .action(TitleAction::secondary(START))
-    };
-    // The width the title and all actions need on one line, from the same measure.
-    let mut need = 0.0;
-    frame(&ctx, vec2(1200.0, 300.0), |ui| {
-        let probe = line();
-        need = probe.title_width(ui) + L + probe.actions_width(ui);
-    });
-    let at = |width: f32| {
-        let mut below = (false, 0);
-        let mut seen = (0.0, 0.0);
-        let nodes = frame(&ctx, vec2(width + 40.0, 300.0), |ui| {
-            let rect = Rect::from_min_size(ui.cursor().min, vec2(width, 200.0));
-            ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
-                let probe = line();
-                seen = (
-                    ui.available_width(),
-                    probe.title_width(ui) + L + probe.actions_width(ui),
-                );
-                let shown = line().show(ui);
-                below = (shown.below, shown.rows);
-            });
-        });
-        assert_eq!(seen, (width, need), "the measure is the probe's");
-        let rects = ["Edit", "Add to Log", "Start fight"].map(|word| bounds(&nodes, word));
-        (below, rects)
-    };
-    for width in [need + 1.0, need + 200.0] {
-        let ((below, _), rects) = at(width);
-        assert!(!below, "fits at {width}");
-        assert!(
-            rects
-                .iter()
-                .all(|r| (r.center().y - rects[0].center().y).abs() < 1.0)
-        );
-    }
-    // Step 2: one row under the title, never wrapped while that row fits the pane.
-    let ((below, rows), rects) = at(need - 1.0);
-    assert!(
-        below && rows == 1,
-        "one row under the title at {}",
-        need - 1.0
-    );
-    // Every action is there, on one line, with its word (the node is found by it).
-    assert!(rects.iter().all(|r| (r.top() - rects[0].top()).abs() < 1.0));
-    let (_, wide) = at(need + 1.0);
-    assert!(rects[0].top() > wide[0].bottom() - 1.0, "under the title");
-    // Step 3: a pane too narrow for one row wraps at whole actions, from the left.
-    let ((below, rows), rects) = at(150.0);
-    assert!(below && rows > 1, "rows wrap at 150");
-    assert!(rects[1].top() > rects[0].top() || rects[2].top() > rects[1].top());
-    let left = rects.iter().map(|r| r.left()).fold(f32::MAX, f32::min);
-    for pair in rects.windows(2) {
-        // In order: the next action is right of this one on its row, or starts a lower row.
-        assert!(pair[1].left() > pair[0].right() - 1.0 || pair[1].top() > pair[0].bottom() - 1.0);
-        if pair[1].top() > pair[0].bottom() - 1.0 {
-            assert!(
-                (pair[1].left() - left).abs() < 1.0 + S,
-                "a row starts at the left"
-            );
-        }
-    }
-}
-
 /// The ruling's order, by measure, at each boundary: on the title line, else one row under the
 /// title, else rows that wrap at whole actions. Every action once, in order; never a wrap while
-/// one row fits; an action wider than the pane has its own row.
+/// one row fits; an action wider than the line has its own row.
 #[test]
 // One row of all three actions is the point of these cases.
 #[allow(clippy::single_range_in_vec_init)]
 fn title_placement_follows_the_ruling_at_each_boundary() {
     let widths = [60.0, 100.0, 80.0];
-    let row = 60.0 + 100.0 + 80.0 + 2.0 * XS;
-    let title = 200.0;
+    let row = 60.0 + 100.0 + 80.0 + 2.0 * ACTION_GAP;
+    let (title, lead) = (200.0, L - S);
+    let place = |beside: f32, under: f32| title_placement(title, lead, &widths, beside, under);
+    assert_eq!(place(title + lead + row, 1.0), TitlePlacement::OnTitle);
     assert_eq!(
-        title_placement(title, &widths, XS, title + L + row),
-        TitlePlacement::OnTitle
-    );
-    assert_eq!(
-        title_placement(title, &widths, XS, title + L + row - 1.0),
+        place(title + lead + row - 0.5, 1000.0),
         TitlePlacement::Under(vec![0..3])
     );
+    assert_eq!(place(10.0, row), TitlePlacement::Under(vec![0..3]));
     assert_eq!(
-        title_placement(title, &widths, XS, row),
-        TitlePlacement::Under(vec![0..3])
-    );
-    assert_eq!(
-        title_placement(title, &widths, XS, row - 1.0),
+        place(10.0, row - 0.5),
         TitlePlacement::Under(vec![0..2, 2..3])
     );
     assert_eq!(
-        title_placement(title, &widths, XS, 100.0),
+        place(10.0, 100.0),
         TitlePlacement::Under(vec![0..1, 1..2, 2..3])
     );
-    // Wider than the pane: its own row, never dropped.
+    // Wider than the line: its own row, never dropped.
     assert_eq!(
-        title_placement(title, &widths, XS, 70.0),
+        place(10.0, 70.0),
         TitlePlacement::Under(vec![0..1, 1..2, 2..3])
     );
     // No actions: nothing moves under the title.
     assert_eq!(
-        title_placement(title, &[], XS, 10.0),
+        title_placement(title, lead, &[], 10.0, 10.0),
         TitlePlacement::OnTitle
     );
 }
 
-/// F15: typing moves nothing: Create, the field, the kept line and the help below stay put, and
+/// F17: the actions follow the title when they fit, by measure, to half a point; else they move
+/// together under it; in the narrowest pane they wrap at whole actions. Every word is painted
+/// whole inside its clip at every width, the title's context included. The measure here does
+/// not use the part's own: it adds the painted title, the context, the gaps and each
+/// `Action`'s natural width.
+#[test]
+fn title_line_keeps_every_action_and_its_word_at_every_width() {
+    const EDIT: Word = crate::word!("Edit");
+    const LOG: Word = crate::word!("Add to Log");
+    const START: Word = crate::word!("Start fight");
+    const OPEN: Word = crate::word!("Open in Lookup");
+    const WORDS: [&str; 4] = ["Edit", "Add to Log", "Start fight", "Open in Lookup"];
+    let (title, kind) = ("Cinder Wolf", "Beast · CR 3");
+    let ctx = context();
+    let line = || {
+        TitleLine::new(title)
+            .role(TitleType::Section)
+            .context(Some(kind))
+            .action(TitleAction::quiet(EDIT).icon(crate::design::icons::EDIT))
+            .action(TitleAction::quiet(LOG))
+            .action(TitleAction::quiet(START))
+            .action(TitleAction::secondary(OPEN))
+    };
+    let mut need = 0.0;
+    let mut row = 0.0;
+    frame(&ctx, vec2(1600.0, 300.0), |ui| {
+        let text = |words: &str, font: Type| {
+            let font = font.font(ui);
+            ui.fonts_mut(|fonts| fonts.layout_no_wrap(words.to_owned(), font, colors().text))
+                .size()
+                .x
+                .ceil()
+        };
+        let actions = [
+            Action::quiet("Edit").icon(crate::design::icons::EDIT),
+            Action::quiet("Add to Log"),
+            Action::quiet("Start fight"),
+            Action::secondary("Open in Lookup"),
+        ]
+        .map(|action| action.density(Density::Read).natural_width(ui).ceil());
+        row = actions.iter().sum::<f32>() + 3.0 * XS;
+        need = text(title, Type::Section) + XS + text(kind, Type::Small) + (L - S) + row;
+    });
+    let at = |width: f32| {
+        let mut rows = 0;
+        let mut left = 0.0;
+        let (nodes, painted) = frame_with(&ctx, vec2(width + 40.0, 400.0), Vec::new(), |ui| {
+            let rect = Rect::from_min_size(ui.cursor().min, vec2(width, 300.0));
+            left = rect.left();
+            ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+                rows = line().show(ui).rows;
+            });
+        });
+        for words in WORDS.into_iter().chain([title, kind]) {
+            assert!(painted_whole(&painted, words), "{words:?} whole at {width}");
+        }
+        let rects = WORDS.map(|word| bounds(&nodes, word));
+        // The draw keeps to the measure: every action ends inside the width it was given.
+        for (word, rect) in WORDS.iter().zip(&rects) {
+            assert!(
+                rect.right() <= left + width + 0.5,
+                "{word:?} inside {width}"
+            );
+        }
+        (rows, rects)
+    };
+    // One line, to half a point.
+    let (rows, beside) = at(need + 0.5);
+    assert_eq!(rows, 0, "fits at {}", need + 0.5);
+    assert!(
+        beside
+            .iter()
+            .all(|r| (r.center().y - beside[0].center().y).abs() < 1.0)
+    );
+    let (rows, under) = at(need - 0.5);
+    assert_eq!(rows, 1, "one row under the title at {}", need - 0.5);
+    assert!(under.iter().all(|r| (r.top() - under[0].top()).abs() < 1.0));
+    assert!(under[0].top() > beside[0].bottom() - 1.0, "under the title");
+    // The narrowest pane: one row cannot fit, so the rows wrap at whole actions, from the left,
+    // in order, and every word is still whole.
+    assert!(row > NARROWEST_PANE, "the case needs more than one row");
+    let (rows, wrapped) = at(NARROWEST_PANE);
+    assert!(rows > 1, "rows wrap at {NARROWEST_PANE}");
+    for pair in wrapped.windows(2) {
+        let next_row = pair[1].top() > pair[0].bottom() - 1.0;
+        assert!(
+            next_row || pair[1].left() > pair[0].right() - 1.0,
+            "in order"
+        );
+        if next_row {
+            assert!(
+                (pair[1].left() - wrapped[0].left()).abs() < 1.0,
+                "from the left"
+            );
+        }
+    }
+}
+
+/// The longest word a `Word` may have, in the widest letters and with an icon, is painted whole
+/// in the narrowest pane.
+#[test]
+fn the_longest_word_fits_the_narrowest_pane() {
+    const LONGEST: Word = crate::word!("WWWWWWWWWWWWWWWWWWWW");
+    assert_eq!(LONGEST.as_str().chars().count(), MAX_WORD_CHARS);
+    let ctx = context();
+    let (_, painted) = frame_with(&ctx, vec2(NARROWEST_PANE + 40.0, 300.0), Vec::new(), |ui| {
+        let rect = Rect::from_min_size(ui.cursor().min, vec2(NARROWEST_PANE, 200.0));
+        ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+            let _ = TitleLine::new("Cinder Wolf")
+                .action(TitleAction::secondary(LONGEST).icon(crate::design::icons::EDIT))
+                .show(ui);
+        });
+    });
+    assert!(painted_whole(&painted, LONGEST.as_str()));
+}
+
+crate::create_reasons! {
+    enum TestReason {
+        NoFolder => "Choose a folder first.",
+        Long => "Splat cannot add a campaign here, because another campaign already keeps its notes, encounters and runs in this folder, and two campaigns in one folder would write over each other. Choose another folder first, or open the other campaign.",
+    }
+}
+
+/// F15: nothing moves while the DM types: Create, the field and what is below stay put through
+/// no reason, a short reason and a two-line reason, with and without Cancel, and with a preview.
 /// Create sits on the last field's line.
 #[test]
 fn inline_create_moves_nothing_while_the_dm_types() {
     const CREATE: Word = crate::word!("Add campaign");
     const BROWSE: Word = crate::word!("Browse…");
     const CANCEL: Word = crate::word!("Cancel");
+    const PREVIEW: &str = "Will create /home/dm/Obsidian/Vault/Campaigns/The Copper Coast and the Salt Road/Modules/Sessions/A very long folder name that goes on/Copper Coast/Campaign.md";
     let ctx = context();
-    let draw = |name: &str, folder: &str, with_preview: bool| {
-        let (mut name, mut folder) = (name.to_owned(), folder.to_owned());
-        let reason = folder.is_empty().then_some("Choose a folder first.");
-        let preview = format!("Will create {folder}/Campaign.md");
-        let cancel = (!name.is_empty()).then_some(CANCEL);
-        let nodes = frame(&ctx, vec2(800.0, 400.0), |ui| {
+    let draw = |reason: Option<TestReason>, cancel: bool, preview: bool| {
+        let (mut name, mut folder) = (String::from("Copper Coast"), String::from("/vault"));
+        let (nodes, painted) = frame_with(&ctx, vec2(800.0, 500.0), Vec::new(), |ui| {
             let _ = InlineCreate::new()
                 .field(
                     CreateField::new(
@@ -261,24 +365,53 @@ fn inline_create_moves_nothing_while_the_dm_types() {
                 .create(Create::primary(CREATE).blocked(reason))
                 .kept_line(
                     KeptLine::new()
-                        .cancel(cancel)
-                        .preview(with_preview.then_some(preview.as_str())),
+                        .cancel(CANCEL, cancel)
+                        .preview(preview.then_some(PREVIEW)),
                 )
                 .show(ui);
             let _ = Action::quiet("Below").show(ui);
         });
-        ["Folder", "Browse…", "Add campaign", "Below"].map(|name| bounds(&nodes, name))
+        let rects = ["Folder", "Browse…", "Add campaign", "Below"].map(|name| bounds(&nodes, name));
+        (rects, nodes, painted)
     };
-    let empty = draw("", "", true);
-    let typed = draw("Copper Coast", "/vault/copper", true);
-    // A kept line with nothing on it (no Cancel, no reason, no preview) keeps its height too.
-    assert_eq!(
-        draw("", "/vault/copper", false),
-        empty,
-        "an empty kept line stays"
-    );
-    assert_eq!(empty, typed, "nothing moves as the DM types");
-    let [field, browse, create, _] = typed;
+    let (still, _, _) = draw(None, false, false);
+    for reason in [None, Some(TestReason::NoFolder), Some(TestReason::Long)] {
+        for cancel in [false, true] {
+            let (rects, nodes, painted) = draw(reason, cancel, reason.is_none());
+            assert_eq!(rects, still, "{reason:?}, Cancel {cancel}");
+            if reason == Some(TestReason::Long) {
+                // The case can fail: the long reason is really painted on two lines or more.
+                let long = painted
+                    .iter()
+                    .find(|text| text.text == TestReason::Long.words())
+                    .expect("the long reason is painted");
+                assert!(
+                    long.rect.height() > Density::Read.control(),
+                    "taller than a control"
+                );
+                // It fits its kept line: it ends above the help under that line.
+                let help = painted
+                    .iter()
+                    .find(|text| text.text == "Splat keeps the notes here.")
+                    .expect("the help is painted");
+                assert!(
+                    long.rect.bottom() <= help.rect.top(),
+                    "the reason has its room"
+                );
+            }
+            if reason.is_none() {
+                // The preview keeps one line, cut at its start; its accessible name is whole.
+                let preview = painted
+                    .iter()
+                    .find(|text| text.text.ends_with("Campaign.md"))
+                    .expect("the preview is painted");
+                assert!(preview.rect.height() < 1.5 * Type::Small.line());
+                assert!(preview.text.starts_with('…'), "{}", preview.text);
+                let _ = bounds(&nodes, PREVIEW);
+            }
+        }
+    }
+    let [field, browse, create, _] = still;
     assert!(
         (create.center().y - field.center().y).abs() < 1.0,
         "Create is on the field's line"
@@ -286,18 +419,20 @@ fn inline_create_moves_nothing_while_the_dm_types() {
     assert!(browse.right() <= create.left() && field.right() <= browse.left());
 }
 
-/// PR 297: a field keeps its focus when a layout branch changes around it. A field whose id
-/// comes from its place does not, which is the fault this part rules out.
+/// PR 297: a field keeps its focus when a layout branch changes around it, and two live fields
+/// with one name and two row keys keep their own text and focus. A field whose id comes from its
+/// place does not keep it, which is the fault this part rules out.
 #[test]
 fn a_field_id_keeps_focus_across_a_layout_branch() {
     const NAME: FieldId = crate::field_id!("test_branch_name");
     let ctx = context();
-    let mut text = String::from("Copper");
+    let (mut first, mut second) = (String::from("Copper"), String::from("Salt"));
     let mut placed = None;
-    let mut draw = |wide: bool, focus: bool| {
-        frame(&ctx, vec2(800.0, 400.0), |ui| {
+    let mut draw = |wide: bool, focus: bool, events: Vec<egui::Event>| {
+        frame_with(&ctx, vec2(800.0, 400.0), events, |ui| {
             let mut add = |ui: &mut Ui| {
-                let kept = line_field(ui, NAME, "Name", &mut text, "", 200.0);
+                let _ = line_field(ui, NAME.with(RowIndex(0)), "First", &mut first, "", 200.0);
+                let kept = line_field(ui, NAME.with(RowIndex(1)), "Second", &mut second, "", 200.0);
                 let mut other = String::new();
                 let by_place = ui.add(egui::TextEdit::singleline(&mut other));
                 if focus {
@@ -319,22 +454,43 @@ fn a_field_id_keeps_focus_across_a_layout_branch() {
             }
         });
     };
-    draw(true, true);
-    draw(true, false);
-    assert!(ctx.memory(|memory| memory.has_focus(NAME.id())));
-    draw(false, false);
-    draw(false, false);
+    let second_id = NAME.with(RowIndex(1)).id();
+    draw(true, true, Vec::new());
+    draw(true, false, Vec::new());
+    assert!(ctx.memory(|memory| memory.has_focus(second_id)));
+    draw(false, false, Vec::new());
+    draw(false, false, vec![egui::Event::Text("y".into())]);
     assert!(
-        ctx.memory(|memory| memory.has_focus(NAME.id())),
+        ctx.memory(|memory| memory.has_focus(second_id)),
         "the field keeps its focus"
     );
-    // The field beside it, with an id from its place, is another widget in the other branch.
+    assert_eq!(
+        (first.as_str(), second.as_str()),
+        ("Copper", "Salty"),
+        "only the focused field takes the text"
+    );
+    // The field beside them, with an id from its place, is another widget in the other branch.
     let mut moved = None;
     frame(&ctx, vec2(800.0, 400.0), |ui| {
         ui.vertical(|ui| {
             ui.label("Narrow");
+            let _ = line_field(
+                ui,
+                NAME.with(RowIndex(0)),
+                "First",
+                &mut String::new(),
+                "",
+                200.0,
+            );
+            let _ = line_field(
+                ui,
+                NAME.with(RowIndex(1)),
+                "Second",
+                &mut String::new(),
+                "",
+                200.0,
+            );
             let mut other = String::new();
-            let _ = line_field(ui, NAME, "Name", &mut String::new(), "", 200.0);
             moved = Some(ui.add(egui::TextEdit::singleline(&mut other)).id);
         });
     });
@@ -342,4 +498,38 @@ fn a_field_id_keeps_focus_across_a_layout_branch() {
         placed, moved,
         "an id from the place changes with the branch"
     );
+}
+
+/// Rung 4 for `FieldId`: two live text fields with one id make egui paint its id-clash warning,
+/// which the gate's `widget-id-clash` check fails on in every state.
+#[test]
+fn two_live_fields_with_one_id_paint_the_clash_warning() {
+    const NAME: FieldId = crate::field_id!("test_clash_name");
+    let ctx = context();
+    ctx.options_mut(|options| options.warn_on_id_clash = true);
+    let painted = |key: usize| {
+        let (_, painted) = frame_with(&ctx, vec2(800.0, 400.0), Vec::new(), |ui| {
+            let _ = line_field(
+                ui,
+                NAME.with(RowIndex(0)),
+                "A",
+                &mut String::new(),
+                "",
+                200.0,
+            );
+            let _ = line_field(
+                ui,
+                NAME.with(RowIndex(key)),
+                "B",
+                &mut String::new(),
+                "",
+                200.0,
+            );
+        });
+        painted
+            .iter()
+            .any(|text| text.text.contains("use of widget ID"))
+    };
+    assert!(!painted(1), "two keys, no clash");
+    assert!(painted(0), "one id twice is a clash");
 }

@@ -151,7 +151,15 @@ fn apply_spacing(style: &mut egui::Style) {
     s.icon_spacing = 6.0;
     s.combo_height = 320.0;
     s.tooltip_width = 320.0;
-    s.scroll = ScrollStyle {
+    s.scroll = scroll_style();
+    style.interaction.tooltip_delay = 0.25;
+}
+
+/// Force the one dark theme and install its fonts and style.
+/// The app's solid scroll bars. `ScrollColumn` sets it on its own `Ui`, so its lane does not
+/// depend on a caller's style.
+pub fn scroll_style() -> ScrollStyle {
+    ScrollStyle {
         foreground_color: false,
         dormant_background_opacity: 0.0,
         active_background_opacity: 0.4,
@@ -163,11 +171,9 @@ fn apply_spacing(style: &mut egui::Style) {
         floating_width: 8.0,
         floating_allocated_width: 0.0,
         ..ScrollStyle::solid()
-    };
-    style.interaction.tooltip_delay = 0.25;
+    }
 }
 
-/// Force the one dark theme and install its fonts and style.
 pub fn install(ctx: &egui::Context) {
     // The app reads focused widgets' roles, and assistive technology can attach at any time.
     ctx.enable_accesskit();

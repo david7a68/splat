@@ -1,45 +1,90 @@
-# Raw egui calls that a shared part in `src/design/` replaces (docs/design-system.md, Layout parts).
+# Raw egui calls that a shared part in `src/design/` replaces (docs/design-system.md, Widgets).
 # `check` runs Clippy with `-D warnings`, so a new raw call outside `src/design/` fails it. A function
-# that still makes such a call carries `#[allow(clippy::disallowed_methods)]`; the source lint
-# (`src/design/lint.rs`, rule `disallowed-methods-allow`) counts those per file, and the count can
-# only go down. The paths name egui, which only the `splat` crate uses: `allow-invalid` keeps the
-# other workspace crates quiet.
+# that still makes such a call carries `#[allow(clippy::disallowed_methods)]` on its own `fn`; the
+# source lint (`src/design/lint.rs`) counts those per file, the count can only go down, and it
+# refuses any other form (a module, an `impl`, `expect`, `cfg_attr`, a group, several lines).
+# The list names every way egui gives to make each thing (egui 0.33: `ScrollArea`, `TextEdit`,
+# `Ui`, `Response`, the containers). The paths name egui, which only the `splat` crate uses:
+# `allow-invalid` keeps the other workspace crates quiet.
 disallowed-methods = [
     # Scroll areas: `design::ScrollColumn` keeps the scroll bar's lane, so nothing moves when the bar
-    # comes (family F14). A sideways table scroll (`ScrollArea::horizontal`) is not listed.
+    # comes (family F14); `design::sideways_scroll` is the sideways table scroll. These are all of
+    # `ScrollArea`'s constructors; it has no `Default`.
     { path = "egui::ScrollArea::vertical", reason = "use design::ScrollColumn, which keeps the scroll bar's lane", allow-invalid = true },
-    { path = "egui::ScrollArea::both", reason = "use design::ScrollColumn, which keeps the scroll bar's lane", allow-invalid = true },
-    { path = "egui::ScrollArea::new", reason = "use design::ScrollColumn, which keeps the scroll bar's lane", allow-invalid = true },
+    { path = "egui::ScrollArea::both", reason = "use design::ScrollColumn::sideways_too", allow-invalid = true },
+    { path = "egui::ScrollArea::new", reason = "use design::ScrollColumn or design::sideways_scroll", allow-invalid = true },
+    { path = "egui::ScrollArea::horizontal", reason = "use design::sideways_scroll", allow-invalid = true },
+    { path = "egui::ScrollArea::neither", reason = "use design::ScrollColumn or design::sideways_scroll", allow-invalid = true },
     # Text fields: a field's id comes from a `FieldId`, never from its place in the layout, so a
-    # layout branch cannot drop its focus or its cursor (PR 297).
+    # layout branch cannot drop its focus or its cursor (PR 297). These are `TextEdit`'s
+    # constructors, its id setters, and the `Ui` helpers that make one.
     { path = "egui::TextEdit::singleline", reason = "use design::line_field, design::labelled_field or FieldId::single_line", allow-invalid = true },
     { path = "egui::TextEdit::multiline", reason = "use FieldId::multi_line", allow-invalid = true },
-    { path = "egui::TextEdit::new", reason = "use FieldId::single_line or FieldId::multi_line", allow-invalid = true },
     { path = "egui::TextEdit::id", reason = "a FieldId gives the field its id", allow-invalid = true },
     { path = "egui::TextEdit::id_salt", reason = "a FieldId gives the field its id", allow-invalid = true },
     { path = "egui::TextEdit::id_source", reason = "a FieldId gives the field its id", allow-invalid = true },
+    { path = "egui::Ui::text_edit_singleline", reason = "use design::line_field with a FieldId", allow-invalid = true },
+    { path = "egui::Ui::text_edit_multiline", reason = "use FieldId::multi_line", allow-invalid = true },
+    { path = "egui::Ui::code_editor", reason = "use FieldId::multi_line", allow-invalid = true },
     { path = "splat::design::components::text_field", reason = "use design::labelled_field with a FieldId", allow-invalid = true },
     { path = "splat::design::components::small_text_field", reason = "use design::labelled_field with a FieldId", allow-invalid = true },
     { path = "splat::design::components::text_input", reason = "use design::line_field with a FieldId", allow-invalid = true },
     # Words and field ids are checked when the program compiles: build them with `word!` and
-    # `field_id!`, which check the literal in a `const` block.
+    # `field_id!`, which take a literal and check it in a `const` block.
     { path = "splat::design::layout::Word::checked", reason = "use word!(\"…\")", allow-invalid = true },
     { path = "splat::design::layout::FieldId::checked", reason = "use field_id!(\"…\")", allow-invalid = true },
-    # Foreground layers: a popup, menu, window or free area drawn by hand chooses its own place
-    # and can cover a splitter or a scroll bar. Shared parts in `src/design/` own them.
+    # Foreground layers: a popup, menu, window, tooltip or free area drawn by hand chooses its own
+    # place and can cover a splitter or a scroll bar. Shared parts in `src/design/` own them. A
+    # `LayerId` written as a struct with an `egui::Order` is the lint's `foreground-layer` rule.
     { path = "egui::Area::new", reason = "foreground layers belong to src/design/", allow-invalid = true },
     { path = "egui::Window::new", reason = "use design::dialog", allow-invalid = true },
     { path = "egui::Modal::new", reason = "use design::dialog", allow-invalid = true },
+    { path = "egui::Modal::default_area", reason = "use design::dialog", allow-invalid = true },
     { path = "egui::LayerId::new", reason = "foreground layers belong to src/design/", allow-invalid = true },
     { path = "egui::LayerId::debug", reason = "foreground layers belong to src/design/", allow-invalid = true },
+    { path = "egui::LayerId::background", reason = "foreground layers belong to src/design/", allow-invalid = true },
     { path = "egui::Context::layer_painter", reason = "foreground layers belong to src/design/", allow-invalid = true },
-    { path = "egui::Popup::new", reason = "foreground layers belong to src/design/", allow-invalid = true },
+    { path = "egui::Context::debug_painter", reason = "foreground layers belong to src/design/", allow-invalid = true },
+    { path = "egui::Painter::new", reason = "foreground layers belong to src/design/", allow-invalid = true },
+    { path = "egui::Ui::new", reason = "foreground layers belong to src/design/", allow-invalid = true },
+    { path = "egui::Ui::with_layer_id", reason = "foreground layers belong to src/design/", allow-invalid = true },
+    { path = "egui::UiBuilder::layer_id", reason = "foreground layers belong to src/design/", allow-invalid = true },
+    { path = "egui::Popup::new", reason = "use design::menu_popup", allow-invalid = true },
     { path = "egui::Popup::menu", reason = "use design::row_menu or design::menu_popup", allow-invalid = true },
     { path = "egui::Popup::context_menu", reason = "use design::menu_popup", allow-invalid = true },
     { path = "egui::Popup::from_response", reason = "use design::menu_popup", allow-invalid = true },
     { path = "egui::Popup::from_toggle_button_response", reason = "use design::menu_popup", allow-invalid = true },
     { path = "egui::Ui::menu_button", reason = "use design::row_menu or design::menu_popup", allow-invalid = true },
+    { path = "egui::Ui::menu_image_button", reason = "use design::row_menu or design::menu_popup", allow-invalid = true },
+    { path = "egui::Ui::menu_image_text_button", reason = "use design::row_menu or design::menu_popup", allow-invalid = true },
     { path = "egui::Response::context_menu", reason = "use design::menu_popup", allow-invalid = true },
+    { path = "egui::containers::menu::MenuBar::new", reason = "menus belong to src/design/", allow-invalid = true },
+    { path = "egui::containers::menu::MenuButton::new", reason = "menus belong to src/design/", allow-invalid = true },
+    { path = "egui::containers::menu::MenuButton::from_button", reason = "menus belong to src/design/", allow-invalid = true },
+    { path = "egui::containers::menu::SubMenuButton::new", reason = "use design::menu_submenu", allow-invalid = true },
+    { path = "egui::containers::menu::SubMenuButton::from_button", reason = "use design::menu_submenu", allow-invalid = true },
+    { path = "egui::containers::menu::SubMenu::new", reason = "use design::menu_submenu", allow-invalid = true },
+    { path = "egui::ComboBox::new", reason = "a drop-down's list is a foreground layer; it belongs to src/design/", allow-invalid = true },
+    { path = "egui::ComboBox::from_label", reason = "a drop-down's list is a foreground layer; it belongs to src/design/", allow-invalid = true },
+    { path = "egui::ComboBox::from_id_salt", reason = "a drop-down's list is a foreground layer; it belongs to src/design/", allow-invalid = true },
+    { path = "egui::ComboBox::from_id_source", reason = "a drop-down's list is a foreground layer; it belongs to src/design/", allow-invalid = true },
+    { path = "egui::Tooltip::new", reason = "tooltips with drawn content belong to src/design/; words go in on_hover_text", allow-invalid = true },
+    { path = "egui::Tooltip::always_open", reason = "tooltips with drawn content belong to src/design/", allow-invalid = true },
+    { path = "egui::Tooltip::for_widget", reason = "tooltips with drawn content belong to src/design/", allow-invalid = true },
+    { path = "egui::Tooltip::for_enabled", reason = "tooltips with drawn content belong to src/design/", allow-invalid = true },
+    { path = "egui::Tooltip::for_disabled", reason = "tooltips with drawn content belong to src/design/", allow-invalid = true },
+    { path = "egui::Response::on_hover_ui", reason = "tooltips with drawn content belong to src/design/; words go in on_hover_text", allow-invalid = true },
+    { path = "egui::Response::on_hover_ui_at_pointer", reason = "tooltips with drawn content belong to src/design/", allow-invalid = true },
+    { path = "egui::Response::on_disabled_hover_ui", reason = "tooltips with drawn content belong to src/design/", allow-invalid = true },
+    { path = "egui::Response::show_tooltip_ui", reason = "tooltips with drawn content belong to src/design/", allow-invalid = true },
+    { path = "egui::Response::show_tooltip_text", reason = "tooltips belong to src/design/; words go in on_hover_text", allow-invalid = true },
+    { path = "egui::show_tooltip", reason = "tooltips belong to src/design/", allow-invalid = true },
+    { path = "egui::show_tooltip_at_pointer", reason = "tooltips belong to src/design/", allow-invalid = true },
+    { path = "egui::show_tooltip_for", reason = "tooltips belong to src/design/", allow-invalid = true },
+    { path = "egui::show_tooltip_at", reason = "tooltips belong to src/design/", allow-invalid = true },
+    { path = "egui::show_tooltip_text", reason = "tooltips belong to src/design/", allow-invalid = true },
+    { path = "egui::popup_below_widget", reason = "use design::menu_popup", allow-invalid = true },
+    { path = "egui::popup_above_or_below_widget", reason = "use design::menu_popup", allow-invalid = true },
     # A pane's footer: `Footer::pane` draws the body, measures where its content ends and places
     # the footer, so the caller gets no y to size the body by hand (round 28, package P). The
     # source lint also counts each call left (`footer-by-hand`), shrink only.
