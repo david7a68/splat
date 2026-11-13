@@ -762,7 +762,8 @@ impl<A> FaultMessage<A> {
 /// ```
 /// use splat::outcome::{Messages, NoPress, Outcome};
 /// fn f(ui: &mut eframe::egui::Ui) {
-///     let mut messages = Messages::<NoPress>::new("f", 400.0);
+///     let frame = splat::outcome::PaneFrame::new(ui);
+///     let mut messages = Messages::<NoPress>::new(&frame, "f", 400.0);
 ///     messages.outcome(Outcome::Refused(splat::sentence!("No.")));
 ///     let _ = messages.pane(ui, splat::pane::Body::Content, |_| ());
 /// }
@@ -770,7 +771,8 @@ impl<A> FaultMessage<A> {
 /// ```compile_fail
 /// use splat::outcome::{Done, Messages, NoPress, Verb};
 /// fn f(ui: &mut eframe::egui::Ui) {
-///     let mut messages = Messages::<NoPress>::new("f", 400.0);
+///     let frame = splat::outcome::PaneFrame::new(ui);
+///     let mut messages = Messages::<NoPress>::new(&frame, "f", 400.0);
 ///     messages.outcome(Done::new(Verb::Remove, "Bell"));
 ///     let _ = messages.pane(ui, splat::pane::Body::Content, |_| ());
 /// }
@@ -1617,9 +1619,14 @@ pub fn message_rects(ctx: &eframe::egui::Context) -> Vec<(Rect, MessagePlace, To
     .unwrap_or_default()
 }
 
-/// `{chosen} of {total} <unit> chosen`: the one form of a count of chosen things. The phrase
-/// lint keeps this form here.
+/// `{chosen} of {total} <unit> chosen`: the one form of a count of chosen things, in the app's
+/// number form (`1,204 of 2,310 entries chosen`; zero is `0`). The phrase lint keeps this form
+/// here.
 pub fn chosen_count(chosen: usize, total: usize, unit: &str) -> String {
+    let (chosen, total) = (
+        super::components::grouped_number(chosen),
+        super::components::grouped_number(total),
+    );
     if unit.is_empty() {
         format!("{chosen} of {total} chosen")
     } else {
@@ -1862,6 +1869,17 @@ mod tests {
 
     /// The pane's one press: the first in the footer's drawing order wins, and a second press
     /// in the same frame is dropped.
+    /// The chosen count's one form, with the app's digit grouping.
+    #[test]
+    fn a_chosen_count_groups_its_digits() {
+        assert_eq!(chosen_count(0, 999, "entries"), "0 of 999 entries chosen");
+        assert_eq!(chosen_count(999, 1000, ""), "999 of 1,000 chosen");
+        assert_eq!(
+            chosen_count(1204, 2310, "entries"),
+            "1,204 of 2,310 entries chosen"
+        );
+    }
+
     #[test]
     fn a_pane_gives_back_at_most_one_press_the_first() {
         let sink = PressSink::<u8>(std::rc::Rc::default());
@@ -2043,6 +2061,17 @@ mod tests {
             node.accesskit_node().description()
         }
 
+        /// The primary button down or up at `at`.
+        pub(super) fn pointer(h: &mut Harness<'_, App>, at: egui::Pos2, down: bool) {
+            h.event(egui::Event::PointerMoved(at));
+            h.event(egui::Event::PointerButton {
+                pos: at,
+                button: egui::PointerButton::Primary,
+                pressed: down,
+                modifiers: egui::Modifiers::NONE,
+            });
+        }
+
         pub(super) fn two() -> App {
             let mut app = App::default();
             // Recorded at the action: the older link first.
@@ -2111,10 +2140,13 @@ mod tests {
         use pilot::*;
         for change in [InBody::Replace("older"), InBody::End("older")] {
             let mut h = harness(two());
-            // In the frame of the press, the body replaces or ends the result first, then the
-            // footer draws the line it was given and takes the press.
+            let at = undo(&h, "older").rect().center();
+            pointer(&mut h, at, true);
+            h.run_steps(1);
+            // In the frame of the release, the body replaces or ends the result first, then the
+            // footer draws the line it was given (its old ticket) and takes the press.
             h.state_mut().in_body = Some(change);
-            undo(&h, "older").click();
+            pointer(&mut h, at, false);
             h.run_steps(1);
             assert_eq!(h.state().acted, [Err("gone")], "{change:?}");
             h.run_steps(3);
@@ -2145,9 +2177,16 @@ mod tests {
         let mut h = harness(two());
         undo(&h, "older").focus();
         h.run_steps(2);
+        let focused = h.ctx.memory(|memory| memory.focused());
+        assert!(focused.is_some(), "the older Undo has focus");
         h.state_mut().in_body = Some(InBody::Add("third"));
         h.run_steps(4);
         assert!(h.query_by_label("Folder chosen.").is_some());
+        assert_eq!(
+            h.ctx.memory(|memory| memory.focused()),
+            focused,
+            "focus stays on the older Undo"
+        );
         h.key_press(egui::Key::Enter);
         h.run_steps(2);
         assert_eq!(h.state().acted, [Ok("Campaign link saved")]);
@@ -2155,22 +2194,11 @@ mod tests {
         // the older one or on nothing, never on another result.
         let mut h = harness(two());
         let at = undo(&h, "older").rect().center();
-        h.event(egui::Event::PointerMoved(at));
-        h.event(egui::Event::PointerButton {
-            pos: at,
-            button: egui::PointerButton::Primary,
-            pressed: true,
-            modifiers: egui::Modifiers::NONE,
-        });
+        pointer(&mut h, at, true);
         h.run_steps(1);
         h.state_mut().in_body = Some(InBody::Add("third"));
         h.run_steps(3);
-        h.event(egui::Event::PointerButton {
-            pos: at,
-            button: egui::PointerButton::Primary,
-            pressed: false,
-            modifiers: egui::Modifiers::NONE,
-        });
+        pointer(&mut h, at, false);
         h.run_steps(2);
         let acted = &h.state().acted;
         assert!(

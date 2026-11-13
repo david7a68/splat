@@ -1942,10 +1942,8 @@ pub fn signed(value: i64) -> String {
 }
 
 /// A count and the right word for it: `1 entry`, `2 entries`.
-pub fn count(n: usize, one: &str, many: &str) -> String {
-    if n == 0 {
-        return String::new();
-    }
+/// The app's one number form: digits grouped by threes with commas (`2,310`).
+pub(super) fn grouped_number(n: usize) -> String {
     let digits = n.to_string();
     let mut grouped = String::new();
     for (i, digit) in digits.chars().enumerate() {
@@ -1954,6 +1952,14 @@ pub fn count(n: usize, one: &str, many: &str) -> String {
         }
         grouped.push(digit);
     }
+    grouped
+}
+
+pub fn count(n: usize, one: &str, many: &str) -> String {
+    if n == 0 {
+        return String::new();
+    }
+    let grouped = grouped_number(n);
     let unit = if n == 1 { one } else { many };
     if unit.is_empty() {
         grouped
