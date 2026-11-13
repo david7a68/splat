@@ -1,0 +1,61 @@
+phase	task	kind	what	interactions	from	pages	blocked
+before	Set-up	Setup	prep: Warden Ostrel, the Wolf Pack encounter and the road table	0	Encounters		false
+before	Set-up	Setup	play last week's session, then quit and open the app	12	Encounters	Session>Timeline>Encounters	false
+before	Set-up	Setup	work at 1200x800	0	Encounters		false
+before	Set-up	Setup	prep: tonight's plan holds a fight and a talk with Ostrel	9	Encounters	Session	false
+before	Set-up	Setup	save, quit and open the app at the table	0	Session		false
+during	Play the planned NPC: read Warden Ostrel	Panel	open him from the scene	1	Session		false
+during	The party attacks Warden Ostrel: start the fight	Nav	Start a fight with Warden Ostrel	1	Session	Run	false
+during	The party attacks Warden Ostrel: start the fight	Panel	close Lookup, to see his stat block	1	Run		false
+during	Roll and begin the fight with Warden Ostrel	Do	Roll NPC initiative	1	Run		false
+during	Roll and begin the fight with Warden Ostrel	Do	type Brannoch Vale's initiative	1	Run		false
+during	Roll and begin the fight with Warden Ostrel	Do	next field with Enter	1	Run		false
+during	Roll and begin the fight with Warden Ostrel	Do	type Iselle Marrowind's initiative	1	Run		false
+during	Roll and begin the fight with Warden Ostrel	Do	next field with Enter	1	Run		false
+during	Roll and begin the fight with Warden Ostrel	Do	type Kestrel Dunmoor's initiative	1	Run		false
+during	Roll and begin the fight with Warden Ostrel	Do	next field with Enter	1	Run		false
+during	Roll and begin the fight with Warden Ostrel	Do	type Oren Thistlewick's initiative	1	Run		false
+during	Roll and begin the fight with Warden Ostrel	Do	next field with Enter	1	Run		false
+during	Roll and begin the fight with Warden Ostrel	Do	type Sable Harrowgate's initiative	1	Run		false
+during	Roll and begin the fight with Warden Ostrel	Do	Begin combat	1	Run		false
+during	Warden Ostrel gives up: end the fight	Do	End encounter…	1	Run		false
+during	Warden Ostrel gives up: end the fight	Do	type the outcome	1	Run		false
+during	Warden Ostrel gives up: end the fight	Do	end with Enter	1	Run		false
+during	He gave up, and the party holds him: a line in his Log	Panel	Ctrl+K shows his page again	1	Run		false
+during	He gave up, and the party holds him: a line in his Log	Do	Add to Log	1	Run		false
+during	He gave up, and the party holds him: a line in his Log	Do	type the line	1	Run		false
+during	He gave up, and the party holds him: a line in his Log	Do	add it	1	Run		false
+during	He gave up, and the party holds him: a line in his Log	Panel	close Lookup	1	Run		false
+during	Close the fight, keep the rewards, and add loot nobody planned	Nav	Close run	1	Run	Session	false
+during	Close the fight, keep the rewards, and add loot nobody planned	Find	Fight with Warden Ostrel	1	Session		false
+during	Close the fight, keep the rewards, and add loot nobody planned	Do	Add rewards	1	Session		false
+during	Close the fight, keep the rewards, and add loot nobody planned	Do	click under the new block	1	Session		false
+during	Close the fight, keep the rewards, and add loot nobody planned	Do	type the loot	1	Session		false
+during	Two days overland: roll for encounters on the road	Find	More Add actions	1	Session		false
+during	Two days overland: roll for encounters on the road	Do	Add Travel	1	Session		false
+during	Two days overland: roll for encounters on the road	Find	More actions for Travel	1	Session		false
+during	Two days overland: roll for encounters on the road	Do	Roll for encounters	1	Session		false
+during	Two days overland: roll for encounters on the road	Do	type the length	1	Session		false
+during	Two days overland: roll for encounters on the road	Do	Roll all 2	1	Session		false
+during	The second day names the Wolf Pack: plan it and start it	Do	Plan “Wolf Pack”	1	Session		false
+during	The second day names the Wolf Pack: plan it and start it	Nav	Start fight: Wolf Pack	1	Session	Run	false
+during	Roll and begin the Wolf Pack fight	Do	Roll NPC initiative	1	Run		false
+during	Roll and begin the Wolf Pack fight	Do	type Brannoch Vale's initiative	1	Run		false
+during	Roll and begin the Wolf Pack fight	Do	next field with Enter	1	Run		false
+during	Roll and begin the Wolf Pack fight	Do	type Iselle Marrowind's initiative	1	Run		false
+during	Roll and begin the Wolf Pack fight	Do	next field with Enter	1	Run		false
+during	Roll and begin the Wolf Pack fight	Do	type Kestrel Dunmoor's initiative	1	Run		false
+during	Roll and begin the Wolf Pack fight	Do	next field with Enter	1	Run		false
+during	Roll and begin the Wolf Pack fight	Do	type Oren Thistlewick's initiative	1	Run		false
+during	Roll and begin the Wolf Pack fight	Do	next field with Enter	1	Run		false
+during	Roll and begin the Wolf Pack fight	Do	type Sable Harrowgate's initiative	1	Run		false
+during	Roll and begin the Wolf Pack fight	Do	Begin combat	1	Run		false
+during	End the Wolf Pack fight	Do	End encounter…	1	Run		false
+during	End the Wolf Pack fight	Do	End encounter	1	Run		false
+during	End the Wolf Pack fight	Nav	Close run	1	Run	Session	false
+after	Put the Wolf Pack fight's rewards in the note	Do	Add rewards: Wolf Pack	1	Session		false
+after	Mark the talk with Warden Ostrel done, and log what happened	Do	Open: Warden Ostrel	2	Session		false
+after	Mark the talk with Warden Ostrel done, and log what happened	Panel	Add to Log: Warden Ostrel	1	Session		false
+after	Mark the talk with Warden Ostrel done, and log what happened	Do	type the line	1	Session		false
+after	Mark the talk with Warden Ostrel done, and log what happened	Do	add it	1	Session		false
+after	Mark the talk with Warden Ostrel done, and log what happened	Panel	close Lookup	1	Session		false

@@ -46,7 +46,7 @@
     esac
     # Feedback-only settings must not turn a merge gate into a partial/report run.
     unset SPLAT_VISUAL_SCENARIOS SPLAT_VISUAL_UPDATE_BASELINE SPLAT_VISUAL_DIAGNOSE
-    unset SPLAT_DM_AUDIT_WRITE SPLAT_PLAIN_EVENING_WRITE SPLAT_FROZEN_AT SPLAT_PLAIN_EVENING_OUT
+    unset SPLAT_DM_AUDIT_WRITE SPLAT_PLAIN_EVENING_WRITE SPLAT_FROZEN_AT SPLAT_PLAIN_EVENING_OUT SPLAT_FREEZE_STAGE
     export SPLAT_VISUAL_ENFORCE=baseline
     # Cargo serializes compilation in this target directory, but releases its
     # build lock before running tests. Let fmt/Clippy overlap test execution.
@@ -101,6 +101,7 @@
   '';
   # G6's counts and G7's plain reference (README.md, Visual tests).
   #   audit-freeze counts [label]     G6: write every row of the audit's counts from this source.
+  #   audit-freeze journeys [label]   G6: write every row of journeys J2, J3, J4 and J6 likewise.
   #   audit-freeze reference [label]  G7: write the plain reference on an unchanged commit of main.
   #   audit-freeze add [label]        Add new tasks, views and acts; keep every frozen record.
   #   audit-freeze verify [label]     Write the reference to a scratch folder and compare bytes.
@@ -108,7 +109,7 @@
     what="''${1:-}"
     label="''${2:-freeze}"
     if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
-      echo "Use: audit-freeze counts|reference|add|verify [label]" >&2
+      echo "Use: audit-freeze counts|journeys|reference|add|verify [label]" >&2
       exit 2
     fi
     case "$label" in
@@ -125,16 +126,48 @@
         exit 1
       fi
     }
+    # Each frozen file under artifacts/dm-audit/ and src/visual_tests/plain_evening/, with its hash.
+    frozen_sums() {
+      find artifacts/dm-audit src/visual_tests/plain_evening -type f -print0 | sort -z | xargs -0 sha256sum
+    }
+    # A freeze of several scenarios writes nothing when one refuses. Each scenario writes into a
+    # staging folder; only when every one passed are they copied into the tree. A refusal must
+    # leave every frozen file byte-equal, and this checks it. A copy that fails stops the
+    # command and keeps the staged files.
+    staged() {
+      stage="$PWD/artifacts/screenshots/$label/freeze-stage"
+      rm -rf "$stage"
+      before="$(frozen_sums)"
+      if env SPLAT_FREEZE_STAGE="$stage" "$@"; then
+        if [ -d "$stage" ] && ! cp -a "$stage"/. "$PWD"/; then
+          echo "audit-freeze $what: copying the staged files into the tree failed, so the tree may be mixed." >&2
+          echo "The staged files stay in $stage; copy them again, or restore the tree with git." >&2
+          exit 4
+        fi
+        rm -rf "$stage"
+        return 0
+      fi
+      if [ "$(frozen_sums)" != "$before" ]; then
+        echo "audit-freeze $what refused, and yet changed frozen files:" >&2
+        diff <(echo "$before") <(frozen_sums) >&2
+        exit 3
+      fi
+      echo "audit-freeze $what refused: no frozen file changed." >&2
+      exit 1
+    }
+    journeys="journey-j2,journey-j3,journey-j4,journey-j6"
     case "$what" in
       counts)
-        SPLAT_DM_AUDIT_WRITE=all visual-test "$label" --only dm-audit ;;
+        staged env SPLAT_DM_AUDIT_WRITE=all visual-test "$label" --only dm-audit ;;
+      journeys)
+        staged env SPLAT_DM_AUDIT_WRITE=all visual-test "$label" --only "$journeys" ;;
       reference)
         unchanged
         SPLAT_FROZEN_AT="$(git rev-parse HEAD)" SPLAT_PLAIN_EVENING_WRITE=all \
           visual-test "$label" --only plain-evening ;;
       add)
-        SPLAT_DM_AUDIT_WRITE=add SPLAT_PLAIN_EVENING_WRITE=add \
-          visual-test "$label" --only dm-audit,plain-evening ;;
+        staged env SPLAT_DM_AUDIT_WRITE=add SPLAT_PLAIN_EVENING_WRITE=add \
+          visual-test "$label" --only "dm-audit,plain-evening,$journeys" ;;
       verify)
         unchanged
         out="$PWD/artifacts/screenshots/$label/verify"
@@ -154,7 +187,7 @@
           exit 1
         fi ;;
       *)
-        echo "Use: audit-freeze counts|reference|add|verify [label]" >&2
+        echo "Use: audit-freeze counts|journeys|reference|add|verify [label]" >&2
         exit 2 ;;
     esac
   '';
