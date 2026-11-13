@@ -222,6 +222,9 @@ struct RemovedPackage {
     campaign: Uuid,
     /// The result's words, prepared once when the removal succeeds.
     words: String,
+    /// The warning's words after the result's, when encounters lose creatures; prepared with
+    /// `words`.
+    warning: Option<String>,
     before: Vec<PackageSelection>,
     after: Vec<PackageSelection>,
     users: Vec<(Uuid, String)>,
@@ -344,15 +347,15 @@ fn relocated_package(module: &Module, registered: &[Module]) -> Option<Module> {
     (found.len() == 1).then(|| found.into_values().next().unwrap())
 }
 
-/// A package removal's result words: the package, or the encounters it leaves without
-/// creatures. Prepared once, when the removal succeeds.
-fn removal_words(name: &str, users: &[(Uuid, String)]) -> String {
-    if users.is_empty() {
-        format!("{name} removed from this campaign.")
-    } else {
+/// A package removal's result words, and the warning's words when the removal leaves encounters
+/// without creatures. Round 27 FE5: the result is a success sentence in every case; the warning
+/// follows it. Prepared once, when the removal succeeds.
+fn removal_words(name: &str, users: &[(Uuid, String)]) -> (String, Option<String>) {
+    let warning = (!users.is_empty()).then(|| {
         let names: Vec<_> = users.iter().map(|(_, name)| name.as_str()).collect();
         format!("{} {}", names.join(", "), removed_suffix(names.len()))
-    }
+    });
+    (format!("{name} removed from this campaign."), warning)
 }
 
 /// The words after the encounter names when a removed package leaves them without creatures.
@@ -411,18 +414,12 @@ impl PackageWarnings {
 }
 
 /// A package row's count, in one form: `All chosen · 2,065 entries`, `None chosen · 6 entries`,
-/// `3 of 6 chosen`, `5 of 6 chosen · 1 still needed`, `None chosen · 3 still needed`. `chosen`
-/// counts only the DM's own choices, as the page header does; `still needed` counts the entries
-/// that other choices need and the DM did not choose, and is left out when it is 0 (round 25
-/// FA2). Round 26 FD5/FA7: `still` keeps it apart from the list `Needed by your entries`, which
-/// counts every needed entry.
-fn package_count(
-    count: usize,
-    required: usize,
-    total: usize,
-    partial: bool,
-    enabled: bool,
-) -> String {
+/// `3 of 6 chosen`. Round 27 FA6: a ticked box counts as chosen, whoever ticked it, so an entry
+/// that other choices need (ticked and locked) counts too; the list `Needed by your entries`
+/// says which they are. `ticked` is the DM's choices and the needed entries together.
+/// `indeterminate` is the package box's own state: a box that is not fully ticked never says
+/// `All chosen`.
+fn package_count(ticked: usize, total: usize, indeterminate: bool) -> String {
     let number = |n: usize| design::count(n, "", "").trim().to_owned();
     let entries = || {
         if total == 0 {
@@ -431,21 +428,13 @@ fn package_count(
             format!(" · {}", design::count(total, "entry", "entries"))
         }
     };
-    if count == 0 && required > 0 {
-        format!("None chosen · {} still needed", number(required))
-    } else if required > 0 {
-        format!(
-            "{} of {} chosen · {} still needed",
-            number(count),
-            number(total),
-            number(required)
-        )
-    } else if partial {
-        format!("{} of {} chosen", number(count), number(total))
-    } else if enabled {
+    let ticked = ticked.min(total);
+    if ticked == 0 {
+        format!("None chosen{}", entries())
+    } else if ticked == total && !indeterminate {
         format!("All chosen{}", entries())
     } else {
-        format!("None chosen{}", entries())
+        format!("{} of {} chosen", number(ticked), number(total))
     }
 }
 
@@ -584,12 +573,9 @@ impl CampaignContent {
                         })
                 })
                 .count();
-            let chosen = design::count(chosen, "entry chosen", "entries chosen");
-            if needed == 0 {
-                chosen
-            } else {
-                format!("{chosen} · {needed} still needed")
-            }
+            // Round 27 FA6: a ticked box counts as chosen, whoever ticked it, as each package
+            // row counts it.
+            design::count(chosen + needed, "entry chosen", "entries chosen")
         })
     }
     /// Runs on every frame, on any page, so the sidebar can say when the DM has moves to review.
@@ -900,6 +886,18 @@ impl CampaignContent {
         if self.snapshot.is_some() {
             self.selection_bar(ui, campaigns, &active);
         }
+        if self.body_missing() {
+            // Round 27 FB3, AB1: a page with no package list draws its errors as its content,
+            // where an empty state starts, so the DM does not look past a blank page for them.
+            let mut write = false;
+            ui.scope(|ui| {
+                ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
+                self.draw_reason(ui, campaigns, &active, &mut write);
+            });
+            if write {
+                self.write_campaign(campaigns, &active);
+            }
+        }
         self.repair_section(ui, campaigns, &active);
         if !active.path.exists() {
             design::message(
@@ -955,24 +953,30 @@ impl CampaignContent {
             .dirty()
             .then_some("Save or discard campaign changes first.");
         let results = self.live_results(active);
-        let reason = self.reason_words(campaigns, active);
+        // Round 27 FB3, AB1: with no package list to show, the page's errors are its content, at
+        // the top of the page (`page`), not in the footer.
+        let reason = if self.body_missing() {
+            String::new()
+        } else {
+            self.reason_words(campaigns, active)
+        };
         let warnings = self.package_warnings_of(campaigns);
         let warning_words = warnings.words();
-        // What each repair says, by its file.
-        let repair_messages: Vec<(String, String, Option<String>, Option<String>)> = self
+        // What each repair says, by its path, as the message above and Save's reason name it
+        // (round 27 FB5: two notes can share a name in different folders). Round 27 FB1, AB2:
+        // a refusal's cause shows once. While the repair is closed the message above says it;
+        // only an open repair's message drops it, and then the footer says it.
+        let repair_messages: Vec<(String, Option<String>, Option<String>)> = self
             .repairs
             .iter()
             .map(|repair| {
-                let name = repair
-                    .path
-                    .rsplit('/')
-                    .next()
-                    .unwrap_or(&repair.path)
-                    .to_owned();
+                let open = ui.data(|data| {
+                    data.get_temp::<bool>(egui::Id::new(("repair_open", repair.path.as_str())))
+                        .unwrap_or(false)
+                });
                 (
                     repair.path.clone(),
-                    name,
-                    repair.refusal.clone(),
+                    repair.refusal.clone().filter(|_| open),
                     repair.failure.clone(),
                 )
             })
@@ -991,12 +995,12 @@ impl CampaignContent {
                     }
                 });
             }
-            for (_, name, refusal, failure) in &repair_messages {
+            for (path, refusal, failure) in &repair_messages {
                 // A failed Save or a refusal belongs to its repair: its words name the file.
                 let words = if let Some(failure) = failure {
-                    format!("{name} is not saved. {failure}")
+                    format!("{path} is not saved. {failure}")
                 } else if let Some(refusal) = refusal {
-                    format!("{name}: {refusal}")
+                    format!("{path}: {refusal}")
                 } else {
                     continue;
                 };
@@ -1036,6 +1040,12 @@ impl CampaignContent {
             this.write_campaign(campaigns, active);
         }
         bottom
+    }
+
+    /// The package list cannot show: no load is waiting and none gave a snapshot (a missing
+    /// Campaign.md, a load that failed). Then the page's errors are its content.
+    fn body_missing(&self) -> bool {
+        self.snapshot.is_none() && self.pending.is_none()
     }
 
     /// The page's errors, in one part: Save's or a load's error and the change check's error.
@@ -1158,7 +1168,10 @@ impl CampaignContent {
             PageResult::Removed => self
                 .removed_package
                 .as_ref()
-                .map(|removed| removed.words.clone())
+                .map(|removed| match &removed.warning {
+                    Some(warning) => format!("{} {warning}", removed.words),
+                    None => removed.words.clone(),
+                })
                 .unwrap_or_default(),
             PageResult::Saved => self.message.clone().unwrap_or_default(),
             PageResult::Applied => self.reconcile.message.clone().unwrap_or_default(),
@@ -1206,13 +1219,12 @@ impl CampaignContent {
                     ))
                 }),
             PageResult::Removed => self.removed_package.as_ref().and_then(|removed| {
-                if removed.users.is_empty() {
-                    undo(design::undo_message(
-                        ui,
-                        Tone::Success,
-                        &removed.words,
-                        "Undo package removal",
-                    ))
+                // Round 27 FE5: the result says what was done, a success with its Undo; the
+                // warning about the encounters it leaves without creatures follows it.
+                let pressed =
+                    design::undo_message(ui, Tone::Success, &removed.words, "Undo package removal");
+                let link = if removed.users.is_empty() {
+                    None
                 } else {
                     // Borrowed names, for the links; the words were prepared at the removal.
                     let names: Vec<_> = removed
@@ -1220,15 +1232,14 @@ impl CampaignContent {
                         .iter()
                         .map(|(_, name)| name.as_str())
                         .collect();
-                    let (pressed, link) = design::undo_message_with_links(
+                    design::message_with_links(
                         ui,
                         Tone::Warning,
                         &names,
                         removed_suffix(names.len()),
-                        "Undo package removal",
-                    );
-                    link.map(ResultPress::Link).or(undo(pressed))
-                }
+                    )
+                };
+                link.map(ResultPress::Link).or(undo(pressed))
             }),
             PageResult::Saved | PageResult::Applied => {
                 design::message(ui, Tone::Success, &self.words_of(kind));
@@ -2097,9 +2108,11 @@ impl CampaignContent {
                     new_result!(self, PageResult::Removed);
                     self.removal_text_preparations += 1;
                     let name = selection.display_name().to_owned();
+                    let (words, warning) = removal_words(&name, &users);
                     self.removed_package = Some(RemovedPackage {
                         campaign: active.id,
-                        words: removal_words(&name, &users),
+                        words,
+                        warning,
                         before,
                         after: document.selections.clone(),
                         users,
@@ -2438,8 +2451,11 @@ impl CampaignContent {
                                             )
                                         },
                                     );
-                                    let counted =
-                                        package_count(count, required, total, partial, enabled);
+                                    let counted = package_count(
+                                        count + required,
+                                        total,
+                                        partial || (count == 0 && required > 0),
+                                    );
                                     let (detail, spoken) = match mark {
                                         Some((icon, words)) => (
                                             format!("{icon} {counted}"),
@@ -2944,37 +2960,21 @@ mod tests {
 
     #[test]
     fn package_counts_share_one_form() {
-        // Round 24 FF2: `<All, None or N of M> chosen`, then the entries or the needed count.
+        // Round 24 FF2: `<All, None or N of M> chosen`, then the entries.
         assert_eq!(
-            package_count(2065, 0, 2065, false, true),
+            package_count(2065, 2065, false),
             "All chosen · 2,065 entries"
         );
-        assert_eq!(
-            package_count(0, 0, 6, false, false),
-            "None chosen · 6 entries"
-        );
-        assert_eq!(
-            package_count(4, 1, 6, true, true),
-            "4 of 6 chosen · 1 still needed"
-        );
-        // Round 25 FA2: a needed entry is never also counted as chosen, so a package whose
-        // other five entries are chosen does not read as `6 of 6 chosen`.
-        assert_eq!(
-            package_count(5, 1, 6, false, true),
-            "5 of 6 chosen · 1 still needed"
-        );
-        assert_eq!(
-            package_count(0, 3, 6, false, false),
-            "None chosen · 3 still needed"
-        );
-        assert_eq!(package_count(3, 0, 6, true, true), "3 of 6 chosen");
-        assert_eq!(package_count(0, 0, 0, false, false), "None chosen");
-        // FF4: a manifest fault leads the line in its tone's icon.
-        assert_eq!(manifest_mark(false), (icons::WARN, "Manifest deleted"));
-        assert_eq!(
-            manifest_mark(true),
-            (icons::ERROR, "Manifest cannot be read")
-        );
+        assert_eq!(package_count(0, 6, false), "None chosen · 6 entries");
+        // Round 27 FA6: a needed entry is ticked, so it counts as chosen. Four chosen and one
+        // needed of six read `5 of 6 chosen`; five chosen and the one needed read `All chosen`.
+        assert_eq!(package_count(4 + 1, 6, true), "5 of 6 chosen");
+        assert_eq!(package_count(5 + 1, 6, false), "All chosen · 6 entries");
+        // An off package whose three entries others need: three of its boxes are ticked.
+        assert_eq!(package_count(3, 6, true), "3 of 6 chosen");
+        // Every entry needed, none chosen: the box is not fully ticked, so not `All chosen`.
+        assert_eq!(package_count(6, 6, true), "6 of 6 chosen");
+        assert_eq!(package_count(0, 0, false), "None chosen");
     }
 
     #[test]
@@ -3235,7 +3235,8 @@ mod tests {
         document.save().unwrap();
         let removed = |campaign: &Campaign| RemovedPackage {
             campaign: campaign.id,
-            words: removal_words("Gone", &[]),
+            words: removal_words("Gone", &[]).0,
+            warning: None,
             before: before.clone(),
             after: Vec::new(),
             users: Vec::new(),

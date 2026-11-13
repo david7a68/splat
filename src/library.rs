@@ -922,19 +922,14 @@ fn place(
     })
 }
 
-/// A package's About line count, in Campaign's form: `All entries chosen`, `4 of 6 entries
-/// chosen`, `4 of 6 entries chosen · 1 still needed`, `No entries chosen · 3 still needed`.
-/// `chosen`
-/// counts only the DM's own choices; `still needed` counts the entries those choices need that
-/// the DM did not choose, and is left out when it is 0.
+/// A package's About line count, in Campaign's form: `All entries chosen`, `5 of 6 entries
+/// chosen`, `No entries chosen`. Round 27 FA6: a ticked box counts as chosen, whoever ticked
+/// it, so the entries the DM's choices need (ticked and locked in Campaign) count too.
 fn chosen_count(chosen: usize, needed: usize, total: usize) -> String {
-    let needed_words = |needed: usize| format!("{needed} still needed");
-    match (chosen, needed) {
-        (c, 0) if c == total => "All entries chosen".into(),
-        (0, 0) => "No entries chosen".into(),
-        (0, n) => format!("No entries chosen · {}", needed_words(n)),
-        (c, 0) => format!("{c} of {total} entries chosen"),
-        (c, n) => format!("{c} of {total} entries chosen · {}", needed_words(n)),
+    match (chosen + needed).min(total) {
+        0 => "No entries chosen".into(),
+        ticked if ticked == total => "All entries chosen".into(),
+        ticked => format!("{ticked} of {total} entries chosen"),
     }
 }
 
@@ -6939,8 +6934,8 @@ impl Library {
                             })
                     })
                     .collect();
-                // `chosen` counts only the DM's own choices, as Campaign's package row does;
-                // the entries those choices need are `still needed` (round 26 FC2, FD4).
+                // Round 27 FA6: the DM's choices and the entries they need, as Campaign's
+                // package row counts its ticked boxes.
                 let chosen = entries.iter().filter(|n| loaded.chose(n)).count();
                 let needed = entries
                     .iter()
@@ -11059,7 +11054,11 @@ mod tests {
             assert_ne!(write.path(), filename);
             assert_eq!(
                 write.message(),
-                format!("{} was written again.", write.path())
+                format!(
+                    "{} was written again. It now has the package’s name and ID in the current \
+                     format.",
+                    write.path()
+                )
             );
             assert_eq!(fs::read(&path).unwrap(), readme.as_bytes());
             write.undo().unwrap();
@@ -11341,7 +11340,14 @@ mod tests {
             assert_eq!(write.path(), filename);
             assert!(write.replaced());
             // Round 24 FF5: the result and its Undo (`Undo write <file>`) share one verb.
-            assert_eq!(write.message(), format!("{filename} was written again."));
+            // Round 27 FC5: a replaced file's result says that Undo puts the old text back.
+            assert_eq!(
+                write.message(),
+                format!(
+                    "{filename} was written again. It now has the package’s name and ID in the \
+                     current format. Undo puts your old text back."
+                )
+            );
             write.undo().unwrap();
         }
     }
