@@ -71,10 +71,6 @@ fn recovery_paragraph(ui: &mut egui::Ui, fault: &FileFault) {
     });
 }
 
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn fault_notice(ui: &mut egui::Ui, fault: &FileFault) -> bool {
     let again = design::message_with_actions(ui, Tone::Error, &fault_here(fault), |ui| {
         recovery_paragraph(ui, fault);
@@ -84,7 +80,7 @@ fn fault_notice(ui: &mut egui::Ui, fault: &FileFault) -> bool {
             .show(ui)
             .clicked()
     });
-    ui.add_space(design::S);
+    design::gap(ui, design::Gap::S);
     design::quiet_section(ui, "Technical details", |ui| {
         ui.add(egui::Label::new(Type::Small.rich(ui, &fault.system).color(colors().muted)).wrap());
     });
@@ -2502,6 +2498,9 @@ pub(crate) const MOVED_ON_DISK: &str =
 
 const ENTRY_ROW_HEIGHT: f32 = 44.0;
 const SEARCH_NAME: &str = "Search the Library";
+const LIBRARY_SEARCH: design::FieldId = crate::field_id!("library_search");
+const NEW_ENTRY_FOLDER: design::FieldId = crate::field_id!("new_entry_folder");
+const DISK_DRAFT: design::FieldId = crate::field_id!("library_disk_draft");
 /// A row's short cause for an entry whose identity or key another file claims too.
 pub(crate) const SAME_ENTRY: &str = "Same entry in two files";
 /// A row's short cause for a first heading that does not say the entry's name.
@@ -2846,6 +2845,7 @@ fn visit_folders(root: &Path, path: &Path, folders: &mut Vec<String>) {
 )]
 pub(crate) fn folder_field(
     ui: &mut egui::Ui,
+    id: design::FieldId,
     label: &str,
     value: &mut String,
     root: &Path,
@@ -2888,17 +2888,17 @@ pub(crate) fn folder_field(
                             let width =
                                 (ui.available_width() - design::XL - ui.spacing().item_spacing.x)
                                     .max(design::XXL);
-                            let response = ui.add(
-                                egui::TextEdit::singleline(value)
-                                    .frame(false)
-                                    .font(Type::Strong.font(ui))
+                            let font = Type::Strong.font(ui);
+                            let response = id.single_line(ui, value, |edit| {
+                                edit.frame(false)
+                                    .font(font)
                                     .margin(egui::Vec2::ZERO)
                                     // Round 27 FH10: centred, as `Main folder` is painted, so
                                     // typed words and the chosen value share one baseline.
                                     .vertical_align(egui::Align::Center)
                                     .desired_width(width)
-                                    .min_size(egui::vec2(width, design::XL)),
-                            );
+                                    .min_size(egui::vec2(width, design::XL))
+                            });
                             design::named(ui, &response, label);
                             let typing = response.has_focus();
                             if value.is_empty() {
@@ -2929,10 +2929,7 @@ pub(crate) fn folder_field(
                             );
                             design::named(ui, &response, &format!("Suggestions for {label}"));
                             egui::Popup::menu(&response).show(|ui| {
-                                if ui
-                                    .selectable_label(value.is_empty(), "Main folder")
-                                    .clicked()
-                                {
+                                if design::choice(ui, value.is_empty(), "Main folder").clicked() {
                                     value.clear();
                                     ui.close();
                                 }
@@ -2940,7 +2937,7 @@ pub(crate) fn folder_field(
                                     .iter()
                                     .filter(|folder| folder.to_lowercase().contains(&query))
                                 {
-                                    if ui.selectable_label(value == folder, folder).clicked() {
+                                    if design::choice(ui, value == folder, folder).clicked() {
                                         *value = folder.clone();
                                         ui.close();
                                     }
@@ -3688,17 +3685,8 @@ fn natural_key(name: &str) -> Vec<(String, u64)> {
 
 pub(crate) const EDITOR_MAX_WIDTH: f32 = 720.0;
 
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn form_heading(ui: &mut egui::Ui, title: &str) {
-    ui.add_space(design::L);
-    ui.label(
-        Type::Label
-            .rich(ui, title.to_uppercase())
-            .color(colors().text),
-    );
+    design::heading(ui, design::Heading::Group { title, count: 0 });
 }
 
 fn obsidian_for(root: &Path, owner: &Owner) -> bool {
@@ -4819,7 +4807,7 @@ impl Library {
                 }
             });
         }
-        ui.add_space(design::XS);
+        design::gap(ui, design::Gap::XS);
         self.unregister_dialog(ui.ctx(), campaigns);
         // Round 26: the page's error is a reason in the pane's message footer, so it never moves
         // the list or the reader. It ends on the events that clear `error`.
@@ -5057,16 +5045,16 @@ impl Library {
                                     continue;
                                 }
                                 if !group.is_empty() {
-                                    ui.add_space(design::M);
-                                    design::group_heading(
+                                    design::heading(
                                         ui,
-                                        group,
-                                        sections
-                                            .iter()
-                                            .map(|section| count_of(*section, &counts))
-                                            .sum(),
+                                        design::Heading::Group {
+                                            title: group,
+                                            count: sections
+                                                .iter()
+                                                .map(|section| count_of(*section, &counts))
+                                                .sum(),
+                                        },
                                     );
-                                    ui.add_space(design::XS);
                                 }
                                 for &section in sections {
                                     let count = count_of(section, &counts);
@@ -5263,7 +5251,7 @@ impl Library {
                                 for &(_, sections) in Section::GROUPS {
                                     for &section in sections {
                                         if count_of(section, &counts) == 0 { continue; }
-                                        let response = ui.selectable_label(self.section == section && !about_open, section.label());
+                                        let response = design::choice(ui, self.section == section && !about_open, section.label());
                                         design::named(ui, &response, &format!("Library section: {}", section.label()));
                                         if response.clicked() { if about_open && !dirty { self.selected = None; self.draft.clear(); } self.section = section; self.search.clear(); }
                                     }
@@ -5272,25 +5260,15 @@ impl Library {
                         design::named(ui, &combo.response, "Section");
                     });
                 }
-                ui.horizontal(|ui| {
-                    let width =
-                        ui.available_width() - if self.search.is_empty() { 0.0 } else { Action::quiet("Clear").density(Density::Scan).natural_width(ui) + ui.spacing().item_spacing.x };
-                    design::search_field(
-                        ui,
-                        SEARCH_NAME,
-                        &mut self.search,
-                        "Search by name or detail…",
-                        width,
-                    );
-                    if !self.search.is_empty()
-                        && Action::quiet("Clear")
-                            .density(Density::Scan)
-                            .show(ui)
-                            .clicked()
-                    {
-                        self.search.clear();
-                    }
-                });
+                let width = ui.available_width();
+                // Clear empties the text; the search chooses nothing else to reset.
+                let _ = LIBRARY_SEARCH.search(
+                    ui,
+                    SEARCH_NAME,
+                    &mut self.search,
+                    "Search by name or detail…",
+                    width,
+                );
                 if compact
                     && let Scope::Package(package) = scope
                     && let Some((index, note)) = loaded.notes.iter().enumerate().find(|(_, n)| n.owner.id() == Some(package) && n.is_manifest())
@@ -5326,12 +5304,13 @@ impl Library {
                         ui.ctx().request_repaint();
                     }
                 }
-                ui.add_space(design::XS);
                 if searching || filtering || (compact && self.section != Section::All) {
-                    design::group_heading(ui, if searching { "Search results" } else if filtering { "Matches" } else { self.section.label() }, matches.len());
+                    design::heading(ui, design::Heading::Group { title: if searching { "Search results" } else if filtering { "Matches" } else { self.section.label() }, count: matches.len() });
+                } else {
+                    design::gap(ui, design::Gap::XS);
                 }
                 if searching && !matches.is_empty() && self.typo_from == 0 {
-                    ui.add_space(design::S);
+                    design::gap(ui, design::Gap::S);
                     ui.add(
                         egui::Label::new(
                             Type::Body.rich(ui, CLOSE_NAMES)
@@ -5341,7 +5320,7 @@ impl Library {
                     );
                 }
                 if matches.is_empty() {
-                    ui.add_space(design::S);
+                    design::gap(ui, design::Gap::S);
                     if let Scope::Package(id) = scope && !searching
                         && !loaded.notes.iter().any(|note| note.owner.id() == Some(id) && note.entry.as_ref().is_some_and(|entry| entry.kind != "package")) {
                         let name = campaigns.modules().iter().find(|m| m.id == id).map_or("this package", |m| m.name.as_str());
@@ -5764,20 +5743,26 @@ impl Library {
                     ui.set_max_width(inner);
                     ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
                     if active.is_some() {
-                        ui.selectable_value(&mut scope, Scope::Uses, label(Scope::Uses));
+                        design::choice_value(ui, &mut scope, Scope::Uses, &label(Scope::Uses));
                     }
-                    ui.selectable_value(&mut scope, Scope::All, label(Scope::All));
+                    design::choice_value(ui, &mut scope, Scope::All, &label(Scope::All));
                     ui.separator();
-                    ui.selectable_value(&mut scope, Scope::Builtin, label(Scope::Builtin));
+                    design::choice_value(ui, &mut scope, Scope::Builtin, &label(Scope::Builtin));
                     for m in campaigns.modules() {
-                        ui.selectable_value(
+                        design::choice_value(
+                            ui,
                             &mut scope,
                             Scope::Package(m.id),
-                            label(Scope::Package(m.id)),
+                            &label(Scope::Package(m.id)),
                         );
                     }
                     if active.is_some() {
-                        ui.selectable_value(&mut scope, Scope::Campaign, label(Scope::Campaign));
+                        design::choice_value(
+                            ui,
+                            &mut scope,
+                            Scope::Campaign,
+                            &label(Scope::Campaign),
+                        );
                     }
                 });
             combo.response.clone().on_hover_text(label(scope));
@@ -5869,7 +5854,7 @@ impl Library {
                 }
             }
             design::help(ui, &format!("The files stay in {}.", module.path.display()));
-            ui.add_space(design::S);
+            design::gap(ui, design::Gap::S);
             design::dialog_actions(
                 ui,
                 |ui| {
@@ -5919,7 +5904,7 @@ impl Library {
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
-                ui.add_space(design::L);
+                design::gap(ui, design::Gap::L);
                 ui.horizontal(|ui| {
                     ui.label(
                         Type::Heading
@@ -6434,7 +6419,12 @@ impl Library {
                                     let word = kind.replace('_', " ");
                                     let word =
                                         format!("{}{}", word[..1].to_uppercase(), &word[1..]);
-                                    ui.selectable_value(&mut self.new_kind, kind.into(), word);
+                                    design::choice_value(
+                                        ui,
+                                        &mut self.new_kind,
+                                        kind.into(),
+                                        &word,
+                                    );
                                 }
                             })
                     })
@@ -6452,7 +6442,7 @@ impl Library {
                             .selected_text(places[place].label())
                             .show_ui(ui, |ui| {
                                 for (i, owner) in places.iter().enumerate() {
-                                    ui.selectable_value(&mut place, i, owner.label());
+                                    design::choice_value(ui, &mut place, i, &owner.label());
                                 }
                             })
                     })
@@ -6486,6 +6476,7 @@ impl Library {
                         |ui| {
                             folder_field(
                                 ui,
+                                NEW_ENTRY_FOLDER,
                                 "Folder",
                                 &mut self.new_folder,
                                 places[place].root().unwrap(),
@@ -8078,7 +8069,7 @@ impl Library {
                     .inner
                 },
             );
-            ui.add_space(design::S);
+            design::gap(ui, design::Gap::S);
             design::quiet_section(ui, "Technical details", |ui| {
                 ui.add(
                     egui::Label::new(Type::Small.rich(ui, &fault.system).color(colors().muted))
@@ -8276,15 +8267,23 @@ impl Library {
                                                 true,
                                             );
                                         } else {
-                                            design::group_heading(ui, "Your draft", 0);
-                                            let mut draft = self.draft.as_str();
-                                            let response = ui.add(
-                                                egui::TextEdit::multiline(&mut draft)
-                                                    .font(egui::TextStyle::Monospace)
-                                                    .margin(egui::vec2(design::S, design::S))
-                                                    .desired_width(editor_width - 2.0 * design::S)
-                                                    .interactive(false),
+                                            design::heading(
+                                                ui,
+                                                design::Heading::Group {
+                                                    title: "Your draft",
+                                                    count: 0,
+                                                },
                                             );
+                                            let mut draft = self.draft.as_str();
+                                            let response =
+                                                DISK_DRAFT.multi_line(ui, &mut draft, |edit| {
+                                                    edit.font(egui::TextStyle::Monospace)
+                                                        .margin(egui::vec2(design::S, design::S))
+                                                        .desired_width(
+                                                            editor_width - 2.0 * design::S,
+                                                        )
+                                                        .interactive(false)
+                                                });
                                             design::named(ui, &response, "Your draft");
                                         }
                                         return;
@@ -8293,7 +8292,7 @@ impl Library {
                                     let body = parsed.as_ref().map_or("", |e| e.body.as_str());
                                     ui.push_id(&note.path, |ui| {
                                         reader_style::measure(ui, |ui| {
-                                            ui.add_space(design::XS);
+                                            design::gap(ui, design::Gap::XS);
                                             let reading_subtitle =
                                                 reader_kind_line(&note.owner, &reading_subtitle);
                                             let subtitle = reading_subtitle.as_str();

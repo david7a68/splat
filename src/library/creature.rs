@@ -3,7 +3,7 @@
 use super::presentation;
 use crate::design::{
     self, Type, colors,
-    reader::{self as reader_style, heavy_rule, section_heading},
+    reader::{self as reader_style, heavy_rule},
 };
 use eframe::egui;
 use pulldown_cmark::{Event, Options, Parser, Tag};
@@ -701,17 +701,13 @@ fn stat_identity(entry: &Entry) -> String {
 }
 
 /// Identity, vitals, abilities and details: what the entry has, and no empty cells.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 pub(super) fn stat_head(ui: &mut egui::Ui, entry: &Entry, values: Option<&super::view::RunValues>) {
-    ui.add_space(design::S);
+    design::gap(ui, design::Gap::S);
     reader_style::identity(ui, &stat_identity(entry));
     heavy_rule(ui);
-    ui.add_space(design::S);
+    design::gap(ui, design::Gap::S);
     vitals(ui, entry, values);
-    ui.add_space(design::S);
+    design::gap(ui, design::Gap::S);
     // The rulebook's table: physical abilities beside mental ones, with a clear gutter between
     // them. A creature with no saving throw has no Save column.
     let saves = ABILITIES
@@ -723,7 +719,7 @@ pub(super) fn stat_head(ui: &mut egui::Ui, entry: &Entry, values: Option<&super:
         .any(|ability| stat(entry, ability).is_some());
     if any_ability {
         design::rule(ui);
-        ui.add_space(design::XS);
+        design::gap(ui, design::Gap::XS);
     }
     if !any_ability {
         // An authored creature can have no scores. There is nothing to tabulate.
@@ -746,9 +742,9 @@ pub(super) fn stat_head(ui: &mut egui::Ui, entry: &Entry, values: Option<&super:
         }
     }
     if any_ability {
-        ui.add_space(design::XS);
+        design::gap(ui, design::Gap::XS);
         design::rule(ui);
-        ui.add_space(design::XS);
+        design::gap(ui, design::Gap::XS);
     }
     ui.spacing_mut().item_spacing.y = 2.0;
     for (key, label) in DETAILS {
@@ -764,16 +760,12 @@ pub(super) fn stat_head(ui: &mut egui::Ui, entry: &Entry, values: Option<&super:
             }
         }
     }
-    ui.add_space(design::XS);
+    design::gap(ui, design::Gap::XS);
     heavy_rule(ui);
-    ui.add_space(design::S);
+    design::gap(ui, design::Gap::S);
     ui.spacing_mut().item_spacing.y = design::XS;
 }
 
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 pub(super) fn show(
     ui: &mut egui::Ui,
     entry: &Entry,
@@ -802,7 +794,7 @@ pub(super) fn show(
                 continue;
             }
             if section.title != "Overview" {
-                section_heading(ui, &section.title);
+                design::heading(ui, design::Heading::Section(&section.title));
             }
             prose(
                 ui,

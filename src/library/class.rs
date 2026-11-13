@@ -93,7 +93,7 @@ pub(super) fn show_source(ui: &mut egui::Ui, source: &str, name: &str) -> bool {
     if rows.is_empty() {
         return false;
     }
-    style::section_heading(ui, "Core traits");
+    design::heading(ui, design::Heading::Section("Core traits"));
     ui.add_space(6.0);
     let mut equipment = None;
     let mut facts = Vec::new();
@@ -118,8 +118,7 @@ pub(super) fn show_source(ui: &mut egui::Ui, source: &str, name: &str) -> bool {
     }
     style::facts(ui, &facts);
     if let Some(value) = equipment {
-        ui.add_space(design::S);
-        style::section_heading(ui, "Starting equipment");
+        design::heading(ui, design::Heading::Section("Starting equipment"));
         ui.add_space(6.0);
         // Preserve the choice instruction and each option, including classes
         // with three alternatives. Do not split on punctuation inside items.
@@ -142,8 +141,7 @@ pub(super) fn show_source(ui: &mut egui::Ui, source: &str, name: &str) -> bool {
         style::facts(ui, &options);
     }
     if !remainder.is_empty() {
-        ui.add_space(10.0);
-        style::section_heading(ui, "Class table");
+        design::heading(ui, design::Heading::Section("Class table"));
         style::markdown(ui, &presentation::overview_markdown(&remainder));
     }
     true
@@ -232,17 +230,12 @@ fn related(entry: &Entry, links: &dyn Links) -> Vec<(usize, String)> {
     .collect()
 }
 
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 pub(super) fn show_features(ui: &mut egui::Ui, entry: &Entry, links: &dyn Links) -> Option<usize> {
     let features = features(entry, links);
     let related = related(entry, links);
     let mut selected = None;
     if !related.is_empty() {
-        ui.add_space(design::M);
-        style::section_heading(ui, "Related");
+        design::heading(ui, design::Heading::Section("Related"));
         for (target, name) in related {
             if design::link(ui, &name).clicked() {
                 selected = Some(target);
@@ -252,14 +245,13 @@ pub(super) fn show_features(ui: &mut egui::Ui, entry: &Entry, links: &dyn Links)
     if features.is_empty() {
         return selected;
     }
-    ui.add_space(design::M);
-    style::section_heading(
+    design::heading(
         ui,
-        if supports(entry) {
+        design::Heading::Section(if supports(entry) {
             "Class features"
         } else {
             "Subclass features"
-        },
+        }),
     );
     for feature in features {
         ui.horizontal_top(|ui| {
