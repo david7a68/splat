@@ -9,9 +9,11 @@ pub mod layout;
 pub mod memo;
 pub mod outcome;
 pub mod pane;
+pub mod popups;
 pub mod reader;
 pub mod results;
 pub mod save_row;
+pub mod status;
 pub mod theme;
 pub mod tokens;
 
@@ -32,12 +34,18 @@ pub use extras::{Gap, Heading, choice, choice_value, gap, heading};
 pub use layout::{
     ACTION_GAP, Create, CreateChoice, CreateField, CreateReasons, FieldId, InlineCreate, KeptLine,
     MAX_WORD_CHARS, NARROWEST_PANE, NoReason, RowIndex, RowKey, ScrollColumn, Slot, SlotType,
-    TextKey, TitleAction, TitleLine, TitlePlacement, TitleType, Word, labelled_field, lane_width,
-    line_field, menu_popup, sideways_scroll, status_slot, title_lead_in, title_placement,
+    TextKey, TitleAction, TitleActionRow, TitleLine, TitlePlacement, TitleType, Word,
+    labelled_field, lane_width, line_field, menu_popup, register_title_row, sideways_scroll,
+    status_slot, title_lead_in, title_placement,
 };
 // Wave 2 callers name the pane's escape through `design`.
 #[allow(unused_imports)]
 pub use pane::{Body, Fills, FillsReason, Placement};
+// Wave 2 callers name the popup parts through `design`, as they name the components.
+#[allow(unused_imports)]
+pub use popups::{Dropdown, DropdownResponse, Ghost, ImageSize, TipLine, drag_source, rich_tip};
 pub use results::Results;
 pub use save_row::{DraftState, save_row};
+#[allow(unused_imports)]
+pub use status::{KindStatus, StatusKind, Tinted};
 pub use tokens::*;

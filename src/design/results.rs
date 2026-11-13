@@ -726,7 +726,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         ("src/world.rs", "stamp", &[Ban::Results]),
         // Package K: raw egui calls that a layout part replaces.
-        ("src/art.rs", "show_viewer", &[Ban::Layout(1)]),
+        ("src/art.rs", "show_viewer", &[Ban::Layout(2)]),
         (
             "src/campaign_content.rs",
             "packages_content",
@@ -1007,11 +1007,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "an_open_history_prepares_its_rows_once_and_draws_only_those_in_view",
             &[Ban::Layout(1)],
         ),
-        ("src/trackers/view.rs", "amount_field", &[Ban::Layout(1)]),
+        ("src/trackers/view.rs", "amount_field", &[Ban::RowKey(3)]),
         (
             "src/trackers/view.rs",
             "show",
-            &[Ban::Layout(1), Ban::Extras(2)],
+            &[Ban::Layout(1), Ban::Extras(1)],
         ),
         (
             "src/world.rs",
@@ -1062,12 +1062,8 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         ("src/trackers.rs", "act_words", &[Ban::Words]),
         ("src/trackers.rs", "cause", &[Ban::Words]),
-        (
-            "src/trackers/history.rs",
-            "show",
-            &[Ban::Body, Ban::Extras(2)],
-        ),
-        ("src/trackers/view.rs", "body", &[Ban::Body, Ban::Extras(4)]),
+        ("src/trackers/history.rs", "show", &[Ban::Body]),
+        ("src/trackers/view.rs", "body", &[Ban::Body]),
         (
             "src/trackers/view.rs",
             "footer",
@@ -1300,8 +1296,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "rest_ruling_line",
             &[Ban::Extras(1)],
         ),
-        ("src/trackers/view.rs", "notice_row", &[Ban::Extras(1)]),
-        ("src/trackers/view.rs", "tracker_lines", &[Ban::Extras(5)]),
         ("src/world.rs", "draw", &[Ban::Extras(5)]),
         ("src/world.rs", "missing_link", &[Ban::Extras(1)]),
         ("src/world.rs", "unread_groups_message", &[Ban::Extras(1)]),
@@ -1382,11 +1376,6 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/design/components.rs",
             "hanging_add_strip",
-            &[Ban::Layout(1)],
-        ),
-        (
-            "src/design/components.rs",
-            "image_viewer",
             &[Ban::Layout(1)],
         ),
         (
@@ -1502,6 +1491,16 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "src/visual_tests/ergonomics.rs",
             "scrolled_content_is_clipped_by_its_own_area_and_not_one_it_passes_behind",
             &[Ban::Layout(2)],
+        ),
+        // Package K2: the popup parts.
+        ("src/design/popups.rs", "list", &[Ban::Layout(1)]),
+        ("src/design/popups.rs", "rich_tip", &[Ban::Layout(2)]),
+        ("src/design/popups.rs", "drag_source", &[Ban::Layout(3)]),
+        ("src/design/popups.rs", "image_viewer", &[Ban::Layout(1)]),
+        (
+            "src/design/popups/tests.rs",
+            "a_submenu_in_a_narrow_pane_keeps_its_parent_reachable",
+            &[Ban::Layout(1)],
         ),
     ]
 };

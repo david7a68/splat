@@ -193,6 +193,39 @@ pub fn components(ui: &mut egui::Ui) {
             let _ = choice(ui, false, "Another way");
         });
     });
+    // The popup parts (package K2): a drop-down, a tip of typed lines, a drag source.
+    design_group(ui, "Drop-down, tip and drag");
+    ui.horizontal(|ui| {
+        let id = egui::Id::new("gallery_side");
+        let mut side = ui.data(|data| data.get_temp::<usize>(id)).unwrap_or(1);
+        let _ = super::Dropdown::new(crate::field_id!("gallery_side"), "Side")
+            .choice(0, "Allies")
+            .choices([(1, "Enemies"), (2, "Neutral")])
+            .width(160.0)
+            .show(ui, &mut side);
+        ui.data_mut(|data| data.insert_temp(id, side));
+        let mut locked = 0;
+        let _ = super::Dropdown::new(crate::field_id!("gallery_side_locked"), "Locked side")
+            .choice(0, "Allies")
+            .width(160.0)
+            .blocked(Some("Close the run first."))
+            .show(ui, &mut locked);
+        let more = Action::quiet("2 more").show(ui);
+        let _ = super::rich_tip(
+            more,
+            &[
+                super::TipLine::title("Brannoch Vale"),
+                super::TipLine::detail("58 of 62 HP"),
+            ],
+        );
+        let grip = Action::quiet("Cinder Wolf").icon(icons::DRAG).show(ui);
+        super::drag_source(
+            ui,
+            &grip,
+            Some(1_u32),
+            super::Ghost::new(icons::ADD, "Cinder Wolf"),
+        );
+    });
     ui.horizontal(|ui| {
         let _ = Action::quiet("Absent")
             .icon(icons::ABSENT)
