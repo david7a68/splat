@@ -8730,6 +8730,32 @@ pub fn world_note_deleted(d: &mut Driver<'_>) {
             format!("The file line keeps Watchkeeper.md whole at {size:?}: {detail}"),
         );
     }
+    // Round 27 FF5: with Lookup beside it, World's header keeps every action with its word,
+    // as Lookup's does: two readers, each with Edit, Start fight and Add to Log.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let counts = d.at_size(size, |d| {
+            [
+                "Edit Watchkeeper",
+                "Start a fight with Watchkeeper",
+                "Add to Log",
+            ]
+            .map(|name| {
+                d.nodes()
+                    .into_iter()
+                    .filter(|node| {
+                        node.name == name
+                            && node.in_view()
+                            && node.rect.width() > design::Density::Read.control() + 0.5
+                    })
+                    .count()
+            })
+        });
+        d.observe(
+            "iter-27-D-FF5",
+            counts == [2, 2, 2],
+            format!("At {size:?}, Edit, Start fight and Add to Log with their words, per reader: {counts:?}"),
+        );
+    }
     d.state("npc-stat-block-deleted-in-lookup", Sizes::All);
     d.press(Key::Escape);
     go_encounters(d);
