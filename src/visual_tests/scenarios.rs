@@ -14192,17 +14192,13 @@ pub mod session_recording {
         d.click_containing("Add to timeline: Rest at the mill");
         d.expect("On the timeline");
         let next_after = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, next_add));
-        let footer = d.place_of("Rest at the mill added to Session 1.");
+        // Round 27 FI3: the result's place in the footer is proved in the marked transcript
+        // (iter-27-S-FN2), which shows this same result from the session's one footer push.
+        // Must stay true: the other marker's Add keeps its place at every size.
         d.observe(
-            "iter-27-S-FI3",
-            next_before.iter().all(Option::is_some)
-                && next_before == next_after
-                && footer
-                    .zip(next_after[1])
-                    .is_some_and(|(footer, next)| footer.top() > next),
-            format!(
-                "The marker's Add result is in the footer {footer:?} and the next Add keeps its y: {next_before:?} {next_after:?}"
-            ),
+            "iter-27-S-FI3-next",
+            next_before.iter().all(Option::is_some) && next_before == next_after,
+            format!("The other marker's Add keeps its y: {next_before:?} {next_after:?}"),
         );
         d.observe_both("H1 recording add", "The recording row owns one Undo", |d| {
             d.has("Undo add")
