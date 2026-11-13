@@ -216,6 +216,8 @@ struct Keep {
     /// The control pressed: focus that comes to it (egui focuses a clicked control a pass later)
     /// is not a move.
     pressed: Id,
+    /// The frame of the press.
+    frame: u64,
     /// The room's height at the press: a footer that comes or goes ends the hold.
     room: Option<f32>,
 }
@@ -247,6 +249,7 @@ pub fn hold_press(ui: &Ui, control: impl std::hash::Hash, pressed: &egui::Respon
     let control = Id::new(control);
     let (top, pressed_id) = (pressed.rect.top(), pressed.id);
     let focus = ui.ctx().memory(|memory| memory.focused());
+    let frame = ui.ctx().cumulative_frame_nr();
     with_held(ui, |held, pass| {
         held.keep = Some(Keep {
             control,
@@ -256,6 +259,7 @@ pub fn hold_press(ui: &Ui, control: impl std::hash::Hash, pressed: &egui::Respon
             content: None,
             focus,
             pressed: pressed_id,
+            frame,
             room: None,
         });
     });
@@ -438,14 +442,13 @@ fn hold_place<R>(ui: &Ui, mut held: Held, output: &egui::scroll_area::ScrollArea
     let focus = ui.ctx().memory(|memory| memory.focused());
     let room = output.inner_rect.height();
     let content_now = output.content_size.y - held.room;
+    let frame = ui.ctx().cumulative_frame_nr();
     let ended = held.keep.as_mut().and_then(|keep| {
         let room_changed = (*keep.room.get_or_insert(room) - room).abs() > 0.5;
-        // The press's own change (a row raised above it, its result in the footer) is still to
-        // be held: a room change then does not end the hold; a later one does.
-        let pending = keep.now.is_none_or(|now| (now - keep.top).abs() > 0.5)
-            || keep
-                .content
-                .is_none_or(|content| (content - content_now).abs() > 0.5);
+        // The press's own change (a row raised above it, its result in the footer) comes in its
+        // frame or the next: a room change then does not end the hold; a later one does.
+        let _ = content_now;
+        let pending = frame <= keep.frame + 1;
         if scrolled {
             Some("scrolled")
         } else if pass > keep.pass + KEEP_PASSES {
