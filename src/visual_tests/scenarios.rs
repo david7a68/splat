@@ -8482,6 +8482,18 @@ pub mod gallery {
                     .is_some_and(|(a, b)| (a - b).abs() < 1.0),
                 format!("The submenu and quiet menu action share a text edge: {edges:?}"),
             );
+            // iter-27-A FG1: the submenu row ends with the icon set's caret, as sections and
+            // dropdowns do, not egui's solid triangle.
+            let row = d.place_of("Move to…");
+            let caret = row.and_then(|row| d.painted_rect_in(crate::design::icons::NEXT, row));
+            let solid = row.and_then(|row| {
+                d.painted_rect_in(egui::containers::menu::SubMenuButton::RIGHT_ARROW, row)
+            });
+            d.observe(
+                "iter-27-A-FG1",
+                caret.is_some() && solid.is_none(),
+                format!("Move to… ends with the icon set's caret: row {row:?}, caret {caret:?}, solid {solid:?}"),
+            );
         });
         // SD2/AD1, the other caller: with room on the right, the gallery's submenu still opens
         // there, clear of any splitter.

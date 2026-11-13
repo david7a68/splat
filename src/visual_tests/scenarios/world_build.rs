@@ -116,7 +116,11 @@ pub fn broken(d: &mut Driver<'_>) {
             && d.is_disabled("Save repaired note"),
         "The unchanged unreadable repair says Invalid, not No changes",
     );
-    d.state("broken-note-repair", Sizes::All);
+    // iter-27-A FE2: the 4-line repair's footer follows its save row, `S` below it, instead of
+    // the pane's bottom; a footer that cuts no body has no hairline at its top.
+    d.state_prepared("broken-note-repair", Sizes::All, |d| {
+        repair_footer_follows(d, "Line 3 opens a list", "iter-27-A-FE2");
+    });
     let external = "---\nsplat_schema: 2\nsplat_id: [\n---\n\nOutside edit kept.\n";
     fs::write(&path, external).unwrap();
     d.settle();
@@ -400,7 +404,10 @@ pub fn broken(d: &mut Driver<'_>) {
         &format!("Reloaded from disk. Your draft is kept until you edit. {combined}"),
         "Undo reload",
     );
-    d.state("repair-reloaded-with-undo", Sizes::All);
+    // iter-27-A FA2: with Undo reload and the reason the footer still follows the save row.
+    d.state_prepared("repair-reloaded-with-undo", Sizes::All, |d| {
+        repair_footer_follows(d, "Reloaded from disk.", "iter-27-A-FA2");
+    });
     d.click("Undo reload");
     assert_eq!(d.editor_text().as_deref(), Some(fixed.as_str()));
     tops.push(("reload undone, no message", editor_tops(d)));
@@ -3900,11 +3907,19 @@ fn body_kept(
         for size in [SMALL, DEFAULT, LARGE] {
             placed.push(d.at_size(size, |d| {
                 let found = d.place_of(result).filter(|_| d.in_view(result));
-                let below = found
-                    .zip(d.place_of(anchor))
-                    .is_some_and(|(found, anchor)| {
-                        found.top() >= anchor.bottom() && found.top() >= size.1 / 2.0
-                    });
+                // iter-27-A: the footer follows a short body, so the result is no longer in the
+                // window's lower half; it is below the body, inside the pane's footer group.
+                let in_footer = found.is_some_and(|found| {
+                    d.nodes().into_iter().any(|node| {
+                        node.role == Role::GenericContainer
+                            && !node.name.is_empty()
+                            && node.rect.contains_rect(found)
+                    })
+                });
+                let below = in_footer
+                    && found
+                        .zip(d.place_of(anchor))
+                        .is_some_and(|(found, anchor)| found.top() >= anchor.bottom());
                 (size, found, below)
             }));
         }
@@ -4937,6 +4952,8 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.click("Update 1 link");
     d.wait_for_text("Undo link update");
     assert!(fs::read_to_string(&path).unwrap().contains("[[Ash Wolf]]"));
+    // Review of PR 298, item 2: A's link result keeps the order its own update issued.
+    let a_order = d.app().library.open_link_result_order();
     // AD3: the update's result is a message, and its Undo follows it with its icon. The result
     // takes the offer's place, so nothing below it moves.
     undo_follows_message(
@@ -5019,6 +5036,7 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.click("Update 1 link");
     d.settle();
     let b_result_shown = d.has_containing(&format!("Links now say “{LAMP}”."));
+    let b_order = d.app().library.open_link_result_order();
     let b_result_alone = !d.has_containing("Links now say “Ash Wolf”");
     let b_with_result = editor_below_read(d);
     // Astra re-check 2: B's long result is reached by keyboard and by wheel, and its Undo keeps
@@ -5071,6 +5089,16 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.click_starting("Ash Wolf · ");
     d.settle();
     let a_back = d.visible_text("Links now say “Ash Wolf”.") && !d.has_containing("Veilglass");
+    let a_order_back = d.app().library.open_link_result_order();
+    d.observe(
+        "review-298-2-link-order",
+        a_order.is_some()
+            && a_order_back == a_order
+            && b_order.zip(a_order).is_some_and(|(b, a)| b > a),
+        format!(
+            "Each link result keeps its own update's order: A {a_order:?}, B {b_order:?}, A again {a_order_back:?}"
+        ),
+    );
     d.observe(
         "iter-24-L-link-owner",
         a_hidden_in_b && b_offer_alone && b_result_alone && b_saved && a_back,
@@ -5149,6 +5177,39 @@ pub fn package_rename(d: &mut Driver<'_>) {
             && d.has("Update 1 link"),
         format!("The offer writes again ({again}), its Undo restores A's links and gives the offer back, and B's links stay"),
     );
+    // Review of PR 298 (re-check): an older discard result is kept, then the links are updated:
+    // the newer `Undo link update` is above the older `Undo discard`, in Edit Markdown and in
+    // Read, as each result keeps the order its own action issued.
+    const DISCARD_A: &str = "Undo discard of Ash Wolf";
+    d.click(EDIT_MARKDOWN);
+    d.type_into_editor("A line to let go.\n");
+    d.click("Discard");
+    d.expect(DISCARD_A);
+    d.click("Update 1 link");
+    d.wait_for_text("Undo link update");
+    let newest_first = |d: &mut Driver<'_>| {
+        let (links, discard) = (d.place_of("Undo link update"), d.place_of(DISCARD_A));
+        (
+            d.in_view("Undo link update")
+                && d.in_view(DISCARD_A)
+                && links
+                    .zip(discard)
+                    .is_some_and(|(links, discard)| links.top() < discard.top()),
+            format!("Undo link update {links:?}, Undo discard {discard:?}"),
+        )
+    };
+    let (edit, edit_detail) = newest_first(d);
+    d.click("Read");
+    let (read, read_detail) = newest_first(d);
+    d.observe(
+        "review-298-3-link-above-discard",
+        edit && read,
+        format!("The newer link update leads the older discard: Edit Markdown {edit_detail}; Read {read_detail}"),
+    );
+    // Back to the offer, as before this check.
+    d.click("Undo link update");
+    d.settle();
+    d.expect("Update 1 link");
     // Round 26 re-check: in Read with an unsaved draft, the save row's footer holds the result;
     // its Undo restores the links, keeps the draft and ends the result. The Library reads the
     // files again once the draft ends, and then the offer shows again.
@@ -11311,6 +11372,30 @@ fn package_list_tops(d: &mut Driver<'_>) -> [Option<f32>; 3] {
                 .map(|node| node.rect.top())
         })
     })
+}
+
+/// iter-27-A: a short repair's footer (the one whose words hold `words`) sits `S` below its
+/// save row, clear of the pane's bottom, and draws no hairline, as it cuts no body.
+fn repair_footer_follows(d: &mut Driver<'_>, words: &str, id: &str) {
+    let size = d.window_size();
+    let save = d.place_of("Save repaired note");
+    let footer = footer_with(d, words);
+    let hairline = footer.map(|footer| {
+        d.hairlines_in(egui::Rect::from_min_max(
+            footer.left_top() - egui::vec2(0.0, 1.0),
+            egui::pos2(footer.right(), footer.top() + 2.0),
+        ))
+    });
+    d.observe(
+        id,
+        save.zip(footer).is_some_and(|(save, footer)| {
+            (footer.top() - (save.bottom() + design::S)).abs() <= 1.0
+                && footer.bottom() < size.1 - design::XXL
+        }) && hairline.as_ref().is_some_and(Vec::is_empty),
+        format!(
+            "At {size:?}, the footer is `S` below the save row, with no hairline: save {save:?}, footer {footer:?}, hairlines {hairline:?}"
+        ),
+    );
 }
 
 /// The stat block's last section, next to the run panel's footer.

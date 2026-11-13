@@ -45,6 +45,9 @@ pub fn fights_that_keep_hp(
 struct Removal {
     /// This removal's own identity: a new removal, even of the same event, has another.
     action: u64,
+    /// When this removal was done: its result's place in every footer that shows it (Timeline
+    /// and the plan).
+    order: crate::design::ResultOrder,
     index: usize,
     /// The event that was before it, which it goes back after.
     after: Option<String>,
@@ -763,21 +766,20 @@ fn new_id() -> String {
     format!("t-{}", &id[id.len() - 10..])
 }
 
-/// When a kept result was made: one count for every footer result, so a footer lists its results
-/// with a live Undo newest first, whatever their kind. The owner of a result takes it when the
-/// result is made, every time, also when it repeats an earlier one.
-pub(crate) fn next_result_order() -> u64 {
-    static ORDER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    ORDER.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1
+/// When a kept result was made, so a footer lists its results with a live Undo newest first,
+/// whatever their kind. The owner of a result takes it when the result is made, every time, also
+/// when it repeats an earlier one.
+pub(crate) fn next_result_order() -> crate::design::ResultOrder {
+    crate::design::ResultOrder::issue()
 }
 
 /// A campaign's events, kept in step with its file. Edits save shortly after they stop.
 #[derive(Default)]
 pub struct Book {
     /// When the reload result was made (`next_result_order`).
-    pub dropped_order: u64,
+    pub dropped_order: crate::design::ResultOrder,
     /// When the rest ruling's result was made (`next_result_order`).
-    pub rest_undo_order: u64,
+    pub rest_undo_order: crate::design::ResultOrder,
     path: Option<PathBuf>,
     pub events: Vec<Event>,
     pub flags: Vec<splat::content::layout::Flag>,
@@ -789,6 +791,8 @@ pub struct Book {
     pub duplicate: Option<String>,
     saved_events: Vec<Event>,
     pub renamed_links: BTreeMap<String, Vec<String>>,
+    /// When each event's rename made its link offer: the offer's footer order, one per event.
+    pub renamed_orders: BTreeMap<String, crate::design::ResultOrder>,
     link_titles: BTreeMap<String, (String, String)>,
     reordered: Vec<String>,
     dirty: bool,
@@ -942,6 +946,8 @@ impl Book {
                 if !labels.contains(&old_label) {
                     labels.push(old_label);
                 }
+                self.renamed_orders
+                    .insert(event.id.clone(), crate::design::ResultOrder::issue());
             }
         }
         self.dirty = true;
@@ -1482,6 +1488,7 @@ impl Book {
             // One Undo remove at a time: a newer removal, in any session, replaces it.
             self.removed = Some(Removal {
                 action: REMOVAL_ACTIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+                order: crate::design::ResultOrder::issue(),
                 index,
                 after,
                 owned: self.owned_events(event.session),
@@ -1506,6 +1513,11 @@ impl Book {
     /// The event that Undo would put back.
     pub fn removed_event(&self) -> Option<&Event> {
         self.removed.as_ref().map(|removal| &removal.event)
+    }
+
+    /// When the removal that Undo would reverse was done: its result's footer order.
+    pub fn removal_order(&self) -> Option<crate::design::ResultOrder> {
+        self.removed.as_ref().map(|removal| removal.order)
     }
 
     pub fn removed(&self) -> Option<&str> {

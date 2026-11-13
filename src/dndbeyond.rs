@@ -147,7 +147,8 @@ pub struct DndBeyond {
     pending: Option<Receiver<Result<Vec<RemoteCampaign>, String>>>,
     loaded: bool,
     error: Option<String>,
-    message: Option<String>,
+    /// The link's result, with the order the link took for the footer.
+    message: Option<(String, crate::design::ResultOrder)>,
     visible_last_frame: bool,
     requested_visible_link: Option<(uuid::Uuid, String)>,
     pending_link: Option<(uuid::Uuid, String)>,
@@ -381,8 +382,8 @@ impl DndBeyond {
                 crate::design::message(ui, crate::design::Tone::Error, error);
             });
         }
-        if link && let Some(message) = &self.message {
-            footer.result(message.as_str(), false, move |ui| {
+        if link && let Some((message, order)) = &self.message {
+            footer.result(*order, message.as_str(), false, move |ui| {
                 crate::design::message(ui, crate::design::Tone::Success, message);
             });
         }
@@ -502,7 +503,10 @@ impl DndBeyond {
             match local.link(selected.clone()) {
                 Ok(()) => {
                     self.requested_visible_link = None;
-                    self.message = Some("Campaign link saved.".into());
+                    self.message = Some((
+                        "Campaign link saved.".into(),
+                        crate::design::ResultOrder::issue(),
+                    ));
                     self.error = None;
                     if let Some(remote) = self
                         .campaigns

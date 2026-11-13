@@ -445,7 +445,7 @@ struct Draft {
     groups_written: bool,
     /// One group detached from this draft, until the next save.
     /// Its place, the group, whether it is deleted, and when (`result_stamp`).
-    removed_group: Option<(usize, GroupDraft, bool, u64)>,
+    removed_group: Option<(usize, GroupDraft, bool, design::ResultOrder)>,
     /// The last replacement of missing roster rows, for its result and Undo. A later edit of
     /// those rows, or a Save (a start that saves too), ends it (FC3): after a Save its Undo
     /// would make a draft that differs from the file while it looks like it.
@@ -560,8 +560,9 @@ impl Draft {
         {
             self.replacement = None;
         }
-        // (when, tone, words, Undo, which)
-        let mut results: Vec<(u64, Tone, String, &'static str, DraftResult)> = Vec::new();
+        // (when, tone, words, Undo, which); the footer puts them newest first by `when`.
+        let mut results: Vec<(design::ResultOrder, Tone, String, &'static str, DraftResult)> =
+            Vec::new();
         if let Some((words, undo)) = self.removed_group_result()
             && let Some((.., stamp)) = self.removed_group
         {
@@ -587,9 +588,8 @@ impl Draft {
                 ));
             }
         }
-        results.sort_by_key(|(stamp, ..)| std::cmp::Reverse(*stamp));
-        for (_, tone, words, undo, which) in results {
-            footer.result(words.clone(), true, move |ui| {
+        for (stamp, tone, words, undo, which) in results {
+            footer.result(stamp, words.clone(), true, move |ui| {
                 // A result is a message, so its Undo keeps the undo icon as every other Undo
                 // does.
                 if design::undo_message(ui, tone, &words, undo) {
@@ -2168,7 +2168,7 @@ struct ReplacementUndo {
     before: Vec<Slot>,
     after: Vec<Slot>,
     /// When the replacement was made (`result_stamp`).
-    stamp: u64,
+    stamp: design::ResultOrder,
     /// The result in words, such as `2 Cinder Wolf rows replaced with Guard.`
     words: String,
 }
@@ -2553,16 +2553,17 @@ struct DraftUndo {
     which: std::cell::Cell<Option<DraftResult>>,
 }
 
-/// When a result was made: a number that only grows, so the newest result can come first.
-pub(super) fn result_stamp() -> u64 {
-    static CLOCK: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
-    CLOCK.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+/// When a result was made: the footer's own order, issued when the action is done, so the
+/// newest result comes first.
+pub(super) fn result_stamp() -> design::ResultOrder {
+    design::ResultOrder::issue()
 }
 
 /// A kept result with its own Undo, on the Encounters page or in an editor's footer. Each is
 /// owned by the state that holds its data (`discarded`, `discarded_group`, `deleted_run`,
-/// `removed_saved_group`, `removed_encounter`) and ends with it (FI1, FJ4).
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+/// `removed_saved_group`, `removed_encounter`) and ends with it (FI1, FJ4). Its footer order is
+/// issued when its action is done (`stamp_kept`).
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 enum KeptResult {
     Discarded,
     GroupDiscarded,
@@ -2607,9 +2608,13 @@ pub struct Encounters {
     #[cfg(test)]
     difficulty_counts: (usize, usize),
     message: Option<String>,
+    /// When `message`'s save was done, for the footer's order.
+    message_order: Option<design::ResultOrder>,
     /// The draft `Discard changes` last dropped, for one step of undo.
     discarded: Option<Draft>,
     discarded_options: Option<crate::encounter_settings::Options>,
+    /// When `discarded_options` was discarded, for the footer's order.
+    discarded_options_order: Option<design::ResultOrder>,
     pub saved: bool,
     run: Option<crate::encounter_run::Run>,
     /// The encounter editor's last frame found that Save would refuse its changed draft, so
@@ -2637,8 +2642,8 @@ pub struct Encounters {
     group_draft: Option<GroupDraft>,
     /// The group draft `Discard changes` last dropped, for one step of undo.
     discarded_group: Option<GroupDraft>,
-    /// When that discard was made (`timeline::next_result_order`), for the plan's footer order.
-    discarded_group_order: u64,
+    /// When that discard was made, for the plan's footer order.
+    discarded_group_order: Option<design::ResultOrder>,
     /// A creature made the campaign's own, with its text open beside the roster.
     creature: Option<CreatureEditor>,
 
@@ -2665,8 +2670,9 @@ pub struct Encounters {
     removed_saved_group: Option<groups::RemovedNote>,
     /// The encounter `Remove…` last removed, for `Undo remove encounter`.
     removed_encounter: Option<groups::RemovedNote>,
-    /// The kept results shown last frame, newest first (`kept_results`).
-    result_order: Vec<KeptResult>,
+    /// When each kept result's action was done (`stamp_kept`), for the footer's newest-first
+    /// order. An entry outlives its result; the next action of that kind replaces it.
+    kept_orders: std::collections::HashMap<KeptResult, design::ResultOrder>,
 }
 /// One encounter, as a session's plan offers it.
 pub struct PlanFight {
@@ -3252,7 +3258,7 @@ impl Encounters {
         self.group_in_plan && self.group_draft.is_none() && self.discarded_group.is_some()
     }
     /// When the discard the plan shows was made, for its footer's newest-first order.
-    pub fn discarded_group_order(&self) -> u64 {
+    pub fn discarded_group_order(&self) -> Option<design::ResultOrder> {
         self.discarded_group_order
     }
     pub fn discarded_group_name(&self) -> String {
@@ -3704,6 +3710,7 @@ impl Encounters {
                 self.saved = true;
                 self.error = None;
                 self.message = Some("Encounter saved.".into());
+                self.message_order = Some(design::ResultOrder::issue());
                 // AB1, FB1: the open fight from this encounter keeps its own copy of the Prep
                 // text. The same Save gives it the new words; its combat state stays.
                 if let (Some(run), Ok(entry)) =
@@ -4321,6 +4328,7 @@ impl Encounters {
         self.validated = None;
         self.discarded = Some(draft);
         self.discarded_group = None;
+        self.stamp_kept(KeptResult::Discarded);
     }
     /// The undo of `discard_draft`.
     fn undo_discard(&mut self) {
@@ -4339,10 +4347,15 @@ impl Encounters {
         }
     }
 
-    /// The kept results that show now, newest first: one that was not shown before goes ahead
-    /// of the others. `page` is the Encounters list, which shows every kind; an editor shows only
-    /// the discard of its own kind, as before. Each result is owned by the state that holds its
-    /// data and ends with it.
+    /// A kept result of `kind` was just made: it is now the newest.
+    fn stamp_kept(&mut self, kind: KeptResult) {
+        self.kept_orders.insert(kind, design::ResultOrder::issue());
+    }
+
+    /// The kept results that show now; the footer puts them newest first by `stamp_kept`.
+    /// `page` is the Encounters list, which shows every kind; an editor shows only the discard
+    /// of its own kind, as before. Each result is owned by the state that holds its data and
+    /// ends with it.
     fn kept_results(&mut self, page: bool) -> Vec<KeptResult> {
         self.expire_discards();
         // Every result whose data is still held, and whether this view shows it.
@@ -4369,32 +4382,10 @@ impl Encounters {
                 page,
             ),
         ];
-        let held: Vec<KeptResult> = alive
+        alive
             .iter()
-            .filter(|(_, held, _)| *held)
+            .filter(|(_, held, here)| *held && *here)
             .map(|(kind, ..)| *kind)
-            .collect();
-        // A result new since the last frame goes first; one whose data is gone leaves the
-        // order. One that this view does not show keeps its place for the views that do.
-        let mut order: Vec<KeptResult> = held
-            .iter()
-            .filter(|kind| !self.result_order.contains(kind))
-            .copied()
-            .collect();
-        order.extend(
-            self.result_order
-                .iter()
-                .filter(|kind| held.contains(kind))
-                .copied(),
-        );
-        self.result_order = order.clone();
-        order
-            .into_iter()
-            .filter(|kind| {
-                alive
-                    .iter()
-                    .any(|(shown, held, here)| shown == kind && *held && *here)
-            })
             .collect()
     }
 
@@ -4478,7 +4469,10 @@ impl Encounters {
     ) {
         for &kind in kinds {
             let (tone, words, undo, name) = self.kept_words(kind);
-            footer.result(words.clone(), true, move |ui| {
+            // Every place that makes a kept result stamps it (`stamp_kept`); one made elsewhere
+            // without a stamp is older than every stamped one: a draw never issues an order.
+            let order = self.kept_orders.get(&kind).copied().unwrap_or_default();
+            footer.result(order, words.clone(), true, move |ui| {
                 if design::undo_message_named(ui, tone, &words, undo, name.as_deref()) {
                     pressed.set(Some(kind));
                 }
@@ -4709,8 +4703,8 @@ impl Encounters {
                 }
             });
         }
-        if let Some(message) = self.message.clone() {
-            footer.result(message.clone(), false, move |ui| {
+        if let (Some(message), Some(order)) = (self.message.clone(), self.message_order) {
+            footer.result(order, message.clone(), false, move |ui| {
                 design::message(ui, Tone::Success, &message);
             });
         }
@@ -4873,6 +4867,7 @@ impl Encounters {
                     Ok(removed) => {
                         self.removed_saved_group = Some(removed);
                         self.removed_encounter = None;
+                        self.stamp_kept(KeptResult::GroupRemoved);
                         self.reload_snapshot(active, campaigns.modules());
                         self.saved = true;
                     }
@@ -4884,6 +4879,7 @@ impl Encounters {
                     Ok(removed) => {
                         self.removed_encounter = Some(removed);
                         self.removed_saved_group = None;
+                        self.stamp_kept(KeptResult::EncounterRemoved);
                         self.reload_snapshot(active, campaigns.modules());
                         self.saved = true;
                     }
@@ -4921,6 +4917,7 @@ impl Encounters {
                 match deleted {
                     Some(Ok(deleted)) => {
                         self.deleted_run = Some(deleted);
+                        self.stamp_kept(KeptResult::RunDeleted);
                         self.error = None;
                         self.read_runs_again(active);
                     }
@@ -6561,6 +6558,7 @@ impl Encounters {
                             &mut snapshot.options,
                             snapshot.saved_options.clone(),
                         ));
+                        self.discarded_options_order = Some(design::ResultOrder::issue());
                     }
                 }
                 if !changed && !rule_flags.is_empty() {
@@ -6667,9 +6665,9 @@ impl Encounters {
         let undo = &undo_discard;
         let mut footer =
             design::Footer::new(("run_settings_footer", active.id), design::FORM_WIDTH);
-        if discard_shown {
+        if discard_shown && let Some(order) = self.discarded_options_order {
             let words = "Rules and runs draft discarded.";
-            footer.result(words, true, move |ui| {
+            footer.result(order, words, true, move |ui| {
                 if design::draft_discarded(ui, "Rules and runs") {
                     undo.set(true);
                 }
