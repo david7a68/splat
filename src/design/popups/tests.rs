@@ -859,32 +859,64 @@ fn a_known_size_sizes_the_viewer_before_the_texture_loads() {
     }
 }
 
-/// One part draws a chosen row: package X's `design::choice` (and its wrapping form,
-/// `choice_wrapped`, which the drop-down uses). This test reads `src/design/` with `syn` and
-/// fails if a private copy (`choice_row`) comes back beside it.
+/// One part draws a chosen row: package X's `design::choice` and its wrapping form,
+/// `choice_wrapped`, which the drop-down uses, are each one call of the same painter in
+/// `extras.rs`; and the drop-down's file draws no row of its own. This test reads the source with
+/// `syn`.
 #[test]
 fn one_choice_row() {
-    let mut free_fns = Vec::new();
-    for item in std::fs::read_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/src/design")).expect("read")
-    {
-        let path = item.expect("an entry").path();
-        if path.extension().is_some_and(|e| e == "rs") {
-            let text = std::fs::read_to_string(&path).expect("a source file");
-            let file = syn::parse_file(&text).expect("it parses");
-            for item in file.items {
-                if let syn::Item::Fn(function) = item {
-                    free_fns.push(function.sig.ident.to_string());
-                }
-            }
-        }
-    }
+    let read = |name: &str| {
+        let path = format!("{}/src/design/{name}", env!("CARGO_MANIFEST_DIR"));
+        syn::parse_file(&std::fs::read_to_string(path).expect("a source file")).expect("it parses")
+    };
+    let free_fns = |file: &syn::File| -> Vec<syn::ItemFn> {
+        file.items
+            .iter()
+            .filter_map(|item| match item {
+                syn::Item::Fn(function) => Some(function.clone()),
+                _ => None,
+            })
+            .collect()
+    };
+    // The one function each form's body calls, when the body is that one call.
+    let only_call = |function: &syn::ItemFn| -> Option<String> {
+        let [syn::Stmt::Expr(syn::Expr::Call(call), None)] = function.block.stmts.as_slice() else {
+            return None;
+        };
+        let syn::Expr::Path(path) = call.func.as_ref() else {
+            return None;
+        };
+        Some(path.path.segments.last()?.ident.to_string())
+    };
+    let extras = free_fns(&read("extras.rs"));
+    let form = |name: &str| {
+        let function = extras
+            .iter()
+            .find(|function| function.sig.ident == name)
+            .unwrap_or_else(|| panic!("`{name}` is in extras.rs"));
+        only_call(function)
+    };
+    let painter = form("choice");
     assert!(
-        free_fns.iter().any(|name| name == "choice"),
-        "the scan sees the part"
+        painter.is_some(),
+        "`choice` is one call of the shared painter"
+    );
+    assert_eq!(
+        form("choice_wrapped"),
+        painter,
+        "`choice_wrapped` calls the same painter as `choice`"
+    );
+    // The drop-down's file names `choice_wrapped` and draws no row itself.
+    let popups =
+        std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/design/popups.rs"))
+            .expect("a source file");
+    assert!(
+        popups.contains("choice_wrapped("),
+        "the drop-down's rows are the part"
     );
     assert!(
-        !free_fns.iter().any(|name| name == "choice_row"),
-        "a copy of `design::choice` (`choice_row`) is back: use `choice` or `choice_wrapped`"
+        !popups.contains("SelectableLabel"),
+        "a copy of `design::choice` is back in popups.rs: use `choice_wrapped`"
     );
 }
 
