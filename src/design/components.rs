@@ -3455,12 +3455,10 @@ pub fn section<R>(
     title: impl Into<egui::WidgetText>,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> egui::CollapsingResponse<R> {
-    with_expanded(
-        ui,
-        egui::CollapsingHeader::new(title)
-            .icon(section_icon)
-            .show(ui, add),
-    )
+    let response = egui::CollapsingHeader::new(title)
+        .icon(section_icon)
+        .show(ui, add);
+    with_expanded(ui, response)
 }
 
 /// A collapsing section that stays open when its title changes, such as a count.
@@ -3470,13 +3468,11 @@ pub fn section_with_id<R>(
     title: impl Into<egui::WidgetText>,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> egui::CollapsingResponse<R> {
-    with_expanded(
-        ui,
-        egui::CollapsingHeader::new(title)
-            .id_salt(id)
-            .icon(section_icon)
-            .show(ui, add),
-    )
+    let response = egui::CollapsingHeader::new(title)
+        .id_salt(id)
+        .icon(section_icon)
+        .show(ui, add);
+    with_expanded(ui, response)
 }
 
 /// egui gives a collapsing header no expanded state: set it from the section's own state, after
@@ -4720,7 +4716,7 @@ mod tests {
         super::super::theme::install(&harness.ctx);
         harness.run_steps(2);
         let expanded = |harness: &egui_kittest::Harness<'_>| {
-            use egui_kittest::kittest::Queryable;
+            use egui_kittest::kittest::{NodeT, Queryable};
             ["Details", "3 notes", "Technical"].map(|name| {
                 harness
                     .get_by_label(name)
