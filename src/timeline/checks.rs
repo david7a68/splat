@@ -3,7 +3,7 @@
 //! The plan's Travel row and Timeline's detail column draw the same block from here.
 use super::{Book, Check, DAY, Event, HOUR, Kind, clock_words, read_duration};
 use crate::design::{self, Action, Density, Status, Tone, Type, colors, icons};
-use crate::roll_table::{PER_NOT_READ, Per, Table};
+use crate::roll_table::{Per, Table};
 use eframe::egui;
 use splat::execution::dice::Random;
 use std::collections::BTreeMap;
@@ -513,8 +513,8 @@ pub fn header(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<A
             },
         )
         .on_hover_text(fault);
-    } else if table.is_some_and(|table| matches!(table.per, Per::NotRead(_))) {
-        design::small_message(ui, Tone::Warning, PER_NOT_READ);
+    } else if let Some(warning) = table.and_then(|table| table.per.warning()) {
+        design::small_message(ui, Tone::Warning, &warning);
     }
     act
 }
