@@ -26,6 +26,24 @@ impl Rank {
     const fn typo(tier: u8) -> Self {
         Self { typo: true, tier }
     }
+
+    /// FI5: where a creature search sorts this name, in the one creature order that the
+    /// encounter editor, the group editor and Arrivals share: a name that holds the search as
+    /// a whole word sorts with any other name that holds it (`creature_tier`).
+    pub(crate) const fn creature(self) -> Self {
+        if !self.typo && self.tier == 3 {
+            Self::typed(2)
+        } else {
+            self
+        }
+    }
+}
+
+/// FI5: the one creature search order, Arrivals' order: the exact name (0), then a name that
+/// starts with the search (1), then a name that holds it anywhere (2). Names in one tier keep
+/// the list's order.
+pub(crate) fn creature_tier(name: &str, query: &str) -> Option<u8> {
+    name_rank(name, query).map(|tier| tier.min(2))
 }
 
 /// Shown when every result was found only with a typo.
