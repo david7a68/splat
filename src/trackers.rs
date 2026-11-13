@@ -3340,6 +3340,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::disallowed_methods)]
     fn an_open_history_prepares_its_rows_once_and_draws_only_those_in_view() {
         use crate::test_support::{CachedWork, Counts};
         use egui_kittest::{Harness, kittest::Queryable};

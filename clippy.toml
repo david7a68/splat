@@ -1,0 +1,43 @@
+# Raw egui calls that a shared part in `src/design/` replaces (docs/design-system.md, Layout parts).
+# `check` runs Clippy with `-D warnings`, so a new raw call outside `src/design/` fails it. A function
+# that still makes such a call carries `#[allow(clippy::disallowed_methods)]`; the source lint
+# (`src/design/lint.rs`, rule `disallowed-methods-allow`) counts those per file, and the count can
+# only go down. The paths name egui, which only the `splat` crate uses: `allow-invalid` keeps the
+# other workspace crates quiet.
+disallowed-methods = [
+    # Scroll areas: `design::ScrollColumn` keeps the scroll bar's lane, so nothing moves when the bar
+    # comes (family F14). A sideways table scroll (`ScrollArea::horizontal`) is not listed.
+    { path = "egui::ScrollArea::vertical", reason = "use design::ScrollColumn, which keeps the scroll bar's lane", allow-invalid = true },
+    { path = "egui::ScrollArea::both", reason = "use design::ScrollColumn, which keeps the scroll bar's lane", allow-invalid = true },
+    { path = "egui::ScrollArea::new", reason = "use design::ScrollColumn, which keeps the scroll bar's lane", allow-invalid = true },
+    # Text fields: a field's id comes from a `FieldId`, never from its place in the layout, so a
+    # layout branch cannot drop its focus or its cursor (PR 297).
+    { path = "egui::TextEdit::singleline", reason = "use design::line_field, design::labelled_field or FieldId::single_line", allow-invalid = true },
+    { path = "egui::TextEdit::multiline", reason = "use FieldId::multi_line", allow-invalid = true },
+    { path = "egui::TextEdit::new", reason = "use FieldId::single_line or FieldId::multi_line", allow-invalid = true },
+    { path = "egui::TextEdit::id", reason = "a FieldId gives the field its id", allow-invalid = true },
+    { path = "egui::TextEdit::id_salt", reason = "a FieldId gives the field its id", allow-invalid = true },
+    { path = "egui::TextEdit::id_source", reason = "a FieldId gives the field its id", allow-invalid = true },
+    { path = "splat::design::components::text_field", reason = "use design::labelled_field with a FieldId", allow-invalid = true },
+    { path = "splat::design::components::small_text_field", reason = "use design::labelled_field with a FieldId", allow-invalid = true },
+    { path = "splat::design::components::text_input", reason = "use design::line_field with a FieldId", allow-invalid = true },
+    # Words and field ids are checked when the program compiles: build them with `word!` and
+    # `field_id!`, which check the literal in a `const` block.
+    { path = "splat::design::layout::Word::checked", reason = "use word!(\"…\")", allow-invalid = true },
+    { path = "splat::design::layout::FieldId::checked", reason = "use field_id!(\"…\")", allow-invalid = true },
+    # Foreground layers: a popup, menu, window or free area drawn by hand chooses its own place
+    # and can cover a splitter or a scroll bar. Shared parts in `src/design/` own them.
+    { path = "egui::Area::new", reason = "foreground layers belong to src/design/", allow-invalid = true },
+    { path = "egui::Window::new", reason = "use design::dialog", allow-invalid = true },
+    { path = "egui::Modal::new", reason = "use design::dialog", allow-invalid = true },
+    { path = "egui::LayerId::new", reason = "foreground layers belong to src/design/", allow-invalid = true },
+    { path = "egui::LayerId::debug", reason = "foreground layers belong to src/design/", allow-invalid = true },
+    { path = "egui::Context::layer_painter", reason = "foreground layers belong to src/design/", allow-invalid = true },
+    { path = "egui::Popup::new", reason = "foreground layers belong to src/design/", allow-invalid = true },
+    { path = "egui::Popup::menu", reason = "use design::row_menu or design::menu_popup", allow-invalid = true },
+    { path = "egui::Popup::context_menu", reason = "use design::menu_popup", allow-invalid = true },
+    { path = "egui::Popup::from_response", reason = "use design::menu_popup", allow-invalid = true },
+    { path = "egui::Popup::from_toggle_button_response", reason = "use design::menu_popup", allow-invalid = true },
+    { path = "egui::Ui::menu_button", reason = "use design::row_menu or design::menu_popup", allow-invalid = true },
+    { path = "egui::Response::context_menu", reason = "use design::menu_popup", allow-invalid = true },
+]

@@ -871,6 +871,7 @@ impl Reader {
     }
 
     /// The form, in place of the entry's rows and text.
+    #[allow(clippy::disallowed_methods)]
     pub(super) fn edit_form(
         &mut self,
         ui: &mut egui::Ui,

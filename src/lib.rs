@@ -19,6 +19,9 @@ mod copy_dialog;
 mod creature_filter;
 mod credentials;
 mod design;
+// The layout parts are public only so that their `compile_fail` doc tests can name them.
+#[doc(hidden)]
+pub use design::layout;
 mod difficulty;
 mod dndbeyond;
 mod encounter_run;
@@ -56,6 +59,8 @@ mod touchpad;
 mod trackers;
 mod ui_state;
 #[cfg(test)]
+// The capture harness drives egui directly; it ships nothing a DM sees.
+#[allow(clippy::disallowed_methods)]
 mod visual_tests;
 mod world;
 
@@ -1811,6 +1816,7 @@ impl Splat {
         }
     }
 
+    #[allow(clippy::disallowed_methods)]
     fn page(&mut self, ui: &mut egui::Ui) {
         let active = self.campaigns.active_campaign();
         let (_, session) = self.settings.campaign_session();

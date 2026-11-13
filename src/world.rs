@@ -3042,6 +3042,7 @@ impl Reader {
         go
     }
 
+    #[allow(clippy::disallowed_methods)]
     fn make_entry_control(
         &mut self,
         ui: &mut egui::Ui,
@@ -4219,6 +4220,7 @@ impl Reader {
     }
 
     /// The open picker. Returns the value the DM chose, or `Value::Null` to clear it.
+    #[allow(clippy::disallowed_methods)]
     fn pick(
         &mut self,
         ui: &mut egui::Ui,
@@ -4336,6 +4338,7 @@ impl Reader {
         chosen
     }
 
+    #[allow(clippy::disallowed_methods)]
     fn entry_controls(
         &mut self,
         ui: &mut egui::Ui,
@@ -4589,6 +4592,7 @@ impl Reader {
 }
 
 /// Choose the stat block, side and initiative. Returns how the form ended, if it did.
+#[allow(clippy::disallowed_methods)]
 fn add_form(
     ui: &mut egui::Ui,
     item: &Item,

@@ -386,6 +386,7 @@ impl Party {
     }
 
     /// The page below its header, above its footer: the empty states, or the list and the sheet.
+    #[allow(clippy::disallowed_methods)]
     fn page_body(&mut self, ui: &mut egui::Ui, session: Option<Session>, linked: bool) {
         let mut open_link = false;
         if !linked {
@@ -740,6 +741,7 @@ impl Party {
         design::rule(ui);
     }
 
+    #[allow(clippy::disallowed_methods)]
     fn sheet_view(&mut self, ui: &mut egui::Ui, session: Option<Session>) {
         let c = colors();
         let Some(id) = &self.reader.selected.clone() else {

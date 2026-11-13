@@ -192,6 +192,7 @@ pub fn viewer_open(ctx: &egui::Context) -> bool {
 }
 
 /// The full-window view of the image the DM clicked, if any.
+#[allow(clippy::disallowed_methods)]
 pub fn show_viewer(ctx: &egui::Context) {
     if let Some((path, name)) = viewing(ctx) {
         let uri = uri(&path);

@@ -1060,6 +1060,7 @@ impl TimelinePage {
         }
     }
 
+    #[allow(clippy::disallowed_methods)]
     fn list(&mut self, ui: &mut egui::Ui, book: &mut Book, sessions: &[SessionLink]) {
         let flagged: std::collections::HashMap<String, u32> = book
             .baseline
@@ -1132,6 +1133,7 @@ impl TimelinePage {
         });
     }
 
+    #[allow(clippy::disallowed_methods)]
     fn detail(
         &mut self,
         ui: &mut egui::Ui,

@@ -366,6 +366,7 @@ impl Run {
     }
 
     /// `block` is the width of Arrivals' group block, when it has groups.
+    #[allow(clippy::disallowed_methods)]
     pub(super) fn add_creature_form(&mut self, ui: &mut egui::Ui, block: Option<f32>) {
         let c = colors();
         let known = self.creatures.clone().unwrap_or_default();

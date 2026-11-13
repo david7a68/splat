@@ -457,6 +457,7 @@ fn form_footer(
 
 /// The form above a form footer, in a scroll area that ends at the footer's top, so a long form
 /// never runs under the footer.
+#[allow(clippy::disallowed_methods)]
 fn above_footer<R>(ui: &mut egui::Ui, bottom: f32, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
     let height = (bottom - ui.cursor().top()).max(0.0);
     egui::ScrollArea::vertical()
@@ -2743,6 +2744,7 @@ fn kind_folder(kind: &str) -> &'static str {
     }
 }
 
+#[allow(clippy::disallowed_methods)]
 pub(crate) fn folder_field(
     ui: &mut egui::Ui,
     label: &str,
@@ -4335,6 +4337,7 @@ impl Library {
             None
         }
     }
+    #[allow(clippy::disallowed_methods)]
     pub fn show(&mut self, ui: &mut egui::Ui, campaigns: &mut Campaigns) {
         // The New entry form's error ends with the form, however it closed.
         if !self.new_form {
@@ -5767,6 +5770,7 @@ impl Library {
     }
 
     /// Registering a package is a form in the page, not a window over it.
+    #[allow(clippy::disallowed_methods)]
     fn package_form(&mut self, ui: &mut egui::Ui, campaigns: &mut Campaigns) {
         let c = colors();
         let locked = self.draft_reason().or(self
@@ -6215,6 +6219,7 @@ impl Library {
             });
     }
 
+    #[allow(clippy::disallowed_methods)]
     fn new_entry(&mut self, ui: &mut egui::Ui, dirty: bool, campaigns: &Campaigns) {
         if self.new_kind.is_empty() {
             self.new_kind = "creature".into();
@@ -6749,6 +6754,7 @@ impl Library {
     }
 
     /// `pane_right` is the pane's right edge, where the reader's body may end.
+    #[allow(clippy::disallowed_methods)]
     fn editor_pane(
         &mut self,
         ui: &mut egui::Ui,

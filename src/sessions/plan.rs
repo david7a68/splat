@@ -932,6 +932,7 @@ enum MenuChoice {
 }
 
 /// A button whose menu offers a new thing, then the campaign's, with a search when they are many.
+#[allow(clippy::disallowed_methods)]
 fn plan_menu(
     ui: &mut egui::Ui,
     menu: &PlanMenu<'_>,
@@ -1006,6 +1007,7 @@ fn plan_menu(
 }
 
 /// The fields of one event, in place in a session's plan. Returns whether any changed.
+#[allow(clippy::disallowed_methods)]
 fn event_fields(ui: &mut egui::Ui, event: &mut timeline::Event) -> bool {
     let title = design::text_field(ui, "Title", &mut event.title, None, None);
     let mut changed = title.changed();
@@ -1025,6 +1027,7 @@ fn event_fields(ui: &mut egui::Ui, event: &mut timeline::Event) -> bool {
 /// A played fight's `Where`, in place under its opened row's links (W2-D3): the Timeline detail's
 /// own field on the same event, so the typed place has one owner, the Timeline, and saves as
 /// any edit of an event does. Returns whether it changed.
+#[allow(clippy::disallowed_methods)]
 fn place_field(ui: &mut egui::Ui, event: &mut timeline::Event) -> bool {
     ui.add_space(design::XS);
     design::text_field(ui, "Where", &mut event.place, None, None).changed()
@@ -2629,6 +2632,7 @@ impl Sessions {
 
     /// The session as a list, top to bottom: what happened, then what is still to come. It
     /// replaces a walk between Encounters, Timeline and the note.
+    #[allow(clippy::disallowed_methods)]
     pub(super) fn plan_pane(&mut self, ui: &mut egui::Ui, book: &mut Book, plan: &Plan<'_>) {
         let session = self.selected;
         let here = self.group_session == session;
@@ -4124,6 +4128,7 @@ impl Sessions {
     /// How a fight ended, in place: final HP and the log, with no run to reopen. `rewards` is
     /// whether its rewards are in the note, when its row has no room for them (F7): the last
     /// link is then `Add rewards`, or the words `In notes`. Returns whether the DM pressed it.
+    #[allow(clippy::disallowed_methods)]
     fn fight_block(
         &mut self,
         ui: &mut egui::Ui,

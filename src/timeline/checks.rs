@@ -517,6 +517,7 @@ pub fn header(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<A
 
 /// The table menu, then `· 1d20 each day`. Dice words that move to a line of their own start
 /// with the words, not with `·`.
+#[allow(clippy::disallowed_methods)]
 fn table_line(ui: &mut egui::Ui, view: &View<'_>, table: Option<&Table>, act: &mut Option<Act>) {
     let c = colors();
     ui.spacing_mut().item_spacing.x = design::S;
@@ -890,6 +891,7 @@ pub fn note_taken(book: &mut Book, taken: Taken) {
 /// **How long**, the Timeline's field. The file takes the words on Enter or when the field
 /// loses focus; until then the page shows what was typed. Returns the words in view, and what
 /// reached the event.
+#[allow(clippy::disallowed_methods)]
 pub fn length_input(
     ui: &mut egui::Ui,
     draft: &mut LengthDraft,

@@ -15,6 +15,7 @@ pub(crate) fn editor_name(path: &str) -> String {
 
 /// The source editor, with its two events apart: the DM changed the text, and focus moved into
 /// it. A caller that keeps a result for one draft ends it on a change, not on focus.
+#[allow(clippy::disallowed_methods)]
 pub(crate) fn editor_events(
     ui: &mut egui::Ui,
     path: &str,

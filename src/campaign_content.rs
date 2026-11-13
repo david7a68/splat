@@ -750,6 +750,7 @@ impl CampaignContent {
         self.message = None;
     }
 
+    #[allow(clippy::disallowed_methods)]
     pub fn show(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns) {
         let scope = (self.module, self.dependencies);
         if self.notice_scope.is_some_and(|previous| previous != scope) {
@@ -1361,6 +1362,7 @@ impl CampaignContent {
     }
 
     /// Each change waits for the DM. A blocked one says what they must decide first.
+    #[allow(clippy::disallowed_methods)]
     fn reconcile_section(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
         let reconcile = &mut self.reconcile;
         if reconcile.applying {
@@ -2121,6 +2123,7 @@ impl CampaignContent {
         });
     }
 
+    #[allow(clippy::disallowed_methods)]
     fn packages_content(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
         // Review round 26: egui panels set their own clip to the panel's rect, so their rows would
         // paint and take clicks below the page's viewport, under the footer. Each column clips

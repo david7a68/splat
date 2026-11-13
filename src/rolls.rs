@@ -366,6 +366,7 @@ pub(crate) fn menu_heading(link: &RollLink) -> Option<String> {
 /// stays in view, headed in muted Small with what it rolls, and its choices start at the
 /// heading's words. It stays inside its pane, whose right edge is `right`. Returns how to
 /// roll it, when one was chosen.
+#[allow(clippy::disallowed_methods)]
 fn mode_menu(response: &egui::Response, link: &RollLink, right: f32) -> Option<(Mode, bool)> {
     let heading = menu_heading(link)?;
     let inspired = response
@@ -1877,6 +1878,7 @@ pub(crate) fn compact_tiles(ui: &mut egui::Ui, chips: &[Chip]) {
 
 /// The strip's actions from `from` on, which have no room on its line: a menu that lists each
 /// by name and its Ctrl number, and arms the one the DM chooses.
+#[allow(clippy::disallowed_methods)]
 fn more_actions(ui: &mut egui::Ui, word: &str, chips: &[Chip], from: usize, changes: (i64, i64)) {
     let response = design::menu_button(ui, word, false).on_hover_text(format!(
         "{}. Choose one to arm it.",

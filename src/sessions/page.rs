@@ -1486,6 +1486,7 @@ impl Sessions {
     /// What cannot wait, on every page. It sits at the bottom, so that it never moves `Next
     /// turn` under a pointer parked on it. A silence takes no banner: it is often only a quiet
     /// table, and it shows in the rail and on the run's own line.
+    #[allow(clippy::disallowed_methods)]
     pub fn banner(
         &mut self,
         ctx: &egui::Context,
@@ -3329,6 +3330,7 @@ impl Sessions {
         });
     }
 
+    #[allow(clippy::disallowed_methods)]
     fn show_form(&mut self, ui: &mut egui::Ui) {
         let Some(mut form) = self.form.take() else {
             return;
@@ -3582,6 +3584,7 @@ impl Sessions {
         Ok(note.id)
     }
 
+    #[allow(clippy::disallowed_methods)]
     fn list_pane(&mut self, ui: &mut egui::Ui) {
         let locked = self.draft.as_ref().is_some_and(Draft::needs_attention);
         let mut choose = None;
@@ -3711,6 +3714,7 @@ impl Sessions {
     }
 
     /// The one editor of a session's note, on the page and in the panel beside any page.
+    #[allow(clippy::disallowed_methods)]
     fn note_editor(&mut self, ui: &mut egui::Ui, in_panel: bool) {
         let Some(draft) = &mut self.draft else {
             design::message(ui, Tone::Error, "This note could not be opened.");
@@ -4166,6 +4170,7 @@ impl Sessions {
         )
     }
 
+    #[allow(clippy::disallowed_methods)]
     fn read_tab(&mut self, ui: &mut egui::Ui, book: &Book, plan: &Plan<'_>, beside: bool) {
         if self.draft.is_none() {
             return;
@@ -5184,6 +5189,7 @@ impl Sessions {
 
     /// One text from a recording, in the whole pane, one part at a time. A 5-hour transcript
     /// is about 30 parts of a size the Reader handles.
+    #[allow(clippy::disallowed_methods)]
     fn reading_view(&mut self, ui: &mut egui::Ui, book: &mut Book) {
         let c = colors();
         let session = self.selected;
@@ -5458,6 +5464,7 @@ impl Sessions {
         }
     }
 
+    #[allow(clippy::disallowed_methods)]
     fn recordings_tab(
         &mut self,
         ui: &mut egui::Ui,
@@ -6088,6 +6095,7 @@ impl Sessions {
         }
     }
 
+    #[allow(clippy::disallowed_methods)]
     fn notes_view(
         &mut self,
         ui: &mut egui::Ui,
@@ -6273,6 +6281,7 @@ impl Sessions {
             });
     }
 
+    #[allow(clippy::disallowed_methods)]
     fn template_list(&mut self, ui: &mut egui::Ui, choose: &mut Option<String>) {
         if Action::quiet("Sessions")
             .icon(icons::BACK)
@@ -6340,6 +6349,7 @@ impl Sessions {
         }
     }
 
+    #[allow(clippy::disallowed_methods)]
     fn new_template_form(&mut self, ui: &mut egui::Ui) {
         let Some(mut name) = self.new_template.take() else {
             return;
@@ -6413,6 +6423,7 @@ impl Sessions {
         }
     }
 
+    #[allow(clippy::disallowed_methods)]
     fn template_editor(&mut self, ui: &mut egui::Ui) {
         let c = colors();
         let Some(template) = self
@@ -6569,6 +6580,7 @@ impl Sessions {
         });
     }
 
+    #[allow(clippy::disallowed_methods)]
     fn folder_form(
         &mut self,
         ui: &mut egui::Ui,

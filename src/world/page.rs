@@ -429,6 +429,7 @@ impl WorldPage {
         }
     }
 
+    #[allow(clippy::disallowed_methods)]
     pub fn show(
         &mut self,
         ui: &mut egui::Ui,
@@ -964,6 +965,7 @@ impl WorldPage {
 
     /// A creation form or the held NPC's card, with the pane's footer: the card's `Copy the
     /// marker` result and the error of the last Create or Save (round 27 FG2: no body places).
+    #[allow(clippy::disallowed_methods)]
     fn creation_form(&mut self, ui: &mut egui::Ui, index: &ContentIndex, campaign: &Campaign) {
         let form = self.new_kind.is_some() || self.card_shown();
         // The copy's result, with the order its press issued; it has no Undo.
@@ -1620,6 +1622,7 @@ impl WorldPage {
 }
 
 /// The same next step in the header and in an empty reader.
+#[allow(clippy::disallowed_methods)]
 fn new_menu(ui: &mut egui::Ui) -> Option<&'static str> {
     let mut choice = None;
     let label = format!("New {}", icons::DOWN);
