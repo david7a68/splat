@@ -2869,6 +2869,10 @@ struct NextAction {
     /// pass to pass, so the area is checked within each pass: it must be the pane's own.)
     pass: u64,
     footer: Option<Id>,
+    /// After a reveal: the row's top before it, and what is left of the room lost. A row that
+    /// moved but is still cut (egui's scroll fell short) is owed the rest; one that did not move
+    /// at all is not (another area took the scroll), and stays cut for the checks to see.
+    rest: Option<(f32, f32)>,
 }
 
 /// A next action as the reveal saw it in the last finished pass, for checks.
@@ -2958,6 +2962,13 @@ pub fn keep_above_footer(ui: &Ui, response: &Response) {
         next.promised = false;
     }
     (next.pass, next.footer) = (pass, footer);
+    if let Some((from, left)) = next.rest.take()
+        && (rect.top() - from).abs() >= 0.5
+        && left >= 1.0
+        && !whole_at(rect.top())
+    {
+        next.owed = left;
+    }
     // The DM's own scroll or press in the pane ends what a footer owed the row; a row seen whole
     // has had what it was owed.
     if scrolled || whole_at(rect.top()) {
@@ -3004,6 +3015,7 @@ pub fn keep_above_footer(ui: &Ui, response: &Response) {
         ctx.request_discard("a next action came back into view above its footer");
         top -= by;
         next.capped = by < need;
+        next.rest = Some((rect.top(), next.owed.ceil() - by));
         next.owed = 0.0;
         None
     };
