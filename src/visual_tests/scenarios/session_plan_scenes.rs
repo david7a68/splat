@@ -68,6 +68,54 @@ fn fold_shown(d: &Driver<'_>) -> bool {
     })
 }
 
+/// The baseline of the first line of the painted text with exactly these words.
+fn first_baseline(d: &Driver<'_>, words: &str) -> Option<f32> {
+    let mut found = None;
+    d.each_painted_text(|text, _| {
+        if text.galley.job.text == words
+            && let Some(row) = text.galley.rows.first()
+            && let Some(glyph) = row.glyphs.first()
+        {
+            found.get_or_insert(text.pos.y + row.pos.y + glyph.pos.y);
+        }
+    });
+    found
+}
+
+/// Round 27 FL4: a fight's caret is centred on its title's target, and a scene's box sits on
+/// its words as the caret sits on its title (each measured from its title's baseline).
+fn lead_centred(d: &Driver<'_>) -> (bool, String) {
+    let line = crate::design::Type::Body.line();
+    let scene_box = d
+        .place_of(&format!("Open: {VARRA}"))
+        .map(|rect| rect.center().y);
+    let fight = d.place_of(SHRINE);
+    let caret = fight.and_then(|fight| {
+        let area = egui::Rect::from_x_y_ranges(
+            fight.left() - 2.0 * crate::design::XL..=fight.left(),
+            fight.top() - crate::design::S..=fight.top() + line + crate::design::S,
+        );
+        d.painted_word_rect(crate::design::icons::NEXT, area)
+            .map(|rect| rect.center().y)
+    });
+    let (scene_line, title_line) = (first_baseline(d, VARRA), first_baseline(d, SHRINE));
+    let centred = fight
+        .zip(caret)
+        .is_some_and(|(fight, caret)| (fight.center().y - caret).abs() <= 1.0);
+    let same = scene_box
+        .zip(scene_line)
+        .zip(caret.zip(title_line))
+        .is_some_and(|((lead, words), (caret, title))| {
+            ((words - lead) - (title - caret)).abs() <= 1.0
+        });
+    (
+        centred && same,
+        format!(
+            "fight target {fight:?}, caret {caret:?}, title baseline {title_line:?}; box {scene_box:?}, scene baseline {scene_line:?}"
+        ),
+    )
+}
+
 /// App round 1, V2 and V8: a scene's words start at the fights' title column, at a plan row
 /// title's size, and its second line sits at a fight row's pitch.
 fn scene_matches_fight(d: &Driver<'_>) -> (bool, String) {
@@ -89,19 +137,66 @@ fn scene_matches_fight(d: &Driver<'_>) -> (bool, String) {
     let column = words
         .zip(fight)
         .is_some_and(|(words, fight)| (words.left() - fight.left()).abs() <= 0.5);
-    let pitch = words.zip(detail).zip(fight.zip(summary)).is_some_and(
-        |((words, detail), (fight, summary))| {
-            ((detail.top() - words.top()) - (summary.top() - fight.top())).abs() <= 0.5
-        },
-    );
+    // App round 2, X12: measured on the painted words, by the baseline of each text's first
+    // line. The scene's first line sits as far below its row's top (its box) as the fight's
+    // title below its own (its link's target), and its second line as far below its first as
+    // the fight's summary below the title.
+    let baseline = |left: f32, below: f32, words: Option<&str>| {
+        let mut found: Option<f32> = None;
+        d.each_painted_text(|text, _| {
+            let rect = text.galley.rect.translate(text.pos.to_vec2());
+            let Some((row, glyph)) = text
+                .galley
+                .rows
+                .first()
+                .and_then(|row| Some((row, row.glyphs.first()?)))
+            else {
+                return;
+            };
+            let line = text.pos.y + row.pos.y + glyph.pos.y;
+            if (rect.left() - left).abs() <= 0.5
+                && rect.top() >= below - 0.5
+                && words.is_none_or(|words| text.galley.job.text == words)
+                && found.is_none_or(|found| line < found)
+            {
+                found = Some(line);
+            }
+        });
+        found
+    };
+    let scene_top = d.place_of(&format!("Open: {VARRA}"));
+    let scene_line = words.and_then(|words| baseline(words.left(), words.top(), Some(VARRA)));
+    let detail_line = detail.and_then(|detail| {
+        baseline(
+            detail.left(),
+            detail.top(),
+            Some("NPC · alive · Ashfall Keep"),
+        )
+    });
+    let title_line = fight.and_then(|fight| baseline(fight.left(), fight.top(), Some(SHRINE)));
+    let summary_line = summary.and_then(|summary| baseline(summary.left(), summary.top(), None));
+    let first_line = scene_top
+        .zip(scene_line)
+        .zip(fight.zip(title_line))
+        .is_some_and(|((row, line), (fight, title))| {
+            ((line - row.top()) - (title - fight.top())).abs() <= 0.5
+        });
+    let pitch = scene_line
+        .zip(detail_line)
+        .zip(title_line.zip(summary_line))
+        .is_some_and(|((words, detail), (title, summary))| {
+            ((detail - words) - (summary - title)).abs() <= 0.5
+        });
     let size = !sizes.is_empty()
         && sizes
             .iter()
             .all(|size| *size == crate::design::Type::Body.size());
     (
-        column && pitch && size,
+        column && first_line && pitch && size,
         format!(
-            "words {words:?}, second line {detail:?}; fight {fight:?}, its second line {summary:?}; sizes {sizes:?}"
+            "words {words:?}, second line {detail:?}; fight {fight:?}, its second line {summary:?}; \
+             baselines: scene row {scene_top:?}, words {scene_line:?}, second line {detail_line:?}; \
+             fight title {title_line:?}, summary {summary_line:?}; sizes {sizes:?}"
         ),
     )
 }
@@ -175,6 +270,16 @@ pub fn run(d: &mut Driver<'_>) {
             format!(
                 "At {size:?}, a scene's words start at the fights' title column, at a plan row title's size, with its second line at a fight row's pitch: {detail}"
             ),
+        );
+    }
+    // Round 27 FL4: the leading slot sits on its title line's centre: a scene's box and a
+    // fight's caret, each within 1 px.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (centred, detail) = d.at_size(size, lead_centred);
+        d.observe(
+            "iter-27-S-FL4",
+            centred,
+            format!("At {size:?}, the box and the caret are centred on their titles: {detail}"),
         );
     }
     d.state("scenes-in-the-plan", Sizes::All);
@@ -297,6 +402,33 @@ pub fn run(d: &mut Driver<'_>) {
             }),
         format!("The first row was at {first:?} and is at {now:?}; the field is at {field:?}, Undo scene at {undo:?}"),
     );
+    // App round 2, X13: `Undo scene` takes a line of its own only when it is wider than the
+    // room after the words in their column, which ends where the rows' menus end.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (words, undo, column) = d.at_size(size, |d| {
+            (
+                painted(d, "Scene added to tonight.")
+                    .first()
+                    .map(|(rect, _)| *rect),
+                d.place_of("Undo scene"),
+                d.place_of(&format!("More actions for {SHRINE}"))
+                    .map(|rect| rect.right()),
+            )
+        });
+        let wraps_only_when_wider =
+            words
+                .zip(undo)
+                .zip(column)
+                .is_some_and(|((words, undo), column)| {
+                    undo.top() < words.bottom()
+                        || words.right() + crate::design::S + undo.width() > column + 0.5
+                });
+        d.observe(
+            "X13",
+            wraps_only_when_wider,
+            format!("At {size:?}: the words at {words:?}, Undo scene at {undo:?}, the column ends at {column:?}"),
+        );
+    }
     d.state("scene-added", Sizes::All);
     // App round 1, W1-D1: at 960x640 the scene just added stays in view while the DM types the
     // next one and its suggestions show: the fold holds while the field has focus.
@@ -591,8 +723,12 @@ pub fn log_from_play(d: &mut Driver<'_>) {
             let action = d.place_of(&short);
             let menu = d.place_of(&format!("More actions for {VARRA_BLACK}"));
             let open = d.has(&format!("Add to Log: {KEEP}"));
+            // App round 2, X29: on the row it has no icon, as the row's other actions.
+            let icon = action
+                .is_some_and(|action| d.painted_in(action).contains(crate::design::icons::ADD));
             (
                 !open
+                    && !icon
                     && (size != DEFAULT || action.is_some())
                     && action.is_none_or(|action| {
                         menu.is_some_and(|menu| {
@@ -632,13 +768,23 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     d.begin_task();
     d.click(&short);
     d.expect(&field);
+    // The window is 1200x800 here (the base above).
+    let beside = d
+        .place_of(&format!("{stamp}:"))
+        .zip(d.place_of(&field))
+        .is_some_and(|(label, place)| {
+            label.right() < place.left()
+                && label.bottom() > place.top()
+                && label.top() < place.bottom()
+        });
     d.observe(
         "T18.2",
         d.has("Close Lookup")
             && d.focused_name().as_deref() == Some(field.as_str())
             && d.field_text(&field).as_deref() == Some("")
-            && d.visible_text(&format!("{stamp}:")),
-        "A done scene's Add to Log opens Lookup on its entry with the Log field and the stamp",
+            && d.visible_text(&format!("{stamp}:"))
+            && beside,
+        "A done scene's Add to Log opens Lookup on its entry with the Log field and the stamp on its line at 1200x800",
     );
     d.type_text(TYPED);
     d.press(Key::Enter);
@@ -672,6 +818,44 @@ pub fn log_from_play(d: &mut Driver<'_>) {
         fs::read_to_string(&path).unwrap() == before && !d.has("Undo Log line"),
         "Undo Log line takes back that one line, and the note is as before",
     );
+    // The measured journeys of app round 2 (J6 step 2): Lookup's reader of a campaign World
+    // entry has `Change` on Status, as the World page's reader has. One act writes the value
+    // and its Log line, its Undo is in Lookup's footer, and Lookup keeps the entry. The field
+    // starts from the status on disk, also when another reader or Obsidian changed it after
+    // Lookup opened the entry (Astra's review of PR 287).
+    let away = before.replacen("status: alive", "status: away", 1);
+    fs::write(&path, &away).unwrap();
+    d.app_mut().lookup.refresh();
+    d.settle();
+    d.click("Change Status");
+    d.observe(
+        "T15.4",
+        d.focused_name().as_deref() == Some("Status")
+            && d.field_text("Status").as_deref() == Some("away"),
+        "Change on Status in Lookup puts the keyboard in the field, with the status on disk",
+    );
+    d.type_text("missing");
+    d.press(Key::Enter);
+    d.expect("Undo status change");
+    let changed = fs::read_to_string(&path).unwrap();
+    d.observe(
+        "T15.4",
+        changed.contains("status: missing")
+            && changed.contains(": Status away → missing.\n")
+            && d.has(&format!("Edit {VARRA_BLACK}"))
+            && d.has("Close Lookup"),
+        format!("Change on Status in Lookup writes the value and its Log line: {changed:?}"),
+    );
+    d.state("status-changed-in-lookup", Sizes::Default);
+    d.click("Undo status change");
+    d.observe(
+        "T15.4",
+        fs::read_to_string(&path).unwrap() == away && d.has(&format!("Edit {VARRA_BLACK}")),
+        "Undo status change in Lookup takes back the value and its Log line",
+    );
+    fs::write(&path, &before).unwrap();
+    d.app_mut().lookup.refresh();
+    d.settle();
 
     // From the long scene's menu: the field starts with the scene's words outside its link,
     // selected, so typing replaces them.
@@ -684,6 +868,19 @@ pub fn log_from_play(d: &mut Driver<'_>) {
         d.focused_name().as_deref() == Some(field.as_str())
             && d.field_text(&field).as_deref() == Some(WORDS),
         "The menu's Add to Log fills the field with the scene's words outside its link",
+    );
+    // X30 of app round 2: beside the plan at 1200x800 the stamp stands above a field whose words
+    // would not fit beside it, so no word of the scene is cut; an empty field shares its line
+    // (the first check of this scenario's field).
+    let (label, place) = d.at_size(DEFAULT, |d| {
+        (d.place_of(&format!("{stamp}:")), d.place_of(&field))
+    });
+    d.observe(
+        "T18.2",
+        label
+            .zip(place)
+            .is_some_and(|(label, place)| label.bottom() <= place.top() + 0.5),
+        format!("At 1200x800 the stamp {label:?} stands above the field {place:?} of long words"),
     );
     d.state("log-field-from-scene", Sizes::All);
     d.type_text(TYPED);
@@ -843,5 +1040,83 @@ pub fn log_from_play(d: &mut Driver<'_>) {
             "Undo discard {undo:?} in Lookup's footer {footer:?}, above the warning {warning:?}"
         ),
     );
+    // App round 2, X14: the scene whose entry is gone says `Not found`, in the warning tone, on
+    // its second line at the words' column, as Lookup and World say it.
+    for size in [SMALL, DEFAULT] {
+        let (said, detail) = d.at_size(size, |d| {
+            let row = d.place_of(&format!("Done: {VARRA_BLACK}"));
+            let found: Vec<_> = painted(d, "Not found")
+                .into_iter()
+                .filter(|(rect, formats)| {
+                    row.is_some_and(|row| {
+                        (rect.left() - row.right()).abs() <= 0.5
+                            && rect.top() > row.top()
+                            && rect.top() < row.top() + 2.0 * crate::design::XL
+                    }) && formats
+                        .iter()
+                        .all(|format| format.color == crate::design::colors().result.warning)
+                })
+                .map(|(rect, _)| rect)
+                .collect();
+            (
+                found.len() == 1,
+                format!("row {row:?}, Not found at {found:?}"),
+            )
+        });
+        d.observe("X14", said, format!("At {size:?}: {detail}"));
+    }
+    // X28 of app round 2: the notice offers the words with `Copy text`, as a lost draft does,
+    // and stays until the DM copies or dismisses it, also while Lookup shows no entry.
+    let notice = format!("“{VARRA_BLACK}” was deleted. The Log line was not added: “{TYPED}”");
+    let copy = format!("Copy the Log line for {VARRA_BLACK}");
+    d.observe(
+        "T18.2-guard",
+        d.has(&copy) && d.has(&format!("Dismiss the Log line for {VARRA_BLACK}")),
+        "The deleted entry's notice has Copy text and Dismiss",
+    );
     d.state("log-words-of-a-deleted-entry", Sizes::Default);
+    d.app_mut().lookup.search_for(KEEP);
+    d.settle();
+    d.click("Clear");
+    d.observe(
+        "T18.2-guard",
+        !d.has("Edit Ashfall Keep") && d.visible_text(&notice) && d.has(&copy),
+        "With no entry on show, Lookup's footer still says the deleted entry's words",
+    );
+    d.state("log-words-without-an-entry", Sizes::Default);
+    d.app_mut().lookup.open_id(keep);
+    d.settle();
+    d.click(&copy);
+    d.observe(
+        "T18.2-guard",
+        d.copied_text().as_deref() == Some(TYPED) && !d.visible_text(&notice) && !d.has(&copy),
+        "Copy text puts the words on the clipboard and ends the notice",
+    );
+    // Astra's review: a link that two entries share is not gone; that scene says no `Not found`.
+    entry(
+        d,
+        "Locations/Ashfall Keep, the old fort.md",
+        KEEP,
+        "location",
+        "",
+    );
+    d.app_mut().lookup.refresh();
+    d.settle();
+    let row = d.place_of(&format!("Open: {KEEP}"));
+    let found: Vec<_> = painted(d, "Not found")
+        .into_iter()
+        .map(|(rect, _)| rect)
+        .filter(|rect| {
+            row.is_some_and(|row| {
+                rect.top() > row.top() && rect.top() < row.top() + 2.0 * crate::design::XL
+            })
+        })
+        .collect();
+    d.observe(
+        "X14",
+        row.is_some() && found.is_empty(),
+        format!(
+            "A name that two entries share is not Not found: row {row:?}, Not found at {found:?}"
+        ),
+    );
 }

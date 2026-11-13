@@ -34,6 +34,21 @@ fn reminders(d: &Driver<'_>, name: &str) -> Option<String> {
         .find_map(|node| node.name.strip_prefix(&start).map(str::to_owned))
 }
 
+/// The Conditions help's own example of a time, and the counts it says that time goes from and
+/// to at the end of a turn: `Bless 10 rounds`, `10`, `9` (review of PR 295).
+fn help_example(d: &Driver<'_>) -> Option<(String, String, String)> {
+    let help = d
+        .nodes()
+        .into_iter()
+        .map(|node| node.name)
+        .find(|name| name.contains("counts down at the end"))?;
+    let (_, rest) = help.split_once("turn: ")?;
+    let (example, rest) = rest.split_once(" goes from ")?;
+    let (from, rest) = rest.split_once(" to ")?;
+    let to = rest.split('.').next()?;
+    Some((example.to_owned(), from.to_owned(), to.to_owned()))
+}
+
 /// The heights of these rows, as the roster draws them.
 fn heights(d: &Driver<'_>, rows: &[&str]) -> Vec<Option<f32>> {
     rows.iter()
@@ -83,11 +98,33 @@ pub fn run(d: &mut Driver<'_>) {
         d.place_of("Next turn") == next_turn,
         "Next turn keeps its place beside the reminders",
     );
+    // X6: the added effect's Undo has one form, `Undo: add effect <words>`; a shortened target
+    // keeps the copy number that tells Cinder Wolf 2 from Cinder Wolf 1, or goes.
+    let first = current.split(' ').next().unwrap_or_default();
+    let copy = current.rsplit(' ').next().unwrap_or_default();
+    for size in [SMALL, DEFAULT] {
+        d.at_size_mut(size, |d| {
+            undo_paints_a_form(d, "Undo: add effect Wis save", first, copy)
+        });
+    }
+    // W1-D1: on its turn the row leads with the effect due on it, though the DM added it
+    // after Bless. X10: a count of the rest ends the effects' slot with no dot before it.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let words = d.at_size(size, |d| d.row_words(&current));
+        let (hold, bless) = (words.find("Wis save"), words.find("Bless"));
+        d.observe(
+            "W1-D1",
+            hold.is_some_and(|hold| bless.is_none_or(|bless| hold < bless))
+                && !words.contains("· ⚑"),
+            format!("At {size:?} the current row paints: {words}"),
+        );
+    }
     d.state("effects-on-its-turn", Sizes::All);
 
     // A label with no time is as today: it shows on no notice and does not count.
     d.click_row(WOLF);
     by_key(d, "Hexed until the hag dies");
+    let recharged = format!(" for {CULTIST}: Fire Breath ");
     // T20.5: a use is spent in 1, on the row; a spent recharge rolls in 1.
     by_key(d, "Legendary actions 3 uses");
     d.click_row(CULTIST);
@@ -109,7 +146,43 @@ pub fn run(d: &mut Driver<'_>) {
         d.name_starting("Undo") == format!("Undo: recharge roll for {CULTIST}"),
         format!("The roll is one named step: {}", d.name_starting("Undo")),
     );
+    // X4: the roll shows its die in the dice total's slot, and one line in the run's footer
+    // names the participant, the effect and the result.
+    let result = d
+        .nodes()
+        .into_iter()
+        .map(|node| node.name)
+        .find(|name| name.starts_with("Rolled ") && name.contains(&recharged));
+    let die = result
+        .as_deref()
+        .and_then(|words| words.split_whitespace().nth(1))
+        .map(|die| format!("Rolled {die} for {CULTIST}: Fire Breath"));
+    // Review of PR 292: the dock's total is named by its participant and effect.
+    d.observe(
+        "X4",
+        die.as_deref().is_some_and(|die| d.has(die)),
+        format!("The footer says {result:?}, and the dock shows {die:?}"),
+    );
     d.state("effects-on-rows", Sizes::Default);
+    // X4: Undo of the roll takes its die and its line away with it; the roll again brings both.
+    d.click_containing("Undo: recharge roll");
+    d.observe(
+        "X4",
+        !d.has_containing(&recharged) && die.as_deref().is_none_or(|die| !d.has(die)),
+        "Undo of the roll ends its result",
+    );
+    d.click("Roll 1d6. 5–6 makes it ready");
+    let die = d
+        .nodes()
+        .into_iter()
+        .map(|node| node.name)
+        .find(|name| name.starts_with("Rolled ") && name.contains(&recharged))
+        .and_then(|words| {
+            words
+                .split_whitespace()
+                .nth(1)
+                .map(|die| format!("Rolled {die} for {CULTIST}: Fire Breath"))
+        });
 
     // T20.3: the count goes down when its participant's turn ends.
     d.click_row(&current);
@@ -118,6 +191,13 @@ pub fn run(d: &mut Driver<'_>) {
         "T20.3",
         row_name(d, &current).contains("Bless 9") && reminders(d, &current).is_none(),
         format!("After its turn: {}", row_name(d, &current)),
+    );
+    d.observe(
+        "X4",
+        die.is_some()
+            && !d.has_containing(&recharged)
+            && die.as_deref().is_none_or(|die| !d.has(die)),
+        format!("The recharge's result line and its die {die:?} go at the next act"),
     );
     // A crash is not a turn: the saved count shows again, and Undo of Next turn gives it back.
     d.restart();
@@ -161,13 +241,26 @@ pub fn run(d: &mut Driver<'_>) {
     d.press_ctrl(Key::K);
     d.observe("T20.1", d.has(SEARCH_LOOKUP), "Ctrl+K shows Lookup again");
     d.state("effects-beside-lookup", Sizes::Default);
-    // T20.4: no row changed its height for its effects.
+    // T20.4: no row changed its height for a time: each row has the height of the same row
+    // with each time taken away, where each effect is its plain words (rule P, as the ruling on
+    // PR 276 states it; X5). A plain label can grow a row as it always could.
     d.press_ctrl(Key::K);
     let after = heights(d, &rows);
+    let untimed = d.aside(|d| {
+        let timed = d.app_mut().encounters.simulate_untimed();
+        d.settle();
+        let untimed = heights(d, &rows);
+        d.app_mut().encounters.simulate_conditions(timed);
+        d.settle();
+        untimed
+    });
     d.observe(
         "T20.4",
-        after == before,
-        format!("Rows keep their heights: {before:?} then {after:?}"),
+        after == untimed && heights(d, &rows) == after,
+        format!(
+            "Rows keep the heights they have with no time: {untimed:?} then {after:?}; before \
+             any effect {before:?}"
+        ),
     );
     // T20.5: an official condition's name opens its rule beside the run; its count is a
     // second target, which opens Conditions.
@@ -179,6 +272,28 @@ pub fn run(d: &mut Driver<'_>) {
         "F2",
         d.in_view("Other effect"),
         "The count opens Conditions, which lists each effect",
+    );
+    // X11: a ticked condition shows its count on its tick, and Other effects holds other
+    // words only. X7: the help says what Splat does with a time. X8: the dock has no room for
+    // `Effect` here, so the field's words give an example with a time.
+    let tick = format!("{} Frightened 10", crate::design::icons::OK);
+    d.observe(
+        "X11",
+        d.visible_text(&tick) && !d.has("More actions for Frightened 10"),
+        format!("The tick says {tick:?}, and Other effects does not list it again"),
+    );
+    let example = help_example(d);
+    d.observe(
+        "X7",
+        d.has_containing("A time you type counts down at the end of that creature’s turn: Bless 10 rounds goes from 10 to 9.")
+            && !d.has_containing("No number changes by itself.")
+            && example.is_some(),
+        format!("The Conditions help says what is true now, with an example: {example:?}"),
+    );
+    d.observe(
+        "X8",
+        !d.has(EFFECT) && d.visible_text("Other effect, such as Bless 10 rounds"),
+        "Where the dock has no room for Effect, the field says how to give a time",
     );
     d.state("effects-in-conditions", Sizes::Default);
 
@@ -203,5 +318,45 @@ pub fn run(d: &mut Driver<'_>) {
         "T20.6",
         !row_name(d, &current).contains("Conc save DC"),
         "The DC lasts until the next step",
+    );
+
+    // X7, T20.3, review of PR 295: the help's own example does what the help says. Typed in
+    // Other effect on a row, it counts down at the end of that row's turn, from and to the
+    // numbers the help names, and the count is saved through a restart.
+    let Some((example, from, to)) = example else {
+        d.observe("X7-example", false, "The help has no example to type");
+        return;
+    };
+    let words = example
+        .split(&format!(" {from} "))
+        .next()
+        .unwrap_or(&example)
+        .to_owned();
+    d.click_row(ISELLE);
+    d.click("Conditions for this participant");
+    d.click("Other effect");
+    d.type_text(&example);
+    d.press(Key::Enter);
+    let joined = row_name(d, ISELLE).contains(&format!("{words} {from}"));
+    let mut ended = false;
+    for _ in 0..20 {
+        let hers = current_participant(d).as_deref() == Some(ISELLE);
+        d.click(NEXT_TURN);
+        if hers {
+            ended = true;
+            break;
+        }
+    }
+    let counted = row_name(d, ISELLE).contains(&format!("{words} {to}"));
+    d.restart();
+    let kept = row_name(d, ISELLE).contains(&format!("{words} {to}"));
+    d.observe(
+        "X7-example",
+        joined && ended && counted && kept,
+        format!(
+            "The help's example {example:?} joined ({joined}), her turn ended ({ended}), it says \
+             {words} {to} ({counted}) and after a restart ({kept}): {}",
+            row_name(d, ISELLE)
+        ),
     );
 }

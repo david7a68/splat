@@ -2228,31 +2228,14 @@ pub fn linked_sentence(ui: &mut Ui, names: &[&str], suffix: &str) -> Option<usiz
     clicked
 }
 
-/// An Undo message whose affected entries remain links on the message line. Capped at
-/// `LIST_MEASURE` like every notice.
-pub fn undo_message_with_links(
-    ui: &mut Ui,
-    tone: Tone,
-    names: &[&str],
-    suffix: &str,
-    action: &str,
-) -> (bool, Option<usize>) {
+/// A message whose first words are entry links, such as the encounters a package removal leaves
+/// without creatures. Capped at `LIST_MEASURE` like every notice. Round 27 FE5: a result's Undo
+/// stays on its own success sentence (`undo_message`), and this message follows it, so it has no
+/// action of its own. The pressed link's index.
+pub fn message_with_links(ui: &mut Ui, tone: Tone, names: &[&str], suffix: &str) -> Option<usize> {
+    let (icon, color) = tone.parts();
     ui.scope(|ui| {
         ui.set_max_width(ui.available_width().min(LIST_MEASURE));
-        undo_message_with_links_inside(ui, tone, names, suffix, action)
-    })
-    .inner
-}
-
-fn undo_message_with_links_inside(
-    ui: &mut Ui,
-    tone: Tone,
-    names: &[&str],
-    suffix: &str,
-    action: &str,
-) -> (bool, Option<usize>) {
-    fn notice(ui: &mut Ui, tone: Tone, names: &[&str], suffix: &str) -> Option<usize> {
-        let (icon, color) = tone.parts();
         ui.horizontal_top(|ui| {
             let start = ui.cursor().min;
             ui.add_space(S + 1.0);
@@ -2272,44 +2255,8 @@ fn undo_message_with_links_inside(
             content.inner
         })
         .inner
-    }
-    let button = Action::quiet(action)
-        .icon(icons::UNDO)
-        .density(Density::Read);
-    let button_width = button.natural_width(ui);
-    let inset = S
-        + 1.0
-        + number_width(ui, tone.parts().0, &Type::Body.font(ui))
-        + ui.spacing().item_spacing.x * 2.0
-        - XS;
-    let words = format!("{} {suffix}", names.join(" and "));
-    let gap = ui.spacing().item_spacing.x;
-    let mut pressed = false;
-    let clicked;
-    if ui.available_width()
-        < number_width(ui, &words, &Type::Body.font(ui)) + inset + gap + button_width
-    {
-        clicked = notice(ui, tone, names, suffix);
-        ui.horizontal(|ui| {
-            ui.add_space((inset - gap).max(0.0));
-            pressed = button.line_start_in_column().show(ui).clicked();
-        });
-    } else {
-        clicked = ui
-            .horizontal_top(|ui| {
-                let width = (ui.available_width() - button_width - gap).max(0.0);
-                let clicked = ui
-                    .allocate_ui_with_layout(vec2(width, 0.0), Layout::top_down(Align::Min), |ui| {
-                        ui.add_space((Density::Read.control() - Type::Body.line()) / 2.0);
-                        notice(ui, tone, names, suffix)
-                    })
-                    .inner;
-                pressed = button.show(ui).clicked();
-                clicked
-            })
-            .inner;
-    }
-    (pressed, clicked)
+    })
+    .inner
 }
 
 /// A message with several actions below it, aligned with the message text.
@@ -2869,6 +2816,9 @@ struct NextAction {
     /// pass to pass, so the area is checked within each pass: it must be the pane's own.)
     pass: u64,
     footer: Option<Id>,
+    /// For checks: how many reveals this action had.
+    #[cfg(test)]
+    reveals: u32,
 }
 
 /// A next action as the reveal saw it in the last finished pass, for checks.
@@ -2885,6 +2835,9 @@ pub(crate) struct NextSeen {
     pub capped: bool,
     /// What holds the reveal back: `pointer` or `field`.
     pub held: Option<&'static str>,
+    /// How many reveals this action has had: a page that brings its action into view itself
+    /// shows that this rule did not act too.
+    pub reveals: u32,
 }
 
 #[cfg(test)]
@@ -3014,6 +2967,10 @@ pub fn keep_above_footer(ui: &Ui, response: &Response) {
         top -= by;
         next.capped = by < need;
         next.owed = 0.0;
+        #[cfg(test)]
+        {
+            next.reveals += 1;
+        }
         None
     };
     next.whole = whole_at(top);
@@ -3032,6 +2989,7 @@ pub fn keep_above_footer(ui: &Ui, response: &Response) {
             promised: next.promised,
             capped: next.capped,
             held,
+            reveals: next.reveals,
         });
     });
 }
@@ -3115,15 +3073,15 @@ pub fn undo_line(ui: &mut Ui, tone: Tone, result: Option<(&str, &str)>) -> bool 
         ui.label(Type::Body.rich(ui, icon).color(color));
         ui.add_space(XS);
         let font = Type::Body.font(ui);
-        let mut room = ui.available_width() - gap - button.natural_width(ui);
-        // A cut adds `…` past the room it was given, so a cut leaves room for it.
-        if number_width(ui, text, &font) > room {
-            room -= number_width(ui, "…", &font);
-        }
-        let words = one_line(ui, text, font, colors().text, room);
-        let cut = words.elided;
+        let room = ui.available_width() - gap - button.natural_width(ui);
+        // App round 2: the words shorten by whole words, never inside one.
+        let fitted = words_that_fit(ui, text, &font, room);
+        let cut = fitted != text;
+        let words = one_line(ui, &fitted, font, colors().text, room);
         let response = ui.add(egui::Label::new(words));
         if cut {
+            // The cut words are what shows; the whole words are its name and its hover.
+            named(ui, &response, text);
             response.clone().on_hover_text(text);
         }
         let bar = Rect::from_min_max(
@@ -3135,27 +3093,6 @@ pub fn undo_line(ui: &mut Ui, tone: Tone, result: Option<(&str, &str)>) -> bool 
         pressed = button.show(ui).clicked();
     });
     pressed
-}
-
-/// The height `undo_message` takes for these words in `width`: one control when the words and
-/// the action share a line; else the wrapped words, then the action's line under them. A place
-/// that must not move when the message comes reserves this height from the start.
-pub fn undo_message_height(ui: &Ui, tone: Tone, text: &str, action: &str, width: f32) -> f32 {
-    let width = width.min(LIST_MEASURE);
-    let button = Action::quiet(action)
-        .icon(icons::UNDO)
-        .density(Density::Read);
-    let font = Type::Body.font(ui);
-    let icon_width = number_width(ui, tone.parts().0, &font);
-    let gap = ui.spacing().item_spacing.x;
-    let inset = S + 1.0 + icon_width + XS + gap;
-    if width >= number_width(ui, text, &font) + inset + gap + button.natural_width(ui) {
-        return Density::Read.control();
-    }
-    let wrap = width - (S + 1.0 + icon_width + XS);
-    let words =
-        ui.fonts_mut(|fonts| fonts.layout(text.to_owned(), font, Color32::PLACEHOLDER, wrap));
-    words.size().y + ui.spacing().item_spacing.y + Density::Read.control()
 }
 
 /// `undo_message`, with an accessible name for the action when its words are not enough. Capped
@@ -3191,14 +3128,16 @@ fn undo_message_inside(
     let button_width = button.natural_width(ui);
     let icon_width = number_width(ui, tone.parts().0, &Type::Body.font(ui));
     // The words start `XS` after the icon whatever the caller's spacing; the gap follows them.
-    let inset = S + 1.0 + icon_width + XS + ui.spacing().item_spacing.x;
+    // App round 2, X13: the line is measured as `message` draws it, with one gap before the
+    // action, so the action wraps only when it is wider than the room after the words.
+    let inset = S + 1.0 + icon_width + XS;
     let text_width = number_width(ui, text, &Type::Body.font(ui)) + inset;
     let gap = ui.spacing().item_spacing.x;
     let mut pressed = false;
     if ui.available_width() < text_width + gap + button_width {
         message(ui, tone, text);
         ui.horizontal(|ui| {
-            ui.add_space((inset - gap).max(0.0));
+            ui.add_space(inset);
             pressed = button.line_start_in_column().show(ui).clicked();
         });
     } else {
@@ -4675,19 +4614,13 @@ mod tests {
             right - left <= LIST_MEASURE + 0.5 && words.height() > Type::Body.line(),
             "the message spans {left}..{right}: words {words:?}, action {action:?}"
         );
-        // The same cap holds for the two Undo messages.
+        // The same cap holds for the Undo message and the message with links.
         for links in [false, true] {
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(vec2(1800.0, 240.0))
                 .build_ui(move |ui| {
                     if links {
-                        undo_message_with_links(
-                            ui,
-                            Tone::Success,
-                            &["Ashen Marches"],
-                            LONG,
-                            "Undo",
-                        );
+                        message_with_links(ui, Tone::Warning, &["Ashen Marches"], LONG);
                     } else {
                         undo_message(ui, Tone::Success, LONG, "Undo");
                     }
@@ -4705,7 +4638,7 @@ mod tests {
                 .fold(f32::MAX, f32::min);
             assert!(
                 !texts.is_empty() && right - left <= LIST_MEASURE,
-                "links {links}: the Undo message spans {left}..{right}"
+                "links {links}: the message spans {left}..{right}"
             );
         }
     }

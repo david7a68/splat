@@ -1,63 +1,66 @@
 Phase totals
 phase	tasks	transitions	interactions	nav	sub	panel	find	do
-before	9	5	35	5	0	1	7	22
-during	32	9	196	9	2	15	44	126
-after	10	6	31	6	4	4	1	16
-total	51	20	262	20	6	20	52	164
+before	10	7	41	7	0	1	8	25
+during	33	9	202	9	2	17	47	127
+after	11	5	33	5	5	4	2	17
+total	54	21	276	21	7	22	57	169
 
 Tasks
-phase	task	transitions	interactions	overhead	path
-before	Start tonight's session note	1	4	1	Encounters > Session
-before	Recall what happened last session, and where the story stands	0	0	0	Session
-before	Compare the party's passive Perception, to plan an ambush	1	1	1	Session > Party
-before	Build tonight's encounter	2	16	9	Party > Session > Encounters
-before	Make the boss your own: copy it, change it, and swap it in	0	5	0	Encounters
-before	Write the read-aloud text and tactics for the encounter	0	4	0	Encounters
-before	Back to the session plan, with tonight's encounter in it	1	4	2	Encounters > Session
-before	Is each planned fight right for this party?	0	0	0	Session
-before	Carry over what last week left into tonight's note	0	1	0	Session
-during	Start recording	0	2	0	Session
-during	Read last session's recap aloud	0	0	0	Session
-during	A player asks who Captain Varra is	0	3	3	Session
-during	Note what the party decides	0	2	1	Session
-during	The party travels for half a day: record it	0	2	1	Session
-during	Check the road for encounters	0	3	1	Session
-during	Ambush: read the read-aloud text and start the fight	1	12	1	Session > Run
-during	Combat: round 1	0	32	8	Run
-during	A player casts Fireball: read the spell	0	3	3	Run
-during	Fireball hits three enemies: apply half to one, full to two	0	6	3	Run
-during	The table rules that the Fireball missed: undo it	0	1	0	Run
-during	A wolf frightens Oren: mark the condition	0	3	2	Run
-during	What does Frightened do?	0	2	2	Run
-during	A wolf frightens Oren for 10 rounds: give the condition its count	0	4	1	Run
-during	Iselle starts concentrating: mark it	0	2	1	Run
-during	Combat: round 2	0	32	8	Run
-during	Check Iselle's spell save DC and spell list	0	3	3	Run
-during	Roll a save for a monster	0	4	0	Run
-during	On a player's turn, read a monster's reaction	0	2	2	Run
-during	A player asks what the miller said last session	0	3	3	Run
-during	Note a moment beside the fight	0	3	2	Run
-during	Combat: round 3	0	32	8	Run
-during	A wolf is dead: take it out of the order	0	2	1	Run
-during	End the fight	1	4	1	Run > Session
-during	Record a short rest	0	2	1	Session
-during	Mark a house rule's number between fights	0	3	2	Session
-during	Next fight: start it, with the party as it stands	1	1	1	Session > Run
-during	Next fight: roll and begin	0	11	0	Run
-during	Next fight: end it after a short exchange	1	3	1	Run > Session
-during	The players start a fight you did not plan, and then talk their way out	3	8	5	Session > Encounters > Run > Session
-during	A fight that nobody planned, with a Bandit from the book, then talk	2	5	5	Session > Run > Session
-during	Stop recording	0	1	0	Session
-after	Review how the fight went: log and final HP	0	1	1	Session
-after	Say where the fight happened	2	4	2	Session > Timeline > Session
-after	Process the recording and read the summary	0	4	3	Session
-after	Add a suggested event to the timeline	0	1	0	Session
-after	Write the wrap-up in the note	0	4	1	Session
-after	Link the fight in the note	2	6	2	Session > Timeline > Session
-after	Put the fight's rewards in the note	0	1	0	Session
-after	Check the party's HP for next time	1	1	1	Session > Party
-after	Put what an NPC said in the NPC's own note	0	4	2	Session
-after	A new day starts: take the supply wagon's torches	1	5	3	Session > Timeline
+phase	task	transitions	interactions	overhead	nav	sub	panel	find	do	path
+before	Start tonight's session note	1	4	1	1	0	0	0	3	Encounters > Session
+before	Recall what happened last session, and where the story stands	0	0	0	0	0	0	0	0	Session
+before	Compare the party's passive Perception, to plan an ambush	1	1	1	1	0	0	0	0	Session > Party
+before	Build tonight's encounter	2	16	9	2	0	1	6	7	Party > Session > Encounters
+before	Make the boss your own: copy it, change it, and swap it in	0	5	0	0	0	0	0	5	Encounters
+before	Write the read-aloud text and tactics for the encounter	0	4	0	0	0	0	0	4	Encounters
+before	Back to the session plan, with tonight's encounter in it	1	4	2	1	0	0	1	2	Encounters > Session
+before	Is each planned fight right for this party?	0	0	0	0	0	0	0	0	Session
+before	Change a planned fight's roster from the plan, and come back	2	6	3	2	0	0	1	3	Session > Encounters > Session
+before	Carry over what last week left into tonight's note	0	1	0	0	0	0	0	1	Session
+during	Start recording	0	2	0	0	0	0	0	2	Session
+during	Read last session's recap aloud	0	0	0	0	0	0	0	0	Session
+during	A player asks who Captain Varra is	0	3	3	0	0	2	1	0	Session
+during	Note what the party decides	0	2	1	0	0	1	0	1	Session
+during	The party travels for half a day: record it	0	2	1	0	0	0	1	1	Session
+during	Check the road for encounters	0	3	1	0	0	0	1	2	Session
+during	Ambush: read the read-aloud text and start the fight	1	12	1	1	0	0	0	11	Session > Run
+during	Combat: round 1	0	32	8	0	0	0	8	24	Run
+during	A player casts Fireball: read the spell	0	3	3	0	0	2	1	0	Run
+during	Fireball hits three enemies: apply half to one, full to two	0	6	3	0	0	0	3	3	Run
+during	The table rules that the Fireball missed: undo it	0	1	0	0	0	0	0	1	Run
+during	A wolf frightens Oren: mark the condition	0	3	2	0	1	0	1	1	Run
+during	What does Frightened do?	0	2	2	0	0	2	0	0	Run
+during	A wolf frightens Oren for 10 rounds: give the condition its count	0	4	1	0	0	0	1	3	Run
+during	Iselle starts concentrating: mark it	0	2	1	0	0	0	1	1	Run
+during	Combat: round 2	0	32	8	0	0	0	8	24	Run
+during	Check Iselle's spell save DC and spell list	0	3	3	0	1	0	2	0	Run
+during	Roll a save for a monster	0	4	0	0	0	0	0	4	Run
+during	On a player's turn, read a monster's reaction	0	2	2	0	0	0	2	0	Run
+during	A player asks what the miller said last session	0	3	3	0	0	2	1	0	Run
+during	Note a moment beside the fight	0	3	2	0	0	2	0	1	Run
+during	Combat: round 3	0	32	8	0	0	0	8	24	Run
+during	A wolf is dead: take it out of the order	0	2	1	0	0	0	1	1	Run
+during	End the fight	1	4	1	1	0	0	0	3	Run > Session
+during	Record a short rest	0	2	1	0	0	0	1	1	Session
+during	Mark a house rule's number between fights	0	3	2	0	0	2	0	1	Session
+during	Correct a wrong press of last session from the house rule note	0	6	5	0	0	2	3	1	Session
+during	Next fight: start it, with the party as it stands	1	1	1	1	0	0	0	0	Session > Run
+during	Next fight: roll and begin	0	11	0	0	0	0	0	11	Run
+during	Next fight: end it after a short exchange	1	3	1	1	0	0	0	2	Run > Session
+during	The players start a fight you did not plan, and then talk their way out	3	8	5	3	0	0	2	3	Session > Encounters > Run > Session
+during	A fight that nobody planned, with a Bandit from the book, then talk	2	5	5	2	0	2	1	0	Session > Run > Session
+during	Stop recording	0	1	0	0	0	0	0	1	Session
+after	Review how the fight went: log and final HP	0	1	1	0	0	0	1	0	Session
+after	Say where the fight happened	0	2	0	0	0	0	0	2	Session
+after	Process the recording and read the summary	0	4	3	0	3	0	0	1	Session
+after	Add a suggested event to the timeline	0	1	0	0	0	0	0	1	Session
+after	Write the wrap-up in the note	0	4	1	0	1	0	0	3	Session
+after	Link the fight in the note	2	6	2	2	0	0	0	4	Session > Timeline > Session
+after	Put the fight's rewards in the note	0	1	0	0	0	0	0	1	Session
+after	Check the party's HP for next time	1	1	1	1	0	0	0	0	Session > Party
+after	Put what an NPC said in the NPC's own note	0	5	3	0	0	2	1	2	Session
+after	A new day starts: take the supply wagon's torches	1	5	3	1	0	2	0	2	Session > Timeline
+after	The table settles an open question: tick it	1	3	2	1	1	0	0	1	Timeline > World
 
 Set-up, not counted
 before	play last week's session, then quit and open the app
@@ -67,10 +70,13 @@ during	a microphone is there
 during	the recorder hears the table
 during	the campaign has a marked road table
 during	the campaign has a house rule note in play
+during	last session's ledger holds a wrong press
 after	save, quit and open the app after the session
 after	the recording service has its keys
+after	the opened row and the next fight's action, at both sizes
 after	the plan holds a done scene with Hobb the Miller, in view
 after	the torch rules have a supply wagon on the next day
+after	Hobb's note holds an open question
 
 Blocked
 
@@ -81,6 +87,9 @@ before / Compare the party's passive Perception, to plan an ambush: Party compar
 before / Make the boss your own: copy it, change it, and swap it in: the roster has a row for the copy: true
 before / Back to the session plan, with tonight's encounter in it: the plan offers tonight's fight: true
 before / Is each planned fight right for this party?: the planned fights' rows say ["Low", "Low"]
+before / Change a planned fight's roster from the plan, and come back: the plan says ["Low", "Low"] before
+before / Change a planned fight's roster from the plan, and come back: the editor holds Shrine of Cinders: true
+before / Change a planned fight's roster from the plan, and come back: back on Session with the plan saying ["Low", "Low"]
 before / Carry over what last week left into tonight's note: tonight's note holds last week's open thread: true
 during / Open the app at the table: the app reopened on Session
 during / Read last session's recap aloud: the Last time line shows last week's words with no act: true
@@ -94,6 +103,7 @@ during / Roll a save for a monster: the roll is beside the amount, with the stat
 during / A player asks what the miller said last session: Lookup finds last session's notes: true
 during / End the fight: after the fight, the page is Session
 during / Mark a house rule's number between fights: the ledger holds the press: true
+during / Correct a wrong press of last session from the house rule note: last session's press is gone and tonight's stays: true
 during / Next fight: start it, with the party as it stands: Kestrel at the end of the last fight: [Kestrel Dunmoor, party, HP 9/41, Temp 0, AC 15, Initiative 21, Current turn, Bloodied, Poisoned]. At setup of the next: [Kestrel Dunmoor ·  Party · HP 9/41 · AC 15 ·  Bloodied · Poisoned]
 during / The players start a fight you did not plan, and then talk their way out: the improvised run is open: Run
 during / The players start a fight you did not plan, and then talk their way out: closing it comes back to: Session
@@ -102,9 +112,11 @@ during / A fight that nobody planned, with a Bandit from the book, then talk: th
 during / A fight that nobody planned, with a Bandit from the book, then talk: closing it comes back to: Session
 after / Stop recording: the app reopened on Session
 after / Review how the fight went: log and final HP: final HP reads in place: true
+after / Say where the fight happened: the Timeline's event says where: true
 after / Link the fight in the note: the note holds the fight's link: true
 after / Put the fight's rewards in the note: the note holds the fight's rewards block: true
 after / Check the party's HP for next time: Kestrel on Party after the evening: [Kestrel Dunmoor · Level 5 Rogue · Per 11 · Ins 11 · HP 9/41 · AC 15 · Poisoned]
+after / Put what an NPC said in the NPC's own note: the done scene with Hobb the Miller is in view: true
 after / Put what an NPC said in the NPC's own note: the NPC's note holds the line: true
 after / A new day starts: take the supply wagon's torches: the rail counts the day mark: true
 after / A new day starts: take the supply wagon's torches: the ledger holds the wagon's Done: true

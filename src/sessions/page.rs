@@ -75,6 +75,16 @@ enum SessionAct {
     Open(Option<Uuid>),
     OpenSettings,
     UndoCarry(Uuid),
+    UndoMarker,
+}
+
+/// Round 27 FI3, FN2: a marker's `Add` result, kept by the session whose recording holds the
+/// marker and the Timeline event it made. It shows in that session's footer while the event
+/// stands; `Undo add`, leaving the Recordings tab or a campaign change ends it.
+struct MarkerAdded {
+    session: Option<Uuid>,
+    id: String,
+    title: String,
 }
 
 #[derive(Clone, Copy, Default, PartialEq)]
@@ -380,7 +390,7 @@ pub struct Sessions {
     job_warned: bool,
     alerts: Vec<Alert>,
     added: Option<Added>,
-    recording_added: Option<String>,
+    recording_added: Option<MarkerAdded>,
     notice_context: Option<(Option<Uuid>, View)>,
     job: Option<(Job, Uuid)>,
     reading: Option<Reading>,
@@ -421,6 +431,9 @@ pub struct Sessions {
     pub wants_event: Option<String>,
     /// The encounter to start, by its path.
     pub wants_fight: Option<String>,
+    /// A planned fight's `Edit encounter`: its encounter, by its ID, opens in the editor, whose
+    /// way back is this session.
+    pub wants_edit_encounter: Option<Uuid>,
     pub wants_campaign_link: bool,
     pub wants_runs_refresh: bool,
     pub wants_new_fight: bool,
@@ -690,9 +703,11 @@ fn compact_plan_for_reading(
     let Some(plan) = section_text(body, "Plan for tonight") else {
         return body.to_owned();
     };
+    // A line planned from a journey's check ends with its mark, which no reader shows.
     let lines: Vec<_> = plan
         .lines()
         .filter(|line| !line.trim().is_empty())
+        .map(|line| crate::timeline::checks::marked(line).words)
         .collect();
     let only_planned_links = !lines.is_empty()
         && lines.iter().all(|line| {
@@ -3121,23 +3136,30 @@ impl Sessions {
     /// ends.
     fn draft_footer(&mut self, ui: &mut egui::Ui, id: &str, template: bool) -> f32 {
         let undo = std::cell::Cell::new(false);
+        let undo_delete = std::cell::Cell::new(false);
         let mut footer = design::Footer::new((id, self.selected), ui.available_width());
         let draft = if template {
             self.template_draft.as_ref()
         } else {
             self.draft.as_ref()
         };
+        let mut undos = LiveUndos::new();
         if let Some(draft) = draft {
-            let mut undos = LiveUndos::new();
             draft_result_in(&mut undos, draft, &undo);
-            undos.into_footer(&mut footer);
         }
+        if template {
+            self.deleted_template_in(&mut undos, &undo_delete);
+        }
+        undos.into_footer(&mut footer);
         if template && let Some(error) = self.template_error.clone() {
             footer.reason(error.clone(), move |ui| {
                 design::message(ui, Tone::Error, &error);
             });
         }
         let bottom = footer.show(ui);
+        if undo_delete.get() {
+            self.undo_delete_template();
+        }
         let draft = if template {
             self.template_draft.as_mut()
         } else {
@@ -4329,7 +4351,8 @@ impl Sessions {
                 Some(Written {
                     title: note.label(),
                     detail: format!("Session note · {}", note.date),
-                    text: words_to_read(&body, book),
+                    // Search shows found lines as they read: a travel check's mark is no word.
+                    text: words_to_read(&crate::timeline::checks::without_marks(&body), book),
                     place: WrittenIn::Session(note.id),
                 })
             })
@@ -4432,8 +4455,22 @@ impl Sessions {
         );
         let mut delete = false;
         let mut again = false;
+        // Round 27 FO1: the `⋯` follows its date-time title an `L` gap after it, on the title's
+        // line, so it belongs to this row and never floats at the pane's edge.
         ui.horizontal(|ui| {
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let menu = Density::Read.control() + design::L;
+            ui.allocate_ui_with_layout(
+                egui::vec2((ui.available_width() - menu).max(0.0), 0.0),
+                egui::Layout::left_to_right(egui::Align::Center),
+                |ui| {
+                    ui.add(
+                        egui::Label::new(Type::Strong.rich(ui, &recording.title).color(c.text))
+                            .wrap(),
+                    );
+                },
+            );
+            ui.add_space(design::L - ui.spacing().item_spacing.x);
+            {
                 design::row_menu(ui, &recording.title, |ui| {
                     if recording.summary
                         && Action::quiet("Process again…")
@@ -4477,13 +4514,7 @@ impl Sessions {
                         ui.close();
                     }
                 });
-                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                    ui.add(
-                        egui::Label::new(Type::Strong.rich(ui, &recording.title).color(c.text))
-                            .wrap(),
-                    );
-                });
-            });
+            }
         });
         let processing = self
             .job
@@ -4727,12 +4758,18 @@ impl Sessions {
                     .map(|(job, _)| job.progress.words())
                     .unwrap_or_default();
                 {
+                    let row_left = ui.cursor().left();
                     design::spinner(ui);
+                    let text_left = ui.cursor().left();
                     ui.label(
                         Type::Small
                             .rich(ui, format!("Processing · {words}"))
                             .color(c.muted),
                     );
+                    // Round 27 AN1: Cancel has its own line at the progress words' left edge, so
+                    // a stage's longer sentence never moves it under the pointer.
+                    ui.end_row();
+                    ui.add_space(text_left - row_left);
                     let cancelling = self.job.as_ref().is_some_and(|(job, _)| job.cancelling());
                     if cancelling {
                         ui.label(
@@ -4995,9 +5032,8 @@ impl Sessions {
             .min(design::READER_MEASURE)
             .min((ui.available_width() - action - design::L).max(0.0));
         let widths = [text, action];
-        // The rows and their rules take the combined width. A row's result message uses the
-        // list measure, so its Undo follows the words on one line when they fit.
-        let message_width = ui.available_width().min(design::LIST_MEASURE);
+        // The rows and their rules take the combined width. A row's Add result is in the
+        // session pane's footer (round 27 FI3).
         ui.scope(|ui| {
             for (index, (marker, title, key, added, facts, placement)) in rows.iter().enumerate() {
                 ui.scope(|ui| {
@@ -5032,7 +5068,23 @@ impl Sessions {
                                             .wrap(),
                                         );
                                     });
-                                    if !placement.is_empty() {
+                                    // Review of PR 296, item 2: the placement line is kept
+                                    // on every row, empty until the marker is added, so an
+                                    // Add moves no row below it.
+                                    if placement.is_empty() {
+                                        // As tall as the label it stands for.
+                                        let height =
+                                            egui::WidgetText::from(Type::Small.rich(ui, "After"))
+                                                .into_galley(
+                                                    ui,
+                                                    Some(egui::TextWrapMode::Wrap),
+                                                    f32::INFINITY,
+                                                    egui::TextStyle::Body,
+                                                )
+                                                .size()
+                                                .y;
+                                        ui.allocate_space(egui::vec2(0.0, height));
+                                    } else {
                                         ui.add(
                                             egui::Label::new(
                                                 Type::Small.rich(ui, placement).color(c.muted),
@@ -5069,27 +5121,17 @@ impl Sessions {
                                 {
                                     let id = book.add_marker(marker, key, session);
                                     book.save();
-                                    self.recording_added = Some(id);
+                                    self.result_orders.renew("marker");
+                                    self.recording_added = Some(MarkerAdded {
+                                        session,
+                                        id,
+                                        title: (*title).to_owned(),
+                                    });
                                 }
                             });
                         }
                     });
                 });
-                if added.as_ref() == self.recording_added.as_ref()
-                    && let Some(id) = &added
-                {
-                    let words = added_message(title, self.session_name(session).as_deref(), None);
-                    let undo = ui
-                        .scope(|ui| {
-                            ui.set_max_width(message_width);
-                            design::undo_message(ui, Tone::Success, &words, "Undo add")
-                        })
-                        .inner;
-                    if undo {
-                        book.undo_add(id);
-                        self.recording_added = None;
-                    }
-                }
             }
         });
         if let Some((at, marker, key)) = read_at {
@@ -5194,7 +5236,6 @@ impl Sessions {
             self.open_reading(&recording, made, None, None);
         }
         // A marker's Add result names the session that gets the event.
-        let added_to = self.session_name(self.selected);
         let Some(reading) = &mut self.reading else {
             return;
         };
@@ -5325,22 +5366,19 @@ impl Sessions {
                                     {
                                         let id = book.add_marker(marker, key, session);
                                         book.save();
-                                        self.recording_added = Some(id);
+                                        self.result_orders.renew("marker");
+                                        let title = if marker.title.is_empty() {
+                                            marker.kind.word()
+                                        } else {
+                                            marker.title.as_str()
+                                        };
+                                        self.recording_added = Some(MarkerAdded {
+                                            session,
+                                            id,
+                                            title: title.to_owned(),
+                                        });
                                     }
                                 });
-                                if let Some(id) = &self.recording_added
-                                    && book
-                                        .event_of_marker(key)
-                                        .is_some_and(|event| event.id == *id)
-                                {
-                                    let id = id.clone();
-                                    let words =
-                                        added_message(&marker.title, added_to.as_deref(), None);
-                                    if design::undo_message(ui, Tone::Success, &words, "Undo add") {
-                                        book.undo_add(&id);
-                                        self.recording_added = None;
-                                    }
-                                }
                                 markdown_view::show_reader(ui, &body[line_end..]);
                             } else {
                                 markdown_view::show_reader(ui, &body[at..]);
@@ -5472,7 +5510,7 @@ impl Sessions {
         design::dialog(ctx, "delete_recording", "Delete this recording?", |ui| {
             ui.add(
                 egui::Label::new(format!(
-                    "This removes {} and what was made from it from the campaign folder. You cannot undo this. The timeline stays as it is.",
+                    "This deletes the recording of {}, its transcripts and its summary. You cannot undo this. The timeline stays as it is.",
                     recording_title(&path)
                 ))
                 .wrap(),
@@ -5683,8 +5721,11 @@ impl Sessions {
         }
         // Another session's recording: its state, time and title, as a notice. As on the
         // recording row, the state's colour is only on its icon and word.
+        // Round 27 FE8: while the bottom banner says this recording stopped saving audio (with
+        // what was kept), the footer does not say it again.
         if let (Some(live), Some((icon, word, color))) = (&self.live, self.recording_status())
             && Some(live.session) != self.selected
+            && self.stalled_elsewhere().is_none()
         {
             let detail = format!(" {} in {}", clock(live.recorder.seconds()), live.label);
             let (icon, word) = (icon.to_owned(), word.to_owned());
@@ -5710,6 +5751,24 @@ impl Sessions {
             footer.notice(MISSING, move |ui| {
                 if design::message_with_action(ui, Tone::Warning, MISSING, "Open Settings") {
                     act.set(Some(SessionAct::OpenSettings));
+                }
+            });
+        }
+        // Round 27 FI3, FN2: a marker's Add result, in its own session's footer while its event
+        // stands. The marker row keeps `✓ On the timeline`.
+        if let Some(added) = self.recording_added.as_ref().filter(|added| {
+            added.session == self.selected && book.events.iter().any(|event| event.id == added.id)
+        }) {
+            let words = added_message(
+                &added.title,
+                self.session_name(added.session).as_deref(),
+                None,
+            );
+            let order = self.result_orders.of("marker", &added.id);
+            let act = &act;
+            undos.push(order, words.clone(), move |ui| {
+                if design::undo_message(ui, Tone::Success, &words, "Undo add") {
+                    act.set(Some(SessionAct::UndoMarker));
                 }
             });
         }
@@ -5747,6 +5806,11 @@ impl Sessions {
             Some(SessionAct::Open(session)) => self.select(session),
             Some(SessionAct::OpenSettings) => self.wants_processing_settings = true,
             Some(SessionAct::UndoCarry(session)) => self.undo_carry(session),
+            Some(SessionAct::UndoMarker) => {
+                if let Some(added) = self.recording_added.take() {
+                    book.undo_add(&added.id);
+                }
+            }
             None => {}
         }
         bottom
@@ -6083,7 +6147,17 @@ impl Sessions {
         // Beside Lookup at a small window, two columns would crush the editor.
         let narrow = ui.available_width() < TWO_COLUMNS_FROM;
         if narrow && self.templates_list_only {
-            self.template_list(ui, &mut choose);
+            // Round 27 FI4: with the list alone on screen, its footer holds the delete result.
+            let undo_delete = std::cell::Cell::new(false);
+            let mut footer = design::Footer::new("template_list_footer", ui.available_width());
+            let mut undos = LiveUndos::new();
+            self.deleted_template_in(&mut undos, &undo_delete);
+            undos.into_footer(&mut footer);
+            let bottom = footer.show(ui);
+            if undo_delete.get() {
+                self.undo_delete_template();
+            }
+            body_above(ui, bottom, |ui| self.template_list(ui, &mut choose));
         } else if narrow {
             if Action::quiet("All templates")
                 .icon(icons::BACK)
@@ -6127,7 +6201,14 @@ impl Sessions {
                 body_above(ui, bottom, |ui| {
                     // One thing at a time, so that the DM does not type into another template.
                     if self.new_template.is_some() {
-                        self.new_template_form(ui);
+                        // Round 27: `Cancel` starts its line, and its target reaches into the
+                        // gutter: an `L` gutter keeps it clear of the column's splitter.
+                        egui::Frame::new()
+                            .inner_margin(egui::Margin {
+                                left: (design::L - design::S) as i8,
+                                ..Default::default()
+                            })
+                            .show(ui, |ui| self.new_template_form(ui));
                     } else {
                         self.template_editor(ui);
                     }
@@ -6167,26 +6248,39 @@ impl Sessions {
                         *choose = Some(template.name.clone());
                     }
                 }
-                if let Some((name, _)) = self.deleted_template.clone()
-                    && design::undo_message(
-                        ui,
-                        Tone::Success,
-                        &format!("Deleted “{name}”."),
-                        "Undo delete",
-                    )
-                {
-                    let (name, body) = self.deleted_template.take().expect("just read");
-                    if let Some(folder) = &self.folder {
-                        match create_template(folder, &name, &body) {
-                            Ok(_) => {
-                                self.refresh();
-                                self.select_template(&name);
-                            }
-                            Err(error) => self.template_error = Some(error),
-                        }
-                    }
+            });
+    }
+
+    /// Round 27 FI4: `Deleted “<name>”.` with `Undo delete` is a result in the template page's
+    /// message footer, never under the list's last row. It is the campaign's: a campaign change
+    /// or an edit to another template ends it, and a later result with an Undo goes above it.
+    fn deleted_template_in<'a>(&self, undos: &mut LiveUndos<'a>, act: &'a std::cell::Cell<bool>) {
+        if let Some((name, _)) = &self.deleted_template {
+            let words = format!("Deleted “{name}”.");
+            let order = self.result_orders.of("deleted template", name);
+            let drawn = words.clone();
+            undos.push(order, words, move |ui| {
+                if design::undo_message(ui, Tone::Success, &drawn, "Undo delete") {
+                    act.set(true);
                 }
             });
+        }
+    }
+
+    /// `Undo delete`: the deleted template's file comes back with the words it had.
+    fn undo_delete_template(&mut self) {
+        let Some((name, body)) = self.deleted_template.take() else {
+            return;
+        };
+        if let Some(folder) = &self.folder {
+            match create_template(folder, &name, &body) {
+                Ok(_) => {
+                    self.refresh();
+                    self.select_template(&name);
+                }
+                Err(error) => self.template_error = Some(error),
+            }
+        }
     }
 
     fn new_template_form(&mut self, ui: &mut egui::Ui) {
@@ -6196,40 +6290,67 @@ impl Sessions {
         ui.add_space(design::L);
         design::group_label(ui, "New template");
         ui.add_space(design::M);
-        design::text_field(
-            ui,
-            "Template name",
-            &mut name,
-            Some("Starts with the title line only."),
-            None,
-        );
-        let mut keep = true;
-        ui.horizontal(|ui| {
-            if if self.open_run.is_some() {
+        // Round 27 FL2, SL1: the one inline creation layout. `Create template` follows the name
+        // field on its line, the help stays under the field, and the kept line below holds quiet
+        // `Cancel` at its start and the reason after it, so typing moves nothing.
+        let create_action = || {
+            if self.open_run.is_some() {
                 Action::secondary("Create template")
             } else {
                 Action::primary("Create template")
             }
-            .show(ui)
-            .clicked()
-                && let Some(folder) = &self.folder
+        };
+        let reason = name.trim().is_empty().then_some("Type a name first.");
+        let create_width = create_action().natural_width(ui);
+        let mut create = false;
+        ui.horizontal_top(|ui| {
+            let width = ui.available_width() - create_width - ui.spacing().item_spacing.x;
+            ui.allocate_ui_with_layout(
+                egui::vec2(width, 0.0),
+                egui::Layout::top_down(egui::Align::Min),
+                |ui| {
+                    design::text_field(
+                        ui,
+                        "Template name",
+                        &mut name,
+                        Some("Starts with the title line only."),
+                        None,
+                    );
+                },
+            );
+            ui.vertical(|ui| {
+                ui.add_space(design::L + design::XS);
+                create = create_action().blocked(reason).show(ui).clicked();
+            });
+        });
+        let mut keep = true;
+        ui.horizontal(|ui| {
+            // As tall as Cancel, so the reason coming or going moves nothing.
+            ui.set_min_height(Density::Read.control());
+            if Action::quiet("Cancel")
+                .density(Density::Read)
+                .line_start()
+                .show(ui)
+                .clicked()
             {
-                let body = "# Session {{number}}: {{title}}\n\n";
-                match create_template(folder, &name, body) {
-                    Ok(template) => {
-                        keep = false;
-                        self.template_error = None;
-                        self.refresh();
-                        self.select_template(&template.name);
-                    }
-                    Err(error) => self.template_error = Some(error),
-                }
-            }
-            if Action::quiet("Cancel").show(ui).clicked() {
                 keep = false;
                 self.template_error = None;
             }
+            ui.add_space(design::L - ui.spacing().item_spacing.x);
+            design::blocked_reason(ui, reason);
         });
+        if create && let Some(folder) = &self.folder {
+            let body = "# Session {{number}}: {{title}}\n\n";
+            match create_template(folder, &name, body) {
+                Ok(template) => {
+                    keep = false;
+                    self.template_error = None;
+                    self.refresh();
+                    self.select_template(&template.name);
+                }
+                Err(error) => self.template_error = Some(error),
+            }
+        }
         if keep {
             self.new_template = Some(name);
         }
@@ -6314,6 +6435,7 @@ impl Sessions {
                         .template_draft
                         .take()
                         .map_or_else(|| template.body.clone(), |draft| draft.body);
+                    self.result_orders.renew("deleted template");
                     self.deleted_template = Some((template.name.clone(), body));
                     self.template = None;
                     self.refresh();
@@ -6933,6 +7055,7 @@ mod tests {
             played_order: 0,
             checks_table: None,
             checks: Vec::new(),
+            within: None,
             extra: Default::default(),
         };
         let mut book = Book::default();
@@ -7681,6 +7804,7 @@ mod tests {
     fn read_plan_summary_keeps_mixed_notes_and_repeated_fights_in_the_file() {
         let fights = [PlanFight {
             saved: None,
+            id: uuid::Uuid::nil(),
             name: "Bridge Ambush".into(),
             path: String::new(),
             summary: String::new(),
@@ -7760,6 +7884,7 @@ mod tests {
         })];
         let fights = [PlanFight {
             saved: None,
+            id: uuid::Uuid::nil(),
             name: "Bridge Ambush".into(),
             path: String::new(),
             summary: String::new(),

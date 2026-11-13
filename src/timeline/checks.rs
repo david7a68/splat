@@ -3,7 +3,7 @@
 //! The plan's Travel row and Timeline's detail column draw the same block from here.
 use super::{Book, Check, DAY, Event, HOUR, Kind, clock_words, read_duration};
 use crate::design::{self, Action, Density, Status, Tone, Type, colors, icons};
-use crate::roll_table::{PER_NOT_READ, Per, Table};
+use crate::roll_table::{Per, Table};
 use eframe::egui;
 use splat::execution::dice::Random;
 use std::collections::BTreeMap;
@@ -28,8 +28,6 @@ pub enum Act {
     Clear(String, String),
     /// `Plan “<name>”` on a result that links an encounter or a group.
     Plan(Planned),
-    /// `Undo plan line` on the line of the check that the plan line came from.
-    UndoPlan,
 }
 
 /// What `Plan “<name>”` acted on: the name, and the check the DM clicked it on, by its label
@@ -55,6 +53,168 @@ impl Planned {
 /// The message of `Plan “<name>”`.
 fn plan_line_words(name: &str) -> String {
     format!("“{name}” is in tonight’s plan.")
+}
+
+/// The mark that `Plan “<name>”` leaves at the end of its plan line, which no reader shows: the
+/// journey, and the check as read (its offset, and the sum of its words). Starting the fight
+/// reads it, so the fight is played at that check.
+#[derive(Clone, Debug, PartialEq)]
+pub struct RoadMark {
+    journey: String,
+    at: u64,
+    sum: String,
+}
+
+const ROAD_MARK: &str = "<!-- splat:check ";
+
+/// Why a fight planned from a check is not played at it, in the words of the run's notice.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum OffRoad {
+    /// The check, or its journey, changed or went since the plan line; or the mark is not read.
+    Changed,
+    /// The journey is another session's: the line was carried over or copied.
+    OtherSession,
+    /// The note or `Timeline.md` cannot be read now.
+    NotRead,
+}
+
+impl OffRoad {
+    pub fn words(self) -> &'static str {
+        match self {
+            Self::Changed => "Its travel check changed, so this fight follows the last event.",
+            Self::OtherSession => {
+                "Its journey is in an earlier session, so this fight follows the last event."
+            }
+            Self::NotRead => {
+                "Splat cannot read its travel check now, so this fight follows the last event."
+            }
+        }
+    }
+}
+
+/// A plan line read for its mark: the line's own words, with the mark taken out and the text
+/// before and after it kept byte for byte, and its mark, if it has one. Half a comment is no
+/// mark and stays in the words; a whole one whose terms cannot be read is taken out of the
+/// words and is no mark either: an ordinary line, an ordinary fight, and no notice.
+pub struct MarkedLine {
+    pub words: String,
+    pub mark: Option<RoadMark>,
+}
+
+/// The one reader of a plan line's mark.
+pub fn marked(line: &str) -> MarkedLine {
+    let whole = line
+        .split_once(ROAD_MARK)
+        .and_then(|(before, rest)| Some((before, rest.split_once("-->")?)));
+    let Some((before, (inner, after))) = whole else {
+        return MarkedLine {
+            words: line.to_owned(),
+            mark: None,
+        };
+    };
+    let term = |key: &str| {
+        inner
+            .split_whitespace()
+            .find_map(|term| term.strip_prefix(key)?.strip_prefix('='))
+    };
+    let mark = (|| {
+        Some(RoadMark {
+            journey: term("journey")?.to_owned(),
+            at: term("at")?.parse().ok()?,
+            sum: term("sum")?.to_owned(),
+        })
+    })();
+    MarkedLine {
+        words: format!("{before}{after}"),
+        mark,
+    }
+}
+
+/// A note's words as readers show them: each line's words without its mark, byte for byte.
+pub fn without_marks(text: &str) -> String {
+    text.split_inclusive('\n')
+        .map(|line| marked(line).words)
+        .collect()
+}
+
+impl RoadMark {
+    /// The mark for a check of this journey, when its offset can be read.
+    pub fn new(journey: &str, check: &Check) -> Option<Self> {
+        Some(Self {
+            journey: journey.to_owned(),
+            at: check.at?,
+            sum: words_sum(&check.words),
+        })
+    }
+
+    /// The comment that ends the plan line.
+    pub fn comment(&self) -> String {
+        format!(
+            "{ROAD_MARK}journey={} at={} sum={} -->",
+            self.journey, self.at, self.sum
+        )
+    }
+
+    /// Where the fight is played: in this session's journey at the check, while the journey
+    /// still covers the check and the check is as the plan line read it. Else why not: the
+    /// fight goes after the session's last event, as any fight does.
+    pub fn place(
+        &self,
+        events: &[Event],
+        session: Option<uuid::Uuid>,
+    ) -> Result<super::Within, OffRoad> {
+        let journey = events
+            .iter()
+            .find(|event| event.id == self.journey && event.kind == Kind::Travel)
+            .ok_or(OffRoad::Changed)?;
+        if journey.session != session {
+            return Err(OffRoad::OtherSession);
+        }
+        let same = journey
+            .checks
+            .iter()
+            .any(|check| check.at == Some(self.at) && words_sum(&check.words) == self.sum);
+        (covers(journey, self.at) && same)
+            .then(|| super::Within {
+                journey: self.journey.clone(),
+                at: self.at,
+            })
+            .ok_or(OffRoad::Changed)
+    }
+
+    /// The day the fight is played on, for its plan row: `Day 2 of Road to the ford`, counted
+    /// as the check's name is. `starts` is the clock of `events`.
+    pub fn day_words(
+        &self,
+        events: &[Event],
+        starts: &[Option<u64>],
+        session: Option<uuid::Uuid>,
+    ) -> Option<String> {
+        let within = self.place(events, session).ok()?;
+        let at = events.iter().position(|event| event.id == within.journey)?;
+        let minute = starts[at].unwrap_or(0) + within.at * HOUR;
+        Some(format!(
+            "Day {} of {}",
+            minute / DAY + 1,
+            events[at].label(0)
+        ))
+    }
+}
+
+/// The sum of a check's words, so a mark tells a check rolled again or edited from the one the
+/// DM planned from: 64 bits of SHA-256, short enough that the mark stays one line in the note
+/// and long enough that two different words do not meet by chance. Two rolls with the same
+/// words are the same check.
+fn words_sum(words: &str) -> String {
+    use sha2::{Digest, Sha256};
+    format!("{:x}", Sha256::digest(words.as_bytes()))[..16].to_owned()
+}
+
+/// Whether the journey covers a check at this offset, in hours: before its end, or the one
+/// check of a journey whose length the clock cannot read. The checks block, Begin combat and
+/// the clock all ask this.
+pub fn covers(journey: &Event, at: u64) -> bool {
+    fits(at, 1, minutes(&journey.duration))
 }
 
 /// Whether this journey shows its checks: the DM chose `Roll for encounters` on it.
@@ -265,7 +425,7 @@ pub fn apply(
             event.checks.remove(at);
             Some(("Check cleared.".to_owned(), "Undo clear"))
         }
-        Act::Plan(_) | Act::UndoPlan => return Ok(None),
+        Act::Plan(_) => return Ok(None),
     };
     let after = event.clone();
     if after == before {
@@ -293,8 +453,6 @@ pub struct View<'a> {
     /// For a name that a result links: nothing when it is not an encounter or a group, else
     /// whether the plan has a row still to come for it.
     pub planned: &'a dyn Fn(&str) -> Option<bool>,
-    /// The plan line whose message and Undo show on its check's line, in place of its offer.
-    pub plan_line: Option<&'a Planned>,
 }
 
 /// What the DM typed in one block: a roll for each line, and the last line's fault.
@@ -351,8 +509,8 @@ pub fn header(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<A
             },
         )
         .on_hover_text(fault);
-    } else if table.is_some_and(|table| matches!(table.per, Per::NotRead(_))) {
-        design::small_message(ui, Tone::Warning, PER_NOT_READ);
+    } else if let Some(warning) = table.and_then(|table| table.per.warning()) {
+        design::small_message(ui, Tone::Warning, &warning);
     }
     act
 }
@@ -634,26 +792,14 @@ fn result(ui: &mut egui::Ui, label: &str, check: &Check, view: &View<'_>) -> Opt
             );
             let mut names = crate::sessions::linked_names(&check.words);
             names.retain(|name| planned(name).is_some());
-            // Each name keeps one place of one height: its offer, then the plan line's message
-            // and Undo, then `In the plan`. The place is as high as the message needs here, so
-            // nothing moves when the message comes or goes, and the message is never cut.
+            // Each name keeps one place, one control high: its offer, then `In the plan`. The
+            // offer's result and its Undo are in the plan's message footer (round 27 FE7).
             for name in names.into_iter().take(MOST_OFFERS) {
-                let words = plan_line_words(&name);
-                let width = ui.available_width();
-                let height =
-                    design::undo_message_height(ui, Tone::Success, &words, "Undo plan line", width);
-                let size = egui::vec2(width, height);
+                let size = egui::vec2(ui.available_width(), Density::Read.control());
                 let top = egui::Layout::top_down(egui::Align::Min);
                 ui.allocate_ui_with_layout(size, top, |ui| {
                     ui.set_min_size(size);
-                    if view
-                        .plan_line
-                        .is_some_and(|line| line.name == name && line.on(check))
-                    {
-                        if design::undo_message(ui, Tone::Success, &words, "Undo plan line") {
-                            act = Some(Act::UndoPlan);
-                        }
-                    } else if planned(&name) == Some(true) {
+                    if planned(&name) == Some(true) {
                         let line = egui::vec2(ui.available_width(), Density::Read.control());
                         let left = egui::Layout::left_to_right(egui::Align::Center);
                         ui.allocate_ui_with_layout(line, left, |ui| {
@@ -807,6 +953,110 @@ mod tests {
     use super::*;
     use crate::roll_table::RollRow;
 
+    /// F9, W5-D1: the plan line's mark names the journey and the check as read. It places the
+    /// fight only while that journey of this session still covers that check, unchanged; else
+    /// it says why. The one reader keeps the line's words before and after the mark.
+    #[test]
+    fn w5_d1_a_road_mark_places_the_fight_only_at_the_check_it_read() {
+        let session = Some(uuid::Uuid::from_u128(1));
+        let mut road = journey("t-road", Some("road"));
+        road.session = session;
+        road.duration = "2 days".into();
+        road.checks = vec![Check::new(
+            24,
+            "16 · [[Wolf Pack]] wait near mile 53628.".into(),
+        )];
+        let mark = RoadMark::new("t-road", &road.checks[0]).unwrap();
+        let line = format!("- [[Wolf Pack]] {}", mark.comment());
+        let read = marked(&line);
+        assert_eq!(
+            (read.words.as_str(), read.mark),
+            ("- [[Wolf Pack]] ", Some(mark.clone()))
+        );
+        // Review of PR 284, finding 1: the DM's words after the mark are the line's words.
+        let read = marked(&format!("{line} Bring silver weapons."));
+        assert_eq!(read.words, "- [[Wolf Pack]]  Bring silver weapons.");
+        assert_eq!(read.mark, Some(mark.clone()));
+        // Half a mark is no mark: the line's words as they are.
+        let half = "- [[Wolf Pack]] <!-- splat:check journey=t-road at=24";
+        assert_eq!(
+            (marked(half).words.as_str(), marked(half).mark),
+            (half, None)
+        );
+        assert_eq!(marked("- [[Wolf Pack]]").mark, None);
+        let unread = marked("- [[Wolf Pack]] <!-- splat:check at=x -->");
+        assert_eq!(
+            (unread.words.as_str(), unread.mark),
+            ("- [[Wolf Pack]] ", None),
+            "a whole mark that cannot be read is no mark, and no reader shows it"
+        );
+        let within = super::super::Within {
+            journey: "t-road".into(),
+            at: 24,
+        };
+        let day = event_with(Kind::Day);
+        let events = |road: &Event| vec![day.clone(), road.clone()];
+        let starts = |road: &Event| super::super::clock(&events(road));
+        assert_eq!(mark.place(&events(&road), session), Ok(within));
+        assert_eq!(
+            mark.day_words(&events(&road), &starts(&road), session)
+                .as_deref(),
+            Some("Day 2 of Travel")
+        );
+        // Rolled again, or edited in Obsidian: other words. Finding 4: these two words share
+        // the first eight digits of their sum.
+        let mut changed = road.clone();
+        changed.checks[0].words = "16 · [[Wolf Pack]] wait near mile 92050.".into();
+        // Cleared.
+        let mut cleared = road.clone();
+        cleared.checks.clear();
+        // Shortened, so the check is outside the journey now.
+        let mut short = road.clone();
+        short.duration = "1 day".into();
+        // Finding 4: a check at offset zero of a journey made zero long.
+        let mut zero = road.clone();
+        zero.duration = "0 hours".into();
+        zero.checks = vec![Check::new(0, "16 · [[Wolf Pack]] wait.".into())];
+        let zero_mark = RoadMark::new("t-road", &zero.checks[0]).unwrap();
+        assert!(!covers(&zero, 0) && covers(&road, 0) && !covers(&road, 48));
+        let mut unknown = zero.clone();
+        unknown.duration = String::new();
+        assert!(
+            covers(&unknown, 0),
+            "the one check of a journey of no known length"
+        );
+        assert!(zero_mark.place(&events(&unknown), session).is_ok());
+        // Another session's journey: a fight carried over is played tonight.
+        let mut other = road.clone();
+        other.session = Some(uuid::Uuid::from_u128(2));
+        for (case, mark, road, why) in [
+            ("rolled again", &mark, changed, OffRoad::Changed),
+            ("cleared", &mark, cleared, OffRoad::Changed),
+            ("shortened", &mark, short, OffRoad::Changed),
+            ("zero long", &zero_mark, zero, OffRoad::Changed),
+            ("another session", &mark, other, OffRoad::OtherSession),
+        ] {
+            assert_eq!(mark.place(&events(&road), session), Err(why), "{case}");
+            assert_eq!(
+                mark.day_words(&events(&road), &starts(&road), session),
+                None,
+                "{case}"
+            );
+        }
+        assert_eq!(
+            mark.place(&[day], session),
+            Err(OffRoad::Changed),
+            "the journey is gone"
+        );
+    }
+
+    fn event_with(kind: Kind) -> Event {
+        Event {
+            kind,
+            ..journey("t-day", None)
+        }
+    }
+
     fn table(key: &str, heading: &str, per: Per) -> Table {
         Table {
             key: key.into(),
@@ -851,6 +1101,7 @@ mod tests {
             played_order: 0,
             checks_table: key.map(str::to_owned),
             checks: Vec::new(),
+            within: None,
             extra: Default::default(),
         }
     }
@@ -928,7 +1179,6 @@ mod tests {
                         length: "",
                         tables: &tables,
                         planned: &|_| None,
-                        plan_line: None,
                     };
                     header(ui, &view, &mut State::default());
                 });

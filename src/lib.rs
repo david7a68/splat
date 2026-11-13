@@ -349,6 +349,46 @@ impl Splat {
         self.ui_store.save(&state);
     }
 
+    /// F9, W5-D1: a fight that enters the Timeline now, from a plan line that a journey's check
+    /// wrote, is played at that check (`Sessions::road_at_begin`). Else it goes after the
+    /// session's last event as any fight does, and the run's notice line says why.
+    fn road_of_entering_fight(
+        &mut self,
+        fact: &timeline::RunFact,
+    ) -> Option<(timeline::checks::RoadMark, timeline::Within)> {
+        let entering = fact.state == timeline::RunState::Running
+            && !self.timeline.events.iter().any(|event| {
+                event.run == Some(fact.id)
+                    || (fact.copied_from.is_some() && event.run == fact.copied_from)
+            });
+        if !entering {
+            return None;
+        }
+        let session = self.sessions.current();
+        self.sessions
+            .road_at_begin(&self.timeline, session, &fact.name)?
+            .inspect_err(|why| self.tell_run(why.words()))
+            .ok()
+    }
+
+    /// The fight just placed is saved and checked again after the merge
+    /// (`Sessions::confirm_road`).
+    fn confirm_road(&mut self, fact: &timeline::RunFact, mark: &timeline::checks::RoadMark) {
+        let session = self.sessions.current();
+        if let Some(why) =
+            self.sessions
+                .confirm_road(&mut self.timeline, session, fact.id, &fact.name, mark)
+        {
+            self.tell_run(why.words());
+        }
+    }
+
+    fn tell_run(&mut self, words: &str) {
+        if let Some(run) = self.encounters.run_mut() {
+            run.tell(words.to_owned());
+        }
+    }
+
     /// Where the party stands in the session being played, from the timeline and the last
     /// fight's file. It is read again when any of those could have changed.
     fn update_carry(&mut self) {
@@ -1369,14 +1409,14 @@ impl Splat {
     }
 
     /// `Add to Timeline` after a tracker act: a second act, a Major event with the act's label
-    /// in the session being played, with the Timeline's own `Undo add`.
+    /// and its line in the session being played, with the Timeline's own `Undo add`.
     fn add_tracker_act_to_timeline(&mut self) {
-        if let Some((entry, label)) = self.trackers.wants_timeline.take() {
+        if let Some((entry, title)) = self.trackers.wants_timeline.take() {
             let event = self
                 .timeline
                 .add(timeline::Kind::Event, self.trackers.played);
             if let Some(added) = self.timeline.event_mut(&event) {
-                added.title = label;
+                added.title = title;
             }
             self.trackers.added = Some(trackers::Added {
                 entry,
@@ -1776,8 +1816,17 @@ impl Splat {
                     viewport.min.y += design::L;
                     let clip = viewport.intersect(ui.clip_rect());
                     ui.scope_builder(egui::UiBuilder::new().max_rect(viewport), |ui| {
+                        // Round 27 FI7: the tab's notices sit in its message footer.
+                        let bottom = {
+                            let width = ui.available_width().min(design::LIST_MEASURE);
+                            let mut footer =
+                                design::Footer::new("recording_settings_footer", width);
+                            self.processing.footer_messages(&mut footer);
+                            footer.show(ui)
+                        };
                         egui::ScrollArea::vertical()
                             .id_salt("recording_settings")
+                            .max_height((bottom - ui.cursor().top()).max(0.0))
                             .auto_shrink([false, false])
                             .show(ui, |ui| {
                                 ui.set_clip_rect(ui.clip_rect().intersect(clip));
@@ -1796,8 +1845,9 @@ impl Splat {
                 let rest = ui.available_rect_before_wrap();
                 ui.scope_builder(egui::UiBuilder::new().max_rect(rest), |ui| {
                     // Round 26: results, reasons and errors on this tab sit in one footer at the
-                    // bottom of the pane (a failed Connect, the campaign form, the campaign list), so
-                    // none of them moves the form the DM works in.
+                    // bottom of the pane (the campaign form, the campaign list), so none of them
+                    // moves the form the DM works in. Round 27 FA1: a failed Connect's cause is in
+                    // the reason slot beside Connect; the account's other errors stay here.
                     let bottom = {
                         let width = ui.available_width().min(design::LIST_MEASURE);
                         let campaigns = std::cell::RefCell::new(&mut self.campaigns);
@@ -1812,7 +1862,7 @@ impl Splat {
                         self.dndbeyond.footer_messages(&mut footer, false);
                         footer.show(ui)
                     };
-                    egui::ScrollArea::vertical()
+                    let page = egui::ScrollArea::vertical()
                         .id_salt("settings_page")
                         .max_height((bottom - ui.cursor().top()).max(0.0))
                         .auto_shrink([false, false])
@@ -1871,6 +1921,20 @@ impl Splat {
                                 }
                             }
                         });
+                    // After a failed Connect, Connect comes into view above the footer.
+                    let reveal = self.settings.take_reveal();
+                    if let Some(connect) = reveal
+                        && connect.bottom() > page.inner_rect.bottom()
+                    {
+                        let mut state = page.state;
+                        let most = (page.content_size.y - page.inner_rect.height()).max(0.0);
+                        state.offset.y = (state.offset.y + connect.bottom()
+                            - page.inner_rect.bottom()
+                            + design::S)
+                            .min(most);
+                        state.store(ui.ctx(), page.id);
+                        ui.ctx().request_repaint();
+                    }
                 });
             }
             Page::Sessions => {
@@ -1994,7 +2058,8 @@ impl Splat {
             Page::World => {
                 if let Some(campaign) = &active {
                     let index = self.lookup.index();
-                    self.world_page.show(ui, index.as_ref(), campaign);
+                    self.world_page
+                        .show(ui, index.as_ref(), campaign, &mut self.trackers);
                 } else {
                     self.no_campaign(ui);
                 }
@@ -2335,12 +2400,22 @@ impl Splat {
             self.page = Page::Encounters;
         }
         self.encounters.planned_groups = self.sessions.tonight_links();
-        if std::mem::take(&mut self.encounters.wants_session) {
+        // The editor's way back belongs to its route: leaving the editor another way ends it.
+        if self.page != Page::Encounters {
+            self.encounters.end_session_route();
+        }
+        if let Some(session) = self.encounters.wants_session.take() {
+            // Through the Session page's own guards for an unsaved note.
+            self.sessions.select(Some(session));
             self.page = Page::Sessions;
         }
         if std::mem::take(&mut self.sessions.wants_campaign_link) {
             self.page = Page::Campaign;
             self.campaign_tab = CampaignTab::Link;
+        }
+        if std::mem::take(&mut self.trackers.wants_rules) {
+            self.page = Page::Campaign;
+            self.campaign_tab = CampaignTab::RunSettings;
         }
         if std::mem::take(&mut self.encounters.wants_run_folder) {
             self.page = Page::Campaign;
@@ -2373,8 +2448,19 @@ impl Splat {
             }
         }
         if std::mem::take(&mut self.sessions.wants_new_fight) {
-            self.encounters.new_from_plan();
+            self.encounters.new_from_plan(self.sessions.selected_id());
             self.page = Page::Encounters;
+        }
+        if let Some(id) = self.sessions.wants_edit_encounter.take()
+            && let Some(campaign) = &active
+        {
+            match self
+                .encounters
+                .edit_from_plan(id, self.sessions.selected_id(), campaign)
+            {
+                Ok(()) => self.page = Page::Encounters,
+                Err(why) => self.sessions.encounter_not_opened(why),
+            }
         }
         if std::mem::take(&mut self.sessions.wants_back_to_run)
             || std::mem::take(&mut self.timeline_page.wants_back_to_run)
@@ -2638,11 +2724,16 @@ impl eframe::App for Splat {
         if fact != self.run_fact {
             match &fact {
                 Some(fact) => {
+                    let road = self.road_of_entering_fight(fact);
                     self.timeline.record_change(
                         self.run_fact.as_ref(),
                         fact,
                         self.sessions.current(),
+                        road.as_ref().map(|(_, within)| within),
                     );
+                    if let Some((mark, _)) = &road {
+                        self.confirm_road(fact, mark);
+                    }
                 }
                 // The run closed, so its last result goes to the file now and not after the
                 // pause.

@@ -313,6 +313,10 @@ pub(crate) fn remember_notes(folder: &Path, notes: &[Note]) -> Result<(), String
         );
     }
     let text = serde_json::to_string_pretty(&known).map_err(|e| e.to_string())?;
+    // A scan that found nothing new writes nothing: an idle campaign's files keep their times.
+    if fs::read(&path).is_ok_and(|bytes| bytes == text.as_bytes()) {
+        return Ok(());
+    }
     replace_file(&path, &text)
 }
 
@@ -1145,7 +1149,8 @@ pub struct TaskLine {
     /// The whole line, as the note holds it.
     pub line: String,
     pub done: bool,
-    /// The words after the box.
+    /// The words after the box, as readers show them: a travel check's mark is not among them.
+    /// Acts that change the line use `line`.
     pub words: String,
 }
 
@@ -1181,7 +1186,11 @@ pub fn plan_lines(body: &str) -> Vec<PlanLine> {
                 at,
                 line: line.trim_end_matches('\r').to_owned(),
                 done,
-                words: words.to_owned(),
+                // What a reader shows and copies: the mark of a travel check is no word.
+                words: crate::timeline::checks::marked(words)
+                    .words
+                    .trim_end()
+                    .to_owned(),
             }),
             None => PlanLine::Links(each_linked_name(line)),
         })
@@ -2684,6 +2693,16 @@ mod tests {
             "{text}"
         );
         assert_eq!(list_notes(dir.path()), [note]);
+        // An idle scan writes nothing: the index of note paths keeps its file (W9-D2).
+        #[cfg(unix)]
+        {
+            let index = dir.path().join(NOTE_PATHS);
+            let file =
+                |path: &Path| std::os::unix::fs::MetadataExt::ino(&fs::metadata(path).unwrap());
+            let written = file(&index);
+            remember_notes(dir.path(), &list_notes(dir.path())).unwrap();
+            assert_eq!(file(&index), written, "an idle scan replaced the index");
+        }
     }
 
     #[test]

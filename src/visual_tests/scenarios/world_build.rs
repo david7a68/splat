@@ -2061,6 +2061,19 @@ pub fn facts(d: &mut Driver<'_>) {
         d.focused_name().as_deref() == Some("Log line for Zarel") && d.visible_text("Session 1:"),
         "Add to Log opens the Log field with the keyboard in it, after the line's stamp",
     );
+    // X31 of app round 2: the stamp and the field end at the reader's measure, as its rules do.
+    for size in [DEFAULT, LARGE] {
+        let (stamp, field) = d.at_size(size, |d| {
+            (d.place_of("Session 1:"), d.place_of("Log line for Zarel"))
+        });
+        d.observe(
+            "T18.2",
+            stamp.zip(field).is_some_and(|(stamp, field)| {
+                field.right() - stamp.left() <= design::READER_MEASURE + 0.5
+            }),
+            format!("At {size:?} the stamp {stamp:?} and the field {field:?} end at the measure"),
+        );
+    }
     d.state("log-field-open", Sizes::All);
     d.type_text("Gave the gate key to Iselle.");
     d.press(Key::Enter);
@@ -2191,6 +2204,64 @@ pub fn facts(d: &mut Driver<'_>) {
         format!("The question {question:?} is Body above its note {source:?}: {sizes:?}"),
     );
     d.state("open-questions", Sizes::All);
+    // X45 of app round 2: a question is ticked where the DM reads it. Its box writes `[x]` to
+    // that line of its note at once, with `Undo tick` in the pane's footer.
+    let horn = root(d).join("Lore/Horn Rings.md");
+    let open = fs::read_to_string(&horn).unwrap();
+    let question = "Open: Can a horn ring be sold?";
+    d.click(question);
+    d.expect("Undo tick");
+    d.observe(
+        "T15.5",
+        fs::read_to_string(&horn).unwrap()
+            == open.replacen(
+                "- [ ] Can a horn ring be sold?",
+                "- [x] Can a horn ring be sold?",
+                1,
+            )
+            && !d.has(question)
+            && d.visible_text("“Can a horn ring be sold?” ticked in Horn Rings."),
+        "The box ticks that line of its note, and the question leaves the list",
+    );
+    d.state("question-ticked", Sizes::Default);
+    d.click("Undo tick");
+    d.observe(
+        "T15.5",
+        fs::read_to_string(&horn).unwrap() == open && d.has(question) && !d.has("Undo tick"),
+        "Undo tick opens that box again",
+    );
+    // The line changed on disk since it was read: the tick writes nothing and says so.
+    let changed = open.replace(
+        "Can a horn ring be sold?",
+        "Can a horn ring be sold or lent?",
+    );
+    fs::write(&horn, &changed).unwrap();
+    d.click(question);
+    d.observe(
+        "T15.5",
+        fs::read_to_string(&horn).unwrap() == changed
+            && d.visible_text("This question changed in Horn Rings. Nothing was written.")
+            && !d.has("Undo tick"),
+        "A question whose line changed on disk is not ticked, and the footer says why",
+    );
+    // Another note took the file's place outside Splat, with the same question on the same
+    // line: the tick writes nothing to it (Astra's review of PR 287).
+    let id = open
+        .lines()
+        .find(|line| line.starts_with("splat_id: "))
+        .unwrap();
+    let other = open.replace(id, "splat_id: 00000000-0000-4000-8000-0000000000aa");
+    fs::write(&horn, &other).unwrap();
+    d.click(question);
+    d.observe(
+        "T15.5",
+        fs::read_to_string(&horn).unwrap() == other
+            && d.visible_text("Horn Rings changed on disk. Nothing was written.")
+            && !d.has("Undo tick"),
+        "A note that took the question's file is not ticked",
+    );
+    fs::write(&horn, &open).unwrap();
+    reload(d);
     d.click("Can a horn ring be sold?");
     d.observe(
         "T15.5",
@@ -2842,10 +2913,26 @@ pub fn tables(d: &mut Driver<'_>) {
         |d| d.has_containing("3 table faults") && d.visible_text("1 note needs fixing"),
     );
     // F9: a `per` word that Splat cannot read warns on its table, and the table still rolls.
+    // Round 27 FE13: the warning quotes the word the DM wrote and names the words that work.
+    let per_warning = crate::roll_table::per_not_read("fortnight");
     d.observe(
         "T11.9",
-        d.visible_text(crate::roll_table::PER_NOT_READ) && d.has("Roll 1d6"),
-        "An interval that cannot be read warns on its table",
+        d.visible_text(&per_warning)
+            && per_warning.contains("per fortnight")
+            && per_warning.contains("Use day, watch or hours such as 4h.")
+            && d.has("Roll 1d6"),
+        "An interval that cannot be read warns on its table, with the word and what to write",
+    );
+    // Round 27 FE4: every warning under a table has one size: the interval warning is the size
+    // of a gap in the rows.
+    let sizes = [per_warning.as_str(), "1d4 needs a row for 2."].map(|words| {
+        d.painted_rect_in(words, egui::Rect::EVERYTHING)
+            .and_then(|rect| d.painted_size(rect, words))
+    });
+    d.observe(
+        "iter-27-L-FE4",
+        sizes.iter().all(Option::is_some) && sizes[0] == sizes[1],
+        format!("Table warnings share one size (interval, gap): {sizes:?}"),
     );
     d.state("authored-table-validation", Sizes::All);
     d.observe_both(
@@ -4203,12 +4290,21 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
             d.expect("Edit Rook Ambry");
             let rect = d.place_of("Edit Rook Ambry").unwrap();
             let words = d.painted_in(rect);
-            words.contains("Edit") && words.contains(design::icons::EDIT)
+            // X32 of app round 2: `Add to Log` has its own glyph, a list with a plus, in its
+            // word form and its icon form, not the bare `+` of `Add to fight`.
+            let log = d.place_of("Add to Log").map(|rect| d.painted_in(rect));
+            words.contains("Edit")
+                && words.contains(design::icons::EDIT)
+                && log.is_some_and(|log| {
+                    log.contains(design::icons::ADD_TO_LOG) && !log.contains(design::icons::ADD)
+                })
         });
         d.observe(
             "iter-6-D-FD7",
             named,
-            format!("Lookup's Edit action has its pencil and word at {size:?}"),
+            format!(
+                "Lookup's Edit action has its pencil and word, and Add to Log its own glyph, at {size:?}"
+            ),
         );
     }
     d.expect("Edit Rook Ambry");
@@ -5406,14 +5502,32 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.focus_window(false);
     d.focus_window(true);
     d.wait_for_text("Save my draft to Moved/Ash Exposure.md");
-    d.observe_both("W8", "The old folder follows Show file on its line", |d| {
-        d.place_of("Show file")
-            .zip(d.place_of("moved from Rules/"))
-            .is_some_and(|(file, from)| {
-                from.left() >= file.right()
-                    && (file.center().y - from.center().y).abs() < crate::design::XS
-            })
-    });
+    // Round 27 FD7: the old folder follows the path, and Show file follows both, on one line.
+    d.observe_both(
+        "W8",
+        "The old folder follows the new path, then Show file, on one line",
+        |d| {
+            let from = d.place_of("moved from Rules/");
+            let file = d.place_of("Show file");
+            // On the file line only: Save's words name the path too.
+            let path = from.and_then(|from| {
+                let line = egui::Rect::from_x_y_ranges(
+                    0.0..=f32::INFINITY,
+                    from.top() - crate::design::S..=from.bottom() + crate::design::S,
+                );
+                d.painted_rect_in("Moved/Ash Exposure.md", line)
+            });
+            match (path, from, file) {
+                (Some(path), Some(from), Some(file)) => {
+                    from.left() >= path.right()
+                        && file.left() >= from.right()
+                        && (file.center().y - from.center().y).abs() < crate::design::XS
+                        && (path.center().y - from.center().y).abs() < crate::design::XS
+                }
+                _ => false,
+            }
+        },
+    );
     // Round 24 FF6: the warning offers no choice that no control names; its buttons do.
     d.observe(
         "iter-24-L-FF6",
@@ -5533,13 +5647,13 @@ pub fn package_about(d: &mut Driver<'_>) {
     d.open_combo_at(LIBRARY_PACKAGE_DROPDOWN);
     d.click(MODULE);
     d.click("About Ashen Marches");
-    d.wait_for_text("4 of 6 entries chosen · 1 still needed");
+    d.wait_for_text("5 of 6 entries chosen");
     d.observe(
         "W2 fixture",
-        d.visible_text("4 of 6 entries chosen · 1 still needed")
+        d.visible_text("5 of 6 entries chosen")
             && !d.visible_text("Engine support")
             && !d.visible_text("Library / Other entries"),
-        "Four chosen entries count as chosen; the one entry they need counts as still needed",
+        "Four chosen entries and the one entry they need count as chosen (round 27 FA6)",
     );
     d.state("package-about", Sizes::All);
     let title_before = reader_title_tops(d, MODULE);
@@ -5547,7 +5661,7 @@ pub fn package_about(d: &mut Driver<'_>) {
         [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, |d| d.place_of("Read")))
     };
     let read_before = read_tabs(d);
-    d.click("Choose every entry");
+    d.click("Choose all");
     d.wait_for_text("All entries chosen");
     let title_after = reader_title_tops(d, MODULE);
     let read_after = read_tabs(d);
@@ -5574,7 +5688,7 @@ pub fn package_about(d: &mut Driver<'_>) {
         );
     });
     d.click("Undo package choice");
-    d.wait_for_text("4 of 6 entries chosen · 1 still needed");
+    d.wait_for_text("5 of 6 entries chosen");
     d.expect_same("Undo package choice restores the original package selection and About reader.");
     d.assert_state_matches("package-use-undone", "package-about");
     d.click(EDIT_MARKDOWN);
@@ -5650,6 +5764,16 @@ pub fn package_about(d: &mut Driver<'_>) {
             d.visible_text("Module.md was written again.")
                 && !d.visible_text("Package.md was written again."),
             "Campaign names the existing manifest file",
+        );
+        // Round 27 FC5: the result says what the file holds now, and that Undo puts the DM's
+        // replaced text back.
+        d.observe(
+            "iter-27-C-FC5",
+            d.visible_text(
+                "Module.md was written again. It now has the package’s name and ID in the current \
+                 format. Undo puts your old text back.",
+            ),
+            "The replaced manifest's result says what changed and that Undo restores the old text",
         );
     });
     assert!(!folder.join("Package.md").exists());
@@ -6276,6 +6400,13 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
         let warning = d
             .painted_rect_in("The package manifest was deleted.", egui::Rect::EVERYTHING)
             .expect("The warning text is visible");
+        // Round 27 FH9: `L` between the kind line and the warning below it.
+        let kind = d.painted_word_rect("Package", reader);
+        d.observe(
+            "iter-27-L-FH9",
+            kind.is_some_and(|kind| warning.top() - kind.bottom() >= design::L - 1.0),
+            format!("The warning starts L below the kind line: kind {kind:?}, warning {warning:?}"),
+        );
         let aligned = if action.top() >= warning.bottom() {
             (action.left() - text_edge).abs() <= 1.0
         } else {
@@ -6562,7 +6693,41 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     d.click_row("Cinder Wolf 1");
     d.click("Stat block");
     d.expect("Bite");
+    // iter-27-R FD3: a file that cannot be read now is an error in the run's panel too.
+    let mut error_icon = false;
+    let mut unread = false;
+    d.each_painted_text(|text, _| {
+        let job = &text.galley.job;
+        if job.text == design::icons::ERROR
+            && job.sections.first().map(|s| s.format.color) == Some(design::colors().result.error)
+        {
+            error_icon = true;
+        }
+        unread |= job.text.contains("Cinder Wolf.md cannot be read now.");
+    });
+    d.observe(
+        "iter-27-R-FD3",
+        error_icon && unread,
+        format!("The run's notice is an error: icon {error_icon}, words {unread}"),
+    );
+    // iter-27-R FD5: the notice is in the panel's footer, so the stat block keeps its top when
+    // the notice grows by `Read the new version` after the repair.
+    let bite_y = |d: &mut Driver<'_>| {
+        [(960.0, 640.0), (1200.0, 800.0), (1920.0, 1080.0)].map(|size| {
+            d.at_size(size, |d| {
+                d.painted_rect_in("Bite", egui::Rect::EVERYTHING)
+                    .map(|rect| rect.top().round())
+            })
+        })
+    };
+    let unreadable_y = bite_y(d);
     d.state("invalid-package-in-paused-run", Sizes::All);
+    footer_presses(
+        d,
+        "iter-27-R-FD5-press-appears",
+        Some("Cinder Wolf.md cannot be read now."),
+        false,
+    );
     close_run(d);
     go_library(d);
     search_library(d, "Cinder Wolf");
@@ -6582,7 +6747,29 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     d.click("Stat block");
     d.expect("Bite");
     d.expect_same("The paused run keeps its saved creature snapshot across a package repair.");
+    let repaired_y = bite_y(d);
+    d.observe(
+        "iter-27-R-FD5",
+        unreadable_y.iter().all(Option::is_some)
+            && unreadable_y == repaired_y
+            && d.has("Read the new version"),
+        format!(
+            "Bite's y with the unreadable notice {unreadable_y:?}, after the repair {repaired_y:?}"
+        ),
+    );
     d.state("repaired-package-in-paused-run", Sizes::All);
+    footer_presses(
+        d,
+        "iter-27-R-FD5-press-grows",
+        Some("Cinder Wolf.md has changed."),
+        true,
+    );
+    // Another row's stat block, from a file that did not change: the footer is empty.
+    d.click_row("Ember Cultist");
+    if !d.has(SOURCE_SECTION) {
+        d.click("Stat block");
+    }
+    footer_presses(d, "iter-27-R-FD5-press-clears", None, false);
 
     // iter-22-E-SD1: a repair draft's notice and save-row state come from its current parse. The
     // saved file stays unreadable on its owner line until Save or a newer file.
@@ -8875,16 +9062,81 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     d.type_into("Package folder", &copied.to_string_lossy());
     d.click("Add folder");
     d.expect("This folder is a copy of Ashen Marches.");
-    d.expect("This folder is a copy.");
     assert!(d.is_disabled("Add folder"));
     assert_eq!(d.app_mut().campaigns.modules().len(), 1);
+    // Round 27 FA7, FD6: the warning is the reason. The kept reason line under Add folder stays
+    // empty; Add folder's accessible description and hover keep `This folder is a copy.`
+    let copy_reason_once = |d: &mut Driver<'_>, id: &str| {
+        let line_empty = !d.visible_text("This folder is a copy.");
+        let described = d
+            .descriptions()
+            .iter()
+            .any(|words| words == "This folder is a copy.");
+        let hover = d.tooltip_contains("Add folder", "This folder is a copy.");
+        d.observe(
+            id,
+            d.visible_text("This folder is a copy of Ashen Marches.") && line_empty && described && hover,
+            format!(
+                "The copy fact shows once, as the warning; Add folder keeps the reason (line empty {line_empty}, description {described}, hover {hover})"
+            ),
+        );
+    };
+    copy_reason_once(d, "iter-27-L-FA7");
     d.state("copied-package-names-duplicate-identity", Sizes::All);
     d.click("Register as a new package");
     d.clear_text_in("New package name");
     d.expect("Type a name first.");
-    assert!(d.is_disabled("Register package"));
+    assert!(d.is_disabled("Register"));
+    // Round 27 FD2: the inline creation form's one order. The choice first, `Register` at the
+    // end of the name field's line, then quiet Cancel at the start of the kept line below with
+    // the reason after it. Typing a name moves neither action.
+    let form_places = |d: &mut Driver<'_>, reason: Option<&str>| {
+        [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                let field = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| {
+                        node.name == "New package name"
+                            && node.role == egui::accesskit::Role::TextInput
+                    })?
+                    .rect;
+                let choice = d.place_of("Choose for this campaign")?;
+                let register = d.place_of("Register")?;
+                let cancel = d.place_of("Cancel")?;
+                let reason_ok = reason.is_none_or(|reason| {
+                    d.painted_rect_in(reason, egui::Rect::EVERYTHING)
+                        .is_some_and(|words| {
+                            words.left() >= cancel.right() + design::L - 1.0
+                                && (words.center().y - cancel.center().y).abs() <= 1.0
+                        })
+                });
+                (choice.bottom() < field.top()
+                    && (register.center().y - field.center().y).abs() <= 1.0
+                    && register.left() > field.right()
+                    && cancel.top() >= field.bottom() - 0.5
+                    && (cancel.left() - field.left()).abs() <= design::S
+                    && reason_ok)
+                    .then_some((register, cancel))
+            })
+        })
+    };
+    let empty = form_places(d, Some("Type a name first."));
+    d.observe(
+        "iter-27-L-FD2-order",
+        empty.iter().all(Option::is_some),
+        format!("Choice, then the name with Register on its line, then Cancel and the reason below: {empty:?}"),
+    );
     d.state("copied-package-needs-a-name", Sizes::All);
     d.replace_text_in("New package name", "Ashen Reaches");
+    let named = form_places(d, None);
+    d.observe(
+        "iter-27-L-FD2-still",
+        empty.iter().all(Option::is_some) && empty == named,
+        format!(
+            "Register and Cancel keep their place when the name is typed: {empty:?} → {named:?}"
+        ),
+    );
     d.expect("REGISTER A COPY");
     d.expect("This campaign keeps the original. The copy is registered but not chosen.");
     d.expect("Cancel");
@@ -8896,12 +9148,13 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
                 .place_of("This folder is a copy of Ashen Marches.")
                 .unwrap();
             let title = d.place_of("REGISTER A COPY").unwrap();
-            let register = d.place_of("Register Ashen Reaches").unwrap();
+            let register = d.place_of("Register").unwrap();
             let cancel = d.place_of("Cancel").unwrap();
+            // Round 27 FD2: Cancel starts the kept line below Register's line.
             warning.bottom() < title.top()
                 && title.bottom() < register.top()
-                && cancel.left() >= register.right() + design::L
-                && cancel.top() < register.bottom()
+                && cancel.top() >= register.bottom() - 0.5
+                && cancel.right() < register.left()
         },
     );
     // Round 24 FF3: the ready form's commit is primary, as `Create package` is, and it is the
@@ -8909,7 +9162,7 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     let primary = super::session_recording::accent_filled(d);
     d.observe(
         "iter-24-L-FF3",
-        primary == ["Register Ashen Reaches"],
+        primary == ["Register"],
         format!("The ready registration form's commit is the one primary: {primary:?}"),
     );
     d.state("copied-package-new-name", Sizes::All);
@@ -8922,12 +9175,13 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     assert!(!d.has("New package name"));
     assert_eq!(d.app_mut().campaigns.modules().len(), 1);
     assert_eq!(fs::read(copied.join("Module.md")).unwrap(), before);
+    copy_reason_once(d, "iter-27-L-FD6");
     d.expect_same(
         "Cancel restores the copied-folder warning and its registration action without writing.",
     );
     d.state("copied-package-registration-cancelled", Sizes::All);
     d.click("Register as a new package");
-    d.expect("Register Ashen Reaches");
+    d.expect("Register");
     d.expect("Uses every entry in this package, including future entries.");
     d.click("Choose for this campaign");
     d.expect("This campaign keeps the original. The copy is registered but not chosen.");
@@ -8940,7 +9194,7 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
         })
     };
     let columns_before = columns_top(d);
-    d.click("Register Ashen Reaches");
+    d.click("Register");
     d.wait_for_text("Undo package registration");
     let columns_after = columns_top(d);
     d.observe(
@@ -11065,4 +11319,74 @@ fn package_list_tops(d: &mut Driver<'_>) -> [Option<f32>; 3] {
                 .map(|node| node.rect.top())
         })
     })
+}
+
+/// The stat block's last section, next to the run panel's footer.
+const SOURCE_SECTION: &str = "Source and identifiers";
+
+/// iter-27-R FD5, review of PR 295 (revision 19 press proof): at 960, 1200 and 1920, with the
+/// run's panel on the stat block, each press reaches only its own control while the panel's
+/// footer holds `notice` (`None`: the footer is empty). The stat block's last action, `Source
+/// and identifiers`, is scrolled to the body's end next to the footer and opens only itself;
+/// the footer's `Read the new version`, when `action`, opens only Lookup and is reached by Tab;
+/// and typing in an outside field (`Amount`) changes only that field.
+fn footer_presses(d: &mut Driver<'_>, id: &str, notice: Option<&str>, action: bool) {
+    const SOURCE: &str = SOURCE_SECTION;
+    const OPENED: &str = "Starting snapshot, saved with this run";
+    for size in [(960.0, 640.0), (1200.0, 800.0), (1920.0, 1080.0)] {
+        let report = d.act_at_size(size, |d| {
+            let footer = |d: &Driver<'_>| notice.is_none_or(|words| d.has_containing(words));
+            let empty = |d: &Driver<'_>| {
+                notice.is_some() || !d.has_containing("uses the copy from the start of the fight")
+            };
+            // The body's end: the stat block scrolled down, so its last action is the body's
+            // lowest control, next to the footer.
+            if let Some(tab) = d.place_of("Stat block") {
+                d.scroll_at(egui::pos2(tab.center().x, tab.bottom() + 120.0), 12);
+            }
+            let source = d.place_of(SOURCE);
+            d.click(SOURCE);
+            let body = d.has_containing(OPENED) && !d.has("Close Lookup") && footer(d) && empty(d);
+            // A press that went elsewhere is recorded, then put back, so each part still runs.
+            if d.has("Close Lookup") {
+                d.press_ctrl(egui::Key::K);
+                if !d.has(SOURCE) {
+                    d.click("Stat block");
+                }
+            }
+            if d.has_containing(OPENED) {
+                d.click(SOURCE);
+            }
+            let closed = !d.has_containing(OPENED);
+            let (pressed, tab) = if action && d.has("Read the new version") {
+                d.click("Read the new version");
+                let pressed = d.has("Close Lookup") && !d.has_containing(OPENED);
+                d.press_ctrl(egui::Key::K);
+                if !d.has("Read the new version") {
+                    d.click("Stat block");
+                }
+                let tab = d.tab_to("Read the new version")
+                    && d.focused_name().as_deref() == Some("Read the new version");
+                (pressed, tab)
+            } else {
+                (!action && !d.has("Read the new version"), true)
+            };
+            d.click("Amount");
+            d.type_text("7");
+            let typed = d.focused_name().as_deref() == Some("Amount")
+                && !d.has("Close Lookup")
+                && !d.has_containing(OPENED)
+                && footer(d)
+                && empty(d);
+            d.clear_text_in("Amount");
+            (
+                body && closed && pressed && tab && typed && source.is_some(),
+                format!(
+                    "source {source:?}: body {body}, closed again {closed}, footer action {pressed}, \
+                     Tab {tab}, outside field {typed}"
+                ),
+            )
+        });
+        d.observe(id, report.0, format!("At {size:?}: {}", report.1));
+    }
 }

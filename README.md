@@ -180,6 +180,13 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
   task's page transitions, interactions or path differ from `artifacts/dm-audit/counts.json`. A
   change that makes a task cost more or less on purpose runs `devenv shell -- audit-freeze counts`
   and says why in the pull request; a new task goes in with `devenv shell -- audit-freeze add`.
+- `journey-j2`, `journey-j3`, `journey-j4` and `journey-j6` are G6 too: they play the workflow score's other
+  journeys the same way and compare them with `artifacts/dm-audit/journeys/<J>/counts.json`. Each fails
+  first when a saved record that its journey states is wrong (the note, a Log, `Timeline.md`,
+  `Trackers.md`, the run file). `devenv shell -- audit-freeze journeys` writes those rows again;
+  `audit-freeze add` adds new tasks to every journey and refuses when a frozen task changed
+  (`artifacts/dm-audit/README.md`). A refused freeze changes no frozen file; a failed copy of a
+  passed freeze fails the command and keeps the staged files.
 - `plain-evening` (G7) always runs and captures, but compares with
   `src/visual_tests/plain_evening/reference.json` only with the switch `SPLAT_FROZEN=1`, as in
   `SPLAT_FROZEN=1 devenv shell -- audit-gate <label>`: any change of the user interface fails it
@@ -197,7 +204,7 @@ Session Read and Write views keep the same left-aligned prose width of at most 7
 The Write frame is no wider than the reader measure plus its padding and stays at the left edge. Read and Write sit at its top right edge.
 Spare width stays outside it; stored line breaks stay unchanged. Read omits plan links already shown beside the note, including group links and scenes.
 A task line under the plan heading is a scene: a row with a done box, whose tick writes the note at once.
-When the plan's closed rows do not fit, or an opened row would push the next fight out of view with scenes above it, the scenes fold to `N scenes`, with a section caret, on the Tonight line, so the next fight stays in view. A scene's words are a plan row title's size at the fights' title column.
+When the plan's closed rows do not fit, or an opened row would push the next fight out of view with scenes above it, or, with no fight still to come, an opened row's details do not fit with the rows, the scenes fold to `N scenes`, with a section caret, on the Tonight line, so the next fight stays in view. A scene's words are a plan row title's size at the fights' title column.
 `Scene`, the last line of the Add strip's More menu, adds one. With no run open, a creature's or an NPC's
 reader, and a scene that links one, has `Start fight`, which saves and starts `Fight with <name>`. A campaign
 World entry's reader, and a done scene that links one, has `Add to Log`, which adds one line in the DM's words
@@ -325,7 +332,7 @@ with **Always use this one**. Until you choose, the note's World row says **Plac
 and the header's **notes need fixing** link counts it. An empty World note says **Nothing written yet.**
 Its file line keeps the one **Edit in Obsidian** link.
 
-With no campaigns, the switcher says **No campaign** and offers **Add campaign…**.
+With no campaigns, the switcher says **No campaign** and offers **Add campaign**.
 New entry and Copy entry use **Destination** and show a short path, with the full path
 on hover. Sharing required campaign entries lists the copies before **Copy both**.
 
@@ -496,7 +503,8 @@ opens the draft beside the current file at the first difference, with disk-confl
 before it can replace those words. A repaired Timeline file is read
 again, and the open fight's latest result is applied.
 
-Session storage remembers each known note path in `.splat-session-paths.json`. A copied session
+Session storage remembers each known note path in `.splat-session-paths.json`, and writes it only when a
+path changes, so an idle campaign's files keep their times. A copied session
 shows both file names and offers **Make <file> a separate entry**, with **Undo separate entry**. A moved draft can save to its new path
 with the same session ID. If a session or run folder is gone, choose its folder before making new
 files. Recording results stay listed as **Audio removed** when their WAV is gone.
@@ -672,7 +680,12 @@ in Obsidian counts at once and is never written over; an act on a definition or 
 nothing and says so. A file that cannot be read (`Trackers.md`, `Campaign.md` or a house rule note in play) blocks every act and
 shows `Trackers not read`. A save that fails records nothing and keeps nothing: the bottom of Trackers says
 `Trackers.md was not saved` with the reason, and you press again. Entries for a tracker that no note in play has are kept and not
-counted; the end of Trackers names them. To take back an entry of an older session, edit `Trackers.md` in Obsidian. In a fight the run shows no tracker part: use Ctrl+T, press, and
+counted; the end of Trackers names them, and so it names a value that an edit forced below its `min`. Each
+tracker's history is in its house rule note's reader (open the note in Lookup): fold open `<NAME> HISTORY` to see
+each entry and the value it left. To take back an entry of an older session, use **Remove** in that row's menu: it
+takes the entry, the others of its press and the entries of any notice it raised, and **Undo remove** puts them
+back where they were. Remove refuses when a later notice's crossing depends on the entry, and names that notice's
+entry to remove first. In a fight the run shows no tracker part: use Ctrl+T, press, and
 go back.
 
 ### Loot
@@ -1021,7 +1034,7 @@ An encounter with an unfinished run appears only in **In progress** and returns 
 **Keep in Ready during a run** also keeps its Ready row, with **Start fight** blocked and a reason.
 Empty list sections show one muted line and hide the zero count.
 The rail keeps a paused run in view and resumes it in one click. Its detail wraps below the Run label. **History** holds dated, ended runs under their session.
-History rows show **Open** or **Close**, with **Start fight** and **Edit** in their menu. An ended run opens read-only in place, with its final state and log; the list scrolls once so that its row and whole final state are in view. It leaves the live run open. Run changes never
+History rows show **Open** or **Close**, with **Start fight** and **Edit** in their menu. An ended run opens read-only in place, with its final state and log; the list scrolls so that its row and whole final state are in view, and keeps them there when the window changes size, until the DM scrolls it. It leaves the live run open. Run changes never
 write to templates or character copies.
 
 A fight that ended by mistake can go on. In the ended view, **Undo: end encounter** takes the ending away while

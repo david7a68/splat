@@ -15,6 +15,17 @@ pub struct Settings {
     focus_cookie: bool,
     /// The request in progress is the DM's Connect.
     connecting: bool,
+    /// `error` is a failed Connect's cause (round 27 FA1): it sits in the reason slot beside
+    /// Connect. Every other error (a failed removal, restore or worker) keeps its message in the
+    /// Settings footer, with its recovery. Set with `error`, from the request that failed.
+    connect_failed: bool,
+    /// A Connect failed. The next frame of the form scrolls its error, cookie and Connect into
+    /// view together; a new request ends it.
+    reveal_retry: bool,
+    /// Drawn passes left in which Connect is brought into view after a failed Connect.
+    reveal_passes: u8,
+    /// Where Connect is, for the page to bring into view (`take_reveal`).
+    reveal_rect: Option<egui::Rect>,
     pub campaign_form_open: bool,
     sign_in_again: bool,
     session: Option<Session>,
@@ -68,6 +79,10 @@ impl Default for Settings {
             cookie_input: String::new(),
             focus_cookie: false,
             connecting: false,
+            connect_failed: false,
+            reveal_retry: false,
+            reveal_passes: 0,
+            reveal_rect: None,
             campaign_form_open: false,
             sign_in_again: false,
             session: None,
@@ -134,6 +149,7 @@ impl Settings {
             Account::NotConnected => self.session = None,
             Account::Failed => {
                 self.session = None;
+                self.connect_failed = true;
                 self.error =
                     Some("Could not reach D&D Beyond. Check your connection and try again.".into());
             }
@@ -195,6 +211,7 @@ impl Settings {
     fn send(&mut self, action: Action, ctx: &egui::Context) {
         self.restoring = matches!(&action, Action::Restore);
         self.connecting = matches!(&action, Action::Connect { .. });
+        self.reveal_retry = false;
         self.forgetting = matches!(&action, Action::Forget);
         self.refreshing = matches!(&action, Action::Refresh(_));
         if !matches!(&action, Action::Refresh(_)) {
@@ -203,6 +220,7 @@ impl Settings {
         }
         self.generation += 1;
         self.error = None;
+        self.connect_failed = false;
         self.busy = true;
         let worker = self.worker.get_or_insert_with(|| Worker::new(ctx.clone()));
         if let Err(error) = worker.send(self.generation, action) {
@@ -256,6 +274,8 @@ impl Settings {
                             Err(error) => {
                                 self.session = None;
                                 self.error = Some(error);
+                                self.connect_failed = self.connecting;
+                                self.reveal_retry = self.connecting;
                                 // A failed removal says to select Disconnect again.
                                 self.saved_session = self.restoring || self.forgetting;
                             }
@@ -264,6 +284,7 @@ impl Settings {
                     Err(mpsc::TryRecvError::Empty) => break,
                     Err(mpsc::TryRecvError::Disconnected) => {
                         self.busy = false;
+                        self.connect_failed = false;
                         self.error = Some("The session worker stopped. Restart Splat.".into());
                         break;
                     }
@@ -280,6 +301,7 @@ impl Settings {
                 self.refresh_failures = 0;
                 self.retry_at = None;
                 self.refresh_error = None;
+                self.connect_failed = false;
                 self.error = Some(SESSION_ENDED.into());
             } else if session.needs_refresh() && self.retry_at.is_none_or(|at| Instant::now() >= at)
             {
@@ -371,18 +393,25 @@ impl Settings {
         self.show_account(ui, true);
     }
 
-    /// Round 26 FG2: the account's error (a failed Connect), in the Settings footer. It lives
-    /// until the next Connect, Disconnect or a working sign-in, as before.
+    /// The account's errors that are not a failed Connect (a failed removal, restore or worker),
+    /// in the Settings footer, so their recovery stays in view whatever the cookie field holds.
+    /// A failed Connect's cause sits beside Connect instead (round 27 FA1); an ended session is
+    /// the account's state, said in the account column. Each lives until the next request.
     pub fn footer_messages<'a>(&'a self, footer: &mut design::Footer<'a>) {
         if let Some(error) = self
             .error
             .as_deref()
-            .filter(|error| *error != SESSION_ENDED)
+            .filter(|error| !self.connect_failed && *error != SESSION_ENDED)
         {
             footer.reason(error, move |ui| {
                 design::message(ui, Tone::Error, error);
             });
         }
+    }
+
+    /// Where Connect is, while a failed Connect asks the page to bring it into view.
+    pub fn take_reveal(&mut self) -> Option<egui::Rect> {
+        self.reveal_rect.take()
     }
 
     fn show_account(&mut self, ui: &mut egui::Ui, heading: bool) {
@@ -419,9 +448,10 @@ impl Settings {
             }
             _ => {}
         }
-        // Round 26 FG2: a failed Connect's cause sits in the Settings footer
-        // (`footer_messages`), so the cookie field and Connect stay under the pointer. An ended
-        // session is the account's state, so its help stays here.
+        // Round 27 FA1: a failed Connect's cause sits in the reason slot left of Connect, where
+        // the DM pressed (it was in the page's footer, far from Connect); other errors stay in
+        // the footer (`footer_messages`). An ended session is the account's state, so its help
+        // stays here.
         if let Some(error) = self
             .error
             .as_deref()
@@ -502,9 +532,19 @@ impl Settings {
                     .trim()
                     .is_empty()
                     .then_some("Paste your session cookie first.");
-                let primary =
-                    reason.is_none() && account != Account::Connected && !self.campaign_form_open;
-                let action = if primary {
+                // Round 27 FA1: the reason slot left of Connect holds a failed Connect's cause
+                // while Connect is open. It lives until the next Connect, Disconnect or a working
+                // sign-in, as before; while the cookie field is empty, the slot names that step.
+                // Only a Connect's failure goes here (`connect_failed`); the others keep their
+                // footer message (`footer_messages`).
+                let failure = self
+                    .error
+                    .as_deref()
+                    .filter(|_| self.connect_failed && reason.is_none());
+                let action = if reason.is_none()
+                    && account != Account::Connected
+                    && !self.campaign_form_open
+                {
                     design::Action::primary("Connect")
                 } else {
                     design::Action::secondary("Connect")
@@ -512,14 +552,19 @@ impl Settings {
                 let clicked = ui
                     .with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let connect = action.blocked(reason).show(ui);
-                        // After a failed Connect, its cause comes in the footer, and the
-                        // footer's rule brings the retry back into view whole above it, also
-                        // while an open campaign form owns the accent fill.
-                        if !primary && reason.is_none() && account != Account::Connected {
-                            design::keep_above_footer(ui, &connect);
+                        // After a failed Connect, show the kept cookie, the retry and the cause
+                        // beside it. The cause can wrap and make the row taller, so the reveal
+                        // runs on the next few drawn passes (not on one egui draws again); it
+                        // scrolls only when Connect is out of view.
+                        if std::mem::take(&mut self.reveal_retry) {
+                            self.reveal_passes = 3;
+                        }
+                        if self.reveal_passes > 0 {
+                            self.reveal_passes -= 1;
+                            self.reveal_rect = Some(connect.rect);
                         }
                         ui.spacing_mut().item_spacing.x = design::S;
-                        design::blocked_reason(ui, reason);
+                        design::blocked_reason(ui, reason.or(failure));
                         connect.clicked()
                     })
                     .inner;
@@ -607,6 +652,36 @@ mod tests {
             .unwrap();
         settings.poll(&ctx);
         assert!(settings.saved_session, "the message says to select it");
+        // Round 23 SF1: only a failed Connect scrolls its retry into view.
+        assert!(!settings.reveal_retry, "a failed removal is not a retry");
+        // Round 27 review: drawn as the Settings tab draws it, with the cookie field empty (a
+        // Disconnect clears it), the removal's error stays in view with Disconnect to try
+        // again. Only a failed Connect's cause moves to the slot beside Connect.
+        assert!(settings.cookie_input.is_empty());
+        use egui_kittest::kittest::Queryable;
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(1200.0, 800.0))
+            .build_ui_state(
+                |ui, settings: &mut Settings| {
+                    let mut footer = design::Footer::new("settings_footer", 600.0);
+                    settings.footer_messages(&mut footer);
+                    let _ = footer.show(ui);
+                    settings.show(ui);
+                },
+                std::mem::take(&mut settings),
+            );
+        design::theme::install(&harness.ctx);
+        harness.run_steps(3);
+        assert!(
+            harness
+                .query_all_by_label("The saved cookie could not be removed.")
+                .next()
+                .is_some(),
+            "the removal's error is drawn"
+        );
+        assert!(harness.query_all_by_label("Disconnect").next().is_some());
+        settings = std::mem::take(harness.state_mut());
+        drop(harness);
         settings.send(
             Action::Connect {
                 cookie: Zeroizing::new("test-cookie".into()),
@@ -622,7 +697,10 @@ mod tests {
             })
             .unwrap();
         settings.poll(&ctx);
+        assert!(settings.reveal_retry, "a failed Connect shows its retry");
+        // A new request ends it, before its reply.
         settings.disconnect(&ctx);
+        assert!(!settings.reveal_retry);
         let (id, _) = commands.recv().unwrap();
         results
             .send(Reply {
@@ -631,6 +709,7 @@ mod tests {
             })
             .unwrap();
         settings.poll(&ctx);
+        assert!(!settings.reveal_retry, "a failed removal is not a retry");
         settings.disconnect(&ctx);
         let (id, _) = commands.recv().unwrap();
         results

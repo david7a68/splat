@@ -75,12 +75,22 @@ pub(super) fn roll(state: &mut State, rolls: Vec<LootRoll>) -> Result<Vec<String
 /// The Undo words for these rolls. Short, because the ended view's header holds them.
 pub(super) fn describe(rolls: &[LootRoll]) -> String {
     match rolls {
-        [one] if one.times == 1 => format!("loot roll on {}", one.roll.key),
-        [one] => format!("{} loot rolls on {}", one.times, one.roll.key),
-        all => format!(
-            "{} loot rolls",
-            all.iter().map(|roll| roll.times).sum::<u32>()
-        ),
+        [one] => step_words(one.times, Some(&one.roll.key)),
+        all => step_words(all.iter().map(|roll| roll.times).sum(), None),
+    }
+}
+
+/// A loot step's words: `loot roll on gems`, `2 loot rolls on gems`, or, for several lines,
+/// `3 loot rolls`.
+fn step_words(times: u32, key: Option<&str>) -> String {
+    let rolls = if times == 1 {
+        "loot roll".to_owned()
+    } else {
+        format!("{times} loot rolls")
+    };
+    match key {
+        Some(key) => format!("{rolls} on {key}"),
+        None => rolls,
     }
 }
 
@@ -260,7 +270,14 @@ impl Rewards {
         let downed = scale.weigh(&[], self.downed.iter().map(|(_, xp)| *xp));
         let grouped = crate::encounter_run::grouped_number;
         let known = self.downed.len() as u64 - downed.unknown;
-        let mut line = format!("XP {} for {known} at 0 HP", grouped(downed.xp));
+        // Round 27 FM4: with nothing counted, the line says so in words, not `XP 0 for 0 at 0 HP`.
+        let mut line = if known == 0 && downed.unknown == 0 {
+            "XP 0 · no creature at 0 HP".to_owned()
+        } else if known == 0 {
+            "XP 0".to_owned()
+        } else {
+            format!("XP {} for {known} at 0 HP", grouped(downed.xp))
+        };
         if downed.unknown > 0 {
             let names: Vec<&str> = self
                 .downed

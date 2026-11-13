@@ -114,6 +114,8 @@ enum FooterAct {
     UndoAdd(String),
     UndoRemove,
     Scene(SceneAct),
+    Rewards(RewardsAct),
+    UndoPlanLine,
 }
 /// A list longer than this gets a search, and it scrolls instead of leaving the window.
 const FIGHT_SEARCH_FROM: usize = 8;
@@ -338,6 +340,15 @@ fn plan_group_summary(ui: &mut egui::Ui, summary: &str, max_rows: usize) {
 /// covers only the word. The target is the link's own minimum size: at least `XL` square. A
 /// word narrower than that gets the extra width evenly on both sides, inside the gaps, so the
 /// word stays at the text edge and nothing beside it moves (the `line_start` pattern).
+/// Round 27 FH4: the gap on each side of a `·` between the opened row's links: one blank of
+/// the links' type, as `Party won · Ended · Round 1` has in one text.
+fn link_gap(ui: &egui::Ui) -> f32 {
+    ui.painter()
+        .layout_no_wrap(" ".to_owned(), Type::Body.font(ui), colors().text)
+        .size()
+        .x
+}
+
 fn word_link(ui: &mut egui::Ui, label: &str) -> egui::Response {
     let c = colors();
     let galley = ui
@@ -409,7 +420,7 @@ fn unlink_planned_fight(body: &str, name: &str, occurrence: usize) -> String {
                         if matches!(
                             prefix,
                             "" | "-" | "*" | "- [ ]" | "- [x]" | "- [X]" | "* [ ]" | "* [x]"
-                        ) && line[end..].trim().is_empty()
+                        ) && checks::marked(&line[end..]).words.trim().is_empty()
                         {
                             return None;
                         }
@@ -462,12 +473,15 @@ fn plan_row_with(
 ) {
     ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = design::S;
+        // Round 27 FL4: the lead is centred in its `XL` slot, which is where a title's first
+        // line is centred: a fight's link in its `XL` target, a scene's line in its `XL` band
+        // (`scene_words`). A caret at the slot's top sat 2 px above its title's centre.
         let (_, slot) = ui.allocate_space(egui::vec2(lead_width(), design::XL));
         lead(
             &mut ui.new_child(
                 egui::UiBuilder::new()
                     .max_rect(slot)
-                    .layout(egui::Layout::top_down(egui::Align::Min)),
+                    .layout(egui::Layout::left_to_right(egui::Align::Center)),
             ),
         );
         ui.vertical(|ui| {
@@ -669,7 +683,8 @@ fn read_encounter(
         crate::difficulty::append(&mut job, ui, Type::Body, &format!(" · {words}"), c.muted);
         job
     };
-    // The reason whole, else without its names, which hover and the accessible name keep.
+    // The reason whole, else with the name shortened from its end, else without the name (X1);
+    // hover and the accessible name keep it whole.
     let mut whole = None;
     let job = match (&difficulty.rating, &difficulty.missing) {
         (Some(rating), _) => {
@@ -686,16 +701,15 @@ fn read_encounter(
             job
         }
         (None, Some(missing)) => {
-            let Some(words) = missing.words() else {
-                return link;
-            };
-            let job = muted(&words);
-            if crate::difficulty::width(ui, &job) <= room {
-                job
-            } else {
+            // With no name known, the reason in its short form, as the editor's heading has it
+            // (pull request 290).
+            let fitted = missing
+                .fitted(|words| crate::difficulty::width(ui, &muted(words)) <= room)
+                .unwrap_or_else(|| missing.short().to_owned());
+            if let Some(words) = missing.words().filter(|words| *words != fitted) {
                 whole = Some(words);
-                muted(missing.short())
             }
+            muted(&fitted)
         }
         (None, None) => return link,
     };
@@ -722,6 +736,37 @@ fn read_encounter(
         }
     }
     link
+}
+
+/// A planned fight's menu line that opens its encounter in the editor, with the way back to this
+/// session (Sol's W1-D1 after app round 2). An unsaved encounter, group or creature in the editor
+/// blocks it, so the editor never loses typed words.
+fn edit_encounter_line(ui: &mut egui::Ui, plan: &Plan<'_>) -> bool {
+    Action::quiet("Edit encounter")
+        .blocked(plan.group_blocked)
+        .show(ui)
+        .clicked()
+}
+
+/// One scroll, on the frame the DM opened a played fight's row (review round 1): the row with its
+/// fields and the next fight's primary action both in view when they fit together, with as little
+/// scroll as that needs; else that action in view at the pane's bottom, under as much of the row
+/// as fits. With no fight to come, the row at the top, as for any other row.
+fn reveal_opened_played(
+    ui: &egui::Ui,
+    opened: Option<egui::Rect>,
+    next_action: Option<egui::Rect>,
+) {
+    let Some(opened) = opened else {
+        return;
+    };
+    match next_action.filter(|action| action.top() > opened.top()) {
+        Some(action) if opened.union(action).height() <= ui.clip_rect().height() => {
+            ui.scroll_to_rect(opened.union(action), None);
+        }
+        Some(action) => ui.scroll_to_rect(action, Some(egui::Align::BOTTOM)),
+        None => ui.scroll_to_rect(opened, Some(egui::Align::TOP)),
+    }
 }
 
 /// The rule below a row. Returns its height, which the scenes' fold counts with the row's.
@@ -839,6 +884,14 @@ fn event_fields(ui: &mut egui::Ui, event: &mut timeline::Event) -> bool {
     changed
 }
 
+/// A played fight's `Where`, in place under its opened row's links (W2-D3): the Timeline detail's
+/// own field on the same event, so the typed place has one owner, the Timeline, and saves as
+/// any edit of an event does. Returns whether it changed.
+fn place_field(ui: &mut egui::Ui, event: &mut timeline::Event) -> bool {
+    ui.add_space(design::XS);
+    design::text_field(ui, "Where", &mut event.place, None, None).changed()
+}
+
 /// The removal action a deletion of this run follows: the book's live removal, when its event
 /// is that same run's. A deletion in another fight or session replaces no removal.
 fn removal_replaced_by(book: &Book, deleted_run: Option<Uuid>) -> Option<u64> {
@@ -856,6 +909,11 @@ struct Scene {
     task: TaskLine,
     /// The one entry that its words link, when they link exactly one.
     entry: Option<SceneEntry>,
+    /// Its words link a name and no entry has it (X14): it says `Not found`.
+    not_found: bool,
+    /// Its entry had a second line when it was last found, so `Not found` takes that line; else
+    /// it ends the words' own line, so the row keeps its height (review round 1).
+    second_line: bool,
     /// Whether `Add to Log` fits on the row, for the last few rooms it was measured in. The
     /// words and the done mark are this model's, so only the room can change it
     /// (`Scene::log_keeps_rows`).
@@ -978,6 +1036,17 @@ fn scene_entry(index: &ContentIndex, words: &str) -> Option<SceneEntry> {
     })
 }
 
+/// Whether a scene's words link a name and every one of them is missing from the campaign: its
+/// entry is gone. A name that two entries share is not gone. With the content not yet read,
+/// this is not known, and the caller says nothing.
+fn links_no_entry(index: &ContentIndex, words: &str) -> bool {
+    let names = each_linked_name(words);
+    !names.is_empty()
+        && names
+            .iter()
+            .all(|name| matches!(index.resolve_link(name, None), crate::world::Go::Missing(_)))
+}
+
 /// A scene's words that are outside its links, as `Add to Log` starts its field with them:
 /// `[[Captain Varra]]: the ropes` gives `the ropes`.
 fn words_outside_links(words: &str) -> String {
@@ -1033,9 +1102,13 @@ impl PlanModel {
                 match task.filter(|_| !links_fight_or_group(&names, fights, groups)) {
                     Some(task) => {
                         let entry = index.and_then(|index| scene_entry(index, &task.words));
+                        let not_found =
+                            index.is_some_and(|index| links_no_entry(index, &task.words));
                         ModelLine::Scene(Scene {
                             task,
                             entry,
+                            not_found,
+                            second_line: false,
                             fit: std::sync::Mutex::new(Vec::new()),
                         })
                     }
@@ -1054,6 +1127,27 @@ impl PlanModel {
             })
             .collect();
         Self { lines }
+    }
+
+    /// What each linked name's entry looked like when it was found: whether it had a second
+    /// line. A scene whose entry is gone keeps the row it had: `Not found` on that second line,
+    /// else at the end of its words' line. `seen` is the plan's, kept from one build to the next.
+    fn place_not_found(&mut self, seen: &mut std::collections::HashMap<String, bool>) {
+        for line in &mut self.lines {
+            let ModelLine::Scene(scene) = line else {
+                continue;
+            };
+            let names = each_linked_name(&scene.task.words);
+            if let Some(entry) = &scene.entry {
+                for name in &names {
+                    seen.insert(name.to_lowercase(), entry.detail.is_some());
+                }
+            }
+            scene.second_line = scene.not_found
+                && names
+                    .iter()
+                    .any(|name| seen.get(&name.to_lowercase()) == Some(&true));
+        }
     }
 
     /// Each scene's whole line, as the note holds it.
@@ -1078,6 +1172,9 @@ pub(super) struct PlanModelCache {
     /// How often a frame asked for the model, and how often it was built.
     pub(super) reached: usize,
     pub(super) builds: usize,
+    /// Per linked name, whether its entry had a second line when last found
+    /// (`PlanModel::place_not_found`).
+    seen: std::collections::HashMap<String, bool>,
 }
 
 /// Where a scene act's words show: under the scene's row, under the Scene field, or in the
@@ -1293,16 +1390,17 @@ fn scene_row(
         .and_then(|entry| entry.log.as_ref())
         .filter(|_| task.done);
     let log_name = format!("Add to Log: {plain}");
-    let log_action = || {
+    // On the row it has no icon, as the row's other actions (X29); its menu line keeps it.
+    let row_log = || {
         Action::quiet("Add to Log")
-            .icon(icons::ADD)
             .density(Density::Read)
             .name(&log_name)
     };
+    let log_action = || row_log().icon(icons::ADD);
     // On the row while it fits, else a line of the scene's own menu.
     let menu = Density::Read.control();
     let with_log = log
-        .map(|_| menu + log_action().natural_width(ui) + design::S)
+        .map(|_| menu + row_log().natural_width(ui) + design::S)
         .filter(|&with_log| scene.log_keeps_rows(ui, &plain, menu, with_log));
     let on_row = with_log.is_some();
     let action_width = with_log.unwrap_or(menu);
@@ -1323,7 +1421,13 @@ fn scene_row(
                 design::named(ui, &response, &format!("{state}: {plain}"));
                 tick = response.clicked();
             },
-            |ui| crate::markdown_view::show_row_words(ui, &task.words, task.done),
+            |ui| {
+                if scene.not_found && !scene.second_line {
+                    gone_scene_words(ui, task, &plain);
+                } else {
+                    scene_words(ui, task, &plain);
+                }
+            },
             |ui| {
                 if let Some(detail) = scene
                     .entry
@@ -1331,6 +1435,9 @@ fn scene_row(
                     .and_then(|entry| entry.detail.as_deref())
                 {
                     wrapped_words(ui, Type::Small, detail, c.muted);
+                } else if scene.not_found && scene.second_line {
+                    // As Lookup and World say it of a link whose entry is gone (X14).
+                    wrapped_words(ui, Type::Small, "Not found", c.result.warning);
                 }
             },
             |ui| {
@@ -1369,7 +1476,7 @@ fn scene_row(
                     }
                 });
                 if on_row {
-                    add_log = log_action().show(ui).clicked();
+                    add_log = row_log().show(ui).clicked();
                 }
             },
         );
@@ -1389,6 +1496,84 @@ fn scene_row(
         ));
     }
     ui.cursor().top() - top
+}
+
+/// A scene's words at a plan row title's size. A one-line title is centred in its link's `XL`
+/// target (`design::wrapped_link`), and a row's words start at the top of their row, so a
+/// one-line scene starts that much lower: its line is the fights' title line, and its second
+/// line keeps a fight row's pitch (app round 2, X12).
+fn scene_words(ui: &mut egui::Ui, task: &TaskLine, plain: &str) {
+    let font = Type::Body.font(ui);
+    let width = ui.available_width();
+    let (rows, row_height) = ui.fonts_mut(|fonts| {
+        let rows = fonts
+            .layout(plain.to_owned(), font.clone(), colors().text, width)
+            .rows
+            .len();
+        (rows, fonts.row_height(&font))
+    });
+    if rows == 1 {
+        ui.add_space(((design::XL - row_height) / 2.0).max(0.0));
+    }
+    crate::markdown_view::show_row_words(ui, &task.words, task.done);
+}
+
+/// The words of a scene whose entry is gone and that had no second line: the words, then the
+/// warning mark and `Not found` at the end of their line, in the lines the words take alone, so
+/// the row keeps its height. Where the mark has no room, the words give up whole words from
+/// their end first; hover keeps them whole (review round 1).
+fn gone_scene_words(ui: &mut egui::Ui, task: &TaskLine, plain: &str) {
+    let c = colors();
+    let width = ui.available_width();
+    let words_color = if task.done { c.muted } else { c.text };
+    let (body, small) = (Type::Body.font(ui), Type::Small.font(ui));
+    let job = |words: &str| {
+        let mut job = egui::text::LayoutJob::default();
+        let format = |font_id: &egui::FontId, color| egui::TextFormat {
+            font_id: font_id.clone(),
+            color,
+            ..Default::default()
+        };
+        job.append(words, 0.0, format(&body, words_color));
+        job.append(
+            &format!("  {} Not found", icons::WARN),
+            0.0,
+            format(&small, c.result.warning),
+        );
+        job.wrap.max_width = width;
+        job
+    };
+    let rows = |job: egui::text::LayoutJob| ui.fonts_mut(|fonts| fonts.layout_job(job).rows.len());
+    let alone = ui.fonts_mut(|fonts| {
+        fonts
+            .layout(plain.to_owned(), Type::Body.font(ui), words_color, width)
+            .rows
+            .len()
+    });
+    let all: Vec<&str> = plain.split_whitespace().collect();
+    let whole = all.join(" ");
+    let fitted = (1..=all.len())
+        .rev()
+        .map(|kept| {
+            let words = all[..kept].join(" ");
+            if kept == all.len() {
+                words
+            } else {
+                format!("{words}…")
+            }
+        })
+        .find(|words| rows(job(words)) <= alone)
+        .unwrap_or_else(|| format!("{}…", all.first().copied().unwrap_or_default()));
+    let shown = job(&fitted);
+    if alone == 1 {
+        let row_height = ui.fonts_mut(|fonts| fonts.row_height(&body));
+        ui.add_space(((design::XL - row_height) / 2.0).max(0.0));
+    }
+    let response = ui.add(egui::Label::new(shown).wrap());
+    design::named(ui, &response, &format!("{plain} · Not found"));
+    if fitted != whole {
+        response.on_hover_text(plain);
+    }
 }
 
 /// A scene's box, the theme's checkbox with a 24 px target, in the leading slot that a fight's
@@ -1509,6 +1694,76 @@ fn plan_first(
     words
 }
 
+/// The plan line of `Plan “<name>”`: the link, and the mark of the journey and the check it was
+/// clicked on, so that starting the fight plays it at that check (F9, W5-D1).
+fn road_plan_line(book: &Book, journey: &str, chosen: &checks::Planned) -> String {
+    let mark = book
+        .events
+        .iter()
+        .find(|event| event.id == journey)
+        .and_then(|event| event.checks.iter().find(|check| chosen.on(check)))
+        .and_then(|check| checks::RoadMark::new(journey, check));
+    match mark {
+        Some(mark) => format!("- [[{}]] {}", chosen.name, mark.comment()),
+        None => format!("- [[{}]]", chosen.name),
+    }
+}
+
+/// Each fight still to come in the plan, in order, by its name, with the day it is played on
+/// when its line came from a journey's check.
+fn road_days(
+    body: &str,
+    events: &[timeline::Event],
+    session: Option<Uuid>,
+    fights: &[PlanFight],
+) -> RoadDays {
+    let starts = timeline::clock(events);
+    plan_links(body, events, session, fights)
+        .into_iter()
+        .filter(|(_, _, waiting)| *waiting)
+        .map(|(at, fight, _)| {
+            let line = body[at..].lines().next().unwrap_or_default();
+            let day = checks::marked(line)
+                .mark
+                .and_then(|mark| mark.day_words(events, &starts, session));
+            (fight.name.to_lowercase(), day)
+        })
+        .collect()
+}
+
+/// A planned fight's summary with the day it is played on: `… · Day 2 of Road to the ford`.
+/// As the row's rating word does, the words show only while the line keeps its rows (rule P):
+/// first the journey's name goes, then the day.
+fn on_road(ui: &egui::Ui, summary: &str, day: Option<&str>) -> String {
+    let Some(day) = day else {
+        return summary.to_owned();
+    };
+    let font = Type::Small.font(ui);
+    let width = ui.available_width();
+    let rows = |text: &str| {
+        let laid = without_loose_separators(ui, fight_summary_text(text), &font, width);
+        ui.fonts_mut(|fonts| {
+            fonts
+                .layout(laid, font.clone(), colors().muted, width)
+                .rows
+                .len()
+        })
+    };
+    let with = |words: &str| {
+        if summary.trim().is_empty() {
+            words.to_owned()
+        } else {
+            format!("{summary} · {words}")
+        }
+    };
+    let alone = rows(summary).max(1);
+    let short = day.split_once(" of ").map_or(day, |(head, _)| head);
+    [with(day), with(short)]
+        .into_iter()
+        .find(|words| rows(words) <= alone)
+        .unwrap_or_else(|| summary.to_owned())
+}
+
 /// The help line of **How long** when the clock cannot place the journey.
 const LENGTH_HELP: &str = timeline::LENGTH_HELP;
 
@@ -1517,7 +1772,6 @@ const LENGTH_HELP: &str = timeline::LENGTH_HELP;
 enum TravelUndo {
     None,
     Checks,
-    PlanLine,
 }
 
 /// A journey's encounter checks in the plan: what the DM typed, each journey's last result with
@@ -1535,6 +1789,33 @@ pub(super) struct Travel {
     /// Undo. It lasts while the note's words are what the act left, as every note act's Undo
     /// does; a page change keeps it.
     planned: Option<(String, checks::Planned, NoteUndo)>,
+    /// The fights still to come with their days on the road, while the note, the Timeline and
+    /// the campaign's fights are as they were.
+    days: Option<(RoadKey, Arc<RoadDays>)>,
+}
+
+/// What the plan's days on the road are read from: the session, the note's revision, the
+/// Timeline's count of changes, and the count of the campaign's fights.
+type RoadKey = (Option<Uuid>, u64, u64, usize);
+
+/// Each fight still to come, by its name, with its day on the road when it has one.
+type RoadDays = Vec<(String, Option<String>)>;
+
+/// The day of the planned fight at this place: that fight's own turn among the rows to come.
+fn planned_day(
+    days: &[(String, Option<String>)],
+    planned: &[&PlanFight],
+    position: usize,
+) -> Option<String> {
+    let name = planned[position].name.to_lowercase();
+    let turn = planned[..position]
+        .iter()
+        .filter(|fight| fight.name.eq_ignore_ascii_case(&name))
+        .count();
+    days.iter()
+        .filter(|(known, _)| *known == name)
+        .nth(turn)
+        .and_then(|(_, day)| day.clone())
 }
 
 /// F7's action and its words.
@@ -1542,7 +1823,7 @@ const ADD_REWARDS: &str = "Add rewards";
 const REWARDS_BLOCKED: &str = "Splat cannot read this fight’s run, so its rewards are not known.";
 
 /// Where a played row has `Add rewards`.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum RewardsAt {
     Row,
     Link,
@@ -1550,6 +1831,7 @@ enum RewardsAt {
 }
 
 /// What the DM pressed for a played fight: `Add rewards`, or `Undo rewards`, by its event.
+#[derive(Clone, Debug, PartialEq)]
 enum RewardsAct {
     Add(String, Uuid),
     Undo(String),
@@ -1563,6 +1845,27 @@ struct RewardsDone {
     with_xp: bool,
     not_rolled: usize,
     unknown: u64,
+    /// When the act made it (`next_result_order`): the plan's footer lists results newest first.
+    order: u64,
+    /// The fight's name as the act read it, so the footer searches no DM data each frame
+    /// (review of PR 296, item 1).
+    fight: String,
+}
+
+/// A played fight's name for its rewards result and fault, read once at the act.
+fn fight_name(book: &Book, event: &str) -> String {
+    #[cfg(test)]
+    FIGHT_NAME_READS.with(|reads| reads.set(reads.get() + 1));
+    book.events
+        .iter()
+        .find(|one| one.id == event)
+        .map_or_else(|| "this fight".to_owned(), |one| one.title.clone())
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How many times a rewards act read a fight's name from the Timeline.
+    static FIGHT_NAME_READS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// What the selected note says now, read once for each revision of its draft.
@@ -1575,13 +1878,14 @@ struct RewardsSeen {
 }
 
 /// The rewards record (F7) in the plan. Each result is kept by its session note's ID and its
-/// fight, and shows under that fight's row while its block stands as the act left it. Another
+/// fight, and shows in the plan's message footer, naming the fight, while its block stands as
+/// the act left it (round 27 FN1, FK3, SK2): the fight's row keeps only `✓ In notes`. Another
 /// act, another session or another page leaves it.
 #[derive(Default)]
 pub(super) struct Rewards {
     done: BTreeMap<(Uuid, String), RewardsDone>,
-    /// What an act could not do, where the DM acted: the note, the fight, the words, and the
-    /// draft's revision it met. A change of the note ends it.
+    /// What an act could not do: the note, the fight, the whole words (with the fight's name,
+    /// read at the act), and the draft's revision it met. A change of the note ends it.
     fault: Option<(Uuid, String, String, u64)>,
     seen: Option<RewardsSeen>,
     /// Whether `Add rewards` fits on a played row: by the title, its lead icon, the row's width
@@ -1671,14 +1975,15 @@ impl Rewards {
                 .collect();
             (breaks, title.size().x)
         };
-        // As `fight_block` lays out its links, beside the opened row's indent.
-        let spacing = ui.spacing().item_spacing.x;
+        // As `fight_block` lays out its links, beside the opened row's indent: four words and
+        // three `·`, with one blank (`link_gap`) on each side of each `·`.
+        let spacing = link_gap(ui);
         let links = ["Log", "Whole run", "Timeline", ADD_REWARDS]
             .map(|link| word(link, Type::Body))
             .iter()
             .sum::<f32>()
             + 3.0 * word("·", Type::Small)
-            + 7.0 * spacing;
+            + 6.0 * spacing;
         let (with, alone) = (layout(action), layout(Density::Read.control()));
         let fits = if with.0 == alone.0 && (with.1 - alone.1).abs() < 0.5 {
             RewardsAt::Row
@@ -1694,24 +1999,34 @@ impl Rewards {
         fits
     }
 
-    /// A fight's result and its fault, under its row: a result that belongs to one row stays
-    /// under that row (the plan's footer rule), and a fight's row never folds.
-    fn message(
+    /// The note's rewards results and its fault, in the plan's message footer, each naming its
+    /// fight by the name the act read. Results with their Undo go newest first among the
+    /// footer's results; the fault is a notice until the note changes.
+    fn in_footer<'a>(
         &self,
-        ui: &mut egui::Ui,
+        footer: &mut design::Footer<'a>,
+        undos: &mut LiveUndos<'a>,
+        act: &'a std::cell::Cell<Option<FooterAct>>,
         note: Uuid,
-        event: &str,
         revision: u64,
-    ) -> Option<RewardsAct> {
-        let mut act = None;
-        if let Some((id, at, words, met)) = &self.fault
-            && (*id, at.as_str(), *met) == (note, event, revision)
+    ) {
+        if let Some((id, _, words, met)) = &self.fault
+            && (*id, *met) == (note, revision)
         {
-            ui.add_space(design::S);
-            design::message(ui, Tone::Warning, words);
+            let words = words.clone();
+            footer.notice(words.clone(), move |ui| {
+                design::message(ui, Tone::Warning, &words);
+            });
         }
-        if let Some(done) = self.done.get(&(note, event.to_owned())) {
-            let mut words = format!("Rewards added under Loot and rewards. {}", done.choice);
+        for ((id, event), done) in &self.done {
+            if *id != note {
+                continue;
+            }
+            let fight = &done.fight;
+            let mut words = format!(
+                "Rewards for “{fight}” added under Loot and rewards. {}",
+                done.choice
+            );
             if done.with_xp
                 && let Some(RewardsSeen {
                     tonight: (xp, fights @ 1..),
@@ -1734,12 +2049,14 @@ impl Rewards {
                 1 => words.push_str(" 1 award is not known."),
                 n => words.push_str(&format!(" {n} awards are not known.")),
             }
-            ui.add_space(design::S);
-            if design::undo_message(ui, Tone::Success, &words, "Undo rewards") {
-                act = Some(RewardsAct::Undo(event.to_owned()));
-            }
+            let event = event.clone();
+            let drawn = words.clone();
+            undos.push(done.order, words, move |ui| {
+                if design::undo_message(ui, Tone::Success, &drawn, "Undo rewards") {
+                    act.set(Some(FooterAct::Rewards(RewardsAct::Undo(event.clone()))));
+                }
+            });
         }
-        act
     }
 }
 
@@ -1761,7 +2078,7 @@ fn rewards_choice(with_xp: Option<bool>, xp: u64) -> String {
             crate::encounter_run::grouped_number(xp)
         ),
         Some(false) => "No XP, as in your last rewards.".to_owned(),
-        None => "XP added. Delete that line to leave XP out from now on.".to_owned(),
+        None => "XP line added. Delete it in the note to leave XP out from now on.".to_owned(),
     }
 }
 
@@ -1791,6 +2108,16 @@ impl Sessions {
         };
         let rewards = &mut self.rewards;
         rewards.fault = None;
+        // The fight's name, read once here: the result and the fault keep it.
+        let fight = match &act {
+            RewardsAct::Undo(event) => rewards
+                .done
+                .get(&(note, event.clone()))
+                .map(|done| done.fight.clone())
+                .unwrap_or_default(),
+            RewardsAct::Add(event, _) => fight_name(book, event),
+        };
+        let fault = |words: &str| format!("Rewards for “{fight}” not added. {words}");
         let (event, result) = match act {
             RewardsAct::Undo(event) => {
                 let Some(done) = rewards.done.get(&(note, event.clone())) else {
@@ -1819,8 +2146,7 @@ impl Sessions {
                     _ => Err(String::new()),
                 };
                 let Ok(found) = read else {
-                    rewards.fault =
-                        Some((note, event, REWARDS_BLOCKED.to_owned(), draft.revision()));
+                    rewards.fault = Some((note, event, fault(REWARDS_BLOCKED), draft.revision()));
                     return;
                 };
                 let earlier = self.folder.as_deref().map_or_else(
@@ -1866,19 +2192,21 @@ impl Sessions {
                             with_xp: has_xp,
                             not_rolled: found.not_rolled,
                             unknown: unknown * u64::from(has_xp),
+                            order: crate::timeline::next_result_order(),
+                            fight: fight.clone(),
                         },
                     );
                     self.caret_to_show = Some(shown);
                 }
                 if let Some(why) = refused {
-                    rewards.fault = Some((note, event, why.to_owned(), draft.revision()));
+                    rewards.fault = Some((note, event, fault(why), draft.revision()));
                     return;
                 }
                 (event, result.map(drop))
             }
         };
-        if let Err(fault) = result {
-            rewards.fault = Some((note, event, fault.words().to_owned(), draft.revision()));
+        if let Err(failed) = result {
+            rewards.fault = Some((note, event, fault(failed.words()), draft.revision()));
         }
     }
 }
@@ -1905,44 +2233,8 @@ impl Sessions {
         let focus = std::mem::take(&mut travel.focus_length);
         let mut undo = TravelUndo::None;
         ui.add_space(design::XS);
-        // The plan line's message shows on the line of the check it came from. With that check
-        // gone, it takes the kept line, unless a roll's result holds it: then it ends the block.
-        let plan_line = travel
-            .planned
-            .as_ref()
-            .filter(|(id, _, _)| *id == event.id)
-            .map(|(_, line, _)| line);
-        let on_check = plan_line.filter(|line| event.checks.iter().any(|check| line.on(check)));
-        let elsewhere = plan_line.filter(|_| on_check.is_none());
-        let done = travel.done.get(&event.id);
-        let plan_words = elsewhere.map(checks::Planned::words);
-        let (kept, last) = match (done, &plan_words) {
-            (Some(done), _) => (
-                Some((done.words.as_str(), done.undo, TravelUndo::Checks)),
-                plan_words.as_deref(),
-            ),
-            (None, Some(words)) => (
-                Some((words.as_str(), "Undo plan line", TravelUndo::PlanLine)),
-                None,
-            ),
-            (None, None) => (None, None),
-        };
-        let header = checks::View {
-            event,
-            start,
-            length: &event.duration,
-            tables: plan.tables,
-            planned,
-            plan_line: on_check,
-        };
-        let mut act = checks::header(ui, &header, &mut travel.block);
-        if design::undo_line(
-            ui,
-            Tone::Success,
-            kept.map(|(words, undo, _)| (words, undo)),
-        ) {
-            undo = kept.map_or(TravelUndo::None, |(_, _, which)| which);
-        }
+        // Round 27 FE7: **How long** and its range come first, so the checks' results follow
+        // their table directly, as on Timeline. The plan line's result is in the plan's footer.
         let typed = length_draft.words(event);
         let help = checks::span(start, &typed).or_else(|| {
             timeline::read_duration(&typed)
@@ -1952,25 +2244,24 @@ impl Sessions {
         let (length, changed) = design::field(ui, "How long", help.as_deref(), None, |ui| {
             checks::length_input(ui, length_draft, event, "", focus)
         });
+        ui.add_space(design::M);
         let view = checks::View {
             event,
             start,
             length: &length,
             tables: plan.tables,
             planned,
-            plan_line: on_check,
         };
+        let mut act = checks::header(ui, &view, &mut travel.block);
+        let done = travel.done.get(&event.id);
+        if design::undo_line(
+            ui,
+            Tone::Success,
+            done.map(|done| (done.words.as_str(), done.undo)),
+        ) {
+            undo = TravelUndo::Checks;
+        }
         act = checks::lines(ui, &view, &mut travel.block).or(act);
-        if act == Some(checks::Act::UndoPlan) {
-            act = None;
-            undo = TravelUndo::PlanLine;
-        }
-        if let Some(words) = last {
-            ui.add_space(design::S);
-            if design::undo_message(ui, Tone::Success, words, "Undo plan line") {
-                undo = TravelUndo::PlanLine;
-            }
-        }
         (act, changed, undo)
     }
 
@@ -1993,6 +2284,102 @@ impl Sessions {
             .and_then(|at| timeline::clock(&book.events)[at]);
         self.travel.start = Some((book.changes(), open.to_owned(), at, start));
         (at, start)
+    }
+
+    /// The mark of the plan line that a fight beginning now takes by the plan's rule (one played
+    /// event of `events` takes one link of its name), read from the session note as the file
+    /// holds it at this moment. `None` for a line with no mark, and for a note that cannot be
+    /// read: then nothing is said about travel.
+    pub fn road_mark(
+        &self,
+        session: Option<Uuid>,
+        name: &str,
+        events: &[timeline::Event],
+    ) -> Option<checks::RoadMark> {
+        let note = self.notes.iter().find(|note| Some(note.id) == session)?;
+        let text = std::fs::read_to_string(&note.path).ok()?;
+        let fight = [PlanFight {
+            saved: None,
+            id: Uuid::nil(),
+            name: name.to_owned(),
+            path: String::new(),
+            summary: String::new(),
+            difficulty: Default::default(),
+        }];
+        let (at, _, _) = plan_links(&text, events, session, &fight)
+            .into_iter()
+            .find(|(_, _, waiting)| *waiting)?;
+        checks::marked(text[at..].lines().next().unwrap_or_default()).mark
+    }
+
+    /// F9, W5-D1, at `Begin combat`: where a fight that enters the Timeline now is played. One
+    /// read of the files as they are on disk decides: `Timeline.md` gives the played fights,
+    /// so the plan line this fight takes, and the journey and its check; the Timeline as Splat
+    /// holds it must agree. `None` for a fight with no mark (an ordinary fight, no notice).
+    pub fn road_at_begin(
+        &self,
+        book: &Book,
+        session: Option<Uuid>,
+        name: &str,
+    ) -> Option<Result<(checks::RoadMark, timeline::Within), checks::OffRoad>> {
+        let disk = book.on_disk();
+        // With `Timeline.md` not read, the plan line is the one the Timeline in memory gives.
+        let mark = self.road_mark(session, name, disk.as_deref().unwrap_or(&book.events))?;
+        let placed = disk.ok_or(checks::OffRoad::NotRead).and_then(|disk| {
+            mark.place(&disk, session)?;
+            mark.place(&book.events, session)
+        });
+        Some(placed.map(|within| (mark, within)))
+    }
+
+    /// The fight just placed at `mark` is saved at once. After that save's merge with the file,
+    /// the plan line it takes and its check are read again; when either is not the one the mark
+    /// named, the fight goes after the session's last event, and the reason comes back.
+    pub fn confirm_road(
+        &self,
+        book: &mut Book,
+        session: Option<Uuid>,
+        run: Uuid,
+        name: &str,
+        mark: &checks::RoadMark,
+    ) -> Option<checks::OffRoad> {
+        book.save();
+        let others: Vec<_> = book
+            .events
+            .iter()
+            .filter(|event| event.run != Some(run))
+            .cloned()
+            .collect();
+        let why = match self.road_mark(session, name, &others) {
+            Some(read) if read == *mark => mark.place(&book.events, session).err(),
+            _ => Some(checks::OffRoad::Changed),
+        };
+        if why.is_some() {
+            book.leave_journey(run);
+        }
+        why
+    }
+
+    /// The days on the road of the fights still to come, read again only when what they are
+    /// read from changed.
+    fn planned_days(
+        &mut self,
+        book: &Book,
+        session: Option<Uuid>,
+        plan: &Plan<'_>,
+    ) -> Arc<RoadDays> {
+        let Some(draft) = &self.draft else {
+            return Arc::default();
+        };
+        let key = (session, draft.revision(), book.changes(), plan.fights.len());
+        if let Some((known, days)) = &self.travel.days
+            && *known == key
+        {
+            return Arc::clone(days);
+        }
+        let days = Arc::new(road_days(&draft.body, &book.events, session, plan.fights));
+        self.travel.days = Some((key, Arc::clone(&days)));
+        days
     }
 
     /// Take back the plan line of `Plan “…”`, while the note is as that act left it.
@@ -2030,19 +2417,22 @@ impl Sessions {
                 .any(|event| event.id == id && event.duration.trim().is_empty());
         }
         if let checks::Act::Plan(chosen) = &act {
-            let name = &chosen.name;
             let (Some(draft), Some(note)) = (&mut self.draft, session) else {
                 return;
             };
-            let line = format!("- [[{name}]]");
+            let line = road_plan_line(book, id, chosen);
             let written = draft.apply(note, Apply::Now, |words| {
                 Some(plan_first(words, &line, &book.events, session, plan.fights))
             });
             match written {
-                Ok(undo) => self.travel.planned = Some((id.to_owned(), chosen.clone(), undo)),
+                Ok(undo) => {
+                    self.result_orders.renew("plan line");
+                    self.travel.planned = Some((id.to_owned(), chosen.clone(), undo));
+                }
                 Err(fault) => {
                     let words = fault.words().to_owned();
                     if let crate::sessions::ActFault::NotSaved(_, undo) = fault {
+                        self.result_orders.renew("plan line");
                         self.travel.planned = Some((id.to_owned(), chosen.clone(), undo));
                     }
                     self.travel.block.failed(&act, words);
@@ -2057,6 +2447,17 @@ impl Sessions {
             Ok(None) => {}
             Err(error) => self.travel.block.failed(&act, error),
         }
+    }
+
+    /// The selected session's ID: where an encounter editor opened from the plan goes back to.
+    pub fn selected_id(&self) -> Option<Uuid> {
+        self.selected
+    }
+
+    /// A planned fight's `Edit encounter` that opened nothing: why, on the page where the DM acted.
+    pub fn encounter_not_opened(&mut self, why: String) {
+        self.notice = Some((Tone::Warning, why));
+        self.notice_session = None;
     }
 
     /// Lead ruling, round 26 (one pane, one footer): a plan group's removal result and its Undo
@@ -2267,6 +2668,7 @@ impl Sessions {
         // below the rows, so a result never moves a row or the Add strip.
         let footer_act = std::cell::Cell::new(None);
         let mut group_undo_in_footer = false;
+        let mut footer_rewards = None;
         let mut footer =
             design::Footer::new(("session_plan_footer", session), ui.available_width());
         if plan.group_open && self.not_being_played().is_none() {
@@ -2315,6 +2717,30 @@ impl Sessions {
         );
         self.scene_messages(&mut footer, &mut undos, &footer_act, shown);
         self.removed_group_message(&mut undos, &footer_act, session);
+        // Round 27 FN1, FK3, SK2: rewards results and their fault are the footer's, by fight.
+        self.rewards.see(self.draft.as_ref(), session, book);
+        if let (Some(note), Some(draft)) = (session, self.draft.as_ref()) {
+            self.rewards
+                .in_footer(&mut footer, &mut undos, &footer_act, note, draft.revision());
+        }
+        // Round 27 FE7: `Plan “<name>”`'s result and `Undo plan line`, in the plan of its
+        // journey's session, while the note is as the act left it.
+        if let Some((journey, line, undo)) = &self.travel.planned
+            && self.draft.as_ref().is_some_and(|draft| undo.live(draft))
+            && book
+                .events
+                .iter()
+                .any(|event| event.id == *journey && event.is_in(session))
+        {
+            let words = line.words();
+            let order = self.result_orders.of("plan line", (journey, &line.name));
+            let act = &footer_act;
+            undos.push(order, words.clone(), move |ui| {
+                if design::undo_message(ui, Tone::Success, &words, "Undo plan line") {
+                    act.set(Some(FooterAct::UndoPlanLine));
+                }
+            });
+        }
         undos.into_footer(&mut footer);
         // The fold measures the room the rows have with an empty footer, so that a result coming
         // or going never folds or unfolds the scenes.
@@ -2336,6 +2762,8 @@ impl Sessions {
                 book.undo_remove();
             }
             Some(FooterAct::Scene(act)) => scene_act = Some(act),
+            Some(FooterAct::Rewards(act)) => footer_rewards = Some(act),
+            Some(FooterAct::UndoPlanLine) => self.undo_plan_line(),
             None => {}
         }
         file_act(book, file.take());
@@ -2395,8 +2823,7 @@ impl Sessions {
         let mut length_taken = checks::Taken::Nothing;
         let mut travel_act = None;
         self.rewards.see(self.draft.as_ref(), session, book);
-        let revision = self.draft.as_ref().map(crate::sessions::Draft::revision);
-        let mut rewards_act = None;
+        let mut rewards_act = footer_rewards;
         let mut travel_undo = (TravelUndo::None, String::new());
         // A name a result links: an encounter or a group, and whether a row for it is to come.
         let in_plan = |name: &str| {
@@ -2459,6 +2886,9 @@ impl Sessions {
                     + Density::Read.control() + design::S;
                 let mut any = false;
                 let mut primary_available = plan.open_run.is_none() && !self.confirm_record;
+                // The opened played row, on the frame the DM opened it, and the next fight's action.
+                let mut opened_played = None;
+                let mut next_action = None;
                 for (at, event) in book.events.iter_mut().enumerate() {
                     if let Some((removed_at, words)) = &removed_row && *removed_at == at {
                         ui.add_space(design::S);
@@ -2581,6 +3011,7 @@ impl Sessions {
                                 if self.fight_block(ui, run, &event.id, plan, link) {
                                     rewards_act = Some(RewardsAct::Add(event.id.clone(), run));
                                 }
+                                changed |= place_field(ui, event);
                             } else {
                                 // A journey's checks come first, under its row; Title and Notes follow them.
                                 if checks::shown(event) {
@@ -2599,10 +3030,6 @@ impl Sessions {
                             });
                         }
                         details_above += ui.cursor().top() - details_top;
-                        if let (Some(note), Some(revision)) = (session, revision)
-                            && let Some(act) = self.rewards.message(ui, note, &event.id, revision) {
-                            rewards_act = Some(act);
-                        }
                         if self.row_notice == Some((session, at)) && self.deleted_run.is_some() {
                             ui.add_space(design::S);
                             self.deleted_run_in_row(ui);
@@ -2610,14 +3037,19 @@ impl Sessions {
                         closed += plan_rule(ui);
                     });
                     // The opened row and the next row stay in reach.
-                    if is_open && std::mem::take(&mut self.reveal_event) { row.response.scroll_to_me(Some(egui::Align::TOP)); }
+                    if is_open && std::mem::take(&mut self.reveal_event) {
+                        // A played fight's row waits for the next fight's action (review round 1).
+                        if event.run.is_some() { opened_played = Some(row.response.rect); } else { row.response.scroll_to_me(Some(egui::Align::TOP)); }
+                    }
                     reveal.after(ui, Some(&event.id), row.response.rect);
                 }
                 if let Some((at, words)) = &removed_row && *at >= event_count {
                     ui.add_space(design::S);
                     undo_row_remove |= design::undo_message(ui, Tone::Success, words, "Undo remove");
                 }
+                let days = self.planned_days(book, session, plan);
                 for (position, fight) in planned.iter().enumerate() {
+                    let day = planned_day(&days, &planned, position);
                     self.removed_fight_message(ui, session, position);
                     if !folded {
                         closed_scenes += self.scene_rows(ui, width, &scenes[position], position, shown, plan, &mut scene_act);
@@ -2641,7 +3073,7 @@ impl Sessions {
                                 }
                             } else if let Some(saved) = saved {
                                 design::status(ui, Status { icon: icons::RUN, word: &plan_saved_status(saved), color: c.muted });
-                            } else { planned_summary(ui, &fight.summary, fight.difficulty.rating.as_ref()); }
+                            } else { planned_summary(ui, &on_road(ui, &fight.summary, day.as_deref()), fight.difficulty.rating.as_ref()); }
                         }, |ui| {
                             design::row_menu(ui, &fight.name, |ui| {
                                 if Action::quiet("Remove from tonight").show(ui).clicked() {
@@ -2655,20 +3087,26 @@ impl Sessions {
                                         delete_run = saved.cloned(); ui.close();
                                     }
                                 }
+                                // Last, so no line of today's menu moves (W1-D1).
+                                if edit_encounter_line(ui, plan) { self.wants_edit_encounter = Some(fight.id); ui.close(); }
                             });
                             if running {
                                 // The run strip owns Back to run.
                             } else if let Some(saved) = saved {
                                 let action = if std::mem::take(&mut primary_available) { Action::primary("Resume") } else { Action::secondary("Resume") };
-                                if action.icon(icons::RUN).name(&format!("Resume: {}", fight.name)).density(Density::Read).blocked(plan.blocked).show(ui).clicked() {
+                                let shown = action.icon(icons::RUN).name(&format!("Resume: {}", fight.name)).density(Density::Read).blocked(plan.blocked).show(ui);
+                                if position == 0 { next_action = Some(shown.rect); }
+                                if shown.clicked() {
                                     self.wants_saved_run = Some(saved.path.clone());
                                 }
                             } else {
                                 let action = if std::mem::take(&mut primary_available) {
                                     Action::primary("Start fight")
                                 } else { Action::secondary("Start fight") };
-                                if action.icon(icons::RUN).name(&format!("Start fight: {}", fight.name))
-                                    .density(Density::Read).blocked(plan.blocked).show(ui).clicked() {
+                                let shown = action.icon(icons::RUN).name(&format!("Start fight: {}", fight.name))
+                                    .density(Density::Read).blocked(plan.blocked).show(ui);
+                                if position == 0 { next_action = Some(shown.rect); }
+                                if shown.clicked() {
                                     self.wants_fight = Some(fight.path.clone());
                                 }
                             }
@@ -2764,6 +3202,7 @@ impl Sessions {
                     design::empty_state(ui, icons::SESSIONS, "Nothing planned yet",
                         "Use Add to plan a fight, a group, or an event.", |_| {});
                 }
+                reveal_opened_played(ui, opened_played, next_action);
                 reveal.finish(ui);
                 self.scene_field(ui, index.as_deref(), shown, &mut scene_act);
                 let drawn = ui.min_rect();
@@ -2854,7 +3293,6 @@ impl Sessions {
         }
         match travel_undo {
             (TravelUndo::Checks, id) => self.travel.done.undo(&id, book),
-            (TravelUndo::PlanLine, _) => self.undo_plan_line(),
             (TravelUndo::None, _) => {}
         }
         if let Some((id, action)) = ruling {
@@ -3053,12 +3491,9 @@ impl Sessions {
         if cache.key != Some(key) || cache.model.is_none() {
             cache.builds += 1;
             let body = self.draft.as_ref().map_or("", |draft| draft.body.as_str());
-            cache.model = Some(Arc::new(PlanModel::build(
-                body,
-                plan.fights,
-                plan.groups,
-                index,
-            )));
+            let mut model = PlanModel::build(body, plan.fights, plan.groups, index);
+            model.place_not_found(&mut cache.seen);
+            cache.model = Some(Arc::new(model));
             cache.key = Some(key);
         }
         Arc::clone(cache.model.as_ref().expect("the model was just built"))
@@ -3641,7 +4076,9 @@ impl Sessions {
                     });
                 ui.horizontal(|ui| {
                     // Each word starts where the text does; a short word's target is wider
-                    // than the word, never padded with spaces.
+                    // than the word, never padded with spaces. One blank on each side of `·`,
+                    // at every size, also where the page's columns give the plan a wider gap (X48).
+                    ui.spacing_mut().item_spacing.x = link_gap(ui);
                     if word_link(ui, "Log").clicked() {
                         self.show_fight_log = !self.show_fight_log;
                     }
@@ -3747,6 +4184,7 @@ mod tests {
             temporary_hp: 0,
             conditions: Vec::new(),
             present: true,
+            concentration: false,
         };
         let rows = [
             row("Kestrel Dunmoor", 3, true),
@@ -3787,11 +4225,387 @@ mod tests {
     fn planned_fight(name: &str, path: &str) -> PlanFight {
         PlanFight {
             saved: None,
+            id: uuid::Uuid::nil(),
             name: name.into(),
             path: path.into(),
             summary: String::new(),
             difficulty: Default::default(),
         }
+    }
+
+    /// Review of PR 284, finding 1: the mark is one whole comment and nothing else. The DM's
+    /// words after it stay in Read, in `Remove from tonight` and in the line acts that treat the
+    /// line as its text; half a mark is no mark, and its line shows as it is.
+    #[test]
+    fn pr284_review_words_after_the_mark_stay() {
+        let mark = "<!-- splat:check journey=t-road at=24 sum=12345678 -->";
+        let body =
+            format!("## Plan for tonight\n- [[Bridge Ambush]] {mark} Bring silver weapons.\n");
+        let fights = [planned_fight(
+            "Bridge Ambush",
+            "Encounters/Bridge Ambush.md",
+        )];
+        let removed = unlink_planned_fight(&body, "Bridge Ambush", 0);
+        assert_eq!(
+            removed,
+            body.replace("[[Bridge Ambush]]", "Bridge Ambush"),
+            "Remove from tonight keeps the line's words"
+        );
+        let shown = super::super::compact_plan_for_reading(&body, &fights, &[], &[], true);
+        assert!(shown.contains("Bring silver weapons."), "{shown:?}");
+        // An isolated marked line is a planned link: Read folds it, Remove takes it whole.
+        let alone = format!("## Plan for tonight\n- [[Bridge Ambush]] {mark}\n");
+        assert_eq!(
+            unlink_planned_fight(&alone, "Bridge Ambush", 0),
+            "## Plan for tonight\n"
+        );
+        let folded = super::super::compact_plan_for_reading(&alone, &fights, &[], &[], true);
+        assert!(!folded.contains("Bridge"), "{folded:?}");
+        let half = "## Plan for tonight\n- [[Bridge Ambush]] <!-- splat:check journey=t-road\n";
+        assert_eq!(
+            super::super::compact_plan_for_reading(half, &fights, &[], &[], true),
+            half,
+            "half a mark is the line's own text"
+        );
+        // The done box, a rename by `Edit encounter`, and a line change keep the rest byte for
+        // byte: they act on the line as its text.
+        let line = format!("- [ ] [[Bridge Ambush]] {mark} Bring silver weapons.");
+        assert_eq!(
+            crate::sessions::ticked(&line, true),
+            line.replacen("[ ]", "[x]", 1)
+        );
+        let mut renamed = line.clone();
+        crate::sessions::rename_links(&mut renamed, "Bridge Ambush", "Ford Ambush");
+        assert_eq!(renamed, line.replace("Bridge", "Ford"));
+    }
+
+    /// A session note whose plan holds two marked lines for Bridge Ambush, at hours 0 and 24 of
+    /// one two-day journey, a played fight called Scouts, and the Timeline saved beside it.
+    fn two_marked_lines() -> (
+        tempfile::TempDir,
+        Sessions,
+        Book,
+        [checks::RoadMark; 2],
+        String,
+    ) {
+        use crate::sessions::{NewNote, create_note};
+        let dir = tempfile::tempdir().unwrap();
+        let note = create_note(
+            dir.path(),
+            &NewNote {
+                number: 1,
+                title: "Road",
+                date: "2026-11-12",
+                campaign: "Marches",
+                template: "## Plan for tonight\n",
+            },
+        )
+        .unwrap();
+        let session = Some(note.id);
+        let mut b = Book::default();
+        b.open(Some(dir.path()));
+        b.add(Kind::Day, session);
+        let road = b.add(Kind::Travel, session);
+        let e = b.event_mut(&road).unwrap();
+        e.duration = "2 days".into();
+        e.checks = [0, 24]
+            .map(|at| timeline::Check::new(at, "16 · [[Bridge Ambush]] waits.".into()))
+            .to_vec();
+        let marks = [0, 1].map(|at| checks::RoadMark::new(&road, &e.checks[at]).unwrap());
+        let text = fs::read_to_string(&note.path).unwrap().replace(
+            "## Plan for tonight",
+            &format!(
+                "## Plan for tonight\n- [[Bridge Ambush]] {}\n- [[Bridge Ambush]] {}",
+                marks[0].comment(),
+                marks[1].comment()
+            ),
+        );
+        fs::write(&note.path, text).unwrap();
+        let sessions = Sessions {
+            selected: session,
+            notes: vec![note],
+            ..Sessions::default()
+        };
+        let id = b.add(Kind::Encounter, session);
+        let played = b.event_mut(&id).unwrap();
+        played.title = "Scouts".into();
+        played.run = Some(Uuid::from_u128(123));
+        b.save();
+        (dir, sessions, b, marks, id)
+    }
+
+    /// Outside the app, Scouts becomes Bridge Ambush: under the plan's rule it takes the first
+    /// marked line.
+    fn rename_scouts_outside(dir: &std::path::Path, id: &str) {
+        let mut outside = Book::default();
+        outside.open(Some(dir));
+        outside.event_mut(id).unwrap().title = "Bridge Ambush".into();
+        outside.touch();
+        outside.save();
+    }
+
+    fn begin(b: &mut Book, session: Option<Uuid>, within: &timeline::Within) -> Uuid {
+        let setup = timeline::RunFact {
+            id: Uuid::from_u128(456),
+            copied_from: None,
+            name: "Bridge Ambush".into(),
+            round: 1,
+            state: timeline::RunState::Setup,
+            steps: 1,
+        };
+        let running = timeline::RunFact {
+            state: timeline::RunState::Running,
+            ..setup.clone()
+        };
+        b.record_change(Some(&setup), &running, session, Some(within));
+        running.id
+    }
+
+    fn fight_start(b: &Book, run: Uuid) -> Option<u64> {
+        let at = b.events.iter().position(|e| e.run == Some(run)).unwrap();
+        timeline::clock(&b.events)[at]
+    }
+
+    /// Review round 2, finding 1: Begin takes the plan line that the played fights on disk give,
+    /// in the same read that checks the journey, not a count kept in memory.
+    #[test]
+    fn pr284_r2_begin_uses_current_occurrence() {
+        let (dir, sessions, mut b, [_, second], id) = two_marked_lines();
+        let session = sessions.selected;
+        // A typed journey note waits for its pause, so the Timeline in memory is not read again.
+        let road = second.place(&b.events, session).unwrap().journey;
+        b.event_mut(&road).unwrap().notes = "Fog on the road.".into();
+        b.touch();
+        rename_scouts_outside(dir.path(), &id);
+        let (mark, within) = sessions
+            .road_at_begin(&b, session, "Bridge Ambush")
+            .unwrap()
+            .unwrap();
+        assert_eq!(mark, second, "the first line is taken by the renamed fight");
+        let run = begin(&mut b, session, &within);
+        assert_eq!(
+            sessions.confirm_road(&mut b, session, run, "Bridge Ambush", &mark),
+            None
+        );
+        assert!(b.error.is_none(), "{:?}", b.error);
+        assert_eq!(fight_start(&b, run), Some(1440), "Day 2, 00:00");
+    }
+
+    /// Review round 2, finding 4: a change that lands after Begin's read meets the production
+    /// check after the save's merge, which sends the fight after the session's last event. Here
+    /// the outside rename lands then: the fight's plan line is now the second one.
+    #[test]
+    fn pr284_r2_confirm_road_moves_a_fight_whose_line_changed_after_begin() {
+        let (dir, sessions, mut b, [first, _], id) = two_marked_lines();
+        let session = sessions.selected;
+        let (mark, within) = sessions
+            .road_at_begin(&b, session, "Bridge Ambush")
+            .unwrap()
+            .unwrap();
+        assert_eq!(mark, first);
+        let run = begin(&mut b, session, &within);
+        rename_scouts_outside(dir.path(), &id);
+        assert_eq!(
+            sessions.confirm_road(&mut b, session, run, "Bridge Ambush", &mark),
+            Some(checks::OffRoad::Changed)
+        );
+        assert_eq!(
+            fight_start(&b, run),
+            Some(2 * 1440),
+            "after the journey, not Day 1"
+        );
+        assert!(
+            !fs::read_to_string(dir.path().join("Timeline.md"))
+                .unwrap()
+                .contains("journey=")
+        );
+    }
+
+    /// Review round 2, finding 2: a fight with no mark gets nothing about travel, also when its
+    /// note cannot be read at Begin.
+    #[test]
+    fn pr284_r2_plain_fight_has_no_travel_notice() {
+        use crate::sessions::{Draft, NewNote, create_note};
+        let dir = tempfile::tempdir().unwrap();
+        let note = create_note(
+            dir.path(),
+            &NewNote {
+                number: 1,
+                title: "Plain evening",
+                date: "2026-11-12",
+                campaign: "Marches",
+                template: "## Plan for tonight\n- [[Bridge Ambush]]\n",
+            },
+        )
+        .unwrap();
+        let session = Some(note.id);
+        let sessions = Sessions {
+            selected: session,
+            notes: vec![note.clone()],
+            draft: Some(Draft::open(&note.path).unwrap()),
+            ..Sessions::default()
+        };
+        let book = Book::default();
+        assert_eq!(sessions.road_mark(session, "Bridge Ambush", &[]), None);
+        fs::remove_file(&note.path).unwrap();
+        assert_eq!(sessions.road_mark(session, "Bridge Ambush", &[]), None);
+        assert_eq!(
+            sessions.road_at_begin(&book, session, "Bridge Ambush"),
+            None,
+            "an ordinary fight must not get a travel notice when its note goes"
+        );
+    }
+
+    /// Review round 2, finding 3: a marked line that the DM turns into a done scene shows its
+    /// words, never the mark, in Add to Log's field; the line itself keeps the mark.
+    #[test]
+    fn pr284_r2_scene_log_hides_mark() {
+        let line = "- [x] [[Captain Varra]] <!-- splat:check journey=t-road at=24 sum=12345678 --> Bring silver weapons.";
+        let body = format!("## Plan for tonight\n{line}\n");
+        let model = PlanModel::build(&body, &[], &[], None);
+        let ModelLine::Scene(scene) = &model.lines[0] else {
+            panic!("a scene")
+        };
+        assert_eq!(
+            words_outside_links(&scene.task.words),
+            "Bring silver weapons."
+        );
+        assert_eq!(scene.task.line, line, "acts on the line keep it whole");
+    }
+
+    /// Review round 2, finding 3: Lookup's search of session notes shows found lines as they
+    /// read, so a plan line's mark is not among its words.
+    #[test]
+    fn pr284_r2_search_shows_no_mark() {
+        use crate::sessions::{NewNote, create_note};
+        let dir = tempfile::tempdir().unwrap();
+        let note = create_note(
+            dir.path(),
+            &NewNote {
+                number: 1,
+                title: "Road",
+                date: "2026-11-12",
+                campaign: "Marches",
+                template: "## Plan for tonight\n- [[Bridge Ambush]] <!-- splat:check journey=t-road at=24 sum=12345678 --> Bring silver weapons.\n",
+            },
+        )
+        .unwrap();
+        let sessions = Sessions {
+            notes: vec![note],
+            ..Sessions::default()
+        };
+        let written = sessions.written(&Book::default());
+        let text = &written[0].text;
+        assert!(
+            text.contains("Bring silver weapons.") && !text.contains("splat:check"),
+            "{text:?}"
+        );
+    }
+
+    /// Review finding 2: Begin reads the session note as the file holds it at that moment, not
+    /// the open draft, which can be older.
+    #[test]
+    fn pr284_review_begin_reads_current_note() {
+        use crate::sessions::{Draft, NewNote, create_note};
+        let dir = tempfile::tempdir().unwrap();
+        let note = create_note(
+            dir.path(),
+            &NewNote {
+                number: 1,
+                title: "Road",
+                date: "2026-11-12",
+                campaign: "Marches",
+                template: "## Plan for tonight\n",
+            },
+        )
+        .unwrap();
+        let session = Some(note.id);
+        let mut b = Book::default();
+        b.add(Kind::Day, session);
+        let road = b.add(Kind::Travel, session);
+        let e = b.event_mut(&road).unwrap();
+        e.duration = "2 days".into();
+        e.checks = vec![timeline::Check::new(
+            24,
+            "16 · [[Bridge Ambush]] waits.".into(),
+        )];
+        let mark = checks::RoadMark::new(&road, &e.checks[0]).unwrap();
+        let text = fs::read_to_string(&note.path).unwrap().replace(
+            "## Plan for tonight",
+            &format!(
+                "## Plan for tonight\n- [[Bridge Ambush]] {}",
+                mark.comment()
+            ),
+        );
+        fs::write(&note.path, &text).unwrap();
+        let sessions = Sessions {
+            selected: session,
+            notes: vec![note.clone()],
+            draft: Some(Draft::open(&note.path).unwrap()),
+            ..Sessions::default()
+        };
+        assert_eq!(
+            sessions.road_mark(session, "Bridge Ambush", &b.events),
+            Some(mark.clone())
+        );
+        // Obsidian takes the mark off this plan line before Begin combat.
+        fs::write(&note.path, text.replace(&mark.comment(), "")).unwrap();
+        assert_eq!(
+            sessions.road_mark(session, "Bridge Ambush", &b.events),
+            None
+        );
+        fs::remove_file(&note.path).unwrap();
+        assert_eq!(
+            sessions.road_mark(session, "Bridge Ambush", &b.events),
+            None,
+            "a note that cannot be read says nothing about travel"
+        );
+    }
+
+    /// Review of PR 284: the day never changes a planned row's height, at any width.
+    #[test]
+    fn pr284_review_row_height_and_long_journey_name() {
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let rating = crate::difficulty::above_high();
+        let summary = "5 party · 2 × Ember Cultist";
+        let day = "Day 2 of The road to the ford beyond the old northern quarry";
+        let (mut full, mut short, mut hidden) = (0, 0, 0);
+        let _ = ctx.run(Default::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                for width in (120..=600).step_by(5) {
+                    let plain = ui
+                        .scope(|ui| {
+                            ui.set_width(width as f32);
+                            planned_summary(ui, summary, Some(&rating));
+                        })
+                        .response
+                        .rect
+                        .height();
+                    let road = ui
+                        .scope(|ui| {
+                            ui.set_width(width as f32);
+                            let words = on_road(ui, summary, Some(day));
+                            if words.contains("of The road") {
+                                full += 1;
+                            } else if words.contains("Day 2") {
+                                short += 1;
+                            } else {
+                                hidden += 1;
+                            }
+                            planned_summary(ui, &words, Some(&rating));
+                        })
+                        .response
+                        .rect
+                        .height();
+                    assert_eq!(road, plain, "the day adds no height at {width} px");
+                }
+            });
+        });
+        assert!(
+            full > 0 && short > 0 && hidden > 0,
+            "{full} {short} {hidden}"
+        );
     }
 
     #[test]
@@ -3835,6 +4649,43 @@ mod tests {
             to_come,
             ["Wolf Pack", "Bridge Ambush"],
             "the new fight is the next row"
+        );
+        // W5-D1: planned from the day-two check of tonight's journey, the line carries the
+        // journey and the check, its row says the day, and Remove from tonight takes the line.
+        book.add(Kind::Day, Some(session));
+        let road = book.add(Kind::Travel, Some(session));
+        let travel = book.event_mut(&road).unwrap();
+        travel.title = "Road to the ford".into();
+        travel.duration = "2 days".into();
+        travel.checks = vec![timeline::Check::new(
+            24,
+            "16 · [[Wolf Pack]] pick up the trail.".into(),
+        )];
+        let chosen = checks::Planned {
+            name: "Wolf Pack".into(),
+            check: ("Check at 24h".into(), travel.checks[0].words.clone()),
+        };
+        let line = road_plan_line(&book, &road, &chosen);
+        assert!(
+            line.starts_with("- [[Wolf Pack]] <!-- splat:check journey="),
+            "{line}"
+        );
+        let marked = plan_first(body, &line, &book.events, Some(session), &fights);
+        assert_eq!(
+            road_days(&marked, &book.events, Some(session), &fights),
+            [
+                (
+                    "wolf pack".to_owned(),
+                    Some("Day 2 of Road to the ford".to_owned())
+                ),
+                ("bridge ambush".to_owned(), None)
+            ]
+        );
+        assert_eq!(unlink_planned_fight(&marked, "Wolf Pack", 1), body);
+        // A fight planned the ordinary way carries nothing.
+        assert_eq!(
+            road_days(body, &book.events, Some(session), &fights)[0].1,
+            None
         );
         // With every fight played, the line goes at the plan's end, before the next heading.
         let all = book.add(Kind::Encounter, Some(session));
@@ -4054,12 +4905,24 @@ mod tests {
                 names: vec!["Nameless Thing".into(), "Wisp".into()],
             }),
         };
+        // A roster member whose name cannot be read: the reason in its short form.
+        let nameless = Difficulty {
+            xp: 0,
+            rating: None,
+            unknown: 1,
+            missing: Some(Missing {
+                what: Unknown::Level,
+                at: vec![0],
+                names: Vec::new(),
+            }),
+        };
         for (difficulty, words) in [
             (rated, "Read encounter · Above High · XP 6,300"),
             (
                 unknown,
                 "Read encounter · XP not known: Nameless Thing and 1 more",
             ),
+            (nameless, "Read encounter · Level not known"),
         ] {
             // The second frame has the app's fonts.
             let frame = || {
@@ -4318,6 +5181,68 @@ mod tests {
     fn scenes_are_note_acts_with_their_own_undo() {
         use crate::sessions::{NewNote, create_note, plan_lines};
         use egui_kittest::kittest::Queryable;
+        // Review round 1 (REVIEW-291-scene-state-height): a scene that links a rule note has no
+        // second line; when the note goes, `Not found` ends its line and the row keeps its
+        // height.
+        let mut row = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(400.0, 800.0))
+            .build_state(
+                |ctx, state: &mut (bool, f32)| {
+                    let mut group = |_: &mut egui::Ui| {};
+                    let plan = Plan {
+                        fights: &[],
+                        saved_runs: &[],
+                        groups: &[],
+                        group_blocked: None,
+                        group_open: false,
+                        group_discarded: false,
+                        group_discarded_name: String::new(),
+                        group_discarded_order: 0,
+                        arrivals_open: false,
+                        group_editor: std::cell::RefCell::new(&mut group),
+                        blocked: None,
+                        run_directory: None,
+                        open_run: None,
+                        open_state: String::new(),
+                        open_encounter: None,
+                        party: &[],
+                        tables: &[],
+                    };
+                    let scene = Scene {
+                        task: TaskLine {
+                            at: 0,
+                            line: "- [ ] Read [[Emberfall Rumours]]".into(),
+                            done: false,
+                            words: "Read [[Emberfall Rumours]]".into(),
+                        },
+                        // A rule note that is found has no World detail, no fight and no Log.
+                        entry: (!state.0).then_some(SceneEntry {
+                            detail: None,
+                            start: None,
+                            log: None,
+                        }),
+                        not_found: state.0,
+                        second_line: false,
+                        fit: std::sync::Mutex::new(Vec::new()),
+                    };
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        ui.set_width(330.0);
+                        state.1 = scene_row(ui, 330.0, &scene, ((0, 0), 0), &plan, &mut None);
+                    });
+                },
+                (false, 0.0),
+            );
+        design::theme::install(&row.ctx);
+        row.run_steps(3);
+        let found = row.state().1;
+        row.state_mut().0 = true;
+        row.run_steps(3);
+        let missing = row.state().1;
+        assert!(
+            (found - missing).abs() < 0.5,
+            "REVIEW-291-scene-state-height: a rule-note scene changes height when its entry goes: {found} -> {missing}"
+        );
+        assert!(row.query_by_label_contains("Not found").is_some());
         let dir = tempfile::tempdir().unwrap();
         let note = create_note(
             dir.path(),
@@ -4880,7 +5805,20 @@ mod tests {
                     faults.clear();
                     egui::CentralPanel::default().show(ctx, |ui| {
                         ui.set_width(330.0);
+                        // X48: beside the note the page gives the plan its column gap, `L`; the
+                        // links keep `S`, so a title with no room on its row has `Add rewards` as
+                        // the opened row's last link at the 330 px plan, not in the menu.
+                        ui.spacing_mut().item_spacing.x = design::L;
                         let mut rewards = Rewards::default();
+                        let long = "Wolves at the Ford Below the Burning Shrine Road";
+                        let place = rewards.fits(ui, long, icons::NEXT, 330.0, Action::quiet(ADD_REWARDS)
+                            .density(Density::Read)
+                            .natural_width(ui)
+                            + Density::Read.control()
+                            + design::S);
+                        if place != RewardsAt::Link {
+                            faults.push(format!("{long:?} has Add rewards at {place:?}"));
+                        }
                         let band = Action::quiet(ADD_REWARDS)
                             .density(Density::Read)
                             .natural_width(ui)
@@ -5064,14 +6002,15 @@ mod tests {
             );
         design::theme::install(&harness.ctx);
         harness.run_steps(2);
+        // The footer's scroll part is named by its messages too, so a message can match twice.
         let shown = |harness: &egui_kittest::Harness<'_, (Sessions, Book)>, words: &str| {
-            harness.query_by_label_contains(words).is_some()
+            harness.query_all_by_label_contains(words).next().is_some()
         };
         let block_a = format!(
             "- [[Timeline#^{a}|Bridge]]\n  - XP 200 for 1 at 0 HP · 1 still stood (XP 200)\n  - 30 gp\n"
         );
         let block_b = format!(
-            "- [[Timeline#^{b}|Shrine]]\n  - XP 0 for 0 at 0 HP. XP not known for Captain Varra: enter an award here.\n"
+            "- [[Timeline#^{b}|Shrine]]\n  - XP 0. XP not known for Captain Varra: enter an award here.\n"
         );
 
         // An edit on disk a moment before is in the words that the act changes. With no block
@@ -5079,8 +6018,19 @@ mod tests {
         // `In notes`, and the note beside the plan is asked to show the block.
         let outside = read().replace("## What happened\n", "## What happened\n\nThe ford held.\n");
         fs::write(&note.path, &outside).unwrap();
+        let next_row = |harness: &egui_kittest::Harness<'_, (Sessions, Book)>| {
+            harness.get_by_label("Add rewards: Shrine").rect()
+        };
+        let shrine_before = next_row(&harness);
         harness.get_by_label("Add rewards: Bridge").click();
         harness.run_steps(2);
+        // Round 27 FN1, FK3, SK2: the result is in the plan's footer, so the next row's action
+        // keeps its place.
+        assert_eq!(
+            next_row(&harness),
+            shrine_before,
+            "the rewards result moved the next row"
+        );
         let with_a = outside.replace(
             "## Loot and rewards\n\n",
             &format!("## Loot and rewards\n\n{block_a}\n"),
@@ -5088,11 +6038,22 @@ mod tests {
         assert_eq!(read(), with_a);
         assert!(shown(
             &harness,
-            "Rewards added under Loot and rewards. XP added. Delete that line to leave XP out from now on. XP tonight: 200 for 1 fight."
+            "Rewards for “Bridge” added under Loot and rewards. XP line added. Delete it in the note to leave XP out from now on. XP tonight: 200 for 1 fight."
         ));
         assert!(harness.query_by_label("Add rewards: Bridge").is_none());
         assert!(shown(&harness, "In notes"));
         assert!(harness.state().0.caret_to_show.is_some());
+        // Review of PR 296, item 1: the footer shows the result by the name the act read; an
+        // unchanged render reads no fight's name from the Timeline again.
+        let reads = || FIGHT_NAME_READS.with(std::cell::Cell::get);
+        let after_act = reads();
+        harness.run_steps(4);
+        assert!(shown(&harness, "Rewards for “Bridge”"));
+        assert_eq!(
+            reads(),
+            after_act,
+            "a render searched the Timeline for a fight's name"
+        );
 
         // A: Bridge. B: Shrine, another fight. It follows the newest block, which has XP, and
         // names the award that is not known, which the sum leaves out. A's Undo stays.
@@ -5106,10 +6067,24 @@ mod tests {
             "XP 0, as in your last rewards. XP tonight: 200 for 2 fights. 1 award is not known."
         ));
         assert_eq!(harness.query_all_by_label("Undo rewards").count(), 2);
-        // Undo of A takes back A's block alone; B's stays.
+        // The footer lists the newest result first: B, then A.
+        let top = |words: &str| {
+            harness
+                .query_all_by_label_contains(words)
+                .map(|node| node.rect().top())
+                .reduce(f32::max)
+        };
+        let (newest, oldest) = (top("Rewards for “Shrine”"), top("Rewards for “Bridge”"));
+        assert!(
+            newest
+                .zip(oldest)
+                .is_some_and(|(newest, oldest)| newest < oldest),
+            "newest first: {newest:?} {oldest:?}"
+        );
+        // Undo of A (the footer's second) takes back A's block alone; B's stays.
         harness
             .query_all_by_label("Undo rewards")
-            .next()
+            .last()
             .unwrap()
             .click();
         harness.run_steps(2);
@@ -5288,10 +6263,11 @@ mod tests {
         assert!(shown(&harness, "In notes"));
 
         // Too narrow for the link after Timeline: no line is added, and the action is the last
-        // line of the row's menu.
+        // line of the row's menu. With one blank at each `·` (round 27 FH4), the links fit at
+        // 300 px, so this is a narrower window.
         fs::write(&note.path, &outside).unwrap();
         harness.state_mut().0.draft.as_mut().unwrap().follow_disk();
-        harness.set_size(egui::vec2(330.0, 800.0));
+        harness.set_size(egui::vec2(260.0, 800.0));
         harness.run_steps(2);
         assert!(harness.query_by_label(ADD_REWARDS).is_none());
         harness

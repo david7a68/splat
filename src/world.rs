@@ -1885,6 +1885,9 @@ pub struct Reader {
     showing: Option<Uuid>,
     status: String,
     status_editing: bool,
+    /// `Change` on Status was pressed: the field takes the keyboard, its words selected, once
+    /// the frame of the press is over.
+    status_select: bool,
     status_drafts: HashMap<Uuid, String>,
     /// Edit forms by entry. A form with changes stays while the DM reads other entries.
     edits: HashMap<Uuid, edit::EditDraft>,
@@ -1940,8 +1943,8 @@ pub struct Reader {
     /// Each open `Add to Log` field, by its entry and the session it was opened in. Its words
     /// wait while the reader shows another entry; a restart loses them, as every held form.
     log_fields: HashMap<LogKey, LogField>,
-    /// The words of Log lines whose entry is gone, for the footer, and whether they were shown.
-    gone_log_lines: Vec<(String, bool)>,
+    /// The Log lines whose entry is gone, for the footer, until the DM copies or dismisses each.
+    gone_log_lines: Vec<GoneLog>,
     /// The entries whose edit form is open in the other reader (Lookup's, or the World
     /// page's). Their Log field waits too, so Splat never makes its own disk conflict.
     pub edited_elsewhere: Vec<Uuid>,
@@ -1979,7 +1982,20 @@ impl PageResult {
 /// in another campaign has the same entry ID, so the campaign is part of the key, and the words
 /// never reach another campaign's note. The session is not: the stamp is the session being
 /// played at Enter, so a renamed, closed or changed session cannot hide typed words.
-type LogKey = (Uuid, Uuid);
+pub(crate) type LogKey = (Uuid, Uuid);
+
+/// The typed words of a Log line whose entry is gone: the footer says them, with `Copy text`,
+/// until the DM copies or dismisses them.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct GoneLog {
+    /// This notice's own number, so two drafts lost from one entry stay two notices.
+    id: u64,
+    /// The campaign of the entry: the notice shows only there.
+    campaign: Uuid,
+    name: String,
+    /// The words as the DM typed them, byte for byte, for `Copy text`.
+    words: String,
+}
 
 /// One open `Add to Log` field: its words, and whether its next draw selects them.
 #[derive(Default)]
@@ -2070,6 +2086,12 @@ pub(crate) enum FooterAct {
     Discarded,
     /// The page result's Undo: the page owns it.
     Page,
+    /// The DM copied or dismissed the words of a Log line whose entry is gone, by its notice.
+    GoneLog(u64),
+    /// `Undo tick` of an open question, by its note and its line: the World page's.
+    Untick(Uuid, usize),
+    /// `Undo remove` of a row of a tracker's history: the trackers own it, and the pane takes it.
+    Trackers,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -2088,6 +2110,8 @@ pub(crate) enum FooterKind {
     Error {
         editor: Option<std::path::PathBuf>,
     },
+    /// A Log line whose entry is gone, with `Copy text` and `Dismiss`.
+    GoneLog(GoneLog),
 }
 
 /// One World or Lookup message for its pane's footer (round 26): a result, reason or notice
@@ -2143,6 +2167,7 @@ impl FooterLine {
             FooterKind::Discarded { name, act } => {
                 design::draft_discarded(ui, name).then_some(*act)
             }
+            FooterKind::GoneLog(gone) => gone.draw(ui, &self.words, self.tone),
             FooterKind::Error { editor } => {
                 ui.horizontal_wrapped(|ui| {
                     design::message(ui, self.tone, &self.words);
@@ -2157,6 +2182,14 @@ impl FooterLine {
             }
         }
     }
+}
+
+/// A pane's footer lines with more from another owner, in the footer's order: results with a
+/// live Undo newest first, then reasons, then notices.
+pub(crate) fn with_lines(mut lines: Vec<FooterLine>, more: Vec<FooterLine>) -> Vec<FooterLine> {
+    lines.extend(more);
+    lines.sort_by_key(|line| (line.rank, std::cmp::Reverse(line.order)));
+    lines
 }
 
 /// Draw a pane's footer lines in its message footer (`design::Footer`), pinned at the bottom of
@@ -2299,9 +2332,9 @@ impl Reader {
                 .remove(&item.entry.id)
                 .unwrap_or_else(|| status(&item.entry).to_owned());
             self.status_editing = self.status != status(&item.entry);
+            self.status_select = false;
             // Only a form with changes is worth keeping. It opens again where it was left.
             self.edits.retain(|_, draft| draft.dirty());
-            self.gone_log_lines.retain(|(_, shown)| !shown);
             self.other_type.clear();
             self.adding = None;
             self.picker = None;
@@ -2309,12 +2342,26 @@ impl Reader {
         }
     }
 
+    #[cfg(test)]
     pub fn read(
         &mut self,
         ui: &mut egui::Ui,
         item: &Item,
         index: &ContentIndex,
         campaign: Option<&Campaign>,
+    ) -> Option<Nav> {
+        self.read_with(ui, item, index, campaign, None)
+    }
+
+    /// `read`, with the trackers: a house rule note in play shows its problems and each
+    /// tracker's history after its text.
+    pub fn read_with(
+        &mut self,
+        ui: &mut egui::Ui,
+        item: &Item,
+        index: &ContentIndex,
+        campaign: Option<&Campaign>,
+        trackers: Option<&mut crate::trackers::Trackers>,
     ) -> Option<Nav> {
         self.prepare(item);
         if self.undo.as_ref().is_some_and(|change| {
@@ -2341,7 +2388,7 @@ impl Reader {
             None
         };
         crate::markdown_view::want_heading(ui.ctx(), heading);
-        let go = self.draw(ui, item, index, campaign);
+        let go = self.draw(ui, item, index, campaign, trackers);
         // A request lasts one draw, so it cannot reach a heading on another page.
         crate::markdown_view::want_heading(ui.ctx(), None);
         go.and_then(|go| self.settle(go))
@@ -2353,6 +2400,7 @@ impl Reader {
         item: &Item,
         index: &ContentIndex,
         campaign: Option<&Campaign>,
+        trackers: Option<&mut crate::trackers::Trackers>,
     ) -> Option<Go> {
         let mut go = None;
         if self.place_choices_document != Some(item.entry.id) {
@@ -2456,8 +2504,9 @@ impl Reader {
             // design): `Start fight` next to Edit, where it is for a DM who never adds to a Log,
             // then `Add to Log`, which gives way first: to its icon, then away. `Start fight`
             // keeps its word, or does not show.
+            // Its own glyph, a list with a plus, so it is not a bare `+` above `Add to fight`.
             let log_action = Action::quiet("Add to Log")
-                .icon(design::icons::ADD)
+                .icon(design::icons::ADD_TO_LOG)
                 .density(Density::Read);
             let start_name = start
                 .as_ref()
@@ -2498,7 +2547,7 @@ impl Reader {
                     in_rect(ui, at(width), |ui| log_action.show(ui).clicked())
                 }
                 Some(LogAction::Icon) => in_rect(ui, at(Density::Read.control()), |ui| {
-                    design::icon_button(ui, design::icons::ADD, "Add to Log").clicked()
+                    design::icon_button(ui, design::icons::ADD_TO_LOG, "Add to Log").clicked()
                 }),
                 None => false,
             };
@@ -2829,6 +2878,9 @@ impl Reader {
                 index,
                 empty_value_block,
                 |ui| {
+                    if let Some(trackers) = trackers {
+                        crate::trackers::history::show(ui, trackers, &item.entry);
+                    }
                     related(ui, item, index).and_then(|go| {
                         if let Go::Item(at, _) = go {
                             Some(at)
@@ -3089,8 +3141,9 @@ impl Reader {
     }
 
     /// `Add to Log`'s field under the header, while it is open for this entry in this session:
-    /// the line's stamp in muted words, then the field. Enter adds the line and closes the
-    /// field; Escape clears and closes it. An open edit form blocks it.
+    /// the line's stamp in muted words, then the field, both ending at the reader's measure.
+    /// Enter adds the line and closes the field; Escape clears and closes it. An open edit form
+    /// blocks it.
     fn log_field(
         &mut self,
         ui: &mut egui::Ui,
@@ -3098,10 +3151,21 @@ impl Reader {
         campaign: &Campaign,
         editing: bool,
     ) -> Option<Go> {
-        let key = (campaign.id, item.entry.id);
-        if !self.log_fields.contains_key(&key) {
+        // With no field open, no scope: an empty one still takes an item gap.
+        if !self.log_fields.contains_key(&(campaign.id, item.entry.id)) {
             return None;
         }
+        design::reader::measure(ui, |ui| self.log_field_in(ui, item, campaign, editing))
+    }
+
+    fn log_field_in(
+        &mut self,
+        ui: &mut egui::Ui,
+        item: &Item,
+        campaign: &Campaign,
+        editing: bool,
+    ) -> Option<Go> {
+        let key = (campaign.id, item.entry.id);
         if editing || self.edited_elsewhere.contains(&item.entry.id) {
             design::message(ui, Tone::Info, "Save or discard your edit first.");
             return None;
@@ -3634,7 +3698,7 @@ impl Reader {
         self.prepare(item);
         let id = item.entry.id;
         let editing = campaign.is_some_and(|campaign| self.editing(id, campaign));
-        let mut lines = self.gone_log_notices();
+        let mut lines = self.gone_log_notices(campaign.map(|campaign| campaign.id));
         let has_unread = self
             .group_fault
             .as_ref()
@@ -3817,8 +3881,14 @@ impl Reader {
                 }
                 None
             }
-            // The page takes its own result's Undo.
-            FooterAct::Page => None,
+            // The page takes its own result's Undo, and the pane the trackers'.
+            FooterAct::Page | FooterAct::Trackers => None,
+            FooterAct::GoneLog(id) => {
+                self.end_gone_log(id);
+                None
+            }
+            // The World page takes a tick's Undo.
+            FooterAct::Untick(..) => None,
         };
         go.and_then(|go| self.settle(go))
     }
@@ -4160,63 +4230,79 @@ impl Reader {
         {
             return Some(go);
         }
-        if !self.compact {
-            let value_width = self.relationship_value_width(ui, item, index);
-            if !self.status_editing
-                && (!status(&item.entry).trim().is_empty() || status_unread(&item.entry))
-            {
-                let value = status(&item.entry);
-                let unread = status_unread(&item.entry);
-                let changed = Self::relationship_row(
-                    ui,
-                    "Status",
-                    value_width,
-                    |ui| {
-                        // Round 26 FE5: a set value is in `Body` in the text colour, as a set
-                        // link is; only `not read` and `not set` stay `Small`.
-                        let (words, role, color) = if unread {
-                            ("not read", Type::Small, colors().result.warning)
-                        } else if value.is_empty() {
-                            ("not set", Type::Small, colors().muted)
-                        } else {
-                            (value, Type::Body, colors().text)
-                        };
-                        ui.label(role.rich(ui, words).color(color));
-                    },
-                    None,
-                );
-                if changed {
-                    self.status_editing = true;
-                }
+        // Status and its Change show in both readers, World's and Lookup's: one act, one write
+        // and one Undo wherever the DM reads the entry.
+        let value_width = self.relationship_value_width(ui, item, index);
+        if !self.status_editing
+            && (!status(&item.entry).trim().is_empty() || status_unread(&item.entry))
+        {
+            let value = status(&item.entry);
+            let unread = status_unread(&item.entry);
+            let changed = Self::relationship_row(
+                ui,
+                "Status",
+                value_width,
+                |ui| {
+                    // Round 26 FE5: a set value is in `Body` in the text colour, as a set
+                    // link is; only `not read` and `not set` stay `Small`.
+                    let (words, role, color) = if unread {
+                        ("not read", Type::Small, colors().result.warning)
+                    } else if value.is_empty() {
+                        ("not set", Type::Small, colors().muted)
+                    } else {
+                        (value, Type::Body, colors().text)
+                    };
+                    ui.label(role.rich(ui, words).color(color));
+                },
+                None,
+            );
+            if changed {
+                // The field starts from the value the reader shows now, not a copy from when
+                // the entry opened: the other reader or Obsidian may have changed it since.
+                status(&item.entry).clone_into(&mut self.status);
+                self.status_editing = true;
+                self.status_select = true;
             }
-            if self.status_editing {
-                let response = design::text_field(ui, "Status", &mut self.status, None, None);
-                let wanted = self.status.trim().to_owned();
-                if wanted != status(&item.entry) {
-                    let mut save = response.has_focus()
-                        && ui.input(|input| input.key_pressed(egui::Key::Enter));
-                    ui.horizontal(|ui| {
-                        design::status(
-                            ui,
-                            design::Status {
-                                icon: design::icons::DRAFT,
-                                word: "Unsaved",
-                                color: colors().document.unsaved,
-                            },
-                        );
-                        save |= Action::secondary("Save status")
-                            .density(Density::Read)
-                            .show(ui)
-                            .clicked();
-                    });
-                    if save {
-                        let result = self.change(campaign, item, index, "status", wanted.into());
-                        if result.is_some() {
-                            self.status_editing = false;
-                            self.status_drafts.remove(&item.entry.id);
-                        }
-                        return result;
+        }
+        if self.status_editing {
+            let response = design::text_field(ui, "Status", &mut self.status, None, None);
+            // Change puts the keyboard in the field with its words selected, so the DM types
+            // the new value at once. A pass that still holds Change's click takes the keyboard
+            // from a field that was not clicked, so the request waits for a pass with no click.
+            if self.status_select {
+                design::focus_and_select(ui, response.id, &self.status);
+                self.status_select = ui.input(|input| input.pointer.any_click());
+            }
+            // While the field has the keyboard, Escape is the field's, not Lookup's.
+            if response.has_focus() || response.lost_focus() {
+                self.form_focused = true;
+            }
+            let wanted = self.status.trim().to_owned();
+            if wanted != status(&item.entry) {
+                // A one-line field lets go of the keyboard on Enter, so Enter saves as it lets go.
+                let mut save = (response.has_focus() || response.lost_focus())
+                    && ui.input(|input| input.key_pressed(egui::Key::Enter));
+                ui.horizontal(|ui| {
+                    design::status(
+                        ui,
+                        design::Status {
+                            icon: design::icons::DRAFT,
+                            word: "Unsaved",
+                            color: colors().document.unsaved,
+                        },
+                    );
+                    save |= Action::secondary("Save status")
+                        .density(Density::Read)
+                        .show(ui)
+                        .clicked();
+                });
+                if save {
+                    let result = self.change(campaign, item, index, "status", wanted.into());
+                    if result.is_some() {
+                        self.status_editing = false;
+                        self.status_drafts.remove(&item.entry.id);
                     }
+                    return result;
                 }
             }
         }
@@ -5700,7 +5786,8 @@ mod tests {
         );
 
         // An entry that is gone: its draft waits for no guard, and the pane's footer says the
-        // words once, so nothing is lost without a word.
+        // words, so nothing is lost without a word.
+        let hob_text = fs::read_to_string(&path).unwrap();
         fs::remove_file(&path).unwrap();
         let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
         assert!(index.position(hob).is_none());
@@ -5719,6 +5806,53 @@ mod tests {
             ),
             "{notices:?}"
         );
+        // X28 of app round 2: the notice stays until the DM copies or dismisses it. Lookup's
+        // Clear, and another entry shown after it, keep it; its choice ends it.
+        lookup.clear();
+        let notices = |lookup: &mut Reader| {
+            lookup
+                .footer_lines(item, &index, Some(&campaign), None)
+                .iter()
+                .filter(|line| matches!(line.kind, FooterKind::GoneLog(_)))
+                .count()
+        };
+        assert_eq!(notices(&mut lookup), 1);
+        assert_eq!(notices(&mut lookup), 1);
+        // The entry comes back with its ID, the DM types again, and it goes again: both lost
+        // drafts keep their notice (Astra's review of PR 287).
+        fs::write(&path, &hob_text).unwrap();
+        let again = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        lookup.forget_gone_log_lines(&again);
+        lookup.open_log(campaign.id, hob, "Hob", "");
+        // The words keep every byte the DM typed, for Copy text (review round 1 of PR 287).
+        let again = "  \"Again.\"\nsecond line\n  ";
+        lookup.log_fields.get_mut(&key).unwrap().field.words = again.into();
+        fs::remove_file(&path).unwrap();
+        lookup.forget_gone_log_lines(&ContentIndex::load(&[], Some(&campaign)).unwrap());
+        assert_eq!(notices(&mut lookup), 2);
+        let gone: Vec<_> = lookup
+            .footer_lines(item, &index, Some(&campaign), None)
+            .into_iter()
+            .filter_map(|line| match line.kind {
+                FooterKind::GoneLog(gone) => Some(gone),
+                _ => None,
+            })
+            .collect();
+        assert!(gone.iter().any(|gone| gone.words == again), "{gone:?}");
+        // A notice belongs to its campaign: another campaign's footer does not show it.
+        let other = Campaign {
+            id: Uuid::new_v4(),
+            ..campaign.clone()
+        };
+        assert!(
+            lookup
+                .footer_lines(item, &index, Some(&other), None)
+                .iter()
+                .all(|line| !matches!(line.kind, FooterKind::GoneLog(_)))
+        );
+        let first = gone.iter().find(|gone| gone.words == "Kept.").unwrap().id;
+        lookup.footer_act(FooterAct::GoneLog(first), item, &campaign);
+        assert_eq!(notices(&mut lookup), 1);
     }
 
     #[test]

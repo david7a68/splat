@@ -17,6 +17,12 @@
 //! counted, so a set-up change cannot move a count.
 //!
 //! `dm_audit_stale_library` is a separate audit, ignored, run by hand in its own process.
+//!
+//! The other journeys of the workflow score (J2, J3, J4 and J6) are in `journeys`. They use
+//! this file's tasks, acts and counts, and the same check: each has its own frozen files under
+//! `artifacts/dm-audit/journeys/`.
+pub mod journeys;
+
 use super::{
     driver::Driver,
     fixture::{Seed, World},
@@ -40,6 +46,19 @@ const ROAD_TABLE: &str = "# Road\n\n## On the road\n\n<!-- splat:rolls key=road 
 fn torch_rules(id: uuid::Uuid) -> String {
     format!(
         "---\nsplat_schema: 2\nsplat_id: {id}\nsplat_kind: rule\nsplat_name: Torch Rules\n---\n\n<!-- splat:yaml path=splat_members -->\n\n```yaml\ntrackers:\n  torches:\n    name: Torches\n    start: 6\n    min: 0\n    pin: true\n    quick:\n    - label: Burn a torch\n      add: -1\n```\n\n<!-- splat:yaml path=splat_rule -->\n\n```yaml\nmechanic: house:torches\nmode: augment\nimplementation: splat:house_rules\nparameters: {{}}\n```\n"
+    )
+}
+
+/// The folder where `audit-freeze` stages what a freeze writes. It copies the folder into the
+/// tree only when every scenario of the command passed, so a refused freeze writes nothing.
+const STAGE: &str = "SPLAT_FREEZE_STAGE";
+
+/// Where a freeze writes the frozen file at `relative`, a path from the repository's root: the
+/// staging folder when `audit-freeze` names one, else the tree.
+pub(super) fn frozen_out(relative: &str) -> PathBuf {
+    std::env::var_os(STAGE).map_or_else(
+        || Path::new(env!("CARGO_MANIFEST_DIR")).join(relative),
+        |stage| PathBuf::from(stage).join(relative),
     )
 }
 
@@ -186,6 +205,17 @@ impl<'a> Audit<'_, 'a> {
         self.act(kind, name, |d| d.click(name));
     }
 
+    /// An outcome that the journey states, read from the saved record after the act. A wrong
+    /// record stops the journey here, so its counts are never frozen or passed.
+    fn outcome(&mut self, what: &str, holds: bool, read: impl std::fmt::Debug) {
+        assert!(
+            holds,
+            "{} / {}: the saved record is wrong: {what}. It reads: {read:?}",
+            self.phase, self.task
+        );
+        self.fact(format!("{what}: holds"));
+    }
+
     fn fact(&mut self, text: impl Into<String>) {
         let text = text.into();
         self.record
@@ -327,6 +357,29 @@ fn before_the_session(a: &mut Audit<'_, '_>) {
         ));
         a.click(Find, TONIGHT);
     }
+
+    // App round 2, Sol's W1-D1: from a planned fight's word to its roster and back, by a named
+    // line of its menu. The next fight gets one more cultist; its run rolls every creature's
+    // initiative in one press, so no frozen task after this one costs more.
+    a.task("Change a planned fight's roster from the plan, and come back");
+    a.fact(format!("the plan says {:?} before", words(a.d)));
+    a.click(Find, &format!("More actions for {SECOND}"));
+    a.click(Nav, "Edit encounter");
+    a.fact(format!(
+        "the editor holds {SECOND}: {}",
+        a.d.has("Back to session") && a.d.has(&format!("Encounter name: {SECOND}"))
+    ));
+    a.act(Do, "duplicate a cultist", |d| {
+        d.click_first("More actions for Ember Cultist");
+        d.click("Duplicate");
+    });
+    a.click(Do, SAVE_ENCOUNTER);
+    a.act(Nav, "Back to session", |d| d.click("Back to session"));
+    a.fact(format!(
+        "back on {} with the plan saying {:?}",
+        a.d.current_page(),
+        words(a.d)
+    ));
 
     // F5: what last week left joins tonight's note in one act. The last act of prep: its result
     // stays under the Last time line until the note changes, and the restart that starts the
@@ -652,6 +705,50 @@ fn during_the_session(a: &mut Audit<'_, '_>) {
         ledger.contains("why: Burn a torch")
     ));
 
+    // F4: a wrong press of last session, on a tracker with no opposite action, is removed from
+    // the house rule note's history in Lookup's reader.
+    a.setup("last session's ledger holds a wrong press", |d| {
+        use crate::trackers::ledger::{self, Entry, Op};
+        let campaign = d.app_mut().campaigns.active_campaign().expect("a campaign");
+        let wrong = Entry {
+            id: "c-1a57ee00".into(),
+            tracker: Some("torches".into()),
+            add: Some(-1),
+            why: Some("Burn a torch".into()),
+            session: Some(uuid::Uuid::from_u128(7)),
+            ..Entry::default()
+        };
+        ledger::commit(&ledger::path(&campaign.path), |_| {
+            Ok(Op::Restore(vec![(None, wrong)]))
+        })
+        .expect("write last session's press");
+        d.app_mut().trackers.read_disk();
+        d.settle();
+    });
+    a.task("Correct a wrong press of last session from the house rule note");
+    a.act(Panel, "open Lookup", |d| d.press_ctrl(Key::K));
+    a.act(Find, "search: torch rules", |d| d.type_text("Torch Rules"));
+    a.click(Find, "TORCHES HISTORY 2");
+    a.click(Find, "More actions for Burn a torch: -1");
+    a.click(Do, "Remove");
+    a.act(Panel, "close Lookup", |d| d.press(Key::Escape));
+    let ledger =
+        a.d.app_mut()
+            .campaigns
+            .active_campaign()
+            .map(|campaign| campaign.path.join("Trackers.md"))
+            .and_then(|path| fs::read_to_string(path).ok())
+            .unwrap_or_default();
+    let corrected = !ledger.contains("c-1a57ee00") && ledger.contains("why: Burn a torch");
+    a.fact(format!(
+        "last session's press is gone and tonight's stays: {corrected}"
+    ));
+    a.d.observe(
+        "T19.6",
+        corrected,
+        "Remove in the house rule note's history takes last session's press, and tonight's stays",
+    );
+
     a.task("Next fight: start it, with the party as it stands");
     a.click(Nav, &format!("Start fight: {SECOND}"));
     a.fact(format!(
@@ -721,15 +818,71 @@ fn after_the_session(a: &mut Audit<'_, '_>) {
         a.d.visible_text("Kestrel ") && a.d.has("Log")
     ));
 
-    // The fight's place is typed on the Timeline page, which its row links to.
+    // W2-D3: the fight's place is typed in its opened row, which the last task opened. It is
+    // the Timeline event's own field.
     a.task("Say where the fight happened");
-    a.act(Nav, "open the fight on the Timeline", |d| {
-        d.click_link("Timeline")
-    });
     a.act(Do, "type where it happened", |d| {
         d.type_into("Where", "The ford");
     });
-    a.click(Nav, NAV_SESSIONS);
+    a.fact(format!(
+        "the Timeline's event says where: {}",
+        a.d.app()
+            .timeline
+            .events
+            .iter()
+            .any(|event| event.title == TONIGHT && event.place == "The ford")
+    ));
+    // Review round 1 (REVIEW-291-next-primary): opening the played row, taller by `Where`, keeps
+    // the next fight's primary action in view with the row's fields, at both sizes and with
+    // Lookup closed and open. Uncounted: the DM opens the row at each size; the row ends open at
+    // the evening's own size, as before.
+    a.setup(
+        "the opened row and the next fight's action, at both sizes",
+        |d| {
+            for lookup in [false, true] {
+                if lookup {
+                    d.press_ctrl(Key::K);
+                }
+                for size in [super::driver::SMALL, super::driver::DEFAULT] {
+                    let (next, place) = d.at_size_mut(size, |d| {
+                        show_plan(d);
+                        d.click(TONIGHT);
+                        d.click(TONIGHT);
+                        let nodes = d.nodes();
+                        let next = nodes
+                            .iter()
+                            .find(|node| {
+                                node.name.starts_with("Start fight: ")
+                                    || node.name.starts_with("Resume: ")
+                            })
+                            .map(|node| (node.name.clone(), node.rect, node.fully_in_view()));
+                        let place = nodes
+                            .iter()
+                            .find(|node| {
+                                node.name == "Where"
+                                    && node.role == egui::accesskit::Role::TextInput
+                            })
+                            .map(|node| (node.rect, node.fully_in_view()));
+                        (next, place)
+                    });
+                    d.observe(
+                        "REVIEW-291-next-primary",
+                        next.as_ref().is_some_and(|next| next.2)
+                            && place.is_some_and(|place| place.1),
+                        format!(
+                            "At {size:?}, Lookup open {lookup}: next {next:?}, Where {place:?}"
+                        ),
+                    );
+                }
+                if lookup {
+                    d.press_ctrl(Key::K);
+                }
+            }
+            show_plan(d);
+            d.click(TONIGHT);
+            d.click(TONIGHT);
+        },
+    );
 
     a.task("Process the recording and read the summary");
     a.click(Sub, "Recordings, 1 recording");
@@ -820,11 +973,17 @@ fn after_the_session(a: &mut Audit<'_, '_>) {
         ));
         d.press_ctrl(Key::S);
         show_plan(d);
-        // The opened fight with its rewards does not fold this scene: an opened row folds the
-        // scenes only when it pushes the next fight out of view with scenes above it (F3).
-        d.expect(&format!("Done: {HOBB}"));
     });
     a.task("Put what an NPC said in the NPC's own note");
+    // W2-D3 (app round 2): the reviewed fight's opened row is taller by its `Where`, so it would
+    // push the improvised fight still to come out of view with this scene above it, and the
+    // scenes fold (F3, the fold's second cause). The DM closes the fight's row first: the closed
+    // rows fit, and the scene shows. Opening the folded scenes instead costs 2.
+    a.act(Find, "close the fight's row", |d| d.click(TONIGHT));
+    a.fact(format!(
+        "the done scene with {HOBB} is in view: {}",
+        a.d.in_view(&format!("Done: {HOBB}"))
+    ));
     a.click(Panel, &format!("Add to Log: {HOBB}"));
     a.act(Do, "type the line", |d| {
         d.type_text("Named the informer at the ford.")
@@ -885,6 +1044,54 @@ fn next_morning(a: &mut Audit<'_, '_>) {
         "the ledger holds the wagon's Done: {}",
         ledger.contains("mark: wagon") && ledger.contains("done: true")
     ));
+
+    settle_a_question(a);
+}
+
+/// X45 of app round 2: the table settles a question that the DM left open in a World note, and
+/// the DM ticks it where Open questions lists it.
+fn settle_a_question(a: &mut Audit<'_, '_>) {
+    const QUESTION: &str = "Who paid the toll collectors?";
+    let note = |d: &mut Driver<'_>| {
+        d.app_mut()
+            .campaigns
+            .active_campaign()
+            .map(|campaign| campaign.path.join(HOBB_PATH))
+            .expect("a campaign")
+    };
+    a.setup("Hobb's note holds an open question", |d| {
+        let path = note(d);
+        let text = fs::read_to_string(&path).expect("Hobb's note");
+        let asked = text.replacen(
+            "Keeps the mill at the ford.\n",
+            &format!("Keeps the mill at the ford.\n\n- [ ] {QUESTION}\n"),
+            1,
+        );
+        fs::write(&path, asked).expect("write Hobb's note");
+        d.app_mut().lookup.refresh();
+        d.settle();
+    });
+    let asked = fs::read_to_string(note(a.d)).expect("Hobb's note");
+    a.task("The table settles an open question: tick it");
+    a.click(Nav, NAV_WORLD);
+    a.act(Sub, "Open questions", |d| {
+        d.click_containing("Open questions · ")
+    });
+    // The act is done when the note holds the tick on that line and nothing else changed: a
+    // box that writes nothing blocks the act, and G6 fails (review round 1 of PR 287).
+    a.act(Do, &format!("Open: {QUESTION}"), |d| {
+        d.click(&format!("Open: {QUESTION}"));
+        let saved = fs::read_to_string(note(d)).expect("Hobb's note");
+        let ticked = asked.replacen(
+            &format!("- [ ] {QUESTION}\n"),
+            &format!("- [x] {QUESTION}\n"),
+            1,
+        );
+        assert!(
+            ticked != asked && saved == ticked,
+            "the tick did not write that line alone: {saved:?}"
+        );
+    });
 }
 
 /// The World NPC of F6's task, whom a done scene links.
@@ -936,6 +1143,19 @@ fn steps(rows: &[Row]) -> String {
     steps
 }
 
+/// The interactions of these rows by kind, in the order `nav sub panel find do`.
+fn by_kind(rows: &[&Row]) -> String {
+    [Nav, Sub, Panel, Find, Do]
+        .map(|kind| {
+            rows.iter()
+                .filter(|row| row.kind == kind)
+                .map(|row| row.interactions)
+                .sum::<u32>()
+                .to_string()
+        })
+        .join("\t")
+}
+
 fn summary(record: &Record) -> String {
     let rows: Vec<&Row> = record
         .rows
@@ -943,52 +1163,60 @@ fn summary(record: &Record) -> String {
         .filter(|row| row.kind != Kind::Setup)
         .collect();
     let tasks = counts(record);
+    let mut phases: Vec<&str> = Vec::new();
+    for (phase, _, _) in &record.tasks {
+        if !phases.contains(phase) {
+            phases.push(phase);
+        }
+    }
+    phases.push("total");
     let mut out = String::new();
     let _ = writeln!(
         out,
         "Phase totals\nphase\ttasks\ttransitions\tinteractions\tnav\tsub\tpanel\tfind\tdo"
     );
-    for phase in ["before", "during", "after", "total"] {
-        let of: Vec<&&Row> = rows
+    for phase in phases {
+        let of: Vec<&Row> = rows
             .iter()
+            .copied()
             .filter(|row| phase == "total" || row.phase == phase)
             .collect();
-        let count = |kind| {
-            of.iter()
-                .filter(|row| row.kind == kind)
-                .map(|row| row.interactions)
-                .sum::<u32>()
-        };
         let _ = writeln!(
             out,
-            "{phase}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+            "{phase}\t{}\t{}\t{}\t{}",
             tasks
                 .iter()
                 .filter(|task| phase == "total" || task.phase == phase)
                 .count(),
             of.iter().map(|row| row.pages.len()).sum::<usize>(),
             of.iter().map(|row| row.interactions).sum::<u32>(),
-            count(Nav),
-            count(Sub),
-            count(Panel),
-            count(Find),
-            count(Do),
+            by_kind(&of),
         );
     }
     let _ = writeln!(
         out,
-        "\nTasks\nphase\ttask\ttransitions\tinteractions\toverhead\tpath"
+        "\nTasks\nphase\ttask\ttransitions\tinteractions\toverhead\tnav\tsub\tpanel\tfind\tdo\tpath"
     );
     for task in &tasks {
-        let overhead: u32 = rows
+        let of: Vec<&Row> = rows
             .iter()
-            .filter(|r| r.phase == task.phase && r.task == task.task && r.kind != Do)
+            .copied()
+            .filter(|r| r.phase == task.phase && r.task == task.task)
+            .collect();
+        let overhead: u32 = of
+            .iter()
+            .filter(|r| r.kind != Do)
             .map(|r| r.interactions)
             .sum();
         let _ = writeln!(
             out,
-            "{}\t{}\t{}\t{}\t{overhead}\t{}",
-            task.phase, task.task, task.transitions, task.interactions, task.path,
+            "{}\t{}\t{}\t{}\t{overhead}\t{}\t{}",
+            task.phase,
+            task.task,
+            task.transitions,
+            task.interactions,
+            by_kind(&of),
+            task.path,
         );
     }
     let _ = writeln!(out, "\nSet-up, not counted");
@@ -1007,8 +1235,8 @@ fn summary(record: &Record) -> String {
 }
 
 /// The frozen counts. An empty file proves nothing, so it fails.
-fn read_frozen() -> Frozen {
-    let path = folder().join("counts.json");
+fn read_frozen(folder: &Path) -> Frozen {
+    let path = folder.join("counts.json");
     let text = fs::read_to_string(&path)
         .unwrap_or_else(|error| panic!("G6: cannot read {}: {error}", path.display()));
     let frozen: Frozen = serde_json::from_str(&text)
@@ -1035,10 +1263,9 @@ fn blocked(rows: &[Row]) -> Vec<String> {
         .collect()
 }
 
-/// What differs between the frozen counts and this evening's, one line each.
+/// What differs between the frozen counts and this journey's, one line each.
 fn differences(frozen: &[TaskCount], measured: &[TaskCount], rows: &[Row]) -> Vec<String> {
-    let name =
-        |task: &TaskCount| format!("the task \"{}\" ({} the session)", task.task, task.phase);
+    let name = |task: &TaskCount| format!("the task \"{}\" ({})", task.task, task.phase);
     let mut out = blocked(rows);
     for old in frozen {
         match measured
@@ -1046,7 +1273,7 @@ fn differences(frozen: &[TaskCount], measured: &[TaskCount], rows: &[Row]) -> Ve
             .find(|new| new.phase == old.phase && new.task == old.task)
         {
             None => out.push(format!(
-                "{} is in counts.json, but the evening no longer plays it",
+                "{} is in counts.json, but the journey no longer plays it",
                 name(old)
             )),
             Some(new) if new != old => out.push(format!(
@@ -1088,7 +1315,8 @@ fn differences(frozen: &[TaskCount], measured: &[TaskCount], rows: &[Row]) -> Ve
     out
 }
 
-fn evening(d: &mut Driver<'_>) -> Record {
+/// Play a journey from its first act, at 1200x800 unless the journey says otherwise.
+fn play(d: &mut Driver<'_>, journey: impl FnOnce(&mut Audit<'_, '_>)) -> Record {
     d.set_base((1200.0, 800.0));
     let mut audit = Audit {
         d,
@@ -1096,25 +1324,52 @@ fn evening(d: &mut Driver<'_>) -> Record {
         task: String::new(),
         record: Record::default(),
     };
-    audit.setup(
-        "play last week's session, then quit and open the app",
-        last_week,
-    );
-    audit.setup("work at 1200x800", |d| d.set_base((1200.0, 800.0)));
-    before_the_session(&mut audit);
-    during_the_session(&mut audit);
-    after_the_session(&mut audit);
+    journey(&mut audit);
     audit.record
 }
 
-fn folder() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("artifacts/dm-audit")
+fn evening(a: &mut Audit<'_, '_>) {
+    a.setup(
+        "play last week's session, then quit and open the app",
+        last_week,
+    );
+    a.setup("work at 1200x800", |d| d.set_base((1200.0, 800.0)));
+    before_the_session(a);
+    during_the_session(a);
+    after_the_session(a);
+}
+
+/// A measured journey's frozen files, and the words its check uses.
+struct FrozenFiles {
+    /// What a failure calls the journey.
+    what: &'static str,
+    /// The folder of `counts.json`, `steps.tsv` and `summary.tsv`, from the repository's root.
+    folder: String,
+    /// The command that writes every row again, when a task costs more or less on purpose.
+    counts_command: &'static str,
+}
+
+impl FrozenFiles {
+    fn path(&self) -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join(&self.folder)
+    }
 }
 
 /// G6. The scenario `dm-audit`: play the frozen evening and compare each task's counts.
 pub fn run(d: &mut Driver<'_>) {
-    let record = evening(d);
-    let measured = counts(&record);
+    let record = play(d, evening);
+    let files = FrozenFiles {
+        what: "the audit's evening",
+        folder: "artifacts/dm-audit".to_owned(),
+        counts_command: COUNTS_COMMAND,
+    };
+    measure(d, &files, &record);
+}
+
+/// G6 for one journey: compare each task's counts with its frozen files, or write them when
+/// `SPLAT_DM_AUDIT_WRITE` asks.
+fn measure(d: &mut Driver<'_>, files: &FrozenFiles, record: &Record) {
+    let measured = counts(record);
     let total = |tasks: &[TaskCount]| {
         (
             tasks.iter().map(|t| t.transitions).sum::<usize>(),
@@ -1122,60 +1377,64 @@ pub fn run(d: &mut Driver<'_>) {
         )
     };
     let mode = std::env::var(WRITE).ok();
+    let dir = files.path();
+    let at = &files.folder;
     if let Some(mode) = mode.as_deref() {
         let blocked = blocked(&record.rows);
         assert!(
             blocked.is_empty(),
-            "dm-audit: an act found no control, so nothing is frozen:\n{}",
+            "{at}: an act found no control, so nothing is frozen:\n{}",
             blocked.join("\n")
         );
         let about = match mode {
-            "all" => {
-                "G6 reads this in every gate. `devenv shell -- audit-freeze counts` writes it; a \
-                      feature adds its new tasks with `devenv shell -- audit-freeze add`, which \
-                      leaves every row here as it is."
-                    .to_owned()
-            }
+            "all" => format!(
+                "G6 reads this in every gate. `{}` writes it; a feature adds its new tasks with \
+                 `{ADD_COMMAND}`, which leaves every row here as it is.",
+                files.counts_command
+            ),
             "add" => {
-                let frozen = read_frozen();
+                let frozen = read_frozen(&dir);
                 let refused: Vec<String> = differences(&frozen.tasks, &measured, &record.rows)
                     .into_iter()
                     .filter(|line| !line.contains(NEW_TASK))
                     .collect();
                 assert!(
                     refused.is_empty(),
-                    "dm-audit: `{ADD_COMMAND}` writes rows for new tasks only, and a frozen task differs, \
+                    "{at}: `{ADD_COMMAND}` writes rows for new tasks only, and a frozen task differs, \
                      so nothing is written. Put the frozen task back as it was:\n{}",
                     refused.join("\n")
                 );
                 frozen.about
             }
-            other => panic!("dm-audit: {WRITE} is `all` or `add`, not {other:?}"),
+            other => panic!("{at}: {WRITE} is `all` or `add`, not {other:?}"),
         };
         let frozen = Frozen {
             about,
             tasks: measured,
         };
-        let dir = folder();
+        let dir = frozen_out(&files.folder);
+        fs::create_dir_all(&dir).expect("make the folder of the frozen files");
         fs::write(dir.join("steps.tsv"), steps(&record.rows)).expect("write steps.tsv");
-        fs::write(dir.join("summary.tsv"), summary(&record)).expect("write summary.tsv");
+        fs::write(dir.join("summary.tsv"), summary(record)).expect("write summary.tsv");
         fs::write(
             dir.join("counts.json"),
             serde_json::to_string_pretty(&frozen).expect("encode counts") + "\n",
         )
         .expect("write counts.json");
-        println!("dm-audit: froze {}", dir.display());
+        println!("{at}: froze {}", dir.display());
         return;
     }
-    let frozen = read_frozen();
+    let frozen = read_frozen(&dir);
     let found = differences(&frozen.tasks, &measured, &record.rows);
     assert!(
         found.is_empty(),
-        "G6: the audit's evening (artifacts/dm-audit/) does not cost what counts.json says. {}.\n\
-         If this change is meant, run `{COUNTS_COMMAND}` and say in the pull request why the task \
+        "G6: {} ({at}/) does not cost what counts.json says. {}.\n\
+         If this change is meant, run `{}` and say in the pull request why the task \
          costs more or less. If it is not meant, your change made the task cost more or less: \
-         artifacts/dm-audit/steps.tsv lists each act of the task.\nAll {} differences:\n{}",
+         {at}/steps.tsv lists each act of the task.\nAll {} differences:\n{}",
+        files.what,
         found[0],
+        files.counts_command,
         found.len(),
         found.join("\n")
     );
@@ -1184,7 +1443,8 @@ pub fn run(d: &mut Driver<'_>) {
         "G6",
         true,
         format!(
-            "{} tasks, {transitions} page transitions and {interactions} interactions, as frozen",
+            "{}: {} tasks, {transitions} page transitions and {interactions} interactions, as frozen",
+            files.what,
             measured.len()
         ),
     );

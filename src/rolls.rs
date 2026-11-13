@@ -1182,6 +1182,13 @@ pub(crate) enum ArmedAction {
     Stop,
 }
 
+impl ArmedAction {
+    /// The step that continues the armed task, which has the secondary border (FI9).
+    pub(crate) fn continues(self) -> bool {
+        matches!(self, Self::RollDamage)
+    }
+}
+
 fn armed_id() -> Id {
     Id::new("roll_armed")
 }
@@ -1450,20 +1457,9 @@ impl TileText {
             if armed { c.accent } else { c.muted },
             f32::INFINITY,
         );
-        let digit = number.map(|n| {
-            design::one_line(
-                ui,
-                &n.to_string(),
-                Type::Small.font(ui),
-                c.faint,
-                f32::INFINITY,
-            )
-        });
-        let room = (inner
-            - mark.size().x
-            - design::XS
-            - digit.as_ref().map_or(0.0, |g| g.size().x + design::XS))
-        .max(1.0);
+        let words = inner - mark.size().x - design::XS;
+        let digit = key_hint(ui, link_label(&chip.link), number, words);
+        let room = (words - digit.as_ref().map_or(0.0, |g| g.size().x + design::XS)).max(1.0);
         let name = design::words_that_fit(ui, link_label(&chip.link), &Type::Strong.font(ui), room);
         let name = design::one_line(ui, &name, Type::Strong.font(ui), c.text, room);
         let wrapped = |text: String| {
@@ -1487,6 +1483,26 @@ impl TileText {
             + 2.0 * design::XS
             + 2.0
     }
+}
+
+/// X54: a tile's key hint, `Ctrl+1`, as the keys are. It gives way before the name in
+/// `room` is cut, so the tile never shows a bare digit; its hover and accessible name keep
+/// the keys.
+fn key_hint(
+    ui: &egui::Ui,
+    name: &str,
+    number: Option<usize>,
+    room: f32,
+) -> Option<std::sync::Arc<egui::Galley>> {
+    let hint = design::one_line(
+        ui,
+        &format!("Ctrl+{}", number?),
+        Type::Small.font(ui),
+        colors().faint,
+        f32::INFINITY,
+    );
+    (design::number_width(ui, name, &Type::Strong.font(ui)) + design::XS + hint.size().x <= room)
+        .then_some(hint)
 }
 
 /// The hover and focus text of a tile: its rules, its printed numbers when a run changes
@@ -1619,14 +1635,26 @@ fn tile_lines(line: f32, count: usize) -> Vec<(usize, f32)> {
 
 /// Quiet actions on a line under a message, wrapped by whole actions. The first action of
 /// each line starts its words at the text edge.
-fn line_start_actions<T: Copy>(ui: &mut egui::Ui, actions: &[(&str, T)]) -> Option<T> {
+/// An armed action's button: bordered when it continues the task, else quiet (FI9).
+fn armed_button(word: &str, action: ArmedAction) -> Action<'_> {
+    if action.continues() {
+        Action::secondary(word)
+    } else {
+        Action::quiet(word)
+    }
+    .density(Density::Read)
+}
+
+fn line_start_actions(ui: &mut egui::Ui, actions: &[(&str, ArmedAction)]) -> Option<ArmedAction> {
+    // FI9 (iter-27-R): the step that continues the task has the secondary border; the
+    // others stay quiet, a quiet one at a line's start hanging its padding in the gutter.
+
     let mut chosen = None;
     let width = ui.available_width();
-    let mut lines: Vec<Vec<(&str, T)>> = Vec::new();
+    let mut lines: Vec<Vec<(&str, ArmedAction)>> = Vec::new();
     let mut used = width;
     for (word, action) in actions {
-        let needed = Action::quiet(word).density(Density::Read).natural_width(ui);
-        // The first action hangs its padding in the gutter, so it takes less of the line.
+        let needed = armed_button(word, *action).natural_width(ui);
         if lines.is_empty() || used + design::S + needed > width {
             lines.push(Vec::new());
             used = needed;
@@ -1641,9 +1669,13 @@ fn line_start_actions<T: Copy>(ui: &mut egui::Ui, actions: &[(&str, T)]) -> Opti
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = design::S;
             for (at, (word, action)) in line.into_iter().enumerate() {
-                let button = Action::quiet(word).density(Density::Read);
-                let button = if at == 0 { button.line_start() } else { button };
-                if button.show(ui).clicked() {
+                let shown = armed_button(word, action);
+                let shown = if at == 0 && !action.continues() {
+                    shown.line_start()
+                } else {
+                    shown
+                };
+                if shown.show(ui).clicked() {
                     chosen = Some(action);
                 }
             }
