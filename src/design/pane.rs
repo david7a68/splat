@@ -790,3 +790,67 @@ impl Footer<'_> {
         inner
     }
 }
+
+#[cfg(test)]
+mod hold_tests {
+    use super::*;
+    use egui_kittest::{Harness, kittest::Queryable};
+
+    #[derive(Default)]
+    struct State {
+        holds: bool,
+        rows_above: usize,
+    }
+
+    /// A list with rows above a button and many below; the button's press adds a row above it.
+    fn list(ui: &mut Ui, state: &mut State) {
+        let mut scroll = ContentScroll::default();
+        if state.holds {
+            scroll = scroll.holds_presses();
+        }
+        Footer::new("held", ui.available_width()).pane_content(ui, scroll, |ui| {
+            for row in 0..state.rows_above {
+                ui.label(format!("Row above {row}"));
+            }
+            let response = ui.button("Add a row above");
+            held_seen(ui, "add", response.rect.top());
+            if response.clicked() {
+                hold_press(ui, "add", response.rect.top());
+                state.rows_above += 3;
+            }
+            for row in 0..60 {
+                ui.label(format!("Row below {row}"));
+            }
+        });
+    }
+
+    /// `ContentScroll::holds_presses`: a press that adds rows above its control keeps the
+    /// control under the pointer, so a second press of a still pointer presses it again. Without
+    /// the option, the control moves down by the rows added.
+    #[test]
+    fn a_held_press_keeps_its_control_under_the_pointer() {
+        for holds in [true, false] {
+            let mut h = Harness::builder()
+                .with_size(egui::vec2(400.0, 300.0))
+                .build_ui_state(
+                    list,
+                    State {
+                        holds,
+                        rows_above: 2,
+                    },
+                );
+            crate::design::theme::install(&h.ctx);
+            h.run_steps(4);
+            let before = h.get_by_label("Add a row above").rect().top();
+            h.get_by_label("Add a row above").click();
+            h.run_steps(8);
+            let after = h.get_by_label("Add a row above").rect().top();
+            assert_eq!(h.state().rows_above, 5);
+            if holds {
+                assert!((after - before).abs() < 0.5, "held: {before} then {after}");
+            } else {
+                assert!(after - before > 20.0, "not held: {before} then {after}");
+            }
+        }
+    }
+}

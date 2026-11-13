@@ -585,6 +585,30 @@ pub fn run(d: &mut Driver<'_>) {
         ),
     );
     d.audit_goal_within("T19.2", "open the numbers and record a room", 2);
+    // Round 28 review of PR 308: the view is the pane's scroll column. With a result in its
+    // footer and short content at 1920x1080, the footer follows the content by `S`, and G6
+    // finds no footer far below a short body.
+    let (follows, gaps, detail) = d.at_size(LARGE, |d| {
+        let gap = d.pane_records().iter().find_map(|record| {
+            let (footer, viewport, height) = (
+                record.footer()?,
+                record.viewport()?,
+                record.content_height()?,
+            );
+            (record.fits() && record.offset() <= 0.5)
+                .then(|| footer.top() - (viewport.top() + height))
+        });
+        (
+            gap.is_some_and(|gap| (gap - crate::design::S).abs() <= 1.0),
+            d.short_body_gaps(),
+            format!("{gap:?}"),
+        )
+    });
+    d.observe(
+        "T19.2",
+        follows && gaps.is_empty(),
+        format!("At 1920x1080 the footer follows the short Trackers list by S: gap {detail}, G6 {gaps:?}"),
+    );
     d.observe(
         "T19.3",
         d.has_label("DUE 1") && d.has_containing("1 notice is due"),
