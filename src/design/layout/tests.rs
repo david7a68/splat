@@ -232,7 +232,7 @@ fn inline_create_moves_nothing_while_the_dm_types() {
     const BROWSE: Word = crate::word!("Browse…");
     const CANCEL: Word = crate::word!("Cancel");
     let ctx = context();
-    let draw = |name: &str, folder: &str| {
+    let draw = |name: &str, folder: &str, with_preview: bool| {
         let (mut name, mut folder) = (name.to_owned(), folder.to_owned());
         let reason = folder.is_empty().then_some("Choose a folder first.");
         let preview = format!("Will create {folder}/Campaign.md");
@@ -257,14 +257,24 @@ fn inline_create_moves_nothing_while_the_dm_types() {
                     .help("Splat keeps the notes here."),
                 )
                 .create(Create::primary(CREATE).blocked(reason))
-                .kept_line(KeptLine::new().cancel(cancel).preview(Some(&preview)))
+                .kept_line(
+                    KeptLine::new()
+                        .cancel(cancel)
+                        .preview(with_preview.then_some(preview.as_str())),
+                )
                 .show(ui);
             let _ = Action::quiet("Below").show(ui);
         });
         ["Folder", "Browse…", "Add campaign", "Below"].map(|name| bounds(&nodes, name))
     };
-    let empty = draw("", "");
-    let typed = draw("Copper Coast", "/vault/copper");
+    let empty = draw("", "", true);
+    let typed = draw("Copper Coast", "/vault/copper", true);
+    // A kept line with nothing on it (no Cancel, no reason, no preview) keeps its height too.
+    assert_eq!(
+        draw("", "/vault/copper", false),
+        empty,
+        "an empty kept line stays"
+    );
     assert_eq!(empty, typed, "nothing moves as the DM types");
     let [field, browse, create, _] = typed;
     assert!(
