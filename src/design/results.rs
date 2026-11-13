@@ -1926,7 +1926,8 @@ mod tests {
             clippy::disallowed_methods,
             reason = "the test of the by-owner Undo, staged until its callers use `undo_by`"
         )]
-        assert!(links.undo(&b, |_| Ok::<(), ()>(())).is_none(), "B undoes A");
+        let b_undoes_a = links.undo(&b, |_| Ok::<(), ()>(()));
+        assert!(b_undoes_a.is_none(), "B undoes A");
         links.owner_changed(&b);
         assert!(links.get(&a).is_some(), "B's saved edit ends A");
         links.record(Linked(b.clone(), "B."));
@@ -1941,7 +1942,8 @@ mod tests {
             clippy::disallowed_methods,
             reason = "the test of the by-owner Undo, staged until its callers use `undo_by`"
         )]
-        assert!(matches!(links.undo(&b, |_| Ok::<(), ()>(())), Some(Ok(_))));
+        let undone = links.undo(&b, |_| Ok::<(), ()>(()));
+        assert!(matches!(undone, Some(Ok(_))));
         assert_eq!(links.get(&a).unwrap().value().1, "A.", "B's Undo takes A");
     }
 

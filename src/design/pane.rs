@@ -942,6 +942,7 @@ mod hold_tests {
                 ui.label(format!("Row above {row}"));
             }
             let response = ui.button("Add a row above");
+            let _ = ui.button("Next control");
             held_seen(ui, "add", response.rect.top());
             if response.clicked() {
                 hold_press(ui, "add", &response);
@@ -978,7 +979,7 @@ mod hold_tests {
         crate::design::theme::install(&h.ctx);
         h.run_steps(4);
         h.get_by_label("Add a row above").click();
-        h.get_by_label("Far control").focus();
+        h.get_by_label("Next control").focus();
         h.run_steps(8);
         let ends = h.ctx.data(|data| {
             data.get_temp::<Vec<(&'static str, u64, Option<Id>)>>(Id::new("design_pane_hold_ends"))
@@ -990,7 +991,7 @@ mod hold_tests {
             "ends {ends:?}, focused now {focused:?}, rows {}",
             h.state().rows_above
         );
-        let far = h.get_by_label("Far control").rect();
+        let far = h.get_by_label("Next control").rect();
         let record = pane_records(&h.ctx).into_iter().next().unwrap();
         let (viewport, footer) = (record.viewport().unwrap(), record.footer().unwrap());
         assert!(
