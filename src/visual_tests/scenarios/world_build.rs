@@ -2846,6 +2846,57 @@ pub fn round_trip(d: &mut Driver<'_>) {
         );
     }
     d.state("world-edit-without-run", Sizes::All);
+    // A field keeps its cursor and its text history under its id, and the id carries the note's
+    // key: Ctrl+Z in Rook's Status field must not bring back words from Ashfall Faction's draft.
+    assert_eq!(d.field_text("Status").as_deref(), Some("ready"));
+    let rook_path = root(d).join("NPCs/Rook.md");
+    fs::create_dir_all(rook_path.parent().unwrap()).unwrap();
+    fs::write(
+        &rook_path,
+        format!(
+            "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: world\nsplat_name: Rook\nsplat_type: npc\nsplat_status: alive\n---\n",
+            crate::hermetic::new_uuid()
+        ),
+    )
+    .unwrap();
+    reload(d);
+    d.click_containing("Rook · ");
+    d.expect("Edit Rook");
+    d.click("Edit Rook");
+    d.expect("Save changes");
+    assert_eq!(d.field_text("Status").as_deref(), Some("alive"));
+    d.type_into("Status", "");
+    d.press_ctrl(Key::Z);
+    assert_eq!(
+        d.field_text("Status").as_deref(),
+        Some("alive"),
+        "ctrl-z-other-note: Rook keeps its own Status after Ctrl+Z"
+    );
+    d.click("Cancel");
+    fs::remove_file(&rook_path).unwrap();
+    reload(d);
+    d.click_containing("Ashfall Faction · ");
+    assert_eq!(
+        d.field_text("Status").as_deref(),
+        Some("ready"),
+        "ctrl-z-other-note: Ashfall Faction's draft is unchanged"
+    );
+    // One entry, two pickers: the group search must not take the location search's text
+    // history, so each picker kind has its own field name.
+    d.click("Change In");
+    d.expect("Find a location");
+    d.type_into("Find a location", "Gate");
+    d.click("Cancel");
+    d.click("Change Part of");
+    d.expect("Find a group");
+    d.type_into("Find a group", "");
+    d.press_ctrl(Key::Z);
+    assert_eq!(
+        d.field_text("Find a group").as_deref(),
+        Some(""),
+        "ctrl-z-other-picker: the group search keeps its own text after Ctrl+Z"
+    );
+    d.click("Cancel");
     let repair_path = root(d).join("Notes/Rail repair.md");
     fs::write(&repair_path, "---\nsplat_schema: 2\nsplat_id: [\n---\n").unwrap();
     reload(d);
