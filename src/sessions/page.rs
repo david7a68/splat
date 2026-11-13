@@ -6457,7 +6457,6 @@ impl Sessions {
             return;
         };
         design::heading(ui, design::Heading::Label("New template"));
-        design::gap(ui, design::Gap::M);
         // Round 27 FL2, SL1: the one inline creation layout. `Create template` follows the name
         // field on its line, the help stays under the field, and the kept line below holds quiet
         // `Cancel` at its start and the reason after it, so typing moves nothing.
@@ -6686,11 +6685,15 @@ impl Sessions {
         let response = ui
             .add_enabled_ui(locked.is_none(), |ui| {
                 let width = ui.available_width() - 2.0 * design::S;
-                let response = SESSION_FOLDER.single_line(ui, &mut self.folder_text, |edit| {
-                    edit.desired_width(width)
-                        .min_size(egui::vec2(0.0, Density::Read.control()))
-                        .margin(egui::vec2(design::S, design::XS))
-                });
+                let campaign = self.campaign.as_ref().map(|campaign| campaign.id);
+                let response =
+                    SESSION_FOLDER
+                        .with(campaign)
+                        .single_line(ui, &mut self.folder_text, |edit| {
+                            edit.desired_width(width)
+                                .min_size(egui::vec2(0.0, Density::Read.control()))
+                                .margin(egui::vec2(design::S, design::XS))
+                        });
                 design::named(ui, &response, "Folder");
                 response
             })

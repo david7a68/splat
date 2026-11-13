@@ -12949,6 +12949,23 @@ pub mod session_notes {
                 .is_some_and(|text| text.contains("Edited in the template.")),
             "A template edited a moment ago is what a new session starts from",
         );
+        // A form field's cursor and Undo belong to its session (the field's key is the session's
+        // id): edit Session 2's title, switch to Session 1, focus its title and undo. Session 1
+        // takes none of Session 2's words (its own history may still undo its own edits).
+        d.click("Edit session details");
+        d.type_into("Session title", " (draft)");
+        d.click_starting(&format!("Session 1: {TITLE} ·"));
+        d.click("Edit session details");
+        d.type_into("Session title", "");
+        d.press_ctrl(Key::Z);
+        let own = d.field_text("Session title");
+        d.observe(
+            "round-28-S-form-undo-per-session",
+            own.as_deref()
+                .is_some_and(|words| !words.contains("Tonight") && !words.contains("(draft)")),
+            format!("Undo in Session 1's title brings none of Session 2's words: {own:?}"),
+        );
+        d.click("Cancel");
         d.click_starting(&format!("Session 1: {TITLE} ·"));
         show_plan(d);
         d.observe(
