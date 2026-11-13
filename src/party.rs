@@ -859,6 +859,7 @@ impl Party {
         if self.page > 0 && sheet_entries(record, self.page).len() > 8 {
             // The page's search is one field; `Clear` is the part's.
             let _ = SHEET_SEARCH
+                .with(character_key(id))
                 .search(
                     ui,
                     "Filter this page",
@@ -1055,7 +1056,18 @@ pub struct LiveValues {
 }
 
 /// One entry on a sheet page: its name and its facts.
-const SHEET_SEARCH: design::FieldId = crate::field_id!("sheet_search");
+pub(crate) const SHEET_SEARCH: design::FieldId = crate::field_id!("sheet_search");
+
+/// The key of one character's own fields: their D&D Beyond id. egui keeps a field's cursor and
+/// text Undo under its id, and the page's search is cleared when another character is chosen,
+/// so each character has their own.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: a text key from a character's id, so each character's field keeps its own Undo (design::results::STAGED_ALLOWS)"
+)]
+fn character_key(id: &str) -> design::TextKey {
+    design::TextKey::from_data(id)
+}
 const ENTRY_ROW: f32 = 40.0;
 /// The way to connect, wherever the party asks the DM to.
 const CONNECT: &str = "Connect D&D Beyond";

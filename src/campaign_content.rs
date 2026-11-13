@@ -23,7 +23,7 @@ use uuid::Uuid;
 
 /// Sheets refresh in the background, so the campaign package needs another look now and then.
 const NEEDED_SEARCH: design::FieldId = crate::field_id!("package_needed_search");
-const PACKAGE_SEARCH: design::FieldId = crate::field_id!("package_entries_search");
+pub(crate) const PACKAGE_SEARCH: design::FieldId = crate::field_id!("package_entries_search");
 const CHECK_EVERY: Duration = Duration::from_secs(5 * 60);
 
 pub(crate) struct Snapshot {
@@ -2712,6 +2712,7 @@ impl CampaignContent {
                     }
                 });
                 let _ = PACKAGE_SEARCH
+                    .with(module.id)
                     .search(
                         ui,
                         "Find an entry in this package",
