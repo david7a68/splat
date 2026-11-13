@@ -2537,6 +2537,7 @@ mod tests {
     /// on its control when a result is added above.
     #[test]
     fn one_entry_in_two_panes_has_two_lines_with_their_own_ids() {
+        use egui_kittest::kittest::NodeT;
         use pilot::*;
         let mut app = two();
         app.two_panes = true;
