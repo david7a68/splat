@@ -667,6 +667,22 @@ pub fn broken(d: &mut Driver<'_>) {
         );
     }
     d.expect("Copy the text of Repaired watchkeeper");
+    // Revision 19: with the warning in the footer at 960, the last body action still takes the
+    // press, and only it: the type section opens, and the warning and its choices stay.
+    let base = d.window_size();
+    d.set_base(SMALL);
+    d.click("Give this note a type");
+    let opened = d.has_label(crate::world::TYPE_HELP)
+        && d.has("Copy the text of Repaired watchkeeper")
+        && d.has("Discard the draft of Repaired watchkeeper");
+    d.click("Give this note a type");
+    let opened = opened && !d.has_label(crate::world::TYPE_HELP);
+    d.set_base(base);
+    d.observe(
+        "iter-27-D-FE6-press",
+        opened,
+        "At 960 the body's last action opens and closes its section under the footer's warning",
+    );
     action_at_text_edge(
         d,
         "iter-17-D-copy-text",

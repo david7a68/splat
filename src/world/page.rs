@@ -1137,6 +1137,8 @@ impl WorldPage {
             if choice.discard
                 && let Some(npc) = self.generated.take()
             {
+                // The copy's result belonged to this card; `Undo discard` does not bring it back.
+                self.marker_copied = None;
                 self.result_order = super::next_order();
                 self.discarded_npc = Some((
                     npc,
@@ -1154,6 +1156,7 @@ impl WorldPage {
                 self.new_kind = None;
                 // A New form's save leaves a held NPC in its row.
                 if self.generated_shown {
+                    self.marker_copied = None;
                     self.generated = None;
                     self.generated_shown = false;
                 }
