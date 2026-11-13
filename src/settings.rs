@@ -533,15 +533,15 @@ impl Settings {
                 });
             });
             let cookie_width = design::small_field(ui, "Session cookie", None, None, |ui| {
-                let response = ui.add(
-                    SESSION_COOKIE
-                        .single_line(&mut self.cookie_input)
-                        .password(true)
-                        .hint_text(design::placeholder(ui, "Paste session cookie"))
+                let hint = design::placeholder(ui, "Paste session cookie");
+                let width = 420.0_f32.min(ui.available_width() - 2.0 * design::S);
+                let response = SESSION_COOKIE.single_line(ui, &mut self.cookie_input, |edit| {
+                    edit.password(true)
+                        .hint_text(hint)
                         .min_size(egui::vec2(0.0, Density::Read.control()))
                         .margin(egui::vec2(design::S, 5.0))
-                        .desired_width(420.0_f32.min(ui.available_width() - 2.0 * design::S)),
-                );
+                        .desired_width(width)
+                });
                 design::named(ui, &response, "Paste session cookie");
                 self.focus_cookie |= ui
                     .ctx()

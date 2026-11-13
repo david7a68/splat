@@ -307,6 +307,10 @@ fn run_nav_detail(ui: &Ui, detail: &str, width: f32) -> String {
 /// The quiet menu at the right edge of a list row. It opens under its `⋯`. When it would
 /// cross the right edge of the row's pane (a splitter or a scroll bar), it ends at the
 /// `⋯`'s right edge instead, so it stays inside the pane.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+)]
 pub fn row_menu(ui: &mut Ui, name: &str, add: impl FnOnce(&mut Ui)) {
     let response = icon_button(ui, icons::EXPAND, &format!("More actions for {name}"));
     let popup = egui::Popup::menu(&response);
@@ -827,6 +831,10 @@ impl<'a> Action<'a> {
 
 /// An action with a default, and a caret beside it that opens a menu of the other ways
 /// to do it. A click in the menu closes it. The response is the action's own.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+)]
 pub fn split_action(
     ui: &mut Ui,
     action: Action<'_>,
@@ -902,6 +910,10 @@ pub fn stepper(
 /// why on hover and in its accessible description when the caller gives that limit's reason
 /// (`low_reason`, `high_reason`). With None, the button is only disabled. An enclosing lock's
 /// reason comes first.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+)]
 pub fn stepper_with_density(
     ui: &mut Ui,
     name: &str,
@@ -1190,6 +1202,10 @@ pub fn small_text_field(
     text_field_label(ui, label, Type::Small, text, help, error)
 }
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+)]
 fn text_field_label(
     ui: &mut Ui,
     label: &str,
@@ -1217,6 +1233,10 @@ pub fn placeholder(ui: &Ui, hint: &str) -> egui::RichText {
 }
 
 /// A short text field with a target of at least 26 px, and an accessible name.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+)]
 pub fn text_input(ui: &mut Ui, name: &str, text: &mut String, hint: &str, width: f32) -> Response {
     // The desired width excludes the margins.
     let response = ui.add(
@@ -1244,6 +1264,10 @@ pub fn number_field(
 }
 
 /// For a field whose name another field can share, as two things with one name do.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+)]
 pub fn number_field_with_id(
     ui: &mut Ui,
     id: Id,
@@ -1272,6 +1296,10 @@ pub fn number_field_with_id(
 }
 
 /// Search with an icon. The hint is what can be searched.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+)]
 pub fn search_field(
     ui: &mut Ui,
     name: &str,
@@ -1464,6 +1492,10 @@ pub struct AddFieldResult<T> {
 /// key and Enter, or a click. Escape clears the highlight, then the words. `beside` draws a
 /// control right of the field, `beside_width` wide, and can choose a value too. `suggest` lists
 /// the suggestions for the typed words, which show only while there are words.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+)]
 pub fn add_field<T>(
     ui: &mut Ui,
     state: &mut AddField,
@@ -2450,6 +2482,10 @@ pub const PART_INSET: f32 = FOCUS_WIDTH + HAIRLINE_WIDTH;
 /// it and each control in it, scrolling that control into view; while it has focus the up and down arrows scroll it by a line and
 /// Page Up and Page Down by the part, and its ring is at the part's edge, clear of the words.
 /// The wheel scrolls it too. Returns what `add` returned and the height of what it drew.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+)]
 fn scroll_part<R>(
     ui: &mut Ui,
     rect: Rect,
@@ -3123,6 +3159,10 @@ pub fn dialog<R>(ctx: &egui::Context, id: &str, title: &str, add: impl FnOnce(&m
     dialog_width(ctx, id, title, FORM_WIDTH, add)
 }
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+)]
 fn dialog_width<R>(
     ctx: &egui::Context,
     id: &str,
@@ -3160,6 +3200,10 @@ fn dialog_width<R>(
 
 /// An image at full size, within the window. Returns true when the DM closes it, by a click
 /// or Escape.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+)]
 pub fn image_viewer(ctx: &egui::Context, name: &str, uri: &str) -> bool {
     let viewport = ctx.content_rect();
     let response = egui::Modal::new(Id::new("image_viewer"))
@@ -3313,6 +3357,10 @@ pub fn focus_and_select(ui: &Ui, id: Id, text: &str) {
 /// action moves for them, and a strip with no More has none of them.
 /// Returns the chosen action's original index, whether inline or in the menu. A `menu_only`
 /// line's index follows the last of `actions`.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+)]
 pub fn hanging_add_strip(
     ui: &mut Ui,
     first: impl FnOnce(&mut Ui),
@@ -3379,6 +3427,10 @@ pub fn hanging_add_strip(
 /// right of its menu when it fits there inside `inside` with `S` to spare, else to the left, else
 /// as far right as fits. `inside` is the usable area of the pane that opened the menu: without
 /// its splitter and scroll bar, so the submenu and its choices never lie over either.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+)]
 pub fn menu_submenu<R>(
     ui: &mut Ui,
     word: &str,
@@ -3436,6 +3488,10 @@ fn submenu_left(button: Rect, width: f32, gap: f32, inside: Rect) -> f32 {
 }
 
 /// Sheet tabs keep one line. Less frequent pages move to a named menu when needed.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+)]
 pub fn overflow_tabs(ui: &mut Ui, selected: &mut usize, choices: &[(usize, &str)]) {
     let width = |label: &str| number_width(ui, label, &Type::Strong.font(ui)) + L;
     let all: f32 = choices.iter().map(|(_, label)| width(label)).sum();
@@ -3709,6 +3765,10 @@ fn iter3_unchanged_text_aligns_without_highlights_in_the_draft_comparison() {
 }
 
 #[test]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+)]
 fn iter3_text_input_placeholder_uses_body_and_faint() {
     let ctx = egui::Context::default();
     super::theme::install(&ctx);
@@ -3915,6 +3975,10 @@ fn i19_s2_s3_comparison_offset_fills_the_view_and_starts_on_a_whole_row() {
 }
 
 /// The shared wrapped comparison with caller-supplied column headings.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+)]
 pub fn draft_comparison_labeled(
     ui: &mut Ui,
     text: [&str; 2],
@@ -4145,6 +4209,10 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+    )]
     fn enclosing_lock_describes_each_control_and_stays_inside_its_scope() {
         let ctx = egui::Context::default();
         super::super::theme::install(&ctx);
@@ -4916,6 +4984,10 @@ mod tests {
     /// of every word. The last Undo, reached by keyboard and by pointer, ends its own result only:
     /// the other 19 stay, with their Undo.
     #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
+    )]
     fn iter26_a_the_footer_keeps_the_body_top_and_reaches_its_last_message() {
         use egui_kittest::kittest::{NodeT, Queryable};
         use std::{cell::RefCell, rc::Rc};
@@ -5196,6 +5268,10 @@ mod tests {
     /// adds them in: A then B, B then A; removing a middle result keeps the others' places; A,
     /// B, Undo A, then A again is newer than B. A redraw or changed words issue nothing. A reason
     /// stays after the results, and a result with no live Undo after the notices.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn iter27_a_footer_results_go_newest_first_by_their_action() {
         // The words, top down, of a footer that holds `results` (added in this order) with a
         // reason and a notice added first.
@@ -5314,6 +5390,10 @@ mod tests {
     /// all of this for the footer placed by hand and for `Footer::pane`, after the pane's
     /// placement for every body shape (`iter28_p_the_pane_places_its_footer_for_every_body`).
     /// A caller of `pane` does not repeat this proof.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
+    )]
     fn iter27_a_the_footer_follows_a_short_body() {
         use egui_kittest::kittest::{NodeT, Queryable};
         use std::{
@@ -5771,6 +5851,10 @@ mod tests {
     /// hairline, and the body control next to the footer takes its press. The pane's record is
     /// of the last completed pass only: present, absent (no record), present. A vertical
     /// `ScrollColumn` inside a `Content` pane is refused.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn iter28_p_the_pane_places_its_footer_for_every_body() {
         use super::super::{
             layout::ScrollColumn,
@@ -5847,10 +5931,10 @@ mod tests {
                                 });
                                 let body = match shape {
                                     Shape::SideColumn | Shape::Nested => {
-                                        Body::Fills(Fills::because(FillsReason::Columns))
+                                        Body::Fills(Fills::for_test(FillsReason::Columns))
                                     }
                                     Shape::Editor => {
-                                        Body::Fills(Fills::because(FillsReason::NoteEditor))
+                                        Body::Fills(Fills::for_test(FillsReason::NoteEditor))
                                     }
                                     _ => Body::Content,
                                 };
@@ -6200,6 +6284,10 @@ mod tests {
 }
 
 #[test]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+)]
 fn iter_two_form_labels_share_sentence_case_small_muted_type() {
     let context = egui::Context::default();
     super::theme::install(&context);

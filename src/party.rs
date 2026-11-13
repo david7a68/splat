@@ -569,6 +569,10 @@ impl Party {
     /// stopped-sync notice ends at its close icon, a local-edit notice when its sheet is
     /// replaced. The messages own their words, so the body can change the page while the footer
     /// waits for it; a press is kept in `presses` and done by `page_pressed`.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn page_footer<'p>(
         &self,
         presses: &'p PagePresses,

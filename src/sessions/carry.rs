@@ -504,6 +504,10 @@ type PreparingKey = (Uuid, Option<Uuid>, Option<Uuid>, Option<Uuid>, usize);
 impl Carries {
     /// The act on `session` made `outcome`: it replaces that session's earlier result, with a new
     /// order of its own. Other sessions' results keep theirs.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn record(&mut self, session: Uuid, outcome: Outcome) {
         self.results.insert(session, outcome);
         self.orders.insert(session, design::ResultOrder::issue());
@@ -781,6 +785,10 @@ impl Sessions {
     /// Last time line, the tabs and the plan never move when it comes or goes: its words and
     /// `Undo carry over`, or why it wrote nothing. It is that note's, so it shows also when the
     /// last session can no longer be found. A save that failed says so, and the Undo still works.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     pub(super) fn carry_in_footer<'a>(
         &'a self,
         undos: &mut crate::timeline::page::LiveUndos<'a>,

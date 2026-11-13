@@ -267,6 +267,10 @@ fn removal(
 impl Trackers {
     /// `Remove` on a row of a member's history in the reader of `note`: the entry it was drawn
     /// from, exactly as read. It replaces the Undo of the last `Remove`.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     pub fn remove(&mut self, note: Uuid, drawn: &Entry) {
         let today = self.today.clone();
         let mut made = None;

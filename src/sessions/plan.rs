@@ -932,7 +932,10 @@ enum MenuChoice {
 }
 
 /// A button whose menu offers a new thing, then the campaign's, with a search when they are many.
-#[allow(clippy::disallowed_methods)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn plan_menu(
     ui: &mut egui::Ui,
     menu: &PlanMenu<'_>,
@@ -1007,7 +1010,10 @@ fn plan_menu(
 }
 
 /// The fields of one event, in place in a session's plan. Returns whether any changed.
-#[allow(clippy::disallowed_methods)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn event_fields(ui: &mut egui::Ui, event: &mut timeline::Event) -> bool {
     let title = design::text_field(ui, "Title", &mut event.title, None, None);
     let mut changed = title.changed();
@@ -1027,7 +1033,10 @@ fn event_fields(ui: &mut egui::Ui, event: &mut timeline::Event) -> bool {
 /// A played fight's `Where`, in place under its opened row's links (W2-D3): the Timeline detail's
 /// own field on the same event, so the typed place has one owner, the Timeline, and saves as
 /// any edit of an event does. Returns whether it changed.
-#[allow(clippy::disallowed_methods)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn place_field(ui: &mut egui::Ui, event: &mut timeline::Event) -> bool {
     ui.add_space(design::XS);
     design::text_field(ui, "Where", &mut event.place, None, None).changed()
@@ -2545,6 +2554,10 @@ impl Sessions {
 
     /// Carry out an act on a journey's checks. `Plan` writes the session note; the others write
     /// `Timeline.md`.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn travel_act(
         &mut self,
         book: &mut Book,
@@ -2632,7 +2645,10 @@ impl Sessions {
 
     /// The session as a list, top to bottom: what happened, then what is still to come. It
     /// replaces a walk between Encounters, Timeline and the note.
-    #[allow(clippy::disallowed_methods)]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
+    )]
     pub(super) fn plan_pane(&mut self, ui: &mut egui::Ui, book: &mut Book, plan: &Plan<'_>) {
         let session = self.selected;
         let here = self.group_session == session;
@@ -3803,6 +3819,10 @@ impl Sessions {
     /// One scene act, through the note's one act path: it follows the disk, changes the one line
     /// that the row was drawn from and saves at once. What it could not do shows where the DM
     /// acted. An act whose save failed keeps its Undo: the fragment waits in the draft.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn scene_act(&mut self, act: SceneAct, session: Option<Uuid>) {
         if let SceneAct::StartFight(fight) = act {
             self.wants_start_fight = Some(fight);
@@ -3918,6 +3938,10 @@ impl Sessions {
 
     /// The deletion's result. While it shows, it replaces the result of the removal action it
     /// follows, when that removal is of this run's own event.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn record_deleted_run(
         &mut self,
         book: &Book,
@@ -4128,7 +4152,10 @@ impl Sessions {
     /// How a fight ended, in place: final HP and the log, with no run to reopen. `rewards` is
     /// whether its rewards are in the note, when its row has no room for them (F7): the last
     /// link is then `Add rewards`, or the words `In notes`. Returns whether the DM pressed it.
-    #[allow(clippy::disallowed_methods)]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn fight_block(
         &mut self,
         ui: &mut egui::Ui,
@@ -5761,13 +5788,18 @@ mod tests {
             let day = *timeline::day_numbers(&book.events).last().unwrap();
             (event.id.clone(), event.label(day), book.events.len())
         };
-        harness.state_mut().0.added = Some(Added {
+        #[allow(
+            clippy::disallowed_methods,
+            reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+        )]
+        let added = Added {
             order: design::ResultOrder::issue(),
             id,
             label,
             at: Instant::now(),
             count,
-        });
+        };
+        harness.state_mut().0.added = Some(added);
         harness.run_steps(4);
         assert!(
             harness.query_by_label("Undo add").is_some(),

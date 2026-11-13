@@ -2,63 +2,58 @@
 # File content: the initiative rule note's YAML and the NPC generator's note text.
 src/encounter_settings.rs straight-apostrophe 1
 src/npc_generator.rs straight-apostrophe 3
-# Functions that still make a raw egui call that clippy.toml disallows (structural package K).
-# Wave 2 moves them to the design parts and lowers these counts.
-src/art.rs disallowed-methods-allow 1
-src/campaign_content.rs disallowed-methods-allow 4
-src/campaigns.rs disallowed-methods-allow 1
-src/combat_sync.rs disallowed-methods-allow 1
-src/copy_dialog.rs disallowed-methods-allow 1
-src/creature_filter.rs disallowed-methods-allow 2
-src/dndbeyond.rs disallowed-methods-allow 1
-src/encounter_run/ad_hoc.rs disallowed-methods-allow 1
-src/encounter_run/dock.rs disallowed-methods-allow 1
-src/encounter_run/rolling.rs disallowed-methods-allow 1
-src/encounter_run/view.rs disallowed-methods-allow 15
-src/encounters.rs disallowed-methods-allow 10
-src/encounters/groups.rs disallowed-methods-allow 8
-src/encounters/list.rs disallowed-methods-allow 2
-src/lib.rs disallowed-methods-allow 2
-src/library.rs disallowed-methods-allow 8
-src/lookup.rs disallowed-methods-allow 2
-src/loot_editor.rs disallowed-methods-allow 2
-src/markdown_source.rs disallowed-methods-allow 2
-src/markdown_view.rs disallowed-methods-allow 2
-src/party.rs disallowed-methods-allow 1
-src/party_bar.rs disallowed-methods-allow 2
-src/processing/settings.rs disallowed-methods-allow 4
-src/rolls.rs disallowed-methods-allow 4
-src/sessions/page.rs disallowed-methods-allow 16
-src/sessions/plan.rs disallowed-methods-allow 5
-src/sessions/slash.rs disallowed-methods-allow 2
-src/timeline/checks.rs disallowed-methods-allow 2
-src/timeline/page.rs disallowed-methods-allow 5
-src/trackers.rs disallowed-methods-allow 1
-src/trackers/view.rs disallowed-methods-allow 2
-src/world.rs disallowed-methods-allow 5
-src/world/edit.rs disallowed-methods-allow 1
-src/world/page.rs disallowed-methods-allow 4
-src/world/repair.rs disallowed-methods-allow 2
 # A hand-built layer (`LayerId { order: … }` or `Order::…`) that Clippy's method list cannot see.
 src/encounter_run/view.rs foreground-layer 1
-# Functions that call `Footer::show_by_hand` and had no allow before (round 28, package P).
-src/sessions/carry.rs disallowed-methods-allow 1
-src/settings.rs disallowed-methods-allow 1
-# Footers placed by hand (`Footer::show_by_hand`, staged out; round 28, package P). Wave 2 gives each
-# body to `Footer::pane` and lowers its count; at 0 the method and its last-pass widget scan go.
-src/campaign_content.rs footer-by-hand 1
-src/encounter_run/view.rs footer-by-hand 3
-src/encounters.rs footer-by-hand 6
-src/encounters/groups.rs footer-by-hand 3
-src/lib.rs footer-by-hand 3
-src/library.rs footer-by-hand 4
-src/sessions/carry.rs footer-by-hand 1
-src/sessions/page.rs footer-by-hand 4
-src/sessions/plan.rs footer-by-hand 1
-src/settings.rs footer-by-hand 1
-src/timeline/page.rs footer-by-hand 1
-src/world.rs footer-by-hand 1
-src/world/page.rs footer-by-hand 1
-src/world/repair.rs footer-by-hand 1
-# The pane's one escape (`Fills::because`), counted per file, shrink only (round 28, package P).
-src/party.rs fills-escape 1
+# Banned egui names as text, per file (clippy.toml's set): a second raw call inside an allowed
+# function raises the count. Wave 2 lowers these with the allows.
+src/art.rs raw-egui-call 1
+src/campaign_content.rs raw-egui-call 6
+src/campaigns.rs raw-egui-call 1
+src/copy_dialog.rs raw-egui-call 3
+src/creature_filter.rs raw-egui-call 3
+src/dndbeyond.rs raw-egui-call 1
+src/encounter_run/ad_hoc.rs raw-egui-call 2
+src/encounter_run/dock.rs raw-egui-call 2
+src/encounter_run/rolling.rs raw-egui-call 2
+src/encounter_run/view.rs raw-egui-call 23
+src/encounters.rs raw-egui-call 12
+src/encounters/groups.rs raw-egui-call 12
+src/encounters/list.rs raw-egui-call 4
+src/lib.rs raw-egui-call 5
+src/library.rs raw-egui-call 27
+src/lookup.rs raw-egui-call 3
+src/loot_editor.rs raw-egui-call 2
+src/markdown_source.rs raw-egui-call 2
+src/markdown_view.rs raw-egui-call 2
+src/party_bar.rs raw-egui-call 3
+src/processing/settings.rs raw-egui-call 5
+src/rolls.rs raw-egui-call 8
+src/sessions/page.rs raw-egui-call 27
+src/sessions/plan.rs raw-egui-call 8
+src/sessions/slash.rs raw-egui-call 8
+src/timeline/checks.rs raw-egui-call 2
+src/timeline/page.rs raw-egui-call 12
+src/trackers.rs raw-egui-call 1
+src/trackers/view.rs raw-egui-call 2
+src/world.rs raw-egui-call 5
+src/world/edit.rs raw-egui-call 3
+src/world/page.rs raw-egui-call 8
+src/world/repair.rs raw-egui-call 2
+# A footer placed by hand (`Footer::show_by_hand`) or the pane's escape (`Fills::because`), as text,
+# per file (round 28, package P). Clippy refuses them by name; each calling function has its row
+# in `design::results::STAGED_ALLOWS` (`Ban::Pane`). Wave 2 lowers these counts.
+src/campaign_content.rs pane-call 1
+src/encounter_run/view.rs pane-call 3
+src/encounters.rs pane-call 6
+src/encounters/groups.rs pane-call 3
+src/lib.rs pane-call 3
+src/library.rs pane-call 4
+src/party.rs pane-call 1
+src/sessions/carry.rs pane-call 1
+src/sessions/page.rs pane-call 4
+src/sessions/plan.rs pane-call 1
+src/settings.rs pane-call 1
+src/timeline/page.rs pane-call 1
+src/world.rs pane-call 1
+src/world/page.rs pane-call 1
+src/world/repair.rs pane-call 1

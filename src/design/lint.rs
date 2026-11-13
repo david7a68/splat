@@ -2,15 +2,10 @@
 //! words. The allowlist can only shrink: a count above it fails, and a count below it asks
 //! you to lower it.
 //!
-//! The same allowlist counts the functions that may still make a raw egui call that
-//! `clippy.toml` disallows (`#[allow(clippy::disallowed_methods)]`, rule
-//! `disallowed-methods-allow`). An allow for a whole module or for a Clippy group would let a
-//! new file or a new function through, so it is never allowed (`broad-clippy-allow`).
-//!
-//! Staged calls are counted one by one, also inside a function whose allow already lets Clippy
-//! pass them: `Footer::show_by_hand` (`footer-by-hand`; use `Footer::pane`) and the pane's one
-//! escape, `Fills::because` (`fills-escape`). Clippy refuses both by name; these counts are a
-//! second net inside a function whose allow covers another raw call.
+//! The same allowlist counts, per file, the banned egui names of `clippy.toml` as text
+//! (`raw-egui-call`), so a second raw call inside a function whose suppression
+//! `design::results::STAGED_ALLOWS` lists is seen; and the row keys that take any number or text
+//! (`row-key`). The suppressions themselves are `STAGED_ALLOWS`'s and `OWNED_ALLOWS`'s rows.
 use std::{collections::BTreeMap, fs, path::Path};
 
 const ALLOWLIST: &str = include_str!("lint_allowlist.txt");
@@ -175,129 +170,100 @@ fn without_strings(code: &str) -> String {
     out
 }
 
-/// Whether `code` names a Clippy lint that can let a raw egui call through: the lint itself, or
-/// a group that holds it.
-fn names_the_ban(code: &str) -> bool {
-    let code: String = code.chars().filter(|c| !c.is_whitespace()).collect();
-    code.match_indices("clippy::").any(|(at, _)| {
-        let name: String = code[at + "clippy::".len()..]
-            .chars()
-            .take_while(|c| c.is_alphanumeric() || *c == '_')
-            .collect();
-        matches!(name.as_str(), "disallowed_methods" | "style" | "all")
-    })
-}
+/// The banned egui names the lint counts per file, as text (`raw-egui-call`), beside the count of
+/// allows. An allow on a function frees every call inside it, also in a nested function or a
+/// closure, so a second raw call in an allowed function raises this count and fails. The set
+/// matches `clippy.toml`; `UiBuilder::layer_id` is the one ban it cannot tell apart from the
+/// `Ui::layer_id` getter by its words, so Clippy alone holds that one.
+/// Package P's banned names (`clippy.toml`): a footer placed by hand, and the pane's escape.
+pub(crate) const PANE_CALLS: [&str; 2] = ["show_by_hand(", "Fills::because("];
 
-/// Whether `line` starts a function item, after its visibility and qualifiers.
-fn starts_fn(line: &str) -> bool {
-    let mut rest = line.trim_start();
-    loop {
-        if let Some(after) = rest.strip_prefix("pub") {
-            let after = after.trim_start();
-            rest = if after.starts_with('(') {
-                after
-                    .split_once(')')
-                    .map_or(after, |(_, tail)| tail)
-                    .trim_start()
-            } else {
-                after
-            };
-            continue;
-        }
-        let mut stripped = false;
-        for word in ["const ", "async ", "unsafe ", "extern \"C\" "] {
-            if let Some(after) = rest.strip_prefix(word) {
-                rest = after.trim_start();
-                stripped = true;
+pub(crate) const RAW_CALLS: [&str; 55] = [
+    "ScrollArea::",
+    "TextEdit::",
+    ".text_edit_singleline(",
+    ".text_edit_multiline(",
+    ".code_editor(",
+    "text_field(",
+    "text_input(",
+    "DragValue::",
+    "Slider::",
+    "Word::checked",
+    "FieldId::checked",
+    "Area::new",
+    "Window::new",
+    "Modal::",
+    "LayerId::",
+    "layer_painter",
+    "debug_painter",
+    "Painter::new",
+    "Ui::new",
+    ".with_layer_id(",
+    "Popup::",
+    ".menu_button(",
+    ".menu_image_button(",
+    ".menu_image_text_button(",
+    ".context_menu(",
+    "MenuButton::",
+    "SubMenuButton::",
+    "SubMenu::",
+    "MenuBar",
+    "ComboBox::",
+    "Tooltip::",
+    "on_hover_ui",
+    "on_disabled_hover_ui",
+    "show_tooltip",
+    "popup_below_widget",
+    "popup_above_or_below_widget",
+    "dnd_drag_source",
+    "dnd_drop_zone",
+    "dnd_set_drag_payload",
+    "debug_paint_cursor",
+    "paint_debug_info",
+    "Scene::new",
+    "color_edit_button",
+    "egui::menu::",
+    "open_popup",
+    "toggle_popup",
+    "move_to_top",
+    "set_sublayer",
+    "set_transform_layer",
+    "settings_ui",
+    "inspection_ui",
+    "texture_ui",
+    "memory_ui",
+    "style_ui",
+    "show_viewport_",
+];
+
+/// The counted names on one line of code, by rule: each banned egui name (`raw-egui-call`), and
+/// each key that takes any number or text (`row-key`: `RowIndex(`, `TextKey::`).
+fn counted_names(line: &str) -> Vec<&'static str> {
+    let code = without_strings(line.split("//").next().unwrap_or(""));
+    let starts_word = |at: usize| !code[..at].ends_with(|c: char| c.is_alphanumeric() || c == '_');
+    let mut found = Vec::new();
+    for name in RAW_CALLS {
+        let word = !name.starts_with('.');
+        for (at, _) in code.match_indices(name) {
+            if !word || starts_word(at) {
+                found.push("raw-egui-call");
             }
-        }
-        if !stripped {
-            break;
         }
     }
-    rest.starts_with("fn ")
-}
-
-/// The one counted allow; on a `fn`, or on the harness's `mod visual_tests;` in `src/lib.rs`.
-const ALLOW: &str = "#[allow(clippy::disallowed_methods)]";
-
-/// Every Clippy allow in a file that can let a raw egui call through, by rule. The attribute is
-/// read whole, also over several lines, with the item it sits on. Counted
-/// (`disallowed-methods-allow`): exactly `#[allow(clippy::disallowed_methods)]`, alone on its
-/// line, on a `fn`. Refused (`broad-clippy-allow`): any other form, which frees more than one
-/// function or hides from the count: an inner `#![…]` (a module or a block), one on an `impl`,
-/// `mod`, `trait`, closure or statement, `expect(…)`, `cfg_attr(…)`, a list with other lints, an
-/// attribute over several lines, or a group (`clippy::style`, `clippy::all`).
-fn clippy_allows(key: &str, text: &str) -> Vec<&'static str> {
-    let lines: Vec<String> = text
-        .lines()
-        .map(|line| without_strings(line.split("//").next().unwrap_or("")))
-        .collect();
-    let mut found = Vec::new();
-    let mut at = 0;
-    while at < lines.len() {
-        let start = lines[at].trim_start();
-        if !start.starts_with("#[") && !start.starts_with("#![") {
-            if names_the_ban(&lines[at]) && lines[at].contains('#') {
-                // An attribute in the middle of a line: on an expression or after an item.
-                found.push("broad-clippy-allow");
+    // Package P: a footer placed by hand, and the pane's one escape.
+    for name in PANE_CALLS {
+        for (at, _) in code.match_indices(name) {
+            if starts_word(at) {
+                found.push("pane-call");
             }
-            at += 1;
-            continue;
         }
-        // The whole attribute: until its brackets close.
-        let mut depth = 0i32;
-        let mut end = at;
-        let mut attribute = String::new();
-        loop {
-            for c in lines[end].chars() {
-                depth += match c {
-                    '[' => 1,
-                    ']' => -1,
-                    _ => 0,
-                };
-            }
-            attribute.push_str(&lines[end]);
-            if depth <= 0 || end + 1 >= lines.len() {
-                break;
-            }
-            end += 1;
-        }
-        if names_the_ban(&attribute) {
-            // The item it sits on: the next line that is not an attribute or blank.
-            let mut item = end + 1;
-            while item < lines.len() {
-                let line = lines[item].trim_start();
-                if line.is_empty() || line.starts_with("#[") {
-                    item += 1;
-                } else {
-                    break;
-                }
-            }
-            let item = lines.get(item).map_or("", |line| line.trim());
-            let exact = end == at && attribute.trim() == ALLOW;
-            let harness = key == "src/lib.rs" && item == "mod visual_tests;";
-            found.push(if exact && (starts_fn(item) || harness) {
-                "disallowed-methods-allow"
-            } else {
-                "broad-clippy-allow"
-            });
-        }
-        at = end + 1;
     }
-    found
-}
-
-/// The staged calls on one line of code, by the rule that counts them: each one counts, even in
-/// a function whose allow already lets Clippy pass it.
-fn staged_calls(line: &str) -> Vec<&'static str> {
-    let code = line.split("//").next().unwrap_or("");
-    let mut found = Vec::new();
-    for (pattern, rule) in [
-        (".show_by_hand(", "footer-by-hand"),
-        ("Fills::because(", "fills-escape"),
-    ] {
-        found.extend(std::iter::repeat_n(rule, code.matches(pattern).count()));
+    for name in ["RowIndex(", "TextKey::"] {
+        for (at, _) in code.match_indices(name) {
+            if starts_word(at) {
+                found.push("row-key");
+            }
+        }
     }
     found
 }
@@ -317,11 +283,9 @@ fn scan(folder: &Path, counts: &mut BTreeMap<String, usize>) {
             let text = fs::read_to_string(&path).expect("read source file");
             let root = concat!(env!("CARGO_MANIFEST_DIR"), "/");
             let key = relative.strip_prefix(root).unwrap_or(&relative);
-            // Every allow counts, in tests too: a test's raw call is still a raw call.
-            for rule in clippy_allows(key, &text)
-                .into_iter()
-                .chain(text.lines().flat_map(staged_calls))
-            {
+            // Each banned name counts, in tests too: a second raw call in a function whose allow
+            // `design::results::STAGED_ALLOWS` lists raises the count.
+            for rule in text.lines().flat_map(counted_names) {
                 *counts.entry(format!("{key} {rule}")).or_default() += 1;
             }
             // Unit tests may name colours and sizes. They do not ship.
@@ -362,18 +326,16 @@ fn raw_colours_and_sizes_stay_inside_the_design_system() {
         if *count > limit {
             let fix = if key.ends_with("straight-apostrophe") {
                 "Use ’ in UI words"
-            } else if key.ends_with("disallowed-methods-allow") {
-                "Use the design part that clippy.toml names, not a raw egui call"
-            } else if key.ends_with("broad-clippy-allow") {
-                "Write `#[allow(clippy::disallowed_methods)]` alone on one line, on one `fn`"
+            } else if key.ends_with("raw-egui-call") {
+                "A new raw egui call, also inside an allowed function: use the design part that clippy.toml names"
+            } else if key.ends_with("pane-call") {
+                "A footer placed by hand or a new `Fills::because`: give the body to `Footer::pane` with `Body::Content`"
+            } else if key.ends_with("row-key") {
+                "A new RowIndex or TextKey: give it the row's data, never a value read from the layout"
             } else if key.ends_with("foreground-layer") {
                 "Foreground layers and menus belong to src/design/"
             } else if key.ends_with("hand-create-reasons") {
                 "Declare a form's reasons with create_reasons!"
-            } else if key.ends_with("footer-by-hand") {
-                "Give the body to `Footer::pane`, which places the footer"
-            } else if key.ends_with("fills-escape") {
-                "Use `Body::Content`: the pane is the scroll column. `Fills::because` is only for a body that manages its own room"
             } else {
                 "Use design tokens"
             };
@@ -442,67 +404,27 @@ fn each_field_id_name_is_used_once() {
 }
 
 #[test]
-fn the_lint_finds_staged_calls() {
+fn the_lint_counts_raw_names_and_row_keys() {
+    let count = |code: &str| counted_names(code);
     assert_eq!(
-        staged_calls("        let bottom = footer.show_by_hand(ui);"),
-        ["footer-by-hand"]
+        count("let a = egui::ScrollArea::vertical(); let b = egui::ScrollArea::both();"),
+        ["raw-egui-call"; 2]
     );
+    assert_eq!(count("ui.menu_button(\"m\", add);"), ["raw-egui-call"]);
     assert_eq!(
-        staged_calls("let body = Body::Fills(Fills::because(FillsReason::NoteEditor));"),
-        ["fills-escape"]
+        count("ui.color_edit_button_srgba(&mut c);"),
+        ["raw-egui-call"]
     );
-    assert!(staged_calls("// footer.show_by_hand(ui) in a comment").is_empty());
-    assert!(staged_calls("footer.pane(ui, Body::Content, |ui| ui.label(\"x\"));").is_empty());
-}
-
-#[test]
-fn the_lint_finds_clippy_allows() {
-    let allows = |text: &str| clippy_allows("src/x.rs", text);
-    // The one counted form: alone on its line, on a `fn`, with its docs and other attributes.
+    assert_eq!(count("ui.dnd_drag_source(id, 1, add);"), ["raw-egui-call"]);
+    // The design's own parts, words in a string and a comment are not raw calls.
+    assert!(count("design::menu_button(ui, \"Sort\", true);").is_empty());
+    assert!(count("design::labelled_field(ui, NAME, \"Name\", &mut text, None, None);").is_empty());
+    assert!(count("let words = \"ScrollArea::vertical\"; // TextEdit::singleline").is_empty());
+    assert!(count("let output: ScrollAreaOutput<()> = column.show(ui, add);").is_empty());
     assert_eq!(
-        allows("    #[allow(clippy::disallowed_methods)]\n    pub(crate) fn draw() {}"),
-        ["disallowed-methods-allow"]
+        count("NAME.with(RowIndex(at)); NAME.with(TextKey::from_data(name));"),
+        ["row-key"; 2]
     );
-    assert_eq!(
-        allows("/// Docs.\n#[allow(clippy::disallowed_methods)]\n#[must_use]\nconst fn f() {}"),
-        ["disallowed-methods-allow"]
-    );
-    // Every other form is refused.
-    for text in [
-        // A module, a file, a block.
-        "#![allow(clippy::disallowed_methods)]\nfn f() {}",
-        "fn f() {\n    #![allow(clippy::disallowed_methods)]\n}",
-        "#[allow(clippy::disallowed_methods)]\nmod screens;",
-        // A whole `impl` frees every method in it.
-        "#[allow(clippy::disallowed_methods)]\nimpl Library {",
-        "#[allow(clippy::disallowed_methods)]\ntrait Draw {",
-        // A statement or a closure.
-        "    #[allow(clippy::disallowed_methods)]\n    let area = egui::ScrollArea::vertical();",
-        "    let area = #[allow(clippy::disallowed_methods)] egui::ScrollArea::vertical();",
-        // Other spellings.
-        "#[expect(clippy::disallowed_methods)]\nfn f() {}",
-        "#[cfg_attr(test, allow(clippy::disallowed_methods))]\nfn f() {}",
-        "#[allow(dead_code, clippy::disallowed_methods)]\nfn f() {}",
-        "#[allow(\n    clippy::disallowed_methods\n)]\nfn f() {}",
-        "#[allow(clippy :: disallowed_methods)]\nfn f() {}",
-        // A group that holds the lint.
-        "#[allow(clippy::style)]\nfn f() {}",
-        "#[expect(clippy::all, reason = \"x\")]\nfn f() {}",
-    ] {
-        assert_eq!(allows(text), ["broad-clippy-allow"], "{text}");
-    }
-    // The capture harness's one exception is in `src/lib.rs` only.
-    let harness = "#[cfg(test)]\n#[allow(clippy::disallowed_methods)]\nmod visual_tests;";
-    assert_eq!(
-        clippy_allows("src/lib.rs", harness),
-        ["disallowed-methods-allow"]
-    );
-    assert_eq!(allows(harness), ["broad-clippy-allow"]);
-    // Words and comments are not lints, and another Clippy lint is not this one.
-    assert!(allows("// #[allow(clippy::disallowed_methods)] in a comment").is_empty());
-    assert!(allows("let lint = \"#[allow(clippy::disallowed_methods)]\";").is_empty());
-    assert!(allows("#[allow(clippy::allow_attributes)]\nimpl X {").is_empty());
-    assert!(allows("#[allow(clippy::too_many_arguments)]\nimpl X {").is_empty());
 }
 
 #[test]
@@ -516,7 +438,7 @@ fn the_lint_finds_hand_made_layers_and_reasons() {
         assert_eq!(violations(code), ["foreground-layer"], "{code}");
     }
     assert!(violations("let order = SortOrder::Foreground;").is_empty());
-    assert!(violations("let order = ResultOrder::issue();").is_empty());
+    assert!(violations("let order = ResultOrder::default();").is_empty());
     assert_eq!(
         violations("impl design::CreateReasons for Why {"),
         ["hand-create-reasons"]

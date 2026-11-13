@@ -144,6 +144,12 @@ impl Fills {
     pub fn reason(self) -> FillsReason {
         self.0
     }
+
+    /// For the design system's own tests, which prove the escape: Clippy refuses `because`.
+    #[cfg(test)]
+    pub(in crate::design) fn for_test(reason: FillsReason) -> Self {
+        Self(reason)
+    }
 }
 
 /// Why a body fills its room. Closed: a new reason is a change to this part.

@@ -376,6 +376,10 @@ impl DndBeyond {
 
     /// Round 26: the D&D Beyond list's error and, on Link and folder (`link`), the link's result,
     /// in the footer of the pane that shows them. Both live until the next refresh or link.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     pub fn footer_messages<'a>(&'a self, footer: &mut crate::design::Footer<'a>, link: bool) {
         if let Some(error) = &self.error {
             footer.reason(error.as_str(), move |ui| {
@@ -389,7 +393,10 @@ impl DndBeyond {
         }
     }
 
-    #[allow(clippy::disallowed_methods)]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
+    )]
     pub fn show(
         &mut self,
         ui: &mut egui::Ui,

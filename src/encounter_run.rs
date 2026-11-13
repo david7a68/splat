@@ -1491,6 +1491,10 @@ impl Run {
     }
     /// Keep one more Undo step: the state before it, its name, and whether a sheet made it.
     /// Every step enters here, so the stack never holds more than the limit: the oldest goes.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn keep_step(&mut self, before: State, (label, target): Named, from_sheet: bool) {
         let extra = (self.history.len() + 1).saturating_sub(undo::LIMIT);
         self.saved_steps = self.saved_steps.saturating_sub(extra);
@@ -4464,6 +4468,10 @@ impl Run {
         }
     }
     /// A saved run with its Undo steps, to go on with it.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     pub fn open(path: &Path, campaign: Uuid) -> Result<Self, String> {
         let (mut run, saved_undo) = Self::load(path, campaign)?;
         match saved_undo.map(|saved| undo::read(&saved, &run.state)) {

@@ -2290,7 +2290,10 @@ pub(crate) fn with_lines(mut lines: Vec<FooterLine>, more: Vec<FooterLine>) -> V
 /// what is left of `ui`, in the footer's order: results with a live Undo, then reasons, then
 /// notices. `id` is the pane instance's own. Returns the action pressed and the y where the body
 /// drawn next ends.
-#[allow(clippy::disallowed_methods)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+)]
 pub(crate) fn draw_footer(
     ui: &mut egui::Ui,
     id: impl std::hash::Hash,
@@ -3034,7 +3037,10 @@ impl Reader {
         go
     }
 
-    #[allow(clippy::disallowed_methods)]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn make_entry_control(
         &mut self,
         ui: &mut egui::Ui,
@@ -3976,6 +3982,10 @@ impl Reader {
     }
 
     /// A kept result was made now: it goes first among the results with a live Undo.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     pub(super) fn stamp(&mut self, act: FooterAct) {
         self.orders.insert(act, design::ResultOrder::issue());
     }
@@ -4212,7 +4222,10 @@ impl Reader {
     }
 
     /// The open picker. Returns the value the DM chose, or `Value::Null` to clear it.
-    #[allow(clippy::disallowed_methods)]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn pick(
         &mut self,
         ui: &mut egui::Ui,
@@ -4330,7 +4343,10 @@ impl Reader {
         chosen
     }
 
-    #[allow(clippy::disallowed_methods)]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
+    )]
     fn entry_controls(
         &mut self,
         ui: &mut egui::Ui,
@@ -4584,7 +4600,10 @@ impl Reader {
 }
 
 /// Choose the stat block, side and initiative. Returns how the form ended, if it did.
-#[allow(clippy::disallowed_methods)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn add_form(
     ui: &mut egui::Ui,
     item: &Item,

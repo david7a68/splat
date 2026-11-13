@@ -1,12 +1,17 @@
-# Raw egui calls that a shared part in `src/design/` replaces (docs/design-system.md, Widgets).
-# `check` runs Clippy with `-D warnings`, so a new raw call outside `src/design/` fails it. A function
-# that still makes such a call carries `#[allow(clippy::disallowed_methods)]` on its own `fn`; the
-# source lint (`src/design/lint.rs`) counts those per file, the count can only go down, and it
-# refuses any other form (a module, an `impl`, `expect`, `cfg_attr`, a group, several lines).
-# The list names every way egui gives to make each thing (egui 0.33: `ScrollArea`, `TextEdit`,
-# `Ui`, `Response`, the containers). The paths name egui, which only the `splat` crate uses:
-# `allow-invalid` keeps the other workspace crates quiet.
+# Calls that a shared part in `src/design/` replaces (docs/design-system.md, Widgets). `check` runs
+# Clippy with `-D warnings`, so a new call outside its owner fails it. Each function that still
+# calls one has its own `#[allow(clippy::disallowed_methods, reason = "staged: ...")]` (never on a
+# file, a module, an `impl`, or a function that holds a nested one); `design::results::STAGED_ALLOWS`
+# lists each one with the bans it is for (package O: `Ban::Results`; package K: `Ban::Layout`), and
+# it can only shrink. Package K's egui paths are the list below, read from egui 0.33.3's API; review
+# finds a helper that opens a layer or makes a text field and is not listed, and adds its path. The
+# egui paths name a crate only `splat` uses: `allow-invalid` keeps the other workspace crates quiet.
 disallowed-methods = [
+    # Package O: kept results, the save row.
+    { path = "splat::design::components::ResultOrder::issue", reason = "record the result in a `design::Results` store: it issues the order at the action" },
+    { path = "splat::design::components::Footer::result", reason = "give the footer a kept result from a `design::Results` store with `Footer::kept` or `Footer::kept_line`" },
+    { path = "splat::design::components::save_row_state", reason = "use `design::save_row` with a `DraftState`" },
+    # Package K: layout parts.
     # Scroll areas: `design::ScrollColumn` keeps the scroll bar's lane, so nothing moves when the bar
     # comes (family F14); `design::sideways_scroll` is the sideways table scroll. These are all of
     # `ScrollArea`'s constructors; it has no `Default`.
@@ -26,6 +31,10 @@ disallowed-methods = [
     { path = "egui::Ui::text_edit_singleline", reason = "use design::line_field with a FieldId", allow-invalid = true },
     { path = "egui::Ui::text_edit_multiline", reason = "use FieldId::multi_line", allow-invalid = true },
     { path = "egui::Ui::code_editor", reason = "use FieldId::multi_line", allow-invalid = true },
+    { path = "egui::DragValue::new", reason = "a DragValue's text edit takes its id from its place; use design::stepper or design::number_field", allow-invalid = true },
+    { path = "egui::DragValue::from_get_set", reason = "a DragValue's text edit takes its id from its place; use design::stepper or design::number_field", allow-invalid = true },
+    { path = "egui::Slider::new", reason = "a Slider's value field takes its id from its place", allow-invalid = true },
+    { path = "egui::Slider::from_get_set", reason = "a Slider's value field takes its id from its place", allow-invalid = true },
     { path = "splat::design::components::text_field", reason = "use design::labelled_field with a FieldId", allow-invalid = true },
     { path = "splat::design::components::small_text_field", reason = "use design::labelled_field with a FieldId", allow-invalid = true },
     { path = "splat::design::components::text_input", reason = "use design::line_field with a FieldId", allow-invalid = true },
@@ -95,4 +104,44 @@ disallowed-methods = [
     # of PR 305). The app's empty state is a part that keeps its top.
     { path = "egui::Ui::centered_and_justified", reason = "keep content at the body's top; use design::empty_state for an empty state", allow-invalid = true },
     { path = "egui::Ui::vertical_centered_justified", reason = "keep content at the body's top; use design::empty_state for an empty state", allow-invalid = true },
+    { path = "egui::Ui::dnd_drag_source", reason = "a dragged item is drawn on a tooltip layer", allow-invalid = true },
+    { path = "egui::Ui::dnd_drop_zone", reason = "drag and drop belongs to src/design/", allow-invalid = true },
+    { path = "egui::Response::dnd_set_drag_payload", reason = "drag and drop belongs to src/design/", allow-invalid = true },
+    { path = "egui::Ui::debug_paint_cursor", reason = "debug painting is a layer of its own", allow-invalid = true },
+    { path = "egui::Response::paint_debug_info", reason = "debug painting is a layer of its own", allow-invalid = true },
+    { path = "egui::Scene::new", reason = "a scene draws on a layer of its own", allow-invalid = true },
+    { path = "egui::Ui::color_edit_button_srgba", reason = "a colour picker opens a popup", allow-invalid = true },
+    { path = "egui::Ui::color_edit_button_hsva", reason = "a colour picker opens a popup", allow-invalid = true },
+    { path = "egui::Ui::color_edit_button_srgb", reason = "a colour picker opens a popup", allow-invalid = true },
+    { path = "egui::Ui::color_edit_button_rgb", reason = "a colour picker opens a popup", allow-invalid = true },
+    { path = "egui::Ui::color_edit_button_srgba_premultiplied", reason = "a colour picker opens a popup", allow-invalid = true },
+    { path = "egui::Ui::color_edit_button_srgba_unmultiplied", reason = "a colour picker opens a popup", allow-invalid = true },
+    { path = "egui::Ui::color_edit_button_rgba_premultiplied", reason = "a colour picker opens a popup", allow-invalid = true },
+    { path = "egui::Ui::color_edit_button_rgba_unmultiplied", reason = "a colour picker opens a popup", allow-invalid = true },
+    { path = "egui::widgets::color_picker::color_edit_button_hsva", reason = "a colour picker opens a popup", allow-invalid = true },
+    { path = "egui::widgets::color_picker::color_edit_button_srgba", reason = "a colour picker opens a popup", allow-invalid = true },
+    { path = "egui::widgets::color_picker::color_edit_button_srgb", reason = "a colour picker opens a popup", allow-invalid = true },
+    { path = "egui::widgets::color_picker::color_edit_button_rgba", reason = "a colour picker opens a popup", allow-invalid = true },
+    { path = "egui::widgets::color_picker::color_edit_button_rgb", reason = "a colour picker opens a popup", allow-invalid = true },
+    { path = "egui::menu::bar", reason = "use design::row_menu or design::menu_popup", allow-invalid = true },
+    { path = "egui::menu::menu_button", reason = "use design::row_menu or design::menu_popup", allow-invalid = true },
+    { path = "egui::menu::menu_custom_button", reason = "use design::row_menu or design::menu_popup", allow-invalid = true },
+    { path = "egui::menu::menu_image_button", reason = "use design::row_menu or design::menu_popup", allow-invalid = true },
+    { path = "egui::menu::submenu_button", reason = "use design::row_menu or design::menu_popup", allow-invalid = true },
+    { path = "egui::menu::context_menu", reason = "use design::row_menu or design::menu_popup", allow-invalid = true },
+    { path = "egui::Memory::open_popup", reason = "popups and layer order belong to src/design/", allow-invalid = true },
+    { path = "egui::Memory::open_popup_at", reason = "popups and layer order belong to src/design/", allow-invalid = true },
+    { path = "egui::Memory::toggle_popup", reason = "popups and layer order belong to src/design/", allow-invalid = true },
+    { path = "egui::memory::Areas::move_to_top", reason = "popups and layer order belong to src/design/", allow-invalid = true },
+    { path = "egui::memory::Areas::set_sublayer", reason = "popups and layer order belong to src/design/", allow-invalid = true },
+    { path = "egui::Context::set_transform_layer", reason = "layers, windows and egui's own panels belong to src/design/", allow-invalid = true },
+    { path = "egui::Context::move_to_top", reason = "layers, windows and egui's own panels belong to src/design/", allow-invalid = true },
+    { path = "egui::Context::set_sublayer", reason = "layers, windows and egui's own panels belong to src/design/", allow-invalid = true },
+    { path = "egui::Context::settings_ui", reason = "layers, windows and egui's own panels belong to src/design/", allow-invalid = true },
+    { path = "egui::Context::inspection_ui", reason = "layers, windows and egui's own panels belong to src/design/", allow-invalid = true },
+    { path = "egui::Context::texture_ui", reason = "layers, windows and egui's own panels belong to src/design/", allow-invalid = true },
+    { path = "egui::Context::memory_ui", reason = "layers, windows and egui's own panels belong to src/design/", allow-invalid = true },
+    { path = "egui::Context::style_ui", reason = "layers, windows and egui's own panels belong to src/design/", allow-invalid = true },
+    { path = "egui::Context::show_viewport_deferred", reason = "layers, windows and egui's own panels belong to src/design/", allow-invalid = true },
+    { path = "egui::Context::show_viewport_immediate", reason = "layers, windows and egui's own panels belong to src/design/", allow-invalid = true },
 ]

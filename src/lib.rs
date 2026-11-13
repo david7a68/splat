@@ -25,6 +25,18 @@ pub use design::layout;
 // The pane is public only so that its `compile_fail` doc tests can name it.
 #[doc(hidden)]
 pub use design::pane;
+/// The ownership and cost parts of `design` (kept results, the save row, per-change caches),
+/// public only so that their compile-fail doc tests can name them. The app uses them through
+/// `design`.
+#[doc(hidden)]
+pub mod ownership {
+    pub use crate::design::components::{Footer, ResultOrder};
+    pub use crate::design::memo::{Changed, Key, Memo, Revised, Revision};
+    pub use crate::design::results::{
+        DiskChanged, Ends, FooterResult, Kept, Owner, OwnerChanged, Press, Results, Shown,
+    };
+    pub use crate::design::save_row::{DraftState, Primary, SaveWeight, SaveWord};
+}
 mod difficulty;
 mod dndbeyond;
 mod encounter_run;
@@ -62,8 +74,6 @@ mod touchpad;
 mod trackers;
 mod ui_state;
 #[cfg(test)]
-// The capture harness drives egui directly; it ships nothing a DM sees.
-#[allow(clippy::disallowed_methods)]
 mod visual_tests;
 mod world;
 
@@ -1819,7 +1829,10 @@ impl Splat {
         }
     }
 
-    #[allow(clippy::disallowed_methods)]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn page(&mut self, ui: &mut egui::Ui) {
         let active = self.campaigns.active_campaign();
         let (_, session) = self.settings.campaign_session();
