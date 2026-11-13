@@ -206,7 +206,8 @@ menus put the caret after the word. Keep remains the default focus when closing 
 Header actions have at most one bordered secondary button, for `New …`. Other header actions are quiet and
 come first. Only one accent-filled primary action can be visible. An open run's strip owns primary `Next turn`
 on other pages; `Back to run` is secondary. Use a `status_link`, such as `Running · Round 2`, to open its
-state. An on toggle uses `selected`, its word and an icon or check, without accent fill. Use red only for an
+state. An on toggle uses `selected`, its word and an icon or check, without accent fill. A menu's selected choice has a check
+before its words, and the other choices keep that slot empty, so every choice's words start at one x. Use red only for an
 action that loses something. Keep Delete and Remove in row menus.
 
 A save row keeps its state and quiet `Discard` at the left and `Save` at the right. A draft that Save's own check
@@ -1478,27 +1479,28 @@ gap: a bordered secondary button, as Arrivals offers it. The words, the button a
 
 Long local effects show four words and `…` (`Hexed until the hag…`), the last shown word a link to the whole effect;
 a hidden count keeps its number (`2 more`, never a bare `more`); Undo keeps four when they fit. An added effect's Undo has
-one form, `Undo: effect <words>`: narrower, it keeps two effect words and its target (`Undo: effect Wis save… on Cinder
-Wolf 2`), then the target shortens by the rule above, then the target goes (`Undo: effect Wis save…`). Concentration Undo says start concentration or stop concentration before
+one form, `Undo: add effect <words>`: narrower, it keeps two effect words and its target (`Undo: add effect Wis save…
+on Cinder Wolf 2`), then the target shortens by the rule above, then the target goes (`Undo: add effect Wis save…`).
+Every condition and effect step names its verb: `Undo: add Frightened on Oren`, `Undo: remove Prone from Oren`. Concentration Undo says start concentration or stop concentration before
 the target. Exhaustion Undo keeps both levels, such as `exhaustion 2 → 3 on Oren`. Exhaustion level uses the shared `stepper` at Scan height. One drag on the level is one Undo step, from the level where the drag started, committed when the drag ends; each − or + press is one step. At a limit the button says `Exhaustion stops at 6.` or `Exhaustion is already 0.` Hover and accessibility keep full text.
 
 The dock has a fixed place above the footer: Amount, Damage, Heal, Temp HP, selected name, Conditions, Conc,
 Absent, Effect. Off toggles use text colour; disabled controls stay muted. Enter applies damage. The dock's and footer's
 background uses roster width; panels never cover them. The dock's controls are one block at the left, no wider than
 `LIST_MEASURE`: the dice end at the block's edge, and Conditions, Conc and Absent follow the selected name's slot after
-an `L` gap, not at the roster's far edge. The slot has one width for the whole fight (the widest roster name in
-`Heading`, at most `12 × L`), so the toggles keep one x whichever row is selected. The selected name keeps `Heading`; it
-uses `Small` only when that shows the name whole. The selected name starts the line. In a dock too narrow for the dice
+an `L` gap, not at the roster's far edge. The slot has one width, `8 × L` (less only where the dock has no room for
+it), in every fight and for every row, so the toggles keep one x whichever row is selected and whatever names the
+roster has. The selected name starts the line: in `Heading` when that holds it on one line; else in `Small` on up to
+two lines that share one control's height, whole while they hold it; else two lines of whole words that end in `…`
+and keep a copy number or letter (`Ember Cultist of the… 12`). In a dock too narrow for the dice
 total beside the dice, the total (the dice icon and the number, named `Rolled 4`) has a reserved place at the end of the name's line, under
 the dice, never before the name. In a wider dock the total (`= 4`, named `Rolled 4`) has a fixed place after Roll at
 the block's edge, and a total of three digits gives up `=` there. Each place holds three digits whole; a longer total
 ends in `…`, and hover keeps the roll's whole line. No control of the dock moves when a total comes, changes or goes.
 Fit whole words, retain a distinguishing last word or copy number or
 letter, end shortened names with an ellipsis and drop trailing joining words: `Seraphina… Bell`, `Cinder… 2`.
-The dock's name keeps its last word while its slot holds the first word, `…` and the last word; else it is its
-first word's start and `…`, within the slot, so no control moves. The limit: in the 442 px dock at 960x640 the
-slot is 79 px (95 beside Lookup), and `Seraphina… Bell` needs 107, so it shows `Seraphina…`; from a 596 px
-dock the slot is 192 px. Hover and accessibility keep full names. A row at 0 HP with the panel hidden has `Death saves` first on the
+The dock's name wraps to its two lines before it ends in `…`; a first word longer than both lines is cut by letters,
+within the slot, so no control moves. Hover and accessibility keep full names. A row at 0 HP with the panel hidden has `Death saves` first on the
 action tiles' line above the dock, so no control of the dock moves and the name keeps its slot.
 
 ### Effects and turn reminders
@@ -1522,8 +1524,10 @@ its place. On the row that has the turn, an effect shown on each turn comes firs
 before the last plain condition folds into `1 more`. Each effect shows whole while the line has room; else the
 first ones and a count of the rest, `⚑ +2`, a space after their slot with no dot; else the first one's words
 shortened from their end and the count; else the count of all, `⚑ 3`; else the row shows the effects as their
-plain words, as the row with no time does. A count has a slot as wide as its widest form (`10`, `· last round`, `· ⚠ time is up`), so a
-change of count moves no word, and its underline stops at its last letter. Words read `Bless 9`, `Bless · last
+plain words, as the row with no time does. A count keeps the room of its widest number (`10`) in place, so a change of
+number moves no word, and the line keeps the rest of the room of its widest form (`· last round`, `· ⚠ time is up`)
+after its last word, so no hole opens between the effect and what follows it and the line keeps its lines. The words
+after it move only at `last round` and `time is up`, when the DM must look. Its underline stops at its last letter. Words read `Bless 9`, `Bless · last
 round`, `Bless · time is up` (the `result.warning` icon, words in `text`), `Legendary actions 2 of 3`, `Fire
 Breath ready`, `Fire Breath spent ⚄`. An official condition's name opens its rule; the count is its own
 target of at least `XL`: a running count or words shown on each turn open Conditions, `time is up` removes,
@@ -1535,7 +1539,7 @@ hover and accessible name hold every whole word. After damage to a row marked Co
 its second line until the next step, only in the room that the effects leave; else only in the hover and the
 accessible name. In Conditions an official condition's count is on its tick, `✓ Frightened 10`, while the
 grid fits its room; else it is listed under Other effects, which lists other words with their whole words. The
-tab's help says `No HP, AC or roll changes by itself. A time you type counts down on that creature’s turns.` An
+tab's help says `No HP, AC or roll changes by itself. A time you type counts down at the end of that creature’s turn: Bless 10 rounds goes from 10 to 9.` An
 ended run shows them as words, and a click does nothing.
 
 The notice line has a third part after the state notice and the sheet summary: the current turn's reminders,
@@ -1562,14 +1566,18 @@ Other participants show them only if a success or failure is already recorded, s
 Clicking a count edits it. Sheet
 shows live death saves once, with correct singular and plural words. A character's sheet panel starts with its sync status and facts on one line, one blank before each `·`
 (`Not connected · Fetched 3 h ago · HP from this run`). Correct has no duplicate fields; HP owns
-its help. Correct initiative says This row moves. The current turn stays. Labels share one column, as wide as the widest label (`Initiative bonus`) and an `S` gap; blocked
-initiative and DM-note commits have a short reason on its own line below the field, at the field's left. That line
-stays when the reason goes, so nothing below moves as the DM types. The DM note field takes the form's width
+its help. Initiative has its own `CORRECT INITIATIVE` heading in setup (the bonus) and in live play (the total), so one
+form has one grouping. Correct initiative says This row moves. The current turn stays., `S` below its field's line.
+Labels share one column, as wide as the widest label (`Initiative bonus`) and an `S` gap; blocked
+initiative and DM-note commits have a short reason on its own line below the field (for initiative, below its help),
+at the field's left. That line stays when the reason goes, so nothing below moves as the DM types. The death-save
+counts have the slot of their widest words, so `+ Success` and `+ Failure` keep their x after each press. The DM note field takes the form's width
 (`FORM_WIDTH`) up to Add note. Correct HP has an `L` gap after death saves.
 Empty Prep offers Edit encounter if its encounter exists.
 
 Changed creatures show Changed and the changes the printed stat block does not show, such as Attack +1 or Speed
-40 ft, on line two, aligned under the name at every scale. Setup shows only Changed. If name-only shrinking is insufficient, keep the
+40 ft, on line two, aligned under the name at every scale. Setup shows only Changed, after the side and the numbers
+(`Enemies · HP 43/43 · AC 15 · ✎ Changed`), as the encounter editor's row puts it last. If name-only shrinking is insufficient, keep the
 first table bonus and more; long conditions keep those that fit and a Conditions count link. The card puts
 changes at the top of its Stat block tab, except AC, maximum HP and initiative bonus, which already appear in
 the value trio. Add by hand comes first, in larger type on one summary line, and holds only what the run
@@ -1580,8 +1588,9 @@ changed maxima or bonuses. Changes scroll with the stat block; each participant 
 Paused snapshots state when they differ from the current file, subject first: `This stat block uses the copy from
 the start of the fight. Cinder Wolf.md has changed.` (`This sheet …` for a character; the same subject when the file
 was deleted, cannot be read or is not in the campaign), then `Read the new version`, a bordered secondary button whose
-border starts at the sentence's words. The sentence is the changed-on-disk state: the warning icon in `document.external`, then words in the
-text colour, so it is not read as part of the stat block. Under that notice a character's
+border starts at the sentence's words. The notice comes and goes with the file, so it is in the panel's message footer,
+and the stat block keeps its top. It is a message: an error when the file cannot be read now, as in every other view,
+else a warning. Under that notice a character's
 card says only `The roster has the current values.`; without it, `Saved when this run began. The roster has the
 current values.`
 
@@ -1604,16 +1613,18 @@ In a run a tile arms its action: its frame turns accent on the selected fill and
 the panel stays on the actor. Under the tiles, a crosshair and the next step in Small (`Click a target to roll against
 it. Enter applies the damage. Escape stops.`), the crosshair centred on the first line when the words wrap, led by the way the d20 rolls when it is not plain (`With advantage.
 Click a target…`). The hint keeps the lines that the longest hint (`With disadvantage.` and the longest next step)
-takes at the panel's width, so `Stop` keeps its y in every roll mode and action. Then quiet actions on their own line, the first of each line with `line_start`, so its words start
-at the tiles' edge: `Stop`, and for a save `Roll damage` and `Half for those at or above DC`, or for a player's attack
-`Roll for them`. Each other row shows its roll words in accent Small in one place, at every size: the line under its
+takes at the panel's width, so `Stop` keeps its y in every roll mode and action. Then the actions on their own line:
+the step that continues the task, `Roll damage`, is secondary (bordered), its border at the tiles' edge; the others are
+quiet, a quiet one that starts a line with `line_start`, so its words start at the tiles' edge: `Stop` (last), `Half
+for those at or above DC`, or for a player's attack `Roll for them`. Each other row shows its roll words in accent Small in one place, at every size: the line under its
 name, after its conditions (and after its state word where the row has no state column), never in the state column.
 They are the chance to hit it while an attack is armed, with the way it rolls (`51% to hit · advantage`), then the
 result against it, a plain comparison with no hit or miss verdict (`17 vs AC 13 · 10 damage`). They take the longest
 form that fits whole, dropping words before the result first; the result's last two parts (the comparison or save
-outcome, and the damage with its `(half)`) never drop. When they do not fit whole after the conditions but fit on a line
-of their own, the words take that line, under the conditions at the name's edge, and that row grows by the line; they
-are cut by whole words only where even that line has no room. The row's accessible name holds them whole. Roll words
+outcome, and the damage with its `(half)`) never drop. A roll result does not change a row's height: when the result
+does not fit whole after the effects and the save DC, the row without them shows it whole if it can; else the words are
+cut by whole words after the conditions. Only where not one word fits there do they take a line of their own under
+the conditions, at the name's edge, and that row grows by the line. The row's accessible name holds them whole. Roll words
 never move a row's columns. A save's creature targets show their roll in the AC
 cell. After `Roll damage`, each target says its own result, from the amount Enter gives it (`Saved · 1 damage
 (half)`, `Failed · 3 damage`), and keeps it after Enter. Enter finishes the save: its tile disarms, the hint and `Roll
@@ -1654,7 +1665,8 @@ is as wide as the group block below it, so the panel has one right edge. In the 
 one word column, so their fields start at one x, and `Side` starts where `HP` does. The form's reason line (`Type its
 HP. A creature made up here has no stat block.`) keeps its height when the reason goes, so Add and the groups below
 stay still. Search
-shows five matches. When more match, a quiet `Show all 6` (the number of matches) lists every match in place, in a scroll list at most
+shows five matches; six show as six rows, since a `Show all` line would cost a click for one row of about its height.
+When more match, a quiet `Show all 7` (the number of matches) lists every match in place, in a scroll list at most
 eight rows tall, so the words, the chosen match and the roster stay in view. New words return to five. Its side
 picker says Side and uses roster words. List encounter groups, tonight's plan groups, then any-encounter
 groups. Empty sections use group headings and one muted line. New group opens Encounters. Each group's first
@@ -1714,7 +1726,8 @@ words come from one function: Setup, Setup · Paused, Round 2, Round 2 · Paused
 with other unfinished copies names its copy beside Saved and in rail hover.
 
 A disconnected run has Connect to sync on its header only; blocked footer Sync party uses that cause on hover.
-End encounter… shortens to End… before it moves into a menu. Keep End… visible while it fits, including on recovery copies. Hover and accessibility keep End encounter…. Keys keeps its word beside Lookup, Notes and a wide panel. Saved and Undo
+End encounter… shortens to End… before it moves into a menu. Keep End… visible while it fits, including on recovery copies. Hover and accessibility keep End encounter…. Keys keeps its word beside Lookup, Notes and a wide panel. With Keys on, the panel's title is `Keyboard commands`, and the
+list has no label of its own. Saved and Undo
 align with the roster's right edge. The footer uses error status when saving stops. Ended runs put short
 conflict and pending-change counts below blocked Close after sync at the panel's right edge, with an `L` gap
 between character sync blocks. Each block's heading has one form whatever its state: the name in `Heading` and the text
@@ -1766,7 +1779,8 @@ exact form: `Settle 1 conflict first.` No body line repeats it. A close keeps th
 run's Undo steps, so no close words say that Undo ends.
 The app-close and run-close dialogs draw their recovery actions through one shared function: bordered secondary
 buttons on one line, Connect to sync before Review conflict, and the first one's border starts at the dialog text. Stop and
-close is secondary when saved work remains.
+close is secondary when saved work remains. While the run-close dialog is open, the run's footer line stays behind it
+as it was (Close run, End encounter…, Keys and the save state); the dialog takes the input.
 
 Incoming sheet changes remove only that character's Undo steps. Remaining snapshots keep current sheet values.
 Atomic steps involving others end older affected steps when needed to avoid stale values; Log names each
