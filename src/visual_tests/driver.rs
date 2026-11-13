@@ -2004,6 +2004,38 @@ impl<'a> Driver<'a> {
         self.paste_copied();
     }
 
+    /// Click at the end of the visible Markdown editor's first line that holds these words, as
+    /// a DM clicks after a line to type under it: one interaction.
+    pub fn click_line_end(&mut self, words: &str) {
+        let editor = self.aim("the Markdown editor", |node| {
+            node.role == Role::MultilineTextInput
+        });
+        let mut found = None;
+        self.each_painted_text(|text, clip| {
+            let all = &text.galley.job.text;
+            let Some(start) = all.find(words).filter(|_| found.is_none()) else {
+                return;
+            };
+            let end = all[start..].find('\n').map_or(all.len(), |at| start + at);
+            let caret = text
+                .galley
+                .pos_from_cursor(egui::text::CCursor::new(all[..end].chars().count()))
+                .translate(text.pos.to_vec2());
+            if editor.contains(caret.center()) && clip.contains(caret.center()) {
+                found = Some(caret);
+            }
+        });
+        let caret = found.unwrap_or_else(|| {
+            panic!(
+                "{}: no line of the Markdown editor in view holds {words:?}.\n{}",
+                self.scenario,
+                self.describe()
+            )
+        });
+        let at = egui::Rect::from_center_size(caret.center(), egui::vec2(1.0, 1.0));
+        self.click_rect(at, &format!("Click: after {words}"));
+    }
+
     /// Replace everything in the visible Markdown editor.
     pub fn replace_editor_text(&mut self, text: &str) {
         let rect = self.aim("the Markdown editor", |node| {
