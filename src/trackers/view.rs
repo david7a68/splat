@@ -32,8 +32,8 @@ pub(crate) struct ViewState {
     /// How many times a name was shortened.
     #[cfg(test)]
     shortened: usize,
-    /// The panel's columns, with the trackers' revision and the width they were measured for.
-    columns: Option<(u64, u32, Columns)>,
+    /// The panel’s columns, with the trackers’ revision, and the width and font they were measured for.
+    columns: Option<(u64, (u32, u32), Columns)>,
     /// The widest value slot this panel needed since its definitions were read: an Undo that
     /// takes `1000` back to `999` keeps the room, so no action moves back and forth. It ends
     /// when the definitions are read again (`Trackers::rules` replaced) or the campaign changes.
@@ -126,7 +126,12 @@ fn columns(
     view: &mut ViewState,
     revision: u64,
 ) -> Columns {
-    let width = ui.available_width().to_bits();
+    // Every input of the measure: the width, and the font the names and values are measured in
+    // (a theme installed after a first frame measures again).
+    let width = (
+        ui.available_width().to_bits(),
+        (Type::Body.font(ui).size * ui.ctx().pixels_per_point()).to_bits(),
+    );
     match view.columns {
         Some((seen, at, columns)) if seen == revision && at == width => columns,
         _ => {
@@ -142,7 +147,7 @@ impl ViewState {
     #[cfg(test)]
     pub(crate) fn columns_seen(&self) -> Option<(f32, String)> {
         self.columns
-            .map(|(_, width, columns)| (f32::from_bits(width), format!("{columns:?}")))
+            .map(|(_, (width, _), columns)| (f32::from_bits(width), format!("{columns:?}")))
     }
 
     /// The amount field again, with the number typed for an act that recorded nothing.
