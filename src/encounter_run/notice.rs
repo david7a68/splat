@@ -517,7 +517,7 @@ impl Run {
                         // X69: `S` before the link, as `link_width` counts it, so a long
                         // name never runs into `Review`.
                         if fits_link {
-                            ui.add_space(design::S - ui.spacing().item_spacing.x);
+                            design::gap(ui, design::Gap::XS);
                         }
                         if !link.is_empty() && fits_link && design::small_link(ui, link).clicked() {
                             if link == "Review" {

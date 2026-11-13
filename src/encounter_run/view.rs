@@ -106,25 +106,17 @@ fn other_effect_add() -> Action<'static> {
 }
 
 /// The field that adds an other effect, and its Add. True when the DM adds the typed words;
-/// then the field's response.
+/// then the field's response. `owner` is the key of the object whose draft it is (a run and
+/// its participant, a group's member): egui keeps the field's cursor and its text Undo under
+/// its id, so no caller leaves the owner out.
 pub(crate) fn other_effect_field(
     ui: &mut egui::Ui,
-    text: &mut String,
-    size_and_hint: (f32, &str),
-    focus: bool,
-) -> (bool, egui::Response) {
-    other_effect_field_for(ui, OTHER_EFFECT_FIELD, text, size_and_hint, focus)
-}
-
-/// `other_effect_field` for one object's draft: `id` carries the object's key, so the field's
-/// cursor and its text Undo belong to that object.
-pub(crate) fn other_effect_field_for(
-    ui: &mut egui::Ui,
-    id: design::FieldId,
+    owner: impl design::RowKey,
     text: &mut String,
     (width, placeholder): (f32, &str),
     focus: bool,
 ) -> (bool, egui::Response) {
+    let id = OTHER_EFFECT_FIELD.with(owner);
     ui.horizontal(|ui| {
         let response = design::line_field(ui, id, "Other effect", text, placeholder, width);
         if focus {
@@ -2069,6 +2061,7 @@ impl Run {
         let mut added = false;
         let p = &self.state.participants[index];
         let key = p.key.clone();
+        let run_id = self.id;
         egui::ScrollArea::vertical()
             .id_salt("run_conditions")
             .auto_shrink([false, false])
@@ -2179,10 +2172,11 @@ impl Run {
                 } else {
                     "Other effect…"
                 };
-                // The draft is this participant's: its field keeps its own cursor and Undo.
-                let id = OTHER_EFFECT_FIELD.with(design::TextKey::from_data(p.key.clone()));
+                // The draft is this participant's, in this run: its field keeps its own cursor
+                // and Undo (two runs can reuse a roster slot's key).
+                let owner = design::TextKey::from_data(format!("{}:{}", run_id, p.key));
                 let (add, field) =
-                    other_effect_field_for(ui, id, &mut draft.words, (width, placeholder), focus);
+                    other_effect_field(ui, owner, &mut draft.words, (width, placeholder), focus);
                 // Escape clears the participant's draft, as in the dock's field.
                 if field.lost_focus() && ui.input(|i| i.key_pressed(Key::Escape)) {
                     draft.words.clear();
@@ -2233,7 +2227,7 @@ impl Run {
             if self.ending {
                 let field = design::line_field(
                     ui,
-                    OUTCOME_FIELD,
+                    OUTCOME_FIELD.with(self.id),
                     "Outcome",
                     &mut self.outcome,
                     "Outcome, if any",
@@ -4599,7 +4593,9 @@ impl Run {
                         correction_label(ui, "Note");
                         design::line_field(
                             ui,
-                            DM_NOTE_FIELD,
+                            DM_NOTE_FIELD
+                                .with(self.id)
+                                .with(design::TextKey::from_data(p.key.clone())),
                             "DM note",
                             &mut self.note,
                             "What happened",
@@ -12466,7 +12462,29 @@ mod tests {
             Some("Haste!"),
             "Ctrl+Z in B's field changed A"
         );
+        // The draft is also its run's: another run can reuse the roster slot's key. Run B shows
+        // the same participant key; Ctrl+Z in its field gives it nothing of run A's history.
         run.borrow_mut().selected = 0;
+        let other_run = super::super::tests::run();
+        assert_eq!(
+            other_run.state.participants[0].key, key,
+            "run B reuses A's key"
+        );
+        assert_ne!(other_run.id, run.borrow().id);
+        let run_a = std::mem::replace(&mut *run.borrow_mut(), other_run);
+        harness.run_steps(2);
+        harness.get_by_label("Other effect").click();
+        harness.run_steps(1);
+        harness.key_press_modifiers(egui::Modifiers::COMMAND, Key::Z);
+        harness.run_steps(2);
+        assert!(
+            run.borrow()
+                .effect_fields
+                .get(&key)
+                .is_none_or(|f| f.words.is_empty()),
+            "Ctrl+Z in run B's field gave B the history of run A"
+        );
+        *run.borrow_mut() = run_a;
         harness.run_steps(2);
         harness.get_by_label("Other effect").click();
         harness.run_steps(1);

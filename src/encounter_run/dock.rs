@@ -25,10 +25,6 @@ const DICE_FIELD: design::FieldId = crate::field_id!("dock_dice");
 impl Run {
     /// The entry controls have one fixed home, labelled with the row they act on, so
     /// no row moves when the selection changes. Typing needs no pointer travel at all.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     pub(super) fn dock(&mut self, ui: &mut egui::Ui) {
         let c = colors();
         let index = self.selected;
@@ -164,7 +160,7 @@ impl Run {
                             design::named(ui, &response, &format!("Selected: {}", p.name));
                         },
                     );
-                    ui.add_space(design::L - gap);
+                    design::gap(ui, design::Gap::M);
                     if Action::quiet("Conditions")
                         .density(Density::Read)
                         .name("Conditions for this participant")
@@ -212,7 +208,7 @@ impl Run {
                         effect = EffectFit::Icon;
                     }
                     if effect != EffectFit::None {
-                        ui.add_space(design::L - gap);
+                        design::gap(ui, design::Gap::M);
                     }
                     open_effect = match effect {
                         EffectFit::Word => Self::effect_action(effect_key).show(ui).clicked(),
@@ -362,7 +358,14 @@ impl Run {
             .show(ui)
             .clicked();
         let width = if narrow { 60.0 } else { 72.0 };
-        let field = design::line_field(ui, DICE_FIELD, "Dice", &mut self.dice, "1d20", width);
+        let field = design::line_field(
+            ui,
+            DICE_FIELD.with(self.id),
+            "Dice",
+            &mut self.dice,
+            "1d20",
+            width,
+        );
         if field.gained_focus() {
             design::focus_and_select(ui, field.id, &self.dice);
         }

@@ -786,7 +786,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounter_run/view.rs",
             "record_tab",
-            &[Ban::Layout(1), Ban::Extras(1)],
+            &[Ban::Layout(1), Ban::Extras(1), Ban::RowKey(1)],
         ),
         (
             "src/encounter_run/view.rs",
@@ -1056,7 +1056,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         ("src/dndbeyond.rs", "connection_help", &[Ban::Extras(1)]),
         ("src/dndbeyond.rs", "show_import", &[Ban::Extras(1)]),
-        ("src/encounter_run/dock.rs", "dock", &[Ban::Extras(2)]),
         (
             "src/encounter_run/loot.rs",
             "loot_section",
@@ -1065,7 +1064,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounter_run/notice.rs",
             "live_header",
-            &[Ban::Extras(3)],
+            &[Ban::Extras(2)],
         ),
         (
             "src/encounter_run/view.rs",
@@ -1115,7 +1114,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounters/groups.rs",
             "conditions_row",
-            &[Ban::Extras(1)],
+            &[Ban::Extras(1), Ban::RowKey(1)],
         ),
         (
             "src/encounters/groups.rs",
