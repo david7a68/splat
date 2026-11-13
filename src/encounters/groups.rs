@@ -1899,7 +1899,7 @@ pub(super) fn overrides_form(
     }
     text_row(
         ui,
-        OVERRIDE_NAME.with(std::path::Path::new(id)),
+        OVERRIDE_NAME.with(design::TextKey::from_data(id)),
         "Display name",
         &mut overrides.name,
         &entry.name,
@@ -2013,7 +2013,7 @@ pub(super) fn overrides_form(
     }
     text_row(
         ui,
-        OVERRIDE_NOTE.with(std::path::Path::new(id)),
+        OVERRIDE_NOTE.with(design::TextKey::from_data(id)),
         "Note",
         &mut overrides.note,
         "Why this creature differs",
@@ -2288,12 +2288,14 @@ impl Encounters {
                 right - ui.cursor().left() - 2.0 * design::S
             });
             let font = Type::Heading.font(ui);
-            let response = GROUP_NAME.single_line(ui, &mut draft.name, |edit| {
-                edit.desired_width(width.min(name_width(column)))
-                    .min_size(egui::vec2(0.0, Density::Scan.control()))
-                    .margin(egui::vec2(design::S, design::XS))
-                    .font(font)
-            });
+            let response = GROUP_NAME
+                .with(std::path::Path::new(&draft.path))
+                .single_line(ui, &mut draft.name, |edit| {
+                    edit.desired_width(width.min(name_width(column)))
+                        .min_size(egui::vec2(0.0, Density::Scan.control()))
+                        .margin(egui::vec2(design::S, design::XS))
+                        .font(font)
+                });
             design::named(ui, &response, &format!("Group name: {}", draft.name));
             if response.changed() {
                 draft.touch();

@@ -220,8 +220,12 @@ pub(super) fn side_control(ui: &mut egui::Ui, name: &str, side: &mut String, cho
     ui.data_mut(|data| data.insert_temp(id, other));
 }
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn heading(ui: &mut egui::Ui, word: &str, count: usize) {
-    design::heading(ui, design::Heading::Group { title: word, count });
+    design::group_heading(ui, word, count);
 }
 
 fn section(
@@ -599,6 +603,7 @@ pub(super) fn in_progress_list(
             }
         });
     }
+    design::gap(ui, design::Gap::L);
 }
 
 /// Whether a run of this encounter is saved: unfinished, ended, or in a file that cannot be read
@@ -727,7 +732,6 @@ pub(super) fn group_list(
         heading(ui, "GROUPS", 0);
         blocked_reason(ui, Some("No groups yet. Select New group."));
     } else {
-        design::gap(ui, design::Gap::L);
         section(
             ui,
             "encounter_groups",
@@ -762,6 +766,7 @@ pub(super) fn history_list(
     read: Option<Reading<'_>>,
     action: &mut Option<ListAction>,
 ) -> Option<f32> {
+    design::gap(ui, design::Gap::L);
     if page.runs_unread {
         heading(ui, "HISTORY", 0);
         blocked_reason(ui, Some(ENDED_UNREAD));
@@ -774,7 +779,6 @@ pub(super) fn history_list(
     }
     // The opened run's row: the top of its gap above it, where the list keeps it (X36, X37).
     let mut opened_top = None;
-    design::gap(ui, design::Gap::L);
     section(
         ui,
         "encounter_history",

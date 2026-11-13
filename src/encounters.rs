@@ -2849,6 +2849,21 @@ const RELOAD: &str = "Reload from disk";
 const RELOAD_HINT: &str = "Read encounters and runs from disk again";
 const NAME_FIELD: &str = "Encounter name";
 const SEARCH_FIELD: &str = "Find a creature or party member";
+
+/// The encounter's name field. Its id comes from the draft, so each encounter keeps its own text
+/// history (Ctrl+Z in one never brings back another's words).
+fn name_field(ui: &mut egui::Ui, draft: &mut Draft, width: f32) -> egui::Response {
+    let font = Type::Heading.font(ui);
+    ENCOUNTER_NAME
+        .with(draft.id)
+        .single_line(ui, &mut draft.name, |edit| {
+            edit.desired_width(width)
+                .min_size(egui::vec2(0.0, Density::Scan.control()))
+                .margin(egui::vec2(design::S, design::XS))
+                .font(font)
+        })
+}
+
 const ENCOUNTER_NAME: design::FieldId = crate::field_id!("encounter_name");
 const CREATURE_NAME: design::FieldId = crate::field_id!("encounter_creature_name");
 const INITIATIVE_GROUP: design::FieldId = crate::field_id!("roster_initiative_group");
@@ -4101,7 +4116,7 @@ impl Encounters {
             let width = ui.available_width();
             design::line_field(
                 ui,
-                CREATURE_NAME,
+                CREATURE_NAME.with(std::path::Path::new(&editor.path)),
                 "Name",
                 &mut editor.fields.name,
                 "Name",
@@ -5002,6 +5017,7 @@ impl Encounters {
                     &mut action,
                 );
                 ready_list(ui, &page, live.as_ref(), start_blocked, &mut action);
+                design::gap(ui, design::Gap::L);
                 group_list(ui, snapshot, group_blocked, &mut action);
                 history_list(
                     ui,
@@ -5306,13 +5322,7 @@ impl Encounters {
             .min(
                 (roster_right - ui.cursor().left() - 2.0 * design::S).max(Density::Scan.control()),
             );
-            let font = Type::Heading.font(ui);
-            let response = ENCOUNTER_NAME.single_line(ui, &mut draft_ref.name, |edit| {
-                edit.desired_width(width)
-                    .min_size(egui::vec2(0.0, Density::Scan.control()))
-                    .margin(egui::vec2(design::S, design::XS))
-                    .font(font)
-            });
+            let response = name_field(ui, draft_ref, width);
             design::named(ui, &response, &format!("{NAME_FIELD}: {}", draft_ref.name));
             if std::mem::take(focus_name) {
                 design::focus_and_select(ui, response.id, &draft_ref.name);
@@ -6168,6 +6178,7 @@ impl Encounters {
         live: Option<&Party>,
         make_yours: &mut Option<usize>,
     ) {
+        let draft_id = draft.id;
         let sides: Vec<_> = draft
             .setup
             .sides
@@ -6510,7 +6521,9 @@ impl Encounters {
                             .to_owned();
                         let response = design::line_field(
                             ui,
-                            INITIATIVE_GROUP.with(std::path::Path::new(&slot.key)),
+                            INITIATIVE_GROUP
+                                .with(draft_id)
+                                .with(design::TextKey::from_data(&slot.key)),
                             "Initiative group (optional)",
                             &mut group,
                             "Initiative group",
@@ -7517,6 +7530,58 @@ mod tests {
                 "iter7-B-FD3: repair {action:?} must align with warning text {warning:?}"
             );
         }
+    }
+
+    #[test]
+    fn each_encounters_name_field_keeps_its_own_undo_history() {
+        use egui_kittest::kittest::Queryable;
+        let mut a = Draft::new();
+        a.name = "Alpha".into();
+        let mut b = Draft::new();
+        b.name = "Beta".into();
+        assert_ne!(a.id, b.id);
+        let drafts = std::rc::Rc::new(std::cell::RefCell::new([a, b]));
+        let shown = drafts.clone();
+        let which = std::rc::Rc::new(std::cell::Cell::new(0));
+        let current = which.clone();
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(600.0, 200.0))
+            .build(move |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    name_field(ui, &mut shown.borrow_mut()[current.get()], 300.0);
+                });
+            });
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        let focus = |harness: &mut egui_kittest::Harness<'_>| {
+            harness
+                .get_by_role(egui::accesskit::Role::TextInput)
+                .click();
+            harness.run_steps(2);
+        };
+        // Edit A, so that its field has a history.
+        focus(&mut harness);
+        harness.event(egui::Event::Text("1".into()));
+        harness.run_steps(2);
+        assert_eq!(drafts.borrow()[0].name, "Alpha1");
+        harness.run_steps(40);
+        harness.event(egui::Event::Text("2".into()));
+        harness.run_steps(2);
+        assert_eq!(drafts.borrow()[0].name, "Alpha12");
+        // Switch to B, focus its field and press Ctrl+Z.
+        which.set(1);
+        harness.run_steps(2);
+        focus(&mut harness);
+        harness.event(egui::Event::Key {
+            key: egui::Key::Z,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::COMMAND,
+        });
+        harness.run_steps(2);
+        assert_eq!(drafts.borrow()[1].name, "Beta", "B keeps its own text");
+        assert_eq!(drafts.borrow()[0].name, "Alpha12", "A is unchanged");
     }
 
     #[test]

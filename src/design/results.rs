@@ -838,7 +838,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Pane(1), Ban::Extras(1)],
         ),
         ("src/encounters.rs", "notes_field", &[Ban::Layout(1)]),
-        ("src/encounters.rs", "roster", &[Ban::Layout(1)]),
+        (
+            "src/encounters.rs",
+            "roster",
+            &[Ban::Layout(1), Ban::RowKey(1)],
+        ),
         ("src/encounters.rs", "roster_pane", &[Ban::Layout(1)]),
         ("src/encounters/groups.rs", "belongs_to", &[Ban::Layout(1)]),
         (
@@ -1182,6 +1186,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/encounters.rs", "add_pane", &[Ban::Extras(1)]),
         ("src/encounters.rs", "loot_field", &[Ban::Extras(1)]),
         ("src/encounters/disk.rs", "show", &[Ban::Extras(1)]),
+        ("src/encounters/list.rs", "heading", &[Ban::Extras(1)]),
         (
             "src/encounters/groups.rs",
             "choice_label",
@@ -1195,7 +1200,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounters/groups.rs",
             "overrides_form",
-            &[Ban::Extras(1)],
+            &[Ban::Extras(1), Ban::RowKey(2)],
         ),
         (
             "src/encounters/groups.rs",
