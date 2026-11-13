@@ -1,5 +1,6 @@
 //! The run's header. Its second line is the notice line: the notice, the Undo label beside it,
 //! and the rule for what shortens first.
+#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use super::{
     Command, NOBODY_PRESENT, Panel, Phase, Run, SHEET_SOURCE,
     view::{DOCK_ALL_WORDS_FROM, dock_name, header_height, log_link, undo_forms},

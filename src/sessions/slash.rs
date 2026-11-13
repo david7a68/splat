@@ -1,5 +1,6 @@
 //! `/` in a session note opens a short menu of commands. Each command ends with a link
 //! where the `/` was typed, so the DM keeps writing and never leaves the note.
+#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use crate::{
     design::{self, Density, Tone, Type, colors, icons},
     lookup::{self, ContentIndex},

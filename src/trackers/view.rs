@@ -1,8 +1,12 @@
 //! The Trackers view of the Lookup panel: the Due rows, then the pinned trackers in the note's
-//! order, then `More trackers`, in one scroll area; the result line keeps its place at the
-//! panel's bottom edge. The view draws from the ledger as read, and every press is one act.
+//! order, then `More trackers`, in one scroll area; the results sit in the panel's message
+//! footer. The view draws from the ledger as read, and every press is one act.
 use super::{Rules, Says, State, Trackers, Unrecorded, ledger::Entry, ledger::NoticeRef, mark_of};
-use crate::design::{self, Action, Density, Tone, Type, colors, icons};
+use crate::design::outcome::{
+    Banner, Fault, FaultMessage, MessageChoice, Outcome, PagePlaceholder, Pressed, Said, Sentence,
+    Severity, UndoStep, Verb,
+};
+use crate::design::{self, Action, Density, Type, colors, icons};
 use eframe::egui;
 use std::collections::HashSet;
 
@@ -187,7 +191,21 @@ impl ViewState {
 pub(crate) const RULES_ROUTE: &str = "Campaign → Rules and runs";
 
 /// The Due list's words after the Timeline's own, while the day count is not known.
-pub(crate) const DAY_MARKS_WAIT: &str = "No day mark shows until the Timeline is read.";
+pub(crate) const DAY_MARKS_WAIT: Sentence =
+    crate::sentence!("No day mark shows until the Timeline is read.");
+
+/// A fault of the trackers' files or of a write, for the typed message places: its severity
+/// and its words.
+pub(crate) struct TrackerFault(pub Severity, pub Sentence);
+
+impl Fault for TrackerFault {
+    fn severity(&self) -> Severity {
+        self.0
+    }
+    fn cause(&self) -> Sentence {
+        self.1.clone()
+    }
+}
 
 /// One act the DM asked for in this frame.
 pub(crate) enum Act {
@@ -233,24 +251,12 @@ impl Trackers {
     }
 }
 
-/// The result line, then the empty state, a file that cannot be read, or the trackers.
+/// The message footer, then the empty state, a file that cannot be read, or the trackers.
 pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, from_top: bool) {
     let mut act = None;
-    // The result line comes first: why an act recorded nothing stays in view, also when the
-    // row it was pressed on went away.
-    let has_result = trackers.reason.is_some() || trackers.result.is_some();
-    if has_result && trackers.unreadable.is_none() {
-        egui::TopBottomPanel::bottom("trackers_result")
-            .frame(egui::Frame::NONE)
-            .show_separator_line(false)
-            .resizable(false)
-            .show_inside(ui, |ui| {
-                ui.add_space(design::XS);
-                design::rule(ui);
-                ui.add_space(design::XS);
-                result_line(ui, trackers, &mut act);
-            });
-    }
+    // The footer comes first: why an act recorded nothing stays in view, also when the row it
+    // was pressed on went away.
+    let bottom = footer(ui, trackers, &mut act);
     if !trackers.in_play() {
         ui.add_space(design::S);
         design::empty_state(
@@ -271,6 +277,7 @@ pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, from_top: bool) {
     // What is due is in view when the view opens.
     let mut area = egui::ScrollArea::vertical()
         .id_salt("trackers_view")
+        .max_height((bottom - ui.cursor().top()).max(0.0))
         .auto_shrink([false, false]);
     if from_top {
         area = area.vertical_scroll_offset(0.0);
@@ -352,34 +359,41 @@ fn apply(trackers: &mut Trackers, act: Act) {
     }
 }
 
+/// `Trackers.md cannot be read: <error> The history in the file is safe.`
+pub(super) fn ledger_unreadable(error: &str) -> Sentence {
+    Sentence::outside(format!("{} cannot be read: {error}", super::ledger::FILE))
+        .then(crate::sentence!("The history in the file is safe."))
+}
+
 fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
     if let Some(error) = &trackers.unreadable {
         let path = trackers.path();
-        design::message_with_actions(
-            ui,
-            Tone::Error,
-            &format!(
-                "{} cannot be read: {error} The history in the file is safe. Splat writes nothing to it until it can be read.",
-                super::ledger::FILE
-            ),
-            |ui| {
-                if Action::secondary("Try again")
-                    .density(Density::Read)
-                    .show(ui)
-                    .clicked()
-                {
-                    *act = Some(Act::ReadAgain);
-                }
+        let fault = TrackerFault(
+            Severity::CannotRead,
+            ledger_unreadable(error).then(crate::sentence!(
+                "Splat writes nothing to it until it can be read."
+            )),
+        );
+        let hover = path.as_ref().map(|path| path.display().to_string());
+        let mut placeholder =
+            PagePlaceholder::new(&fault).choice(MessageChoice::Choice("Try again"));
+        if let Some(hover) = &hover {
+            placeholder = placeholder.choice(MessageChoice::Link {
+                word: "Show file",
+                hover: Some(hover),
+            });
+        }
+        match placeholder.show(ui) {
+            Some(Pressed::Choice(0)) => *act = Some(Act::ReadAgain),
+            Some(Pressed::Choice(_)) => {
                 if let Some(path) = path
-                    && design::link(ui, "Show file")
-                        .on_hover_text(path.display().to_string())
-                        .clicked()
                     && let Ok(url) = reqwest::Url::from_file_path(&path)
                 {
                     ui.ctx().open_url(egui::OpenUrl::new_tab(url.to_string()));
                 }
-            },
-        );
+            }
+            _ => {}
+        }
         return;
     }
     let Trackers {
@@ -392,18 +406,24 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
     } = trackers;
     // A definition that cannot be read shows no value, never an old one.
     if let Some(error) = &rules.unreadable {
-        design::message(
-            ui,
-            Tone::Error,
-            &format!(
-                "{error} Splat shows no tracker and records nothing until it can be read. It reads the notes again when its window gets focus."
-            ),
-        );
+        let _ = PagePlaceholder::new(&TrackerFault(
+            Severity::CannotRead,
+            Sentence::outside(error.as_str()).then(crate::sentence!(
+                "Splat shows no tracker and records nothing until it can be read. It reads the notes again when its window gets focus."
+            )),
+        ))
+        .show(ui);
         return;
     }
     // A day count that is not known shows no day notice, never an old one, and says why.
     if let Some(why) = &state.clock_not_read {
-        design::small_message(ui, Tone::Error, &format!("{why} {DAY_MARKS_WAIT}"));
+        design::outcome::banner(
+            ui,
+            Banner::Fault(&TrackerFault(
+                Severity::CannotRead,
+                Sentence::outside(why.as_str()).then(DAY_MARKS_WAIT),
+            )),
+        );
     }
     if !state.due.is_empty() {
         design::group_heading(ui, "Due", state.due.len());
@@ -443,7 +463,7 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
     // A member that cannot be used is reported, and the others still work. So are a row of the
     // ledger that counts for nothing and a value below its `min`.
     for (_, problem) in problems.iter() {
-        design::small_message(ui, Tone::Error, problem);
+        design::outcome::row_fault(ui, &problem_fault(problem));
     }
 }
 
@@ -895,88 +915,100 @@ fn amount_field(
     }
 }
 
-/// Why the last act recorded nothing, then the last act of the session being played, with
-/// `Undo: <label>` and `Add to Timeline`.
-fn result_line(ui: &mut egui::Ui, trackers: &Trackers, act: &mut Option<Act>) {
-    match &trackers.reason {
-        Some(Unrecorded::Refused(why)) => {
-            design::message(ui, Tone::Warning, why);
-        }
-        Some(Unrecorded::NotSaved(error)) => {
-            design::message(ui, Tone::Error, &not_saved(error));
-        }
-        None => {}
-    }
-    let entries = trackers.newest();
-    let (Some(first), Some((label, words))) = (entries.first(), &trackers.result) else {
-        return;
-    };
-    if let Some(added) = trackers
-        .added
-        .as_ref()
-        .filter(|added| added.entry == first.id)
-    {
-        // The event waits in the Timeline's draft when its save failed: say so, not success.
-        let (tone, words) = match &added.not_saved {
-            Some(words) => (Tone::Error, words.as_str()),
-            None => (Tone::Success, "Added to the Timeline."),
-        };
-        if design::undo_message(ui, tone, words, "Undo add") {
-            *act = Some(Act::UndoAdd(added.event.clone()));
-        }
-        return;
-    }
-    let message = design::message(ui, Tone::Success, words);
-    let inset = message.rect.left() - ui.cursor().left();
-    let undo_label = format!("Undo: {label}");
-    let undo = Action::quiet(&undo_label)
-        .icon(icons::UNDO)
-        .density(Density::Read);
-    // A message action without an icon is bordered (FE3).
-    let add = Action::secondary(ADD_TO_TIMELINE).density(Density::Read);
-    // `Undo`'s words start at the message's words, its icon in the message's icon column;
-    // `Add to Timeline` ends the line, or has a line of its own that starts at the words.
-    let one_line =
-        inset + undo.natural_width(ui) + design::L + add.natural_width(ui) <= ui.available_width();
-    let mut undo_clicked = false;
-    let mut add_clicked = false;
-    ui.horizontal(|ui| {
-        ui.add_space(inset);
-        undo_clicked = undo.line_start().show(ui).clicked();
-        if one_line {
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                add_clicked = add.show(ui).clicked();
-            });
-        }
-    });
-    if !one_line {
-        ui.horizontal(|ui| {
-            ui.add_space(inset);
-            add_clicked = Action::secondary(ADD_TO_TIMELINE)
-                .density(Density::Read)
-                .show(ui)
-                .clicked();
-        });
-    }
-    if undo_clicked {
-        *act = Some(Act::Undo(entries.to_vec()));
-    }
-    if add_clicked {
-        let title = super::timeline_title(&trackers.rules, &trackers.ledger, entries);
-        *act = Some(Act::AddToTimeline(first.id.clone(), title));
-    }
+/// A problem of the problems list: the DM must fix it before it counts.
+pub(super) fn problem_fault(problem: &str) -> TrackerFault {
+    TrackerFault(Severity::NeedsFixing, Sentence::outside(problem))
 }
 
-/// The result line's action that makes a Major event of the act.
+/// The view's message footer: why the last act recorded nothing, then the last act of the
+/// session being played with `Undo: <label>` and `Add to Timeline`, or, after `Add to
+/// Timeline`, `Added to the Timeline.` with `Undo add`. Nothing shows while `Trackers.md`
+/// cannot be read. Returns the y where the body ends.
+fn footer(ui: &mut egui::Ui, trackers: &Trackers, act: &mut Option<Act>) -> f32 {
+    let shown = trackers.unreadable.is_none();
+    let entries = trackers.newest();
+    let result = entries.first().zip(trackers.result.as_ref());
+    let added = result.and_then(|(first, _)| {
+        trackers
+            .added
+            .as_ref()
+            .filter(|added| added.entry == first.id)
+    });
+    let not_saved = match &trackers.reason {
+        Some(Unrecorded::NotSaved(error)) => {
+            Some(TrackerFault(Severity::NotSaved, not_saved(error)))
+        }
+        _ => None,
+    };
+    // The event waits in the Timeline's draft when its save failed: say so, not success.
+    let added_not_saved = added
+        .and_then(|added| added.not_saved.as_ref())
+        .map(|words| TrackerFault(Severity::NotSaved, Sentence::outside(words.as_str())));
+    let (mut reason_pressed, mut result_pressed) = (None, None);
+    let mut footer = design::Footer::new("trackers_footer", ui.available_width());
+    if shown {
+        match (&trackers.reason, &not_saved) {
+            (Some(Unrecorded::Refused(why)), _) => {
+                footer.outcome(
+                    Outcome::Refused(Sentence::outside(why.as_str())),
+                    &mut reason_pressed,
+                );
+            }
+            (_, Some(fault)) => {
+                footer.outcome(FaultMessage::new(fault), &mut reason_pressed);
+            }
+            _ => {}
+        }
+        let order = trackers.result_order;
+        match (result, added, &added_not_saved) {
+            (Some(_), Some(_), Some(fault)) => {
+                footer.outcome(
+                    FaultMessage::new(fault).undo(order, UndoStep::verb(Verb::Add)),
+                    &mut result_pressed,
+                );
+            }
+            (Some(_), Some(_), None) => {
+                footer.outcome(
+                    Said::new(order, crate::sentence!("Added to the Timeline."))
+                        .undo(UndoStep::verb(Verb::Add)),
+                    &mut result_pressed,
+                );
+            }
+            (Some((_, (label, words))), None, _) => {
+                footer.outcome(
+                    Said::new(order, words.clone())
+                        .undo(UndoStep::act(label.as_str()))
+                        .choice(MessageChoice::Choice(ADD_TO_TIMELINE)),
+                    &mut result_pressed,
+                );
+            }
+            (None, ..) => {}
+        }
+    }
+    let bottom = footer.show(ui);
+    match (result_pressed, added, result) {
+        (Some(Pressed::Undo), Some(added), _) => *act = Some(Act::UndoAdd(added.event.clone())),
+        (Some(Pressed::Undo), None, _) => *act = Some(Act::Undo(entries.to_vec())),
+        (Some(Pressed::Choice(_)), None, Some((first, _))) => {
+            let title = super::timeline_title(&trackers.rules, &trackers.ledger, entries);
+            *act = Some(Act::AddToTimeline(first.id.clone(), title));
+        }
+        _ => {}
+    }
+    bottom
+}
+
+/// The result's choice that makes a Major event of the act.
 const ADD_TO_TIMELINE: &str = "Add to Timeline";
 
 /// The words of a failed save: the file, the reason, and that nothing was recorded.
-pub(super) fn not_saved(error: &str) -> String {
-    format!(
-        "{} was not saved: {}. Nothing was recorded.",
+pub(super) fn not_saved(error: &str) -> Sentence {
+    Sentence::outside(format!(
+        "{} was not saved: {}",
         super::ledger::FILE,
         error.trim_end_matches('.')
-    )
+    ))
+    .then(crate::sentence!("Nothing was recorded."))
 }
 
 #[cfg(test)]

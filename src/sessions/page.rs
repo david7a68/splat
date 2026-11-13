@@ -1,5 +1,6 @@
 //! The Sessions page: notes, templates and recordings, one campaign at a time. The
 //! recorder and the processing job live here, and keep going while the DM uses other pages.
+#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use super::{
     Apply, DEFAULT_FOLDER, Draft, DraftState, Dropped, NewNote, Note, NoteUndo, Recording,
     Template, body_of, create_note, create_template, delete_recording, folder_setting,

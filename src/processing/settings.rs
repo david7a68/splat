@@ -1,5 +1,6 @@
 //! Settings for recording and processing: which input, which speech service, which LLM.
 //! The choices live in a small file beside the settings file. Keys live in the keyring.
+#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use super::{
     ANTHROPIC_MODEL, ANTHROPIC_URL, CODEX_MODEL, Config, OPENAI_SPEECH_MODEL, OPENAI_URL, Provider,
 };

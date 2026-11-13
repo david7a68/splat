@@ -1,6 +1,7 @@
 //! Carry-over (F5 of `docs/design/session-cycle.md`): what the last session left, added to this
 //! session's note in one act with its exact Undo; and an embed of a session note's heading,
 //! which Read draws by its target.
+#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use super::{Plan, Sessions, prose};
 use crate::{
     content_workspace::patch_fields,

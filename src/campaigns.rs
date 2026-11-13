@@ -1,3 +1,4 @@
+#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use crate::{
     content_workspace::CampaignDocument,
     design::{self, Action, Density, Status, Tone, Type, colors, icons},

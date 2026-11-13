@@ -4,6 +4,7 @@ pub mod column;
 mod comparison;
 pub mod components;
 pub mod icons;
+pub mod outcome;
 pub mod reader;
 pub mod theme;
 pub mod tokens;

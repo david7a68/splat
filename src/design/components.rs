@@ -588,7 +588,7 @@ impl<'a> Action<'a> {
 
     /// `line_start` for an Undo on its own line under its message: its target stays in the
     /// message's column, which starts at the row's left edge.
-    fn line_start_in_column(mut self) -> Self {
+    pub(super) fn line_start_in_column(mut self) -> Self {
         self.line_start = true;
         self.column = true;
         self
@@ -1164,7 +1164,7 @@ fn field_feedback(ui: &mut Ui, help: Option<&str>, error: Option<&str>) {
         self::help(ui, text);
     }
     if let Some(error) = error {
-        message(ui, Tone::Error, error);
+        tone_message(ui, Tone::Error, error);
     }
     ui.add_space(XS);
 }
@@ -1972,7 +1972,7 @@ pub enum Tone {
 }
 
 impl Tone {
-    fn parts(self) -> (&'static str, Color32) {
+    pub(super) fn parts(self) -> (&'static str, Color32) {
         let result = colors().result;
         match self {
             Self::Info => (icons::INFO, result.info),
@@ -1996,7 +1996,15 @@ pub fn message_choice_row<R>(ui: &mut Ui, tone: Tone, add: impl FnOnce(&mut Ui) 
 
 /// An inline message: a bar, an icon and words. It never blocks anything. The gaps are its
 /// own, so the words start the same distance after the icon in every caller.
+#[deprecated(
+    note = "Draw messages through `Footer::outcome`, `design::banner`, `design::row_fault` or `PagePlaceholder` (src/design/outcome.rs)."
+)]
 pub fn message(ui: &mut Ui, tone: Tone, text: &str) -> Response {
+    tone_message(ui, tone, text)
+}
+
+/// `message`'s drawing, for the typed places of `outcome` and the parts of this file.
+pub(super) fn tone_message(ui: &mut Ui, tone: Tone, text: &str) -> Response {
     let (icon, color) = tone.parts();
     let c = colors();
     let inner = ui.horizontal_top(|ui| {
@@ -2047,7 +2055,15 @@ fn wrapped_words(ui: &Ui, words: egui::RichText) -> std::sync::Arc<egui::Galley>
 }
 
 /// A compact run notice. Tone marks the icon and bar; words keep the text colour.
+#[deprecated(
+    note = "Draw messages through `Footer::outcome`, `design::banner`, `design::row_fault` or `PagePlaceholder` (src/design/outcome.rs)."
+)]
 pub fn small_message(ui: &mut Ui, tone: Tone, text: &str) -> Response {
+    small_tone_message(ui, tone, text)
+}
+
+/// `small_message`'s drawing, for the typed places of `outcome`.
+pub(super) fn small_tone_message(ui: &mut Ui, tone: Tone, text: &str) -> Response {
     let (icon, color) = tone.parts();
     ui.horizontal_top(|ui| {
         let start = ui.cursor().min;
@@ -2070,6 +2086,9 @@ pub fn small_message(ui: &mut Ui, tone: Tone, text: &str) -> Response {
 }
 
 /// A message whose marked fragments use the code font.
+#[deprecated(
+    note = "Draw messages through `Footer::outcome`, `design::banner`, `design::row_fault` or `PagePlaceholder` (src/design/outcome.rs)."
+)]
 pub fn message_with_code(ui: &mut Ui, tone: Tone, text: &str) -> Response {
     let (icon, color) = tone.parts();
     let mut job = LayoutJob::default();
@@ -2144,8 +2163,11 @@ pub fn save_row_state(ui: &mut Ui, state: Status<'_>, dirty: bool, blocked: Opti
 
 /// Names the discarded draft in an Undo message. Undo's accessible name also names the draft.
 /// Returns true when undo is pressed.
+#[deprecated(
+    note = "Draw messages through `Footer::outcome`, `design::banner`, `design::row_fault` or `PagePlaceholder` (src/design/outcome.rs)."
+)]
 pub fn draft_discarded(ui: &mut Ui, name: &str) -> bool {
-    undo_message_named(
+    undo_message_capped(
         ui,
         Tone::Info,
         &format!("{name} draft discarded."),
@@ -2156,6 +2178,9 @@ pub fn draft_discarded(ui: &mut Ui, name: &str) -> bool {
 
 /// A message with one action beside it, capped at `LIST_MEASURE` like every notice. Returns true
 /// when the action is used.
+#[deprecated(
+    note = "Draw messages through `Footer::outcome`, `design::banner`, `design::row_fault` or `PagePlaceholder` (src/design/outcome.rs)."
+)]
 pub fn message_with_action(ui: &mut Ui, tone: Tone, text: &str, action: &str) -> bool {
     ui.scope(|ui| {
         ui.set_max_width(ui.available_width().min(LIST_MEASURE));
@@ -2175,7 +2200,7 @@ fn message_with_action_inside(ui: &mut Ui, tone: Tone, text: &str, action: &str)
     let mut pressed = false;
     // The action follows the words after `L` in all: the layout's own item gap is part of it.
     if ui.available_width() < text_width + L + button_width {
-        message(ui, tone, text);
+        tone_message(ui, tone, text);
         ui.horizontal(|ui| {
             ui.add_space((inset - spacing).max(0.0));
             pressed = button.show(ui).clicked();
@@ -2185,7 +2210,7 @@ fn message_with_action_inside(ui: &mut Ui, tone: Tone, text: &str, action: &str)
             let width = (ui.available_width() - button_width - L).max(0.0);
             ui.allocate_ui_with_layout(vec2(width, 0.0), Layout::top_down(Align::Min), |ui| {
                 ui.add_space((Density::Read.control() - Type::Body.line()) / 2.0);
-                message(ui, tone, text)
+                tone_message(ui, tone, text)
             });
             ui.add_space((L - spacing).max(0.0));
             pressed = button.show(ui).clicked();
@@ -2227,6 +2252,9 @@ pub fn linked_sentence(ui: &mut Ui, names: &[&str], suffix: &str) -> Option<usiz
 /// without creatures. Capped at `LIST_MEASURE` like every notice. Round 27 FE5: a result's Undo
 /// stays on its own success sentence (`undo_message`), and this message follows it, so it has no
 /// action of its own. The pressed link's index.
+#[deprecated(
+    note = "Draw messages through `Footer::outcome`, `design::banner`, `design::row_fault` or `PagePlaceholder` (src/design/outcome.rs)."
+)]
 pub fn message_with_links(ui: &mut Ui, tone: Tone, names: &[&str], suffix: &str) -> Option<usize> {
     let (icon, color) = tone.parts();
     ui.scope(|ui| {
@@ -2255,7 +2283,20 @@ pub fn message_with_links(ui: &mut Ui, tone: Tone, names: &[&str], suffix: &str)
 }
 
 /// A message with several actions below it, aligned with the message text.
+#[deprecated(
+    note = "Draw messages through `Footer::outcome`, `design::banner`, `design::row_fault` or `PagePlaceholder` (src/design/outcome.rs)."
+)]
 pub fn message_with_actions<R>(
+    ui: &mut Ui,
+    tone: Tone,
+    text: &str,
+    actions: impl FnOnce(&mut Ui) -> R,
+) -> R {
+    actions_message(ui, tone, text, actions)
+}
+
+/// `message_with_actions`'s drawing.
+pub(super) fn actions_message<R>(
     ui: &mut Ui,
     tone: Tone,
     text: &str,
@@ -2263,7 +2304,7 @@ pub fn message_with_actions<R>(
 ) -> R {
     ui.scope(|ui| {
         ui.set_max_width(ui.available_width().min(LIST_MEASURE));
-        let response = message(ui, tone, text);
+        let response = tone_message(ui, tone, text);
         let inset = response.rect.left() - ui.cursor().left();
         ui.horizontal_top(|ui| {
             ui.add_space(inset);
@@ -2283,7 +2324,11 @@ pub const ROW_RECTS: &str = "design_row_rects";
 
 /// Keep `item` under `key` for this pass only: a new pass starts a new list.
 #[cfg(test)]
-fn keep_for_pass<T: Clone + Send + std::marker::Sync + 'static>(ui: &Ui, key: &str, item: T) {
+pub(super) fn keep_for_pass<T: Clone + Send + std::marker::Sync + 'static>(
+    ui: &Ui,
+    key: &str,
+    item: T,
+) {
     let pass = ui.ctx().cumulative_pass_nr();
     ui.ctx().data_mut(|data| {
         let kept = data.get_temp_mut_or_default::<(u64, Vec<T>)>(Id::new(key));
@@ -2555,7 +2600,7 @@ fn scroll_part<R>(
 
 /// Where a footer message stands in the footer's one order.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
-enum FooterRank {
+pub(super) enum FooterRank {
     /// A result whose Undo is live.
     Undo,
     /// Why Save or the draft waits: Save's reason, a parse error, a disk failure.
@@ -2646,6 +2691,9 @@ impl<'a> Footer<'a> {
     /// it then leads the footer, so a reason that does not clear never hides the way back.
     /// Without one it follows the notices. Results go newest first by `order`, whatever order
     /// the caller adds them in.
+    #[deprecated(
+        note = "Give the footer a typed `Outcome` with `Footer::outcome` (src/design/outcome.rs)."
+    )]
     pub fn result(
         &mut self,
         order: ResultOrder,
@@ -2664,6 +2712,9 @@ impl<'a> Footer<'a> {
     }
 
     /// Why Save or the draft waits: a refusal, a parse error or a failed write.
+    #[deprecated(
+        note = "Give the footer a typed `Outcome` with `Footer::outcome` (src/design/outcome.rs)."
+    )]
     pub fn reason(
         &mut self,
         words: impl Into<std::borrow::Cow<'a, str>>,
@@ -2675,6 +2726,9 @@ impl<'a> Footer<'a> {
     }
 
     /// Any other notice: a warning, guidance, or why other actions wait.
+    #[deprecated(
+        note = "Give the footer a typed `Outcome` with `Footer::outcome` (src/design/outcome.rs)."
+    )]
     pub fn notice(
         &mut self,
         words: impl Into<std::borrow::Cow<'a, str>>,
@@ -2682,6 +2736,18 @@ impl<'a> Footer<'a> {
     ) -> &mut Self {
         self.messages
             .push((FooterRank::Notice, None, words.into(), Box::new(draw)));
+        self
+    }
+
+    /// One message at its place in the footer's order: the typed form is `Footer::outcome`.
+    pub(super) fn push(
+        &mut self,
+        rank: FooterRank,
+        order: Option<ResultOrder>,
+        words: std::borrow::Cow<'a, str>,
+        draw: impl FnOnce(&mut Ui) + 'a,
+    ) -> &mut Self {
+        self.messages.push((rank, order, words, Box::new(draw)));
         self
     }
 
@@ -2893,7 +2959,7 @@ pub enum DiskConflictChoice {
 
 pub fn disk_conflict_choices(ui: &mut Ui, noun: &str) -> Option<DiskConflictChoice> {
     // The choices start at the message text, like every other message with choices.
-    message_with_actions(
+    actions_message(
         ui,
         Tone::Warning,
         &format!("This {noun} changed on disk. Your draft is safe until you choose."),
@@ -2924,23 +2990,33 @@ pub fn disk_conflict_choices(ui: &mut Ui, noun: &str) -> Option<DiskConflictChoi
 }
 
 /// After Reload and lose my draft: the old draft can still come back. True when it should.
+#[deprecated(
+    note = "Draw messages through `Footer::outcome`, `design::banner`, `design::row_fault` or `PagePlaceholder` (src/design/outcome.rs)."
+)]
 pub fn reloaded_draft(ui: &mut Ui) -> bool {
-    undo_message(
+    undo_message_capped(
         ui,
         Tone::Info,
         "Reloaded from disk. Your previous draft is kept until you edit or the file changes again.",
         "Undo reload",
+        None,
     )
 }
 
 /// A recovery message whose action restores the previous state.
+#[deprecated(
+    note = "Draw messages through `Footer::outcome`, `design::banner`, `design::row_fault` or `PagePlaceholder` (src/design/outcome.rs)."
+)]
 pub fn undo_message(ui: &mut Ui, tone: Tone, text: &str, action: &str) -> bool {
-    undo_message_named(ui, tone, text, action, None)
+    undo_message_capped(ui, tone, text, action, None)
 }
 
 /// A kept line for an act's result and its Undo: one control high whether or not a result
 /// shows, so the result moves nothing below it. Words that do not fit beside Undo end in `…`,
 /// and their hover keeps them whole. Capped at `LIST_MEASURE` like every notice.
+#[deprecated(
+    note = "Draw messages through `Footer::outcome`, `design::banner`, `design::row_fault` or `PagePlaceholder` (src/design/outcome.rs)."
+)]
 pub fn undo_line(ui: &mut Ui, tone: Tone, result: Option<(&str, &str)>) -> bool {
     let size = vec2(
         ui.available_width().min(LIST_MEASURE),
@@ -2987,7 +3063,21 @@ pub fn undo_line(ui: &mut Ui, tone: Tone, result: Option<(&str, &str)>) -> bool 
 
 /// `undo_message`, with an accessible name for the action when its words are not enough. Capped
 /// at `LIST_MEASURE` like every notice.
+#[deprecated(
+    note = "Draw messages through `Footer::outcome`, `design::banner`, `design::row_fault` or `PagePlaceholder` (src/design/outcome.rs)."
+)]
 pub fn undo_message_named(
+    ui: &mut Ui,
+    tone: Tone,
+    text: &str,
+    action: &str,
+    name: Option<&str>,
+) -> bool {
+    undo_message_capped(ui, tone, text, action, name)
+}
+
+/// `undo_message_named`'s drawing.
+pub(super) fn undo_message_capped(
     ui: &mut Ui,
     tone: Tone,
     text: &str,
@@ -3025,7 +3115,7 @@ fn undo_message_inside(
     let gap = ui.spacing().item_spacing.x;
     let mut pressed = false;
     if ui.available_width() < text_width + gap + button_width {
-        message(ui, tone, text);
+        tone_message(ui, tone, text);
         ui.horizontal(|ui| {
             ui.add_space(inset);
             pressed = button.line_start_in_column().show(ui).clicked();
@@ -3035,7 +3125,7 @@ fn undo_message_inside(
             let width = (ui.available_width() - button_width - gap).max(0.0);
             ui.allocate_ui_with_layout(vec2(width, 0.0), Layout::top_down(Align::Min), |ui| {
                 ui.add_space((Density::Read.control() - Type::Body.line()) / 2.0);
-                message(ui, tone, text)
+                tone_message(ui, tone, text)
             });
             pressed = button.show(ui).clicked();
         });
@@ -4006,6 +4096,8 @@ pub fn draft_comparison_labeled(
 }
 
 #[cfg(test)]
+// The tests draw the old message functions until Wave 3 makes them private.
+#[allow(deprecated)]
 mod tests {
     use super::*;
 

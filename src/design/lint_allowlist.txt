@@ -2,3 +2,75 @@
 # File content: the initiative rule note's YAML and the NPC generator's note text.
 src/encounter_settings.rs straight-apostrophe 1
 src/npc_generator.rs straight-apostrophe 3
+# Messages (round 28, package M). Each file that still calls an old message function holds one
+# `#![allow(deprecated)]` and counts its calls; Wave 2 moves each file to `design::outcome` and
+# deletes its lines. When none is left, the old functions become private.
+src/campaign_content.rs allow-deprecated 1
+src/campaigns.rs allow-deprecated 1
+src/combat_sync.rs allow-deprecated 1
+src/copy_dialog.rs allow-deprecated 1
+src/dndbeyond.rs allow-deprecated 1
+src/encounter_run/notice.rs allow-deprecated 1
+src/encounter_run/view.rs allow-deprecated 1
+src/encounters.rs allow-deprecated 1
+src/encounters/disk.rs allow-deprecated 1
+src/encounters/groups.rs allow-deprecated 1
+src/lib.rs allow-deprecated 1
+src/library.rs allow-deprecated 1
+src/library/view.rs allow-deprecated 1
+src/lookup.rs allow-deprecated 1
+src/loot_editor.rs allow-deprecated 1
+src/party.rs allow-deprecated 1
+src/processing/settings.rs allow-deprecated 1
+src/roll_table.rs allow-deprecated 1
+src/sessions/carry.rs allow-deprecated 1
+src/sessions/page.rs allow-deprecated 1
+src/sessions/plan.rs allow-deprecated 1
+src/sessions/slash.rs allow-deprecated 1
+src/settings.rs allow-deprecated 1
+src/timeline/checks.rs allow-deprecated 1
+src/timeline/page.rs allow-deprecated 1
+src/world.rs allow-deprecated 1
+src/world/edit.rs allow-deprecated 1
+src/world/page.rs allow-deprecated 1
+src/world/repair.rs allow-deprecated 1
+src/campaign_content.rs old-message 19
+src/campaigns.rs old-message 3
+src/combat_sync.rs old-message 1
+src/copy_dialog.rs old-message 2
+src/dndbeyond.rs old-message 2
+src/encounter_run/notice.rs old-message 1
+src/encounter_run/view.rs old-message 19
+src/encounters.rs old-message 22
+src/encounters/disk.rs old-message 2
+src/encounters/groups.rs old-message 16
+src/lib.rs old-message 1
+src/library.rs old-message 37
+src/library/view.rs old-message 1
+src/lookup.rs old-message 4
+src/loot_editor.rs old-message 1
+src/party.rs old-message 7
+src/processing/settings.rs old-message 7
+src/roll_table.rs old-message 2
+src/sessions/carry.rs old-message 3
+src/sessions/page.rs old-message 36
+src/sessions/plan.rs old-message 24
+src/sessions/slash.rs old-message 2
+src/settings.rs old-message 3
+src/timeline/checks.rs old-message 4
+src/timeline/page.rs old-message 25
+src/world.rs old-message 10
+src/world/edit.rs old-message 4
+src/world/page.rs old-message 4
+src/world/repair.rs old-message 3
+# Phrases outside their owner: the stat block's printed XP (core) is the creature's, not an
+# encounter's; the others move to their owner in Wave 2.
+crates/core/src/content/stat_blocks.rs phrase-owner 2
+src/campaign_content.rs phrase-owner 1
+src/encounter_run.rs phrase-owner 2
+src/encounter_run/loot.rs phrase-owner 2
+src/encounters.rs phrase-owner 1
+src/library.rs phrase-owner 1
+src/sessions/plan.rs phrase-owner 1
+# A blocked reason without its end mark (round 27 FI11); Wave 2 package B ends it.
+src/encounters.rs reason-end-mark 1

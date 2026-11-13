@@ -114,6 +114,84 @@ fn violations(line: &str) -> Vec<&'static str> {
     found
 }
 
+/// The old message functions (`#[deprecated]`). The compiler stops a call in a file without
+/// `#![allow(deprecated)]`; this count also stops one in a file that only inherits the allow from
+/// its parent module.
+const OLD_MESSAGES: [&str; 11] = [
+    "message",
+    "small_message",
+    "message_with_action",
+    "message_with_actions",
+    "message_with_code",
+    "message_with_links",
+    "undo_message",
+    "undo_line",
+    "undo_message_named",
+    "draft_discarded",
+    "reloaded_draft",
+];
+
+/// Phrases with one owner file: the one function that writes that form. A literal outside its
+/// owner fails (round 27 family F4: one fact in two forms).
+fn phrase_owner(path: &str, words: &str) -> bool {
+    let owned = [
+        // The XP of an encounter or a reward.
+        (words.contains("XP {"), "src/difficulty.rs"),
+        // A fault's place: `fault_words`.
+        (words.contains("· line {"), "src/design/outcome.rs"),
+        // A count of chosen things: `chosen_count`.
+        (
+            words.contains("} of {") && words.ends_with("chosen"),
+            "src/design/outcome.rs",
+        ),
+    ];
+    owned
+        .iter()
+        .any(|(found, owner)| *found && !path.ends_with(owner))
+}
+
+/// The message rules of one file (package M, round 28): the counted allows, the old message
+/// calls, a reason without its end mark, and a phrase outside its owner.
+fn message_rules(path: &str, code: &str) -> Vec<&'static str> {
+    let mut found = Vec::new();
+    for line in code.lines() {
+        let line = line.split("//").next().unwrap_or("");
+        if line.contains("allow(deprecated)") {
+            found.push("allow-deprecated");
+            // An allow at the crate root would cover every module.
+            if line.contains("#![")
+                && (path.ends_with("src/lib.rs") || path.ends_with("src/main.rs"))
+            {
+                found.push("crate-wide-allow");
+            }
+        }
+        for old in OLD_MESSAGES {
+            let call = format!("design::{old}(");
+            found.extend(line.matches(&call).map(|_| "old-message"));
+        }
+        // A blocked reason is a sentence: it ends with `.`, `?` or `!` (F12).
+        for pattern in [".blocked(Some(", ".blocked_if(", "blocked_reason("] {
+            if let Some(at) = line.find(pattern)
+                && string_literals(&line[at..]).into_iter().any(|words| {
+                    !words.is_empty()
+                        && !words
+                            .trim_end_matches(['”', '’', ')'])
+                            .ends_with(['.', '?', '!'])
+                })
+            {
+                found.push("reason-end-mark");
+            }
+        }
+        if string_literals(line)
+            .into_iter()
+            .any(|words| phrase_owner(path, words))
+        {
+            found.push("phrase-owner");
+        }
+    }
+    found
+}
+
 fn scan(folder: &Path, counts: &mut BTreeMap<String, usize>) {
     for item in fs::read_dir(folder).expect("read source folder") {
         let path = item.expect("read source entry").path();
@@ -130,12 +208,15 @@ fn scan(folder: &Path, counts: &mut BTreeMap<String, usize>) {
             // Unit tests may name colours and sizes. They do not ship.
             // `mod tests;` near the top names a file of its own, so only an inline module ends it.
             let code = text.split("#[cfg(test)]\nmod tests {").next().unwrap_or("");
+            let root = concat!(env!("CARGO_MANIFEST_DIR"), "/");
+            let key = relative.strip_prefix(root).unwrap_or(&relative);
             for line in code.lines() {
                 for rule in violations(line) {
-                    let root = concat!(env!("CARGO_MANIFEST_DIR"), "/");
-                    let key = relative.strip_prefix(root).unwrap_or(&relative);
                     *counts.entry(format!("{key} {rule}")).or_default() += 1;
                 }
+            }
+            for rule in message_rules(key, code) {
+                *counts.entry(format!("{key} {rule}")).or_default() += 1;
             }
         }
     }
@@ -163,10 +244,19 @@ fn raw_colours_and_sizes_stay_inside_the_design_system() {
     for (key, count) in &counts {
         let limit = allowed.get(key).copied().unwrap_or(0);
         if *count > limit {
-            let fix = if key.ends_with("straight-apostrophe") {
-                "Use ’ in UI words"
-            } else {
-                "Use design tokens"
+            let fix = match key.rsplit_once(' ').map_or("", |(_, rule)| rule) {
+                "straight-apostrophe" => "Use ’ in UI words",
+                "allow-deprecated" | "old-message" => {
+                    "Draw messages through `Footer::outcome`, `design::outcome::banner`, `row_fault` or `PagePlaceholder`"
+                }
+                "crate-wide-allow" => {
+                    "Put `#[allow(deprecated)]` on the function that calls, not on the crate"
+                }
+                "reason-end-mark" => "End a blocked reason with `.`, `?` or `!`",
+                "phrase-owner" => {
+                    "Call the phrase's owner: `XP {` in src/difficulty.rs, `· line {` in `fault_words`, `N of M chosen` in `chosen_count`"
+                }
+                _ => "Use design tokens",
             };
             problems.push(format!("{key}: {count} found, {limit} allowed. {fix}."));
         }
@@ -180,6 +270,53 @@ fn raw_colours_and_sizes_stay_inside_the_design_system() {
         }
     }
     assert!(problems.is_empty(), "{}", problems.join("\n"));
+}
+
+#[test]
+fn the_message_rules_find_what_they_should() {
+    let rules = |path, code| message_rules(path, code);
+    assert_eq!(
+        rules(
+            "src/a.rs",
+            "#![allow(deprecated)]\n design::message(ui, t, x);"
+        ),
+        ["allow-deprecated", "old-message"]
+    );
+    assert_eq!(
+        rules("src/lib.rs", "#![allow(deprecated)]"),
+        ["allow-deprecated", "crate-wide-allow"]
+    );
+    assert!(rules("src/lib.rs", "    #[allow(deprecated)]").len() == 1);
+    assert!(rules("src/a.rs", "design::outcome::row_fault(ui, &f);").is_empty());
+    assert_eq!(
+        rules(
+            "src/a.rs",
+            "Action::quiet(\"Save\").blocked(Some(\"Stop recording first\"))"
+        ),
+        ["reason-end-mark"]
+    );
+    assert!(
+        rules(
+            "src/a.rs",
+            "Action::quiet(\"Save\").blocked(Some(\"Stop recording first.\"))"
+        )
+        .is_empty()
+    );
+    assert_eq!(
+        rules("src/a.rs", ".blocked_if(busy, \"Wait\")"),
+        ["reason-end-mark"]
+    );
+    assert_eq!(rules("src/a.rs", "format!(\"XP {xp}\")"), ["phrase-owner"]);
+    assert!(rules("src/difficulty.rs", "format!(\"XP {xp}\")").is_empty());
+    assert_eq!(
+        rules("src/a.rs", "format!(\"{name} · line {n}: {cause}\")"),
+        ["phrase-owner"]
+    );
+    assert_eq!(
+        rules("src/a.rs", "format!(\"{a} of {b} chosen\")"),
+        ["phrase-owner"]
+    );
+    assert!(rules("src/a.rs", "let chosen = 3; // design::message(").is_empty());
 }
 
 #[test]

@@ -1,4 +1,5 @@
 //! Character viewer, with combat sync on from the time Splat connects to D&D Beyond.
+#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use crate::rolls::Chip;
 use crate::{
     auth::Session,

@@ -1,4 +1,5 @@
 //! The same source editor for broken notes in Campaign and World.
+#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use super::file_fault::FileFault;
 use crate::{
     design::{self, colors},

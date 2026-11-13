@@ -1,4 +1,5 @@
 //! The World page: what is true in this world. One list of notes and entries, and the Reader.
+#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use super::{Nav, Reader, file_fault::FileFault};
 use crate::{
     design::{self, Type, colors, icons},

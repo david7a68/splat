@@ -8,6 +8,7 @@ pub mod history;
 pub mod ledger;
 pub mod view;
 
+use crate::design::outcome::Sentence;
 use crate::{
     content_workspace::CampaignDocument, lookup::ContentIndex, loot_editor::Sources,
     persistence::Campaign,
@@ -1148,7 +1149,7 @@ fn rolled(text: &str) -> String {
 
 /// The result line's words for one act, from the entries alone, so they read the same after a
 /// restart.
-pub fn result_words(rules: &Rules, ledger: &Ledger, state: &State, entries: &[Entry]) -> String {
+pub fn result_words(rules: &Rules, ledger: &Ledger, state: &State, entries: &[Entry]) -> Sentence {
     let mut words = act_words(rules, ledger, state, entries);
     // Every way a notice leaves the Due list by a fall says so once: a press, a linked change,
     // or a ticked change of `Done`.
@@ -1160,14 +1161,14 @@ pub fn result_words(rules: &Rules, ledger: &Ledger, state: &State, entries: &[En
                 entry.instance.as_deref(),
                 *at,
             );
-            words.push_str(&format!(" {name} is no longer due."));
+            words = words.then(crate::sentence!("{} is no longer due.", name));
         }
     }
     words
 }
 
 /// The act's own words: the notice it ended or rolled on, or the values it left.
-fn act_words(rules: &Rules, ledger: &Ledger, state: &State, entries: &[Entry]) -> String {
+fn act_words(rules: &Rules, ledger: &Ledger, state: &State, entries: &[Entry]) -> Sentence {
     let label = label(rules, ledger, entries);
     // An act on a notice says what happened in a sentence; `Undo: <label>` keeps the label.
     if let Some(entry) = head(entries).filter(|e| e.notice.is_some())
@@ -1176,54 +1177,48 @@ fn act_words(rules: &Rules, ledger: &Ledger, state: &State, entries: &[Entry]) -
         let short = notice_name(rules, ledger, notice);
         let ends = entries.iter().filter(|e| e.dismissed).count();
         if let (NoticeRef::Day { mark, .. }, true) = (notice, entry.dismissed && ends > 1) {
-            return format!("{} is dismissed for {ends} days.", rules.day_title(mark));
+            return crate::sentence!("{} is dismissed for {ends} days.", rules.day_title(mark));
         }
         if entry.done {
-            return format!("{short} is done.");
+            return crate::sentence!("{} is done.", short);
         }
         if entry.dismissed {
-            return format!("{short} is dismissed.");
+            return crate::sentence!("{} is dismissed.", short);
         }
         if let Some(Roll::Table(roll)) = &entry.roll {
             let name = roll
                 .name
                 .as_ref()
                 .map_or(String::new(), |n| format!(" for {n}"));
-            let mut words = format!(
+            // The row's words are the DM's own table text.
+            return Sentence::outside(format!(
                 "Rolled {} on {}{name}: {}",
                 roll.value,
                 rules.table_name(&roll.table),
                 roll.row.trim()
-            );
-            if !words.ends_with(['.', '!', '?']) {
-                words.push('.');
-            }
-            return words;
+            ));
         }
     }
     // Each value it left is a sentence of its own; `Undo: <label>` below names the act.
-    let values: Vec<String> = entries
+    let values = entries
         .iter()
         .filter(|entry| entry.notice.is_none())
         .filter_map(|entry| {
             let after = state.after.get(&entry.id)?;
-            Some(format!(
+            Some(crate::sentence!(
                 "{} changed to {after}.",
                 line_name(rules, entry.tracker.as_deref()?, entry.instance.as_deref())
             ))
         })
-        .collect();
-    let mut words = if values.is_empty() {
-        format!("{label}.")
-    } else {
-        values.join(" ")
-    };
+        .reduce(Sentence::then);
+    let mut words = values.unwrap_or_else(|| crate::sentence!("{}.", label));
     for entry in entries {
         if let Some(Roll::Dice(text)) = &entry.roll {
-            match &entry.row {
-                Some(row) => words.push_str(&format!(" {}: {row}", rolled(text))),
-                None => words.push_str(&format!(" {}.", rolled(text))),
-            }
+            words = words.then(match &entry.row {
+                // The row's words are the DM's own table text.
+                Some(row) => Sentence::outside(format!("{}: {row}", rolled(text))),
+                None => crate::sentence!("{}.", rolled(text)),
+            });
         }
     }
     let raised: Vec<(String, i64)> = entries
@@ -1253,9 +1248,9 @@ fn act_words(rules: &Rules, ledger: &Ledger, state: &State, entries: &[Entry]) -
         .collect();
     match due.as_slice() {
         [] => {}
-        [one] => words.push_str(&format!(" {one} is due.")),
+        [one] => words = words.then(crate::sentence!("{} is due.", one)),
         [many @ .., last] => {
-            words.push_str(&format!(" {} and {last} are due.", many.join(", ")));
+            words = words.then(crate::sentence!("{} and {last} are due.", many.join(", ")));
         }
     }
     words
@@ -1473,7 +1468,9 @@ pub struct Trackers {
     /// The entries that `Undo` takes back now: worked out when the ledger or the session changes.
     newest: Vec<Entry>,
     /// The newest act's label and the result line's words, worked out with `newest`.
-    pub(crate) result: Option<(String, String)>,
+    pub(crate) result: Option<(String, Sentence)>,
+    /// When the newest act was done, for the footer's order: issued when `newest` changes.
+    pub(crate) result_order: crate::design::ResultOrder,
     last_check: Option<Instant>,
     /// Why the last act wrote nothing.
     pub reason: Option<Unrecorded>,
@@ -1650,7 +1647,11 @@ impl Trackers {
 
     /// The newest act of the session being played, and the result line's words for it.
     fn settle_result(&mut self) {
-        self.newest = undo_target(&self.ledger, self.played);
+        let newest = undo_target(&self.ledger, self.played);
+        if newest != self.newest {
+            self.result_order = crate::design::ResultOrder::issue();
+        }
+        self.newest = newest;
         self.result = (!self.newest.is_empty()).then(|| {
             (
                 label(&self.rules, &self.ledger, &self.newest),
@@ -2154,7 +2155,7 @@ mod tests {
         let t = &mut race.trackers;
         t.press("favor", None, "Crowd loves it", None);
         t.press("favor", None, "Throw a gift", None);
-        let words = result_words(&t.rules, &t.ledger, &t.state, t.newest());
+        let words = result_words(&t.rules, &t.ledger, &t.state, t.newest()).to_string();
         assert!(
             words.starts_with("Crowd Favor changed to 0. Rolled ")
                 && words.ends_with(": A healing potion."),
@@ -3176,7 +3177,7 @@ mod tests {
         let Some(Unrecorded::NotSaved(error)) = &t.reason else {
             panic!("the result line says the save failed: {:?}", t.reason);
         };
-        let words = view::not_saved(error);
+        let words = view::not_saved(error).to_string();
         assert!(
             words.starts_with("Trackers.md was not saved: ")
                 && words.ends_with(". Nothing was recorded."),

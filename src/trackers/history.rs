@@ -10,6 +10,7 @@ use super::{
     NoticeRef, Rules, State, Today, Trackers, Unrecorded, label, ledger, place_name, replay,
     result_words, with_dependents,
 };
+use crate::design::outcome::{PagePlaceholder, Severity};
 use crate::design::{self, Action, Density, Tone, Type, colors};
 use crate::world::{FooterAct, FooterKind, FooterLine, FooterRank};
 use eframe::egui;
@@ -77,7 +78,7 @@ pub fn rows(rules: &Rules, ledger: &Ledger, state: &State) -> HashMap<String, Ve
         PREPARED.with(|n| n.set(n.get() + 1));
         let one = std::slice::from_ref(entry);
         let words = if entry.notice.is_some() {
-            result_words(rules, ledger, state, one)
+            result_words(rules, ledger, state, one).to_string()
         } else {
             let place = entry
                 .instance
@@ -151,11 +152,13 @@ pub fn problems(rules: &Rules, state: &State) -> Vec<(Option<Uuid>, String)> {
         };
         out.push((
             None,
-            format!(
-                "{} in {} {names} {key}, which no house rule note in play has. {are} not counted.",
+            crate::sentence!(
+                "{} in {} {names} {key}, which no house rule note in play has.",
                 design::count(*count, "entry", "entries"),
                 ledger::FILE
-            ),
+            )
+            .then(crate::sentence!("{} not counted.", are))
+            .to_string(),
         ));
     }
     for tracker in &rules.trackers {
@@ -166,10 +169,11 @@ pub fn problems(rules: &Rules, state: &State) -> Vec<(Option<Uuid>, String)> {
             if value < min {
                 out.push((
                     Some(tracker.note),
-                    format!(
+                    crate::sentence!(
                         "{} is {value}, below its min of {min}.",
                         place_name(rules, &tracker.key, instance)
-                    ),
+                    )
+                    .to_string(),
                 ));
             }
         }
@@ -257,11 +261,11 @@ fn removal(
             names.push(name);
         }
     }
-    let mut words = format!("Removed {}.", names[0]);
+    let mut words = crate::sentence!("Removed {}.", names[0]);
     if names.len() > 1 {
-        words.push_str(&format!(" With it: {}.", names[1..].join("; ")));
+        words = words.then(crate::sentence!("With it: {}.", names[1..].join("; ")));
     }
-    Ok((placed, words))
+    Ok((placed, words.to_string()))
 }
 
 impl Trackers {
@@ -338,7 +342,7 @@ pub(crate) fn footer_lines(trackers: &Trackers, note: Uuid) -> Vec<FooterLine> {
     {
         let (tone, words) = match reason {
             Unrecorded::Refused(why) => (Tone::Warning, why.clone()),
-            Unrecorded::NotSaved(error) => (Tone::Error, super::view::not_saved(error)),
+            Unrecorded::NotSaved(error) => (Tone::Error, super::view::not_saved(error).to_string()),
         };
         lines.push(FooterLine::new(
             FooterRank::Reason,
@@ -373,11 +377,13 @@ pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, note: &splat::content::E
     let id = note.id;
     if let Some(error) = &trackers.rules.unreadable {
         ui.add_space(design::L);
-        design::message(
-            ui,
-            Tone::Error,
-            &format!("{error} Splat shows no tracker history until it can be read."),
-        );
+        let _ = PagePlaceholder::new(&super::view::TrackerFault(
+            Severity::CannotRead,
+            design::outcome::Sentence::outside(error.as_str()).then(crate::sentence!(
+                "Splat shows no tracker history until it can be read."
+            )),
+        ))
+        .show(ui);
         return;
     }
     if !in_play(&trackers.rules, id) {
@@ -385,14 +391,11 @@ pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, note: &splat::content::E
     }
     ui.add_space(design::L);
     if let Some(error) = &trackers.unreadable {
-        design::message(
-            ui,
-            Tone::Error,
-            &format!(
-                "{} cannot be read: {error} The history in the file is safe.",
-                ledger::FILE
-            ),
-        );
+        let _ = PagePlaceholder::new(&super::view::TrackerFault(
+            Severity::CannotRead,
+            super::view::ledger_unreadable(error),
+        ))
+        .show(ui);
         return;
     }
     for (_, problem) in trackers
@@ -400,7 +403,7 @@ pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, note: &splat::content::E
         .iter()
         .filter(|(owner, _)| *owner == Some(id))
     {
-        design::small_message(ui, Tone::Error, problem);
+        design::outcome::row_fault(ui, &super::view::problem_fault(problem));
     }
     let mut pressed = None;
     let played = trackers.played;

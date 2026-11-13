@@ -1,6 +1,7 @@
 //! Lookup: search and read any entry beside the current page, without navigating.
 //! It covers built-in, package and campaign-owned entries in one index (T2.3), and the
 //! campaign's plain notes, with each heading as its own result.
+#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use crate::{
     campaigns::Campaigns,
     content_workspace::Catalogue,

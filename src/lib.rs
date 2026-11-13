@@ -1,4 +1,8 @@
 //! Desktop application and shared content APIs.
+/// Typed messages (`design::outcome`). Public so that `sentence!` works and its compile-fail
+/// proofs can name the types; screens use them through `design`.
+#[doc(hidden)]
+pub use design::outcome;
 pub use splat_core::{character, content, execution, memo};
 extern crate self as splat;
 
@@ -1770,6 +1774,7 @@ impl Splat {
         }
     }
 
+    #[allow(deprecated)] // Old message functions; Wave 2 moves this page to `design::outcome`.
     fn page(&mut self, ui: &mut egui::Ui) {
         let active = self.campaigns.active_campaign();
         let (_, session) = self.settings.campaign_session();
