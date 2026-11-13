@@ -464,11 +464,16 @@ impl FieldId {
     /// `style` sets the rest of the `TextEdit`; Clippy refuses another id on it outside
     /// `src/design/`. The field is drawn here, so the gate's `widget-id-clash` check sees it.
     ///
-    /// Every field part guards its text history: when the bound text is not the
+    /// The field parts (`single_line`, `multi_line`, `editor`, `search`, the parts drawn
+    /// through them, and `number_field`; not the staged raw fields) guard their text history
+    /// (`TextGuard`): when the bound text is not the
     /// text the field held when it last had focus (the program or another object replaced it),
     /// egui's text Undo for this id is dropped before Ctrl+Z can reach it. So another object's
     /// words cannot come back through Undo, even when the owner's key is missing. One case stays
     /// with the owner's key: both texts are equal (A's text was emptied, B's is empty too).
+    ///
+    /// Caller duty: do not rewrite the bound text while the field has focus (a trim, a format, a
+    /// clear in the frame of `changed()`); keep the typed words and store the cleaned value.
     #[allow(
         clippy::disallowed_methods,
         reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
