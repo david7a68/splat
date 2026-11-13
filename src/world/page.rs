@@ -619,6 +619,12 @@ impl WorldPage {
                             })
                             .collect();
                         if !broken.is_empty() {
+                            // The list's last row left no gap after it: the heading takes its
+                            // whole space, as the list's own headings do.
+                            let spacing = ui.spacing().item_spacing.y;
+                            if !groups.is_empty() {
+                                ui.spacing_mut().item_spacing.y = 0.0;
+                            }
                             design::heading(
                                 ui,
                                 design::Heading::Group {
@@ -626,6 +632,7 @@ impl WorldPage {
                                     count: broken.len(),
                                 },
                             );
+                            ui.spacing_mut().item_spacing.y = spacing;
                             for (path, problem) in broken {
                                 let detail = self.broken_details.get(path);
                                 let open = self.repair.as_ref().is_some_and(|r| r.path == *path)
@@ -1548,9 +1555,19 @@ impl WorldPage {
         reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
     )]
     fn list(&mut self, ui: &mut egui::Ui, index: &ContentIndex, groups: &WorldGroups) {
-        for ((kind, title), rows) in groups {
+        let spacing = ui.spacing().item_spacing.y;
+        for (at, ((kind, title), rows)) in groups.iter().enumerate() {
+            // A group's rows have no gap between them, so after the first group nothing has left
+            // the usual gap after it, and a heading takes its whole space (`L`) itself.
+            if at > 0 {
+                ui.spacing_mut().item_spacing.y = 0.0;
+            }
             if *kind == 3 {
-                design::gap(ui, design::Gap::XS);
+                // A folder's heading is not one of the part's kinds: it takes the space that the
+                // part gives a group heading. No token is the `10` that follows the first group
+                // after the search field, so that one keeps its old `XS`.
+                design::gap(ui, if at > 0 { design::Gap::L } else { design::Gap::XS });
+                ui.spacing_mut().item_spacing.y = spacing;
                 design::folder_group_heading(ui, title, rows.len());
             } else {
                 design::heading(
@@ -1561,7 +1578,7 @@ impl WorldPage {
                     },
                 );
             }
-            let spacing = std::mem::replace(&mut ui.spacing_mut().item_spacing.y, 0.0);
+            ui.spacing_mut().item_spacing.y = 0.0;
             for &(position, depth) in rows {
                 let entry = &index.items[position].entry;
                 let problems = super::broken_links(&index.items[position], index);
