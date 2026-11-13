@@ -27,6 +27,9 @@ use uuid::Uuid;
 struct GroupDrag(Uuid);
 
 pub(super) const AMOUNT: &str = "Amount";
+const OTHER_EFFECT_FIELD: design::FieldId = crate::field_id!("run_other_effect");
+const OUTCOME_FIELD: design::FieldId = crate::field_id!("run_outcome");
+const DM_NOTE_FIELD: design::FieldId = crate::field_id!("run_dm_note");
 const READ_ALOUD: &str = "Read-aloud and notes";
 /// FI10: Arrivals says what the fight becomes when a group joins.
 pub(crate) const FIGHT_AFTER: &str = "Fight after: ";
@@ -63,10 +66,6 @@ const CONDITIONS_HELP: &str = "No HP, AC or roll changes by itself. A time you t
 /// Returns the position in `effects` of the one the DM removed. `field` is the width of the
 /// `Other effect…` field below: each row ends where that field's Add ends, so the form has one
 /// right edge (FH2).
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 pub(crate) fn other_effects_list<'a>(
     ui: &mut egui::Ui,
     effects: impl IntoIterator<Item = &'a str>,
@@ -77,7 +76,7 @@ pub(crate) fn other_effects_list<'a>(
         return None;
     }
     let mut removed = None;
-    design::group_label(ui, "Other effects");
+    design::heading(ui, design::Heading::Label("Other effects"));
     let row = (field + ui.spacing().item_spacing.x + other_effect_add().natural_width(ui))
         .min(ui.available_width());
     for (at, effect) in effects.into_iter().enumerate() {
@@ -92,7 +91,7 @@ pub(crate) fn other_effects_list<'a>(
                     ui.close();
                 }
             });
-            ui.add_space(design::S);
+            design::gap(ui, design::Gap::S);
             ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                 ui.add(egui::Label::new(Type::Body.rich(ui, effect).color(colors().text)).wrap());
             });
@@ -107,19 +106,19 @@ fn other_effect_add() -> Action<'static> {
 }
 
 /// The field that adds an other effect, and its Add. True when the DM adds the typed words;
-/// then the field's response.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
+/// then the field's response. `owner` is the key of the object whose draft it is (a run and
+/// its participant, a group's member): egui keeps the field's cursor and its text Undo under
+/// its id, so no caller leaves the owner out.
 pub(crate) fn other_effect_field(
     ui: &mut egui::Ui,
+    owner: impl design::RowKey,
     text: &mut String,
     (width, placeholder): (f32, &str),
     focus: bool,
 ) -> (bool, egui::Response) {
+    let id = OTHER_EFFECT_FIELD.with(owner);
     ui.horizontal(|ui| {
-        let response = design::text_input(ui, "Other effect", text, placeholder, width);
+        let response = design::line_field(ui, id, "Other effect", text, placeholder, width);
         if focus {
             response.request_focus();
         }
@@ -921,7 +920,7 @@ impl Run {
             footer.reason(super::DISK_CONFLICT, |ui| {
                 let choice =
                     design::message_with_actions(ui, Tone::Error, super::DISK_CONFLICT, |ui| {
-                        ui.add_space(design::XS);
+                        design::gap(ui, design::Gap::XS);
                         ui.horizontal(|ui| {
                             // Neither action is filled: the safe one comes first, and the red one
                             // keeps an `L` gap.
@@ -2062,6 +2061,7 @@ impl Run {
         let mut added = false;
         let p = &self.state.participants[index];
         let key = p.key.clone();
+        let run_id = self.id;
         egui::ScrollArea::vertical()
             .id_salt("run_conditions")
             .auto_shrink([false, false])
@@ -2139,7 +2139,6 @@ impl Run {
                         });
                     }
                 }
-                ui.add_space(design::S);
                 // Each other effect with its whole words. An official condition's count is on
                 // its tick; it is here only when the tick cannot show it.
                 let listed = |c: &super::Condition| {
@@ -2153,6 +2152,10 @@ impl Run {
                     .filter(|(_, c)| listed(c))
                     .map(|(at, c)| (at, c.words()))
                     .collect();
+                // The list's heading adds its own space above it; an empty list has no heading.
+                if custom.is_empty() {
+                    design::gap(ui, design::Gap::S);
+                }
                 let width = (ui.available_width() - 80.0).max(100.0);
                 if let Some(at) =
                     other_effects_list(ui, custom.iter().map(|(_, words)| words.as_str()), width)
@@ -2169,8 +2172,11 @@ impl Run {
                 } else {
                     "Other effect…"
                 };
+                // The draft is this participant's, in this run: its field keeps its own cursor
+                // and Undo (two runs can reuse a roster slot's key).
+                let owner = design::TextKey::from_data(format!("{}:{}", run_id, p.key));
                 let (add, field) =
-                    other_effect_field(ui, &mut draft.words, (width, placeholder), focus);
+                    other_effect_field(ui, owner, &mut draft.words, (width, placeholder), focus);
                 // Escape clears the participant's draft, as in the dock's field.
                 if field.lost_focus() && ui.input(|i| i.key_pressed(Key::Escape)) {
                     draft.words.clear();
@@ -2215,12 +2221,18 @@ impl Run {
     )]
     fn live_footer(&mut self, ui: &mut egui::Ui) -> bool {
         let mut closed = false;
-        ui.add_space(design::XS);
+        design::gap(ui, design::Gap::XS);
         ui.horizontal(|ui| {
             ui.set_min_height(Density::Read.control());
             if self.ending {
-                let field =
-                    design::text_input(ui, "Outcome", &mut self.outcome, "Outcome, if any", 160.0);
+                let field = design::line_field(
+                    ui,
+                    OUTCOME_FIELD.with(self.id),
+                    "Outcome",
+                    &mut self.outcome,
+                    "Outcome, if any",
+                    160.0,
+                );
                 if std::mem::take(&mut self.focus_outcome) {
                     field.request_focus();
                     // An outcome that is already there is selected, so that Enter keeps it
@@ -2473,10 +2485,6 @@ impl Run {
     }
 
     /// All close paths share the same safe default and separate loss from saving.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn close_dialog(&mut self, ui: &egui::Ui, note: &str) -> bool {
         let cannot_save = self.strip().not_saved;
         let stranded = self.stranded_names();
@@ -2545,7 +2553,7 @@ impl Run {
                     .wrap(),
                 );
             }
-            ui.add_space(design::S);
+            design::gap(ui, design::Gap::S);
             let chosen = close_recovery_actions(
                 ui,
                 conflict.is_some(),
@@ -2588,7 +2596,7 @@ impl Run {
                     }
                     if right_close && block.is_some() {
                         design::blocked_reason(ui, block.as_deref());
-                        ui.add_space(design::L - design::S);
+                        design::gap(ui, design::Gap::S);
                     }
                     let response = Action::secondary("Keep running").show(ui);
                     let id = ui.id().with("close_default_focused");
@@ -2734,10 +2742,6 @@ impl Run {
 
     /// Setup and the ended view have no row panel, but a sync can still be running. Its
     /// conflicts, and a way to stop it, must be here or the run cannot close.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn sync_block(&mut self, ui: &mut egui::Ui) {
         let names: Vec<(usize, String)> = self
             .syncs
@@ -2750,7 +2754,7 @@ impl Run {
         if names.is_empty() {
             return;
         }
-        design::group_label(ui, "D&D Beyond sync");
+        design::heading(ui, design::Heading::Label("D&D Beyond sync"));
         ui.add(
             egui::Label::new(
                 Type::Small
@@ -2763,7 +2767,7 @@ impl Run {
             .wrap(),
         );
         for (index, name) in names {
-            ui.add_space(design::L);
+            design::gap(ui, design::Gap::L);
             let Some(sync) = self.syncs.get_mut(&index) else {
                 continue;
             };
@@ -2905,7 +2909,7 @@ impl Run {
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 0.0;
             design::segmented(ui, &mut self.panel, &participant);
-            ui.add_space(design::L);
+            design::gap(ui, design::Gap::L);
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 if fits {
                     ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
@@ -2919,8 +2923,7 @@ impl Run {
                     let button = design::menu_button(ui, "Fight", false);
                     egui::Popup::menu(&button).show(|ui| {
                         for (panel, label) in fight {
-                            let action = egui::Button::new(label).selected(self.panel == panel);
-                            if ui.add(action).clicked() {
+                            if design::choice(ui, self.panel == panel, label).clicked() {
                                 self.panel = panel;
                                 ui.close();
                             }
@@ -2991,11 +2994,11 @@ impl Run {
                         },
                     );
                 } else {
-                    design::group_label(ui, READ_ALOUD);
+                    design::heading(ui, design::Heading::Label(READ_ALOUD));
                     style::markdown(ui, prep);
                 }
                 if let Some(technical) = technical {
-                    ui.add_space(design::M);
+                    design::gap(ui, design::Gap::M);
                     design::quiet_section(ui, "Technical details", |ui| {
                         style::markdown(ui, technical);
                     });
@@ -3455,14 +3458,16 @@ impl Run {
     }
 
     /// Returns the group the DM chooses to add. Those in tonight's plan come first.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn group_list(&mut self, ui: &mut egui::Ui, arrival: Option<(f32, f32)>) -> Option<Uuid> {
         let c = colors();
         let Some(groups) = self.groups.clone() else {
-            design::group_heading(ui, "Encounter groups", 0);
+            design::heading(
+                ui,
+                design::Heading::Group {
+                    title: "Encounter groups",
+                    count: 0,
+                },
+            );
             ui.add(
                 egui::Label::new(
                     Type::Body
@@ -3477,7 +3482,13 @@ impl Run {
             return None;
         };
         if groups.is_empty() {
-            design::group_heading(ui, "Encounter groups", 0);
+            design::heading(
+                ui,
+                design::Heading::Group {
+                    title: "Encounter groups",
+                    count: 0,
+                },
+            );
             ui.horizontal_wrapped(|ui| {
                 ui.label(
                     Type::Small
@@ -3508,7 +3519,13 @@ impl Run {
         // tell apart.
         let labelled = !offered.own.is_empty() || !planned.is_empty() || !offered.other.is_empty();
         if !labelled {
-            design::group_heading(ui, "Encounter groups", offered.any.len());
+            design::heading(
+                ui,
+                design::Heading::Group {
+                    title: "Encounter groups",
+                    count: offered.any.len(),
+                },
+            );
         }
         let (add_width, block) = arrival.unwrap_or_default();
         // A child of its own: the pane's earlier rows already make this Ui as wide as the pane,
@@ -3525,7 +3542,13 @@ impl Run {
                 ("For one encounter", offered.other.as_slice()),
             ] {
                 if labelled && !list.is_empty() {
-                    design::group_heading(ui, heading, list.len());
+                    design::heading(
+                        ui,
+                        design::Heading::Group {
+                            title: heading,
+                            count: list.len(),
+                        },
+                    );
                 }
                 if heading == "For one encounter" && !list.is_empty() {
                     design::help(
@@ -3534,11 +3557,12 @@ impl Run {
                     );
                 }
                 for group in list {
-                    ui.push_id(group.id, |ui| {
+                    let row = ui.push_id(group.id, |ui| {
                         if self.group_row(ui, group, add_width, block) {
                             add = Some(group.id);
                         }
                     });
+                    design::register_row(ui, row.response.rect);
                     design::rule(ui);
                 }
             }
@@ -4097,14 +4121,10 @@ impl Run {
         }
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn keys_tab(&self, ui: &mut egui::Ui) {
         let c = colors();
         // The panel's title names them (FE14), so the list has no label of its own.
-        ui.add_space(design::XS);
+        design::gap(ui, design::Gap::XS);
         for (key, what) in KEYS {
             ui.horizontal_top(|ui| {
                 let (rect, _) = ui.allocate_exact_size(vec2(96.0, 20.0), egui::Sense::hover());
@@ -4118,7 +4138,7 @@ impl Run {
                 ui.add(egui::Label::new(Type::Body.rich(ui, what).color(c.muted)).wrap());
             });
         }
-        ui.add_space(design::XS);
+        design::gap(ui, design::Gap::XS);
         ui.add(
             egui::Label::new(
                 Type::Small
@@ -4137,13 +4157,15 @@ impl Run {
     }
 
     /// Recording only. Colour says nothing here, because nothing is wrong.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn death_saves(&mut self, ui: &mut egui::Ui, index: usize, successes: u8, failures: u8) {
         let c = colors();
-        design::group_heading(ui, "Death saves", 0);
+        design::heading(
+            ui,
+            design::Heading::Group {
+                title: "Death saves",
+                count: 0,
+            },
+        );
         let mut command = None;
         ui.horizontal(|ui| {
             ui.set_min_height(Density::Read.control());
@@ -4249,7 +4271,7 @@ impl Run {
             };
             // The death saves are above, below the tabs (`side_panel`); the status follows.
             if p.shows_death_saves() {
-                ui.add_space(design::L);
+                design::gap(ui, design::Gap::L);
             }
             changes_block(ui, p, false);
             let freshness = crate::party::freshness(&record, self.connected);
@@ -4479,8 +4501,7 @@ impl Run {
                 let p = &self.state.participants[index];
                 let mut hp = p.hp;
                 let mut max = p.max_hp;
-                if p.hp == Some(0) { ui.add_space(design::L); }
-                design::group_heading(ui, "Correct HP", 0);
+                design::heading(ui, design::Heading::Group { title: "Correct HP", count: 0 });
                 let sheet_decides = self.syncs.get(&index).is_some_and(|sync| sync.ready());
                 optional_number(ui, "Current HP", &mut hp, 0..=1_000_000);
                 design::locked(ui, sheet_decides.then_some(MAX_FROM_SHEET), |ui| {
@@ -4498,8 +4519,7 @@ impl Run {
                 );
                 if self.state.phase == Phase::Setup {
                     // FJ8 (iter-27-R): the bonus has its own heading, as live play's total has.
-                    ui.add_space(design::L);
-                    design::group_heading(ui, "Correct initiative", 0);
+                    design::heading(ui, design::Heading::Group { title: "Correct initiative", count: 0 });
                     let mut bonus = p.initiative_bonus;
                     optional_number(ui, "Initiative bonus", &mut bonus, -1000..=1000);
                     if bonus != p.initiative_bonus {
@@ -4526,8 +4546,7 @@ impl Run {
                         )
                     };
                     let had = p.initiative;
-                    ui.add_space(design::L);
-                    design::group_heading(ui, "Correct initiative", 0);
+                    design::heading(ui, design::Heading::Group { title: "Correct initiative", count: 0 });
                     let field = format!("Initiative for {}", p.name);
                     let text = self.setup_inputs.entry(index).or_default();
                     let total = text.trim().parse::<i64>().ok();
@@ -4564,8 +4583,7 @@ impl Run {
                     ui.add(egui::Label::new(Type::Small.rich(ui, words).color(color)).wrap());
                     correction_reason(ui, "Type a number first.", total.is_none());
                 }
-                ui.add_space(design::L);
-                design::group_heading(ui, "DM notes", 0);
+                design::heading(ui, design::Heading::Group { title: "DM notes", count: 0 });
                 let empty = self.note.trim().is_empty();
                 // A note is a sentence: its field takes the form's whole line, and Add note
                 // starts the line below it, at the field. The reason has its own line below.
@@ -4573,8 +4591,11 @@ impl Run {
                     ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
                     ui.horizontal(|ui| {
                         correction_label(ui, "Note");
-                        design::text_input(
+                        design::line_field(
                             ui,
+                            DM_NOTE_FIELD
+                                .with(self.id)
+                                .with(design::TextKey::from_data(p.key.clone())),
                             "DM note",
                             &mut self.note,
                             "What happened",
@@ -4602,8 +4623,7 @@ impl Run {
                     );
                 }
                 if p.definition.fields.contains_key("splat_external") {
-                    ui.add_space(design::L);
-                    design::group_heading(ui, "D&D Beyond combat sync", 0);
+                    design::heading(ui, design::Heading::Group { title: "D&D Beyond combat sync", count: 0 });
                     // Viewing Correct is not a request to stop this character's sync.
                     // Keep a new worker only when the DM enables it.
                     let mut unstarted = crate::combat_sync::CombatSync::default();
@@ -4846,7 +4866,7 @@ impl Run {
                 if self.add_to_fight(true, Density::Read).show(ui).clicked() {
                     self.show_arrivals();
                 }
-                ui.add_space(design::S);
+                design::gap(ui, design::Gap::S);
                 let label = self.undo_label();
                 let undo = ui
                     .allocate_ui_with_layout(
@@ -5014,7 +5034,7 @@ impl Run {
         // Past the message footer, which the rows' room left free.
         ui.add_space(footer_room);
         design::rule(ui);
-        ui.add_space(design::XS);
+        design::gap(ui, design::Gap::XS);
         ui.horizontal(|ui| {
             if self.closing {
                 let note = if self.untouched_setup() {
@@ -5372,7 +5392,7 @@ impl Run {
                     },
                 );
             }
-            ui.add_space(design::S);
+            design::gap(ui, design::Gap::S);
             let (word, hint) = presence_action(present);
             let accessible = format!("{word}: {name}");
             let pressed = ui
@@ -5454,7 +5474,7 @@ impl Run {
         }
         if expanded {
             ui.horizontal(|ui| {
-                ui.add_space(design::S);
+                design::gap(ui, design::Gap::S);
                 let mut is_npc = npc;
                 if ui
                     .checkbox(&mut is_npc, "NPC")
@@ -5470,7 +5490,7 @@ impl Run {
                     .selected_text(mode_label(mode))
                     .show_ui(ui, |ui| {
                         for m in [-1, 0, 1] {
-                            ui.selectable_value(&mut picked, m, mode_label(m));
+                            design::choice_value(ui, &mut picked, m, mode_label(m));
                         }
                     });
                 design::named(ui, &combo.response, &format!("Initiative roll for {name}"));
@@ -5725,7 +5745,7 @@ impl Run {
                             if choosing {
                                 design::section(ui, "Combat log", |ui| self.log_tab(ui));
                             } else {
-                                design::group_label(ui, "Combat log");
+                                design::heading(ui, design::Heading::Label("Combat log"));
                                 self.log_tab(ui);
                             }
                         });
@@ -5751,7 +5771,7 @@ impl Run {
                         ui.set_max_width(ui.available_width().min(scale.max_width));
                         // SI1: how everyone ended comes first, so the whole party's HP is in
                         // view; what the party takes follows.
-                        design::group_label(ui, "Final state");
+                        design::heading(ui, design::Heading::Label("Final state"));
                         let spacing = ui.spacing().item_spacing.y;
                         ui.spacing_mut().item_spacing.y = 0.0;
                         roster_right = ui.available_rect_before_wrap().right();
@@ -5788,7 +5808,7 @@ impl Run {
                             }
                         }
                         ui.spacing_mut().item_spacing.y = spacing;
-                        ui.add_space(design::L);
+                        design::gap(ui, design::Gap::L);
                         self.loot_section(ui);
                     });
             });
@@ -6227,10 +6247,6 @@ fn change_origin(p: &Participant) -> Option<String> {
     (!parts.is_empty()).then(|| parts.join(" · "))
 }
 
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn changes_block(ui: &mut egui::Ui, p: &Participant, above_stat_block: bool) {
     let c = colors();
     let heading = |ui: &mut egui::Ui| {
@@ -6309,14 +6325,10 @@ fn changes_block(ui: &mut egui::Ui, p: &Participant, above_stat_block: bool) {
     if let Some(note) = note {
         ui.add(egui::Label::new(Type::Small.rich(ui, note).color(c.muted)).wrap());
     }
-    ui.add_space(design::S);
+    design::gap(ui, design::Gap::S);
 }
 
 /// Each change, with the value it replaces. The editors and the run say it the same way.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 pub(crate) fn change_rows(ui: &mut egui::Ui, rows: &[Row]) {
     let c = colors();
     // What the DM must do comes first, in larger type. The rest the run has done.
@@ -6325,7 +6337,7 @@ pub(crate) fn change_rows(ui: &mut egui::Ui, rows: &[Row]) {
     let mut was_by_hand = false;
     for row in by_hand.into_iter().chain(applied) {
         if separate && was_by_hand && !row.by_hand {
-            ui.add_space(design::S);
+            design::gap(ui, design::Gap::S);
         }
         was_by_hand = row.by_hand;
         let font = if row.by_hand {
@@ -12171,8 +12183,10 @@ mod tests {
         let mut harness = egui_kittest::Harness::builder()
             .with_size(vec2(560.0, 640.0))
             .build(move |ctx| {
-                egui::CentralPanel::default()
-                    .show(ctx, |ui| shown.borrow_mut().conditions_tab(ui, 0));
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let at = shown.borrow().selected;
+                    shown.borrow_mut().conditions_tab(ui, at);
+                });
             });
         design::theme::install(&harness.ctx);
         harness.run_steps(2);
@@ -12419,6 +12433,61 @@ mod tests {
                 .as_deref(),
             Some("Haste")
         );
+        // The draft belongs to the participant: edit A, switch to B, focus the field, Ctrl+Z.
+        // B keeps its own (empty) draft and A's text is unchanged.
+        // A has two undo states: time passes between its two edits.
+        harness.run_steps(16);
+        harness.get_by_label("Other effect").type_text("!");
+        harness.run_steps(1);
+        let other = run.borrow().state.participants[1].key.clone();
+        run.borrow_mut().selected = 1;
+        harness.run_steps(2);
+        harness.get_by_label("Other effect").click();
+        harness.run_steps(1);
+        harness.key_press_modifiers(egui::Modifiers::COMMAND, Key::Z);
+        harness.run_steps(2);
+        assert!(
+            run.borrow()
+                .effect_fields
+                .get(&other)
+                .is_none_or(|f| f.words.is_empty()),
+            "Ctrl+Z in B's field gave B the history of A"
+        );
+        assert_eq!(
+            run.borrow()
+                .effect_fields
+                .get(&key)
+                .map(|f| f.words.clone())
+                .as_deref(),
+            Some("Haste!"),
+            "Ctrl+Z in B's field changed A"
+        );
+        // The draft is also its run's: another run can reuse the roster slot's key. Run B shows
+        // the same participant key; Ctrl+Z in its field gives it nothing of run A's history.
+        run.borrow_mut().selected = 0;
+        let other_run = super::super::tests::run();
+        assert_eq!(
+            other_run.state.participants[0].key, key,
+            "run B reuses A's key"
+        );
+        assert_ne!(other_run.id, run.borrow().id);
+        let run_a = std::mem::replace(&mut *run.borrow_mut(), other_run);
+        harness.run_steps(2);
+        harness.get_by_label("Other effect").click();
+        harness.run_steps(1);
+        harness.key_press_modifiers(egui::Modifiers::COMMAND, Key::Z);
+        harness.run_steps(2);
+        assert!(
+            run.borrow()
+                .effect_fields
+                .get(&key)
+                .is_none_or(|f| f.words.is_empty()),
+            "Ctrl+Z in run B's field gave B the history of run A"
+        );
+        *run.borrow_mut() = run_a;
+        harness.run_steps(2);
+        harness.get_by_label("Other effect").click();
+        harness.run_steps(1);
         harness.key_press(Key::Escape);
         harness.run_steps(2);
         assert!(
