@@ -99,6 +99,33 @@ fn violations(line: &str) -> Vec<&'static str> {
             found.push("raw-symbol");
         }
     }
+    // A layer built by hand, or a menu container from `Default`: the forms Clippy's method list
+    // cannot see (clippy.toml).
+    let bare = without_strings(code);
+    let word_at = |pattern: &str| {
+        bare.match_indices(pattern)
+            .any(|(at, _)| !bare[..at].ends_with(|c: char| c.is_alphanumeric() || c == '_'))
+    };
+    if [
+        "Order::Foreground",
+        "Order::Tooltip",
+        "Order::Middle",
+        "Order::Debug",
+        "Order::Background",
+        "LayerId {",
+        "MenuBar",
+        "SubMenu::",
+        "SubMenu {",
+    ]
+    .into_iter()
+    .any(word_at)
+    {
+        found.push("foreground-layer");
+    }
+    // `create_reasons!` writes `ALL` from the variants; a hand-made impl could leave one out.
+    if bare.contains("CreateReasons for") {
+        found.push("hand-create-reasons");
+    }
     // A moving spinner draws from the clock, so captures of one state would differ.
     if code.contains("ui.spinner()") {
         found.push("raw-spinner");
@@ -119,24 +146,139 @@ fn violations(line: &str) -> Vec<&'static str> {
     found
 }
 
-/// The Clippy allows on one line of code, by the rule that counts them. Each item-level
-/// `allow(clippy::disallowed_methods)` counts once; one for a whole module (`#![…]`) or for a
-/// group that holds the lint (`clippy::style`, `clippy::all`) is a fault of its own.
-fn clippy_allows(line: &str) -> Vec<&'static str> {
-    let code = line.split("//").next().unwrap_or("");
-    let attribute = code.contains("allow(") || code.contains("expect(");
-    let mut found = Vec::new();
-    if !attribute {
-        return found;
+/// `code` with the inside of each string literal blanked, so a lint name in words is not a lint.
+fn without_strings(code: &str) -> String {
+    let mut out = String::with_capacity(code.len());
+    let mut inside = false;
+    let mut escaped = false;
+    for c in code.chars() {
+        match c {
+            '\\' if inside && !escaped => {
+                escaped = true;
+                out.push(' ');
+                continue;
+            }
+            '"' if !escaped => {
+                inside = !inside;
+                out.push('"');
+            }
+            _ if inside => out.push(' '),
+            _ => out.push(c),
+        }
+        escaped = false;
     }
-    if code.contains("clippy::disallowed_methods") {
-        found.push("disallowed-methods-allow");
-        if code.contains("#![") {
-            found.push("broad-clippy-allow");
+    out
+}
+
+/// Whether `code` names a Clippy lint that can let a raw egui call through: the lint itself, or
+/// a group that holds it.
+fn names_the_ban(code: &str) -> bool {
+    let code: String = code.chars().filter(|c| !c.is_whitespace()).collect();
+    code.match_indices("clippy::").any(|(at, _)| {
+        let name: String = code[at + "clippy::".len()..]
+            .chars()
+            .take_while(|c| c.is_alphanumeric() || *c == '_')
+            .collect();
+        matches!(name.as_str(), "disallowed_methods" | "style" | "all")
+    })
+}
+
+/// Whether `line` starts a function item, after its visibility and qualifiers.
+fn starts_fn(line: &str) -> bool {
+    let mut rest = line.trim_start();
+    loop {
+        if let Some(after) = rest.strip_prefix("pub") {
+            let after = after.trim_start();
+            rest = if after.starts_with('(') {
+                after
+                    .split_once(')')
+                    .map_or(after, |(_, tail)| tail)
+                    .trim_start()
+            } else {
+                after
+            };
+            continue;
+        }
+        let mut stripped = false;
+        for word in ["const ", "async ", "unsafe ", "extern \"C\" "] {
+            if let Some(after) = rest.strip_prefix(word) {
+                rest = after.trim_start();
+                stripped = true;
+            }
+        }
+        if !stripped {
+            break;
         }
     }
-    if code.contains("clippy::style") || code.contains("clippy::all") {
-        found.push("broad-clippy-allow");
+    rest.starts_with("fn ")
+}
+
+/// The one counted allow; on a `fn`, or on the harness's `mod visual_tests;` in `src/lib.rs`.
+const ALLOW: &str = "#[allow(clippy::disallowed_methods)]";
+
+/// Every Clippy allow in a file that can let a raw egui call through, by rule. The attribute is
+/// read whole, also over several lines, with the item it sits on. Counted
+/// (`disallowed-methods-allow`): exactly `#[allow(clippy::disallowed_methods)]`, alone on its
+/// line, on a `fn`. Refused (`broad-clippy-allow`): any other form, which frees more than one
+/// function or hides from the count: an inner `#![…]` (a module or a block), one on an `impl`,
+/// `mod`, `trait`, closure or statement, `expect(…)`, `cfg_attr(…)`, a list with other lints, an
+/// attribute over several lines, or a group (`clippy::style`, `clippy::all`).
+fn clippy_allows(key: &str, text: &str) -> Vec<&'static str> {
+    let lines: Vec<String> = text
+        .lines()
+        .map(|line| without_strings(line.split("//").next().unwrap_or("")))
+        .collect();
+    let mut found = Vec::new();
+    let mut at = 0;
+    while at < lines.len() {
+        let start = lines[at].trim_start();
+        if !start.starts_with("#[") && !start.starts_with("#![") {
+            if names_the_ban(&lines[at]) && lines[at].contains('#') {
+                // An attribute in the middle of a line: on an expression or after an item.
+                found.push("broad-clippy-allow");
+            }
+            at += 1;
+            continue;
+        }
+        // The whole attribute: until its brackets close.
+        let mut depth = 0i32;
+        let mut end = at;
+        let mut attribute = String::new();
+        loop {
+            for c in lines[end].chars() {
+                depth += match c {
+                    '[' => 1,
+                    ']' => -1,
+                    _ => 0,
+                };
+            }
+            attribute.push_str(&lines[end]);
+            if depth <= 0 || end + 1 >= lines.len() {
+                break;
+            }
+            end += 1;
+        }
+        if names_the_ban(&attribute) {
+            // The item it sits on: the next line that is not an attribute or blank.
+            let mut item = end + 1;
+            while item < lines.len() {
+                let line = lines[item].trim_start();
+                if line.is_empty() || line.starts_with("#[") {
+                    item += 1;
+                } else {
+                    break;
+                }
+            }
+            let item = lines.get(item).map_or("", |line| line.trim());
+            let exact = end == at && attribute.trim() == ALLOW;
+            let harness = key == "src/lib.rs" && item == "mod visual_tests;";
+            found.push(if exact && (starts_fn(item) || harness) {
+                "disallowed-methods-allow"
+            } else {
+                "broad-clippy-allow"
+            });
+        }
+        at = end + 1;
     }
     found
 }
@@ -157,10 +299,8 @@ fn scan(folder: &Path, counts: &mut BTreeMap<String, usize>) {
             let root = concat!(env!("CARGO_MANIFEST_DIR"), "/");
             let key = relative.strip_prefix(root).unwrap_or(&relative);
             // Every allow counts, in tests too: a test's raw call is still a raw call.
-            for line in text.lines() {
-                for rule in clippy_allows(line) {
-                    *counts.entry(format!("{key} {rule}")).or_default() += 1;
-                }
+            for rule in clippy_allows(key, &text) {
+                *counts.entry(format!("{key} {rule}")).or_default() += 1;
             }
             // Unit tests may name colours and sizes. They do not ship.
             // `mod tests;` near the top names a file of its own, so only an inline module ends it.
@@ -203,7 +343,11 @@ fn raw_colours_and_sizes_stay_inside_the_design_system() {
             } else if key.ends_with("disallowed-methods-allow") {
                 "Use the design part that clippy.toml names, not a raw egui call"
             } else if key.ends_with("broad-clippy-allow") {
-                "Allow `clippy::disallowed_methods` on one function, never on a module or a group"
+                "Write `#[allow(clippy::disallowed_methods)]` alone on one line, on one `fn`"
+            } else if key.ends_with("foreground-layer") {
+                "Foreground layers and menus belong to src/design/"
+            } else if key.ends_with("hand-create-reasons") {
+                "Declare a form's reasons with create_reasons!"
             } else {
                 "Use design tokens"
             };
@@ -273,24 +417,91 @@ fn each_field_id_name_is_used_once() {
 
 #[test]
 fn the_lint_finds_clippy_allows() {
+    let allows = |text: &str| clippy_allows("src/x.rs", text);
+    // The one counted form: alone on its line, on a `fn`, with its docs and other attributes.
     assert_eq!(
-        clippy_allows("    #[allow(clippy::disallowed_methods)]"),
+        allows("    #[allow(clippy::disallowed_methods)]\n    pub(crate) fn draw() {}"),
         ["disallowed-methods-allow"]
     );
     assert_eq!(
-        clippy_allows("#![allow(clippy::disallowed_methods)]"),
-        ["disallowed-methods-allow", "broad-clippy-allow"]
+        allows("/// Docs.\n#[allow(clippy::disallowed_methods)]\n#[must_use]\nconst fn f() {}"),
+        ["disallowed-methods-allow"]
     );
+    // Every other form is refused.
+    for text in [
+        // A module, a file, a block.
+        "#![allow(clippy::disallowed_methods)]\nfn f() {}",
+        "fn f() {\n    #![allow(clippy::disallowed_methods)]\n}",
+        "#[allow(clippy::disallowed_methods)]\nmod screens;",
+        // A whole `impl` frees every method in it.
+        "#[allow(clippy::disallowed_methods)]\nimpl Library {",
+        "#[allow(clippy::disallowed_methods)]\ntrait Draw {",
+        // A statement or a closure.
+        "    #[allow(clippy::disallowed_methods)]\n    let area = egui::ScrollArea::vertical();",
+        "    let area = #[allow(clippy::disallowed_methods)] egui::ScrollArea::vertical();",
+        // Other spellings.
+        "#[expect(clippy::disallowed_methods)]\nfn f() {}",
+        "#[cfg_attr(test, allow(clippy::disallowed_methods))]\nfn f() {}",
+        "#[allow(dead_code, clippy::disallowed_methods)]\nfn f() {}",
+        "#[allow(\n    clippy::disallowed_methods\n)]\nfn f() {}",
+        "#[allow(clippy :: disallowed_methods)]\nfn f() {}",
+        // A group that holds the lint.
+        "#[allow(clippy::style)]\nfn f() {}",
+        "#[expect(clippy::all, reason = \"x\")]\nfn f() {}",
+    ] {
+        assert_eq!(allows(text), ["broad-clippy-allow"], "{text}");
+    }
+    // The capture harness's one exception is in `src/lib.rs` only.
+    let harness = "#[cfg(test)]\n#[allow(clippy::disallowed_methods)]\nmod visual_tests;";
     assert_eq!(
-        clippy_allows("#[allow(clippy::style)]"),
-        ["broad-clippy-allow"]
+        clippy_allows("src/lib.rs", harness),
+        ["disallowed-methods-allow"]
     );
+    assert_eq!(allows(harness), ["broad-clippy-allow"]);
+    // Words and comments are not lints, and another Clippy lint is not this one.
+    assert!(allows("// #[allow(clippy::disallowed_methods)] in a comment").is_empty());
+    assert!(allows("let lint = \"#[allow(clippy::disallowed_methods)]\";").is_empty());
+    assert!(allows("#[allow(clippy::allow_attributes)]\nimpl X {").is_empty());
+    assert!(allows("#[allow(clippy::too_many_arguments)]\nimpl X {").is_empty());
+}
+
+#[test]
+fn the_lint_finds_hand_made_layers_and_reasons() {
+    for code in [
+        "let layer = egui::LayerId { order: egui::Order::Foreground, id };",
+        "let layer = LayerId { order: Order::Tooltip, id };",
+        "let bar = egui::containers::menu::MenuBar::default();",
+        "let menu = SubMenu::default();",
+    ] {
+        assert_eq!(violations(code), ["foreground-layer"], "{code}");
+    }
+    assert!(violations("let order = SortOrder::Foreground;").is_empty());
+    assert!(violations("let order = ResultOrder::issue();").is_empty());
     assert_eq!(
-        clippy_allows("#[expect(clippy::all, reason = \"x\")]"),
-        ["broad-clippy-allow"]
+        violations("impl design::CreateReasons for Why {"),
+        ["hand-create-reasons"]
     );
-    assert!(clippy_allows("// #[allow(clippy::disallowed_methods)] in a comment").is_empty());
-    assert!(clippy_allows("let lint = \"clippy::disallowed_methods\";").is_empty());
+}
+
+#[test]
+fn no_lint_level_frees_raw_calls_outside_the_source() {
+    let root = env!("CARGO_MANIFEST_DIR");
+    for file in ["Cargo.toml", "crates/core/Cargo.toml", ".cargo/config.toml"] {
+        let text = fs::read_to_string(format!("{root}/{file}")).unwrap_or_default();
+        assert!(
+            !text.contains("disallowed_methods") && !text.contains("-A clippy"),
+            "{file} sets a Clippy level; set it on one `fn` instead"
+        );
+    }
+    let devenv = fs::read_to_string(format!("{root}/devenv.nix")).expect("devenv.nix");
+    let check = devenv
+        .lines()
+        .find(|line| line.contains("scripts.check.exec"))
+        .expect("the check script");
+    assert!(
+        check.contains("-D warnings") && !check.contains("-A "),
+        "{check}"
+    );
 }
 
 #[test]

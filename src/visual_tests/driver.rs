@@ -2797,6 +2797,25 @@ impl<'a> Driver<'a> {
             &window,
         ));
         self.check_footer_room(state);
+        // Two live widgets with one id, two text fields with one `FieldId` and key among them:
+        // egui paints its id-clash warning in debug builds, and every state of every scenario
+        // fails on it (package K, rung 4 for `FieldId`).
+        let painted = self.painted_in(egui::Rect::EVERYTHING);
+        if let Some(words) = ["Double use of", "First use of", "Second use of"]
+            .into_iter()
+            .find(|words| painted.contains(words))
+        {
+            self.outcome.violations.push(ergonomics::Violation {
+                check: "widget-id-clash".into(),
+                scenario: self.scenario.into(),
+                state: state.into(),
+                window: format!("{}x{}", size.0, size.1),
+                node: words.into(),
+                role: String::new(),
+                rect: [0.0; 4],
+                detail: "Two live widgets share one id: give each its own FieldId key".into(),
+            });
+        }
     }
 
     /// R3f, the shared footer check, on every captured state: a pane's content ends above its

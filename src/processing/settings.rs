@@ -522,6 +522,7 @@ impl ProcessingSettings {
         }
     }
 
+    #[allow(clippy::disallowed_methods)]
     fn input_section(&mut self, ui: &mut egui::Ui) {
         let heading = ui
             .scope(|ui| design::group_heading(ui, "Recording", 0))

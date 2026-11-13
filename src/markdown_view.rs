@@ -772,6 +772,7 @@ fn table_room(ui: &egui::Ui) -> Option<f32> {
 
 /// The row label has its own column. Only the remaining cells belong to the
 /// horizontal scroll area, so its real viewport also supplies the cell padding.
+#[allow(clippy::disallowed_methods)]
 fn reader_table(
     ui: &mut egui::Ui,
     rows: &[Vec<String>],

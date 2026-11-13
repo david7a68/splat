@@ -601,6 +601,7 @@ impl Campaigns {
     }
 
     /// The always-visible campaign switcher. `blocked` says why it cannot change now.
+    #[allow(clippy::disallowed_methods)]
     pub fn selector(&mut self, ui: &mut egui::Ui, blocked: Option<&str>) -> bool {
         let current = self.data.active_campaign_id;
         let mut add = false;
@@ -1265,10 +1266,10 @@ impl Campaigns {
                             && campaign.path == std::path::Path::new(self.path.trim())
                     });
                 let reason = match (self.name.trim().is_empty(), self.path.trim().is_empty()) {
-                    (true, true) => Some("Enter a campaign name and a folder first."),
-                    (true, false) => Some("Enter a campaign name first."),
-                    (false, true) => Some("Choose a folder first."),
-                    (false, false) if unchanged => Some("No changes to save."),
+                    (true, true) => Some(FormReason::NoNameNoFolder),
+                    (true, false) => Some(FormReason::NoName),
+                    (false, true) => Some(FormReason::NoFolder),
+                    (false, false) if unchanged => Some(FormReason::NoChanges),
                     (false, false) => None,
                 };
                 let missing = reason.is_some();
@@ -1288,7 +1289,7 @@ impl Campaigns {
                     } else {
                         design::Create::secondary(ADD_CAMPAIGN)
                     };
-                    let cancel = (!missing || self.remote.is_some()).then_some(CANCEL);
+                    let cancel = !missing || self.remote.is_some();
                     let form = design::InlineCreate::new()
                         .field(
                             design::CreateField::new(name_id, "Campaign name", &mut self.name)
@@ -1300,7 +1301,7 @@ impl Campaigns {
                                 .help(FOLDER_HELP),
                         )
                         .create(create.blocked(reason))
-                        .kept_line(design::KeptLine::new().cancel(cancel))
+                        .kept_line(design::KeptLine::new().cancel(CANCEL, cancel))
                         .show(ui);
                     if form.side
                         && let Some(path) = crate::hermetic::pick_folder()
@@ -1401,6 +1402,7 @@ impl Campaigns {
                             self.clear_form();
                         }
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            let reason = reason.map(design::CreateReasons::words);
                             commit = action.blocked(reason).show(ui).clicked();
                             ui.spacing_mut().item_spacing.x = design::S;
                             design::blocked_reason(ui, reason.filter(|_| !unchanged));
@@ -1461,6 +1463,16 @@ pub(crate) fn creation_reason(ui: &mut egui::Ui, reason: Option<&str>) {
 
 /// The Browse button and the gap before it, beside the details form's folder field.
 const BROWSE_WIDTH: f32 = 92.0;
+crate::create_reasons! {
+    /// Why the campaign form cannot add or save yet: every reason it can show, so its kept line
+    /// keeps room for the tallest.
+    enum FormReason {
+        NoNameNoFolder => "Enter a campaign name and a folder first.",
+        NoName => "Enter a campaign name first.",
+        NoFolder => "Choose a folder first.",
+        NoChanges => "No changes to save.",
+    }
+}
 const CAMPAIGN_NAME: design::FieldId = crate::field_id!("campaign_name");
 const CAMPAIGN_FOLDER: design::FieldId = crate::field_id!("campaign_folder");
 const ADD_CAMPAIGN: design::Word = crate::word!("Add campaign");

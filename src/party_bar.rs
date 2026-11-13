@@ -489,6 +489,7 @@ fn source_status(ui: &mut egui::Ui, source: &Source, word: &str) {
 
 /// The players that do not fit, as a muted count. It takes keyboard focus. Hover, focus and the
 /// accessible name list each one with HP.
+#[allow(clippy::disallowed_methods)]
 fn more_players(ui: &mut egui::Ui, count: Arc<egui::Galley>, hidden: &[Glance]) {
     let c = colors();
     let size = count.size() + vec2(2.0 * design::XS, 0.0);
@@ -542,6 +543,7 @@ fn more_players(ui: &mut egui::Ui, count: Arc<egui::Galley>, hidden: &[Glance]) 
     }
 }
 
+#[allow(clippy::disallowed_methods)]
 fn paint(ui: &mut egui::Ui, glance: &Glance, item: Item, source: &str) -> egui::Response {
     let c = colors();
     let (rect, response) = ui.allocate_exact_size(

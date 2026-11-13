@@ -22,8 +22,9 @@ pub use components::*;
 // Wave 2 callers name the layout parts through `design`, as they name the components.
 #[allow(unused_imports)]
 pub use layout::{
-    Create, CreateChoice, CreateField, FieldId, InlineCreate, KeptLine, ScrollColumn, Slot,
-    SlotType, TitleAction, TitleLine, TitlePlacement, TitleType, Word, labelled_field, lane_width,
-    line_field, menu_popup, status_slot, title_placement,
+    ACTION_GAP, Create, CreateChoice, CreateField, CreateReasons, FieldId, InlineCreate, KeptLine,
+    MAX_WORD_CHARS, NARROWEST_PANE, NoReason, RowIndex, RowKey, ScrollColumn, Slot, SlotType,
+    TitleAction, TitleLine, TitlePlacement, TitleType, Word, labelled_field, lane_width,
+    line_field, menu_popup, sideways_scroll, status_slot, title_lead_in, title_placement,
 };
 pub use tokens::*;

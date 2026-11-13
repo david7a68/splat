@@ -5041,6 +5041,7 @@ impl Run {
 
     /// Controls share the name line. Ties reserve a column only while tied rows exist.
     /// Enter moves to the next missing total; rare controls wait in the row menu.
+    #[allow(clippy::disallowed_methods)]
     fn setup_row(&mut self, ui: &mut egui::Ui, index: usize) -> Option<Command> {
         let mut command = None;
         let p = self.state.participants[index].clone();

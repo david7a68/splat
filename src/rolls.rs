@@ -1591,6 +1591,7 @@ fn tile(
 
 /// A tile's rules text, and its printed numbers and keys, on hover and on keyboard focus (a
 /// click gives no focus), and as the control's accessible description.
+#[allow(clippy::disallowed_methods)]
 fn rules_on_hover_and_focus(
     ui: &egui::Ui,
     response: egui::Response,
@@ -1802,6 +1803,7 @@ pub(crate) fn tiles(ui: &mut egui::Ui, entry: &str, chips: &[(Option<usize>, Chi
 /// The totals of an outcome in Strong, with their dice in hover. A muted `·` comes between
 /// the parts, as in a run's `11 vs AC 13 · 10 damage`; it never ends a line, so it wraps with
 /// the part after it.
+#[allow(clippy::disallowed_methods)]
 pub(crate) fn outcome_line(ui: &mut egui::Ui, outcome: &Outcome) {
     let c = colors();
     let mut first = true;
