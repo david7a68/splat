@@ -536,9 +536,19 @@ impl ReaderField {
     }
 }
 
-const PICK_SEARCH: ReaderField = ReaderField {
-    page: crate::field_id!("world_pick_search"),
-    compact: crate::field_id!("lookup_pick_search"),
+// One search field name for each picker kind, so the kinds of one entry keep their own text and
+// text history.
+const PICK_PLACE_SEARCH: ReaderField = ReaderField {
+    page: crate::field_id!("world_pick_place_search"),
+    compact: crate::field_id!("lookup_pick_place_search"),
+};
+const PICK_GROUP_SEARCH: ReaderField = ReaderField {
+    page: crate::field_id!("world_pick_group_search"),
+    compact: crate::field_id!("lookup_pick_group_search"),
+};
+const PICK_STAT_BLOCK_SEARCH: ReaderField = ReaderField {
+    page: crate::field_id!("world_pick_stat_block_search"),
+    compact: crate::field_id!("lookup_pick_stat_block_search"),
 };
 const NEW_LOCATION_NAME: ReaderField = ReaderField {
     page: crate::field_id!("world_new_location_name"),
@@ -4331,8 +4341,13 @@ impl Reader {
             .filter_map(|value| index.world_value_target(value))
             .collect();
         let width = ui.available_width();
-        let response = PICK_SEARCH
-            .id(self.compact, item.entry.id)
+        let search_field = match key {
+            "in" => PICK_PLACE_SEARCH,
+            "part_of" => PICK_GROUP_SEARCH,
+            _ => PICK_STAT_BLOCK_SEARCH,
+        };
+        let response = search_field
+            .id(compact, item.entry.id)
             .search(ui, label, &mut picker.search, label, width)
             .field;
         if std::mem::take(&mut picker.focus) {

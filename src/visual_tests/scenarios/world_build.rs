@@ -2881,6 +2881,22 @@ pub fn round_trip(d: &mut Driver<'_>) {
         Some("ready"),
         "ctrl-z-other-note: Ashfall Faction's draft is unchanged"
     );
+    // One entry, two pickers: the group search must not take the location search's text
+    // history, so each picker kind has its own field name.
+    d.click("Change In");
+    d.expect("Find a location");
+    d.type_into("Find a location", "Gate");
+    d.click("Cancel");
+    d.click("Change Part of");
+    d.expect("Find a group");
+    d.type_into("Find a group", "");
+    d.press_ctrl(Key::Z);
+    assert_eq!(
+        d.field_text("Find a group").as_deref(),
+        Some(""),
+        "ctrl-z-other-picker: the group search keeps its own text after Ctrl+Z"
+    );
+    d.click("Cancel");
     let repair_path = root(d).join("Notes/Rail repair.md");
     fs::write(&repair_path, "---\nsplat_schema: 2\nsplat_id: [\n---\n").unwrap();
     reload(d);

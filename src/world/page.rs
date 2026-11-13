@@ -1277,10 +1277,6 @@ impl WorldPage {
 
     /// The open questions, or the problems. Returns the page a press asks for, with the
     /// heading to show.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn checks_view(&mut self, ui: &mut egui::Ui, index: &ContentIndex) -> Option<CheckAct> {
         let (_, checks) = self.checks.as_ref()?;
         let mut open = None;
@@ -1318,7 +1314,7 @@ impl WorldPage {
                     }
                     ui.horizontal_wrapped(|ui| {
                         if questions {
-                            ui.add_space(QUESTION_BOX);
+                            design::gap(ui, design::Gap::XXL);
                         }
                         ui.spacing_mut().item_spacing.x = 0.0;
                         note(ui, "In ");
@@ -1720,7 +1716,7 @@ fn new_menu(ui: &mut egui::Ui) -> Option<&'static str> {
 }
 
 /// The room before a question's words: its box's 24 px target and an `S` gap.
-const QUESTION_BOX: f32 = design::XL + design::S;
+const QUESTION_BOX: f32 = design::Gap::XXL.size();
 
 /// One open question: its box, when Splat can write its note, then its words as a link that
 /// opens the note at its heading. A note that Splat does not write keeps the box's room, so the

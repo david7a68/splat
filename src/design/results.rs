@@ -1281,7 +1281,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/world.rs", "unread_groups_message", &[Ban::Extras(1)]),
         ("src/world.rs", "value_row", &[Ban::Extras(1)]),
         ("src/world/edit.rs", "copy_or_let_go", &[Ban::Extras(1)]),
-        ("src/world/page.rs", "checks_view", &[Ban::Extras(1)]),
         ("src/world/page.rs", "list", &[Ban::Extras(1)]),
         ("src/world/page.rs", "unread_pane", &[Ban::Extras(1)]),
         ("src/world/related.rs", "history_rows", &[Ban::Extras(1)]),
