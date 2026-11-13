@@ -1108,10 +1108,6 @@ impl<'a> Driver<'a> {
     /// in points): the title's rect, the row's rect and its number of actions. `TitleLine` and
     /// the readers' title lines (`world::title_line_actions`, placed by `title_placement`)
     /// register them; actions that follow the title on its line register none.
-    #[expect(
-        dead_code,
-        reason = "package G's check N4 calls it; that change removes this expectation"
-    )]
     pub fn title_action_rows(&self) -> Vec<crate::design::TitleActionRow> {
         crate::design::layout::title_action_rows(&self.harness.ctx)
     }
@@ -3062,6 +3058,11 @@ impl<'a> Driver<'a> {
             &stillness::quiet_rects(shapes),
             &stillness::placed(&painted),
             &popups,
+            &self
+                .title_action_rows()
+                .into_iter()
+                .map(|row| row.row)
+                .collect::<Vec<_>>(),
         ));
         self.stillness.headers.push(stillness::HeaderView {
             window: window.clone(),

@@ -1911,8 +1911,8 @@ Number a width of five `L` units.
 
 Templates is a quiet header action. Its page names Templates and Campaign as owner, starts with the shared
 quiet Sessions back action and puts New template in the header. Hide New template and clear list selection
-while its form is open. Keep the list's help outside the form. New forms have `L` above the heading, `M`
-below, and `Starts with the title line only.` below Name. The new template form has the one inline creation order:
+while its form is open. Keep the list's help outside the form. New forms have `L` above the heading, the shared
+heading's `XS` below it, and `Starts with the title line only.` below Name. The new template form has the one inline creation order:
 `Create template` on the name field's line, the help under the field, then the kept line with quiet `Cancel` at
 its start and `Type a name first.` after it. Built-ins leave one blank line below each heading.
 Template editors use the note's styled source face, no input well, full column width and height. `Deleted
