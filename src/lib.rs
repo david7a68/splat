@@ -1836,8 +1836,9 @@ impl Splat {
                 let rest = ui.available_rect_before_wrap();
                 ui.scope_builder(egui::UiBuilder::new().max_rect(rest), |ui| {
                     // Round 26: results, reasons and errors on this tab sit in one footer at the
-                    // bottom of the pane (a failed Connect, the campaign form, the campaign list), so
-                    // none of them moves the form the DM works in.
+                    // bottom of the pane (the campaign form, the campaign list), so none of them
+                    // moves the form the DM works in. Round 27 FA1: a failed Connect's cause is in
+                    // the reason slot beside Connect.
                     let bottom = {
                         let width = ui.available_width().min(design::LIST_MEASURE);
                         let campaigns = std::cell::RefCell::new(&mut self.campaigns);
@@ -1848,7 +1849,6 @@ impl Splat {
                             true,
                             blocked,
                         );
-                        self.settings.footer_messages(&mut footer);
                         self.dndbeyond.footer_messages(&mut footer, false);
                         footer.show(ui)
                     };

@@ -5605,13 +5605,13 @@ pub fn package_about(d: &mut Driver<'_>) {
     d.open_combo_at(LIBRARY_PACKAGE_DROPDOWN);
     d.click(MODULE);
     d.click("About Ashen Marches");
-    d.wait_for_text("4 of 6 entries chosen · 1 still needed");
+    d.wait_for_text("5 of 6 entries chosen");
     d.observe(
         "W2 fixture",
-        d.visible_text("4 of 6 entries chosen · 1 still needed")
+        d.visible_text("5 of 6 entries chosen")
             && !d.visible_text("Engine support")
             && !d.visible_text("Library / Other entries"),
-        "Four chosen entries count as chosen; the one entry they need counts as still needed",
+        "Four chosen entries and the one entry they need count as chosen (round 27 FA6)",
     );
     d.state("package-about", Sizes::All);
     let title_before = reader_title_tops(d, MODULE);
@@ -5646,7 +5646,7 @@ pub fn package_about(d: &mut Driver<'_>) {
         );
     });
     d.click("Undo package choice");
-    d.wait_for_text("4 of 6 entries chosen · 1 still needed");
+    d.wait_for_text("5 of 6 entries chosen");
     d.expect_same("Undo package choice restores the original package selection and About reader.");
     d.assert_state_matches("package-use-undone", "package-about");
     d.click(EDIT_MARKDOWN);
@@ -5722,6 +5722,16 @@ pub fn package_about(d: &mut Driver<'_>) {
             d.visible_text("Module.md was written again.")
                 && !d.visible_text("Package.md was written again."),
             "Campaign names the existing manifest file",
+        );
+        // Round 27 FC5: the result says what the file holds now, and that Undo puts the DM's
+        // replaced text back.
+        d.observe(
+            "iter-27-C-FC5",
+            d.visible_text(
+                "Module.md was written again. It now has the package’s name and ID in the current \
+                 format. Undo puts your old text back.",
+            ),
+            "The replaced manifest's result says what changed and that Undo restores the old text",
         );
     });
     assert!(!folder.join("Package.md").exists());

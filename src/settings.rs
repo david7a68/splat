@@ -383,20 +383,6 @@ impl Settings {
         self.show_account(ui, true);
     }
 
-    /// Round 26 FG2: the account's error (a failed Connect), in the Settings footer. It lives
-    /// until the next Connect, Disconnect or a working sign-in, as before.
-    pub fn footer_messages<'a>(&'a self, footer: &mut design::Footer<'a>) {
-        if let Some(error) = self
-            .error
-            .as_deref()
-            .filter(|error| *error != SESSION_ENDED)
-        {
-            footer.reason(error, move |ui| {
-                design::message(ui, Tone::Error, error);
-            });
-        }
-    }
-
     /// Where Connect is, while a failed Connect asks the page to bring it into view.
     pub fn take_reveal(&mut self) -> Option<egui::Rect> {
         self.reveal_rect.take()
@@ -436,9 +422,9 @@ impl Settings {
             }
             _ => {}
         }
-        // Round 26 FG2: a failed Connect's cause sits in the Settings footer
-        // (`footer_messages`), so the cookie field and Connect stay under the pointer. An ended
-        // session is the account's state, so its help stays here.
+        // Round 27 FA1: a failed Connect's cause sits in the reason slot left of Connect, where
+        // the DM pressed (it was in the page's footer, far from Connect). An ended session is
+        // the account's state, so its help stays here.
         if let Some(error) = self
             .error
             .as_deref()
@@ -519,6 +505,13 @@ impl Settings {
                     .trim()
                     .is_empty()
                     .then_some("Paste your session cookie first.");
+                // Round 27 FA1: the reason slot left of Connect holds a failed Connect's cause
+                // while Connect is open. It lives until the next Connect, Disconnect or a working
+                // sign-in, as before; while the cookie field is empty, the slot names that step.
+                let failure = self
+                    .error
+                    .as_deref()
+                    .filter(|error| *error != SESSION_ENDED && reason.is_none());
                 let action = if reason.is_none()
                     && account != Account::Connected
                     && !self.campaign_form_open
@@ -530,11 +523,10 @@ impl Settings {
                 let clicked = ui
                     .with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let connect = action.blocked(reason).show(ui);
-                        // After a failed Connect, show the kept cookie and the retry; the
-                        // cause is in the footer, always in view. The footer comes a pass after
-                        // the failure and shortens the page, so the reveal runs on the next few
-                        // drawn passes (not on one egui draws again); it scrolls only when
-                        // Connect is out of view.
+                        // After a failed Connect, show the kept cookie, the retry and the cause
+                        // beside it. The cause can wrap and make the row taller, so the reveal
+                        // runs on the next few drawn passes (not on one egui draws again); it
+                        // scrolls only when Connect is out of view.
                         if std::mem::take(&mut self.reveal_retry) {
                             self.reveal_passes = 3;
                         }
@@ -543,7 +535,7 @@ impl Settings {
                             self.reveal_rect = Some(connect.rect);
                         }
                         ui.spacing_mut().item_spacing.x = design::S;
-                        design::blocked_reason(ui, reason);
+                        design::blocked_reason(ui, reason.or(failure));
                         connect.clicked()
                     })
                     .inner;

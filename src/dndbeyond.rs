@@ -141,6 +141,9 @@ fn connection_help(ui: &mut egui::Ui) {
 pub struct DndBeyond {
     account_epoch: u64,
     campaigns: Vec<RemoteCampaign>,
+    /// The widest remote campaign name, measured once per list (round 27 AN2). It ends when
+    /// `campaigns` is replaced or cleared.
+    name_column: Option<f32>,
     pending: Option<Receiver<Result<Vec<RemoteCampaign>, String>>>,
     loaded: bool,
     error: Option<String>,
@@ -177,6 +180,7 @@ impl DndBeyond {
             self.pending_link = None;
             self.requested_visible_link = None;
             self.campaigns.clear();
+            self.name_column = None;
             local.cancel_import();
             self.loaded = false;
             self.account_epoch = epoch;
@@ -191,6 +195,7 @@ impl DndBeyond {
                     match result {
                         Ok(campaigns) => {
                             self.campaigns = campaigns;
+                            self.name_column = None;
                             self.loaded = true;
                             self.error = None;
                             if let Some((id, remote_id)) = self.pending_link.take() {
@@ -290,11 +295,25 @@ impl DndBeyond {
                 if self.loaded && self.campaigns.is_empty() {
                     ui.label("No campaigns returned for this account.");
                 }
+                // Round 27 AN2: one action column, `L` after the widest name, so each Add or
+                // Added sits near its name (it was at the column's far edge).
+                let font = crate::design::Type::Strong.font(ui);
+                let column = *self.name_column.get_or_insert_with(|| {
+                    self.campaigns
+                        .iter()
+                        .map(|remote| crate::design::number_width(ui, &remote.name, &font))
+                        .fold(0.0, f32::max)
+                });
                 for remote in &self.campaigns {
                     let added = local.is_added(&remote.id);
                     ui.horizontal(|ui| {
+                        let left = ui.cursor().left();
                         ui.label(crate::design::Type::Strong.rich(ui, &remote.name));
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        // The cursor is already one item gap past the name.
+                        ui.add_space(
+                            (left + column + crate::design::L - ui.cursor().left()).max(0.0),
+                        );
+                        ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                             if added {
                                 crate::design::status(
                                     ui,
