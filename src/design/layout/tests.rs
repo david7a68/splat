@@ -577,13 +577,13 @@ fn the_gate_finds_two_live_widgets_with_one_id() {
                     // One id twice at the right edge: the fields and egui's warning run past
                     // the pane's clip.
                     2 => {
-                        ui.add_space(20.0);
+                        space(ui, 20.0);
                         ui.horizontal(|ui| {
-                            ui.add_space(380.0);
+                            space(ui, 380.0);
                             field(ui, 0);
                         });
                         ui.horizontal(|ui| {
-                            ui.add_space(380.0);
+                            space(ui, 380.0);
                             field(ui, 0);
                         });
                     }

@@ -926,7 +926,8 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
 /// The suppressions of `clippy::disallowed_methods` in the owners of the raw egui calls: the
 /// design system (`src/design/`) and its capture harness (`src/visual_tests/`). One row per
 /// suppression, as in [`STAGED_ALLOWS`], so each one sits on one function and frees nothing
-/// else; only rows in those two folders may stand here, and only for `Ban::Layout` and `Ban::RowKey`.
+/// else; only rows in those two folders may stand here, and only for `Ban::Layout`, `Ban::RowKey`
+/// and `Ban::Extras`.
 #[cfg(test)]
 pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
     use suppressions::Ban;
@@ -1462,7 +1463,9 @@ mod tests {
                 (file.starts_with("src/design/") || file.starts_with("src/visual_tests/"))
                     && bans.iter().all(|ban| matches!(
                         ban,
-                        suppressions::Ban::Layout(_) | suppressions::Ban::RowKey(_)
+                        suppressions::Ban::Layout(_)
+                            | suppressions::Ban::RowKey(_)
+                            | suppressions::Ban::Extras(_)
                     )),
                 "{file} `{item}`: only the design system and its harness own raw egui calls"
             );

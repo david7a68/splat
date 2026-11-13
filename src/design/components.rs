@@ -1,5 +1,5 @@
 //! Shared UI parts. Screens compose these instead of styling widgets themselves.
-use super::{comparison::Comparison, icons, tokens::*};
+use super::{comparison::Comparison, extras::space, icons, tokens::*};
 use eframe::egui::{
     self, Align, Align2, Color32, CornerRadius, FontId, Id, Layout, Rect, Response, Sense, Stroke,
     StrokeKind, Ui, Vec2, WidgetInfo, WidgetType, pos2, text::LayoutJob, vec2,
@@ -168,7 +168,7 @@ pub fn page_header(ui: &mut Ui, title: &str, context: Option<&str>, actions: imp
         },
     );
     rule(ui);
-    ui.add_space(L);
+    space(ui, L);
 }
 
 /// The width `page_title` takes with its whole count, and the gap before the actions.
@@ -188,7 +188,7 @@ fn page_title(ui: &mut Ui, title: &str, context: Option<&str>) {
     ui.with_layout(Layout::left_to_right(Align::Max), |ui| {
         ui.label(Type::Title.rich(ui, title).color(colors().text));
         if let Some(context) = context {
-            ui.add_space(XS);
+            space(ui, XS);
             ui.add(
                 egui::Label::new(Type::Small.rich(ui, context).color(colors().muted)).truncate(),
             )
@@ -578,6 +578,8 @@ impl<'a> Action<'a> {
         self
     }
 
+    /// A quiet action. When it is the first thing on its line (see [`Action::line_start`]), the
+    /// part aligns its words with the text above it by itself, so no caller can forget it (N4).
     pub fn quiet(label: &'a str) -> Self {
         Self::new(Kind::Quiet, label)
     }
@@ -585,6 +587,11 @@ impl<'a> Action<'a> {
     /// of that edge. Only an action inside a message has an icon when it starts a line: the icon
     /// then sits in the message's icon column. Outside a message, give it no icon, so its target
     /// reaches only `S` into the pane's gutter.
+    ///
+    /// The part does this by itself for a quiet action without an icon that is the first thing
+    /// on its line: its line starts at its `Ui`'s left edge and it is not in a menu, a popup or a
+    /// table cell (`starts_line`). Call this only for a line that starts at an inset the layout
+    /// cannot see (after `gap`, under a message's icon).
     pub fn line_start(mut self) -> Self {
         self.line_start = true;
         self
@@ -653,6 +660,9 @@ impl<'a> Action<'a> {
     }
 
     pub fn show(mut self, ui: &mut Ui) -> Response {
+        if self.kind == Kind::Quiet && self.icon.is_none() && starts_line(ui) {
+            self.line_start = true;
+        }
         if self.kind == Kind::Primary
             && (self.selected
                 || ui.ctx().data(|data| {
@@ -827,6 +837,32 @@ impl<'a> Action<'a> {
         }
         response
     }
+}
+
+/// Is the next item the first thing on its line, at its `Ui`'s left edge, in a left-to-right
+/// place that is not a menu, a popup, a picker, a tooltip or a table cell? A column of buttons in
+/// a menu and the cells of a table keep their padding.
+fn starts_line(ui: &Ui) -> bool {
+    use egui::UiKind;
+    let layout = ui.layout();
+    if layout.prefer_right_to_left() || layout.horizontal_align() != Align::Min {
+        return false;
+    }
+    if ui.cursor().left() > ui.max_rect().left() + 0.5 {
+        return false;
+    }
+    !ui.stack().iter().any(|frame| {
+        matches!(
+            frame.kind(),
+            Some(
+                UiKind::Menu
+                    | UiKind::Popup
+                    | UiKind::Picker
+                    | UiKind::Tooltip
+                    | UiKind::TableCell
+            )
+        )
+    })
 }
 
 /// An action with a default, and a caret beside it that opens a menu of the other ways
@@ -1171,14 +1207,21 @@ fn field_caption(ui: &mut Ui, label: &str, role: Type) {
     ui.label(role.rich(ui, label).color(c.muted));
 }
 
+/// The field's help and error, then its own space: `L` from the last line of help or error to the
+/// next thing, so help never reads as the next field's (N3); `XS` more when it has neither. A
+/// caller adds no space after a field.
 fn field_feedback(ui: &mut Ui, help: Option<&str>, error: Option<&str>) {
+    let mut last = None;
     if let Some(text) = help {
-        self::help(ui, text);
+        last = Some(self::help(ui, text).rect.bottom());
     }
     if let Some(error) = error {
-        tone_message(ui, Tone::Error, error);
+        last = Some(tone_message(ui, Tone::Error, error).rect.bottom());
     }
-    ui.add_space(XS);
+    match last {
+        Some(bottom) => space(ui, bottom + L - ui.cursor().top()),
+        None => space(ui, XS),
+    }
 }
 
 /// A one-line text field with a label above it.
@@ -1295,13 +1338,26 @@ pub fn number_field_with_id(
     response
 }
 
-/// Search with an icon. The hint is what can be searched.
+/// Search with an icon. The hint is what can be searched. Staged: use `FieldId::search`, which
+/// always draws its `Clear` (Clippy refuses this outside `src/design/`).
+pub fn search_field(
+    ui: &mut Ui,
+    name: &str,
+    text: &mut String,
+    hint: &str,
+    width: f32,
+) -> Response {
+    search_box(ui, focus_id(name), name, text, hint, width)
+}
+
+/// The search field of `search_field` and `FieldId::search`, with this id.
 #[allow(
     clippy::disallowed_methods,
     reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
 )]
-pub fn search_field(
+pub(super) fn search_box(
     ui: &mut Ui,
+    id: Id,
     name: &str,
     text: &mut String,
     hint: &str,
@@ -1311,7 +1367,7 @@ pub fn search_field(
     let height = Density::Scan.control();
     let response = ui.add(
         egui::TextEdit::singleline(text)
-            .id(focus_id(name))
+            .id(id)
             .desired_width(width - 36.0)
             .min_size(vec2(width, height))
             .margin(egui::Margin {
@@ -1333,7 +1389,18 @@ pub fn search_field(
     response
 }
 
-/// One choice from a few, as words with an underline. Returns true when it changed.
+/// The width of a segment's words in its widest state: selected words are `Strong`, the others
+/// `Body`. A segment takes this width in both states, so no word moves when the choice changes
+/// (the rule of `layout::Slot`, for words known only at run time).
+fn segment_width(ui: &Ui, words: &str) -> f32 {
+    [Type::Strong, Type::Body]
+        .iter()
+        .map(|role| number_width(ui, words, &role.font(ui)))
+        .fold(0.0, f32::max)
+}
+
+/// One choice from a few, as words with an underline. Returns true when it changed. Each segment
+/// is as wide as its words in their widest state, so nothing moves when the choice changes.
 pub fn segmented<T: PartialEq + Copy>(ui: &mut Ui, value: &mut T, options: &[(T, &str)]) -> bool {
     let mut changed = false;
     let c = colors();
@@ -1343,9 +1410,10 @@ pub fn segmented<T: PartialEq + Copy>(ui: &mut Ui, value: &mut T, options: &[(T,
             let selected = *value == *option;
             let font = if selected { Type::Strong } else { Type::Body };
             let color = if selected { c.text } else { c.muted };
-            let galley = one_line(ui, label, font.font(ui), color, ui.available_width());
+            let width = segment_width(ui, label).min(ui.available_width());
+            let galley = one_line(ui, label, font.font(ui), color, width.max(1.0) + 1.0);
             let (rect, response) = ui.allocate_exact_size(
-                vec2(galley.size().x + 2.0 * S, Density::Read.control()),
+                vec2(width + 2.0 * S, Density::Read.control()),
                 Sense::click(),
             );
             response.widget_info(|| {
@@ -1362,7 +1430,7 @@ pub fn segmented<T: PartialEq + Copy>(ui: &mut Ui, value: &mut T, options: &[(T,
                         .rect_filled(rect, corner(RADIUS_CONTROL), c.hover);
                 }
                 ui.painter()
-                    .galley(rect.center() - galley.size() / 2.0, galley, color);
+                    .galley(pos2(rect.left() + S, rect.center().y - galley.size().y / 2.0), galley, color);
                 if selected {
                     let bar = Rect::from_min_max(
                         pos2(rect.left() + 2.0, rect.bottom() - 2.0),
@@ -1990,7 +2058,7 @@ pub fn empty_state_with_body(
         ui.label(Type::Title.rich(ui, icon).color(c.muted));
         ui.label(Type::Title.rich(ui, title).color(c.text));
         body(ui);
-        ui.add_space(XS);
+        space(ui, XS);
         action(ui);
     });
 }
@@ -2020,7 +2088,7 @@ impl Tone {
 /// secondary (bordered) action in it, so its border starts there; on a result, only Undo is quiet.
 pub fn message_choice_row<R>(ui: &mut Ui, tone: Tone, add: impl FnOnce(&mut Ui) -> R) -> R {
     ui.horizontal(|ui| {
-        ui.add_space(S + 1.0 + number_width(ui, tone.parts().0, &Type::Body.font(ui)) + XS);
+        space(ui, S + 1.0 + number_width(ui, tone.parts().0, &Type::Body.font(ui)) + XS);
         add(ui)
     })
     .inner
@@ -2042,9 +2110,9 @@ pub(super) fn tone_message(ui: &mut Ui, tone: Tone, text: &str) -> Response {
     let inner = ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
         let start = ui.cursor().min;
-        ui.add_space(S + 1.0);
+        space(ui, S + 1.0);
         ui.label(Type::Body.rich(ui, icon).color(color));
-        ui.add_space(XS);
+        space(ui, XS);
         let galley = wrapped_words(ui, Type::Body.rich(ui, text).color(c.text));
         let response = ui.add(egui::Label::new(galley));
         let bar = Rect::from_min_max(start, pos2(start.x + 3.0, response.rect.bottom()));
@@ -2099,9 +2167,9 @@ pub(super) fn small_tone_message(ui: &mut Ui, tone: Tone, text: &str) -> Respons
     let (icon, color) = tone.parts();
     ui.horizontal_top(|ui| {
         let start = ui.cursor().min;
-        ui.add_space(S + HAIRLINE_WIDTH);
+        space(ui, S + HAIRLINE_WIDTH);
         ui.label(Type::Small.rich(ui, icon).color(color));
-        ui.add_space(-XS);
+        space(ui, -XS);
         let response =
             ui.add(egui::Label::new(Type::Small.rich(ui, text).color(colors().text)).wrap());
         ui.painter().rect_filled(
@@ -2137,9 +2205,9 @@ pub fn message_with_code(ui: &mut Ui, tone: Tone, text: &str) -> Response {
     }
     ui.horizontal_top(|ui| {
         let start = ui.cursor().min;
-        ui.add_space(S + 1.0);
+        space(ui, S + 1.0);
         ui.label(Type::Body.rich(ui, icon).color(color));
-        ui.add_space(-XS);
+        space(ui, -XS);
         let response = ui.add(egui::Label::new(job).wrap());
         let bar = Rect::from_min_max(start, pos2(start.x + 3.0, response.rect.bottom()));
         ui.painter().rect_filled(bar, 0.0, color);
@@ -2234,17 +2302,17 @@ fn message_with_action_inside(ui: &mut Ui, tone: Tone, text: &str, action: &str)
     if ui.available_width() < text_width + L + button_width {
         tone_message(ui, tone, text);
         ui.horizontal(|ui| {
-            ui.add_space((inset - spacing).max(0.0));
+            space(ui, (inset - spacing).max(0.0));
             pressed = button.show(ui).clicked();
         });
     } else {
         ui.horizontal_top(|ui| {
             let width = (ui.available_width() - button_width - L).max(0.0);
             ui.allocate_ui_with_layout(vec2(width, 0.0), Layout::top_down(Align::Min), |ui| {
-                ui.add_space((Density::Read.control() - Type::Body.line()) / 2.0);
+                space(ui, (Density::Read.control() - Type::Body.line()) / 2.0);
                 tone_message(ui, tone, text)
             });
-            ui.add_space((L - spacing).max(0.0));
+            space(ui, (L - spacing).max(0.0));
             pressed = button.show(ui).clicked();
         });
     }
@@ -2254,25 +2322,25 @@ fn message_with_action_inside(ui: &mut Ui, tone: Tone, text: &str, action: &str)
 /// A sentence of entry links, with explicit word spaces around its conjunctions.
 pub fn linked_sentence(ui: &mut Ui, names: &[&str], suffix: &str) -> Option<usize> {
     let mut clicked = None;
-    let space = number_width(ui, " ", &Type::Body.font(ui));
+    let word_space = number_width(ui, " ", &Type::Body.font(ui));
     ui.scope(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
         ui.horizontal_wrapped(|ui| {
             for (at, name) in names.iter().enumerate() {
                 if at > 0 {
-                    ui.add_space(space);
+                    space(ui, word_space);
                     ui.add(
                         egui::Label::new(Type::Body.rich(ui, "and"))
                             .wrap_mode(egui::TextWrapMode::Extend),
                     );
-                    ui.add_space(space);
+                    space(ui, word_space);
                 }
                 if link(ui, name).clicked() {
                     clicked = Some(at);
                 }
             }
             if !names.is_empty() {
-                ui.add_space(space);
+                space(ui, word_space);
             }
             ui.label(Type::Body.rich(ui, suffix));
         });
@@ -2293,7 +2361,7 @@ pub fn message_with_links(ui: &mut Ui, tone: Tone, names: &[&str], suffix: &str)
         ui.set_max_width(ui.available_width().min(LIST_MEASURE));
         ui.horizontal_top(|ui| {
             let start = ui.cursor().min;
-            ui.add_space(S + 1.0);
+            space(ui, S + 1.0);
             // The sentence starts with a link, so its first line is a link's height. The icon
             // centres on that line, as `message` centres it on its words.
             let first_line = XL.max(Type::Body.line());
@@ -2302,7 +2370,7 @@ pub fn message_with_links(ui: &mut Ui, tone: Tone, names: &[&str], suffix: &str)
                 Layout::left_to_right(Align::Center),
                 |ui| ui.label(Type::Body.rich(ui, icon).color(color)),
             );
-            ui.add_space(-XS);
+            space(ui, -XS);
             let content = ui.vertical(|ui| linked_sentence(ui, names, suffix));
             let bar =
                 Rect::from_min_max(start, pos2(start.x + 3.0, content.response.rect.bottom()));
@@ -2339,7 +2407,7 @@ pub(super) fn actions_message<R>(
         let response = tone_message(ui, tone, text);
         let inset = response.rect.left() - ui.cursor().left();
         ui.horizontal_top(|ui| {
-            ui.add_space(inset);
+            space(ui, inset);
             ui.vertical(actions).inner
         })
         .inner
@@ -2924,7 +2992,7 @@ impl<'a> Footer<'a> {
         // egui's `set_max_height` also moves the cursor back to the top of `ui`, so it goes
         // back to where the body starts.
         ui.set_max_height((limit - top).max(0.0));
-        ui.add_space(top - ui.cursor().top());
+        space(ui, top - ui.cursor().top());
         // The body is drawn after the footer, so it would take a press on the footer, and paint
         // over it, where it reaches under it: a scroll area as tall as its room below short
         // content, or a line typed this frame before the footer moves down. Nothing drawn next
@@ -3037,7 +3105,7 @@ pub fn disk_conflict_choices(ui: &mut Ui, noun: &str) -> Option<DiskConflictChoi
                     choice = Some(DiskConflictChoice::Overwrite);
                 }
                 // The layout adds its own item gap after each control; together they make `L`.
-                ui.add_space(L - ui.spacing().item_spacing.x);
+                space(ui, L - ui.spacing().item_spacing.x);
                 if Action::destructive("Reload and lose my draft")
                     .density(Density::Read)
                     .show(ui)
@@ -3098,9 +3166,9 @@ pub fn undo_line(ui: &mut Ui, tone: Tone, result: Option<(&str, &str)>) -> bool 
         let gap = ui.spacing().item_spacing.x;
         let left = ui.cursor().left();
         ui.spacing_mut().item_spacing.x = 0.0;
-        ui.add_space(S + 1.0);
+        space(ui, S + 1.0);
         ui.label(Type::Body.rich(ui, icon).color(color));
-        ui.add_space(XS);
+        space(ui, XS);
         let font = Type::Body.font(ui);
         let room = ui.available_width() - gap - button.natural_width(ui);
         // App round 2: the words shorten by whole words, never inside one.
@@ -3118,7 +3186,7 @@ pub fn undo_line(ui: &mut Ui, tone: Tone, result: Option<(&str, &str)>) -> bool 
             pos2(left + 3.0, response.rect.bottom()),
         );
         ui.painter().rect_filled(bar, 0.0, color);
-        ui.add_space(gap);
+        space(ui, gap);
         pressed = button.show(ui).clicked();
     });
     pressed
@@ -3180,14 +3248,14 @@ fn undo_message_inside(
     if ui.available_width() < text_width + gap + button_width {
         tone_message(ui, tone, text);
         ui.horizontal(|ui| {
-            ui.add_space(inset);
+            space(ui, inset);
             pressed = button.line_start_in_column().show(ui).clicked();
         });
     } else {
         ui.horizontal_top(|ui| {
             let width = (ui.available_width() - button_width - gap).max(0.0);
             ui.allocate_ui_with_layout(vec2(width, 0.0), Layout::top_down(Align::Min), |ui| {
-                ui.add_space((Density::Read.control() - Type::Body.line()) / 2.0);
+                space(ui, (Density::Read.control() - Type::Body.line()) / 2.0);
                 tone_message(ui, tone, text)
             });
             pressed = button.show(ui).clicked();
@@ -3205,7 +3273,7 @@ pub fn dialog_actions<L, R>(
 ) -> (L, R) {
     ui.horizontal(|ui| {
         let left = left(ui);
-        ui.add_space(L);
+        space(ui, L);
         let right = ui
             .with_layout(Layout::right_to_left(Align::Center), right)
             .inner;
@@ -3248,7 +3316,7 @@ fn dialog_width<R>(
             ui.set_max_width((viewport.width() - XXL * 2.0).min(width));
             ui.set_max_height(viewport.height() - XXL * 2.0);
             ui.label(Type::Section.rich(ui, title).color(c.text));
-            ui.add_space(XS);
+            space(ui, XS);
             egui::ScrollArea::vertical()
                 .id_salt(("dialog_body", id))
                 .auto_shrink([false, true])
@@ -3387,9 +3455,9 @@ pub fn table_row(ui: &mut Ui, widths: &[f32], gap: f32, mut cell: impl FnMut(&mu
             });
         }
     });
-    ui.add_space(2.0);
+    space(ui, 2.0);
     rule(ui);
-    ui.add_space(2.0);
+    space(ui, 2.0);
 }
 
 /// A stable ID for a field that takes focus by request.
@@ -3596,7 +3664,7 @@ pub fn overflow_tabs(ui: &mut Ui, selected: &mut usize, choices: &[(usize, &str)
         super::combo_icon(ui, caret, ui.style().interact(&menu), false);
         egui::Popup::menu(&menu).show(|ui| {
             for (value, label) in &choices[count..] {
-                if ui.selectable_label(*selected == *value, *label).clicked() {
+                if super::extras::choice(ui, *selected == *value, label).clicked() {
                     *selected = *value;
                     ui.close();
                 }
@@ -3640,8 +3708,10 @@ pub fn counted_tab<T: PartialEq + Copy>(
         egui::TextFormat::simple(font, c.muted),
     );
     let galley = ui.fonts_mut(|fonts| fonts.layout_job(job));
+    // As wide as its widest state, as a segment is, so nothing moves when the tab changes.
+    let width = segment_width(ui, &format!("{label} {}", super::count(count, "", "")));
     let (rect, response) = ui.allocate_exact_size(
-        egui::vec2(galley.size().x + 2.0 * S, Density::Read.control()),
+        egui::vec2(width.max(galley.size().x) + 2.0 * S, Density::Read.control()),
         egui::Sense::click(),
     );
     response.widget_info(|| {
@@ -3657,7 +3727,7 @@ pub fn counted_tab<T: PartialEq + Copy>(
             ui.painter().rect_filled(rect, RADIUS_CONTROL, c.hover);
         }
         ui.painter()
-            .galley(rect.center() - galley.size() / 2.0, galley, color);
+            .galley(pos2(rect.left() + S, rect.center().y - galley.size().y / 2.0), galley, color);
         if selected {
             let inset = XS / 2.0;
             ui.painter().rect_filled(
@@ -4181,7 +4251,7 @@ pub fn draft_comparison_labeled(
                     cell.add(egui::Label::new(galley));
                 }
             }
-            ui.add_space(padding);
+            space(ui, padding);
         });
     ui.spacing_mut().item_spacing.y = row_gap;
 }
@@ -4571,7 +4641,7 @@ mod tests {
                     ("Undo replacement", true, false),
                 ] {
                     ui.horizontal(|ui| {
-                        ui.add_space(EDGE - ui.cursor().left());
+                        space(ui, EDGE - ui.cursor().left());
                         let action = Action::quiet(label);
                         let action = if icon {
                             action.icon(icons::UNDO)

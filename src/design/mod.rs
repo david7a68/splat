@@ -3,6 +3,7 @@
 pub mod column;
 mod comparison;
 pub mod components;
+pub mod extras;
 pub mod icons;
 pub mod layout;
 pub mod memo;
@@ -22,6 +23,9 @@ mod lint;
 
 pub use column::*;
 pub use components::*;
+// Wave 2 callers name the extras through `design`, as they name the components.
+#[allow(unused_imports)]
+pub use extras::{Gap, Heading, choice, choice_value, gap, heading};
 // Wave 2 callers name the layout parts through `design`, as they name the components.
 #[allow(unused_imports)]
 pub use layout::{

@@ -25,6 +25,7 @@ mod credentials;
 mod design;
 // The layout parts are public only so that their `compile_fail` doc tests can name them.
 #[doc(hidden)]
+pub use design::extras;
 pub use design::layout;
 /// The ownership and cost parts of `design` (kept results, the save row, per-change caches),
 /// public only so that their compile-fail doc tests can name them. The app uses them through

@@ -17,13 +17,29 @@ use syn::visit::{self, Visit};
 
 const CLIPPY: &str = include_str!("../../../clippy.toml");
 
-/// Which of K's counted bans a path belongs to.
+/// Which counted ban a path belongs to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Group {
     /// A raw egui call that a layout part replaces.
     Layout,
     /// A row key a reviewer checks: `RowIndex::from_data`, `TextKey::from_data`.
     RowKey,
+    /// Package X: raw space, raw selectable choices, a search field without `Clear`, a heading
+    /// that does not add its own space (`clippy.toml`, section "Package X").
+    Extras,
+}
+
+/// The `clippy.toml` lines of one package's section: from its `# Package <letter>` line to the
+/// next package's, or to the end.
+fn section(letter: char) -> &'static str {
+    let head = format!("# Package {letter}");
+    let start = CLIPPY
+        .find(&head)
+        .unwrap_or_else(|| panic!("clippy.toml has package {letter}'s list"));
+    let end = CLIPPY[start + head.len()..]
+        .find("# Package ")
+        .map_or(CLIPPY.len(), |at| start + head.len() + at);
+    &CLIPPY[start..end]
 }
 
 /// How a banned path is written at a call.
@@ -62,16 +78,18 @@ const MENU_MODULE: [&str; 6] = [
     "submenu_button",
 ];
 
-/// Every package K path of `clippy.toml`, as the shapes it is written in at a call.
+/// Every package K and package X path of `clippy.toml`, as the shapes it is written in at a call.
 fn patterns() -> Vec<(Group, Shape)> {
-    let start = CLIPPY
-        .find("# Package K")
-        .expect("clippy.toml has package K's list");
-    let end = CLIPPY[start..]
-        .find("# Package M")
-        .map_or(CLIPPY.len(), |at| start + at);
     let mut out = Vec::new();
-    for line in CLIPPY[start..end].lines() {
+    for (letter, lines) in [('K', section('K')), ('X', section('X'))] {
+        shapes(letter, lines, &mut out);
+    }
+    out
+}
+
+/// The shapes of one section's paths.
+fn shapes(letter: char, lines: &str, out: &mut Vec<(Group, Shape)>) {
+    for line in lines.lines() {
         let Some(path) = line
             .split("path = \"")
             .nth(1)
@@ -82,7 +100,9 @@ fn patterns() -> Vec<(Group, Shape)> {
         let segments: Vec<&str> = path.split("::").collect();
         let name = segments[segments.len() - 1].to_owned();
         let owner = segments[segments.len() - 2];
-        let group = if matches!(owner, "RowIndex" | "TextKey") {
+        let group = if letter == 'X' {
+            Group::Extras
+        } else if matches!(owner, "RowIndex" | "TextKey") {
             Group::RowKey
         } else {
             Group::Layout
@@ -107,7 +127,6 @@ fn patterns() -> Vec<(Group, Shape)> {
             out.push((group, Shape::Free(None, name)));
         }
     }
-    out
 }
 
 /// One token of a flattened stream.
@@ -284,17 +303,49 @@ mod tests {
     #[test]
     fn every_package_k_path_has_a_shape() {
         let all = patterns();
-        // Every path of the K list, less the four common method names counted by path only.
-        let paths = CLIPPY
-            [CLIPPY.find("# Package K").unwrap()..CLIPPY.find("# Package M").unwrap()]
-            .matches("path = \"")
-            .count();
+        // Every path of the K and X lists, less the four common method names counted by path
+        // only.
+        let paths = [section('K'), section('X')]
+            .iter()
+            .map(|lines| lines.matches("path = \"").count())
+            .sum::<usize>();
         assert!(
             all.len() >= paths - COMMON.len(),
             "{} shapes for {paths} paths",
             all.len()
         );
         assert!(all.iter().any(|(group, _)| *group == Group::RowKey));
+        assert!(all.iter().any(|(group, _)| *group == Group::Extras));
+        // Package M's escapes are Clippy's alone: never counted as K's or X's.
+        assert!(!section('K').contains("Sentence::outside") && !section('X').contains("outcome::"));
+    }
+
+    /// Package X's paths are counted as calls, by every shape they are written in.
+    #[test]
+    fn the_count_reads_package_x_calls() {
+        let extras = |source: &str| count(source, Group::Extras).unwrap();
+        assert_eq!(
+            extras(
+                "fn f() { ui.add_space(8.0); egui::Ui::add_space(ui, 4.0); ui.selectable_value(&mut a, 1, \"One\"); let _ = ui.selectable_label(true, \"Two\"); egui::Button::selectable(true, \"Three\"); }"
+            ),
+            5
+        );
+        assert_eq!(
+            extras(
+                "fn f() { design::search_field(ui, \"Search\", t, \"…\", 200.0); design::group_heading(ui, \"Ready\", 2); design::group_label(ui, \"Party\"); design::reader::section_heading(ui, \"Actions\"); }"
+            ),
+            4
+        );
+        // The parts that replace them, and words in strings, are not calls.
+        assert_eq!(
+            extras(
+                "fn f() { design::gap(ui, Gap::S); design::heading(ui, Heading::Label(\"add_space(\")); design::choice(ui, true, \"One\"); SEARCH.search(ui, \"Search\", t, \"…\", 200.0); let _ = egui::Label::new(\"x\").selectable(false); }"
+            ),
+            0
+        );
+        // K's count does not see X's calls, nor X's K's.
+        assert_eq!(count("fn f() { ui.add_space(8.0); }", Group::Layout).unwrap(), 0);
+        assert_eq!(extras("fn f() { let a = egui::ScrollArea::vertical(); }"), 0);
     }
 
     #[test]
