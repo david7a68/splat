@@ -8694,12 +8694,57 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
     d.expect("Rook's watch keeps Rook Ambry.md.");
     d.expect("Rook's watch will then use Rook Ambry copy.md.");
     d.state("copied-world-npc-encounter-keeps-guard", Sizes::All);
+    let tops = |d: &Driver<'_>| {
+        [FIND_CREATURE, "Filter creatures"].map(|name| d.place_of(name).map(|rect| rect.top()))
+    };
+    let search_before = tops(d);
     d.click("Make Rook Ambry copy.md a separate note");
     d.wait_for_text("Undo separate note");
     d.expect("Rook Ambry copy.md is now a separate note.");
+    // iter-27-B FF8, AF1, SF1: the result and its Undo are in the editor's footer, below the
+    // search's results, and the search and its filter do not move.
+    let result = d.painted_rect_in(
+        "Rook Ambry copy.md is now a separate note.",
+        egui::Rect::EVERYTHING,
+    );
+    let adds: Vec<f32> = d
+        .nodes()
+        .into_iter()
+        .filter(|node| node.name == "Add" && node.in_view())
+        .map(|node| node.rect.bottom())
+        .collect();
+    d.observe(
+        "iter-27-B-FF8",
+        search_before.iter().all(Option::is_some)
+            && tops(d) == search_before
+            && !adds.is_empty()
+            && result.is_some_and(|result| adds.iter().all(|add| result.top() > *add)),
+        format!(
+            "Search tops before {search_before:?}, after {:?}; result {result:?} below Add {adds:?}",
+            tops(d)
+        ),
+    );
     d.state("duplicate-npc-repaired-from-encounter", Sizes::All);
+    // An unrelated change between the separation and its Undo stays: another search and a
+    // Guard added from it. The result stays in the footer through the new search.
+    d.replace_text_in(FIND_CREATURE, "Guard");
+    d.click_beside_exact("Guard", "Add");
+    d.expect("7. Guard");
+    let kept = d.has("Undo separate note");
     d.click("Undo separate note");
+    d.replace_text_in(FIND_CREATURE, "Rook Ambry");
     d.wait_for_text("Make Rook Ambry copy.md a separate note");
+    d.observe(
+        "iter-27-B-FF8-undo",
+        kept && d.has("7. Guard") && !d.has("Rook Ambry copy.md is now a separate note."),
+        format!(
+            "Undo separate note ends its result and keeps the Guard added after it (kept through the search: {kept})"
+        ),
+    );
+    // The rest of the scenario starts from the saved encounter.
+    d.click("Discard");
+    d.expect("6. Rook Ambry");
+    assert!(!d.has("7. Guard"), "Discard takes back the Guard");
     d.click(NAV_WORLD);
     d.click_starting("Rook Ambry.md ·");
     d.expect("Make Rook Ambry copy.md a separate note");

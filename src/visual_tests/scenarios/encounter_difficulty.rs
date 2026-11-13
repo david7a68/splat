@@ -12,7 +12,13 @@ use serde_yaml_ng::{Mapping, Value};
 const HIGH: &str = "Mill Road";
 // iter-26-B FL2: the members in the group's form, each with its count, joined by commas.
 const HIGH_SUMMARY: &str = "5 party · 1 × Cinder Tyrant, 2 × Ember Cultist";
-const HIGH_NUMBERS: &str = "XP 6,300 of 6,400";
+/// FB6, FH7: the one difficulty form, with the word's limit.
+const HIGH_FORM: &str = "XP 6,300 · High (up to 6,400)";
+const HIGH_SHORT: &str = "XP 6,300 · High";
+const LOW_FORM: &str = "XP 400 · Low (up to 2,800)";
+const ABOVE_FORM: &str = "XP 11,800 · Above High";
+/// FB4: a fight with no word says so in the word's place.
+const UNKNOWN_FORM: &str = "XP not known";
 /// Two Cinder Tyrants and no character: the campaign's party stands in.
 const ABOVE: &str = "Court of Cinders";
 /// Five characters and a creature with no XP and no CR.
@@ -94,71 +100,58 @@ fn ready_line(d: &Driver<'_>, name: &str) -> String {
         .unwrap_or_default()
 }
 
-/// Each Ready to run row ends with its word, or with nothing when its XP is not known.
+/// Each Ready to run row ends with its difficulty in the one form, or `XP not known`; the
+/// accessible name keeps the whole line (FB2, FB4, FB6).
 fn ready_rows_say_their_word(d: &mut Driver<'_>, id: &str) {
     for size in [SMALL, DEFAULT] {
         let lines = d.at_size(size, |d| {
             [HIGH, ABOVE, LOW, UNKNOWN].map(|name| ready_line(d, name))
         });
         let [high, above, low, unknown] = &lines;
-        // Mill Road's long summary keeps its words: beside Lookup at 960x640 its word gives way,
-        // and the accessible name keeps it (V7).
         d.observe(
             id,
-            *high == format!("{HIGH} · {HIGH_SUMMARY} · High")
-                && above == &format!("{ABOVE} · 2 × Cinder Tyrant · Above High")
-                && low == &format!("{LOW} · 5 party · 2 × Ember Cultist · Low")
-                && unknown == &format!("{UNKNOWN} · 5 party · 1 × Nameless Thing"),
+            *high == format!("{HIGH} · {HIGH_SUMMARY} · {HIGH_FORM}")
+                && above == &format!("{ABOVE} · 2 × Cinder Tyrant · {ABOVE_FORM}")
+                && low == &format!("{LOW} · 5 party · 2 × Ember Cultist · {LOW_FORM}")
+                && unknown == &format!("{UNKNOWN} · 5 party · 1 × Nameless Thing · {UNKNOWN_FORM}"),
             format!("At {size:?}, the Ready to run rows read {lines:?}"),
         );
     }
 }
 
-/// The blank before and after each `·` on the opened row's line that starts with
-/// `Read encounter` (V9), between the glyphs' boxes as the font sets them. Empty when the line
-/// is not in view.
-fn separator_blanks(d: &Driver<'_>) -> Vec<(f32, f32)> {
-    let mut link = None;
+/// The blank before and after each `·` on each line of the plan row's summary that starts with
+/// `summary` (V9), between the glyphs' boxes as the font sets them. Empty when it is not in view.
+fn separator_blanks(d: &Driver<'_>, summary: &str) -> Vec<(f32, f32)> {
+    let mut blanks = Vec::new();
     d.each_painted_text(|text, clip| {
-        let rect = text.visual_bounding_rect();
-        if text.galley.job.text == "Read encounter" && clip.contains_rect(rect) {
-            link = Some(rect);
+        let words = text.galley.job.text.replace('\u{a0}', " ");
+        if !clip.contains_rect(text.visual_bounding_rect()) || !words.starts_with(summary) {
+            return;
+        }
+        // Every separator on the row: the summary's, the join before the difficulty form and
+        // the form's own.
+        for row in &text.galley.rows {
+            let ink: Vec<_> = row
+                .glyphs
+                .iter()
+                .filter(|glyph| !glyph.chr.is_whitespace())
+                .map(|glyph| (glyph.chr, glyph.pos.x, glyph.pos.x + glyph.advance_width))
+                .collect();
+            blanks.extend(
+                (1..ink.len().saturating_sub(1))
+                    .filter(|at| ink[*at].0 == '·')
+                    .map(|at| (ink[at].1 - ink[at - 1].2, ink[at + 1].1 - ink[at].2)),
+            );
         }
     });
-    let Some(link) = link else {
-        return Vec::new();
-    };
-    let mut glyphs = Vec::new();
-    d.each_painted_text(|text, clip| {
-        let rect = text.visual_bounding_rect();
-        if clip.contains_rect(rect)
-            && rect.left() >= link.left()
-            && (rect.center().y - link.center().y).abs() <= 4.0
-        {
-            for row in &text.galley.rows {
-                for glyph in &row.glyphs {
-                    let left = text.pos.x + glyph.pos.x;
-                    glyphs.push((glyph.chr, left, left + glyph.advance_width));
-                }
-            }
-        }
-    });
-    glyphs.sort_by(|a, b| a.1.total_cmp(&b.1));
-    let ink: Vec<_> = glyphs
-        .iter()
-        .filter(|glyph| !glyph.0.is_whitespace())
-        .collect();
-    (1..ink.len().saturating_sub(1))
-        .filter(|at| ink[*at].0 == '·')
-        .map(|at| (ink[at].1 - ink[at - 1].2, ink[at + 1].1 - ink[at].2))
-        .collect()
+    blanks
 }
 
-/// V9: the same blank on each side of every separator on the opened row's line. Glyphs sit on
-/// whole pixels, so the blanks agree to 1 px.
-fn separators_have_one_blank(d: &mut Driver<'_>, what: &str, sizes: &[(f32, f32)]) {
+/// V9: the same blank on each side of every separator on a plan row's summary, the difficulty
+/// form's included. Glyphs sit on whole pixels, so the blanks agree to 1 px.
+fn separators_have_one_blank(d: &mut Driver<'_>, what: &str, summary: &str, sizes: &[(f32, f32)]) {
     for size in sizes {
-        let blanks = d.at_size(*size, separator_blanks);
+        let blanks = d.at_size(*size, |d| separator_blanks(d, summary));
         d.observe(
             "V9-separators",
             !blanks.is_empty()
@@ -239,23 +232,23 @@ pub fn run(d: &mut Driver<'_>) {
     );
     look_up(d, "wolf");
     ready_rows_say_their_word(d, "T5.7-ready-lookup");
-    // V7: beside Lookup at 960x640 Mill Road's word gives way on its row, and the row's hover
-    // keeps it, with the whole detail. The row is found by the start of its detail, which
-    // stays painted also where the rest of the detail is cut.
-    const HIGH_START: &str = "5 party · 1 × Cinder Tyrant";
+    // FB2 (replaces V7's word that gave way): beside Lookup at 960x640 Mill Road's detail
+    // gives way on its row and its difficulty stays; the row's hover keeps the whole detail.
+    // The row is found by the start of its detail, which stays painted where the rest is cut.
+    const HIGH_START: &str = "5 party";
     let (line, hover) = d.act_at_size(SMALL, |d| {
-        let line = plan_summary_line(d, HIGH_START);
-        let hover = d.painted_tooltip_shows(HIGH_START, &format!("{HIGH_SUMMARY} · High"));
+        let line = plan_summary_line(d, HIGH_START).filter(|line| line.contains("XP 6,300"));
+        let hover = d.painted_tooltip_shows("XP 6,300", HIGH_SUMMARY);
         (line, hover)
     });
-    let gave_way = line
+    let kept = line
         .as_deref()
-        .is_some_and(|line| !line.contains(" · High"));
+        .is_some_and(|line| line.ends_with(HIGH_FORM) || line.ends_with(HIGH_SHORT));
     d.observe(
-        "V7-ready-hover",
-        gave_way && hover,
+        "iter-27-B-FB2-ready",
+        kept && hover,
         format!(
-            "Beside Lookup at 960x640 the word gives way {gave_way} (the line: {line:?}), and the hover keeps it {hover}"
+            "Beside Lookup at 960x640 the difficulty stays {kept} (the line: {line:?}), and the hover keeps the detail {hover}"
         ),
     );
     d.state("ready-to-run-beside-lookup", Sizes::Small);
@@ -269,7 +262,7 @@ pub fn run(d: &mut Driver<'_>) {
     });
     open_saved_encounter(d, HIGH);
     d.expect(SAVE_ENCOUNTER);
-    let heading = format!("ROSTER 8 · {HIGH_NUMBERS} · High");
+    let heading = format!("ROSTER 8 · {HIGH_FORM}");
     let shown = d.visible_text(&heading);
     let warm = work.warm(d, shown, 1);
     d.observe(
@@ -288,26 +281,16 @@ pub fn run(d: &mut Driver<'_>) {
         steady.is_ok(),
         format!("Unchanged frames and a resize do not work it out again: {steady:?}"),
     );
-    editor_says(
-        d,
-        "T5.7-editor",
-        &heading,
-        &format!("High · {HIGH_NUMBERS}"),
-    );
+    editor_says(d, "T5.7-editor", &heading, HIGH_SHORT);
     d.state("editor-high", Sizes::All);
-    let budget = d.painted_tooltip_shows(HIGH_NUMBERS, BUDGET);
+    let budget = d.painted_tooltip_shows(HIGH_SHORT, BUDGET);
     d.observe(
         "T5.7-editor-hover",
         budget,
         "The hover gives the party's budgets",
     );
     look_up(d, "wolf");
-    editor_says(
-        d,
-        "T5.7-editor-lookup",
-        &heading,
-        &format!("High · {HIGH_NUMBERS}"),
-    );
+    editor_says(d, "T5.7-editor-lookup", &heading, HIGH_SHORT);
     // X51: beside Lookup at the minimum window, Save encounter and Start fight keep their
     // place on the name field's line; the field gives up width.
     let line_one = d.at_size(SMALL, |d| {
@@ -348,8 +331,8 @@ pub fn run(d: &mut Driver<'_>) {
     editor_says(
         d,
         "T5.7-editor-above",
-        "ROSTER 2 · XP 11,800 · Above High",
-        "Above High · XP 11,800",
+        &format!("ROSTER 2 · {ABOVE_FORM}"),
+        ABOVE_FORM,
     );
     d.click("Back to encounters");
     open_saved_encounter(d, UNKNOWN);
@@ -397,18 +380,54 @@ pub fn run(d: &mut Driver<'_>) {
                 [
                     "5 party · 2 × Ember Cultist",
                     "5 party · 1 × Nameless Thing",
-                    HIGH_SUMMARY,
+                    "5 party · 1 × Cinder Tyrant",
                 ]
-                .map(|summary| plan_summary_line(d, summary))
+                .map(|summary| {
+                    // Nameless Visitor's members may give way to its reason (X1): its row is the
+                    // one that says it.
+                    if summary.contains("Nameless") {
+                        let mut found = None;
+                        d.each_painted_text(|text, clip| {
+                            let words = text
+                                .galley
+                                .job
+                                .text
+                                .replace('\u{a0}', " ")
+                                .replace('\n', " · ");
+                            if found.is_none()
+                                && clip.intersects(text.visual_bounding_rect())
+                                && words.starts_with("5 party")
+                                && words.contains(UNKNOWN_FORM)
+                            {
+                                found = Some(words);
+                            }
+                        });
+                        found
+                    } else {
+                        plan_summary_line(d, summary)
+                    }
+                })
             });
-            // Mill Road's word is on its row only where the summary keeps its lines with it.
+            // FB2: Mill Road's difficulty is on its row at every size; its members give way
+            // first, by whole words, with `…`.
             d.observe(
                 "T12.1-difficulty",
-                low.as_deref() == Some("5 party · 2 × Ember Cultist · Low")
-                    && unknown.as_deref() == Some("5 party · 1 × Nameless Thing")
-                    && high.as_deref().is_some_and(|high| {
-                        high == HIGH_SUMMARY || high == format!("{HIGH_SUMMARY} · High")
-                    }),
+                low.as_deref().is_some_and(|low| {
+                    low == format!("5 party · 2 × Ember Cultist · {LOW_FORM}")
+                        || low == "5 party · 2 × Ember Cultist · XP 400 · Low"
+                }) && unknown.as_deref().is_some_and(|unknown| {
+                    // X1: the name keeps at least its first letter; the members give way first.
+                    unknown.starts_with("5 party")
+                        && unknown.contains(&format!(" · {UNKNOWN_FORM}: N"))
+                }) && high.as_deref().is_some_and(|high| {
+                    high == format!("{HIGH_SUMMARY} · {HIGH_FORM}")
+                        || high == format!("{HIGH_SUMMARY} · {HIGH_SHORT}")
+                        || high
+                            .strip_suffix(&format!("… · {HIGH_SHORT}"))
+                            .is_some_and(|cut| {
+                                HIGH_SUMMARY.starts_with(cut.trim_end_matches([' ', '·', ',']))
+                            })
+                }),
                 format!(
                     "At {size:?}, Lookup open {lookup}: the plan's summaries read {low:?}, \
                      {unknown:?}, {high:?}"
@@ -420,24 +439,32 @@ pub fn run(d: &mut Driver<'_>) {
     d.press_ctrl(Key::K);
     show_plan(d);
     d.state("plan", Sizes::All);
-    // The opened row's line holds the word and the numbers, also where the summary has no room.
+    // FH6: the opened row says its difficulty once, on its summary line; `Read encounter`
+    // below it does not repeat it.
     d.click(HIGH);
     for size in [SMALL, DEFAULT, LARGE] {
-        let words = d.at_size(size, |d| d.painted_in(egui::Rect::EVERYTHING));
+        let words = d
+            .at_size(size, |d| d.painted_in(egui::Rect::EVERYTHING))
+            .replace('\u{a0}', " ");
         d.observe(
-            "T12.1-difficulty-opened",
-            words.contains("Read encounter") && words.contains(HIGH_NUMBERS),
-            format!("At {size:?} the opened row says {HIGH_NUMBERS}: {words}"),
+            "iter-27-B-FH6",
+            words.contains("Read encounter")
+                && words.matches("XP 6,300").count() == 1
+                && words.matches(" · High").count() == 1
+                && !words.contains("Read encounter · "),
+            format!("At {size:?} the opened row says its difficulty once: {words}"),
         );
     }
-    separators_have_one_blank(d, "the opened row with its word", &[SMALL, DEFAULT, LARGE]);
+    separators_have_one_blank(
+        d,
+        "the opened row with its word",
+        "5 party",
+        &[SMALL, DEFAULT, LARGE],
+    );
     d.state("plan-opened", Sizes::All);
-    // W1-D2: a fight with no word says why on its opened row, and whose. Its closed row is as
-    // it was (above).
+    // FB4: a fight with no word says `XP not known` on its row, opened or not; FH6: once.
     d.click(HIGH);
     d.click(UNKNOWN);
-    // Where the line has no room for the name, it says `XP not known`, and its hover and its
-    // accessible name keep the name.
     const WHY: &str = "XP not known: Nameless Thing";
     for (lookup, sizes) in [(false, &[SMALL, DEFAULT, LARGE][..]), (true, &[SMALL][..])] {
         if lookup {
@@ -450,35 +477,45 @@ pub fn run(d: &mut Driver<'_>) {
                     .nodes()
                     .into_iter()
                     .any(|node| node.name.ends_with(WHY) && node.fully_in_view());
-                (d.painted_in(egui::Rect::EVERYTHING), named)
+                (
+                    d.painted_in(egui::Rect::EVERYTHING).replace('\u{a0}', " "),
+                    named,
+                )
             });
             // X1: at every size, also at 1200x800 with the note beside the plan, the name
-            // shortens from its end and keeps at least its first letter.
+            // shortens from its end and keeps at least its first letter. iter-27-B FB4, FH6: it
+            // is in the row's `XP not known` place, once; `Read encounter` does not repeat it.
             let name_shown = words.contains(" · XP not known: N");
             d.observe(
                 "W1-D2-why",
                 words.contains("Read encounter")
-                    && words.contains(" · XP not known")
+                    && words.matches(UNKNOWN_FORM).count() == 1
+                    && !words.contains("Read encounter · ")
                     && named
                     && name_shown,
                 format!(
-                    "At {size:?}, Lookup open {lookup}, the opened row says why, and whose                      {named}: {words}"
+                    "At {size:?}, Lookup open {lookup}, the opened row says {UNKNOWN_FORM} once: {words}"
                 ),
             );
         }
         if lookup {
-            separators_have_one_blank(d, "the opened row with its reason beside Lookup", &[SMALL]);
+            separators_have_one_blank(
+                d,
+                "the row with its reason beside Lookup",
+                "5 party",
+                &[SMALL],
+            );
             d.state("plan-opened-unknown-beside-lookup", Sizes::Small);
             d.press_ctrl(Key::K);
             show_plan(d);
         } else {
-            separators_have_one_blank(d, "the opened row with its reason", &[SMALL, DEFAULT]);
+            separators_have_one_blank(d, "the row with its reason", "5 party", &[SMALL, DEFAULT]);
             d.state("plan-opened-unknown", Sizes::All);
         }
     }
     d.click(UNKNOWN);
     // A paused fight's row shows its run, not a word, also when it is opened: its roster may
-    // have changed in the run. The fixture's Bridge Ambush is paused, with XP 600 of 2,800.
+    // have changed in the run. The fixture's Bridge Ambush is paused, with XP 600 (Low).
     d.click("Add a fight");
     d.click(&format!("Plan {RUN}"));
     d.expect(&format!("Resume: {RUN}"));
@@ -487,7 +524,7 @@ pub fn run(d: &mut Driver<'_>) {
     let words = d.painted_in(egui::Rect::EVERYTHING);
     d.observe(
         "T12.1-difficulty-paused",
-        !words.contains("XP 600 of 2,800") && !words.contains("Read encounter · "),
+        !words.contains("XP 600 · ") && !words.contains("Read encounter · "),
         format!("The opened paused fight's line has no difficulty: {words}"),
     );
     // App round 2, Sol's W1-D1: from the word on the plan to the roster and back. The last line
@@ -519,7 +556,11 @@ pub fn run(d: &mut Driver<'_>) {
     d.observe(
         "W1-D1-edit",
         d.app().sessions.selected_path() == session.as_deref()
-            && line.as_deref() == Some("5 party · 3 × Ember Cultist · Low"),
+            && line.as_deref().is_some_and(|line| {
+                // iter-27-B FB6: the one difficulty form (the limit gives way where the row is short).
+                line == "5 party · 3 × Ember Cultist · XP 600 · Low (up to 2,800)"
+                    || line == "5 party · 3 × Ember Cultist · XP 600 · Low"
+            }),
         format!("Back in the same session, the row reads the saved roster: {line:?}"),
     );
     // Astra's review: the act names the encounter by its ID. When its file now holds another
