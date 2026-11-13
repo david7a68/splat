@@ -2929,7 +2929,14 @@ pub(crate) fn folder_field(
                             );
                             design::named(ui, &response, &format!("Suggestions for {label}"));
                             egui::Popup::menu(&response).show(|ui| {
-                                if design::choice(ui, value.is_empty(), "Main folder").clicked() {
+                                if design::extras::choice_wrapped(
+                                    ui,
+                                    value.is_empty(),
+                                    "Main folder",
+                                    None,
+                                )
+                                .clicked()
+                                {
                                     value.clear();
                                     ui.close();
                                 }
@@ -2937,7 +2944,14 @@ pub(crate) fn folder_field(
                                     .iter()
                                     .filter(|folder| folder.to_lowercase().contains(&query))
                                 {
-                                    if design::choice(ui, value == folder, folder).clicked() {
+                                    if design::extras::choice_wrapped(
+                                        ui,
+                                        value == folder,
+                                        folder,
+                                        None,
+                                    )
+                                    .clicked()
+                                    {
                                         *value = folder.clone();
                                         ui.close();
                                     }
@@ -5313,13 +5327,13 @@ impl Library {
                         ui.ctx().request_repaint();
                     }
                 }
-                if searching || filtering || (compact && self.section != Section::All) {
+                let headed = searching || filtering || (compact && self.section != Section::All);
+                if headed {
                     design::heading(ui, design::Heading::Group { title: if searching { "Search results" } else if filtering { "Matches" } else { self.section.label() }, count: matches.len() });
                 } else {
                     design::gap(ui, design::Gap::XS);
                 }
                 if searching && !matches.is_empty() && self.typo_from == 0 {
-                    design::gap(ui, design::Gap::S);
                     ui.add(
                         egui::Label::new(
                             Type::Body.rich(ui, CLOSE_NAMES)
@@ -5329,7 +5343,10 @@ impl Library {
                     );
                 }
                 if matches.is_empty() {
-                    design::gap(ui, design::Gap::S);
+                    // A heading owns the space after it.
+                    if !headed {
+                        design::gap(ui, design::Gap::S);
+                    }
                     if let Scope::Package(id) = scope && !searching
                         && !loaded.notes.iter().any(|note| note.owner.id() == Some(id) && note.entry.as_ref().is_some_and(|entry| entry.kind != "package")) {
                         let name = campaigns.modules().iter().find(|m| m.id == id).map_or("this package", |m| m.name.as_str());
@@ -5751,21 +5768,24 @@ impl Library {
                     ui.set_min_width(inner);
                     ui.set_max_width(inner);
                     ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
+                    let mut choose = |ui: &mut egui::Ui, choice: Scope| {
+                        if design::extras::choice_wrapped(ui, scope == choice, &label(choice), None)
+                            .clicked()
+                        {
+                            scope = choice;
+                        }
+                    };
                     if active.is_some() {
-                        ui.selectable_value(&mut scope, Scope::Uses, label(Scope::Uses));
+                        choose(ui, Scope::Uses);
                     }
-                    ui.selectable_value(&mut scope, Scope::All, label(Scope::All));
+                    choose(ui, Scope::All);
                     ui.separator();
-                    ui.selectable_value(&mut scope, Scope::Builtin, label(Scope::Builtin));
+                    choose(ui, Scope::Builtin);
                     for m in campaigns.modules() {
-                        ui.selectable_value(
-                            &mut scope,
-                            Scope::Package(m.id),
-                            label(Scope::Package(m.id)),
-                        );
+                        choose(ui, Scope::Package(m.id));
                     }
                     if active.is_some() {
-                        ui.selectable_value(&mut scope, Scope::Campaign, label(Scope::Campaign));
+                        choose(ui, Scope::Campaign);
                     }
                 });
             combo.response.clone().on_hover_text(label(scope));

@@ -1165,6 +1165,32 @@ pub mod library_browse {
             "the Library reader, to compare with a campaign entry and a run",
         );
 
+        // A search with no name match shows its message right under the results heading: the
+        // heading owns the space after it (`Heading::below`), so no gap of the caller's adds to it.
+        d.aside(|d| search_library(d, "drgon"));
+        d.expect(crate::matching::CLOSE_NAMES);
+        d.observe_both(
+            "iter-28-L-heading-space",
+            "The close-names message starts one heading space below the results heading",
+            |d| {
+                let nodes = d.nodes();
+                let heading = nodes
+                    .iter()
+                    .find(|node| node.name.starts_with(SEARCH_RESULTS));
+                let message = nodes
+                    .iter()
+                    .find(|node| node.name == crate::matching::CLOSE_NAMES);
+                heading.zip(message).is_some_and(|(heading, message)| {
+                    let below = crate::design::Heading::Group {
+                        title: "",
+                        count: 0,
+                    }
+                    .below();
+                    (message.rect.top() - heading.rect.bottom() - below).abs() < 1.0
+                })
+            },
+        );
+
         search_library(d, "fireball");
         d.click_starting(SPELL_ROW);
         let reader_at_left = |d: &Driver<'_>| {
@@ -1758,6 +1784,41 @@ pub mod library_author {
                 format!("At {size:?}, Create entry on the Folder field's line, its reason below: {row:?}"),
             );
         }
+        // Two long folder paths that differ only near their ends: the suggestions wrap them
+        // inside the popup, so each complete name is visible at 960 px and each can be chosen.
+        let ashen = d.root.join("modules/ashen-marches");
+        let long_folders = [
+            "Creatures/Wights of the Ash Waste/Barrow Guardians of the Cinder Vale and the Long Hollow Road beyond the Salt Gate, kept for the winter campaign, draft one",
+            "Creatures/Wights of the Ash Waste/Barrow Guardians of the Cinder Vale and the Long Hollow Road beyond the Salt Gate, kept for the winter campaign, draft two",
+        ];
+        for folder in long_folders {
+            std::fs::create_dir_all(ashen.join(folder)).unwrap();
+        }
+        // The suggestions filter by the typed folder, so each round starts from `Creatures`.
+        let chosen = d.aside(|d| {
+            d.act_at_size(SMALL, |d| {
+                let mut chosen = Vec::new();
+                for folder in long_folders {
+                    d.replace_text_in("Folder", "Creatures");
+                    d.click("Suggestions for Folder");
+                    let whole = long_folders.iter().all(|name| d.visible_text(name));
+                    d.click(folder);
+                    chosen.push((whole, d.field_text("Folder")));
+                }
+                chosen
+            })
+        });
+        d.observe(
+            "iter-28-L-folder-suggestions",
+            chosen
+                .iter()
+                .zip(long_folders)
+                .all(|((whole, text), folder)| *whole && text.as_deref() == Some(folder)),
+            format!(
+                "At 960 px both long folder names show whole and each can be chosen: {chosen:?}"
+            ),
+        );
+        d.aside(|d| d.replace_text_in("Folder", "Creatures"));
         d.state("new-entry-form", Sizes::All);
         d.type_into(NEW_NAME_FIELD, NEW_NAME);
         d.click(CREATE_ENTRY);
