@@ -2296,7 +2296,7 @@ on the recording row; the recording row, list hover and accessible name use Proc
 and transcript markers. Marker text takes its content width, capped at READER_MEASURE. A marker's Add
 result (`<event> added to <session>.` with `Undo add`), from the list or the marked transcript, is in the session
 pane's message footer, newest first among its results; the row keeps On the timeline. One action column
-sits an L gap after it. Add and On the timeline align left in that column. Row rules span only the combined width. The After placement line does not affect that column’s width and wraps below the facts.
+sits an L gap after it. Add and On the timeline align left in that column. Row rules span only the combined width. The After placement line is kept on every marker row, empty until the marker is added, so an Add moves no row below it. It does not affect that column’s width and wraps below the facts.
 
 The viewer is one block, READER_MEASURE wide, or as wide as its view choices when they are wider. It has back
 link and muted date on line one, Add to notes at the block's right edge on Summary, and left-aligned

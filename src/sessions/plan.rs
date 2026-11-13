@@ -1847,6 +1847,25 @@ struct RewardsDone {
     unknown: u64,
     /// When the act made it (`next_result_order`): the plan's footer lists results newest first.
     order: u64,
+    /// The fight's name as the act read it, so the footer searches no DM data each frame
+    /// (review of PR 296, item 1).
+    fight: String,
+}
+
+/// A played fight's name for its rewards result and fault, read once at the act.
+fn fight_name(book: &Book, event: &str) -> String {
+    #[cfg(test)]
+    FIGHT_NAME_READS.with(|reads| reads.set(reads.get() + 1));
+    book.events
+        .iter()
+        .find(|one| one.id == event)
+        .map_or_else(|| "this fight".to_owned(), |one| one.title.clone())
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How many times a rewards act read a fight's name from the Timeline.
+    static FIGHT_NAME_READS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// What the selected note says now, read once for each revision of its draft.
@@ -1865,8 +1884,8 @@ struct RewardsSeen {
 #[derive(Default)]
 pub(super) struct Rewards {
     done: BTreeMap<(Uuid, String), RewardsDone>,
-    /// What an act could not do, where the DM acted: the note, the fight, the words, and the
-    /// draft's revision it met. A change of the note ends it.
+    /// What an act could not do: the note, the fight, the whole words (with the fight's name,
+    /// read at the act), and the draft's revision it met. A change of the note ends it.
     fault: Option<(Uuid, String, String, u64)>,
     seen: Option<RewardsSeen>,
     /// Whether `Add rewards` fits on a played row: by the title, its lead icon, the row's width
@@ -1981,8 +2000,8 @@ impl Rewards {
     }
 
     /// The note's rewards results and its fault, in the plan's message footer, each naming its
-    /// fight (`name` gives a fight's name by its Timeline ID). Results with their Undo go newest
-    /// first among the footer's results; the fault is a notice until the note changes.
+    /// fight by the name the act read. Results with their Undo go newest first among the
+    /// footer's results; the fault is a notice until the note changes.
     fn in_footer<'a>(
         &self,
         footer: &mut design::Footer<'a>,
@@ -1990,12 +2009,11 @@ impl Rewards {
         act: &'a std::cell::Cell<Option<FooterAct>>,
         note: Uuid,
         revision: u64,
-        name: &dyn Fn(&str) -> String,
     ) {
-        if let Some((id, at, words, met)) = &self.fault
+        if let Some((id, _, words, met)) = &self.fault
             && (*id, *met) == (note, revision)
         {
-            let words = format!("Rewards for “{}” not added. {words}", name(at));
+            let words = words.clone();
             footer.notice(words.clone(), move |ui| {
                 design::message(ui, Tone::Warning, &words);
             });
@@ -2004,7 +2022,7 @@ impl Rewards {
             if *id != note {
                 continue;
             }
-            let fight = name(event);
+            let fight = &done.fight;
             let mut words = format!(
                 "Rewards for “{fight}” added under Loot and rewards. {}",
                 done.choice
@@ -2090,6 +2108,16 @@ impl Sessions {
         };
         let rewards = &mut self.rewards;
         rewards.fault = None;
+        // The fight's name, read once here: the result and the fault keep it.
+        let fight = match &act {
+            RewardsAct::Undo(event) => rewards
+                .done
+                .get(&(note, event.clone()))
+                .map(|done| done.fight.clone())
+                .unwrap_or_default(),
+            RewardsAct::Add(event, _) => fight_name(book, event),
+        };
+        let fault = |words: &str| format!("Rewards for “{fight}” not added. {words}");
         let (event, result) = match act {
             RewardsAct::Undo(event) => {
                 let Some(done) = rewards.done.get(&(note, event.clone())) else {
@@ -2118,8 +2146,7 @@ impl Sessions {
                     _ => Err(String::new()),
                 };
                 let Ok(found) = read else {
-                    rewards.fault =
-                        Some((note, event, REWARDS_BLOCKED.to_owned(), draft.revision()));
+                    rewards.fault = Some((note, event, fault(REWARDS_BLOCKED), draft.revision()));
                     return;
                 };
                 let earlier = self.folder.as_deref().map_or_else(
@@ -2166,19 +2193,20 @@ impl Sessions {
                             not_rolled: found.not_rolled,
                             unknown: unknown * u64::from(has_xp),
                             order: crate::timeline::next_result_order(),
+                            fight: fight.clone(),
                         },
                     );
                     self.caret_to_show = Some(shown);
                 }
                 if let Some(why) = refused {
-                    rewards.fault = Some((note, event, why.to_owned(), draft.revision()));
+                    rewards.fault = Some((note, event, fault(why), draft.revision()));
                     return;
                 }
                 (event, result.map(drop))
             }
         };
-        if let Err(fault) = result {
-            rewards.fault = Some((note, event, fault.words().to_owned(), draft.revision()));
+        if let Err(failed) = result {
+            rewards.fault = Some((note, event, fault(failed.words()), draft.revision()));
         }
     }
 }
@@ -2692,20 +2720,8 @@ impl Sessions {
         // Round 27 FN1, FK3, SK2: rewards results and their fault are the footer's, by fight.
         self.rewards.see(self.draft.as_ref(), session, book);
         if let (Some(note), Some(draft)) = (session, self.draft.as_ref()) {
-            let name = |event: &str| {
-                book.events
-                    .iter()
-                    .find(|one| one.id == event)
-                    .map_or_else(|| "this fight".to_owned(), |one| one.title.clone())
-            };
-            self.rewards.in_footer(
-                &mut footer,
-                &mut undos,
-                &footer_act,
-                note,
-                draft.revision(),
-                &name,
-            );
+            self.rewards
+                .in_footer(&mut footer, &mut undos, &footer_act, note, draft.revision());
         }
         // Round 27 FE7: `Plan “<name>”`'s result and `Undo plan line`, in the plan of its
         // journey's session, while the note is as the act left it.
@@ -6027,6 +6043,13 @@ mod tests {
         assert!(harness.query_by_label("Add rewards: Bridge").is_none());
         assert!(shown(&harness, "In notes"));
         assert!(harness.state().0.caret_to_show.is_some());
+        // Review of PR 296, item 1: the footer shows the result by the name the act read; an
+        // unchanged render reads no fight's name from the Timeline again.
+        let reads = || FIGHT_NAME_READS.with(std::cell::Cell::get);
+        let after_act = reads();
+        harness.run_steps(4);
+        assert!(shown(&harness, "Rewards for “Bridge”"));
+        assert_eq!(reads(), after_act, "a render searched the Timeline for a fight's name");
 
         // A: Bridge. B: Shrine, another fight. It follows the newest block, which has XP, and
         // names the award that is not known, which the sum leaves out. A's Undo stays.

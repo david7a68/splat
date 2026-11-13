@@ -14270,6 +14270,61 @@ pub mod session_recording {
             "Markers do not reach the timeline by themselves",
         );
         d.click(NAV_SESSIONS);
+        // Review of PR 296, item 2 (round 27 FI3): adding the upper marker brings its result to
+        // the session's footer, so the lower marker's Add keeps its place at every size. Then,
+        // at each size, with the footer showing, its Undo takes back only that event (the
+        // footer empties); with it empty, the body's Add adds only that event (it appears); Tab
+        // reaches the footer's Undo. Proof steps that end where they began.
+        const WOLVES_ADD: &str = "Add to timeline: Wolves at the bridge (0)";
+        const WOLVES_ADDED: &str = "Wolves at the bridge added to Session 1.";
+        let lower = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .find(|node| node.name.starts_with("Add to timeline: Rest at the mill"))
+                .map(|node| node.rect.left_top())
+        };
+        let events = |d: &Driver<'_>| d.app().timeline.events.len();
+        let start_events = events(d);
+        let (lower_before, lower_after, presses) = d.aside(|d| {
+            let before = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, lower));
+            d.click(WOLVES_ADD);
+            d.expect(WOLVES_ADDED);
+            let after = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, lower));
+            let presses = [SMALL, DEFAULT, LARGE].map(|size| {
+                d.act_at_size(size, |d| {
+                    let shown = d.has(WOLVES_ADDED);
+                    d.click("Undo add");
+                    let emptied = events(d) == start_events
+                        && d.has(WOLVES_ADD)
+                        && !d.has(WOLVES_ADDED)
+                        && lower(d).is_some();
+                    d.click(WOLVES_ADD);
+                    let appeared = events(d) == start_events + 1
+                        && d.has(WOLVES_ADDED)
+                        && lower(d).is_some()
+                        && !d.has_containing("Rest at the mill added");
+                    let tab = d.tab_to("Undo add");
+                    (size, shown, emptied, appeared, tab)
+                })
+            });
+            d.click("Undo add");
+            (before, after, presses)
+        });
+        d.observe(
+            "iter-27-S-FI3",
+            lower_before.iter().all(Option::is_some) && lower_before == lower_after,
+            format!(
+                "The upper marker's Add result moves no lower marker's Add: {lower_before:?} {lower_after:?}"
+            ),
+        );
+        d.observe(
+            "iter-27-S-FI3-press",
+            events(d) == start_events
+                && presses
+                    .iter()
+                    .all(|(_, shown, emptied, appeared, tab)| *shown && *emptied && *appeared && *tab),
+            format!("Footer Undo, body Add and Tab each act on their own control: {presses:?}"),
+        );
         // Round 27 FI3: the result is in the session's footer, so the next marker's Add keeps
         // its place at every size.
         let next_add = |d: &Driver<'_>| {
@@ -19517,6 +19572,35 @@ pub mod session_plan {
             d.has_containing("In notes") && !d.has(&action),
             "The played row says In notes after Add rewards",
         );
+        // Review of PR 296, item 2: with the rewards result in the footer, at each size, an
+        // outside field takes the typing, Tab reaches `Undo rewards`, and the next row's link
+        // opens only that row. Proof steps that end where they began; the note is untouched.
+        let note_before = std::fs::read_to_string(&note).unwrap();
+        let presses = d.aside(|d| {
+            [SMALL, DEFAULT, LARGE].map(|size| {
+                d.act_at_size(size, |d| {
+                    d.type_into("Where", "Old mill");
+                    let typed = d.field_text("Where").as_deref() == Some("Old mill")
+                        && d.has("Undo rewards");
+                    let tab = d.tab_to("Undo rewards");
+                    d.clear_text_in("Where");
+                    d.click("Shrine of Cinders");
+                    let opened = d.has("Read encounter") && d.has("Undo rewards");
+                    d.click("Shrine of Cinders");
+                    let closed = !d.has("Read encounter");
+                    (size, typed, tab, opened, closed)
+                })
+            })
+        });
+        d.observe(
+            "iter-27-S-FN1-press",
+            std::fs::read_to_string(&note).unwrap() == note_before
+                && d.field_text("Where").as_deref() == Some("")
+                && presses
+                    .iter()
+                    .all(|(_, typed, tab, opened, closed)| *typed && *tab && *opened && *closed),
+            format!("With the result in the footer, typing, Tab and the next row act on their own control: {presses:?}"),
+        );
         d.state("rewards-added", Sizes::All);
         d.click(NAV_LOOKUP);
         d.state("rewards-added-beside-lookup", Sizes::Small);
@@ -20983,11 +21067,18 @@ pub mod session_plan {
                 node.name.starts_with(|c: char| c.is_ascii_digit())
                     && (node.name.ends_with(" in progress") || node.name.ends_with(" ready"))
                     || node.name.contains(" ready · ")
-            }) && d.has_containing("IN PROGRESS"),
-            "The Encounters header does not repeat the headings' counts",
+            }) && d.has_label("IN PROGRESS 2")
+                && d.has_label("READY TO RUN 1"),
+            "The Encounters header does not repeat the headings' counts; the headings count 2 in progress and 1 ready",
         );
         d.state("run-removed", Sizes::Default);
         d.click("Undo delete run");
+        // Review of PR 296, item 3: after Undo the heading counts the run again.
+        d.observe(
+            "iter-27-S-FM3-undo",
+            d.has_label("IN PROGRESS 3"),
+            "After Undo delete run, the IN PROGRESS heading counts 3",
+        );
         d.observe(
             "T14.1",
             before && d.has_containing(&delete),

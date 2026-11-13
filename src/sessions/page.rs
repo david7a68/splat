@@ -5068,7 +5068,24 @@ impl Sessions {
                                             .wrap(),
                                         );
                                     });
-                                    if !placement.is_empty() {
+                                    // Review of PR 296, item 2: the placement line is kept
+                                    // on every row, empty until the marker is added, so an
+                                    // Add moves no row below it.
+                                    if placement.is_empty() {
+                                        // As tall as the label it stands for.
+                                        let height = egui::WidgetText::from(
+                                            Type::Small.rich(ui, "After"),
+                                        )
+                                        .into_galley(
+                                            ui,
+                                            Some(egui::TextWrapMode::Wrap),
+                                            f32::INFINITY,
+                                            egui::TextStyle::Body,
+                                        )
+                                        .size()
+                                        .y;
+                                        ui.allocate_space(egui::vec2(0.0, height));
+                                    } else {
                                         ui.add(
                                             egui::Label::new(
                                                 Type::Small.rich(ui, placement).color(c.muted),
