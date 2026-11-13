@@ -2825,7 +2825,7 @@ impl FooterRooms {
                 footer,
                 lost,
                 id,
-                pane: ui.id(),
+                pane: ui.stack().id,
             });
         });
     }
