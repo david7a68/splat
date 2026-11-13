@@ -8734,6 +8734,10 @@ pub fn world_note_deleted(d: &mut Driver<'_>) {
     // as Lookup's does: two readers, each with Edit, Start fight and Add to Log.
     for size in [SMALL, DEFAULT, LARGE] {
         let counts = d.at_size(size, |d| {
+            // Each action lies inside its own pane: World's, left of the Lookup splitter, or
+            // Lookup's, between the splitter and the window's edge.
+            let splitter = d.place_of("Resize Lookup column");
+            let width = d.window_size().0;
             [
                 "Edit Watchkeeper",
                 "Start a fight with Watchkeeper",
@@ -8746,6 +8750,11 @@ pub fn world_note_deleted(d: &mut Driver<'_>) {
                         node.name == name
                             && node.in_view()
                             && node.rect.width() > design::Density::Read.control() + 0.5
+                            && splitter.is_some_and(|splitter| {
+                                node.rect.right() <= splitter.left()
+                                    || (node.rect.left() >= splitter.right()
+                                        && node.rect.right() <= width)
+                            })
                     })
                     .count()
             })
