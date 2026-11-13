@@ -114,6 +114,8 @@ enum FooterAct {
     UndoAdd(String),
     UndoRemove,
     Scene(SceneAct),
+    Rewards(RewardsAct),
+    UndoPlanLine,
 }
 /// A list longer than this gets a search, and it scrolls instead of leaving the window.
 const FIGHT_SEARCH_FROM: usize = 8;
@@ -338,6 +340,15 @@ fn plan_group_summary(ui: &mut egui::Ui, summary: &str, max_rows: usize) {
 /// covers only the word. The target is the link's own minimum size: at least `XL` square. A
 /// word narrower than that gets the extra width evenly on both sides, inside the gaps, so the
 /// word stays at the text edge and nothing beside it moves (the `line_start` pattern).
+/// Round 27 FH4: the gap on each side of a `·` between the opened row's links: one blank of
+/// the links' type, as `Party won · Ended · Round 1` has in one text.
+fn link_gap(ui: &egui::Ui) -> f32 {
+    ui.painter()
+        .layout_no_wrap(" ".to_owned(), Type::Body.font(ui), colors().text)
+        .size()
+        .x
+}
+
 fn word_link(ui: &mut egui::Ui, label: &str) -> egui::Response {
     let c = colors();
     let galley = ui
@@ -462,12 +473,23 @@ fn plan_row_with(
 ) {
     ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = design::S;
+        // Round 27 FL4: the lead is centred on the title's first line. It is drawn first, so
+        // it keeps its place in the Tab order; the centre is the one the title had in the last
+        // pass, and a change draws the pass again before it shows.
+        let centre_key = ui.id().with("plan_row_lead_centre");
+        let centre = ui
+            .ctx()
+            .data(|data| data.get_temp::<f32>(centre_key))
+            .unwrap_or(design::XL / 2.0);
         let (_, slot) = ui.allocate_space(egui::vec2(lead_width(), design::XL));
         lead(
             &mut ui.new_child(
                 egui::UiBuilder::new()
-                    .max_rect(slot)
-                    .layout(egui::Layout::top_down(egui::Align::Min)),
+                    .max_rect(egui::Rect::from_min_size(
+                        egui::pos2(slot.left(), slot.top() + centre - design::XL / 2.0),
+                        slot.size(),
+                    ))
+                    .layout(egui::Layout::left_to_right(egui::Align::Center)),
             ),
         );
         ui.vertical(|ui| {
@@ -482,6 +504,18 @@ fn plan_row_with(
                     words(ui);
                 },
             );
+            // One line (a link one target high, or a line of words) has its words at its
+            // centre; more lines start at the top, so the first line's centre is half a line.
+            let words_rect = title.response.rect;
+            let measured = if words_rect.height() <= design::XL + 0.5 {
+                words_rect.center().y - slot.top()
+            } else {
+                words_rect.top() - slot.top() + Type::Body.line() / 2.0
+            };
+            if (measured - centre).abs() > 0.25 {
+                ui.ctx().data_mut(|data| data.insert_temp(centre_key, measured));
+                ui.ctx().request_discard("a plan row's lead moved to its title's centre");
+            }
             let action_rect = egui::Rect::from_min_size(
                 egui::pos2(ui.max_rect().right() - widths[1], left.y),
                 egui::vec2(widths[1], Density::Read.control()),
@@ -1587,7 +1621,6 @@ const LENGTH_HELP: &str = timeline::LENGTH_HELP;
 enum TravelUndo {
     None,
     Checks,
-    PlanLine,
 }
 
 /// A journey's encounter checks in the plan: what the DM typed, each journey's last result with
@@ -1647,6 +1680,7 @@ enum RewardsAt {
 }
 
 /// What the DM pressed for a played fight: `Add rewards`, or `Undo rewards`, by its event.
+#[derive(Clone, Debug, PartialEq)]
 enum RewardsAct {
     Add(String, Uuid),
     Undo(String),
@@ -1660,6 +1694,8 @@ struct RewardsDone {
     with_xp: bool,
     not_rolled: usize,
     unknown: u64,
+    /// When the act made it (`next_result_order`): the plan's footer lists results newest first.
+    order: u64,
 }
 
 /// What the selected note says now, read once for each revision of its draft.
@@ -1672,7 +1708,8 @@ struct RewardsSeen {
 }
 
 /// The rewards record (F7) in the plan. Each result is kept by its session note's ID and its
-/// fight, and shows under that fight's row while its block stands as the act left it. Another
+/// fight, and shows in the plan's message footer, naming the fight, while its block stands as
+/// the act left it (round 27 FN1, FK3, SK2): the fight's row keeps only `✓ In notes`. Another
 /// act, another session or another page leaves it.
 #[derive(Default)]
 pub(super) struct Rewards {
@@ -1769,7 +1806,7 @@ impl Rewards {
             (breaks, title.size().x)
         };
         // As `fight_block` lays out its links, beside the opened row's indent.
-        let spacing = ui.spacing().item_spacing.x;
+        let spacing = link_gap(ui);
         let links = ["Log", "Whole run", "Timeline", ADD_REWARDS]
             .map(|link| word(link, Type::Body))
             .iter()
@@ -1791,24 +1828,35 @@ impl Rewards {
         fits
     }
 
-    /// A fight's result and its fault, under its row: a result that belongs to one row stays
-    /// under that row (the plan's footer rule), and a fight's row never folds.
-    fn message(
+    /// The note's rewards results and its fault, in the plan's message footer, each naming its
+    /// fight (`name` gives a fight's name by its Timeline ID). Results with their Undo go newest
+    /// first among the footer's results; the fault is a notice until the note changes.
+    fn in_footer<'a>(
         &self,
-        ui: &mut egui::Ui,
+        footer: &mut design::Footer<'a>,
+        undos: &mut LiveUndos<'a>,
+        act: &'a std::cell::Cell<Option<FooterAct>>,
         note: Uuid,
-        event: &str,
         revision: u64,
-    ) -> Option<RewardsAct> {
-        let mut act = None;
+        name: &dyn Fn(&str) -> String,
+    ) {
         if let Some((id, at, words, met)) = &self.fault
-            && (*id, at.as_str(), *met) == (note, event, revision)
+            && (*id, *met) == (note, revision)
         {
-            ui.add_space(design::S);
-            design::message(ui, Tone::Warning, words);
+            let words = format!("Rewards for “{}” not added. {words}", name(at));
+            footer.notice(words.clone(), move |ui| {
+                design::message(ui, Tone::Warning, &words);
+            });
         }
-        if let Some(done) = self.done.get(&(note, event.to_owned())) {
-            let mut words = format!("Rewards added under Loot and rewards. {}", done.choice);
+        for ((id, event), done) in &self.done {
+            if *id != note {
+                continue;
+            }
+            let fight = name(event);
+            let mut words = format!(
+                "Rewards for “{fight}” added under Loot and rewards. {}",
+                done.choice
+            );
             if done.with_xp
                 && let Some(RewardsSeen {
                     tonight: (xp, fights @ 1..),
@@ -1831,12 +1879,14 @@ impl Rewards {
                 1 => words.push_str(" 1 award is not known."),
                 n => words.push_str(&format!(" {n} awards are not known.")),
             }
-            ui.add_space(design::S);
-            if design::undo_message(ui, Tone::Success, &words, "Undo rewards") {
-                act = Some(RewardsAct::Undo(event.to_owned()));
-            }
+            let event = event.clone();
+            let drawn = words.clone();
+            undos.push(done.order, words, move |ui| {
+                if design::undo_message(ui, Tone::Success, &drawn, "Undo rewards") {
+                    act.set(Some(FooterAct::Rewards(RewardsAct::Undo(event.clone()))));
+                }
+            });
         }
-        act
     }
 }
 
@@ -1963,6 +2013,7 @@ impl Sessions {
                             with_xp: has_xp,
                             not_rolled: found.not_rolled,
                             unknown: unknown * u64::from(has_xp),
+                            order: crate::timeline::next_result_order(),
                         },
                     );
                     self.caret_to_show = Some(shown);
@@ -2002,44 +2053,8 @@ impl Sessions {
         let focus = std::mem::take(&mut travel.focus_length);
         let mut undo = TravelUndo::None;
         ui.add_space(design::XS);
-        // The plan line's message shows on the line of the check it came from. With that check
-        // gone, it takes the kept line, unless a roll's result holds it: then it ends the block.
-        let plan_line = travel
-            .planned
-            .as_ref()
-            .filter(|(id, _, _)| *id == event.id)
-            .map(|(_, line, _)| line);
-        let on_check = plan_line.filter(|line| event.checks.iter().any(|check| line.on(check)));
-        let elsewhere = plan_line.filter(|_| on_check.is_none());
-        let done = travel.done.get(&event.id);
-        let plan_words = elsewhere.map(checks::Planned::words);
-        let (kept, last) = match (done, &plan_words) {
-            (Some(done), _) => (
-                Some((done.words.as_str(), done.undo, TravelUndo::Checks)),
-                plan_words.as_deref(),
-            ),
-            (None, Some(words)) => (
-                Some((words.as_str(), "Undo plan line", TravelUndo::PlanLine)),
-                None,
-            ),
-            (None, None) => (None, None),
-        };
-        let header = checks::View {
-            event,
-            start,
-            length: &event.duration,
-            tables: plan.tables,
-            planned,
-            plan_line: on_check,
-        };
-        let mut act = checks::header(ui, &header, &mut travel.block);
-        if design::undo_line(
-            ui,
-            Tone::Success,
-            kept.map(|(words, undo, _)| (words, undo)),
-        ) {
-            undo = kept.map_or(TravelUndo::None, |(_, _, which)| which);
-        }
+        // Round 27 FE7: **How long** and its range come first, so the checks' results follow
+        // their table directly, as on Timeline. The plan line's result is in the plan's footer.
         let typed = length_draft.words(event);
         let help = checks::span(start, &typed).or_else(|| {
             timeline::read_duration(&typed)
@@ -2049,25 +2064,24 @@ impl Sessions {
         let (length, changed) = design::field(ui, "How long", help.as_deref(), None, |ui| {
             checks::length_input(ui, length_draft, event, "", focus)
         });
+        ui.add_space(design::M);
         let view = checks::View {
             event,
             start,
             length: &length,
             tables: plan.tables,
             planned,
-            plan_line: on_check,
         };
+        let mut act = checks::header(ui, &view, &mut travel.block);
+        let done = travel.done.get(&event.id);
+        if design::undo_line(
+            ui,
+            Tone::Success,
+            done.map(|done| (done.words.as_str(), done.undo)),
+        ) {
+            undo = TravelUndo::Checks;
+        }
         act = checks::lines(ui, &view, &mut travel.block).or(act);
-        if act == Some(checks::Act::UndoPlan) {
-            act = None;
-            undo = TravelUndo::PlanLine;
-        }
-        if let Some(words) = last {
-            ui.add_space(design::S);
-            if design::undo_message(ui, Tone::Success, words, "Undo plan line") {
-                undo = TravelUndo::PlanLine;
-            }
-        }
         (act, changed, undo)
     }
 
@@ -2230,10 +2244,14 @@ impl Sessions {
                 Some(plan_first(words, &line, &book.events, session, plan.fights))
             });
             match written {
-                Ok(undo) => self.travel.planned = Some((id.to_owned(), chosen.clone(), undo)),
+                Ok(undo) => {
+                    self.result_orders.renew("plan line");
+                    self.travel.planned = Some((id.to_owned(), chosen.clone(), undo));
+                }
                 Err(fault) => {
                     let words = fault.words().to_owned();
                     if let crate::sessions::ActFault::NotSaved(_, undo) = fault {
+                        self.result_orders.renew("plan line");
                         self.travel.planned = Some((id.to_owned(), chosen.clone(), undo));
                     }
                     self.travel.block.failed(&act, words);
@@ -2458,6 +2476,7 @@ impl Sessions {
         // below the rows, so a result never moves a row or the Add strip.
         let footer_act = std::cell::Cell::new(None);
         let mut group_undo_in_footer = false;
+        let mut footer_rewards = None;
         let mut footer =
             design::Footer::new(("session_plan_footer", session), ui.available_width());
         if plan.group_open && self.not_being_played().is_none() {
@@ -2506,6 +2525,36 @@ impl Sessions {
         );
         self.scene_messages(&mut footer, &mut undos, &footer_act, shown);
         self.removed_group_message(&mut undos, &footer_act, session);
+        // Round 27 FN1, FK3, SK2: rewards results and their fault are the footer's, by fight.
+        self.rewards.see(self.draft.as_ref(), session, book);
+        if let (Some(note), Some(draft)) = (session, self.draft.as_ref()) {
+            let name = |event: &str| {
+                book.events
+                    .iter()
+                    .find(|one| one.id == event)
+                    .map_or_else(|| "this fight".to_owned(), |one| one.title.clone())
+            };
+            self.rewards
+                .in_footer(&mut footer, &mut undos, &footer_act, note, draft.revision(), &name);
+        }
+        // Round 27 FE7: `Plan “<name>”`'s result and `Undo plan line`, in the plan of its
+        // journey's session, while the note is as the act left it.
+        if let Some((journey, line, undo)) = &self.travel.planned
+            && self.draft.as_ref().is_some_and(|draft| undo.live(draft))
+            && book
+                .events
+                .iter()
+                .any(|event| event.id == *journey && event.is_in(session))
+        {
+            let words = line.words();
+            let order = self.result_orders.of("plan line", (journey, &line.name));
+            let act = &footer_act;
+            undos.push(order, words.clone(), move |ui| {
+                if design::undo_message(ui, Tone::Success, &words, "Undo plan line") {
+                    act.set(Some(FooterAct::UndoPlanLine));
+                }
+            });
+        }
         undos.into_footer(&mut footer);
         // The fold measures the room the rows have with an empty footer, so that a result coming
         // or going never folds or unfolds the scenes.
@@ -2527,6 +2576,8 @@ impl Sessions {
                 book.undo_remove();
             }
             Some(FooterAct::Scene(act)) => scene_act = Some(act),
+            Some(FooterAct::Rewards(act)) => footer_rewards = Some(act),
+            Some(FooterAct::UndoPlanLine) => self.undo_plan_line(),
             None => {}
         }
         file_act(book, file.take());
@@ -2586,8 +2637,7 @@ impl Sessions {
         let mut length_taken = checks::Taken::Nothing;
         let mut travel_act = None;
         self.rewards.see(self.draft.as_ref(), session, book);
-        let revision = self.draft.as_ref().map(crate::sessions::Draft::revision);
-        let mut rewards_act = None;
+        let mut rewards_act = footer_rewards;
         let mut travel_undo = (TravelUndo::None, String::new());
         // A name a result links: an encounter or a group, and whether a row for it is to come.
         let in_plan = |name: &str| {
@@ -2790,10 +2840,6 @@ impl Sessions {
                             });
                         }
                         details_above += ui.cursor().top() - details_top;
-                        if let (Some(note), Some(revision)) = (session, revision)
-                            && let Some(act) = self.rewards.message(ui, note, &event.id, revision) {
-                            rewards_act = Some(act);
-                        }
                         if self.row_notice == Some((session, at)) && self.deleted_run.is_some() {
                             ui.add_space(design::S);
                             self.deleted_run_in_row(ui);
@@ -3047,7 +3093,6 @@ impl Sessions {
         }
         match travel_undo {
             (TravelUndo::Checks, id) => self.travel.done.undo(&id, book),
-            (TravelUndo::PlanLine, _) => self.undo_plan_line(),
             (TravelUndo::None, _) => {}
         }
         if let Some((id, action)) = ruling {
@@ -3834,7 +3879,8 @@ impl Sessions {
                     });
                 ui.horizontal(|ui| {
                     // Each word starts where the text does; a short word's target is wider
-                    // than the word, never padded with spaces.
+                    // than the word, never padded with spaces. One blank on each side of `·`.
+                    ui.spacing_mut().item_spacing.x = link_gap(ui);
                     if word_link(ui, "Log").clicked() {
                         self.show_fight_log = !self.show_fight_log;
                     }
@@ -5670,14 +5716,15 @@ mod tests {
             );
         design::theme::install(&harness.ctx);
         harness.run_steps(2);
+        // The footer's scroll part is named by its messages too, so a message can match twice.
         let shown = |harness: &egui_kittest::Harness<'_, (Sessions, Book)>, words: &str| {
-            harness.query_by_label_contains(words).is_some()
+            harness.query_all_by_label_contains(words).next().is_some()
         };
         let block_a = format!(
             "- [[Timeline#^{a}|Bridge]]\n  - XP 200 for 1 at 0 HP · 1 still stood (XP 200)\n  - 30 gp\n"
         );
         let block_b = format!(
-            "- [[Timeline#^{b}|Shrine]]\n  - XP 0 for 0 at 0 HP. XP not known for Captain Varra: enter an award here.\n"
+            "- [[Timeline#^{b}|Shrine]]\n  - XP 0. XP not known for Captain Varra: enter an award here.\n"
         );
 
         // An edit on disk a moment before is in the words that the act changes. With no block
@@ -5685,8 +5732,15 @@ mod tests {
         // `In notes`, and the note beside the plan is asked to show the block.
         let outside = read().replace("## What happened\n", "## What happened\n\nThe ford held.\n");
         fs::write(&note.path, &outside).unwrap();
+        let next_row = |harness: &egui_kittest::Harness<'_, (Sessions, Book)>| {
+            harness.get_by_label("Add rewards: Shrine").rect()
+        };
+        let shrine_before = next_row(&harness);
         harness.get_by_label("Add rewards: Bridge").click();
         harness.run_steps(2);
+        // Round 27 FN1, FK3, SK2: the result is in the plan's footer, so the next row's action
+        // keeps its place.
+        assert_eq!(next_row(&harness), shrine_before, "the rewards result moved the next row");
         let with_a = outside.replace(
             "## Loot and rewards\n\n",
             &format!("## Loot and rewards\n\n{block_a}\n"),
@@ -5694,7 +5748,7 @@ mod tests {
         assert_eq!(read(), with_a);
         assert!(shown(
             &harness,
-            "Rewards added under Loot and rewards. XP added. Delete that line to leave XP out from now on. XP tonight: 200 for 1 fight."
+            "Rewards for “Bridge” added under Loot and rewards. XP added. Delete that line to leave XP out from now on. XP tonight: 200 for 1 fight."
         ));
         assert!(harness.query_by_label("Add rewards: Bridge").is_none());
         assert!(shown(&harness, "In notes"));
@@ -5712,10 +5766,22 @@ mod tests {
             "XP 0, as in your last rewards. XP tonight: 200 for 2 fights. 1 award is not known."
         ));
         assert_eq!(harness.query_all_by_label("Undo rewards").count(), 2);
-        // Undo of A takes back A's block alone; B's stays.
+        // The footer lists the newest result first: B, then A.
+        let top = |words: &str| {
+            harness
+                .query_all_by_label_contains(words)
+                .map(|node| node.rect().top())
+                .reduce(f32::max)
+        };
+        let (newest, oldest) = (top("Rewards for “Shrine”"), top("Rewards for “Bridge”"));
+        assert!(
+            newest.zip(oldest).is_some_and(|(newest, oldest)| newest < oldest),
+            "newest first: {newest:?} {oldest:?}"
+        );
+        // Undo of A (the footer's second) takes back A's block alone; B's stays.
         harness
             .query_all_by_label("Undo rewards")
-            .next()
+            .last()
             .unwrap()
             .click();
         harness.run_steps(2);

@@ -19115,6 +19115,17 @@ pub mod session_plan {
                 }),
             format!("At {size:?}, Log, Whole run and Timeline share one line: {words:?}"),
         );
+        // Round 27 FH4: one blank on each side of `·`, as the plan's other lines have (about
+        // 11 px from word to word, where 16 px on each side gave about 36).
+        let gaps: Vec<f32> = words
+            .windows(2)
+            .filter_map(|pair| pair[0].zip(pair[1]).map(|(a, b)| b.left() - a.right()))
+            .collect();
+        d.observe(
+            "iter-27-S-FH4",
+            gaps.len() == 2 && gaps.iter().all(|gap| *gap > 0.0 && *gap < crate::design::L),
+            format!("At {size:?}, the links' word gaps are one blank, `·`, one blank: {gaps:?}"),
+        );
     }
 
     /// F7, T18.1: a played fight's rewards reach the note in 1, with its reference and one Undo,
@@ -19171,13 +19182,30 @@ pub mod session_plan {
             .expect("the session's note")
             .path;
         let before = std::fs::read_to_string(&note).unwrap();
+        // Round 27 FN1, FK3, SK2: the next row's menu below this fight's row, and this row's
+        // menu: the result is in the plan's footer, so neither moves when it comes.
+        let rows = |d: &Driver<'_>| {
+            let menu = d.place_of(&format!("More actions for {FIRST}"))?;
+            let next = d
+                .nodes()
+                .into_iter()
+                .filter(|node| {
+                    node.name.starts_with("More actions for ")
+                        && node.in_view()
+                        && node.rect.top() > menu.bottom()
+                })
+                .map(|node| node.rect.top())
+                .reduce(f32::min)?;
+            Some((menu.top(), next))
+        };
+        let rows_before = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, rows));
         // At 960x640 the note is behind its tab: the tab shows the block when the DM goes there.
         let (written, shown, result) = d.act_at_size(SMALL, |d| {
             d.begin_task();
             d.click(&action);
             d.audit_goal_within("T18.1", "put a played fight's rewards in the note", 1);
             d.wait_for_text("In notes");
-            let result = d.has_containing("Rewards added under Loot and rewards. XP added. Delete that line to leave XP out from now on. XP tonight: ");
+            let result = d.has_containing(&format!("Rewards for “{FIRST}” added under Loot and rewards. XP added. Delete that line to leave XP out from now on. XP tonight: "));
             let written = std::fs::read_to_string(&note).unwrap();
             // The counts assume the note in Write; this one shows as a reader.
             write_note(d);
@@ -19204,6 +19232,20 @@ pub mod session_plan {
                 && shown
                 && !d.has(&action),
             format!("Add rewards writes one block under Loot and rewards: {block:?}; result {result}; the Note tab shows it: {shown}"),
+        );
+        let rows_after = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, rows));
+        d.observe(
+            "iter-27-S-FN1",
+            rows_before.iter().all(Option::is_some) && rows_before == rows_after,
+            format!(
+                "The rewards result moves no plan row: menus before {rows_before:?}, after {rows_after:?}"
+            ),
+        );
+        // Must stay true: the row keeps its own state word.
+        d.observe(
+            "iter-27-S-FN1-row",
+            d.has("In notes") && !d.has(&action),
+            "The played row says In notes after Add rewards",
         );
         d.state("rewards-added", Sizes::All);
         d.click(NAV_LOOKUP);

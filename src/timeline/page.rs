@@ -1448,7 +1448,6 @@ impl TimelinePage {
                     length: &length,
                     tables,
                     planned: &|_| None,
-                    plan_line: None,
                 };
                 checks_act = checks::header(ui, &view, &mut self.checks).or(checks_act.take());
                 // The act's result keeps its line under the table, so it moves no field.

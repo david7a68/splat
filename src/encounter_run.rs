@@ -9452,7 +9452,7 @@ mod tests {
             rewards.xp_line(),
             (
                 format!(
-                    "XP 0 for 0 at 0 HP. XP not known for {}: enter an award here.",
+                    "XP 0. XP not known for {}: enter an award here.",
                     run.state.participants[1].name
                 ),
                 0,
@@ -9469,6 +9469,17 @@ mod tests {
             known.xp_line().0,
             "XP 400 for 2 at 0 HP · 80 each for 5 · 1 still stood (XP 200)"
         );
+        // Round 27 FM4: nothing at 0 HP is said in words, not as three zeros.
+        let none_down = loot::Rewards {
+            standing: vec![Some(200), Some(200), Some(200)],
+            characters: 5,
+            ..loot::Rewards::default()
+        };
+        assert_eq!(
+            none_down.xp_line(),
+            ("XP 0 · no creature at 0 HP · 3 still stood (XP 600)".to_owned(), 0, 0)
+        );
+        assert_eq!(crate::sessions::first_number(&none_down.xp_line().0), Some(0));
         let mut reopened = close_and_reopen(&mut run, campaign);
         assert_same_undo(&run, &reopened);
         assert!(reopened.undo_continues());

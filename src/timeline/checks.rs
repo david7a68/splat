@@ -28,8 +28,6 @@ pub enum Act {
     Clear(String, String),
     /// `Plan “<name>”` on a result that links an encounter or a group.
     Plan(Planned),
-    /// `Undo plan line` on the line of the check that the plan line came from.
-    UndoPlan,
 }
 
 /// What `Plan “<name>”` acted on: the name, and the check the DM clicked it on, by its label
@@ -427,7 +425,7 @@ pub fn apply(
             event.checks.remove(at);
             Some(("Check cleared.".to_owned(), "Undo clear"))
         }
-        Act::Plan(_) | Act::UndoPlan => return Ok(None),
+        Act::Plan(_) => return Ok(None),
     };
     let after = event.clone();
     if after == before {
@@ -455,8 +453,6 @@ pub struct View<'a> {
     /// For a name that a result links: nothing when it is not an encounter or a group, else
     /// whether the plan has a row still to come for it.
     pub planned: &'a dyn Fn(&str) -> Option<bool>,
-    /// The plan line whose message and Undo show on its check's line, in place of its offer.
-    pub plan_line: Option<&'a Planned>,
 }
 
 /// What the DM typed in one block: a roll for each line, and the last line's fault.
@@ -796,26 +792,14 @@ fn result(ui: &mut egui::Ui, label: &str, check: &Check, view: &View<'_>) -> Opt
             );
             let mut names = crate::sessions::linked_names(&check.words);
             names.retain(|name| planned(name).is_some());
-            // Each name keeps one place of one height: its offer, then the plan line's message
-            // and Undo, then `In the plan`. The place is as high as the message needs here, so
-            // nothing moves when the message comes or goes, and the message is never cut.
+            // Each name keeps one place, one control high: its offer, then `In the plan`. The
+            // offer's result and its Undo are in the plan's message footer (round 27 FE7).
             for name in names.into_iter().take(MOST_OFFERS) {
-                let words = plan_line_words(&name);
-                let width = ui.available_width();
-                let height =
-                    design::undo_message_height(ui, Tone::Success, &words, "Undo plan line", width);
-                let size = egui::vec2(width, height);
+                let size = egui::vec2(ui.available_width(), Density::Read.control());
                 let top = egui::Layout::top_down(egui::Align::Min);
                 ui.allocate_ui_with_layout(size, top, |ui| {
                     ui.set_min_size(size);
-                    if view
-                        .plan_line
-                        .is_some_and(|line| line.name == name && line.on(check))
-                    {
-                        if design::undo_message(ui, Tone::Success, &words, "Undo plan line") {
-                            act = Some(Act::UndoPlan);
-                        }
-                    } else if planned(&name) == Some(true) {
+                    if planned(&name) == Some(true) {
                         let line = egui::vec2(ui.available_width(), Density::Read.control());
                         let left = egui::Layout::left_to_right(egui::Align::Center);
                         ui.allocate_ui_with_layout(line, left, |ui| {
@@ -1195,7 +1179,6 @@ mod tests {
                         length: "",
                         tables: &tables,
                         planned: &|_| None,
-                        plan_line: None,
                     };
                     header(ui, &view, &mut State::default());
                 });

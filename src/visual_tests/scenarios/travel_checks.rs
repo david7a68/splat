@@ -203,7 +203,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.click("Roll all 2");
     d.expect("2 travel checks rolled.");
     d.goal_within("T11.9", "roll a two-day journey's checks", 1);
-    let faults = block_faults(d, Some("2 travel checks rolled."), "How long");
+    let faults = block_faults(d, Some("2 travel checks rolled."), "Clear the check for Day 1");
     d.observe(
         "T11.9",
         faults.is_empty() && length_at.is_some() && d.place_of("How long") == length_at,
@@ -243,6 +243,31 @@ pub fn run(d: &mut Driver<'_>) {
             && timeline_file(&dir).contains(&format!("  - Check at 24h: \"16 · {AMBUSH}")),
         "A player's roll finds its row, and a result that links an encounter offers it",
     );
+    // Round 27 FE7: How long comes first, the results follow the table, and the plan offer's
+    // line ends the checks with no reserved band before Title.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (ordered, detail) = d.at_size(size, |d| {
+            let length = d.place_of("How long");
+            let label = d.place_of("Encounter checks");
+            let offer = d.place_of(PLAN_AMBUSH);
+            let title = d.place_of("Title");
+            (
+                length
+                    .zip(label)
+                    .is_some_and(|(length, label)| length.bottom() < label.top())
+                    && offer.zip(title).is_some_and(|(offer, title)| {
+                        title.top() > offer.bottom()
+                            && title.top() - offer.bottom() <= crate::design::L + 1.0
+                    }),
+                format!("How long {length:?}, label {label:?}, offer {offer:?}, Title {title:?}"),
+            )
+        });
+        d.observe(
+            "iter-27-S-FE7",
+            ordered,
+            format!("At {size:?}, How long is above the checks and Title follows them: {detail}"),
+        );
+    }
     d.state("travel-checks-rolled", Sizes::All);
     d.state_prepared("travel-checks-rolled-lookup", Sizes::Small, |d| {
         if !d.has("Close Lookup") {
@@ -250,7 +275,7 @@ pub fn run(d: &mut Driver<'_>) {
         }
         d.expect("Encounter checks");
     });
-    let faults = block_faults(d, Some("1 travel check rolled."), "How long");
+    let faults = block_faults(d, Some("1 travel check rolled."), "Clear the check for Day 1");
     d.observe(
         "T11.9",
         faults.is_empty(),
@@ -269,16 +294,19 @@ pub fn run(d: &mut Driver<'_>) {
     d.click(PLAN_AMBUSH);
     d.expect("“Bridge Ambush” is in tonight’s plan.");
     d.goal_within("T11.10", "plan a result as a fight", 1);
-    // The message and its Undo take the offer's place, so nothing below the checks moves.
-    let message = from_label(d, "“Bridge Ambush” is in tonight’s plan.");
+    // Round 27 FE7: the message and its Undo are in the plan's footer; `In the plan` takes the
+    // offer's place, so nothing below the checks moves.
+    let in_plan = from_label(d, "In the plan");
     let after = below_checks(d);
+    let message = from_label(d, "“Bridge Ambush” is in tonight’s plan.");
     d.observe(
         "T11.10",
         below.iter().all(Option::is_some)
             && after == below
             && d.has("Undo plan line")
-            && matches!((offer, message), (Some(offer), Some(at)) if offer.y_range().contains(at.top())),
-        format!("The plan line's message is on the check's line ({offer:?}, {message:?}), and moves nothing ({below:?}, {after:?})"),
+            && matches!((offer, in_plan), (Some(offer), Some(at)) if offer.y_range().contains(at.center().y))
+            && matches!((offer, message), (Some(offer), Some(at)) if at.top() > offer.bottom()),
+        format!("In the plan is on the check's line ({offer:?}, {in_plan:?}), the message {message:?} is in the footer, not there, and nothing moves ({below:?}, {after:?})"),
     );
     d.state("travel-checks-planned", Sizes::Small);
     // Beside Lookup the row is narrower and taller: the plan scrolls to the message.
