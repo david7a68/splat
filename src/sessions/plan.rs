@@ -5154,7 +5154,7 @@ mod tests {
                         group_open: false,
                         group_discarded: false,
                         group_discarded_name: String::new(),
-                        group_discarded_order: 0,
+                        group_discarded_order: None,
                         arrivals_open: false,
                         group_editor: std::cell::RefCell::new(&mut group),
                         blocked: None,
