@@ -1780,7 +1780,11 @@ impl Trackers {
         // finds its act kept, with the order it had.
         let act: Vec<String> = self.newest.iter().map(|entry| entry.id.clone()).collect();
         if self.result.is_none() {
-            self.results.owner_changed(&owner);
+            // Only a ledger as read can say the session has no act left; before the first read
+            // (a campaign switched back) the kept act stays.
+            if self.baseline.is_some() {
+                self.results.owner_changed(&owner);
+            }
         } else if self
             .results
             .get(&owner)
