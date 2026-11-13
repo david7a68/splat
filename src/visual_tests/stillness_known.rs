@@ -6,7 +6,7 @@
 use super::stillness::{G1A, G1B, G1C, G3, KnownLine};
 
 pub const KNOWN: &[KnownLine] = &[
-    // G1A: 4 states, 29 findings.
+    // G1A: 4 states, 30 findings.
     (
         G1A,
         (
@@ -14,7 +14,7 @@ pub const KNOWN: &[KnownLine] = &[
             "06-generator-world-keeps-its-npc",
             "960x640",
         ),
-        5,
+        6,
     ),
     (
         G1A,
