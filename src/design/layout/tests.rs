@@ -341,9 +341,9 @@ fn inline_create_moves_nothing_while_the_dm_types() {
     const CANCEL: Word = crate::word!("Cancel");
     const PREVIEW: &str = "Will create /home/dm/Obsidian/Vault/Campaigns/The Copper Coast and the Salt Road/Modules/Sessions/A very long folder name that goes on/Copper Coast/Campaign.md";
     let ctx = context();
-    let draw = |reason: Option<TestReason>, cancel: bool, preview: bool| {
+    let draw_at = |width: f32, reason: Option<TestReason>, cancel: bool, preview: bool| {
         let (mut name, mut folder) = (String::from("Copper Coast"), String::from("/vault"));
-        let (nodes, painted) = frame_with(&ctx, vec2(800.0, 500.0), Vec::new(), |ui| {
+        let (nodes, painted) = frame_with(&ctx, vec2(width, 500.0), Vec::new(), |ui| {
             let _ = InlineCreate::new()
                 .field(
                     CreateField::new(
@@ -374,6 +374,7 @@ fn inline_create_moves_nothing_while_the_dm_types() {
         let rects = ["Folder", "Browse…", "Add campaign", "Below"].map(|name| bounds(&nodes, name));
         (rects, nodes, painted)
     };
+    let draw = |reason, cancel, preview| draw_at(800.0, reason, cancel, preview);
     let (still, _, _) = draw(None, false, false);
     for reason in [None, Some(TestReason::NoFolder), Some(TestReason::Long)] {
         for cancel in [false, true] {
@@ -417,11 +418,44 @@ fn inline_create_moves_nothing_while_the_dm_types() {
         "Create is on the field's line"
     );
     assert!(browse.right() <= create.left() && field.right() <= browse.left());
+    // The contract across a resize: at each width the kept line's height is one for every
+    // reason state, and the same again when the width comes back. A resize may change it, as it
+    // changes every wrapped text (wide, then narrow, then wide).
+    let below = |width: f32| {
+        let mut tops = Vec::new();
+        for reason in [None, Some(TestReason::NoFolder), Some(TestReason::Long)] {
+            for cancel in [false, true] {
+                tops.push(draw_at(width, reason, cancel, reason.is_none()).0[3].top());
+            }
+        }
+        assert!(
+            tops.iter().all(|top| *top == tops[0]),
+            "one height at {width}: {tops:?}"
+        );
+        tops[0]
+    };
+    let wide = below(800.0);
+    let narrow = below(420.0);
+    assert_eq!(
+        below(800.0),
+        wide,
+        "the same height again at the same width"
+    );
+    assert!(
+        narrow >= wide,
+        "a narrower form wraps its tallest reason on more lines"
+    );
 }
 
 /// PR 297: a field keeps its focus when a layout branch changes around it, and two live fields
 /// with one name and two row keys keep their own text and focus. A field whose id comes from its
 /// place does not keep it, which is the fault this part rules out.
+///
+/// The stated limit: the types refuse an `egui::Id` and a bare text as a key, but a number read
+/// from the layout still compiles, `NAME.with(RowIndex(ui.next_auto_id().value() as usize))`, and
+/// so does `TextKey::from_data(format!("{:?}", ui.id()))`. That a key comes from the row's data
+/// is the caller's duty; the lint counts `RowIndex(` and `TextKey::` per file, so a review sees
+/// each new one.
 #[test]
 fn a_field_id_keeps_focus_across_a_layout_branch() {
     const NAME: FieldId = crate::field_id!("test_branch_name");
@@ -500,36 +534,75 @@ fn a_field_id_keeps_focus_across_a_layout_branch() {
     );
 }
 
-/// Rung 4 for `FieldId`: two live text fields with one id make egui paint its id-clash warning,
-/// which the gate's `widget-id-clash` check fails on in every state.
+/// Rung 4 for `FieldId`, through the gate's own `widget-id-clash` function: two live fields with
+/// one id, also at the pane's right edge where the warning is clipped; a field and another widget
+/// with its id, also inside the field's rect, where egui gives no warning. Two keys stay clean.
 #[test]
-fn two_live_fields_with_one_id_paint_the_clash_warning() {
+fn the_gate_finds_two_live_widgets_with_one_id() {
     const NAME: FieldId = crate::field_id!("test_clash_name");
     let ctx = context();
     ctx.options_mut(|options| options.warn_on_id_clash = true);
-    let painted = |key: usize| {
-        let (_, painted) = frame_with(&ctx, vec2(800.0, 400.0), Vec::new(), |ui| {
-            let _ = line_field(
-                ui,
-                NAME.with(RowIndex(0)),
-                "A",
-                &mut String::new(),
-                "",
-                200.0,
-            );
-            let _ = line_field(
-                ui,
-                NAME.with(RowIndex(key)),
-                "B",
-                &mut String::new(),
-                "",
-                200.0,
-            );
+    let clashes = |case: usize| {
+        let input = egui::RawInput {
+            screen_rect: Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(500.0, 400.0))),
+            ..Default::default()
+        };
+        let output = ctx.run(input, |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                let field = |ui: &mut Ui, key: usize| {
+                    line_field(
+                        ui,
+                        NAME.with(RowIndex(key)),
+                        "A",
+                        &mut String::new(),
+                        "",
+                        200.0,
+                    )
+                };
+                match case {
+                    // Two keys: clean.
+                    0 => {
+                        field(ui, 0);
+                        field(ui, 1);
+                    }
+                    // One id twice, far apart.
+                    1 => {
+                        field(ui, 0);
+                        field(ui, 0);
+                    }
+                    // One id twice at the right edge: the fields and egui's warning run past
+                    // the pane's clip.
+                    2 => {
+                        ui.add_space(20.0);
+                        ui.horizontal(|ui| {
+                            ui.add_space(380.0);
+                            field(ui, 0);
+                        });
+                        ui.horizontal(|ui| {
+                            ui.add_space(380.0);
+                            field(ui, 0);
+                        });
+                    }
+                    // A field, then another widget with its id elsewhere.
+                    3 => {
+                        field(ui, 0);
+                        let rect = Rect::from_min_size(pos2(300.0, 300.0), vec2(40.0, 30.0));
+                        ui.interact(rect, NAME.with(RowIndex(0)).id(), Sense::click());
+                    }
+                    // A field, then another widget with its id inside the field's rect: egui
+                    // gives no warning here.
+                    _ => {
+                        let response = field(ui, 0);
+                        let inside = response.rect.shrink(4.0);
+                        ui.interact(inside, NAME.with(RowIndex(0)).id(), Sense::click());
+                    }
+                }
+            });
         });
-        painted
-            .iter()
-            .any(|text| text.text.contains("use of widget ID"))
+        widget_id_clashes(&ctx, &output.shapes)
     };
-    assert!(!painted(1), "two keys, no clash");
-    assert!(painted(0), "one id twice is a clash");
+    assert!(clashes(0).is_empty(), "two keys: {:?}", clashes(0));
+    for case in 1..=4 {
+        assert!(!clashes(case).is_empty(), "case {case} is found");
+    }
 }

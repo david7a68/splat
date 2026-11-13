@@ -131,9 +131,11 @@ mod sealed {
     pub trait Sealed {}
 }
 
-/// A stable key that tells one field of many apart: a row's data, never its place on screen.
-/// Sealed: only the kinds below are keys. `egui::Id` is not one, so the layout cannot come back
-/// into a field's id through `FieldId::with`.
+/// A key that tells one field of many apart. Sealed: only the kinds below are keys, and
+/// `egui::Id` is not one. That is all the type proves. That a key comes from the row's data, not
+/// from its place on screen, is the caller's duty: a number or a text can still be read from the
+/// layout. So the two keys that take any number or text are named, and the source lint counts
+/// their uses per file (`row-key`), so a review sees each new one.
 pub trait RowKey: sealed::Sealed + Hash {}
 
 /// A row's place in its data (an entry's index in a saved list), as a [`RowKey`]. Give it a
@@ -141,13 +143,24 @@ pub trait RowKey: sealed::Sealed + Hash {}
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct RowIndex(pub usize);
 
+/// A text from the row's data (a file name, an entry's name), as a [`RowKey`]. Named, so that a
+/// key made with `format!` is seen and counted.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct TextKey(String);
+
+impl TextKey {
+    pub fn from_data(text: impl Into<String>) -> Self {
+        Self(text.into())
+    }
+}
+
 macro_rules! row_keys {
     ($($key:ty),*) => {$(
         impl sealed::Sealed for $key {}
         impl RowKey for $key {}
     )*};
 }
-row_keys!(uuid::Uuid, RowIndex, str, String, std::path::Path);
+row_keys!(uuid::Uuid, RowIndex, TextKey, std::path::Path);
 impl<K: RowKey + ?Sized> sealed::Sealed for &K {}
 impl<K: RowKey + ?Sized> RowKey for &K {}
 impl<K: RowKey> sealed::Sealed for Option<K> {}
@@ -165,11 +178,16 @@ impl<K: RowKey> RowKey for Option<K> {}
 /// assert_ne!(NAME.with(RowIndex(1)).id(), NAME.with(RowIndex(2)).id());
 /// ```
 ///
-/// A key from the layout is not a [`RowKey`]:
+/// An `egui::Id` is not a [`RowKey`], and neither is a bare text:
 ///
 /// ```compile_fail,E0277
 /// const NAME: splat::layout::FieldId = splat::field_id!("doc_name");
 /// let _ = NAME.with(eframe::egui::Id::new("place"));
+/// ```
+///
+/// ```compile_fail,E0277
+/// const NAME: splat::layout::FieldId = splat::field_id!("doc_name");
+/// let _ = NAME.with(format!("{:?}", eframe::egui::Id::new("place")));
 /// ```
 ///
 /// An id from the layout is not a `FieldId`:
@@ -233,16 +251,130 @@ impl FieldId {
         Id::new(("splat_field", self.name, self.key))
     }
 
-    /// A raw one-line `TextEdit` with this id, for a field no shared part draws (a password, a
-    /// code font). Clippy refuses another id on it outside `src/design/`.
-    pub fn single_line(self, text: &mut dyn TextBuffer) -> TextEdit<'_> {
-        TextEdit::singleline(text).id(self.id())
+    /// A one-line field with this id that no shared part draws (a password, a code font).
+    /// `style` sets the rest of the `TextEdit`; Clippy refuses another id on it outside
+    /// `src/design/`. The field is drawn here, so the gate's `widget-id-clash` check sees it.
+    pub fn single_line<'t>(
+        self,
+        ui: &mut Ui,
+        text: &'t mut dyn TextBuffer,
+        style: impl FnOnce(TextEdit<'t>) -> TextEdit<'t>,
+    ) -> Response {
+        let response = ui.add(style(TextEdit::singleline(text).id(self.id())));
+        record_field(ui, &response);
+        response
     }
 
-    /// A raw multi-line `TextEdit` with this id.
-    pub fn multi_line(self, text: &mut dyn TextBuffer) -> TextEdit<'_> {
-        TextEdit::multiline(text).id(self.id())
+    /// A multi-line field with this id that no shared part draws.
+    pub fn multi_line<'t>(
+        self,
+        ui: &mut Ui,
+        text: &'t mut dyn TextBuffer,
+        style: impl FnOnce(TextEdit<'t>) -> TextEdit<'t>,
+    ) -> Response {
+        let response = ui.add(style(TextEdit::multiline(text).id(self.id())));
+        record_field(ui, &response);
+        response
     }
+}
+
+/// The text fields the design drew in one pass.
+#[derive(Clone, Default)]
+struct FieldsDrawn {
+    pass: u64,
+    fields: Vec<(Id, Rect)>,
+}
+
+fn fields_drawn_id() -> Id {
+    Id::new("splat_fields_drawn")
+}
+
+/// Note a field drawn in this pass, for [`field_id_clashes`].
+fn record_field(ui: &Ui, response: &Response) {
+    if ui.is_sizing_pass() {
+        return;
+    }
+    let pass = ui.ctx().cumulative_pass_nr();
+    ui.ctx().data_mut(|data| {
+        let drawn = data.get_temp_mut_or_default::<FieldsDrawn>(fields_drawn_id());
+        if drawn.pass != pass {
+            drawn.pass = pass;
+            drawn.fields.clear();
+        }
+        drawn.fields.push((response.id, response.rect));
+    });
+}
+
+/// The ids of the last pass's text fields that another live widget shares: a field drawn twice
+/// with one id, or a field whose record in egui another widget with its id took over (egui keeps
+/// one record per id, the last one; it warns of a clash only when neither rect holds the other,
+/// so this finds the cases it does not warn of). A widget drawn before a field, with the field's
+/// id and inside the field's rect, is the one case neither egui nor this sees.
+pub fn field_id_clashes(ctx: &egui::Context) -> Vec<Id> {
+    let drawn = ctx
+        .data(|data| data.get_temp::<FieldsDrawn>(fields_drawn_id()))
+        .unwrap_or_default();
+    // Only the pass that just ended counts; a record from an older pass is stale.
+    if drawn.pass + 1 < ctx.cumulative_pass_nr() {
+        return Vec::new();
+    }
+    let mut clashes = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for (id, _) in &drawn.fields {
+        if !seen.insert(*id) {
+            clashes.push(*id);
+        }
+    }
+    ctx.viewport(|viewport| {
+        for (id, rect) in &drawn.fields {
+            if viewport
+                .this_pass
+                .widgets
+                .get(*id)
+                .is_some_and(|widget| widget.rect != *rect)
+            {
+                clashes.push(*id);
+            }
+        }
+    });
+    clashes.sort_by_key(|id| id.value());
+    clashes.dedup();
+    clashes
+}
+
+/// The gate's `widget-id-clash` check for one state: egui's clash warnings, read from every
+/// painted shape with no visibility filter (a warning at the pane's edge counts), and the text
+/// fields that [`field_id_clashes`] finds. Each finding is one line of words.
+pub fn widget_id_clashes(
+    ctx: &egui::Context,
+    shapes: &[egui::epaint::ClippedShape],
+) -> Vec<String> {
+    fn texts(shape: &egui::Shape, out: &mut Vec<String>) {
+        match shape {
+            egui::Shape::Text(text) => out.push(text.galley.job.text.clone()),
+            egui::Shape::Vec(shapes) => {
+                for shape in shapes {
+                    texts(shape, out);
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut painted = Vec::new();
+    for clipped in shapes {
+        texts(&clipped.shape, &mut painted);
+    }
+    let mut found: Vec<String> = painted
+        .into_iter()
+        .filter(|text| text.contains("use of widget ID"))
+        .collect();
+    found.extend(field_id_clashes(ctx).into_iter().map(|id| {
+        format!(
+            "Two live widgets share the text field id {}",
+            id.short_debug_format()
+        )
+    }));
+    found
 }
 
 /// A [`FieldId`] from a string literal, checked when the program compiles.
@@ -268,13 +400,12 @@ pub fn line_field(
 ) -> Response {
     let hint = placeholder(ui, hint);
     // The desired width excludes the margins.
-    let response = ui.add(
-        id.single_line(text)
-            .desired_width(width - 2.0 * S)
+    let response = id.single_line(ui, text, |edit| {
+        edit.desired_width(width - 2.0 * S)
             .min_size(vec2(width, 26.0))
             .margin(vec2(S, 4.0))
-            .hint_text(hint),
-    );
+            .hint_text(hint)
+    });
     named(ui, &response, name);
     response
 }
@@ -296,12 +427,11 @@ pub fn labelled_field(
 
 /// The form field of `labelled_field` and `InlineCreate`, `width` wide without its margins.
 fn form_field(ui: &mut Ui, id: FieldId, label: &str, text: &mut String, width: f32) -> Response {
-    let response = ui.add(
-        id.single_line(text)
-            .desired_width(width)
+    let response = id.single_line(ui, text, |edit| {
+        edit.desired_width(width)
             .min_size(vec2(0.0, Density::Read.control()))
-            .margin(vec2(S, 5.0)),
-    );
+            .margin(vec2(S, 5.0))
+    });
     named(ui, &response, label);
     response
 }
@@ -1127,9 +1257,11 @@ impl<'a> CreateChoice<'a> {
 }
 
 /// The line below the last field: quiet Cancel at its start when there is something to cancel,
-/// then Create's blocked reason, or, once nothing blocks Create, the preview. Its height is fixed
-/// for the life of the form: as tall as a control, or as the tallest declared reason wrapped
-/// beside Cancel at the form's width, whichever is taller.
+/// then Create's blocked reason, or, once nothing blocks Create, the preview. At one width its
+/// height is fixed for the life of the form: as tall as a control, or as the tallest declared
+/// reason wrapped beside Cancel at that width, whichever is taller. So nothing below it moves
+/// while the DM types or a reason comes and goes. A resize may change its height, as it changes
+/// every wrapped text.
 #[derive(Clone, Copy, Debug, Default)]
 #[must_use]
 pub struct KeptLine<'a> {
@@ -1177,8 +1309,8 @@ pub struct Complete;
 /// The one inline creation layout: the fields (and choices) in order, the named Create after
 /// the last field on that field's line (after its side action), then one kept line below it,
 /// then the last field's help. Help under an earlier field has `L` before the next label.
-/// Nothing moves while the DM types: Create keeps its word, and the kept line keeps its height
-/// for the life of the form.
+/// Nothing moves while the DM types: Create keeps its word, and at one width the kept line keeps
+/// its height for the life of the form (a resize may change it, as it changes wrapped text).
 ///
 /// The order is in the type: `create` follows a text field, `kept_line` follows `create`, and
 /// only a complete form has `show`.

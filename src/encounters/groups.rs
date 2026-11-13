@@ -2858,6 +2858,7 @@ fn members_heading(draft: &GroupDraft, snapshot: &Snapshot) -> String {
     )
 }
 
+#[allow(clippy::disallowed_methods)]
 fn members(
     ui: &mut egui::Ui,
     draft: &mut GroupDraft,

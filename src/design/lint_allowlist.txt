@@ -14,9 +14,9 @@ src/dndbeyond.rs disallowed-methods-allow 1
 src/encounter_run/ad_hoc.rs disallowed-methods-allow 1
 src/encounter_run/dock.rs disallowed-methods-allow 1
 src/encounter_run/rolling.rs disallowed-methods-allow 1
-src/encounter_run/view.rs disallowed-methods-allow 14
+src/encounter_run/view.rs disallowed-methods-allow 15
 src/encounters.rs disallowed-methods-allow 8
-src/encounters/groups.rs disallowed-methods-allow 6
+src/encounters/groups.rs disallowed-methods-allow 7
 src/encounters/list.rs disallowed-methods-allow 2
 src/lib.rs disallowed-methods-allow 2
 src/library.rs disallowed-methods-allow 7
@@ -41,3 +41,40 @@ src/world/page.rs disallowed-methods-allow 4
 src/world/repair.rs disallowed-methods-allow 1
 # A hand-built layer (`LayerId { order: … }` or `Order::…`) that Clippy's method list cannot see.
 src/encounter_run/view.rs foreground-layer 1
+# Banned egui names as text, per file (clippy.toml's set): a second raw call inside an allowed
+# function raises the count. Wave 2 lowers these with the allows.
+src/art.rs raw-egui-call 1
+src/campaign_content.rs raw-egui-call 6
+src/campaigns.rs raw-egui-call 1
+src/combat_sync.rs raw-egui-call 1
+src/copy_dialog.rs raw-egui-call 3
+src/creature_filter.rs raw-egui-call 3
+src/dndbeyond.rs raw-egui-call 1
+src/encounter_run/ad_hoc.rs raw-egui-call 2
+src/encounter_run/dock.rs raw-egui-call 2
+src/encounter_run/rolling.rs raw-egui-call 2
+src/encounter_run/view.rs raw-egui-call 23
+src/encounters.rs raw-egui-call 12
+src/encounters/groups.rs raw-egui-call 12
+src/encounters/list.rs raw-egui-call 4
+src/lib.rs raw-egui-call 5
+src/library.rs raw-egui-call 27
+src/lookup.rs raw-egui-call 3
+src/loot_editor.rs raw-egui-call 2
+src/markdown_source.rs raw-egui-call 2
+src/markdown_view.rs raw-egui-call 2
+src/party.rs raw-egui-call 3
+src/party_bar.rs raw-egui-call 3
+src/processing/settings.rs raw-egui-call 5
+src/rolls.rs raw-egui-call 8
+src/sessions/page.rs raw-egui-call 27
+src/sessions/plan.rs raw-egui-call 8
+src/sessions/slash.rs raw-egui-call 8
+src/timeline/checks.rs raw-egui-call 2
+src/timeline/page.rs raw-egui-call 12
+src/trackers.rs raw-egui-call 1
+src/trackers/view.rs raw-egui-call 2
+src/world.rs raw-egui-call 5
+src/world/edit.rs raw-egui-call 3
+src/world/page.rs raw-egui-call 8
+src/world/repair.rs raw-egui-call 2

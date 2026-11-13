@@ -8777,6 +8777,7 @@ fn parse_bonus(text: &str) -> Option<f64> {
     text.trim().replace('−', "-").parse().ok()
 }
 
+#[allow(clippy::disallowed_methods)]
 fn optional_number(
     ui: &mut egui::Ui,
     label: &str,

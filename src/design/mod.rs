@@ -24,7 +24,7 @@ pub use components::*;
 pub use layout::{
     ACTION_GAP, Create, CreateChoice, CreateField, CreateReasons, FieldId, InlineCreate, KeptLine,
     MAX_WORD_CHARS, NARROWEST_PANE, NoReason, RowIndex, RowKey, ScrollColumn, Slot, SlotType,
-    TitleAction, TitleLine, TitlePlacement, TitleType, Word, labelled_field, lane_width,
+    TextKey, TitleAction, TitleLine, TitlePlacement, TitleType, Word, labelled_field, lane_width,
     line_field, menu_popup, sideways_scroll, status_slot, title_lead_in, title_placement,
 };
 pub use tokens::*;
