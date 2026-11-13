@@ -38,6 +38,7 @@ pub(crate) const RESULTS_LISTED: usize = 8;
 const PANEL_MARGIN: f32 = design::M;
 
 pub const SEARCH_NAME: &str = "Search everything";
+const LOOKUP_SEARCH: design::FieldId = crate::field_id!("lookup_search");
 
 /// The search field's placeholder for this width of the panel.
 fn search_hint(width: f32) -> &'static str {
@@ -2016,17 +2017,11 @@ impl Lookup {
     /// The search field while Trackers is the view: empty, with its placeholder, so it does not
     /// read as a filter of the trackers. Lookup keeps its words for its own view. Words typed
     /// here are a new search, which leaves Trackers for its results.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn search_over_trackers(&mut self, ui: &mut egui::Ui, width: f32) -> egui::Response {
         let mut typed = String::new();
-        let response = ui
-            .horizontal(|ui| {
-                design::search_field(ui, SEARCH_NAME, &mut typed, search_hint(width), width)
-            })
-            .inner;
+        let response = LOOKUP_SEARCH
+            .search(ui, SEARCH_NAME, &mut typed, search_hint(width), width)
+            .field;
         if !typed.is_empty() {
             self.query = typed;
             self.leave_trackers();
@@ -2117,33 +2112,18 @@ impl Lookup {
         }
         let width = ui.available_width();
         let before = self.query.clone();
-        let show_clear = !self.query.is_empty();
         let response = if self.trackers_shown {
             self.search_over_trackers(ui, width)
         } else {
-            ui.horizontal(|ui| {
-                let response = design::search_field(
-                    ui,
-                    SEARCH_NAME,
-                    &mut self.query,
-                    search_hint(width),
-                    width
-                        - if show_clear {
-                            Action::quiet("Clear").natural_width(ui) + ui.spacing().item_spacing.x
-                        } else {
-                            0.0
-                        },
-                );
-                if show_clear && Action::quiet("Clear").show(ui).clicked() {
-                    self.query.clear();
-                    self.current = None;
-                    self.reader.clear();
-                    self.reading_written = None;
-                    self.generated = None;
-                }
-                response
-            })
-            .inner
+            let search =
+                LOOKUP_SEARCH.search(ui, SEARCH_NAME, &mut self.query, search_hint(width), width);
+            if search.cleared {
+                self.current = None;
+                self.reader.clear();
+                self.reading_written = None;
+                self.generated = None;
+            }
+            search.field
         };
         if std::mem::take(&mut self.focus_search) {
             design::focus_and_select(ui, response.id, &self.query);
@@ -2521,7 +2501,7 @@ impl Lookup {
         let Some(current) = self.current.and_then(|c| index.items.get(c)) else {
             self.gone_log_footer(ui);
             if query.is_empty() {
-                ui.add_space(design::S);
+                design::gap(ui, design::Gap::S);
                 // Help keeps the reader measure, as every help line does (round 26 AB2).
                 design::help(ui, SEARCH_HELP);
             }
@@ -2628,7 +2608,7 @@ impl Lookup {
                     .collect();
                 // A short note is all in view, and needs no second copy of its own line.
                 if !found.is_empty() && written.text.lines().count() > FOUND_FROM_LINES {
-                    design::group_label(ui, "Found here");
+                    design::heading(ui, design::Heading::Label("Found here"));
                     for line in found {
                         let words = line.trim_start_matches(['#', '-', '*', ' ']);
                         ui.add(
@@ -2836,10 +2816,6 @@ pub(crate) fn generated_card(
 }
 
 /// What the generator rolled, with its choices and the names help for this place.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 pub(crate) fn generator_card(
     ui: &mut egui::Ui,
     npc: &crate::npc_generator::Generated,
@@ -2850,7 +2826,7 @@ pub(crate) fn generator_card(
     save_path: &str,
 ) -> CardChoice {
     let mut choice = CardChoice::default();
-    design::group_label(ui, "Generated NPC");
+    design::heading(ui, design::Heading::Label("Generated NPC"));
     ui.add(egui::Label::new(Type::Strong.rich(ui, &npc.name).color(colors().text)).wrap());
     for (label, text) in crate::npc_generator::ATTRIBUTES.iter().zip(&npc.attributes) {
         ui.add(

@@ -230,16 +230,15 @@ fn blank(value: &serde_yaml_ng::Value) -> bool {
     }
 }
 
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn structured_value(ui: &mut egui::Ui, value: &serde_yaml_ng::Value) {
     if let Some(fields) = value.as_mapping() {
         for (key, value) in fields {
             let key = display_value(key);
             if value.is_mapping() || value.is_sequence() {
-                style::section_heading(ui, &style::human_label(&key));
+                crate::design::heading(
+                    ui,
+                    crate::design::Heading::Section(&style::human_label(&key)),
+                );
                 structured_value(ui, value);
             } else {
                 style::detail(ui, &key, &display_value(value));
@@ -368,7 +367,7 @@ pub(super) fn show(
         sections
     };
     if !has_summary && lead_gap {
-        ui.add_space(crate::design::L);
+        crate::design::gap(ui, crate::design::Gap::L);
     }
     if let Some(entry) = entry {
         let printed = sections
@@ -430,7 +429,7 @@ pub(super) fn show(
                             style::detail(ui, &label, &value);
                         }
                     });
-                    ui.add_space(crate::design::M);
+                    crate::design::gap(ui, crate::design::Gap::M);
                 }
                 style::source_prose(ui, &presentation::overview_markdown(&prose));
             } else {

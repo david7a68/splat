@@ -789,10 +789,6 @@ mod reading_tests {
     }
 
     #[test]
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn every_builtin_subclass_has_one_gap_before_its_first_visible_block() {
         let loaded = crate::library::load(None).unwrap();
         let mut count = 0;
@@ -820,7 +816,7 @@ mod reading_tests {
                                 true,
                             );
                         } else {
-                            ui.add_space(design::L);
+                            design::gap(ui, design::Gap::L);
                             design::reader::source_prose(ui, &prose);
                         }
                     });

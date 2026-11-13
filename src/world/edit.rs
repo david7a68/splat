@@ -473,10 +473,6 @@ impl EditDraft {
     }
 
     /// The note changed on disk under the draft. The DM keeps it, or reloads with an Undo.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn conflict(&mut self, ui: &mut egui::Ui, index: &ContentIndex) -> Conflict {
         let Some((disk, theirs)) = self.disk.take() else {
             return Conflict::None;
@@ -485,7 +481,7 @@ impl EditDraft {
         if let Some(theirs) = &theirs {
             let effects = self.overwrite_effects(theirs, index);
             if !effects.is_empty() {
-                ui.add_space(design::S);
+                design::gap(ui, design::Gap::S);
             }
             for (label, words) in effects {
                 ui.horizontal_top(|ui| {
@@ -934,7 +930,7 @@ impl Reader {
                 }
             }
         }
-        ui.add_space(design::M);
+        design::gap(ui, design::Gap::M);
         // The frame the DM chooses Reload: its result, below the save row, scrolls into view.
         let had_conflict = draft.disk.is_some();
         let overwrite = match draft.conflict(ui, index) {
@@ -1096,12 +1092,16 @@ impl Reader {
         // The shared text field, with a faint example of the one rule the value has.
         focused |= design::field(ui, "Status", None, None, |ui| {
             let width = ui.available_width().min(design::FORM_WIDTH) - 2.0 * design::S;
-            let response = ui.add(
-                egui::TextEdit::singleline(&mut draft.now.status)
-                    .desired_width(width)
-                    .min_size(egui::vec2(0.0, Density::Read.control()))
-                    .margin(egui::vec2(design::S, 5.0))
-                    .hint_text(design::placeholder(ui, STATUS_HINT)),
+            let hint = design::placeholder(ui, STATUS_HINT);
+            let response = super::EDIT_STATUS.id(self.compact, id).single_line(
+                ui,
+                &mut draft.now.status,
+                |edit| {
+                    edit.desired_width(width)
+                        .min_size(egui::vec2(0.0, Density::Read.control()))
+                        .margin(egui::vec2(design::S, 5.0))
+                        .hint_text(hint)
+                },
             );
             design::named(ui, &response, "Status");
             response
@@ -1134,14 +1134,17 @@ impl Reader {
                             .max_height(height - 2.0 * (design::S + design::HAIRLINE_WIDTH))
                             .auto_shrink([false, true])
                             .show(ui, |ui| {
-                                ui.add(
-                                    egui::TextEdit::multiline(&mut draft.now.text)
-                                        .id(egui::Id::new(("world_edit_text", id)))
-                                        .font(font)
-                                        .desired_width(ui.available_width())
-                                        .desired_rows(8)
-                                        .frame(false)
-                                        .margin(egui::Vec2::ZERO),
+                                let width = ui.available_width();
+                                super::EDIT_TEXT.id(self.compact, id).multi_line(
+                                    ui,
+                                    &mut draft.now.text,
+                                    |edit| {
+                                        edit.font(font)
+                                            .desired_width(width)
+                                            .desired_rows(8)
+                                            .frame(false)
+                                            .margin(egui::Vec2::ZERO)
+                                    },
                                 )
                             })
                             .inner
@@ -1174,7 +1177,7 @@ impl Reader {
                 && focused
                 && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)));
         let mut cancel = false;
-        ui.add_space(design::S);
+        design::gap(ui, design::Gap::S);
         // The campaign-switch reason sits between Discard and Save where it fits. In a narrow
         // form (Lookup beside a run) it takes its own line below the row, reserved while the
         // form has no changes, so the first edit moves nothing.
