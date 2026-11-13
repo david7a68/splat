@@ -531,6 +531,28 @@ fn first<T>(slot: &mut Option<T>, pressed: T) {
     slot.get_or_insert(pressed);
 }
 
+/// The one decision for every control of a message (its Undo, each choice, the close icon), in
+/// drawing order: an activation goes to `first`. Test builds can also activate a control of the
+/// message `words` for one pass (egui gives each activation its own pass), so a test can put
+/// several in one.
+fn activated(ui: &Ui, slot: &mut Option<Pressed>, clicked: bool, words: &str, what: Pressed) {
+    #[cfg(test)]
+    let clicked = clicked
+        || ui.ctx().data(|data| {
+            data.get_temp::<Vec<(String, Pressed)>>(egui::Id::new(TEST_ACTIVATIONS))
+                .is_some_and(|list| list.iter().any(|(w, p)| w == words && *p == what))
+        });
+    #[cfg(not(test))]
+    let _ = (ui, words);
+    if clicked {
+        first(slot, what);
+    }
+}
+
+/// Test builds: the controls `activated` treats as pressed in this pass.
+#[cfg(test)]
+const TEST_ACTIVATIONS: &str = "design_test_activations";
+
 /// A pane with no choice and no Undo in its footer: its presses can never happen.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NoPress {}
@@ -1346,40 +1368,38 @@ impl Body {
             .iter()
             .position(|choice| matches!(choice, MessageChoice::Dismiss(_)))
         else {
-            return self.draw_words(ui, place).0;
+            let mut pressed = None;
+            self.draw_words(ui, place, &mut pressed);
+            return pressed;
         };
         let size = Density::Read.control();
         let lock = self.locks.get(at).and_then(holding);
         let mut pressed = None;
-        let words = ui
-            .scope(|ui| {
-                ui.set_max_width(ui.available_width().min(LIST_MEASURE));
-                let right = ui.max_rect().right();
-                let (words, line) = ui
-                    .scope(|ui| {
-                        ui.set_max_width(ui.available_width() - size - S);
-                        self.draw_words(ui, place)
-                    })
-                    .inner;
-                let centre = egui::pos2(right - size / 2.0, line);
-                let icon = ui.put(
-                    Rect::from_center_size(centre, egui::Vec2::splat(size)),
-                    |ui: &mut Ui| match lock {
-                        Some(reason) => ui
-                            .add_enabled_ui(false, |ui| icon_button(ui, icons::CLOSE, DISMISS_NAME))
-                            .inner
-                            .on_disabled_hover_text(reason),
-                        None => icon_button(ui, icons::CLOSE, DISMISS_NAME),
-                    },
-                );
-                if icon.clicked() {
-                    first(&mut pressed, Pressed::Choice(at));
-                }
-                words
-            })
-            .inner;
-        // The words and their controls are drawn before the close icon: they come first.
-        words.or(pressed)
+        ui.scope(|ui| {
+            ui.set_max_width(ui.available_width().min(LIST_MEASURE));
+            let right = ui.max_rect().right();
+            let line = ui
+                .scope(|ui| {
+                    ui.set_max_width(ui.available_width() - size - S);
+                    self.draw_words(ui, place, &mut pressed)
+                })
+                .inner;
+            let centre = egui::pos2(right - size / 2.0, line);
+            let icon = ui.put(
+                Rect::from_center_size(centre, egui::Vec2::splat(size)),
+                |ui: &mut Ui| match lock {
+                    Some(reason) => ui
+                        .add_enabled_ui(false, |ui| icon_button(ui, icons::CLOSE, DISMISS_NAME))
+                        .inner
+                        .on_disabled_hover_text(reason),
+                    None => icon_button(ui, icons::CLOSE, DISMISS_NAME),
+                },
+            );
+            // The words and their controls are drawn before the close icon: they come first.
+            let words = self.words.as_str();
+            activated(ui, &mut pressed, icon.clicked(), words, Pressed::Choice(at));
+        });
+        pressed
     }
 
     /// The choices that sit on rows under the words: all but `Dismiss`.
@@ -1395,9 +1415,8 @@ impl Body {
     /// them at their first letter; with choices, the Undo and then the choices on rows under the
     /// words, from their first letter. A locked Undo or choice is disabled, with its reason as
     /// its accessible description and painted under the message. Also the y of the centre of
-    /// the words' first line.
-    fn draw_words(&self, ui: &mut Ui, place: MessagePlace) -> (Option<Pressed>, f32) {
-        let mut pressed = None;
+    /// the words' first line. Its presses go to `pressed`.
+    fn draw_words(&self, ui: &mut Ui, place: MessagePlace, pressed: &mut Option<Pressed>) -> f32 {
         let mut line = ui.cursor().top() + Type::Body.line() / 2.0;
         let response = ui
             .scope(|ui| {
@@ -1415,9 +1434,7 @@ impl Body {
                             let lock = holding(&self.undo_lock);
                             let (undo, centre) =
                                 undo_message_line(ui, self.tone, words, &shown, name, lock);
-                            if undo {
-                                first(&mut pressed, Pressed::Undo);
-                            }
+                            activated(ui, pressed, undo, words, Pressed::Undo);
                             line = centre;
                         }
                     }
@@ -1459,13 +1476,12 @@ impl Body {
                             if shown != label {
                                 action = action.name(label);
                             }
-                            if action.show(ui).clicked() {
-                                first(&mut pressed, Pressed::Undo);
-                            }
+                            let clicked = action.show(ui).clicked();
+                            activated(ui, pressed, clicked, words, Pressed::Undo);
                             space(ui, (L - gap).max(0.0));
                         }
-                        if one_line && let Some(at) = self.draw_choices(ui) {
-                            first(&mut pressed, Pressed::Choice(at));
+                        if one_line {
+                            self.draw_choices(ui, pressed);
                         }
                     });
                 }
@@ -1473,9 +1489,7 @@ impl Body {
                     ui.horizontal_top(|ui| {
                         space(ui, inset);
                         ui.horizontal_wrapped(|ui| {
-                            if let Some(at) = self.draw_choices(ui) {
-                                first(&mut pressed, Pressed::Choice(at));
-                            }
+                            self.draw_choices(ui, pressed);
                         });
                     });
                 }
@@ -1483,7 +1497,7 @@ impl Body {
             })
             .response;
         register(ui, response.rect, place, self.tone);
-        (pressed, line)
+        line
     }
 
     /// Why its Undo or a choice is locked, each reason once, in `Small` muted words on a line of
@@ -1491,18 +1505,21 @@ impl Body {
     /// hover. The reason of a lock that is open now keeps its place, drawn but not shown, so a
     /// lock that comes or goes moves no line below it.
     fn reasons(&self, ui: &mut Ui) {
-        let mut said: Vec<&str> = Vec::new();
+        // Identical reasons are one line, shown when any of their locks holds.
+        let mut said: Vec<(&str, bool)> = Vec::new();
         let locks = std::iter::once(&self.undo_lock)
             .filter(|_| self.undo.is_some())
             .chain(&self.locks);
         for (reason, locked) in locks.flatten() {
             let reason = reason.as_str();
-            if said.contains(&reason) {
-                continue;
+            match said.iter_mut().find(|(said, _)| *said == reason) {
+                Some((_, any)) => *any |= *locked,
+                None => said.push((reason, *locked)),
             }
-            said.push(reason);
+        }
+        for (reason, locked) in said {
             message_choice_row(ui, self.tone, |ui| {
-                if *locked {
+                if locked {
                     blocked_reason(ui, Some(reason));
                 } else {
                     ui.scope_builder(egui::UiBuilder::new().invisible(), |ui| {
@@ -1534,9 +1551,8 @@ impl Body {
 
     /// The choices, in order: a red one keeps exactly `L` from the one before it. The pressed
     /// choice's index.
-    fn draw_choices(&self, ui: &mut Ui) -> Option<usize> {
+    fn draw_choices(&self, ui: &mut Ui, pressed: &mut Option<Pressed>) {
         let gap = ui.spacing().item_spacing.x;
-        let mut pressed = None;
         for (at, choice) in self.row_choices() {
             let lock = self.locks.get(at).and_then(holding);
             let clicked = match choice {
@@ -1575,11 +1591,14 @@ impl Body {
                 },
                 MessageChoice::Dismiss(_) => false,
             };
-            if clicked {
-                first(&mut pressed, at);
-            }
+            activated(
+                ui,
+                pressed,
+                clicked,
+                self.words.as_str(),
+                Pressed::Choice(at),
+            );
         }
-        pressed
     }
 
     /// Undo's label for the room after the message's icon.
@@ -2045,6 +2064,61 @@ mod tests {
         first(&mut pressed, Pressed::Undo);
         first(&mut pressed, Pressed::Choice(0));
         assert_eq!(pressed, Some(Pressed::Undo));
+        // The whole path: several controls activated in one pass, the pane gives back the first
+        // in drawing order (the newer line, then the older; in a line its Undo, its choices,
+        // then its close icon).
+        use pilot::*;
+        let older = "Campaign link saved.";
+        let newer = "Folder saved.";
+        let mut app = two();
+        app.two_choices = true;
+        let mut h = harness(app);
+        for (activate, expect) in [
+            (
+                vec![(older, Pressed::Choice(1)), (older, Pressed::Choice(0))],
+                (Act::Register, "older"),
+            ),
+            (
+                vec![(older, Pressed::Choice(1)), (older, Pressed::Undo)],
+                (Act::Undo, "older"),
+            ),
+            (
+                vec![(newer, Pressed::Choice(0)), (newer, Pressed::Undo)],
+                (Act::Undo, "newer"),
+            ),
+            (
+                vec![(older, Pressed::Undo), (newer, Pressed::Choice(0))],
+                (Act::Dismiss, "newer"),
+            ),
+        ] {
+            let at = order(h.state(), expect.1);
+            h.state_mut().presses.clear();
+            h.state_mut().acted.clear();
+            let list: Vec<(String, Pressed)> = activate
+                .iter()
+                .map(|(words, what)| ((*words).to_owned(), *what))
+                .collect();
+            h.ctx
+                .data_mut(|data| data.insert_temp(egui::Id::new(TEST_ACTIVATIONS), list));
+            h.step();
+            h.ctx.data_mut(|data| {
+                data.remove::<Vec<(String, Pressed)>>(egui::Id::new(TEST_ACTIVATIONS))
+            });
+            assert_eq!(
+                h.state().presses,
+                [(0, expect.0, at)],
+                "activated {activate:?}"
+            );
+            // An Undo acted: record the entry again for the next case.
+            if !h.state().acted.is_empty() {
+                *h.state_mut() = {
+                    let mut app = two();
+                    app.two_choices = true;
+                    app
+                };
+                h.run_steps(2);
+            }
+        }
     }
 
     /// The pilot's pane (package C, Campaign → Link and folder), as a fixture: the footer shows
@@ -2110,6 +2184,9 @@ mod tests {
         pub(super) struct App {
             pub dndbeyond: DndBeyond,
             pub run_live: bool,
+            /// The older line's Undo stays open while the run is live (its choice stays locked,
+            /// with the same reason).
+            pub older_undo_open: bool,
             pub in_body: Option<InBody>,
             /// The older line has a second choice after `Register as a new campaign`.
             pub two_choices: bool,
@@ -2144,6 +2221,7 @@ mod tests {
         /// One pane: its footer shows the store's kept lines; its body changes the owner.
         fn one_pane(ui: &mut Ui, app: &mut App, pane: usize) {
             let live = app.run_live;
+            let older_undo_open = app.older_undo_open;
             let frame = PaneFrame::new(ui);
             let mut messages = Messages::new(&frame, ("pilot", pane), ui.available_width());
             for owner in ["older", "newer", "third"] {
@@ -2154,7 +2232,7 @@ mod tests {
                             UndoStep::verb(Verb::Change)
                                 .tell_apart(owner)
                                 .pressed_as(Act::Undo)
-                                .locked_when(live, LOCK),
+                                .locked_when(live && !(owner == "older" && older_undo_open), LOCK),
                         );
                         if owner == "older" {
                             // A choice attached to a kept result.
@@ -2496,6 +2574,27 @@ mod tests {
         h.run_steps(2);
         assert!(
             h.state().acted.is_empty() && h.state().registered == 0 && h.state().presses.is_empty()
+        );
+        // Two locks of one message share a reason and come apart: the older line's Undo opens
+        // while its choice stays locked. The shared reason stays painted for the choice.
+        let painted = |h: &Harness<'_, pilot::App>| {
+            h.output()
+                .shapes
+                .iter()
+                .filter(|clipped| {
+                    matches!(&clipped.shape, egui::Shape::Text(text) if text.galley.job.text == LOCK.as_str())
+                })
+                .count()
+        };
+        assert_eq!(painted(&h), 2, "both locked messages paint the reason");
+        h.state_mut().older_undo_open = true;
+        h.run_steps(2);
+        assert!(!disabled(&undo(&h, "older")), "the older Undo is open");
+        assert!(disabled(&h.get_by_label("Register as a new campaign")));
+        assert_eq!(
+            painted(&h),
+            2,
+            "the locked choice still paints the reason its open Undo shares"
         );
     }
 

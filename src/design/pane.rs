@@ -1017,7 +1017,10 @@ mod hold_tests {
             h.state_mut().rows_above += rows;
             h.run_steps(4);
             let after = h.get_by_label("Add a row above").rect().top();
-            assert!(after - before > 20.0, "{by}: not held: {before} then {after}");
+            assert!(
+                after - before > 20.0,
+                "{by}: not held: {before} then {after}"
+            );
         }
     }
 
@@ -1052,7 +1055,11 @@ mod hold_tests {
             assert_eq!(h.state().rows_above, 5);
             if holds {
                 assert!((after - before).abs() < 0.5, "held: {before} then {after}");
-                assert_eq!(ended(&h), Some("corrected"), "the one correction ends the hold");
+                assert_eq!(
+                    ended(&h),
+                    Some("corrected"),
+                    "the one correction ends the hold"
+                );
             } else {
                 assert!(after - before > 20.0, "not held: {before} then {after}");
             }
