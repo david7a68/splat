@@ -6634,6 +6634,34 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     d.click_row("Cinder Wolf 1");
     d.click("Stat block");
     d.expect("Bite");
+    // iter-27-R FD3: a file that cannot be read now is an error in the run's panel too.
+    let mut error_icon = false;
+    let mut unread = false;
+    d.each_painted_text(|text, _| {
+        let job = &text.galley.job;
+        if job.text == design::icons::ERROR
+            && job.sections.first().map(|s| s.format.color) == Some(design::colors().result.error)
+        {
+            error_icon = true;
+        }
+        unread |= job.text.contains("Cinder Wolf.md cannot be read now.");
+    });
+    d.observe(
+        "iter-27-R-FD3",
+        error_icon && unread,
+        format!("The run's notice is an error: icon {error_icon}, words {unread}"),
+    );
+    // iter-27-R FD5: the notice is in the panel's footer, so the stat block keeps its top when
+    // the notice grows by `Read the new version` after the repair.
+    let bite_y = |d: &mut Driver<'_>| {
+        [(960.0, 640.0), (1200.0, 800.0), (1920.0, 1080.0)].map(|size| {
+            d.at_size(size, |d| {
+                d.painted_rect_in("Bite", egui::Rect::EVERYTHING)
+                    .map(|rect| rect.top().round())
+            })
+        })
+    };
+    let unreadable_y = bite_y(d);
     d.state("invalid-package-in-paused-run", Sizes::All);
     close_run(d);
     go_library(d);
@@ -6654,6 +6682,16 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     d.click("Stat block");
     d.expect("Bite");
     d.expect_same("The paused run keeps its saved creature snapshot across a package repair.");
+    let repaired_y = bite_y(d);
+    d.observe(
+        "iter-27-R-FD5",
+        unreadable_y.iter().all(Option::is_some)
+            && unreadable_y == repaired_y
+            && d.has("Read the new version"),
+        format!(
+            "Bite's y with the unreadable notice {unreadable_y:?}, after the repair {repaired_y:?}"
+        ),
+    );
     d.state("repaired-package-in-paused-run", Sizes::All);
 
     // iter-22-E-SD1: a repair draft's notice and save-row state come from its current parse. The

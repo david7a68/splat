@@ -1012,6 +1012,19 @@ fn play(d: &mut Driver<'_>) -> (Evening, Bytes, Bytes) {
     ev.hovers(d, "run-twelve");
     ev.act(d, "open Keys", |d| d.click("Keyboard commands"));
     ev.page(d, "run-keys");
+    // iter-27-R FE14: the panel's title names the keys, not the selected row, and the list
+    // has no second label saying the same.
+    d.observe(
+        "iter-27-R-FE14",
+        d.visible_text("Keyboard commands")
+            && !d.visible_text("KEYBOARD COMMANDS")
+            && !d.nodes().iter().any(|node| {
+                node.role == egui::accesskit::Role::Label
+                    && node.name.contains("Ashfang")
+                    && node.rect.left() > 700.0
+            }),
+        "With Keys on, the panel's title is Keyboard commands",
+    );
     ev.act(d, "close Keys", |d| d.click("Keyboard commands"));
     ev.act(d, "select Brannoch", |d| d.click_row("Brannoch Vale"));
     ev.held(d, "run-twelve: Brannoch selected");
@@ -2631,7 +2644,7 @@ mod allowed_classes {
         use std::sync::OnceLock;
 
         const OLD_HELP: &str = "These record your ruling. No number changes by itself. Other effects stay local and do not sync.";
-        const NEW_HELP: &str = "No HP, AC or roll changes by itself. A time you type counts down on that creature’s turns. Other effects stay local and do not sync.";
+        const NEW_HELP: &str = "No HP, AC or roll changes by itself. A number after the words counts down at the end of that creature’s turn: Bless 10 becomes Bless 9. Other effects stay local and do not sync.";
         const OLD_FIELD: &str = "Other effect…";
         const NEW_FIELD: &str = "Other effect, such as Bless 10 rounds";
         const EFFECT: &str = "Button: Effect: words for this row";
@@ -6449,7 +6462,7 @@ mod allowed_classes {
             };
         let (twelve, closed) = ("run-twelve", "1200x800 Lookup closed");
         let (conditions, small) = ("run-conditions", "960x640 Lookup closed");
-        let help = "No HP, AC or roll changes by itself. A time you type counts down on that creature’s turns. Other effects stay local and do not sync.";
+        let help = "No HP, AC or roll changes by itself. A number after the words counts down at the end of that creature’s turn: Bless 10 becomes Bless 9. Other effects stay local and do not sync.";
         let r3a_faults = [
             (
                 33,
