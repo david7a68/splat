@@ -30,6 +30,10 @@ pub(crate) struct ViewState {
     shortened: usize,
     /// The panel's columns, with the trackers' revision and the width they were measured for.
     columns: Option<(u64, u32, Columns)>,
+    /// The widest value slot this panel needed since its definitions were read: an Undo that
+    /// takes `1000` back to `999` keeps the room, so no action moves back and forth. It ends
+    /// when the definitions are read again (`Trackers::rules` replaced) or the campaign changes.
+    pub(super) widest_value: f32,
     /// How many times the columns were measured.
     #[cfg(test)]
     pub(super) measured: usize,
@@ -70,12 +74,7 @@ fn value_slot(value: i64, goal: Option<i64>) -> String {
 /// Measure the panel's columns: every line of every tracker that can be used, pinned or not,
 /// so opening `More trackers` moves no pinned value. Only `columns` calls it, when the
 /// trackers' revision or the width changed.
-fn measure_columns(
-    ui: &egui::Ui,
-    rules: &Rules,
-    state: &State,
-    #[cfg_attr(not(test), allow(unused_variables))] view: &mut ViewState,
-) -> Columns {
+fn measure_columns(ui: &egui::Ui, rules: &Rules, state: &State, view: &mut ViewState) -> Columns {
     #[cfg(test)]
     {
         view.measured += 1;
@@ -103,6 +102,9 @@ fn measure_columns(
         }
     }
     let name = name.min(ui.available_width() * NAME_SHARE);
+    // The value column never narrows while the definitions stay (`widest_value`).
+    let value = value.max(view.widest_value);
+    view.widest_value = value;
     // The line's parts and the gaps between them: name, S, value, S, then the actions.
     let used = name + value + 2.0 * design::S + 4.0 * ui.spacing().item_spacing.x;
     Columns {
@@ -861,9 +863,14 @@ fn amount_field(
     let Some((key, instance, _, typed)) = view.asking.as_mut() else {
         return;
     };
+    // One id for the field, from its tracker, line and action, whatever layout holds it: the
+    // panel's two layouts nest it in different `Ui`s, and an automatic id would lose focus and
+    // the typed amount when the width crosses between them.
+    let id = egui::Id::new(("trackers_amount", key.as_str(), instance.as_deref(), label));
     let response = ui.add_sized(
         egui::vec2(width, Density::Read.control()),
         egui::TextEdit::singleline(typed)
+            .id(id)
             .min_size(egui::vec2(0.0, Density::Read.control()))
             .hint_text("Amount"),
     );

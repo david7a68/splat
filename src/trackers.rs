@@ -1169,16 +1169,36 @@ pub fn result_words(rules: &Rules, ledger: &Ledger, state: &State, entries: &[En
 /// The act's own words: the notice it ended or rolled on, or the values it left.
 fn act_words(rules: &Rules, ledger: &Ledger, state: &State, entries: &[Entry]) -> String {
     let label = label(rules, ledger, entries);
-    if let Some(entry) = head(entries).filter(|e| e.notice.is_some()) {
-        if entry.done || entry.dismissed {
-            return format!("{label}.");
+    // An act on a notice says what happened in a sentence; `Undo: <label>` keeps the label.
+    if let Some(entry) = head(entries).filter(|e| e.notice.is_some())
+        && let Some(notice) = &entry.notice
+    {
+        let short = notice_name(rules, ledger, notice);
+        let ends = entries.iter().filter(|e| e.dismissed).count();
+        if let (NoticeRef::Day { mark, .. }, true) = (notice, entry.dismissed && ends > 1) {
+            return format!("{} is dismissed for {ends} days.", rules.day_title(mark));
+        }
+        if entry.done {
+            return format!("{short} is done.");
+        }
+        if entry.dismissed {
+            return format!("{short} is dismissed.");
         }
         if let Some(Roll::Table(roll)) = &entry.roll {
             let name = roll
                 .name
                 .as_ref()
-                .map_or(String::new(), |n| format!("{n} "));
-            return format!("{label}: {name}{} · {}", roll.value, roll.row);
+                .map_or(String::new(), |n| format!(" for {n}"));
+            let mut words = format!(
+                "Rolled {} on {}{name}: {}",
+                roll.value,
+                rules.table_name(&roll.table),
+                roll.row.trim()
+            );
+            if !words.ends_with(['.', '!', '?']) {
+                words.push('.');
+            }
+            return words;
         }
     }
     // Each value it left is a sentence of its own; `Undo: <label>` below names the act.
@@ -1518,7 +1538,12 @@ impl Trackers {
         {
             self.manifest = Some(CampaignDocument::load(campaign).map(|document| document.path));
             self.index = Some(index);
-            self.rules = self.rules_now();
+            let rules = self.rules_now();
+            if !rules.same_definitions(&self.rules) {
+                // New definitions: the value column fits them afresh.
+                self.view.widest_value = 0.0;
+            }
+            self.rules = rules;
             self.settle();
             self.last_check = None;
         }
@@ -1682,6 +1707,7 @@ impl Trackers {
         });
         let done = self.finish(result);
         if changed {
+            self.view.widest_value = 0.0;
             self.rules = rules;
             self.settle();
         }
@@ -2086,6 +2112,14 @@ mod tests {
                 .clone();
             assert_eq!(roll.name.as_deref(), Some(name));
             assert_eq!(newest_label(t), "Rival Track roll");
+            // The result is a sentence; Undo keeps the label.
+            assert_eq!(
+                result_words(&t.rules, &t.ledger, &t.state, t.newest()),
+                format!(
+                    "Rolled {} on Rival Track for {name}: {}",
+                    roll.value, roll.row
+                )
+            );
         }
         let before = file(&race);
         let t = &mut race.trackers;
@@ -2105,7 +2139,7 @@ mod tests {
         assert_eq!(newest_label(t), "Bell done");
         assert_eq!(
             result_words(&t.rules, &t.ledger, &t.state, t.newest()),
-            "Bell done."
+            "Bell is done."
         );
 
         // `min` blocks a press, and says why beside it.
@@ -2737,10 +2771,7 @@ mod tests {
         assert!(state.due.is_empty(), "{:?}", state.due);
         assert_eq!(
             result_words(&rules, &ledger, &state, &done),
-            format!(
-                "{}. First for Old Guard is no longer due.",
-                label(&rules, &ledger, &done)
-            )
+            "Rest, Day 7 is done. First for Old Guard is no longer due."
         );
     }
 
@@ -2802,8 +2833,12 @@ mod tests {
             .map(|row| row.words.as_str())
             .collect();
         assert_eq!(rows[..2], ["Enter room: +10", "Enter room: +10"]);
-        assert!(rows[2].starts_with("Wandering, 0:00 to 0:39 roll: "));
-        assert_eq!(rows[3], "Bell done.");
+        assert!(
+            rows[2].starts_with("Rolled ") && rows[2].contains(" on Wandering, 0:00 to 0:39: "),
+            "{}",
+            rows[2]
+        );
+        assert_eq!(rows[3], "Bell is done.");
         assert_eq!(t.history["race_clock"][1].value, Some(20));
         // The first room is what the second room's crossing depends on: Remove of it would
         // leave the roll and the Done with no notice, so it writes nothing and names them.
@@ -3446,6 +3481,38 @@ mod tests {
             firsts(&h),
             before,
             "a value with one more digit moves no action"
+        );
+        // 999 / 120, then `Fight minute` makes 1000 / 120, wider than the slot of three
+        // digits; Undo takes it back to 999. The value column keeps the room it needed, so the
+        // actions do not move back and forth.
+        let typed = Entry {
+            id: "c-00000999".into(),
+            tracker: Some("race_clock".into()),
+            set: Some(999),
+            why: Some("Typed in Obsidian".into()),
+            ..Entry::default()
+        };
+        ledger::commit(&ledger::path(&race.campaign.path), |_| {
+            Ok(Op::Append(vec![typed]))
+        })
+        .unwrap();
+        h.state_mut().read_disk();
+        h.run_steps(4);
+        h.state_mut()
+            .press("race_clock", None, "Fight minute", None);
+        h.run_steps(4);
+        let t = h.state();
+        assert_eq!(t.state.value(&t.rules, "race_clock", None), 1000);
+        let wide = firsts(&h);
+        let pressed = h.state().newest().to_vec();
+        h.state_mut().undo(&pressed);
+        h.run_steps(4);
+        let t = h.state();
+        assert_eq!(t.state.value(&t.rules, "race_clock", None), 999);
+        assert_eq!(
+            firsts(&h),
+            wide,
+            "Undo of 1000 / 120 keeps the value column, and no action moves back"
         );
     }
 

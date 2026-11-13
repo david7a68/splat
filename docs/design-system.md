@@ -635,7 +635,8 @@ its place as after a click.
 The result line keeps its place at the panel's bottom
 edge above a hairline: the last act of the session being played as a success message in sentences
 (`Seals for Party changed to 1. First seal for Party is due.`; two notices with one name say their marks, `Bell at
-20 and Bell at 40 are due.`), then `Undo: <label>` (`line_start`: its words at the message's words, its icon in the
+20 and Bell at 40 are due.`; an act on a notice says what happened: `Bell is done.`, `Rolled 5 on Rival Track for Old
+Guard: Moves one room on.`), then `Undo: <label>` (`line_start`: its words at the message's words, its icon in the
 message's icon column), which names the act, and `Add to Timeline` (`Action::secondary`, Read: a message action
 without an icon is bordered) at the right end, or each on its own line, at the words, when both do not fit. `Add to Timeline` makes a Major event
 whose title is the act's label with the line it changed (`Take seal: Old Guard`). After `Add to Timeline` it says `Added to the Timeline.` with `Undo add` for 30 seconds; while the Timeline cannot save that event, it says the Timeline's own words as an error (`The timeline was not saved. <reason>`) with `Undo add`, and the event waits in the Timeline's draft. Why an act recorded nothing shows on
@@ -659,7 +660,7 @@ definition that cannot be used, a value below its `min`, a note in play whose fi
 tracker and each day mark of the note, a collapsed section `<NAME> HISTORY N` (`section_with_id` with
 `group_heading_text`, N entries). Open, a tracker's shows `Start <value>` (or each name's start value) in `Small`
 muted; then each section has one row for each entry in the ledger's order, one control high: its words (`Take
-seal: Keyring +1`, `Bell done.`, `End of month, Day 32 done.`), cut with `…` when they do not fit and whole on hover,
+seal: Keyring +1`, `Bell is done.`, `End of month, Day 32 is done.`), cut with `…` when they do not fit and whole on hover,
 the value it left as a right-aligned `Numeral` (`number`), and the row's menu (`row_menu`) with a quiet `Remove`
 only on an entry with another session's stamp; every row keeps the menu's place, so the values stand in one column.
 Only the rows inside the reader's clip are laid out and drawn. `Remove` takes the entry, the others of its press, and the entries of the notices

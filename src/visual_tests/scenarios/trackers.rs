@@ -270,10 +270,23 @@ fn presses_at_the_footer_edge(d: &mut Driver<'_>) -> (bool, String) {
     let undone = entries(d) == before
         && ledger(d).matches("why: ").count() == total
         && d.has_containing("Seals for Party changed to 1.");
+    // Then a field outside the panel's body takes the next press and the keys.
+    d.click(SEARCH_LOOKUP);
+    d.type_text("zq");
+    let outside = (d.focused_name(), d.field_text(SEARCH_LOOKUP));
+    let typed = outside == (Some(SEARCH_LOOKUP.to_owned()), Some("zq".to_owned()));
+    // Words typed there are a search that leaves Trackers: clear them, close Lookup, and
+    // open it on Trackers with Ctrl+T, as it was.
+    d.press_ctrl(Key::A);
+    d.press(Key::Backspace);
+    d.press_ctrl(Key::K);
+    d.press_ctrl(Key::T);
+    let restored = d.has_containing("Elapsed race time")
+        && d.field_text(SEARCH_LOOKUP).unwrap_or_default().is_empty();
     (
-        pressed && undone,
+        pressed && undone && typed && restored,
         format!(
-            "{name} (bottom {bottom:.0}): pressed {pressed}, footer Undo took it back {undone}"
+            "{name} (bottom {bottom:.0}): pressed {pressed}, footer Undo took it back {undone}, outside field {outside:?}, Trackers again {restored}"
         ),
     )
 }
@@ -284,11 +297,10 @@ const PURSES: &str = "> trackers:\n>   purses:\n>     name: Purses\n>     pin: t
 /// Open the amount field of `Pay` on Ann's line: it has the action's place and width and is at
 /// least 24 px high, and `Tip` on both lines stays. Then 3 and Enter raise `Paid` above, and
 /// `Pay` keeps its place. Undo takes the act back.
-fn amount_in_its_column(d: &mut Driver<'_>) -> (bool, String) {
-    let place = |d: &Driver<'_>, name: &str| d.place_of(name).unwrap_or(egui::Rect::NOTHING);
-    let same = |a: egui::Rect, b: egui::Rect| (a.min - b.min).length() < 0.5;
-    // Where a line's actions are under it (960 beside Lookup), the DM scrolls Purses into view
-    // first, as the panel's footer covers its lower rows.
+/// Where a line's actions are under it (960 beside Lookup), the DM scrolls Purses into view
+/// first, as the panel's footer covers its lower rows. Are Ann's `Pay` and Bo's `Tip` wholly in
+/// view?
+fn purses_in_view(d: &mut Driver<'_>) -> bool {
     let wheel = d
         .place_of(SEARCH_LOOKUP)
         .map_or(egui::pos2(780.0, 300.0), |field| {
@@ -307,7 +319,13 @@ fn amount_in_its_column(d: &mut Driver<'_>) -> (bool, String) {
         }
         d.scroll_points_at(wheel, 40.0);
     }
-    let visible = whole(d);
+    whole(d)
+}
+
+fn amount_in_its_column(d: &mut Driver<'_>) -> (bool, String) {
+    let place = |d: &Driver<'_>, name: &str| d.place_of(name).unwrap_or(egui::Rect::NOTHING);
+    let same = |a: egui::Rect, b: egui::Rect| (a.min - b.min).length() < 0.5;
+    let visible = purses_in_view(d);
     let (pay, tip, bo) = (
         place(d, "Pay: Ann"),
         place(d, "Tip: Ann"),
@@ -393,7 +411,7 @@ fn day_marks(d: &mut Driver<'_>) {
     );
     d.state("trackers-day-mark-due", Sizes::Standard);
     d.click("Done: End of month, Day 32");
-    d.expect("End of month, Day 32 done.");
+    d.expect("End of month, Day 32 is done.");
     d.observe(
         "T19.5",
         d.has_containing("Day 62: Move the rival powers.")
@@ -533,7 +551,7 @@ pub fn run(d: &mut Driver<'_>) {
         "The press raises a Due row above the trackers, and the rail counts it",
     );
     d.click("Done: Bell");
-    d.expect("Bell done.");
+    d.expect("Bell is done.");
     // The race reaches 40: the second bell rolls each rival by name, and the wandering table.
     d.click("Enter room");
     d.click("Enter room");
@@ -937,6 +955,39 @@ pub fn run(d: &mut Driver<'_>) {
         held && wide_held,
         format!("An amount field keeps its action's column and the place of every action: {detail} at 960x640; {wide_detail} at 1200x800"),
     );
+    // An amount typed at 1200 and not sent yet keeps its field, its focus and its words while
+    // the width crosses to 960, where the line's actions are under it, and back; Enter then
+    // saves it once.
+    let pays = |d: &Driver<'_>| ledger(d).matches("why: Pay").count();
+    let before = pays(d);
+    let typed = |d: &Driver<'_>| (d.focused_name(), d.field_text("Pay"));
+    let (wide, wide_field) = d.act_at_size(DEFAULT, |d| {
+        purses_in_view(d);
+        d.click("Pay: Ann");
+        d.type_text("3");
+        (typed(d), d.place_of("Pay"))
+    });
+    let narrow = typed(d);
+    let (back, back_field) = d.act_at_size(DEFAULT, |d| {
+        let held = (typed(d), d.place_of("Pay"));
+        d.press(Key::Enter);
+        held
+    });
+    let saved = pays(d) - before;
+    let kept = (Some("Pay".to_owned()), Some("3".to_owned()));
+    d.observe(
+        "T19.2",
+        wide == kept
+            && narrow == kept
+            && back == kept
+            && wide_field.is_some()
+            && back_field == wide_field
+            && saved == 1,
+        format!(
+            "A typed amount crosses 1200 → 960 → 1200: focus and words {wide:?}, {narrow:?}, {back:?}; field {wide_field:?} then {back_field:?}; {saved} amount saved"
+        ),
+    );
+    d.click("Undo: Pay");
     if !shown {
         d.press_ctrl(Key::T);
     }
