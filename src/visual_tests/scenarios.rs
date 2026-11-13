@@ -19115,6 +19115,25 @@ pub mod session_plan {
                 }),
             format!("At {size:?}, Log, Whole run and Timeline share one line: {words:?}"),
         );
+        // App round 2, X48: one gap, `S`, on each side of each `·`, at every size: from a
+        // word's painted end to the `·`, and from the `·` to the next word.
+        let gaps: Vec<f32> = words
+            .windows(2)
+            .filter_map(|pair| {
+                let (a, b) = pair[0].zip(pair[1])?;
+                let between = egui::Rect::from_x_y_ranges(a.right()..=b.left(), a.y_range());
+                let dot = d.painted_word_rect("·", between)?;
+                Some([dot.left() - a.right(), b.left() - dot.right()])
+            })
+            .flatten()
+            .collect();
+        d.observe(
+            "X48",
+            gaps.len() == 4 && gaps.iter().all(|gap| (gap - crate::design::S).abs() <= 1.0),
+            format!(
+                "At {size:?}, the gaps beside each `·` of Log · Whole run · Timeline: {gaps:?}"
+            ),
+        );
     }
 
     /// F7, T18.1: a played fight's rewards reach the note in 1, with its reference and one Undo,
@@ -19177,7 +19196,7 @@ pub mod session_plan {
             d.click(&action);
             d.audit_goal_within("T18.1", "put a played fight's rewards in the note", 1);
             d.wait_for_text("In notes");
-            let result = d.has_containing("Rewards added under Loot and rewards. XP added. Delete that line to leave XP out from now on. XP tonight: ");
+            let result = d.has_containing("Rewards added under Loot and rewards. XP line added. Delete it in the note to leave XP out from now on. XP tonight: ");
             let written = std::fs::read_to_string(&note).unwrap();
             // The counts assume the note in Write; this one shows as a reader.
             write_note(d);
@@ -20073,10 +20092,35 @@ pub mod session_plan {
             "Final HP names each character in the plan, with no run to reopen",
         );
         rewards_in_the_note(d);
+        // W2-D3 (app round 2): the opened played row has the Timeline detail's `Where`. It is
+        // that event's own field: typed here, the Timeline holds it, with no page change. At
+        // 960x640 the taller row leaves the next fight's primary action in view.
+        let next = d.at_size(SMALL, |d| {
+            d.nodes()
+                .into_iter()
+                .find(|node| node.name == format!("Start fight: {SECOND}"))
+                .is_some_and(|node| node.fully_in_view())
+        });
+        d.begin_task();
+        d.type_into("Where", "The ford");
+        let placed =
+            d.app().timeline.events.iter().any(|event| {
+                event.title == FIRST && event.run.is_some() && event.place == "The ford"
+            });
+        d.observe(
+            "W2-D3-where",
+            placed && next && d.page_title().as_deref() == Some("Session"),
+            format!("Where on the played row writes the Timeline's event {placed}; at 960x640 the next fight's Start fight is whole in view {next}"),
+        );
         d.click(FIRST);
 
         d.click(NAV_TIMELINE);
         assert!(d.has_containing("Held the bridge · Ended · Round 1"));
+        d.observe(
+            "W2-D3-where",
+            d.has_containing("The ford"),
+            "Timeline shows the place typed on the plan's row",
+        );
         d.state_prepared("timeline-after-fight", Sizes::All, |d| {
             d.observe(
                 "iter-23-S-FK2-timeline",
