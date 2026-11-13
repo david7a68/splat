@@ -556,6 +556,7 @@ pub struct ScrollColumn {
     fit_height: bool,
     offset: Option<f32>,
     sideways: bool,
+    full_width: bool,
 }
 
 impl ScrollColumn {
@@ -567,6 +568,7 @@ impl ScrollColumn {
             fit_height: false,
             offset: None,
             sideways: false,
+            full_width: false,
         }
     }
 
@@ -588,6 +590,14 @@ impl ScrollColumn {
 
     pub fn vertical_scroll_offset(mut self, offset: f32) -> Self {
         self.offset = Some(offset);
+        self
+    }
+
+    /// The content takes the column's whole width even when it is narrower: a list whose rows
+    /// fill the column. Without it the column gives its width only as the most the content may
+    /// take, so a form that narrows itself (`set_max_width`) keeps its own width (K2, gap K-6).
+    pub fn full_width(mut self) -> Self {
+        self.full_width = true;
         self
     }
 
@@ -637,13 +647,15 @@ impl ScrollColumn {
         if super::pane::column_in_content(ui) {
             return self.inline(ui, add);
         }
-        let sideways = self.sideways;
+        let (sideways, full) = (self.sideways, self.full_width);
         Self::styled(ui, |ui, width| {
             self.area().show(ui, |ui| {
                 if !sideways {
                     ui.set_max_width(width);
                 }
-                ui.set_min_width(width);
+                if full {
+                    ui.set_min_width(width);
+                }
                 add(ui)
             })
         })
@@ -661,9 +673,12 @@ impl ScrollColumn {
             return self.inline(ui, |ui| add(ui, 0..rows));
         }
         Self::styled(ui, |ui, width| {
+            let full = self.full_width;
             self.area().show_rows(ui, row_height, rows, |ui, range| {
                 ui.set_max_width(width);
-                ui.set_min_width(width);
+                if full {
+                    ui.set_min_width(width);
+                }
                 add(ui, range)
             })
         })
@@ -682,9 +697,12 @@ impl ScrollColumn {
             return self.inline(ui, |ui| add(ui, all));
         }
         Self::styled(ui, |ui, width| {
+            let full = self.full_width;
             self.area().show_viewport(ui, |ui, viewport| {
                 ui.set_max_width(width);
-                ui.set_min_width(width);
+                if full {
+                    ui.set_min_width(width);
+                }
                 add(ui, viewport)
             })
         })
@@ -1013,6 +1031,52 @@ impl TitleLineResponse {
     }
 }
 
+/// One row of actions that a title line drew under its title (`TitlePlacement::Under`): the
+/// title's rect, the row's rect (from its first target's left edge to its last target's right
+/// edge, one control high) and how many actions it holds. [`TitleLine`] and the readers' title
+/// lines (`world::title_line_actions`) register each row they draw; actions that follow the title
+/// on its line register none.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TitleActionRow {
+    pub title: Rect,
+    pub row: Rect,
+    pub actions: usize,
+}
+
+/// Where test builds keep each title action row of a pass.
+#[cfg(test)]
+const TITLE_ACTION_ROWS: &str = "design_title_action_rows";
+
+/// Register a row of actions drawn under a title. Only test builds keep it.
+pub fn register_title_row(ui: &Ui, row: TitleActionRow) {
+    #[cfg(test)]
+    {
+        let pass = ui.ctx().cumulative_pass_nr();
+        ui.ctx().data_mut(|data| {
+            let kept = data
+                .get_temp_mut_or_default::<(u64, Vec<TitleActionRow>)>(Id::new(TITLE_ACTION_ROWS));
+            if kept.0 != pass {
+                *kept = (pass, Vec::new());
+            }
+            kept.1.push(row);
+        });
+    }
+    #[cfg(not(test))]
+    let _ = (ui, row);
+}
+
+/// Each action row drawn under a title in the last completed pass, in draw order; empty when
+/// that pass drew none (a row never outlives its title line). Package G reads them through
+/// `Driver::title_action_rows`.
+#[cfg(test)]
+pub fn title_action_rows(ctx: &egui::Context) -> Vec<TitleActionRow> {
+    let last = ctx.cumulative_pass_nr().saturating_sub(1);
+    ctx.data(|data| data.get_temp::<(u64, Vec<TitleActionRow>)>(Id::new(TITLE_ACTION_ROWS)))
+        .filter(|(pass, _)| *pass == last)
+        .map(|(_, rows)| rows)
+        .unwrap_or_default()
+}
+
 /// A title line's widths, measured once per frame and used by both the placement and the draw.
 struct TitleMetrics {
     title: f32,
@@ -1147,13 +1211,16 @@ impl<'a> TitleLine<'a> {
                 0
             }
             TitlePlacement::Under(rows) => {
-                ui.horizontal_wrapped(|ui| {
-                    ui.spacing_mut().item_spacing.x = XS;
-                    ui.add(title.wrap());
-                    if let Some((words, context)) = context {
-                        ui.add(context.wrap()).on_hover_text(words);
-                    }
-                });
+                let title_rect = ui
+                    .horizontal_wrapped(|ui| {
+                        ui.spacing_mut().item_spacing.x = XS;
+                        ui.add(title.wrap());
+                        if let Some((words, context)) = context {
+                            ui.add(context.wrap()).on_hover_text(words);
+                        }
+                    })
+                    .response
+                    .rect;
                 for row in &rows {
                     let (line, _) = ui.allocate_exact_size(vec2(room, height), Sense::hover());
                     let mut row_ui = ui.new_child(
@@ -1174,6 +1241,14 @@ impl<'a> TitleLine<'a> {
                             pressed = Some(self.actions[at].word);
                         }
                     }
+                    register_title_row(
+                        ui,
+                        TitleActionRow {
+                            title: title_rect,
+                            row: Rect::from_min_max(line.min, egui::pos2(x, line.bottom())),
+                            actions: row.len(),
+                        },
+                    );
                 }
                 rows.len()
             }
@@ -1418,9 +1493,9 @@ pub struct Named;
 /// Typestate of an [`InlineCreate`]: complete.
 pub struct Complete;
 
-/// The one inline creation layout: the fields (and choices) in order, the named Create after
-/// the last field on that field's line (after its side action), then one kept line below it,
-/// then the last field's help. Help under an earlier field has `L` before the next label.
+/// The one inline creation layout: the fields (and choices) in order, each with its help; the
+/// named Create after the last field on that field's line (after its side action), then the last
+/// field's help, then one kept line. Help under an earlier field has `L` before the next label.
 /// Nothing moves while the DM types: Create keeps its word, and at one width the kept line keeps
 /// its height for the life of the form (a resize may change it, as it changes wrapped text).
 ///
@@ -1651,6 +1726,11 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
                 }
             }
         }
+        // The last field's help, under its line (K2, gap K-5): each field with its help, then
+        // the kept line.
+        if let Some(help) = last_help.take() {
+            super::help(ui, help);
+        }
         // The kept line: one fixed height for the life of the form, whatever it holds now.
         let cancel = self.kept.cancel.map(|(word, _)| word);
         let height = kept_line_height::<R>(ui, room, cancel);
@@ -1673,9 +1753,6 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
             kept.add(egui::Label::new(words).wrap());
         } else if let Some(preview) = self.kept.preview {
             preview_line(&mut kept, preview);
-        }
-        if let Some(help) = last_help {
-            super::help(ui, help);
         }
         out
     }
@@ -1713,6 +1790,14 @@ fn preview_line(ui: &mut Ui, preview: &str) {
 pub fn menu_popup(response: &Response) -> egui::Popup<'_> {
     egui::Popup::menu(response)
 }
+
+// The popup and status parts, public here so their doc tests can name them
+// (`splat::layout::Dropdown`).
+pub use super::popups::{
+    Dropdown, DropdownResponse, Ghost, HasChoices, ImageSize, NoChoice, TIP_WIDTH, TipLine,
+    drag_source, fitted, image_viewer, rich_tip,
+};
+pub use super::status::{KindStatus, StatusKind, Tinted};
 
 #[cfg(test)]
 pub(crate) mod bans;

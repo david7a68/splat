@@ -12,7 +12,7 @@ use super::{
     result_words, with_dependents,
 };
 use crate::design::outcome::PagePlaceholder;
-use crate::design::{self, Action, Density, Tone, Type, colors};
+use crate::design::{self, Action, Density, Gap, Tone, Type, colors};
 use crate::world::{FooterAct, FooterKind, FooterLine, FooterRank};
 use eframe::egui;
 use ledger::{Entry, Ledger, Op};
@@ -385,7 +385,7 @@ pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, note: &splat::content::E
     }
     let id = note.id;
     if let Some(error) = &trackers.rules.unreadable {
-        ui.add_space(design::L);
+        design::gap(ui, Gap::L);
         let _ = PagePlaceholder::<crate::design::outcome::NoPress>::new(
             &TrackerFault::NotesUnreadable(error.clone()),
         )
@@ -395,7 +395,7 @@ pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, note: &splat::content::E
     if !in_play(&trackers.rules, id) {
         return;
     }
-    ui.add_space(design::L);
+    design::gap(ui, Gap::L);
     if let Some(error) = &trackers.unreadable {
         let _ = PagePlaceholder::<crate::design::outcome::NoPress>::new(
             &TrackerFault::LedgerUnreadable(error.clone()),
@@ -496,6 +496,7 @@ fn rows_in_view(
             egui::pos2(area.left(), area.top() + at as f32 * pitch),
             egui::vec2(area.width(), height),
         );
+        design::register_row(ui, rect);
         // Each row's controls are kept by its entry's ID: a menu open on a row that an edit on
         // disk took away never opens on the row that takes its place.
         ui.scope_builder(

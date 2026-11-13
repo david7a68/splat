@@ -1104,6 +1104,14 @@ impl<'a> Driver<'a> {
         crate::design::pane::pane_records(&self.harness.ctx)
     }
 
+    /// Each row of actions drawn under a title in the last completed pass (package K's registry,
+    /// in points): the title's rect, the row's rect and its number of actions. `TitleLine` and
+    /// the readers' title lines (`world::title_line_actions`, placed by `title_placement`)
+    /// register them; actions that follow the title on its line register none.
+    pub fn title_action_rows(&self) -> Vec<crate::design::TitleActionRow> {
+        crate::design::layout::title_action_rows(&self.harness.ctx)
+    }
+
     /// G6, "a footer below a short body", from this driver's own accessibility rects: for each
     /// pane that is not `Body::Fills` and whose scroll output says its content fits, a gap of
     /// more than `2 × L` from the last body widget to its footer is a finding.
@@ -3024,6 +3032,38 @@ impl<'a> Driver<'a> {
         if size == SMALL {
             found.extend(stillness::doubled_words(&items, &lines));
         }
+        // Menus and popups: the bounds of each foreground or tooltip layer.
+        let layers: Vec<egui::LayerId> = self
+            .harness
+            .ctx
+            .memory(|memory| memory.layer_ids().collect());
+        let popups: Vec<egui::Rect> = self.harness.ctx.graphics(|graphics| {
+            layers
+                .iter()
+                .filter(|layer| {
+                    matches!(layer.order, egui::Order::Foreground | egui::Order::Tooltip)
+                })
+                .filter_map(|layer| graphics.get(*layer))
+                .map(|list| {
+                    list.all_entries()
+                        .map(|clipped| clipped.shape.visual_bounding_rect())
+                        .filter(|rect| rect.is_finite())
+                        .fold(egui::Rect::NOTHING, |all, rect| all.union(rect))
+                })
+                .filter(|rect| rect.is_positive())
+                .collect()
+        });
+        found.extend(stillness::line_starts(
+            &items,
+            &stillness::quiet_rects(shapes),
+            &stillness::placed(&painted),
+            &popups,
+            &self
+                .title_action_rows()
+                .into_iter()
+                .map(|row| row.row)
+                .collect::<Vec<_>>(),
+        ));
         self.stillness.headers.push(stillness::HeaderView {
             window: window.clone(),
             width: size.0,
