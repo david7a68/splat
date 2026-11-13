@@ -590,7 +590,8 @@ impl<'a> Action<'a> {
     ///
     /// The part does this by itself for a quiet action without an icon that is the first thing
     /// on its line: its line starts at its `Ui`'s left edge and it is not in a menu, a popup or a
-    /// table cell (`starts_line`). Call this only for a line that starts at an inset the layout
+    /// table cell (`starts_line`). Then only its words move to the edge: its target starts there
+    /// too, inside its column. Call this only for a line that starts at an inset the layout
     /// cannot see (after `gap`, under a message's icon).
     pub fn line_start(mut self) -> Self {
         self.line_start = true;
@@ -660,8 +661,11 @@ impl<'a> Action<'a> {
     }
 
     pub fn show(mut self, ui: &mut Ui) -> Response {
-        if self.kind == Kind::Quiet && self.icon.is_none() && starts_line(ui) {
+        // Found by the part: its words go to the text edge, and its target stays inside its
+        // column, so it never reaches a splitter or a scroll bar beside the column.
+        if self.kind == Kind::Quiet && self.icon.is_none() && !self.line_start && starts_line(ui) {
             self.line_start = true;
+            self.column = true;
         }
         if self.kind == Kind::Primary
             && (self.selected
@@ -4779,11 +4783,12 @@ mod tests {
             harness.get_by_label(name).rect()
         };
         let edge = words("Edge");
+        // Its target stays inside its column, so it never reaches a splitter beside it.
         for label in ["Death saves", "Cancel run"] {
             assert!(
-                (words(label) - edge).abs() <= 0.5
-                    && (node(label).left() - (edge - S)).abs() <= 0.5,
-                "n4-start {label}: words {}, edge {edge}",
+                (words(label) - edge).abs() <= 0.5 && (node(label).left() - edge).abs() <= 0.5,
+                "n4-start {label}: words {}, target {:?}, edge {edge}",
+                node(label),
                 words(label)
             );
         }
