@@ -265,14 +265,18 @@ const QUICK: [&str; 13] = [
 
 /// With the result line at the panel's bottom, the lowest quick action that is wholly in view
 /// takes its own press, and the footer's Undo takes the next: each press changes only its own
-/// target. The act before stays the result line's after the Undo.
+/// target. The act before stays the result line's after the Undo. In view means painted whole:
+/// a tracker's lines are one row for the footer's whole-row cut (N12), and a line under the cut
+/// keeps an accessible node in the scroll area's view while nothing of it is painted.
 fn presses_at_the_footer_edge(d: &mut Driver<'_>) -> (bool, String) {
+    let seen = |d: &Driver<'_>, node: &crate::visual_tests::driver::Found, name: &str| {
+        let label = name.split(": ").next().unwrap_or(name);
+        node.name == name && node.fully_in_view() && d.painted_whole_in(label, node.rect)
+    };
     let whole = |d: &Driver<'_>| {
-        QUICK.iter().any(|name| {
-            d.nodes()
-                .iter()
-                .any(|node| node.name == *name && node.fully_in_view())
-        })
+        QUICK
+            .iter()
+            .any(|name| d.nodes().iter().any(|node| seen(d, node, name)))
     };
     // Where the Due rows fill the panel (960), the DM scrolls to the trackers first.
     let wheel = d
@@ -291,7 +295,7 @@ fn presses_at_the_footer_edge(d: &mut Driver<'_>) -> (bool, String) {
         .filter_map(|name| {
             d.nodes()
                 .into_iter()
-                .find(|node| node.name == *name && node.fully_in_view())
+                .find(|node| seen(d, node, name))
                 .map(|node| (*name, node.rect.bottom()))
         })
         .max_by(|a, b| a.1.total_cmp(&b.1));
