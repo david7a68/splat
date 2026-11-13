@@ -571,7 +571,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounters.rs",
             "creature_pane",
-            &[Ban::Results, Ban::Layout(2), Ban::Pane(1)],
+            &[Ban::Results, Ban::Layout(2), Ban::Pane(1), Ban::RowKey(1)],
         ),
         (
             "src/encounters.rs",

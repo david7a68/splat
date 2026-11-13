@@ -36,10 +36,10 @@ const MISSING_ENCOUNTER: &str = "Deleted encounter";
 pub(crate) const ENCOUNTER_DELETED: &str = "Encounter deleted";
 const NOTES_FIELD: &str = "Group notes";
 const LABEL_WIDTH: f32 = 120.0;
-const OVERRIDE_NAME: design::FieldId = crate::field_id!("override_name");
-const OVERRIDE_NOTE: design::FieldId = crate::field_id!("override_note");
-const GROUP_NAME: design::FieldId = crate::field_id!("group_name");
-const ENCOUNTER_GROUP_NAME: design::FieldId = crate::field_id!("encounter_group_name");
+const OVERRIDE_NAME: design::FieldName = crate::field_id!("override_name");
+const OVERRIDE_NOTE: design::FieldName = crate::field_id!("override_note");
+const GROUP_NAME: design::FieldName = crate::field_id!("group_name");
+const ENCOUNTER_GROUP_NAME: design::FieldName = crate::field_id!("encounter_group_name");
 /// The name of a roster slot's button, for the form it opens.
 pub(super) const SLOT_OPTIONS: &str =
     "Options: starting HP, temporary HP, initiative group and changes";
@@ -72,7 +72,7 @@ struct GroupSetup {
 fn name_field(ui: &mut egui::Ui, draft: &mut GroupDraft, width: f32) -> egui::Response {
     let font = Type::Heading.font(ui);
     GROUP_NAME
-        .with(draft.id)
+        .of(draft.id)
         .single_line(ui, &mut draft.name, |edit| {
             edit.desired_width(width)
                 .min_size(egui::vec2(0.0, Density::Scan.control()))
@@ -1329,7 +1329,7 @@ pub(super) fn of_encounter(
                                     let width = (ui.available_width() - 2.0 * design::S)
                                         .min(design::FORM_WIDTH);
                                     let font = Type::Heading.font(ui);
-                                    let response = ENCOUNTER_GROUP_NAME.with(group.id).single_line(
+                                    let response = ENCOUNTER_GROUP_NAME.of(group.id).single_line(
                                         ui,
                                         &mut group.name,
                                         |edit| {
@@ -1922,7 +1922,7 @@ pub(super) fn overrides_form(
     }
     text_row(
         ui,
-        OVERRIDE_NAME.with(design::TextKey::from_data(id)),
+        OVERRIDE_NAME.of(design::TextKey::from_data(id)),
         "Display name",
         &mut overrides.name,
         &entry.name,
@@ -2036,7 +2036,7 @@ pub(super) fn overrides_form(
     }
     text_row(
         ui,
-        OVERRIDE_NOTE.with(design::TextKey::from_data(id)),
+        OVERRIDE_NOTE.of(design::TextKey::from_data(id)),
         "Note",
         &mut overrides.note,
         "Why this creature differs",

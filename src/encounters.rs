@@ -2851,7 +2851,7 @@ const SEARCH_FIELD: &str = "Find a creature or party member";
 fn name_field(ui: &mut egui::Ui, draft: &mut Draft, width: f32) -> egui::Response {
     let font = Type::Heading.font(ui);
     ENCOUNTER_NAME
-        .with(draft.id)
+        .of(draft.id)
         .single_line(ui, &mut draft.name, |edit| {
             edit.desired_width(width)
                 .min_size(egui::vec2(0.0, Density::Scan.control()))
@@ -2860,10 +2860,10 @@ fn name_field(ui: &mut egui::Ui, draft: &mut Draft, width: f32) -> egui::Respons
         })
 }
 
-const ENCOUNTER_NAME: design::FieldId = crate::field_id!("encounter_name");
-const CREATURE_NAME: design::FieldId = crate::field_id!("encounter_creature_name");
-const INITIATIVE_GROUP: design::FieldId = crate::field_id!("roster_initiative_group");
-const RUN_FOLDER: design::FieldId = crate::field_id!("run_folder");
+const ENCOUNTER_NAME: design::FieldName = crate::field_id!("encounter_name");
+const CREATURE_NAME: design::FieldName = crate::field_id!("encounter_creature_name");
+const INITIATIVE_GROUP: design::FieldName = crate::field_id!("roster_initiative_group");
+const RUN_FOLDER: design::FieldName = crate::field_id!("run_folder");
 const SYNC_OPTION: &str = "Sync party with D&D Beyond";
 const REPEATABLE_OPTION: &str = "Keep in Ready during a run";
 const REPEATABLE_HELP: &str = "Lists this encounter under Ready to run while a fight from it is unfinished. Start fight waits until no fight is open.";
@@ -4112,7 +4112,7 @@ impl Encounters {
             let width = ui.available_width();
             design::line_field(
                 ui,
-                CREATURE_NAME.with(std::path::Path::new(&editor.path)),
+                CREATURE_NAME.of(design::TextKey::from_data(editor.path.clone())),
                 "Name",
                 &mut editor.fields.name,
                 "Name",
@@ -6518,7 +6518,7 @@ impl Encounters {
                         let response = design::line_field(
                             ui,
                             INITIATIVE_GROUP
-                                .with(draft_id)
+                                .of(draft_id)
                                 .with(design::TextKey::from_data(&slot.key)),
                             "Initiative group (optional)",
                             &mut group,
@@ -6681,7 +6681,7 @@ impl Encounters {
         design::locked(ui, closed_while, |ui| {
             design::labelled_field(
                 ui,
-                RUN_FOLDER,
+                RUN_FOLDER.of(active.id),
                 "Run folder",
                 &mut snapshot.options.folder,
                 Some("Relative to the campaign folder, or an absolute path."),
