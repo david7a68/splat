@@ -433,15 +433,23 @@ fn hold_place<R>(ui: &Ui, mut held: Held, output: &egui::scroll_area::ScrollArea
     });
     let focus = ui.ctx().memory(|memory| memory.focused());
     let room = output.inner_rect.height();
+    let content_now = output.content_size.y - held.room;
     let ended = held.keep.as_mut().and_then(|keep| {
         let room_changed = (*keep.room.get_or_insert(room) - room).abs() > 0.5;
+        // The press's own change (a row raised above it, its result in the footer) is still to
+        // be held: a room change then does not end the hold; a later one does.
+        let pending = keep
+            .content
+            .is_none_or(|content| (content - content_now).abs() > 0.5)
+            && keep.now.is_some_and(|now| (now - keep.top).abs() > 0.5);
         if scrolled {
             Some("scrolled")
         } else if pass > keep.pass + KEEP_PASSES {
             Some("passes")
         } else if focus != keep.focus {
             Some("focus moved")
-        } else if room_changed {
+        } else if room_changed && !pending {
+            keep.room = Some(room);
             Some("room changed")
         } else {
             None
