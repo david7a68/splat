@@ -330,6 +330,10 @@ fn represented_item_source(entry: &Entry, source: &str) -> bool {
             .is_some_and(|value| Some(value) == entry.fields.get("splat_item"))
 }
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 pub(super) fn show(
     ui: &mut egui::Ui,
     entry: Option<&Entry>,
@@ -434,7 +438,7 @@ pub(super) fn show(
                     if crate::markdown_view::wanted_heading(ui.ctx(), &section.title) {
                         ui.scroll_to_cursor(Some(eframe::egui::Align::TOP));
                     }
-                    crate::design::heading(ui, crate::design::Heading::Section(&section.title));
+                    style::section_heading(ui, &section.title);
                 }
                 // A hand-written stat block's actions read as the book's do.
                 if let Some(entry) = entry.filter(|entry| super::creature::has_stats(entry)) {

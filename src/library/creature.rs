@@ -3,7 +3,7 @@
 use super::presentation;
 use crate::design::{
     self, Type, colors,
-    reader::{self as reader_style, heavy_rule},
+    reader::{self as reader_style, heavy_rule, section_heading},
 };
 use eframe::egui;
 use pulldown_cmark::{Event, Options, Parser, Tag};
@@ -766,6 +766,10 @@ pub(super) fn stat_head(ui: &mut egui::Ui, entry: &Entry, values: Option<&super:
     ui.spacing_mut().item_spacing.y = design::XS;
 }
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 pub(super) fn show(
     ui: &mut egui::Ui,
     entry: &Entry,
@@ -794,7 +798,7 @@ pub(super) fn show(
                 continue;
             }
             if section.title != "Overview" {
-                design::heading(ui, design::Heading::Section(&section.title));
+                section_heading(ui, &section.title);
             }
             prose(
                 ui,
