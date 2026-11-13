@@ -2288,21 +2288,16 @@ mod tests {
             });
         }
 
-        pub(super) fn node_id(h: &Harness<'_, App>, name: &str) -> egui::accesskit::NodeId {
-            h.get_by_label(name).accesskit_node().id()
-        }
-
-        /// Two activations delivered in one frame, as one batch of AccessKit clicks.
-        pub(super) fn clicks(h: &mut Harness<'_, App>, targets: [egui::accesskit::NodeId; 2]) {
-            for target in targets {
-                h.event(egui::Event::AccessKitActionRequest(
-                    egui::accesskit::ActionRequest {
-                        action: egui::accesskit::Action::Click,
-                        target,
-                        data: None,
-                    },
-                ));
-            }
+        /// Two activations in one frame from two sources: Enter on the focused `keyed`, and the
+        /// release of a pointer press on `pointed` (pressed in the frame before).
+        pub(super) fn two_activations(h: &mut Harness<'_, App>, keyed: &str, pointed: &str) {
+            h.get_by_label(keyed).focus();
+            h.run_steps(2);
+            let at = h.get_by_label(pointed).rect().center();
+            pointer(h, at, true);
+            h.step();
+            h.key_press(egui::Key::Enter);
+            pointer(h, at, false);
             h.step();
             h.run_steps(2);
         }
@@ -2502,9 +2497,7 @@ mod tests {
         // The older line's Undo, then its choice, in one frame: the Undo, with its ticket.
         let mut h = harness(two());
         let older = order(h.state(), "older");
-        let register = node_id(&h, "Register as a new campaign");
-        let undo_older = node_id(&h, "Undo change older");
-        clicks(&mut h, [register, undo_older]);
+        two_activations(&mut h, "Undo change older", "Register as a new campaign");
         assert_eq!(h.state().presses, [(0, Act::Undo, older)]);
         assert_eq!(
             (h.state().acted.clone(), h.state().registered),
@@ -2515,17 +2508,13 @@ mod tests {
         app.two_choices = true;
         let mut h = harness(app);
         let older = order(h.state(), "older");
-        let rename = node_id(&h, "Rename the campaign");
-        let register = node_id(&h, "Register as a new campaign");
-        clicks(&mut h, [rename, register]);
+        two_activations(&mut h, "Rename the campaign", "Register as a new campaign");
         assert_eq!(h.state().presses, [(0, Act::Register, older)]);
         assert_eq!((h.state().registered, h.state().renamed), (1, 0));
         // The newer line's Undo and its close icon: the Undo, drawn first.
         let mut h = harness(two());
         let newer = order(h.state(), "newer");
-        let dismiss = node_id(&h, DISMISS_NAME);
-        let undo_newer = node_id(&h, "Undo change newer");
-        clicks(&mut h, [dismiss, undo_newer]);
+        two_activations(&mut h, "Undo change newer", DISMISS_NAME);
         assert_eq!(h.state().presses, [(0, Act::Undo, newer)]);
         assert_eq!(h.state().acted, [Ok("Folder saved")]);
     }

@@ -703,7 +703,12 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         (
             "src/design/results.rs",
-            "a_result_shows_only_in_its_own_scope",
+            "a_result_shows_only_in_its_own_scope statement",
+            &[Ban::Results],
+        ),
+        (
+            "src/design/results.rs",
+            "a_result_shows_only_in_its_own_scope statement",
             &[Ban::Results],
         ),
         (
@@ -1862,10 +1867,6 @@ mod tests {
     /// A campaign switch hides a result and does not end it; one campaign never shows another's
     /// result, even for the same id.
     #[test]
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "the test of the by-owner Undo, staged until its callers use `undo_by`"
-    )]
     fn a_result_shows_only_in_its_own_scope() {
         let mut results = Results::new();
         results.record(done(A, "A."));
@@ -1921,6 +1922,10 @@ mod tests {
         links.record(Linked(a.clone(), "A."));
         let a_order = links.get(&a).unwrap().order();
         assert!(links.get(&b).is_none(), "B reads A");
+        #[allow(
+            clippy::disallowed_methods,
+            reason = "the test of the by-owner Undo, staged until its callers use `undo_by`"
+        )]
         assert!(links.undo(&b, |_| Ok::<(), ()>(())).is_none(), "B undoes A");
         links.owner_changed(&b);
         assert!(links.get(&a).is_some(), "B's saved edit ends A");
@@ -1932,6 +1937,10 @@ mod tests {
             "B's result replaces A's"
         );
         assert_eq!(links.get(&b).unwrap().value().1, "B.");
+        #[allow(
+            clippy::disallowed_methods,
+            reason = "the test of the by-owner Undo, staged until its callers use `undo_by`"
+        )]
         assert!(matches!(links.undo(&b, |_| Ok::<(), ()>(())), Some(Ok(_))));
         assert_eq!(links.get(&a).unwrap().value().1, "A.", "B's Undo takes A");
     }

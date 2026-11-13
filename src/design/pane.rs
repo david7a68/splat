@@ -425,8 +425,13 @@ fn hold_place<R>(ui: &Ui, mut held: Held, output: &egui::scroll_area::ScrollArea
     if let Some(why) = ended {
         held.keep = None;
         #[cfg(test)]
-        ui.ctx()
-            .data_mut(|data| data.insert_temp(Id::new("design_pane_hold_ended"), why));
+        ui.ctx().data_mut(|data| {
+            data.insert_temp(Id::new("design_pane_hold_ended"), why);
+            data.get_temp_mut_or_default::<Vec<(&'static str, u64, Option<Id>)>>(Id::new(
+                "design_pane_hold_ends",
+            ))
+            .push((why, pass, focus));
+        });
         #[cfg(not(test))]
         let _ = why;
     }
@@ -975,7 +980,16 @@ mod hold_tests {
         h.get_by_label("Add a row above").click();
         h.get_by_label("Far control").focus();
         h.run_steps(8);
-        assert_eq!(ended(&h), Some("focus moved"));
+        let ends = h.ctx.data(|data| {
+            data.get_temp::<Vec<(&'static str, u64, Option<Id>)>>(Id::new("design_pane_hold_ends"))
+        });
+        let focused = h.ctx.memory(|memory| memory.focused());
+        assert_eq!(
+            ended(&h),
+            Some("focus moved"),
+            "ends {ends:?}, focused now {focused:?}, rows {}",
+            h.state().rows_above
+        );
         let far = h.get_by_label("Far control").rect();
         let record = pane_records(&h.ctx).into_iter().next().unwrap();
         let (viewport, footer) = (record.viewport().unwrap(), record.footer().unwrap());
