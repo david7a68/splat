@@ -2390,7 +2390,13 @@ impl Splat {
             self.page = Page::Encounters;
         }
         self.encounters.planned_groups = self.sessions.tonight_links();
-        if std::mem::take(&mut self.encounters.wants_session) {
+        // The editor's way back belongs to its route: leaving the editor another way ends it.
+        if self.page != Page::Encounters {
+            self.encounters.end_session_route();
+        }
+        if let Some(session) = self.encounters.wants_session.take() {
+            // Through the Session page's own guards for an unsaved note.
+            self.sessions.select(Some(session));
             self.page = Page::Sessions;
         }
         if std::mem::take(&mut self.sessions.wants_campaign_link) {
@@ -2432,8 +2438,19 @@ impl Splat {
             }
         }
         if std::mem::take(&mut self.sessions.wants_new_fight) {
-            self.encounters.new_from_plan();
+            self.encounters.new_from_plan(self.sessions.selected_id());
             self.page = Page::Encounters;
+        }
+        if let Some(id) = self.sessions.wants_edit_encounter.take()
+            && let Some(campaign) = &active
+        {
+            match self
+                .encounters
+                .edit_from_plan(id, self.sessions.selected_id(), campaign)
+            {
+                Ok(()) => self.page = Page::Encounters,
+                Err(why) => self.sessions.encounter_not_opened(why),
+            }
         }
         if std::mem::take(&mut self.sessions.wants_back_to_run)
             || std::mem::take(&mut self.timeline_page.wants_back_to_run)
