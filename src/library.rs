@@ -418,30 +418,18 @@ fn page_error<'a>(footer: &mut design::Footer<'a>, error: Option<&'a str>) {
     }
 }
 
-/// Each kept result as its own message in the pane's message footer, newest first by when the
-/// pane first saw it (`result_ages`), as Edit Markdown lists its results. `out` gathers what was
-/// pressed.
+/// Each kept result as its own message in the pane's message footer; the footer lists them
+/// newest first by when each action was done (`orders`), as Edit Markdown lists its results.
+/// `out` gathers what was pressed.
 fn add_results<'a>(
     footer: &mut design::Footer<'a>,
     results: &'a ReaderResults,
-    (ages, clock): (&mut std::collections::HashMap<String, u64>, &mut u64),
+    orders: &ResultOrders,
     out: &'a std::cell::Cell<ResultPress>,
 ) {
-    let items = results.items();
-    // With nothing to list, the ages stay as they are: another list in this frame owns them.
-    if items.is_empty() {
-        return;
-    }
-    let age = result_ages(
-        ages,
-        clock,
-        items.iter().map(|(_, words, _)| words.as_str()),
-    );
-    let mut order: Vec<usize> = (0..items.len()).collect();
-    order.sort_by_key(|at| std::cmp::Reverse(age[*at]));
-    for at in order {
-        let (kind, words, undo) = items[at].clone();
-        footer.result(words, undo, move |ui| {
+    for (kind, words, undo) in results.items() {
+        let order = order_of(orders, OrderKey::Reader(kind));
+        footer.result(order, words, undo, move |ui| {
             let mut pressed = out.get();
             show_result(ui, results, kind, &mut pressed);
             out.set(pressed);
@@ -455,12 +443,12 @@ fn form_footer(
     ui: &mut egui::Ui,
     id: &str,
     results: &ReaderResults,
-    ages: (&mut std::collections::HashMap<String, u64>, &mut u64),
+    orders: &ResultOrders,
     (form_error, error): (Option<&str>, Option<&str>),
 ) -> (ResultPress, f32) {
     let pressed = std::cell::Cell::new(ResultPress::default());
     let mut footer = design::Footer::new(id, ui.available_width().min(design::READER_MEASURE));
-    add_results(&mut footer, results, ages, &pressed);
+    add_results(&mut footer, results, orders, &pressed);
     page_error(&mut footer, form_error);
     page_error(&mut footer, error);
     let bottom = footer.show(ui);
@@ -506,8 +494,8 @@ fn reader_messages<'a>(
     duplicates: Option<(&'a Loaded, &'a Note, &'a [usize])>,
     draft_reason: Option<&'static str>,
     dependencies: &'a [(Uuid, String, String)],
-    dependency_results: &'a [(usize, String)],
-    ages: (&mut std::collections::HashMap<String, u64>, &mut u64),
+    dependency_results: &'a [(usize, String, design::ResultOrder)],
+    orders: &ResultOrders,
     out: &'a mut ReaderPress,
 ) {
     let ReaderPress {
@@ -519,17 +507,17 @@ fn reader_messages<'a>(
         undo_dependency,
     } = out;
     let (heading_fix, heading_undo) = (&mut heading_out.0, &mut heading_out.1);
-    add_results(footer, results, ages, results_out);
+    add_results(footer, results, orders, results_out);
     if let Some(result) = heading.and_then(|heading| heading.undo.as_deref()) {
         // The fix's result is a message, so its Undo keeps its icon on the message line.
-        footer.result(result, true, |ui| {
+        footer.result(order_of(orders, OrderKey::Heading), result, true, |ui| {
             *heading_undo = design::undo_message(ui, Tone::Success, result, "Undo heading change");
         });
     }
     // Round 25 FF8: each result names the entry and the package, in the button's words.
-    for (at, result) in dependency_results {
+    for (at, result, order) in dependency_results {
         let undo = &*undo_dependency;
-        footer.result(result.as_str(), true, move |ui| {
+        footer.result(*order, result.as_str(), true, move |ui| {
             if design::undo_message(ui, Tone::Success, result, "Undo copy") {
                 undo.set(Some(*at));
             }
@@ -2161,27 +2149,8 @@ impl ReaderResults {
     }
 }
 
-/// The age of each kept result by its words: the clock when it was first seen. Results first seen
-/// together take the next ticks in the order given. Results no longer
-/// shown leave, so a result that comes back is new again.
-fn result_ages<'a>(
-    ages: &mut std::collections::HashMap<String, u64>,
-    clock: &mut u64,
-    words: impl Iterator<Item = &'a str> + Clone,
-) -> Vec<u64> {
-    ages.retain(|known, _| words.clone().any(|words| words == known));
-    words
-        .map(|words| {
-            *ages.entry(words.to_owned()).or_insert_with(|| {
-                *clock += 1;
-                *clock
-            })
-        })
-        .collect()
-}
-
 /// One kept result of a pane, in the order `show_results` draws them in Read.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 enum ResultKind {
     ScopeNotice,
     LinkOffer,
@@ -3249,6 +3218,8 @@ struct DependencyUndo {
     copied_text: String,
     /// The result's words: `<entry> copied to <package> and linked.`
     result: String,
+    /// When the copy was made, for the footer's order.
+    order: design::ResultOrder,
 }
 
 struct IdentityUndo {
@@ -3476,10 +3447,29 @@ pub struct Library {
     /// The file, the draft before and after a stat fix, and its result message.
     vital_undo: Option<(String, String, String, String)>,
     heading_undo: Option<(String, String, String)>,
-    /// When the editor pane first saw each kept result, by its words, so the message footer can
-    /// list results with a live Undo newest first. A result ends its age when it leaves.
-    result_ages: std::collections::HashMap<String, u64>,
-    result_clock: u64,
+    /// When each kept result's action was done (`stamp_result`), so the message footer lists
+    /// results newest first. The next action of the same kind replaces its entry.
+    result_orders: ResultOrders,
+}
+
+/// A kept result of the Library's panes, for its footer order. A copy result has its own order
+/// in its `DependencyUndo`.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+enum OrderKey {
+    Reader(ResultKind),
+    Heading,
+    Vital,
+    /// An entry removed on disk, whose draft was let go.
+    Removed,
+}
+
+type ResultOrders = std::collections::HashMap<OrderKey, design::ResultOrder>;
+
+/// The order of the result `key`, issued when its action was done.
+fn order_of(orders: &ResultOrders, key: OrderKey) -> design::ResultOrder {
+    // Every action that makes a kept result stamps it (`Library::stamp_result`). A result made
+    // elsewhere without one is older than every stamped one: a draw never issues an order.
+    orders.get(&key).copied().unwrap_or_default()
 }
 /// Sort so that "Level 2" comes before "Level 18".
 fn natural_key(name: &str) -> Vec<(String, u64)> {
@@ -3648,6 +3638,10 @@ impl Library {
             self.copy_campaign_before =
                 Some((document.campaign, document.path, before, document.text));
         }
+        self.result_orders.insert(
+            OrderKey::Reader(ResultKind::Registration),
+            design::ResultOrder::issue(),
+        );
         self.package_copy = Some(copy);
         self.registration_changed = false;
         self.rosters_changed = false;
@@ -3757,6 +3751,10 @@ impl Library {
         let id = crate::hermetic::new_uuid();
         let after = crate::content_workspace::new_note_identity(&before, &note.path, id)?;
         let updated = write_note(&root, &note.path, Some(&before), &after)?;
+        self.result_orders.insert(
+            OrderKey::Reader(ResultKind::Identity),
+            design::ResultOrder::issue(),
+        );
         self.identity_undo = Some(IdentityUndo {
             root: root.clone(),
             path: note.path.clone(),
@@ -3852,6 +3850,10 @@ impl Library {
         }
         let draft = std::mem::take(&mut self.draft);
         self.draft_revision += 1;
+        self.result_orders.insert(
+            OrderKey::Reader(ResultKind::Discarded),
+            design::ResultOrder::issue(),
+        );
         self.discarded = Some((note.owner.id(), note.path.clone(), draft));
         if let Some(fault) = change.fault {
             // The note becomes the file as it is: unreadable, with its fault and no text.
@@ -3884,6 +3886,8 @@ impl Library {
                 self.draft = text;
             }
             None => {
+                self.result_orders
+                    .insert(OrderKey::Removed, design::ResultOrder::issue());
                 self.discarded_note = Some(LetGo {
                     note: Note {
                         path: note.path.clone(),
@@ -3922,6 +3926,10 @@ impl Library {
         }
         if !note.is_manifest() && !self.loaded.as_ref().unwrap().in_scope(note, self.scope) {
             self.scope = Scope::All;
+            self.result_orders.insert(
+                OrderKey::Reader(ResultKind::ScopeNotice),
+                design::ResultOrder::issue(),
+            );
             self.scope_notice = Some(format!("Scope is now Everything, to show {}.", note.name()));
         }
         self.selected = Some(index);
@@ -4712,7 +4720,7 @@ impl Library {
                 ui,
                 "library_form_footer",
                 &results,
-                (&mut self.result_ages, &mut self.result_clock),
+                &self.result_orders,
                 (
                     self.new_form.then_some(self.new_error.as_deref()).flatten(),
                     self.error.as_deref(),
@@ -5264,7 +5272,7 @@ impl Library {
                         ui,
                         "library_form_footer",
                         &results,
-                        (&mut self.result_ages, &mut self.result_clock),
+                        &self.result_orders,
                         (
                             self.new_form.then_some(self.new_error.as_deref()).flatten(),
                             self.error.as_deref(),
@@ -5374,6 +5382,10 @@ impl Library {
                     Ok(edits) => {
                         // The owner's new update ends its earlier result.
                         self.link_edits.retain(|result| result.owner != owner);
+                        self.result_orders.insert(
+                            OrderKey::Reader(ResultKind::Links),
+                            design::ResultOrder::issue(),
+                        );
                         self.link_edits.push(LinkResult {
                             owner,
                             source,
@@ -5411,6 +5423,10 @@ impl Library {
                         ..
                     } = self.link_edits.remove(at);
                     self.renamed_links.retain(|offer| offer.owner != owner);
+                    self.result_orders.insert(
+                        OrderKey::Reader(ResultKind::LinkOffer),
+                        design::ResultOrder::issue(),
+                    );
                     self.renamed_links.push(LinkOffer {
                         owner,
                         source,
@@ -5436,6 +5452,10 @@ impl Library {
         {
             match copy.use_in_rosters(&campaign) {
                 Ok(edits) => {
+                    self.result_orders.insert(
+                        OrderKey::Reader(ResultKind::Rosters),
+                        design::ResultOrder::issue(),
+                    );
                     self.copied_rosters = Some(edits);
                     self.rosters_changed = false;
                     self.content_changed = Some(campaign.path);
@@ -5636,6 +5656,10 @@ impl Library {
             self.confirm_unregister = None;
             match campaigns.unregister_module(module.id) {
                 Ok(()) => {
+                    self.result_orders.insert(
+                        OrderKey::Reader(ResultKind::Unregistered),
+                        design::ResultOrder::issue(),
+                    );
                     self.unregistered = Some(module);
                     self.scope = Scope::default();
                     self.stale = true;
@@ -6488,6 +6512,10 @@ impl Library {
                     && entry.kind != "package"
                     && l.can_rename_links(i, &old.name, &entry.name)
                 {
+                    self.result_orders.insert(
+                        OrderKey::Reader(ResultKind::LinkOffer),
+                        design::ResultOrder::issue(),
+                    );
                     self.renamed_links.push(LinkOffer {
                         owner: entry.id,
                         source: OfferSource {
@@ -6651,16 +6679,12 @@ impl Library {
             );
             if let Some(words) = gone_notice.as_deref().filter(|_| !self.dirty()) {
                 let undo = &mut undo_remove;
-                footer.result(words, true, move |ui| {
+                let order = order_of(&self.result_orders, OrderKey::Removed);
+                footer.result(order, words, true, move |ui| {
                     *undo = design::undo_message(ui, Tone::Info, words, "Undo remove");
                 });
             }
-            add_results(
-                &mut footer,
-                &results,
-                (&mut self.result_ages, &mut self.result_clock),
-                &pressed,
-            );
+            add_results(&mut footer, &results, &self.result_orders, &pressed);
             page_error(&mut footer, self.error.as_deref());
             // The empty reader below holds nothing past the cursor, so the pane ends at the
             // footer's top.
@@ -7431,7 +7455,7 @@ impl Library {
         };
         // The copies this file made, by package root and path, newest first, with their place in
         // `dependency_undos` for their Undo.
-        let dependency_results: Vec<(usize, String)> = self
+        let dependency_results: Vec<(usize, String, design::ResultOrder)> = self
             .dependency_undos
             .iter()
             .enumerate()
@@ -7441,7 +7465,7 @@ impl Library {
                     && change.path == note.path
                     && note.owner.root() == Some(change.root.as_path())
             })
-            .map(|(at, change)| (at, change.result.clone()))
+            .map(|(at, change)| (at, change.result.clone(), change.order))
             .collect();
         let mut reader_press = ReaderPress::default();
         let no_results = ReaderResults::default();
@@ -7472,6 +7496,10 @@ impl Library {
                     .clicked();
                     ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                         if design::save_row_state(ui, state, dirty && !conflict, None) {
+                            self.result_orders.insert(
+                                OrderKey::Reader(ResultKind::Discarded),
+                                design::ResultOrder::issue(),
+                            );
                             self.discarded =
                                 Some((note.owner.id(), note.path.clone(), self.draft.clone()));
                             self.draft = note.text.clone();
@@ -7559,10 +7587,8 @@ impl Library {
                 });
             let (mut heading_fix, mut vital_use) = (false, None);
             // Each kept result is its own footer message, with its own Undo: Discard's, the
-            // heading and stat fixes', and each of the reader's results. Results with a live Undo
-            // are listed newest first, by when this pane first saw each one. Results first seen in
-            // one frame take the next ticks in the order they are listed here (Discard, the fixes,
-            // then Read's order), so among them the last listed shows first.
+            // heading and stat fixes', and each of the reader's results. The footer lists results
+            // with a live Undo newest first, by when each action was done (`result_orders`).
             #[derive(Clone, Copy)]
             enum Kept {
                 Discard,
@@ -7570,35 +7596,38 @@ impl Library {
                 Vital,
                 Reader(ResultKind),
             }
-            let mut kept: Vec<(Kept, String, bool)> = Vec::new();
+            let orders = &self.result_orders;
+            let mut kept: Vec<(Kept, String, bool, design::ResultOrder)> = Vec::new();
             if discard_shown {
                 kept.push((
                     Kept::Discard,
                     format!("{} draft discarded.", note.name()),
                     true,
+                    order_of(orders, OrderKey::Reader(ResultKind::Discarded)),
                 ));
             }
             if let Some(result) = heading.undo.as_deref() {
-                kept.push((Kept::Heading, result.to_owned(), true));
+                kept.push((
+                    Kept::Heading,
+                    result.to_owned(),
+                    true,
+                    order_of(orders, OrderKey::Heading),
+                ));
             }
             if let Some(result) = vital_result {
-                kept.push((Kept::Vital, result.to_owned(), true));
+                kept.push((
+                    Kept::Vital,
+                    result.to_owned(),
+                    true,
+                    order_of(orders, OrderKey::Vital),
+                ));
             }
             if results_shown {
-                kept.extend(
-                    results
-                        .items()
-                        .into_iter()
-                        .map(|(kind, words, undo)| (Kept::Reader(kind), words, undo)),
-                );
+                kept.extend(results.items().into_iter().map(|(kind, words, undo)| {
+                    let order = order_of(orders, OrderKey::Reader(kind));
+                    (Kept::Reader(kind), words, undo, order)
+                }));
             }
-            let ages = result_ages(
-                &mut self.result_ages,
-                &mut self.result_clock,
-                kept.iter().map(|(_, words, _)| words.as_str()),
-            );
-            let mut order: Vec<usize> = (0..kept.len()).collect();
-            order.sort_by_key(|at| std::cmp::Reverse(ages[*at]));
             let (discard_undo, heading_undo, vital_undo) = (
                 std::cell::Cell::new(false),
                 std::cell::Cell::new(false),
@@ -7606,14 +7635,13 @@ impl Library {
             );
             let shown = std::cell::RefCell::new(None::<ResultPress>);
             let mut footer = design::Footer::new("library_footer", editor_width);
-            for at in order {
-                let (which, words, undo) = &kept[at];
+            for (which, words, undo, order) in &kept {
                 let (which, results) = (*which, &results);
                 let (discard_undo, heading_undo, vital_undo, shown) =
                     (&discard_undo, &heading_undo, &vital_undo, &shown);
                 let heading_result = heading.undo.as_deref();
                 // The fixes' results are messages, so each Undo keeps its icon on the line.
-                footer.result(words.as_str(), *undo, move |ui| match which {
+                footer.result(*order, words.as_str(), *undo, move |ui| match which {
                     Kept::Discard => discard_undo.set(design::draft_discarded(ui, note.name())),
                     Kept::Heading => heading_undo.set(heading_result.is_some_and(|result| {
                         design::undo_message(ui, Tone::Success, result, "Undo heading change")
@@ -7709,7 +7737,7 @@ impl Library {
                 draft_reason,
                 &dependencies,
                 &dependency_results,
-                (&mut self.result_ages, &mut self.result_clock),
+                &self.result_orders,
                 &mut reader_press,
             );
             page_error(&mut footer, self.error.as_deref());
@@ -7736,15 +7764,22 @@ impl Library {
             if heading_pressed.0 || heading_pressed.1 {
                 self.draft_revision += 1;
             }
+            let fixed = heading_pressed.0;
             save |= heading.apply(
                 std::mem::take(&mut heading_pressed),
                 &note.path,
                 &mut self.draft,
                 &mut self.heading_undo,
             );
+            if fixed && self.heading_undo.is_some() {
+                self.result_orders
+                    .insert(OrderKey::Heading, design::ResultOrder::issue());
+            }
             if let (Some((key, label, value)), Ok(entry)) = (vital_use, &parsed) {
                 match creature::use_vital(&self.draft, entry, key, value) {
                     Ok(after) => {
+                        self.result_orders
+                            .insert(OrderKey::Vital, design::ResultOrder::issue());
                         self.vital_undo = Some((
                             note.path.clone(),
                             self.draft.clone(),
@@ -7791,7 +7826,7 @@ impl Library {
                 draft_reason,
                 &dependencies,
                 &dependency_results,
-                (&mut self.result_ages, &mut self.result_clock),
+                &self.result_orders,
                 &mut reader_press,
             );
             page_error(&mut footer, self.error.as_deref());
@@ -8115,12 +8150,17 @@ impl Library {
         if heading_pressed.0 || heading_pressed.1 {
             self.draft_revision += 1;
         }
+        let fixed = heading_pressed.0;
         save |= heading.apply(
             heading_pressed,
             &note.path,
             &mut self.draft,
             &mut self.heading_undo,
         );
+        if fixed && self.heading_undo.is_some() {
+            self.result_orders
+                .insert(OrderKey::Heading, design::ResultOrder::issue());
+        }
         let undo_identities = pressed.identities;
         let undo_identity = pressed.identity;
         if pressed.discarded
@@ -8134,6 +8174,10 @@ impl Library {
             if let Some((module, path, exists)) = recovery {
                 match crate::content_workspace::ManifestWrite::write_as(&module, &path, exists) {
                     Ok(write) => {
+                        self.result_orders.insert(
+                            OrderKey::Reader(ResultKind::Manifest),
+                            design::ResultOrder::issue(),
+                        );
                         self.manifest_write = Some(write);
                         self.stale = true;
                         self.content_changed = Some(module.path);
@@ -8227,6 +8271,7 @@ impl Library {
                         "{} copied to {} and linked.",
                         source.entry.name, package.name
                     ),
+                    order: design::ResultOrder::issue(),
                 });
                 self.content_changed = Some(package.path.clone());
                 self.stale = true;
@@ -8325,6 +8370,10 @@ impl Library {
                 });
             match result {
                 Ok(undo) => {
+                    self.result_orders.insert(
+                        OrderKey::Reader(ResultKind::PackageUse),
+                        design::ResultOrder::issue(),
+                    );
                     self.selection_undo = Some(undo);
                     self.stale = true;
                     self.content_changed = Some(campaign.path);
@@ -8339,6 +8388,10 @@ impl Library {
         let identity_result = if let Some((root, paths)) = new_identities {
             crate::content_workspace::ContentEdits::new_identities(&root, &paths).map(|edits| {
                 let folder = root.file_name().unwrap_or_default().to_string_lossy();
+                self.result_orders.insert(
+                    OrderKey::Reader(ResultKind::Identities),
+                    design::ResultOrder::issue(),
+                );
                 self.identities_undo = Some((
                     edits,
                     format!(
@@ -11096,6 +11149,7 @@ mod tests {
             copied_path: paths[1].clone(),
             copied_text: fs::read_to_string(root.join(&paths[1])).unwrap(),
             result: String::new(),
+            order: design::ResultOrder::issue(),
         }];
         library.forget_changed_undos();
         assert!(!library.dependency_undos.is_empty());

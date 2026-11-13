@@ -449,6 +449,7 @@ impl super::Encounters {
                 let old = self.draft.take();
                 self.draft = super::Draft::open(&campaign.path, &path).ok();
                 self.discarded = old;
+                self.stamp_kept(super::KeptResult::Discarded);
                 self.error = None;
             }
         }

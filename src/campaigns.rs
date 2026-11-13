@@ -25,10 +25,14 @@ pub struct Campaigns {
     name: String,
     path: String,
     discarded_details: Option<(String, String)>,
+    /// When the details draft was discarded: its result's place in the footer.
+    discarded_order: crate::design::ResultOrder,
     remote: Option<(String, String)>,
     confirm_remove: Option<Uuid>,
     /// The campaign just added, and where to go next.
     added: Option<String>,
+    /// When that campaign was added: its result's place in the footer.
+    added_order: crate::design::ResultOrder,
     /// The DM asked to go on to Encounters, from that message.
     pub wants_encounters: bool,
     /// Round 26 AG1: the widest name and link block and the widest action group, as the last
@@ -60,9 +64,11 @@ impl Default for Campaigns {
             name: String::new(),
             path: String::new(),
             discarded_details: None,
+            discarded_order: crate::design::ResultOrder::issue(),
             remote: None,
             confirm_remove: None,
             added: None,
+            added_order: crate::design::ResultOrder::issue(),
             wants_encounters: false,
             list_measure: (0.0, 0.0),
         };
@@ -171,6 +177,7 @@ impl Campaigns {
         // A new result replaces the copy's registration result, and its Undo with it.
         self.campaign_copy = None;
         self.added = adding.then(|| format!("Added {}.", campaign.name));
+        self.added_order = crate::design::ResultOrder::issue();
         Ok(())
     }
 
@@ -202,6 +209,7 @@ impl Campaigns {
         self.campaign_copy = Some((copy, id, before.active_campaign_id));
         self.clear_form();
         self.added = Some(copy_registered(&name));
+        self.added_order = crate::design::ResultOrder::issue();
         Ok(())
     }
 
@@ -330,9 +338,11 @@ impl Campaigns {
             name: String::new(),
             path: String::new(),
             discarded_details: None,
+            discarded_order: crate::design::ResultOrder::issue(),
             remote: None,
             confirm_remove: None,
             added: None,
+            added_order: crate::design::ResultOrder::issue(),
             wants_encounters: false,
             list_measure: (0.0, 0.0),
         }
@@ -1089,7 +1099,7 @@ impl Campaigns {
         blocked: Option<&'a str>,
     ) {
         const DISCARDED: &str = "Campaign details draft discarded.";
-        let (discarded, added, copy, error, locked) = {
+        let (discarded, added, copy, error, locked, (discarded_order, added_order)) = {
             let this = me.borrow();
             let locked =
                 blocked.or((!this.writable).then_some("Reload valid campaign settings first."));
@@ -1099,10 +1109,11 @@ impl Campaigns {
                 this.campaign_copy.is_some(),
                 this.error.clone(),
                 locked,
+                (this.discarded_order, this.added_order),
             )
         };
         if discarded {
-            footer.result(DISCARDED, true, move |ui| {
+            footer.result(discarded_order, DISCARDED, true, move |ui| {
                 if design::draft_discarded(ui, "Campaign details") {
                     let mut this = me.borrow_mut();
                     if let Some((name, path)) = this.discarded_details.take() {
@@ -1113,7 +1124,7 @@ impl Campaigns {
             });
         }
         if let Some(added) = added.clone().filter(|_| copy) {
-            footer.result(added.clone(), true, move |ui| {
+            footer.result(added_order, added.clone(), true, move |ui| {
                 // The registration result and its Undo are one message. Build an encounter is
                 // another choice: it starts below, at the message words. Only Undo is quiet.
                 // Review round 26: Undo changes the registration and can change the active
@@ -1148,7 +1159,7 @@ impl Campaigns {
             });
         }
         if let Some(added) = added.filter(|_| !copy) {
-            footer.result(added.clone(), false, move |ui| {
+            footer.result(added_order, added.clone(), false, move |ui| {
                 if design::message_with_action(ui, Tone::Success, &added, "Build an encounter") {
                     me.borrow_mut().build_encounter();
                 }
@@ -1362,6 +1373,7 @@ impl Campaigns {
                                 && let Some(saved) = self.data.campaigns.iter().find(|c| Some(c.id) == self.editing)
                             {
                                 self.discarded_details = Some((self.name.clone(), self.path.clone()));
+                                self.discarded_order = crate::design::ResultOrder::issue();
                                 self.name = saved.name.clone();
                                 self.path = saved.path.to_string_lossy().into_owned();
                             }
@@ -1802,9 +1814,11 @@ mod tests {
             name: String::new(),
             path: String::new(),
             discarded_details: None,
+            discarded_order: crate::design::ResultOrder::issue(),
             remote: None,
             confirm_remove: None,
             added: None,
+            added_order: crate::design::ResultOrder::issue(),
             wants_encounters: false,
             list_measure: (0.0, 0.0),
         };

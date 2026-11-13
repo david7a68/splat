@@ -2478,10 +2478,12 @@ impl Sessions {
             });
         }
         let mut undos = LiveUndos::new();
-        if plan.group_discarded && here {
+        if plan.group_discarded
+            && here
+            && let Some(order) = plan.group_discarded_order
+        {
             let name = plan.group_discarded_name.clone();
             let act = &footer_act;
-            let order = plan.group_discarded_order;
             undos.push(order, format!("{name} draft discarded."), move |ui| {
                 if design::draft_discarded(ui, &name) {
                     act.set(Some(FooterAct::UndoGroupDiscard));
@@ -3466,6 +3468,7 @@ impl Sessions {
                 });
                 if let Ok(undo) | Err(ActFault::NotSaved(_, undo)) = &result {
                     scenes.removed = Some((line, plain_links(&task.words), undo.clone()));
+                    self.result_orders.renew("scene-removed");
                 }
                 (result.map(drop), Place::Row(slot))
             }
@@ -4554,7 +4557,7 @@ mod tests {
                         group_open: false,
                         group_discarded: false,
                         group_discarded_name: String::new(),
-                        group_discarded_order: 0,
+                        group_discarded_order: None,
                         arrivals_open: false,
                         group_editor: std::cell::RefCell::new(&mut group),
                         blocked: None,
@@ -4958,7 +4961,7 @@ mod tests {
                         group_open: false,
                         group_discarded: false,
                         group_discarded_name: String::new(),
-                        group_discarded_order: 0,
+                        group_discarded_order: None,
                         arrivals_open: false,
                         group_editor: std::cell::RefCell::new(&mut group),
                         blocked: None,
@@ -5653,7 +5656,7 @@ mod tests {
                         group_open: false,
                         group_discarded: false,
                         group_discarded_name: String::new(),
-                        group_discarded_order: 0,
+                        group_discarded_order: None,
                         arrivals_open: false,
                         group_editor: std::cell::RefCell::new(&mut group),
                         blocked: None,

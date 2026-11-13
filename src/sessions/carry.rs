@@ -780,7 +780,9 @@ impl Sessions {
         };
         match self.carries.results.get(&session) {
             Some(Outcome::Refused { words, .. }) => {
-                footer.result(words.as_str(), false, move |ui| {
+                // The act's order, issued when it was done (`renew("carry")`).
+                let order = self.result_orders.of("carry", session);
+                footer.result(order, words.as_str(), false, move |ui| {
                     design::message(ui, Tone::Warning, words);
                 });
             }
@@ -1227,7 +1229,7 @@ mod tests {
             group_open: false,
             group_discarded: false,
             group_discarded_name: String::new(),
-            group_discarded_order: 0,
+            group_discarded_order: None,
             arrivals_open: false,
             group_editor: std::cell::RefCell::new(&mut group),
             blocked: None,

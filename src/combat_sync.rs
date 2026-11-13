@@ -839,6 +839,11 @@ enum ActionNotice {
     Failed(String),
 }
 
+/// A new action notice, with the order of the action that made it.
+fn noticed(notice: ActionNotice) -> Option<(ActionNotice, crate::design::ResultOrder)> {
+    Some((notice, crate::design::ResultOrder::issue()))
+}
+
 #[derive(Default)]
 pub struct CombatSync {
     pub enabled: bool,
@@ -872,8 +877,8 @@ pub struct CombatSync {
     first_read: bool,
     /// A sheet action the DM asked for. The next exchange takes it and sends it once.
     action: Option<SheetAction>,
-    /// What happened to the last sheet action.
-    action_notice: Option<ActionNotice>,
+    /// What happened to the last sheet action, with the order the action took for the footer.
+    action_notice: Option<(ActionNotice, crate::design::ResultOrder)>,
     /// A rest the DM is setting up in the panel, before they send it.
     rest_form: Option<RestForm>,
     /// Unsent HP, death saves and conditions also last until the next first read. A run holds
@@ -940,7 +945,7 @@ impl CombatSync {
         }
         // A rest on its way may have reached D&D Beyond. Splat will not hear back.
         if let Some(name) = self.pending.as_ref().and_then(|pending| pending.action) {
-            self.action_notice = Some(ActionNotice::Failed(format!(
+            self.action_notice = noticed(ActionNotice::Failed(format!(
                 "Sync stopped before Splat heard back about the {name}. Check the sheet on D&D Beyond before you try again."
             )));
         }
@@ -1159,12 +1164,12 @@ impl CombatSync {
                         self.accept(outcome, &sent);
                         // A success says so until the next read. An error stays until closed.
                         if action.is_none()
-                            && matches!(self.action_notice, Some(ActionNotice::Taken(_)))
+                            && matches!(self.action_notice, Some((ActionNotice::Taken(_), _)))
                         {
                             self.action_notice = None;
                         }
                         if let (Some(name), Some(taken)) = (action, taken) {
-                            self.action_notice = Some(match taken {
+                            self.action_notice = noticed(match taken {
                                 Ok(()) => ActionNotice::Taken(format!(
                                     "D&D Beyond took the {name}. The values below are the sheet’s new values."
                                 )),
@@ -1174,7 +1179,7 @@ impl CombatSync {
                     }
                     Err(error) => {
                         if action.is_some() {
-                            self.action_notice = Some(ActionNotice::Failed(error.clone()));
+                            self.action_notice = noticed(ActionNotice::Failed(error.clone()));
                         }
                         self.error = Some(error);
                         if let Some(remote) = &self.remote {
@@ -1631,14 +1636,18 @@ impl CombatSync {
     /// dismiss is the close icon at the message end, in the one Party form.
     pub fn footer_messages<'a>(&'a mut self, footer: &mut crate::design::Footer<'a>) {
         use crate::design::{self, Tone};
-        let Some((tone, words)) = self.action_notice.as_ref().map(|notice| match notice {
-            ActionNotice::Taken(words) => (Tone::Success, words.clone()),
-            ActionNotice::Failed(words) => (Tone::Error, words.clone()),
-        }) else {
+        let Some((tone, words, order)) =
+            self.action_notice
+                .as_ref()
+                .map(|(notice, order)| match notice {
+                    ActionNotice::Taken(words) => (Tone::Success, words.clone(), *order),
+                    ActionNotice::Failed(words) => (Tone::Error, words.clone(), *order),
+                })
+        else {
             return;
         };
         let notice = &mut self.action_notice;
-        footer.result(words.clone(), false, move |ui| {
+        footer.result(order, words.clone(), false, move |ui| {
             if crate::party::dismissable(ui, |ui| {
                 design::message(ui, tone, &words);
             }) {
@@ -3089,7 +3098,7 @@ mod tests {
         });
         sync.stop();
         assert!(
-            matches!(&sync.action_notice, Some(ActionNotice::Failed(words)) if words.contains("Check the sheet"))
+            matches!(&sync.action_notice, Some((ActionNotice::Failed(words), _)) if words.contains("Check the sheet"))
         );
     }
     #[test]
@@ -3167,7 +3176,7 @@ mod tests {
                 None,
             ] {
                 let expected = notice.is_some();
-                sync.action_notice = notice;
+                sync.action_notice = notice.and_then(noticed);
                 // Two passes: the first lays out, the second reads the settled place.
                 field_top(&mut sync, size);
                 let (top, notice) = field_top(&mut sync, size);
@@ -3184,7 +3193,7 @@ mod tests {
                 "At {size:?}, the result is in view exactly while it lives: {shown:?}"
             );
         }
-        sync.action_notice = Some(ActionNotice::Taken(TAKEN.into()));
+        sync.action_notice = noticed(ActionNotice::Taken(TAKEN.into()));
         let before = sync.desired.clone();
         for form in [
             None,

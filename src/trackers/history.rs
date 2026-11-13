@@ -44,8 +44,8 @@ pub struct Removed {
     pub note: Uuid,
     placed: Placed,
     pub words: String,
-    /// When it was made (`world::next_order`), for the footer's order.
-    order: u64,
+    /// When it was made, for the footer's order.
+    order: crate::design::ResultOrder,
 }
 
 /// The member an entry belongs to: the tracker it changed, the tracker whose change raised its
@@ -254,7 +254,7 @@ impl Trackers {
                         note,
                         placed,
                         words,
-                        order: crate::world::next_order(),
+                        order: crate::design::ResultOrder::issue(),
                     });
                 }
             }

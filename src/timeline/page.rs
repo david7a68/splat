@@ -151,21 +151,25 @@ pub fn quick_add_with(
     })
 }
 
-/// When a kept result was first shown, by its identity (its kind and what makes this one
-/// result), so a footer lists its results with a live Undo newest first, whatever their kind
-/// (review of PR 274, item 2). The first show is the draw after its action, so it gives the
-/// action's order. A result that ends and comes back with the same identity keeps its place.
+/// When each kept result's action was done, by its identity (its kind and what makes this one
+/// result), so a footer lists its results newest first, whatever their kind (review of PR 274,
+/// item 2). The action calls `renew` for its kind when it is done, which issues the order; the
+/// result's identity takes that order the first time it is asked, and keeps it. A result that
+/// ends and comes back with the same identity keeps its place.
 #[derive(Default)]
 pub(crate) struct ResultOrder {
-    seen: std::cell::RefCell<std::collections::HashMap<(String, u64), u64>>,
+    seen: std::cell::RefCell<std::collections::HashMap<(String, u64), design::ResultOrder>>,
+    /// The order `renew` issued for each kind's newest action.
+    renewed: std::cell::RefCell<std::collections::HashMap<String, design::ResultOrder>>,
 }
 
 /// How many results a `ResultOrder` remembers; the oldest go first.
 const KEPT_ORDERS: usize = 64;
 
 impl ResultOrder {
-    /// The order of the result `kind` with identity `of`, given the first time it is asked.
-    pub(crate) fn of(&self, kind: &str, of: impl std::hash::Hash) -> u64 {
+    /// The order of the result `kind` with identity `of`: the order its kind's newest action
+    /// was given (`renew`), kept from the first time it is asked.
+    pub(crate) fn of(&self, kind: &str, of: impl std::hash::Hash) -> design::ResultOrder {
         use std::hash::{BuildHasher, BuildHasherDefault, DefaultHasher};
         let key = (
             kind.to_owned(),
@@ -181,23 +185,37 @@ impl ResultOrder {
                 seen.remove(&oldest);
             }
         }
-        *seen.entry(key).or_insert_with(super::next_result_order)
+        let renewed = self.renewed.borrow().get(kind).copied();
+        // A kind whose action is on another page (a removal on the Timeline page, read by the
+        // plan; a rename's link offer) has no `renew` here: it is older than every renewed
+        // result. A draw never issues an order.
+        *seen
+            .entry(key)
+            .or_insert_with(|| renewed.unwrap_or_default())
     }
 
-    /// A new result of `kind` was just made: its next `of` gives it a new, newest order, even
-    /// when it looks like the one before (the same words added again after an Undo).
+    /// A new result of `kind` was just made: it gets a new, newest order, even when it looks like
+    /// the one before (the same words added again after an Undo).
     pub(crate) fn renew(&self, kind: &str) {
         self.seen.borrow_mut().retain(|(seen, _), _| seen != kind);
+        self.renewed
+            .borrow_mut()
+            .insert(kind.to_owned(), design::ResultOrder::issue());
     }
 }
 
-/// A footer's results with a live Undo, gathered with their order and added newest first.
+/// A footer's results with a live Undo, gathered with their order; the footer lists them newest
+/// first.
 pub(crate) struct LiveUndos<'a> {
     items: Vec<LiveUndo<'a>>,
 }
 
 /// One result with a live Undo: its order, its words and how to draw it.
-type LiveUndo<'a> = (u64, String, Box<dyn FnOnce(&mut egui::Ui) + 'a>);
+type LiveUndo<'a> = (
+    design::ResultOrder,
+    String,
+    Box<dyn FnOnce(&mut egui::Ui) + 'a>,
+);
 
 impl<'a> LiveUndos<'a> {
     pub(crate) fn new() -> Self {
@@ -206,18 +224,17 @@ impl<'a> LiveUndos<'a> {
 
     pub(crate) fn push(
         &mut self,
-        order: u64,
+        order: design::ResultOrder,
         words: String,
         draw: impl FnOnce(&mut egui::Ui) + 'a,
     ) {
         self.items.push((order, words, Box::new(draw)));
     }
 
-    /// Add them to `footer`, newest first.
-    pub(crate) fn into_footer(mut self, footer: &mut design::Footer<'a>) {
-        self.items.sort_by_key(|item| std::cmp::Reverse(item.0));
-        for (_, words, draw) in self.items {
-            footer.result(words, true, draw);
+    /// Add them to `footer`, which puts them newest first.
+    pub(crate) fn into_footer(self, footer: &mut design::Footer<'a>) {
+        for (order, words, draw) in self.items {
+            footer.result(order, words, true, draw);
         }
     }
 }
@@ -924,9 +941,9 @@ impl TimelinePage {
         let file = std::cell::Cell::new(None);
         let mut footer = design::Footer::new("timeline_list_footer", ui.available_width());
         let mut undos = LiveUndos::new();
-        if let Some(words) = notes.event_link_result() {
+        if let (Some(words), Some(order)) = (notes.event_link_result(), notes.event_link_order()) {
             let act = &act;
-            undos.push(notes.event_link_order(), words.clone(), move |ui| {
+            undos.push(order, words.clone(), move |ui| {
                 if design::undo_message(ui, Tone::Success, &words, "Undo link update") {
                     act.set(Some(ListAct::UndoLinks));
                 }
@@ -938,7 +955,10 @@ impl TimelinePage {
         if let Some(offer) = &offer {
             let (words, action) = (offer.words.clone(), offer.action.clone());
             let act = &act;
-            footer.result(words.clone(), false, move |ui| {
+            // The rename that made the offer is Book's (`renamed_links`), which does not renew
+            // this kind: the offer takes its order the first time it shows.
+            let order = self.orders.of("link offer", (open, &offer.words));
+            footer.result(order, words.clone(), false, move |ui| {
                 if design::message_with_action(ui, Tone::Info, &words, &action) {
                     act.set(Some(ListAct::UpdateLinks));
                 }
@@ -1621,6 +1641,7 @@ impl TimelinePage {
                 .filter(|session| session.mentions.contains(&id))
                 .count();
             book.remove(&id);
+            self.orders.renew("remove");
             self.selected = None;
         }
     }

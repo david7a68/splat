@@ -88,8 +88,8 @@ pub(super) struct GroupDraft {
     /// The last `Use` on a member this campaign could not find. It owns the result line until
     /// its Undo, a newer member result, or a move or removal that changes the members' places.
     replaced: Option<Replaced>,
-    /// When the newest member result was made (`result_stamp`).
-    member_stamp: u64,
+    /// When the newest member result was made (`result_stamp`); `None` before the first.
+    member_stamp: Option<design::ResultOrder>,
     /// Whether the members are the saved ones, worked out once after each change (FJ6); `None`
     /// until then. Editing input (this frame or the one before, as a click's change lands late)
     /// and the events that change the members or the saved ones clear it.
@@ -136,7 +136,7 @@ impl GroupDraft {
             removed_unread: None,
             removed_member: None,
             replaced: None,
-            member_stamp: 0,
+            member_stamp: None,
             members_saved: None,
             edited_last_frame: false,
             repair_error: None,
@@ -172,7 +172,7 @@ impl GroupDraft {
             removed_unread: None,
             removed_member: None,
             replaced: None,
-            member_stamp: 0,
+            member_stamp: None,
             members_saved: None,
             edited_last_frame: false,
             repair_error: None,
@@ -198,7 +198,7 @@ impl GroupDraft {
     /// The member result that shows now, with its Undo: the newest of a replacement, a removed
     /// member and a removed unread row owns it. A replacement's ends when its member no longer
     /// holds the chosen creature.
-    pub(super) fn member_result(&mut self) -> Option<(String, &'static str, u64)> {
+    pub(super) fn member_result(&mut self) -> Option<(String, &'static str, design::ResultOrder)> {
         if let Some(result) = &self.replaced {
             if self
                 .setup
@@ -206,7 +206,10 @@ impl GroupDraft {
                 .get(result.index)
                 .is_some_and(|member| member.creature == result.after)
             {
-                return Some((result.words.clone(), "Undo replacement", self.member_stamp));
+                // Each member result is made with its stamp, so a shown one has it.
+                return self
+                    .member_stamp
+                    .map(|stamp| (result.words.clone(), "Undo replacement", stamp));
             }
             self.replaced = None;
         }
@@ -214,13 +217,8 @@ impl GroupDraft {
             .as_ref()
             .map(|(_, _, name)| name)
             .or(self.removed_unread.as_ref().map(|(_, _, name)| name))
-            .map(|name| {
-                (
-                    format!("Removed {name}."),
-                    "Undo remove member",
-                    self.member_stamp,
-                )
-            })
+            .zip(self.member_stamp)
+            .map(|(name, stamp)| (format!("Removed {name}."), "Undo remove member", stamp))
     }
     /// Undo the member result that shows: the creature, the member or the unread row comes
     /// back at its place, and other draft edits stay.
@@ -386,7 +384,7 @@ impl GroupDraft {
                 .map_or(source.len(), |at| row[0].range.start + at + 1);
             self.removed_member = None;
             self.replaced = None;
-            self.member_stamp = super::result_stamp();
+            self.member_stamp = Some(super::result_stamp());
             self.removed_unread = Some((
                 line,
                 source[start..end].to_owned(),
@@ -1106,6 +1104,7 @@ impl Encounters {
             } else {
                 let path = draft.path.clone();
                 self.discarded_group = self.group_draft.take();
+                self.stamp_kept(super::KeptResult::GroupDiscarded);
                 self.group_draft = GroupDraft::open(&campaign.path, &path).ok();
                 self.error = None;
             }
@@ -2008,6 +2007,7 @@ impl Encounters {
                 self.saved = true;
                 self.error = None;
                 self.message = Some("Group saved.".into());
+                self.message_order = Some(design::ResultOrder::issue());
 
                 // The list and an open run read groups from the snapshot.
                 self.refreshing = true;
@@ -2252,7 +2252,8 @@ impl Encounters {
                 }
             }
             self.discarded_group = Some(draft);
-            self.discarded_group_order = crate::timeline::next_result_order();
+            self.discarded_group_order = Some(design::ResultOrder::issue());
+            self.stamp_kept(super::KeptResult::GroupDiscarded);
             self.discarded = None;
             return;
         }
@@ -2461,8 +2462,8 @@ fn member_result_into<'a>(
     footer: &mut design::Footer<'a>,
     pressed: &'a std::cell::Cell<bool>,
 ) {
-    if let Some((words, undo, _)) = draft.member_result() {
-        footer.result(words.clone(), true, move |ui| {
+    if let Some((words, undo, stamp)) = draft.member_result() {
+        footer.result(stamp, words.clone(), true, move |ui| {
             if design::undo_message(ui, Tone::Success, &words, undo) {
                 pressed.set(true);
             }
@@ -2872,7 +2873,7 @@ fn members(
         draft.removed_member = None;
         draft.removed_unread = None;
         draft.replaced = Some(result);
-        draft.member_stamp = super::result_stamp();
+        draft.member_stamp = Some(super::result_stamp());
     }
     if let Some(index) = remove {
         let member = draft.setup.members.remove(index);
@@ -2886,7 +2887,7 @@ fn members(
         let name = shown_name(&member.overrides, base);
         draft.removed_unread = None;
         draft.removed_member = Some((index, member, name));
-        draft.member_stamp = super::result_stamp();
+        draft.member_stamp = Some(super::result_stamp());
     } else if let Some(index) = raise {
         draft.setup.members.swap(index, index - 1);
     } else if let Some(index) = lower {
