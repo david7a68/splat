@@ -763,8 +763,10 @@ impl<'a> Action<'a> {
             // An Undo under its message keeps its target in the message's column, so it never
             // hangs past a pane whose text edge is the message's (Lookup's reader). The icon
             // and the words keep their places.
+            // A target kept in the column is still at least as wide as it is high.
             let target = if self.column {
-                rect.with_min_x(rect.min.x.max(ui.max_rect().left()))
+                let kept = rect.with_min_x(rect.min.x.max(ui.max_rect().left()));
+                kept.with_max_x(kept.max.x.max(kept.min.x + self.height))
             } else {
                 rect
             };
@@ -4754,6 +4756,7 @@ mod tests {
                     let _ = Action::quiet("Stop run").show(ui);
                 });
                 let _ = Action::quiet("Reload list").icon(icons::REFRESH).show(ui);
+                let _ = Action::quiet("←").name("Back").show(ui);
                 let _ = Action::secondary("Bordered").show(ui);
                 let popup = ui.label("Menu");
                 egui::Popup::new(
@@ -4805,6 +4808,11 @@ mod tests {
         assert!(
             (node("Bordered").left() - edge).abs() <= 0.5,
             "n4-secondary"
+        );
+        let back = node("Back");
+        assert!(
+            back.width() >= Density::Scan.control() - 0.5 && (back.left() - edge).abs() <= 0.5,
+            "n4-short: a one-glyph action keeps a whole target: {back:?}"
         );
         let menu = node("Remove from list");
         assert!(
