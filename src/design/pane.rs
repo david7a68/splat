@@ -209,9 +209,10 @@ struct Keep {
     pass: u64,
     now: Option<f32>,
     content: Option<f32>,
-    /// The control pressed: keyboard focus on any other control ends the hold, so the hold
-    /// never takes back a scroll that brought the focused control into view.
-    pressed: Id,
+    /// The keyboard focus at the press: a move of it ends the hold, so the hold never takes
+    /// back a scroll that brought the newly focused control into view. (Focus that stays on a
+    /// field while the DM clicks an action keeps the hold.)
+    focus: Option<Id>,
     /// The room's height at the press: a footer that comes or goes ends the hold.
     room: Option<f32>,
 }
@@ -241,7 +242,8 @@ fn with_held(ui: &Ui, change: impl FnOnce(&mut Held, u64)) {
 /// that `held_seen` gives): hold it in place.
 pub fn hold_press(ui: &Ui, control: impl std::hash::Hash, pressed: &egui::Response) {
     let control = Id::new(control);
-    let (top, pressed) = (pressed.rect.top(), pressed.id);
+    let top = pressed.rect.top();
+    let focus = ui.ctx().memory(|memory| memory.focused());
     with_held(ui, |held, pass| {
         held.keep = Some(Keep {
             control,
@@ -249,7 +251,7 @@ pub fn hold_press(ui: &Ui, control: impl std::hash::Hash, pressed: &egui::Respon
             pass,
             now: None,
             content: None,
-            pressed,
+            focus,
             room: None,
         });
     });
@@ -414,7 +416,7 @@ fn hold_place<R>(ui: &Ui, mut held: Held, output: &egui::scroll_area::ScrollArea
             Some("scrolled")
         } else if pass > keep.pass + KEEP_PASSES {
             Some("passes")
-        } else if focus.is_some_and(|focus| focus != keep.pressed) {
+        } else if focus != keep.focus {
             Some("focus moved")
         } else if room_changed {
             Some("room changed")
@@ -980,13 +982,12 @@ mod hold_tests {
         h.run_steps(4);
         h.get_by_label("Add a row above").click();
         h.step();
-        h.get_by_label("Next control").focus();
+        // The keyboard moves focus: egui handles Tab in the pass it comes in.
+        h.key_press(egui::Key::Tab);
         h.step();
-        assert!(
-            h.ctx.memory(|memory| memory.focused()).is_some(),
-            "the next control has focus"
-        );
-        h.run_steps(6);
+        let focused = h.ctx.memory(|memory| memory.focused());
+        assert!(focused.is_some(), "Tab gave a control focus");
+        h.run_steps(4);
         let ends = h.ctx.data(|data| {
             data.get_temp::<Vec<(&'static str, u64, Option<Id>)>>(Id::new("design_pane_hold_ends"))
         });
@@ -997,7 +998,16 @@ mod hold_tests {
             "ends {ends:?}, focused now {focused:?}, rows {}",
             h.state().rows_above
         );
-        let far = h.get_by_label("Next control").rect();
+        let far = h
+            .ctx
+            .viewport(|viewport| {
+                viewport
+                    .prev_pass
+                    .widgets
+                    .get(focused.unwrap())
+                    .map(|w| w.rect)
+            })
+            .expect("the focused control is drawn");
         let record = pane_records(&h.ctx).into_iter().next().unwrap();
         let (viewport, footer) = (record.viewport().unwrap(), record.footer().unwrap());
         assert!(
