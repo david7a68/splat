@@ -243,7 +243,11 @@ pub fn run(d: &mut Driver<'_>) {
     d.click("Roll all 2");
     d.expect("2 travel checks rolled.");
     d.goal_within("T11.9", "roll a two-day journey's checks", 1);
-    let faults = block_faults(d, Some("2 travel checks rolled."), "Clear the check for Day 1");
+    let faults = block_faults(
+        d,
+        Some("2 travel checks rolled."),
+        "Clear the check for Day 1",
+    );
     d.observe(
         "T11.9",
         faults.is_empty() && length_at.is_some() && d.place_of("How long") == length_at,
@@ -315,7 +319,11 @@ pub fn run(d: &mut Driver<'_>) {
         }
         d.expect("Encounter checks");
     });
-    let faults = block_faults(d, Some("1 travel check rolled."), "Clear the check for Day 1");
+    let faults = block_faults(
+        d,
+        Some("1 travel check rolled."),
+        "Clear the check for Day 1",
+    );
     d.observe(
         "T11.9",
         faults.is_empty(),
@@ -340,7 +348,12 @@ pub fn run(d: &mut Driver<'_>) {
         .nodes()
         .into_iter()
         .find(|node| node.name.contains("In the plan"))
-        .and_then(|node| Some(node.rect.translate(-d.place_of("Encounter checks")?.min.to_vec2())));
+        .and_then(|node| {
+            Some(
+                node.rect
+                    .translate(-d.place_of("Encounter checks")?.min.to_vec2()),
+            )
+        });
     let after = below_checks(d);
     let message = from_label(d, "“Bridge Ambush” is in tonight’s plan.");
     d.observe(
@@ -718,7 +731,9 @@ fn road_fight_keeps_its_day(d: &mut Driver<'_>, dir: &Path) {
         row.ends_with(" · Day 2 of Travel")
             && travel_row.starts_with("Travel ·")
             && !travel_row.contains("of Travel"),
-        format!("The road fight's row says Day 2 of Travel: {row:?}; the journey's: {travel_row:?}"),
+        format!(
+            "The road fight's row says Day 2 of Travel: {row:?}; the journey's: {travel_row:?}"
+        ),
     );
     d.click_starting("Shrine of Cinders ·");
     d.observe(

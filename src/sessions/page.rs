@@ -6238,11 +6238,7 @@ impl Sessions {
     /// Round 27 FI4: `Deleted “<name>”.` with `Undo delete` is a result in the template page's
     /// message footer, never under the list's last row. It is the campaign's: a campaign change
     /// or an edit to another template ends it, and a later result with an Undo goes above it.
-    fn deleted_template_in<'a>(
-        &self,
-        undos: &mut LiveUndos<'a>,
-        act: &'a std::cell::Cell<bool>,
-    ) {
+    fn deleted_template_in<'a>(&self, undos: &mut LiveUndos<'a>, act: &'a std::cell::Cell<bool>) {
         if let Some((name, _)) = &self.deleted_template {
             let words = format!("Deleted “{name}”.");
             let order = self.result_orders.of("deleted template", name);

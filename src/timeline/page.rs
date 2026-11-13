@@ -1387,9 +1387,7 @@ impl TimelinePage {
         let lane_width = ui.available_width() - ui.spacing().scroll.allocated_width();
         area.show(ui, |ui| {
             ui.set_clip_rect(ui.clip_rect().intersect(clip));
-            let form_width = lane_width
-                .min(ui.available_width())
-                .min(design::FORM_WIDTH);
+            let form_width = lane_width.min(ui.available_width()).min(design::FORM_WIDTH);
             ui.ctx()
                 .data_mut(|data| data.insert_temp(width_id, form_width));
             if (form_width - header_width).abs() > design::HAIRLINE_WIDTH {

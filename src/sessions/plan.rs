@@ -2698,8 +2698,14 @@ impl Sessions {
                     .find(|one| one.id == event)
                     .map_or_else(|| "this fight".to_owned(), |one| one.title.clone())
             };
-            self.rewards
-                .in_footer(&mut footer, &mut undos, &footer_act, note, draft.revision(), &name);
+            self.rewards.in_footer(
+                &mut footer,
+                &mut undos,
+                &footer_act,
+                note,
+                draft.revision(),
+                &name,
+            );
         }
         // Round 27 FE7: `Plan “<name>”`'s result and `Undo plan line`, in the plan of its
         // journey's session, while the note is as the act left it.
@@ -6004,7 +6010,11 @@ mod tests {
         harness.run_steps(2);
         // Round 27 FN1, FK3, SK2: the result is in the plan's footer, so the next row's action
         // keeps its place.
-        assert_eq!(next_row(&harness), shrine_before, "the rewards result moved the next row");
+        assert_eq!(
+            next_row(&harness),
+            shrine_before,
+            "the rewards result moved the next row"
+        );
         let with_a = outside.replace(
             "## Loot and rewards\n\n",
             &format!("## Loot and rewards\n\n{block_a}\n"),
@@ -6039,7 +6049,9 @@ mod tests {
         };
         let (newest, oldest) = (top("Rewards for “Shrine”"), top("Rewards for “Bridge”"));
         assert!(
-            newest.zip(oldest).is_some_and(|(newest, oldest)| newest < oldest),
+            newest
+                .zip(oldest)
+                .is_some_and(|(newest, oldest)| newest < oldest),
             "newest first: {newest:?} {oldest:?}"
         );
         // Undo of A (the footer's second) takes back A's block alone; B's stays.
@@ -6224,11 +6236,11 @@ mod tests {
         assert!(shown(&harness, "In notes"));
 
         // Too narrow for the link after Timeline: no line is added, and the action is the last
-        // line of the row's menu. With one `S` gap at each `·` (X48), the links fit at 330 px
-        // (`the_rewards_fit_keeps_each_title_as_it_is`), so this is a narrower window.
+        // line of the row's menu. With one blank at each `·` (round 27 FH4), the links fit at
+        // 300 px, so this is a narrower window.
         fs::write(&note.path, &outside).unwrap();
         harness.state_mut().0.draft.as_mut().unwrap().follow_disk();
-        harness.set_size(egui::vec2(300.0, 800.0));
+        harness.set_size(egui::vec2(260.0, 800.0));
         harness.run_steps(2);
         assert!(harness.query_by_label(ADD_REWARDS).is_none());
         harness

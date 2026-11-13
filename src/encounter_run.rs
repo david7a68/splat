@@ -9477,9 +9477,16 @@ mod tests {
         };
         assert_eq!(
             none_down.xp_line(),
-            ("XP 0 · no creature at 0 HP · 3 still stood (XP 600)".to_owned(), 0, 0)
+            (
+                "XP 0 · no creature at 0 HP · 3 still stood (XP 600)".to_owned(),
+                0,
+                0
+            )
         );
-        assert_eq!(crate::sessions::first_number(&none_down.xp_line().0), Some(0));
+        assert_eq!(
+            crate::sessions::first_number(&none_down.xp_line().0),
+            Some(0)
+        );
         let mut reopened = close_and_reopen(&mut run, campaign);
         assert_same_undo(&run, &reopened);
         assert!(reopened.undo_continues());

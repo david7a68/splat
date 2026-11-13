@@ -1819,7 +1819,8 @@ impl Splat {
                         // Round 27 FI7: the tab's notices sit in its message footer.
                         let bottom = {
                             let width = ui.available_width().min(design::LIST_MEASURE);
-                            let mut footer = design::Footer::new("recording_settings_footer", width);
+                            let mut footer =
+                                design::Footer::new("recording_settings_footer", width);
                             self.processing.footer_messages(&mut footer);
                             footer.show(ui)
                         };

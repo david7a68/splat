@@ -11280,9 +11280,14 @@ pub mod session_notes {
         d.observe(
             "iter-27-S-FL1",
             day_edges.iter().flatten().all(Option::is_some)
-                && day_edges.iter().flatten().zip(rest_edges.iter().flatten()).all(
-                    |(day, rest)| day.zip(*rest).is_some_and(|(day, rest)| (day - rest).abs() <= 1.0),
-                ),
+                && day_edges
+                    .iter()
+                    .flatten()
+                    .zip(rest_edges.iter().flatten())
+                    .all(|(day, rest)| {
+                        day.zip(*rest)
+                            .is_some_and(|(day, rest)| (day - rest).abs() <= 1.0)
+                    }),
             format!("A Day's and a Long rest's form end at one x: {day_edges:?} {rest_edges:?}"),
         );
         d.replace_text_in("Title", "Rest at the mill");
@@ -11676,7 +11681,13 @@ pub mod session_notes {
         // starts the kept line below it at the field's left; typing moves neither.
         let form = |d: &Driver<'_>| {
             [
-                d.place_of("Template name"),
+                d.nodes()
+                    .into_iter()
+                    .find(|node| {
+                        node.name == "Template name"
+                            && node.role == egui::accesskit::Role::TextInput
+                    })
+                    .map(|node| node.rect),
                 d.place_of("Create template"),
                 d.place_of("Cancel"),
             ]
@@ -11712,7 +11723,9 @@ pub mod session_notes {
         let last_row = d
             .nodes()
             .into_iter()
-            .filter(|node| node.name.starts_with("Short notes") || node.name.starts_with("Standard session"))
+            .filter(|node| {
+                node.name.starts_with("Short notes") || node.name.starts_with("Standard session")
+            })
             .map(|node| node.rect)
             .reduce(|a, b| if a.bottom() > b.bottom() { a } else { b });
         d.observe(
@@ -14077,7 +14090,9 @@ pub mod session_recording {
             "iter-27-S-AN1",
             cancel_speech.is_some()
                 && cancel_speech.map(|at| at.left_top()) == cancel_second.map(|at| at.left_top()),
-            format!("Cancel keeps its place through the stages: {cancel_speech:?} {cancel_second:?}"),
+            format!(
+                "Cancel keeps its place through the stages: {cancel_speech:?} {cancel_second:?}"
+            ),
         );
         d.state("processing-second-pass", Sizes::Default);
         d.observe(
@@ -14418,7 +14433,7 @@ pub mod session_recording {
                 "iter-27-S-FO1",
                 menu.zip(title).is_some_and(|(menu, title)| {
                     let gap = menu.left() - title.right();
-                    gap >= crate::design::S && gap <= crate::design::L + 1.0
+                    (crate::design::S..=crate::design::L + 1.0).contains(&gap)
                 }),
                 format!("At {size:?}, the row menu {menu:?} follows its title {title:?}"),
             );

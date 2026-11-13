@@ -86,7 +86,9 @@ fn first_baseline(d: &Driver<'_>, words: &str) -> Option<f32> {
 /// its words as the caret sits on its title (each measured from its title's baseline).
 fn lead_centred(d: &Driver<'_>) -> (bool, String) {
     let line = crate::design::Type::Body.line();
-    let scene_box = d.place_of(&format!("Open: {VARRA}")).map(|rect| rect.center().y);
+    let scene_box = d
+        .place_of(&format!("Open: {VARRA}"))
+        .map(|rect| rect.center().y);
     let fight = d.place_of(SHRINE);
     let caret = fight.and_then(|fight| {
         let area = egui::Rect::from_x_y_ranges(
@@ -103,7 +105,9 @@ fn lead_centred(d: &Driver<'_>) -> (bool, String) {
     let same = scene_box
         .zip(scene_line)
         .zip(caret.zip(title_line))
-        .is_some_and(|((lead, words), (caret, title))| ((words - lead) - (title - caret)).abs() <= 1.0);
+        .is_some_and(|((lead, words), (caret, title))| {
+            ((words - lead) - (title - caret)).abs() <= 1.0
+        });
     (
         centred && same,
         format!(
