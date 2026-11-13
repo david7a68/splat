@@ -27,7 +27,7 @@ during	He gave up, and the party holds him: a line in his Log	Do	type the line	1
 during	He gave up, and the party holds him: a line in his Log	Do	add it	1	Run		false
 during	He gave up, and the party holds him: a line in his Log	Panel	close Lookup	1	Run		false
 during	Close the fight, keep the rewards, and add loot nobody planned	Nav	Close run	1	Run	Session	false
-during	Close the fight, keep the rewards, and add loot nobody planned	Find	More actions for Fight with Warden Ostrel	1	Session		false
+during	Close the fight, keep the rewards, and add loot nobody planned	Find	Fight with Warden Ostrel	1	Session		false
 during	Close the fight, keep the rewards, and add loot nobody planned	Do	Add rewards	1	Session		false
 during	Close the fight, keep the rewards, and add loot nobody planned	Do	click under the new block	1	Session		false
 during	Close the fight, keep the rewards, and add loot nobody planned	Do	type the loot	1	Session		false

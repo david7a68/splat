@@ -8,9 +8,9 @@ before	Set-up	Setup	play two fights, and the third to its end	47	Session	Run>Ses
 after the last fight	The party searches the last fight	Do	Roll 2 × gems for Ember Watch	1	Run		false
 after the last fight	Verori died here	Panel	open Lookup	1	Run		false
 after the last fight	Verori died here	Find	search: verori	1	Run		false
-after the last fight	Verori died here	Do	Edit Verori	1	Run		false
-after the last fight	Verori died here	Do	change the status	3	Run		false
-after the last fight	Verori died here	Do	Save changes	1	Run		false
+after the last fight	Verori died here	Do	Change Status	1	Run		false
+after the last fight	Verori died here	Do	type the status	1	Run		false
+after the last fight	Verori died here	Do	save with Enter	1	Run		false
 after the last fight	He gave the gate key away first	Do	Add to Log	1	Run		false
 after the last fight	He gave the gate key away first	Do	type the line	1	Run		false
 after the last fight	He gave the gate key away first	Do	add it	1	Run		false
@@ -28,12 +28,12 @@ a week later	Plan three scenes	Do	click under the plan's last line	1	Session		fa
 a week later	Plan three scenes	Do	type a scene	1	Session		false
 a week later	Plan three scenes	Do	type a scene	1	Session		false
 a week later	Plan three scenes	Do	type a scene	1	Session		false
-a week later	The Gate Watch is too easy: add a creature in the encounter editor	Nav	Encounters	1	Session	Encounters	false
-a week later	The Gate Watch is too easy: add a creature in the encounter editor	Find	Edit beside Gate Watch	1	Encounters		false
+a week later	The Gate Watch is too easy: add a creature in the encounter editor	Find	More actions for Gate Watch	1	Session		false
+a week later	The Gate Watch is too easy: add a creature in the encounter editor	Nav	Edit encounter	1	Session	Encounters	false
 a week later	The Gate Watch is too easy: add a creature in the encounter editor	Find	search: oni	2	Encounters		false
 a week later	The Gate Watch is too easy: add a creature in the encounter editor	Do	add an Oni	1	Encounters		false
 a week later	The Gate Watch is too easy: add a creature in the encounter editor	Do	Save encounter	1	Encounters		false
-a week later	The Gate Watch is too easy: add a creature in the encounter editor	Nav	Session	1	Encounters	Session	false
+a week later	The Gate Watch is too easy: add a creature in the encounter editor	Nav	Back to session	1	Encounters	Session	false
 a week later	Prepare the road: a Travel row with its checks	Find	More Add actions	1	Session		false
 a week later	Prepare the road: a Travel row with its checks	Do	Add Travel	1	Session		false
 a week later	Prepare the road: a Travel row with its checks	Find	More actions for Travel	1	Session		false

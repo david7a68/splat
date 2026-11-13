@@ -1,13 +1,13 @@
 Phase totals
 phase	tasks	transitions	interactions	nav	sub	panel	find	do
-after the last fight	5	1	16	1	0	2	1	12
+after the last fight	5	1	14	1	0	2	1	10
 a week later	7	3	22	3	0	0	5	14
-total	12	4	38	4	0	2	6	26
+total	12	4	36	4	0	2	6	24
 
 Tasks
 phase	task	transitions	interactions	overhead	nav	sub	panel	find	do	path
 after the last fight	The party searches the last fight	0	1	0	0	0	0	0	1	Run
-after the last fight	Verori died here	0	7	2	0	0	1	1	5	Run
+after the last fight	Verori died here	0	5	2	0	0	1	1	3	Run
 after the last fight	He gave the gate key away first	0	4	1	0	0	1	0	3	Run
 after the last fight	Back to the evening	1	1	1	1	0	0	0	0	Run > Session
 after the last fight	Rewards for each of the three fights	0	3	0	0	0	0	0	3	Session

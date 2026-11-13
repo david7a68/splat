@@ -12,7 +12,7 @@
       "phase": "after the last fight",
       "task": "Verori died here",
       "transitions": 0,
-      "interactions": 7,
+      "interactions": 5,
       "path": "Run"
     },
     {
