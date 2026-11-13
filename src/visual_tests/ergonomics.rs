@@ -365,6 +365,11 @@ impl RowDetails {
     }
 }
 
+/// The rects that row components gave `design::register_row` in the last pass, in points.
+pub fn row_rects(ctx: &egui::Context) -> Vec<egui::Rect> {
+    RowDetails::of(ctx).rows
+}
+
 /// A `Label` node's words: egui puts them in its value.
 pub fn label_words(node: &AccessKitNode<'_>) -> Option<String> {
     (node.role() == Role::Label)
