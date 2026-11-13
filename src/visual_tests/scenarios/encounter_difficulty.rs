@@ -395,17 +395,18 @@ pub fn run(d: &mut Driver<'_>) {
                 low.as_deref().is_some_and(|low| {
                     low == format!("5 party · 2 × Ember Cultist · {LOW_FORM}")
                         || low == "5 party · 2 × Ember Cultist · XP 400 · Low"
-                }) && unknown.as_deref()
-                    == Some(&format!("5 party · 1 × Nameless Thing · {UNKNOWN_FORM}"))
-                    && high.as_deref().is_some_and(|high| {
-                        high == format!("{HIGH_SUMMARY} · {HIGH_FORM}")
-                            || high == format!("{HIGH_SUMMARY} · {HIGH_SHORT}")
-                            || high
-                                .strip_suffix(&format!("… · {HIGH_SHORT}"))
-                                .is_some_and(|cut| {
-                                    HIGH_SUMMARY.starts_with(cut.trim_end_matches([' ', '·', ',']))
-                                })
-                    }),
+                }) && unknown.as_deref().is_some_and(|unknown| {
+                    unknown
+                        .starts_with(&format!("5 party · 1 × Nameless Thing · {UNKNOWN_FORM}: N"))
+                }) && high.as_deref().is_some_and(|high| {
+                    high == format!("{HIGH_SUMMARY} · {HIGH_FORM}")
+                        || high == format!("{HIGH_SUMMARY} · {HIGH_SHORT}")
+                        || high
+                            .strip_suffix(&format!("… · {HIGH_SHORT}"))
+                            .is_some_and(|cut| {
+                                HIGH_SUMMARY.starts_with(cut.trim_end_matches([' ', '·', ',']))
+                            })
+                }),
                 format!(
                     "At {size:?}, Lookup open {lookup}: the plan's summaries read {low:?}, \
                      {unknown:?}, {high:?}"
@@ -443,20 +444,34 @@ pub fn run(d: &mut Driver<'_>) {
     // FB4: a fight with no word says `XP not known` on its row, opened or not; FH6: once.
     d.click(HIGH);
     d.click(UNKNOWN);
+    const WHY: &str = "XP not known: Nameless Thing";
     for (lookup, sizes) in [(false, &[SMALL, DEFAULT, LARGE][..]), (true, &[SMALL][..])] {
         if lookup {
             look_up(d, "wolf");
             show_plan(d);
         }
         for size in sizes {
-            let words = d
-                .at_size(*size, |d| d.painted_in(egui::Rect::EVERYTHING))
-                .replace('\u{a0}', " ");
+            let (words, named) = d.at_size(*size, |d| {
+                let named = d
+                    .nodes()
+                    .into_iter()
+                    .any(|node| node.name.ends_with(WHY) && node.fully_in_view());
+                (
+                    d.painted_in(egui::Rect::EVERYTHING).replace('\u{a0}', " "),
+                    named,
+                )
+            });
+            // X1: at every size, also at 1200x800 with the note beside the plan, the name
+            // shortens from its end and keeps at least its first letter. iter-27-B FB4, FH6: it
+            // is in the row's `XP not known` place, once; `Read encounter` does not repeat it.
+            let name_shown = words.contains(" · XP not known: N");
             d.observe(
                 "W1-D2-why",
                 words.contains("Read encounter")
                     && words.matches(UNKNOWN_FORM).count() == 1
-                    && !words.contains("Read encounter · "),
+                    && !words.contains("Read encounter · ")
+                    && named
+                    && name_shown,
                 format!(
                     "At {size:?}, Lookup open {lookup}, the opened row says {UNKNOWN_FORM} once: {words}"
                 ),
@@ -484,6 +499,107 @@ pub fn run(d: &mut Driver<'_>) {
         !words.contains("XP 600 · ") && !words.contains("Read encounter · "),
         format!("The opened paused fight's line has no difficulty: {words}"),
     );
+    // App round 2, Sol's W1-D1: from the word on the plan to the roster and back. The last line
+    // of a planned fight's menu opens that encounter's own file in the editor, whose way back
+    // is this session; the saved roster's summary and word follow on its row.
+    let session = d
+        .app()
+        .sessions
+        .selected_path()
+        .map(std::path::Path::to_owned);
+    d.click(&format!("More actions for {LOW}"));
+    d.click("Edit encounter");
+    let opened = d.app().encounters.draft_path().map(str::to_owned);
+    d.observe(
+        "W1-D1-edit",
+        opened.as_deref() == Some(&format!("Encounters/{LOW}.md")[..])
+            && d.has(&format!("Encounter name: {LOW}"))
+            && d.has("Back to session"),
+        format!(
+            "Edit encounter opens {LOW}'s own file with the way back to the session: {opened:?}"
+        ),
+    );
+    d.click_first("More actions for Ember Cultist");
+    d.click("Duplicate");
+    d.click(SAVE_ENCOUNTER);
+    d.click("Back to session");
+    show_plan(d);
+    let line = plan_summary_line(d, "5 party · 3 × Ember Cultist");
+    d.observe(
+        "W1-D1-edit",
+        d.app().sessions.selected_path() == session.as_deref()
+            && line.as_deref() == Some("5 party · 3 × Ember Cultist · Low"),
+        format!("Back in the same session, the row reads the saved roster: {line:?}"),
+    );
+    // Astra's review: the act names the encounter by its ID. When its file now holds another
+    // encounter (Mill Road's), the editor does not open it, and the plan says why.
+    let folder = d.root.join("campaigns/emberfall/Encounters");
+    let mill = std::fs::read_to_string(folder.join(format!("{HIGH}.md"))).unwrap();
+    // The two files that these checks replace and delete go back afterwards.
+    let kept = [LOW, ABOVE].map(|name| {
+        let path = folder.join(format!("{name}.md"));
+        let text = std::fs::read_to_string(&path).unwrap();
+        (path, text)
+    });
+    std::fs::write(folder.join(format!("{LOW}.md")), &mill).unwrap();
+    d.click(&format!("More actions for {LOW}"));
+    d.click("Edit encounter");
+    const GONE: &str = "This encounter is no longer in the campaign. Open it from Encounters.";
+    d.observe(
+        "W1-D1-edit",
+        d.app().encounters.draft_path().is_none()
+            && d.page_title().as_deref() == Some("Session")
+            && d.has_containing(GONE),
+        format!(
+            "A file that now holds another encounter opens nothing, and the plan says why: {:?}",
+            d.app().encounters.draft_path()
+        ),
+    );
+    // Review round 1: a file deleted since the campaign was read opens nothing either, and the
+    // plan gives the same words with their next step, not the file system's error.
+    std::fs::remove_file(folder.join(format!("{ABOVE}.md"))).unwrap();
+    d.click(&format!("More actions for {ABOVE}"));
+    d.click("Edit encounter");
+    d.observe(
+        "W1-D1-edit",
+        d.app().encounters.draft_path().is_none()
+            && d.page_title().as_deref() == Some("Session")
+            && d.has_containing(GONE)
+            && !d.has_containing("No such file"),
+        "A deleted encounter file opens nothing, and the plan says why with its next step",
+    );
+    // Review round 1 (REVIEW-291-return-owner): the way back belongs to the route. After a
+    // detour by the rail to a new session, the editor no longer offers `Back to session`, so no
+    // press can land on the other session.
+    d.click(&format!("More actions for {HIGH}"));
+    d.click("Edit encounter");
+    d.expect("Back to session");
+    d.click(NAV_SESSIONS);
+    d.click("New session");
+    d.type_into("Session title", "Review detour session");
+    d.click("Create session");
+    d.expect("Session 2: Review detour session");
+    let detour = d
+        .app()
+        .sessions
+        .selected_path()
+        .map(std::path::Path::to_owned);
+    d.click(NAV_ENCOUNTERS);
+    d.observe(
+        "REVIEW-291-return-owner",
+        detour.is_some()
+            && detour != session
+            && d.has("Back to encounters")
+            && !d.has("Back to session"),
+        format!(
+            "Opened from {session:?}; after the rail made {detour:?}, Back to session shows {}",
+            d.has("Back to session")
+        ),
+    );
+    for (path, text) in kept {
+        std::fs::write(path, text).unwrap();
+    }
+    d.click("Back to encounters");
     // X2, review 290: a roster member whose saved level an outside edit removed. Their sheet
     // cannot be read, and the heading still says whose level is not known, at each size and
     // in the tab row beside Lookup; a roster with no character names the campaign's copy too.
