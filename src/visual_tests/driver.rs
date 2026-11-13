@@ -2787,14 +2787,11 @@ impl<'a> Driver<'a> {
                 .filter(|next| next.promised && !next.capped && next.held.is_none())
                 .filter(|next| {
                     let at = (next.rect * scale).center();
-                    !nodes.iter().any(|node| {
-                        node.rect.center().distance(at) < 1.0
-                            && node.fully_in_view()
-                            && bands.iter().all(|band| {
-                                !band.x_range().intersects(node.rect.x_range())
-                                    || node.rect.bottom() <= band.top() + 0.5
-                            })
-                    })
+                    // Painted whole: the pane's clip, which ends at the footer's room, cuts none
+                    // of it (egui paints a row a few pixels into the gap above the footer).
+                    !nodes
+                        .iter()
+                        .any(|node| node.rect.center().distance(at) < 1.0 && node.fully_in_view())
                 })
                 .collect();
             let held: Vec<_> = seen.iter().filter(|next| next.held.is_some()).collect();
