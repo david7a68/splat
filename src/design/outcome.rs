@@ -718,8 +718,11 @@ impl<'a> From<FaultMessage<'a>> for Outcome<'a> {
 }
 
 /// A result: what an action did, kept in a `design::Results` store. It reaches the footer only
-/// through `Footer::kept_outcome`, which takes the store's `Shown` view, so its order is the one
-/// the store issued at the action. Results go newest first; one with a live Undo leads the
+/// through `Footer::kept_outcome`, which takes a `Shown` view (only a store makes one), so its
+/// order is that view's, issued by its store at the action. What the types do not hold, and so
+/// stays with the caller: class a result as a result (`Notice::new(sentence!("Removed Bell."))`
+/// compiles and needs no store), choose the right owner and store (a caller can pass B's `Shown`
+/// and describe A), and make the words from that view's value. Results go newest first; one with a live Undo leads the
 /// footer, one without follows the notices.
 ///
 /// | Variant | Tone |
