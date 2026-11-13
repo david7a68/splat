@@ -608,32 +608,25 @@ fn place_choices_words(name: &str, count: usize) -> String {
 /// still says it is a warning. The text wraps and has the same size as `wrapped_link`.
 fn warning_link(ui: &mut egui::Ui, words: &str) -> egui::Response {
     let c = colors();
-    // The icon has its own column, so wrapped words start each line at the first word, as
-    // every wrapped status does (round 27 FH3 family).
-    let icon = ui.painter().layout_no_wrap(
-        format!("{} ", design::icons::WARN),
-        Type::Body.font(ui),
-        c.result.warning,
-    );
     let mut job = egui::text::LayoutJob::default();
     let style = ui.style().clone();
-    Type::Body
-        .rich(ui, words)
-        .color(c.accent)
-        .underline()
-        .append_to(
+    for text in [
+        Type::Body
+            .rich(ui, format!("{} ", design::icons::WARN))
+            .color(c.result.warning),
+        Type::Body.rich(ui, words).color(c.accent).underline(),
+    ] {
+        text.append_to(
             &mut job,
             &style,
             egui::FontSelection::Style(egui::TextStyle::Body),
             egui::Align::Center,
         );
-    job.wrap.max_width = (ui.available_width() - icon.size().x).max(1.0);
+    }
+    job.wrap.max_width = ui.available_width().max(1.0);
     let galley = ui.fonts_mut(|fonts| fonts.layout_job(job));
     let (rect, response) = ui.allocate_exact_size(
-        egui::vec2(
-            icon.size().x + galley.size().x,
-            galley.size().y.max(design::XL),
-        ),
+        egui::vec2(galley.size().x, galley.size().y.max(design::XL)),
         egui::Sense::click(),
     );
     response.widget_info(|| {
@@ -646,12 +639,7 @@ fn warning_link(ui: &mut egui::Ui, words: &str) -> egui::Response {
     if ui.is_rect_visible(rect) {
         let top = rect.center().y - galley.size().y / 2.0;
         ui.painter()
-            .galley(egui::pos2(rect.left(), top), icon.clone(), c.result.warning);
-        ui.painter().galley(
-            egui::pos2(rect.left() + icon.size().x, top),
-            galley,
-            c.accent,
-        );
+            .galley(egui::pos2(rect.left(), top), galley, c.accent);
         if response.has_focus() {
             design::focus_ring(ui, rect);
         }
@@ -2631,8 +2619,14 @@ impl Reader {
                         .density(Density::Read),
                 );
             }
-            // A portrait keeps the right of the title's line.
-            let pressed = title_line_actions(ui, cell, title_width, width - art_width, actions);
+            // A portrait keeps the right of the title's line. It sits after the title cell's words,
+            // which can end well before the pane's edge, so the room ends at its measured left.
+            let room = if art {
+                cell.right() - art_width - cell.left()
+            } else {
+                width
+            };
+            let pressed = title_line_actions(ui, cell, title_width, room, actions);
             let mut pressed = pressed.into_iter();
             if let Some(campaign) = edit
                 && pressed.next() == Some(true)
