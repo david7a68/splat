@@ -4880,12 +4880,17 @@ pub mod settings {
         // Round 27 FA1, the moved cause's lifetime: it lives until the next Connect, Disconnect
         // or a working sign-in. While the cookie field is empty the slot names that step; the
         // cause comes back with a cookie, and Connect stays where it was.
+        // Proof steps that end where they started: they are not part of the DM's next task.
         let connect_before = d.place_of(CONNECT);
-        d.clear_text_in(COOKIE_FIELD);
-        let emptied =
-            d.visible_text("Paste your session cookie first.") && !d.visible_text(OFFLINE_ERROR);
-        d.type_into(COOKIE_FIELD, SYNTHETIC_COOKIE);
-        let back = d.visible_text(OFFLINE_ERROR) && !d.visible_text("Paste your session cookie");
+        let (emptied, back) = d.aside(|d| {
+            d.clear_text_in(COOKIE_FIELD);
+            let emptied = d.visible_text("Paste your session cookie first.")
+                && !d.visible_text(OFFLINE_ERROR);
+            d.type_into(COOKIE_FIELD, SYNTHETIC_COOKIE);
+            let back =
+                d.visible_text(OFFLINE_ERROR) && !d.visible_text("Paste your session cookie");
+            (emptied, back)
+        });
         d.observe(
             "iter-27-C-FA1-lifetime",
             emptied && back && connect_before.is_some() && d.place_of(CONNECT) == connect_before,
