@@ -18,11 +18,7 @@
     ["G6/footer-far-below-body","16-campaign-manifest-written-with-undo","960x640","CheckBox \"Use Veilglass Lantern\"",1]
   ],
   "campaign-copy-registered": [
-    ["G1b/pressed-control-moved","01-copy-registered","960x640","Button \"Add campaign\"",1],
-    ["G6/footer-far-below-body","01-copy-registered","1200x800","Label \"Splat keeps this campaign’s notes, encounters and runs here. A folder in your Obsidian vault works.\"",1],
-    ["G6/footer-far-below-body","01-copy-registered","1920x1080","Label \"Splat keeps this campaign’s notes, encounters and runs here. A folder in your Obsidian vault works.\"",1],
-    ["G6/footer-far-below-body","02-copy-registered-after-build","1200x800","Label \"Splat keeps this campaign’s notes, encounters and runs here. A folder in your Obsidian vault works.\"",1],
-    ["G6/footer-far-below-body","02-copy-registered-after-build","1920x1080","Label \"Splat keeps this campaign’s notes, encounters and runs here. A folder in your Obsidian vault works.\"",1]
+    ["G1b/pressed-control-moved","01-copy-registered","960x640","Button \"Add campaign\"",1]
   ],
   "column-resize": [
     ["G1b/pressed-control-moved","06-run-rail-keeps-roster-room","1200x800","Button \"Next turn\"",1],
