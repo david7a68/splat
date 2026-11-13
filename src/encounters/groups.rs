@@ -67,12 +67,29 @@ struct GroupSetup {
     #[serde(flatten)]
     extra: Mapping,
 }
+/// The standalone group's name field. Its id comes from the group's own id, which the first
+/// save does not change, so the field keeps its focus and its text history through a save.
+fn name_field(ui: &mut egui::Ui, draft: &mut GroupDraft, width: f32) -> egui::Response {
+    let font = Type::Heading.font(ui);
+    GROUP_NAME
+        .with(draft.id)
+        .single_line(ui, &mut draft.name, |edit| {
+            edit.desired_width(width)
+                .min_size(egui::vec2(0.0, Density::Scan.control()))
+                .margin(egui::vec2(design::S, design::XS))
+                .font(font)
+        })
+}
+
 /// Why Save group waits on an empty group.
 const EMPTY_REASON: &str = "Add a creature first.";
 
 #[derive(Clone)]
 pub(super) struct GroupDraft {
     recovery: super::disk::Recovery,
+    /// The group's own id (`splat_id`), the same before and after its first save and after a
+    /// recovery. Its fields take it as their key; the path changes at the first save.
+    id: Uuid,
     path: String,
     baseline: Option<String>,
     source: String,
@@ -134,6 +151,7 @@ impl GroupDraft {
         };
         Self {
             recovery: Default::default(),
+            id,
             path: format!("{FOLDER}/{id}.md"),
             baseline: None,
             source: format!(
@@ -179,6 +197,7 @@ impl GroupDraft {
         let notes = splat::content::list_formats::prose(&entry);
         Ok(Self {
             recovery: Default::default(),
+            id: entry.id,
             path: path.into(),
             baseline: Some(text.clone()),
             member_lines: splat::content::list_formats::group_member_lines(&text, &entry.flags),
@@ -1310,13 +1329,15 @@ pub(super) fn of_encounter(
                                     let width = (ui.available_width() - 2.0 * design::S)
                                         .min(design::FORM_WIDTH);
                                     let font = Type::Heading.font(ui);
-                                    let response = ENCOUNTER_GROUP_NAME
-                                        .with(std::path::Path::new(&path))
-                                        .single_line(ui, &mut group.name, |edit| {
+                                    let response = ENCOUNTER_GROUP_NAME.with(group.id).single_line(
+                                        ui,
+                                        &mut group.name,
+                                        |edit| {
                                             edit.desired_width(width)
                                                 .margin(egui::vec2(design::S, 4.0))
                                                 .font(font)
-                                        });
+                                        },
+                                    );
                                     design::named(
                                         ui,
                                         &response,
@@ -2289,15 +2310,7 @@ impl Encounters {
             let column = column_right.map_or(f32::INFINITY, |right| {
                 right - ui.cursor().left() - 2.0 * design::S
             });
-            let font = Type::Heading.font(ui);
-            let response = GROUP_NAME
-                .with(std::path::Path::new(&draft.path))
-                .single_line(ui, &mut draft.name, |edit| {
-                    edit.desired_width(width.min(name_width(column)))
-                        .min_size(egui::vec2(0.0, Density::Scan.control()))
-                        .margin(egui::vec2(design::S, design::XS))
-                        .font(font)
-                });
+            let response = name_field(ui, draft, width.min(name_width(column)));
             design::named(ui, &response, &format!("Group name: {}", draft.name));
             if response.changed() {
                 draft.touch();
@@ -3405,6 +3418,59 @@ mod tests {
     use super::*;
 
     /// FT4: UI text names a value in curly quotation marks, never straight ones.
+    #[test]
+    fn a_group_name_keeps_focus_and_undo_through_its_first_save() {
+        use egui_kittest::kittest::Queryable;
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let mut fresh = GroupDraft::new();
+        fresh.name = String::new();
+        let first_path = fresh.path.clone();
+        let draft = std::rc::Rc::new(std::cell::RefCell::new(fresh));
+        let shown = draft.clone();
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(600.0, 200.0))
+            .build(move |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    name_field(ui, &mut shown.borrow_mut(), 300.0);
+                });
+            });
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        harness
+            .get_by_role(egui::accesskit::Role::TextInput)
+            .click();
+        harness.run_steps(2);
+        harness.event(egui::Event::Text("Rival".into()));
+        harness.run_steps(2);
+        assert_eq!(draft.borrow().name, "Rival");
+        harness.run_steps(40);
+        // The first save names the file, so the draft's path changes.
+        draft.borrow_mut().check_disk(&campaign).unwrap();
+        assert_ne!(draft.borrow().path, first_path, "the path changed");
+        harness.run_steps(2);
+        harness.event(egui::Event::Text(" Team".into()));
+        harness.run_steps(2);
+        assert_eq!(
+            draft.borrow().name,
+            "Rival Team",
+            "The field keeps its focus through the save"
+        );
+        harness.event(egui::Event::Key {
+            key: egui::Key::Z,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::COMMAND,
+        });
+        harness.run_steps(2);
+        assert_eq!(
+            draft.borrow().name,
+            "Rival",
+            "Undo takes back the last edit"
+        );
+    }
+
     #[test]
     fn iter_17_b_unread_changes_use_curly_quotes() {
         let words = unread_changes("+2 to hit");
