@@ -3640,6 +3640,9 @@ mod tests {
             .with_size(eframe::egui::vec2(480.0, 640.0))
             .build_ui_state(|ui, t: &mut Trackers| view::show(ui, t, false), t);
         crate::design::theme::install(&h.ctx);
+        // The harness drew a first frame with egui's own fonts, before the theme's: measure the
+        // columns again with the theme's, as the app does from its first frame.
+        h.state_mut().revision += 1;
         h.run_steps(4);
         let left = |h: &Harness<'_, Trackers>, name: &str| h.get_by_label(name).rect().left();
         let firsts = |h: &Harness<'_, Trackers>| {
@@ -3652,7 +3655,6 @@ mod tests {
             .map(|name| left(h, name))
         };
         let before = firsts(&h);
-        let seen_before = h.state().view.columns_seen();
         assert!(
             before.iter().all(|x| (x - before[0]).abs() < 0.5),
             "the first actions of three trackers start at one edge: {before:?}"
@@ -3684,8 +3686,7 @@ mod tests {
         assert_eq!(
             firsts(&h),
             before,
-            "a value with one more digit moves no action: columns {seen_before:?}, then {:?}",
-            h.state().view.columns_seen()
+            "a value with one more digit moves no action"
         );
         // 999 / 120, then `Fight minute` makes 1000 / 120, wider than the slot of three
         // digits; Undo takes it back to 999. The value column keeps the room it needed, so the
