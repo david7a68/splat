@@ -130,6 +130,10 @@ pub const fn check_template(template: &str) -> Checked {
 
 /// A template with no value: `sentence!` makes a constant of it.
 #[doc(hidden)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "the helper of `sentence!`: it checks a template"
+)]
 pub const fn check_literal(template: &'static str) -> &'static str {
     check_template(template);
     let b = template.as_bytes();
@@ -196,6 +200,10 @@ pub struct Sentence(Cow<'static, str>);
 impl Sentence {
     /// `sentence!` with no value.
     #[doc(hidden)]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the helper of `sentence!`: it checks its template"
+    )]
     pub const fn __literal(template: &'static str) -> Self {
         Self(Cow::Borrowed(check_literal(template)))
     }
@@ -268,12 +276,17 @@ fn ends_with_mark(words: &str) -> bool {
 #[macro_export]
 macro_rules! sentence {
     ($template:literal $(,)?) => {{
+        #[allow(clippy::disallowed_methods, reason = "the macro's own check of its template")]
         const SENTENCE: $crate::outcome::Sentence = $crate::outcome::Sentence::__literal($template);
         SENTENCE
     }};
     ($template:literal, $($values:tt)+) => {{
+        #[allow(clippy::disallowed_methods, reason = "the macro's own check of its template")]
         const CHECKED: $crate::outcome::Checked = $crate::outcome::check_template($template);
-        $crate::outcome::Sentence::__formatted(CHECKED, ::std::format!($template, $($values)+))
+        #[allow(clippy::disallowed_methods, reason = "the template passed `check_template`")]
+        let sentence =
+            $crate::outcome::Sentence::__formatted(CHECKED, ::std::format!($template, $($values)+));
+        sentence
     }};
 }
 
@@ -1223,6 +1236,10 @@ mod tests {
     use eframe::egui;
     use egui_kittest::{Harness, kittest::Queryable};
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the test calls the helper `sentence!` runs at compile time"
+    )]
     fn rejected(template: &'static str) -> bool {
         std::panic::catch_unwind(|| {
             check_template(template);
@@ -1232,6 +1249,10 @@ mod tests {
 
     /// The template rules, as `sentence!` applies them at compile time.
     #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the test calls the helper `sentence!` runs at compile time"
+    )]
     fn a_template_is_a_sentence_in_the_dms_words() {
         for good in [
             "Removed {}.",
@@ -1265,6 +1286,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::disallowed_methods, reason = "the test of the escape itself")]
     fn outside_words_get_a_capital_and_an_end_mark() {
         let outside = |words: &str| Sentence::outside(words).map(|s| s.to_string());
         assert_eq!(
@@ -1360,6 +1382,10 @@ mod tests {
 
     /// One fault drawn in every place has one tone, its severity's, and one form of words.
     #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the test draws one fault in every body place"
+    )]
     fn one_fault_has_one_tone_in_every_place() {
         let mut h = Harness::builder()
             .with_size(egui::vec2(600.0, 500.0))
@@ -1470,10 +1496,10 @@ mod tests {
         // Recorded at the action: Party first, then Keyring.
         state
             .results
-            .record(Took(Line("party"), "Seals for Party changed to 1."));
+            .record(Took(Line("party"), "Seals for Party changed to 1"));
         state
             .results
-            .record(Took(Line("keyring"), "Seals for Keyring changed to 2."));
+            .record(Took(Line("keyring"), "Seals for Keyring changed to 2"));
         let mut h = Harness::builder()
             .with_size(egui::vec2(600.0, 400.0))
             .build_ui_state(
@@ -1486,7 +1512,7 @@ mod tests {
                             footer.kept_outcome(
                                 shown,
                                 |took| {
-                                    let mut said = Said::new(Sentence::outside(took.1).unwrap())
+                                    let mut said = Said::new(crate::sentence!("{}.", took.1))
                                         .undo(UndoStep::act("Take seal"));
                                     if took.0.0 == "party" {
                                         said =

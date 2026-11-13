@@ -462,8 +462,10 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
 /// Every suppression of `clippy::disallowed_methods` that may stay, one row per suppression:
 /// the file, the item it is on (a function's name, or `<function or macro!> statement`), and the
 /// bans it is for. Clippy's `disallowed-methods` (`clippy.toml`) fails `check` on any call of
-/// `ResultOrder::issue`, `Footer::result` and `save_row_state`, by any name (an alias, a function
-/// item, a qualified path); a suppression frees only what it sits on.
+/// `ResultOrder::issue`, `Footer::result` and `save_row_state`, and of package M's escapes and
+/// helpers (`Ban::Words`, `Ban::Sentence`, `Ban::Order`, `Ban::Body`), by any name (an alias, a
+/// function item, a qualified path); a suppression frees only what it sits on. `Ban::Words` and
+/// `Ban::Body` are named escapes: their rows need not reach 0, but each new one is a visible row.
 ///
 /// `staged_allows_only_shrink` finds every suppression (`allow` or `expect`, any reason or none,
 /// also in `cfg_attr`, also of a group that holds the lint) and fails on one that is not listed,
@@ -639,6 +641,45 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/world.rs", "draw_footer", &[Ban::Results]),
         ("src/world.rs", "entry_controls", &[Ban::Results]),
         ("src/world.rs", "stamp", &[Ban::Results]),
+        // Package M (round 28): the escapes of `design::outcome`, and its own helpers.
+        ("src/design/outcome.rs", "__literal", &[Ban::Sentence]),
+        ("src/design/outcome.rs", "check_literal", &[Ban::Sentence]),
+        (
+            "src/design/outcome.rs",
+            "sentence! statement",
+            &[Ban::Sentence],
+        ),
+        (
+            "src/design/outcome.rs",
+            "sentence! statement",
+            &[Ban::Sentence],
+        ),
+        (
+            "src/design/outcome.rs",
+            "sentence! statement",
+            &[Ban::Sentence],
+        ),
+        ("src/design/outcome.rs", "rejected", &[Ban::Sentence]),
+        (
+            "src/design/outcome.rs",
+            "a_template_is_a_sentence_in_the_dms_words",
+            &[Ban::Sentence],
+        ),
+        (
+            "src/design/outcome.rs",
+            "outside_words_get_a_capital_and_an_end_mark",
+            &[Ban::Words],
+        ),
+        (
+            "src/design/outcome.rs",
+            "one_fault_has_one_tone_in_every_place",
+            &[Ban::Body],
+        ),
+        ("src/trackers.rs", "act_words", &[Ban::Words]),
+        ("src/trackers.rs", "cause", &[Ban::Words]),
+        ("src/trackers/history.rs", "show", &[Ban::Body]),
+        ("src/trackers/view.rs", "body", &[Ban::Body]),
+        ("src/trackers/view.rs", "footer", &[Ban::Words]),
     ]
 };
 

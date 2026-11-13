@@ -13,6 +13,8 @@ pub mod theme;
 pub mod tokens;
 
 #[cfg(test)]
+pub(crate) mod attributes;
+#[cfg(test)]
 pub mod gallery;
 #[cfg(test)]
 mod lint;

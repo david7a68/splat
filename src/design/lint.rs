@@ -1,6 +1,7 @@
 //! No raw colours or text sizes outside the design system, and no straight apostrophe in UI
 //! words. The allowlist can only shrink: a count above it fails, and a count below it asks
 //! you to lower it.
+use super::attributes::{self, Found, Kind};
 use std::{collections::BTreeMap, fs, path::Path};
 
 const ALLOWLIST: &str = include_str!("lint_allowlist.txt");
@@ -114,57 +115,27 @@ fn violations(line: &str) -> Vec<&'static str> {
     found
 }
 
-/// The lint levels an attribute line sets for `deprecated`: `allow(...)` or `expect(...)` that
-/// name it, and `warn`, `deny` or `forbid` that name it. Lists and `cfg_attr` are read whole:
-/// `#![allow(deprecated, dead_code)]` is an allow.
-fn deprecated_levels(line: &str) -> (bool, bool) {
-    let line = line.trim_start();
-    if !line.starts_with("#[") && !line.starts_with("#![") {
-        return (false, false);
-    }
-    let names = |level: &str| {
-        line.match_indices(&format!("{level}(")).any(|(at, _)| {
-            line[at + level.len() + 1..]
-                .split(')')
-                .next()
-                .unwrap_or("")
-                .split(',')
-                .any(|name| name.trim() == "deprecated")
-        })
-    };
-    (
-        names("allow") || names("expect"),
-        names("warn") || names("deny") || names("forbid"),
-    )
-}
+/// Lints whose allow lets an old message function (`#[deprecated]`) pass.
+const DEPRECATED: [&str; 2] = ["deprecated", "warnings"];
 
 /// How a file sets the `deprecated` level for the modules below it.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 struct FileLevel {
-    /// An inner `#![allow(deprecated)]`, or an allow on a `mod` item: its children inherit it.
+    /// An inner allow at the top of the file, or an allow on a `mod x;`: its children inherit it.
     allows_children: bool,
     /// An inner attribute that sets the level for this whole file: allow, or warn or deny.
     explicit: bool,
 }
 
-fn file_level(code: &str) -> FileLevel {
+fn file_level(found: &[Found]) -> FileLevel {
     let mut level = FileLevel::default();
-    let lines: Vec<&str> = code.lines().collect();
-    for (at, line) in lines.iter().enumerate() {
-        let (allow, reset) = deprecated_levels(line);
-        let inner = line.trim_start().starts_with("#![");
-        if inner && (allow || reset) {
+    for attribute in found {
+        let top = attribute.inner && attribute.kind == Kind::File;
+        if top && (attribute.lets_pass(&DEPRECATED) || attribute.resets(&DEPRECATED)) {
             level.explicit = true;
         }
-        let on_mod = !inner
-            && lines[at + 1..]
-                .iter()
-                .find(|next| !next.trim_start().starts_with("#["))
-                .is_some_and(|next| {
-                    let next = next.trim_start();
-                    next.starts_with("mod ") || next.contains(" mod ") && next.ends_with(';')
-                });
-        if allow && (inner || on_mod) {
+        let on_mod_file = !attribute.inner && attribute.kind == Kind::Mod { has_file: true };
+        if attribute.lets_pass(&DEPRECATED) && (top || on_mod_file) {
             level.allows_children = true;
         }
     }
@@ -215,29 +186,71 @@ fn inherits_allow(path: &str, levels: &BTreeMap<String, FileLevel>) -> bool {
     }
 }
 
-/// The arguments of the call that starts just after `open` (the byte after its `(`), up to the
-/// matching `)`, across lines; brackets inside string literals do not count.
-fn call_arguments(code: &str, open: usize) -> &str {
-    let (mut depth, mut quoted, mut escaped) = (1usize, false, false);
-    for (at, c) in code[open..].char_indices() {
-        match c {
-            '\\' if quoted && !escaped => {
-                escaped = true;
-                continue;
-            }
-            '"' if !escaped => quoted = !quoted,
-            '(' if !quoted => depth += 1,
-            ')' if !quoted => {
-                depth -= 1;
-                if depth == 0 {
-                    return &code[open..open + at];
-                }
-            }
-            _ => {}
+/// Blocked reasons without an end mark, read by `syn`: the last non-empty string literal in the
+/// arguments of a `.blocked(…)` or `.blocked_if(…)` method call or a `blocked_reason(…)` call,
+/// on lines up to `last_line`.
+fn reasons_without_end_mark(text: &str, last_line: usize) -> usize {
+    use syn::visit::{self, Visit};
+    struct Literals(Vec<String>);
+    impl<'ast> Visit<'ast> for Literals {
+        fn visit_lit_str(&mut self, literal: &'ast syn::LitStr) {
+            self.0.push(literal.value());
         }
-        escaped = false;
     }
-    &code[open..]
+    struct Reasons {
+        last_line: usize,
+        bad: usize,
+    }
+    impl Reasons {
+        fn check<'a>(&mut self, line: usize, args: impl Iterator<Item = &'a syn::Expr>) {
+            if line > self.last_line {
+                return;
+            }
+            let mut literals = Literals(Vec::new());
+            for arg in args {
+                literals.visit_expr(arg);
+            }
+            if literals
+                .0
+                .iter()
+                .rfind(|words| !words.is_empty())
+                .is_some_and(|words| {
+                    !words
+                        .trim_end_matches(['”', '’', ')'])
+                        .ends_with(['.', '?', '!'])
+                })
+            {
+                self.bad += 1;
+            }
+        }
+    }
+    impl<'ast> Visit<'ast> for Reasons {
+        fn visit_expr_method_call(&mut self, call: &'ast syn::ExprMethodCall) {
+            if call.method == "blocked" || call.method == "blocked_if" {
+                self.check(call.method.span().start().line, call.args.iter());
+            }
+            visit::visit_expr_method_call(self, call);
+        }
+        fn visit_expr_call(&mut self, call: &'ast syn::ExprCall) {
+            if let syn::Expr::Path(path) = &*call.func
+                && path
+                    .path
+                    .segments
+                    .last()
+                    .is_some_and(|s| s.ident == "blocked_reason")
+            {
+                use syn::spanned::Spanned;
+                self.check(call.span().start().line, call.args.iter());
+            }
+            visit::visit_expr_call(self, call);
+        }
+    }
+    let Ok(file) = syn::parse_file(text) else {
+        return 0;
+    };
+    let mut reasons = Reasons { last_line, bad: 0 };
+    reasons.visit_file(&file);
+    reasons.bad
 }
 
 /// Phrases with one owner file: the one function that writes that form. A literal outside its
@@ -259,93 +272,39 @@ fn phrase_owner(path: &str, words: &str) -> bool {
         .any(|(found, owner)| *found && !path.ends_with(owner))
 }
 
-/// The helpers of `sentence!`: outside `src/design/outcome.rs` they build an unchecked sentence.
-const OUTCOME_INTERNALS: [&str; 4] = [
-    "__formatted(",
-    "__literal(",
-    "check_template(",
-    "check_literal(",
-];
-
-/// The message rules of one file (package M, round 28). Each is a count per file in the
-/// allowlist. "Shrink only" holds for a count alone: a change that raises a count and its
-/// allowance together passes this test, so a reviewer reads every raised line (AGENTS.md).
+/// The message rules of one file (package M, round 28), on its code before an inline test
+/// module (`code`, the first `last_line` lines of `text`). Attributes and calls are read by
+/// `syn`, never matched as text; the escapes of `design::outcome` are Clippy bans counted in
+/// `design::results::STAGED_ALLOWS`. Each rule here is a count per file in the allowlist.
+/// "Shrink only" holds for a count alone: a change that raises a count and its allowance
+/// together passes this test, so a reviewer reads every raised line (AGENTS.md).
 ///
-/// - `allow-deprecated`: each attribute that allows `deprecated` (old message functions).
-/// - `crate-wide-allow`: an inner allow at a crate root, which would cover every module.
-/// - `reason-end-mark`: a blocked reason (the last literal of `.blocked(Some(…))`,
-///   `.blocked_if(…)` or `blocked_reason(…)`, across lines) without `.`, `?` or `!`.
-/// - `phrase-owner`: a phrase outside its owner file.
-/// - `outcome-internal`: a helper of `sentence!`, or `Sentence` renamed in a `use`.
-/// - `outside-words`: each `Sentence::outside(`, the escape for words from outside the app.
-/// - `raw-order`: each `Footer::outcome_at`, the staged path for a result whose order its caller
-///   issued by hand (the typed path is `Footer::kept_outcome`, with a `Results` store's view).
-/// - `body-message`: each body place (`outcome::banner(`, `outcome::row_fault(`,
-///   `PagePlaceholder::new(`), or an import that would hide one from this count.
-fn message_rules(path: &str, code: &str) -> Vec<&'static str> {
+/// - `allow-deprecated`: each attribute that lets `deprecated` (or `warnings`) pass, in any
+///   form: inner or outer, a list across lines, `cfg_attr`.
+/// - `crate-wide-allow`: such an inner attribute at a crate root, which would cover every module.
+/// - `reason-end-mark`: a blocked reason without `.`, `?` or `!`.
+/// - `phrase-owner`: a phrase in a string literal outside its owner file.
+fn message_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> {
     let mut found = Vec::new();
     let crate_root = path.ends_with("src/lib.rs") || path.ends_with("src/main.rs");
-    for line in code.lines() {
-        let line = line.split("//").next().unwrap_or("");
-        if deprecated_levels(line).0 {
+    for attribute in attributes::read(text).unwrap_or_default() {
+        if attribute.line <= last_line && attribute.lets_pass(&DEPRECATED) {
             found.push("allow-deprecated");
-            if line.trim_start().starts_with("#![") && crate_root {
+            if attribute.inner && attribute.kind == Kind::File && crate_root {
                 found.push("crate-wide-allow");
             }
         }
+    }
+    for line in text.lines().take(last_line) {
+        let line = line.split("//").next().unwrap_or("");
         if string_literals(line)
             .into_iter()
             .any(|words| phrase_owner(path, words))
         {
             found.push("phrase-owner");
         }
-        if !path.ends_with("src/design/outcome.rs")
-            && (OUTCOME_INTERNALS.iter().any(|name| line.contains(name))
-                || line.trim_start().starts_with("use ") && line.contains("Sentence as "))
-        {
-            found.push("outcome-internal");
-        }
-        found.extend(line.matches("Sentence::outside(").map(|_| "outside-words"));
-        found.extend(line.matches(".outcome_at(").map(|_| "raw-order"));
-        for place in [
-            "outcome::banner(",
-            "outcome::row_fault(",
-            "PagePlaceholder::new(",
-        ] {
-            found.extend(line.matches(place).map(|_| "body-message"));
-        }
-        let trimmed = line.trim_start();
-        if trimmed.starts_with("use ")
-            && trimmed.contains("outcome")
-            && trimmed
-                .split(|c: char| !c.is_alphanumeric() && c != '_')
-                .any(|word| word == "banner" || word == "row_fault")
-        {
-            found.push("body-message");
-        }
     }
-    // A blocked reason is a sentence: it ends with `.`, `?` or `!` (F12).
-    let code_only: String = code
-        .lines()
-        .map(|line| line.split("//").next().unwrap_or(""))
-        .collect::<Vec<_>>()
-        .join("\n");
-    for pattern in [".blocked(Some(", ".blocked_if(", "blocked_reason("] {
-        for (at, _) in code_only.match_indices(pattern) {
-            let arguments = call_arguments(&code_only, at + pattern.len());
-            let last = arguments
-                .lines()
-                .flat_map(string_literals)
-                .rfind(|words| !words.is_empty());
-            if last.is_some_and(|words| {
-                !words
-                    .trim_end_matches(['”', '’', ')'])
-                    .ends_with(['.', '?', '!'])
-            }) {
-                found.push("reason-end-mark");
-            }
-        }
-    }
+    found.extend((0..reasons_without_end_mark(text, last_line)).map(|_| "reason-end-mark"));
     found
 }
 
@@ -358,11 +317,7 @@ fn scan(
         let path = item.expect("read source entry").path();
         let relative = path.to_string_lossy().replace('\\', "/");
         if path.is_dir() {
-            if relative.ends_with("src/design") {
-                // Design is exempt from the rules, except that only `outcome.rs` may use the
-                // helpers of `sentence!`.
-                design_internals(&path, counts);
-            } else if !relative.ends_with("src/visual_tests") {
+            if !relative.ends_with("src/design") && !relative.ends_with("src/visual_tests") {
                 scan(&path, counts, levels);
             }
         } else if path.extension().is_some_and(|e| e == "rs")
@@ -380,34 +335,12 @@ fn scan(
                     *counts.entry(format!("{key} {rule}")).or_default() += 1;
                 }
             }
-            for rule in message_rules(key, code) {
+            for rule in message_rules(key, &text, code.lines().count()) {
                 *counts.entry(format!("{key} {rule}")).or_default() += 1;
             }
-            levels.insert(key.to_owned(), file_level(&text));
-        }
-    }
-}
-
-/// `outcome-internal` in the design folder: only `outcome.rs` may build a sentence by hand.
-fn design_internals(folder: &Path, counts: &mut BTreeMap<String, usize>) {
-    for item in fs::read_dir(folder).expect("read design folder") {
-        let path = item.expect("read design entry").path();
-        let relative = path.to_string_lossy().replace('\\', "/");
-        // `outcome.rs` owns the helpers; this file names them as the rule's own text.
-        if relative.ends_with(".rs")
-            && !relative.ends_with("src/design/outcome.rs")
-            && !relative.ends_with("src/design/lint.rs")
-        {
-            let text = fs::read_to_string(&path).expect("read design file");
-            let hits = text
-                .lines()
-                .filter(|line| OUTCOME_INTERNALS.iter().any(|name| line.contains(name)))
-                .count();
-            if hits > 0 {
-                let root = concat!(env!("CARGO_MANIFEST_DIR"), "/");
-                let key = relative.strip_prefix(root).unwrap_or(&relative);
-                *counts.entry(format!("{key} outcome-internal")).or_default() += hits;
-            }
+            let found = attributes::read(&text)
+                .unwrap_or_else(|error| panic!("{key} does not parse: {error}"));
+            levels.insert(key.to_owned(), file_level(&found));
         }
     }
 }
@@ -458,16 +391,6 @@ fn raw_colours_and_sizes_stay_inside_the_design_system() {
                 "phrase-owner" => {
                     "Call the phrase's owner: `XP {` in src/difficulty.rs, `· line {` in `fault_words`, `N of M chosen` in `chosen_count`"
                 }
-                "outcome-internal" => "Make sentences with `sentence!` or `Sentence::outside`",
-                "raw-order" => {
-                    "Record the result in a `design::Results` store and give it to `Footer::kept_outcome`"
-                }
-                "outside-words" => {
-                    "Use `sentence!`; words from outside the app go through `Sentence::outside`, and a reviewer reads each new use"
-                }
-                "body-message" => {
-                    "Put results, reasons and notices in the pane's `Footer`; a new body place is a review decision"
-                }
                 _ => "Use design tokens",
             };
             problems.push(format!("{key}: {count} found, {limit} allowed. {fix}."));
@@ -486,12 +409,21 @@ fn raw_colours_and_sizes_stay_inside_the_design_system() {
 
 #[test]
 fn the_message_rules_find_what_they_should() {
-    let rules = |path, code| message_rules(path, code);
+    let rules = |path: &str, code: &str| message_rules(path, code, code.lines().count());
     assert_eq!(
         rules("src/a.rs", "#![allow(deprecated)]"),
         ["allow-deprecated"]
     );
-    // A combined attribute is an allow too; another lint alone is not.
+    // A list across lines, as a new module would write it: counted, so it fails the lint until
+    // the allowlist names it.
+    assert_eq!(
+        rules(
+            "src/new.rs",
+            "#![allow(\n    deprecated,\n    reason = \"old message functions\"\n)]\nfn f() {}"
+        ),
+        ["allow-deprecated"]
+    );
+    // A combined list, `cfg_attr` and `warnings` are allows too; another lint alone is not.
     assert_eq!(
         rules("src/a.rs", "#![allow(deprecated, dead_code)]"),
         ["allow-deprecated"]
@@ -499,105 +431,78 @@ fn the_message_rules_find_what_they_should() {
     assert_eq!(
         rules(
             "src/a.rs",
-            "#[cfg_attr(test, allow(dead_code, deprecated))]"
+            "#[cfg_attr(test, allow(dead_code, deprecated))]\nfn f() {}"
         ),
         ["allow-deprecated"]
     );
+    assert_eq!(
+        rules("src/a.rs", "#[allow(warnings)]\nfn f() {}"),
+        ["allow-deprecated"]
+    );
     assert!(rules("src/a.rs", "#![allow(dead_code)]").is_empty());
+    assert!(
+        rules(
+            "src/a.rs",
+            "// #![allow(deprecated)]\nconst A: &str = \"#![allow(deprecated)]\";"
+        )
+        .is_empty()
+    );
     assert_eq!(
         rules("src/lib.rs", "#![allow(deprecated)]"),
         ["allow-deprecated", "crate-wide-allow"]
     );
     assert_eq!(
-        rules("src/lib.rs", "    #[allow(deprecated)]"),
+        rules(
+            "src/lib.rs",
+            "impl A {\n    #[allow(deprecated)]\n    fn page(&self) {}\n}"
+        ),
         ["allow-deprecated"]
     );
+    let reason = |code: &str| rules("src/a.rs", &format!("fn f() {{\n{code}\n}}"));
+    assert_eq!(
+        reason("Action::quiet(\"Save\").blocked(Some(\"Stop recording first\"));"),
+        ["reason-end-mark"]
+    );
+    assert!(reason("Action::quiet(\"Save\").blocked(Some(\"Stop recording first.\"));").is_empty());
+    assert_eq!(reason(".blocked_if(busy, \"Wait\");"), ["reason-end-mark"]);
+    // A reason on the line after the call, and a call through a qualified path.
+    assert_eq!(
+        reason("x.blocked_if(\n    name == \"\",\n    \"Name it first\",\n);"),
+        ["reason-end-mark"]
+    );
+    assert!(reason("x.blocked_if(\n    name == \"\",\n    \"Name it first.\",\n);").is_empty());
+    assert_eq!(
+        reason("crate::design::blocked_reason(ui, Some(\"Wait\"));"),
+        ["reason-end-mark"]
+    );
+    assert_eq!(
+        rules("src/a.rs", "const A: &str = \"XP {xp}\";"),
+        ["phrase-owner"]
+    );
+    assert!(rules("src/difficulty.rs", "const A: &str = \"XP {xp}\";").is_empty());
     assert_eq!(
         rules(
             "src/a.rs",
-            "Action::quiet(\"Save\").blocked(Some(\"Stop recording first\"))"
+            "const A: &str = \"{name} · line {n}: {cause}\";"
         ),
-        ["reason-end-mark"]
-    );
-    assert!(
-        rules(
-            "src/a.rs",
-            "Action::quiet(\"Save\").blocked(Some(\"Stop recording first.\"))"
-        )
-        .is_empty()
-    );
-    assert_eq!(
-        rules("src/a.rs", ".blocked_if(busy, \"Wait\")"),
-        ["reason-end-mark"]
-    );
-    // A reason on the line after the call.
-    assert_eq!(
-        rules(
-            "src/a.rs",
-            ".blocked_if(\n    name == \"\",\n    \"Name it first\",\n)"
-        ),
-        ["reason-end-mark"]
-    );
-    assert!(
-        rules(
-            "src/a.rs",
-            ".blocked_if(\n    name == \"\",\n    \"Name it first.\",\n)"
-        )
-        .is_empty()
-    );
-    assert_eq!(rules("src/a.rs", "format!(\"XP {xp}\")"), ["phrase-owner"]);
-    assert!(rules("src/difficulty.rs", "format!(\"XP {xp}\")").is_empty());
-    assert_eq!(
-        rules("src/a.rs", "format!(\"{name} · line {n}: {cause}\")"),
         ["phrase-owner"]
     );
     assert_eq!(
-        rules("src/a.rs", "format!(\"{a} of {b} chosen\")"),
+        rules("src/a.rs", "const A: &str = \"{a} of {b} chosen\";"),
         ["phrase-owner"]
     );
-    // The helpers of `sentence!` and a renamed `Sentence`.
-    assert_eq!(
-        rules(
-            "src/a.rs",
-            "Sentence::__formatted(check_template(\"Saved.\"), x)"
-        ),
-        ["outcome-internal"]
-    );
-    assert_eq!(
-        rules("src/a.rs", "use crate::design::outcome::Sentence as Words;"),
-        ["outcome-internal"]
-    );
-    assert!(rules("src/design/outcome.rs", "check_template(t)").is_empty());
-    assert_eq!(
-        rules("src/a.rs", "Sentence::outside(error)"),
-        ["outside-words"]
-    );
-    assert_eq!(
-        rules("src/a.rs", "footer.outcome_at(order, done, &mut pressed);"),
-        ["raw-order"]
-    );
-    assert_eq!(
-        rules(
-            "src/a.rs",
-            "design::outcome::row_fault(ui, &f); PagePlaceholder::new(&f)"
-        ),
-        ["body-message", "body-message"]
-    );
-    assert_eq!(
-        rules("src/a.rs", "use crate::design::outcome::{banner, Banner};"),
-        ["body-message"]
-    );
-    // A method of the same name elsewhere is not a body place.
-    assert!(rules("src/a.rs", "self.banner(ui, x); self.row_fault(ui, p, s);").is_empty());
 
     // Levels across files: a child under an allow must write its own level.
-    let level = |code| file_level(code);
+    let level = |code: &str| file_level(&attributes::read(code).unwrap());
     let levels: BTreeMap<String, FileLevel> = [
         (
             "src/lib.rs",
-            level("    #[allow(deprecated)]\n    fn page() {}"),
+            level("impl A {\n    #[allow(deprecated)]\n    fn page() {}\n}"),
         ),
-        ("src/a.rs", level("#![allow(deprecated)] // old\nmod b;")),
+        (
+            "src/a.rs",
+            level("#![allow(\n    deprecated,\n    reason = \"old\"\n)]\nmod b;"),
+        ),
         ("src/a/b.rs", level("use crate::design::message as show;")),
         ("src/a/c.rs", level("#![warn(deprecated)]")),
         ("src/a/d.rs", level("#![allow(deprecated)]")),

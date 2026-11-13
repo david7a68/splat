@@ -1168,6 +1168,10 @@ pub fn result_words(rules: &Rules, ledger: &Ledger, state: &State, entries: &[En
 }
 
 /// The act's own words: the notice it ended or rolled on, or the values it left.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "a roll table's row is the DM's own words"
+)]
 fn act_words(rules: &Rules, ledger: &Ledger, state: &State, entries: &[Entry]) -> Sentence {
     let label = label(rules, ledger, entries);
     // An act on a notice says what happened in a sentence; `Undo: <label>` keeps the label.
@@ -1496,6 +1500,10 @@ impl crate::design::outcome::Fault for TrackerFault {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the faults carry the system's and the Timeline's words"
+    )]
     fn cause(&self) -> Sentence {
         use crate::sentence;
         // Each kind's words come from outside the app; blank words fall back to the app's own.

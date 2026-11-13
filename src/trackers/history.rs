@@ -375,6 +375,10 @@ pub(crate) fn footer_lines(trackers: &Trackers, note: Uuid) -> Vec<FooterLine> {
 
 /// The problems list and each member's folded history, in the reader of a house rule note in
 /// play. A file that cannot be read shows its name and no history or value.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "the history cannot show: a page placeholder; a member's problem: a row fault"
+)]
 pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, note: &splat::content::Entry) {
     if !super::is_house_rule_note(note) || !trackers.in_play() {
         return;

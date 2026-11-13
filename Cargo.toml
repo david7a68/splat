@@ -36,6 +36,9 @@ image = { version = "0.25", default-features = false, features = ["jpeg", "png",
 
 [dev-dependencies]
 rayon = "1.11"
+# The source checks read Rust with a real parser (`design::attributes`), never by hand.
+syn = { version = "2.0.119", features = ["full", "visit", "extra-traits"] }
+proc-macro2 = { version = "1.0.107", features = ["span-locations"] }
 egui_kittest = { version = "0.33", features = ["wgpu", "eframe"] }
 ab_glyph = "0.2"
 epaint_default_fonts = "0.33"

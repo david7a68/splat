@@ -349,6 +349,10 @@ fn apply(trackers: &mut Trackers, act: Act) {
     }
 }
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "the view's body cannot show: a page placeholder; a member's problem: a row fault; the unknown day count: a banner"
+)]
 fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
     if let Some(error) = &trackers.unreadable {
         let path = trackers.path();
@@ -886,6 +890,10 @@ fn amount_field(
 /// session being played with `Undo: <label>` and `Add to Timeline`, or, after `Add to
 /// Timeline`, `Added to the Timeline.` with `Undo add`. Nothing shows while `Trackers.md`
 /// cannot be read. Returns the y where the body ends.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "a refusal carries the ledger's words"
+)]
 fn footer(ui: &mut egui::Ui, trackers: &Trackers, act: &mut Option<Act>) -> f32 {
     let shown = trackers.unreadable.is_none();
     let entries = trackers.newest();
