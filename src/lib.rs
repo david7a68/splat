@@ -1336,14 +1336,22 @@ impl Splat {
             .reader
             .edit_forms_into(&mut self.lookup.reader.edited_elsewhere);
         let mut start_fight = None;
+        // A reader's `Add to fight` (round 27 FJ5), with the reader that asked, for its reason.
+        let mut add_to_fight = None;
         // Beside the encounter editor, Lookup's reader offers no Start fight: the editor's own
         // primary Start fight is the one there.
         self.lookup.reader.beside_editor =
             self.page == Page::Encounters && self.encounters.editor_open();
-        for reader in [&mut self.world_page.reader, &mut self.lookup.reader] {
+        for (at, reader) in [&mut self.world_page.reader, &mut self.lookup.reader]
+            .into_iter()
+            .enumerate()
+        {
             reader.start_blocked = start_blocked;
             if let Some(fight) = reader.start_fight.take() {
                 start_fight = Some(fight);
+            }
+            if let Some(fight) = reader.add_to_fight.take() {
+                add_to_fight = Some((at, fight));
             }
             reader.played.clone_from(&played);
             reader.day = day;
@@ -1373,6 +1381,24 @@ impl Splat {
         }
         if let Some(fight) = start_fight {
             self.start_fight_with(&fight);
+        }
+        // The run's own add: one creature joins, and the run header's Undo takes it away. A
+        // refusal is the reader's error, in its footer.
+        if let Some((at, fight)) = add_to_fight
+            && let Some(index) = self.lookup.index()
+            && let Some(entry) = fight
+                .creature
+                .and_then(|id| index.position(id))
+                .map(|position| std::sync::Arc::new(index.items[position].entry.clone()))
+            && let Some(run) = self.encounters.run_mut()
+            && let Err(reason) = run.add_entry_to_fight(entry, None)
+        {
+            let reader = if at == 0 {
+                &mut self.world_page.reader
+            } else {
+                &mut self.lookup.reader
+            };
+            reader.refuse(reason);
         }
         if let Some(roll) = roll_table::take_roll(ctx) {
             let result = match self.encounters.run_mut() {

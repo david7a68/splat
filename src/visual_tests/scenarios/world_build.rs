@@ -4414,6 +4414,42 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
         );
     }
     d.state("npc-stat-block-link", Sizes::All);
+    // Round 27 FJ5: during a run, a creature's reader has `Add to fight` with its word, as an
+    // NPC's has. One press adds one Guard through the run's own add; the run's Undo takes it
+    // away again.
+    let add = "Add Guard to the fight";
+    let shown: Vec<_> = [SMALL, DEFAULT, LARGE]
+        .map(|size| {
+            d.at_size(size, |d| {
+                d.place_of(add).is_some_and(|rect| {
+                    rect.width() > design::Density::Read.control() + 0.5 && d.in_view(add)
+                })
+            })
+        })
+        .into();
+    let guards = |d: &Driver<'_>| {
+        roster_places(d)
+            .iter()
+            .filter(|(name, _)| name.starts_with("Guard"))
+            .count()
+    };
+    let before = guards(d);
+    d.click(add);
+    let after = guards(d);
+    d.observe(
+        "iter-27-D-FJ5",
+        shown.iter().all(|shown| *shown)
+            && after == before + 1
+            && d.has_containing("Undo: add Guard")
+            && d.has("Back"),
+        format!("Add to fight shows with its word at {shown:?}; Guards {before} → {after}, and Lookup keeps Guard"),
+    );
+    d.click_containing("Undo: add Guard");
+    d.observe(
+        "iter-27-D-FJ5-undo",
+        guards(d) == before,
+        format!("Undo: add Guard takes the Guard back: {} Guards", guards(d)),
+    );
     d.click("Back");
     d.click("Watch House");
     d.wait_for_text("Rook Ambry");

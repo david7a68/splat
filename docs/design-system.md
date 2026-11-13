@@ -1005,7 +1005,11 @@ A campaign world entry has a quiet Edit action, with a pencil icon and the word 
 entry, or a package creature, whose header has no Edit) has a quiet `Start fight` with the run icon after Edit,
 `XS` apart (after the measured title, one `L` on, when there is no Edit), named `Start a fight with <name>` and
 blocked as the encounter editor's `Start fight` is. While the encounter editor is the page, Lookup's reader has
-no `Start fight`: the editor's own primary `Start fight` is the one there. A campaign world entry also has a quiet `Add to Log`
+no `Start fight`: the editor's own primary `Start fight` is the one there. While a run is open, a creature's reader has a
+quiet `Add to fight` (`icons::ADD`, named `Add <name> to the fight`) in that place: one press adds one of it on the
+enemies' side with its initiative rolled, through the run's own add, and the run header's `Undo: add <name>` takes it
+away; when the run refuses (an ended fight, no maximum HP), the reason is the reader's error in its footer. An NPC keeps
+its own `Add to fight` form, which asks for its stat block and side. A campaign world entry also has a quiet `Add to Log`
 (`icons::ADD_TO_LOG`, a list with a plus, so it is not the bare `+` of `Add to fight`) `XS` after `Start fight`, or after Edit when there is no `Start fight`, so `Start fight` keeps
 its place whether or not the DM ever adds to a Log. Title-line actions never go away and never lose their word
 (round 27, `world::title_line_actions`, one rule for World, Lookup and the encounter editor's header): when the
