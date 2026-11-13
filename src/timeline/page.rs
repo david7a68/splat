@@ -1,4 +1,8 @@
 //! The Timeline page: the whole campaign in story order, apart from any one session.
+#![allow(
+    clippy::disallowed_methods,
+    reason = "staged: this file still calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+)]
 use super::{Book, Event, Kind, checks, clock, clock_now, clock_words, day_numbers, reference};
 use crate::design::{self, Action, Density, Status, Tone, Type, colors, icons};
 use eframe::egui;

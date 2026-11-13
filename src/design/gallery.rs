@@ -1,4 +1,8 @@
 //! Every token and component, in each state, for the `gallery` visual scenario.
+#![allow(
+    clippy::disallowed_methods,
+    reason = "staged: this file still calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+)]
 use super::{reader as style, *};
 use eframe::egui::{self, Color32};
 

@@ -1,4 +1,8 @@
 //! Character viewer, with combat sync on from the time Splat connects to D&D Beyond.
+#![allow(
+    clippy::disallowed_methods,
+    reason = "staged: this file still calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+)]
 use crate::rolls::Chip;
 use crate::{
     auth::Session,

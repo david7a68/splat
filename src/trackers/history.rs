@@ -6,6 +6,10 @@
 //! it raised, as Undo does, and it has one Undo, as the Timeline's removal has. The rows and the
 //! problems are worked out when the ledger or the definitions change; a folded section does no
 //! work, and an open one draws only the rows in view.
+#![allow(
+    clippy::disallowed_methods,
+    reason = "staged: this file still calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+)]
 use super::{
     NoticeRef, Rules, State, Today, Trackers, Unrecorded, label, ledger, place_name, replay,
     result_words, with_dependents,

@@ -1,6 +1,10 @@
 //! Carry-over (F5 of `docs/design/session-cycle.md`): what the last session left, added to this
 //! session's note in one act with its exact Undo; and an embed of a session note's heading,
 //! which Read draws by its target.
+#![allow(
+    clippy::disallowed_methods,
+    reason = "staged: this file still calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+)]
 use super::{Plan, Sessions, prose};
 use crate::{
     content_workspace::patch_fields,

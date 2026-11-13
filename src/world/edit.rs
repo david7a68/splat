@@ -1,5 +1,9 @@
 //! Edit, for the DM's own world entries: one form for the status, the stat block, the place and
 //! the text. Save writes them together, with one Undo. Lookup and World show the same form.
+#![allow(
+    clippy::disallowed_methods,
+    reason = "staged: this file still calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+)]
 use super::{
     Change, ChangeKind, Go, Picker, Reader, link_name, reference, status, stored_link, world_field,
 };

@@ -1,0 +1,8 @@
+# Calls that a shared part replaces. A file that still calls one has one
+# `#![allow(clippy::disallowed_methods, reason = "staged: ...")]`, and the files that
+# have it are listed in `design::results::STAGED_ALLOWS`, which can only shrink.
+disallowed-methods = [
+    { path = "splat::design::components::ResultOrder::issue", reason = "record the result in a `design::Results` store: it issues the order at the action" },
+    { path = "splat::design::components::Footer::result", reason = "give the footer a kept result from a `design::Results` store with `Footer::kept` or `Footer::kept_line`" },
+    { path = "splat::design::components::save_row_state", reason = "use `design::save_row` with a `DraftState`" },
+]

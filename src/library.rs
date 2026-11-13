@@ -1,5 +1,9 @@
 //! One catalogue: built-in, package and campaign-owned entries, with their authoring.
 //! Browsing it never changes the active campaign.
+#![allow(
+    clippy::disallowed_methods,
+    reason = "staged: this file still calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+)]
 mod class;
 mod creature;
 pub(crate) mod presentation;
@@ -427,9 +431,9 @@ fn add_results<'a>(
     orders: &ResultOrders,
     out: &'a std::cell::Cell<ResultPress>,
 ) {
-    for (kind, words, undo) in results.items() {
-        let order = reader_order(results, orders, kind);
-        footer.result(order, words, undo, move |ui| {
+    for item in results.items() {
+        let kind = item.0;
+        add_reader_result(footer, results, orders, item, move |ui| {
             let mut pressed = out.get();
             show_result(ui, results, kind, &mut pressed);
             out.set(pressed);
@@ -2113,10 +2117,10 @@ impl design::results::Kept for LinkResult {
 /// a result never moves the columns, the tabs, the file line, the title or the body.
 #[derive(Default)]
 struct PageResults {
-    /// The offer's words, its action's words, and its order from the store.
-    link_offer: Option<(String, String, design::ResultOrder)>,
-    /// The link update's result and its order from the store.
-    links: Option<(String, design::ResultOrder)>,
+    /// The offer's footer line (its words with its order from the store) and its action's words.
+    link_offer: Option<(design::results::FooterResult, String)>,
+    /// The link update's footer line, with its order from the store.
+    links: Option<design::results::FooterResult>,
     /// The registration's result, and why its Undo waits.
     registration: Option<(String, Option<&'static str>)>,
     /// `Use the copy in encounters` shows, with why it waits.
@@ -2224,12 +2228,14 @@ impl ReaderResults {
         add(ResultKind::ScopeNotice, page.scope_notice.clone(), false);
         add(
             ResultKind::LinkOffer,
-            page.link_offer.as_ref().map(|(words, ..)| words.clone()),
+            page.link_offer
+                .as_ref()
+                .map(|(line, _)| line.words().to_owned()),
             false,
         );
         add(
             ResultKind::Links,
-            page.links.as_ref().map(|(words, _)| words.clone()),
+            page.links.as_ref().map(|line| line.words().to_owned()),
             true,
         );
         add(
@@ -2290,14 +2296,16 @@ fn show_result(
             }
         }
         ResultKind::LinkOffer => {
-            if let Some((words, action, _)) = &page.link_offer {
+            if let Some((line, action)) = &page.link_offer {
+                let words = line.words();
                 // The offer names both names, so the DM can check the words before the write.
                 pressed.page.link_offer =
                     design::message_with_action(ui, Tone::Info, words, action);
             }
         }
         ResultKind::Links => {
-            if let Some((words, _)) = &page.links {
+            if let Some(line) = &page.links {
+                let words = line.words();
                 // The result is a message, so its Undo keeps its icon on the message line.
                 pressed.page.links =
                     design::undo_message(ui, Tone::Success, words, "Undo link update");
@@ -3584,21 +3592,31 @@ enum OrderKey {
 
 type ResultOrders = std::collections::HashMap<OrderKey, design::ResultOrder>;
 
-/// The footer order of the reader's result `kind`, in Read and in Edit Markdown alike. A link
-/// offer and a link result each belong to one renamed entry and carry the order their store
-/// issued; the other kinds hold one result at a time, so their kind's slot is that result's.
-fn reader_order(
-    results: &ReaderResults,
+/// One of the reader's results in a footer, in Read and in Edit Markdown alike. A link offer and
+/// a link result each belong to one renamed entry: they go through `Footer::kept`, with the order
+/// their store issued bound to their words. The other kinds hold one result at a time, so their
+/// kind's slot is that result's.
+fn add_reader_result<'a>(
+    footer: &mut design::Footer<'a>,
+    results: &'a ReaderResults,
     orders: &ResultOrders,
-    kind: ResultKind,
-) -> design::ResultOrder {
+    (kind, words, undo): (ResultKind, String, bool),
+    draw: impl FnOnce(&mut egui::Ui) + 'a,
+) {
     let page = &results.page;
-    match kind {
-        ResultKind::LinkOffer => page.link_offer.as_ref().map(|(.., order)| *order),
-        ResultKind::Links => page.links.as_ref().map(|(_, order)| *order),
-        kind => Some(order_of(orders, OrderKey::Reader(kind))),
+    let line = match kind {
+        ResultKind::LinkOffer => page.link_offer.as_ref().map(|(line, _)| line),
+        ResultKind::Links => page.links.as_ref(),
+        _ => None,
+    };
+    match line {
+        Some(line) => {
+            footer.kept_line(line, undo, move |_, ui| draw(ui));
+        }
+        None => {
+            footer.result(order_of(orders, OrderKey::Reader(kind)), words, undo, draw);
+        }
     }
-    .unwrap_or_default()
 }
 
 /// The order of the result `key`, issued when its action was done.
@@ -4761,18 +4779,13 @@ impl Library {
                             &offer.new,
                             count,
                         );
-                        (words, action, shown.order())
+                        (shown.footer(|_| words), action)
                     })
                 }),
             links: open
                 .as_ref()
                 .and_then(|owner| self.link_edits.get(owner))
-                .map(|shown| {
-                    (
-                        format!("Links now say “{}”.", shown.value().new),
-                        shown.order(),
-                    )
-                }),
+                .map(|shown| shown.footer(|result| format!("Links now say “{}”.", result.new))),
             registration: self.package_copy.as_ref().map(|copy| {
                 (
                     package_registered(&copy.module.name, self.copy_campaign_before.is_some()),
@@ -7006,11 +7019,12 @@ impl Library {
             ui.available_width().min(EDITOR_MAX_WIDTH)
         };
         self.just_saved &= !dirty && self.source;
-        let mut save = overwrite
-            || (dirty
-                && editable
-                && !conflict
-                && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)));
+        // Ctrl+S is taken only where a draft could be saved; it saves exactly when Save can
+        // (`DraftState::can_save`, below).
+        let save_key = dirty
+            && editable
+            && !conflict
+            && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
         let d = colors().document;
         // The file stopped reading under the draft: its owner line says so, as for a file that
         // never read.
@@ -7122,9 +7136,6 @@ impl Library {
             .save_failure
             .as_ref()
             .map(|failure| failure.reason.clone());
-        if save_refusal.is_some() && !overwrite {
-            save = false;
-        }
         // The save row's state. Its word, Save's weight and why Save waits all come from it
         // (`design::save_row`). A parse fault ends with the draft that parses: the saved file
         // stays unreadable on the owner line until Save, but the draft is not Invalid.
@@ -7156,6 +7167,8 @@ impl Library {
         if self.just_saved {
             draft_state = draft_state.just_saved();
         }
+        // Overwrite was chosen in the comparison: it saves whatever the draft holds.
+        let mut save = overwrite || (save_key && draft_state.can_save());
         let save_row = editable && (self.source || dirty);
         let mut step = history::take_if(ui.ctx(), |_| true);
         // Edit Markdown's save row, with the pane's message footer below the editor.
@@ -7701,7 +7714,6 @@ impl Library {
                 Discard,
                 Heading,
                 Vital,
-                Reader(ResultKind),
             }
             let orders = &self.result_orders;
             let mut kept: Vec<(Kept, String, bool, design::ResultOrder)> = Vec::new();
@@ -7729,12 +7741,6 @@ impl Library {
                     order_of(orders, OrderKey::Vital),
                 ));
             }
-            if results_shown {
-                kept.extend(results.items().into_iter().map(|(kind, words, undo)| {
-                    let order = reader_order(&results, orders, kind);
-                    (Kept::Reader(kind), words, undo, order)
-                }));
-            }
             let (discard_undo, heading_undo, vital_undo) = (
                 std::cell::Cell::new(false),
                 std::cell::Cell::new(false),
@@ -7743,9 +7749,9 @@ impl Library {
             let shown = std::cell::RefCell::new(None::<ResultPress>);
             let mut footer = design::Footer::new("library_footer", editor_width);
             for (which, words, undo, order) in &kept {
-                let (which, results) = (*which, &results);
-                let (discard_undo, heading_undo, vital_undo, shown) =
-                    (&discard_undo, &heading_undo, &vital_undo, &shown);
+                let which = *which;
+                let (discard_undo, heading_undo, vital_undo) =
+                    (&discard_undo, &heading_undo, &vital_undo);
                 let heading_result = heading.undo.as_deref();
                 // The fixes' results are messages, so each Undo keeps its icon on the line.
                 footer.result(*order, words.as_str(), *undo, move |ui| match which {
@@ -7756,7 +7762,14 @@ impl Library {
                     Kept::Vital => vital_undo.set(vital_result.is_some_and(|result| {
                         design::undo_message(ui, Tone::Success, result, "Undo stat change")
                     })),
-                    Kept::Reader(kind) => {
+                });
+            }
+            // The reader's results, each with its own order (a link offer's and a link result's
+            // from their stores).
+            if results_shown {
+                for item in results.items() {
+                    let (kind, results, shown) = (item.0, &results, &shown);
+                    add_reader_result(&mut footer, results, orders, item, move |ui| {
                         let mut shown = shown.borrow_mut();
                         show_result(
                             ui,
@@ -7764,8 +7777,8 @@ impl Library {
                             kind,
                             shown.get_or_insert_with(Default::default),
                         );
-                    }
-                });
+                    });
+                }
             }
             // A repair draft's fault in its tone (a deleted manifest is a warning), or Save's
             // refusal before the write, a YAML fault in its own words.

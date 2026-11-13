@@ -6,18 +6,24 @@
 //! of one kind with three things that must never come apart:
 //!
 //! - **Its owner.** [`Kept::owner`] names the object (an entry in its root, a note, a run step).
-//!   The store takes the owner from the value, so a result cannot be filed under another
-//!   object, and a second object's result never shares the first one's slot.
+//!   The store takes the owner from the value, and it keys every lookup and change by the
+//!   owner's scope and the owner together, so one campaign never reads, replaces, undoes or
+//!   clears another campaign's result, whatever the owner's `PartialEq` compares.
 //! - **Its order.** [`Results::record`] issues the [`ResultOrder`] when the action is done. The
-//!   order lives in the entry: nothing else holds it, so it cannot be keyed by kind, and a draw,
-//!   which gets `&Results`, cannot issue or renew one.
+//!   order lives in the entry, and it leaves the store only inside the [`Shown`] view, which
+//!   [`Footer::kept`] takes, or a [`FooterResult`] bound to that result's own words, which
+//!   [`Footer::kept_line`] takes. A caller never holds a bare order, so it
+//!   cannot keep orders by kind and show one result with another's order. A draw, which has
+//!   `&Results`, cannot issue or renew an order.
 //! - **Its end events.** [`Kept::ENDS`] says, for every end event, what it does to this kind.
 //!   An Undo leaves the store only when it works: [`Results::undo`] keeps the entry on `Err`.
 //!
+//! **The one escape** is interior mutability: a store inside a `RefCell`, `Cell`, `Mutex` or
+//! `RwLock` can be changed through `&`, so a draw could record. The source scan
+//! `results_are_never_behind_interior_mutability` fails on such a store.
+//!
 //! Caller duties left: call the end events where they happen ([`Results::owner_changed`] after
-//! a saved edit of the owner, [`Results::disk_changed`] after a reload or a file event), and give
-//! the footer the order from [`Shown::order`]. Order, owner, scope and the failed Undo need no
-//! proof in the caller: the tests below hold them.
+//! a saved edit of the owner, [`Results::disk_changed`] after a reload or a file event).
 //!
 //! # What does not compile
 //!
@@ -33,7 +39,7 @@
 //!     type Scope = str;
 //!     fn scope(&self) -> &str { &self.root }
 //! }
-//! struct Done { entry: Entry }
+//! struct Done { entry: Entry, words: String }
 //! impl Kept for Done {
 //!     type Owner = Entry;
 //!     const ENDS: Ends = Ends {
@@ -45,14 +51,31 @@
 //! }
 //! let a = Entry { id: 1, root: "campaign".into() };
 //! let mut results: Results<Entry, Done> = Results::new();
-//! results.record(Done { entry: a.clone() });
-//! // The twin of each case below:
-//! fn draw(results: &Results<Entry, Done>, a: &Entry) -> Option<splat::ownership::ResultOrder> {
-//!     results.get(a).map(|shown| shown.order())
+//! results.record(Done { entry: a.clone(), words: "Links now say “Ash Wolf”.".into() });
+//! // The twin of each case below: a draw reads, and the footer line binds words and order.
+//! fn draw(results: &Results<Entry, Done>, a: &Entry) -> Option<splat::ownership::FooterResult> {
+//!     results.get(a).map(|shown| shown.footer(|done| done.words.clone()))
 //! }
 //! assert!(draw(&results, &a).is_some());
 //! let undone = results.undo(&a, |_| Ok::<(), String>(()));
 //! assert!(matches!(undone, Some(Ok(_))));
+//! ```
+//!
+//! The footer takes the view, and maps the stored value to its words and its drawing:
+//!
+//! ```no_run
+//! # use splat::ownership::{DiskChanged, Ends, Footer, Kept, Owner, OwnerChanged, Press, Results};
+//! # #[derive(Clone, PartialEq, Eq)] struct Entry { id: u32, root: String }
+//! # impl Owner for Entry { type Scope = str; fn scope(&self) -> &str { &self.root } }
+//! # struct Done { entry: Entry, words: String }
+//! # impl Kept for Done { type Owner = Entry; const ENDS: Ends = Ends { owner_changed: OwnerChanged::Ends, disk_changed: DiskChanged::Checked, press: Press::Undo }; fn owner(&self) -> Entry { self.entry.clone() } }
+//! fn add<'a>(footer: &mut Footer<'a>, results: &'a Results<Entry, Done>, a: &Entry) {
+//!     if let Some(shown) = results.get(a) {
+//!         footer.kept(shown, true, |done| done.words.as_str().into(), |done, ui| {
+//!             ui.label(done.words.as_str());
+//!         });
+//!     }
+//! }
 //! ```
 //!
 //! A draw gets `&Results`, so it cannot record a result or issue its order:
@@ -61,24 +84,40 @@
 //! # use splat::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
 //! # #[derive(Clone, PartialEq, Eq)] struct Entry { id: u32, root: String }
 //! # impl Owner for Entry { type Scope = str; fn scope(&self) -> &str { &self.root } }
-//! # struct Done { entry: Entry }
+//! # struct Done { entry: Entry, words: String }
 //! # impl Kept for Done { type Owner = Entry; const ENDS: Ends = Ends { owner_changed: OwnerChanged::Ends, disk_changed: DiskChanged::Checked, press: Press::Undo }; fn owner(&self) -> Entry { self.entry.clone() } }
 //! fn draw(results: &Results<Entry, Done>, a: &Entry) {
-//!     results.record(Done { entry: a.clone() }); // <- issues an order while drawing
+//!     results.record(Done { entry: a.clone(), words: String::new() }); // <- issues an order while drawing
 //! }
 //! ```
 //!
-//! An order is never made by hand; it comes from the store's entry:
+//! Orders kept by kind (the fault of PR 298): a caller cannot take a bare order out of the
+//! store, so it cannot keep one per kind and give A's result B's order:
+//!
+//! ```compile_fail
+//! # use splat::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
+//! # #[derive(Clone, PartialEq, Eq)] struct Entry { id: u32, root: String }
+//! # impl Owner for Entry { type Scope = str; fn scope(&self) -> &str { &self.root } }
+//! # struct Done { entry: Entry, words: String }
+//! # impl Kept for Done { type Owner = Entry; const ENDS: Ends = Ends { owner_changed: OwnerChanged::Ends, disk_changed: DiskChanged::Checked, press: Press::Undo }; fn owner(&self) -> Entry { self.entry.clone() } }
+//! # let a = Entry { id: 1, root: "campaign".into() };
+//! # let mut results: Results<Entry, Done> = Results::new();
+//! # results.record(Done { entry: a.clone(), words: "A.".into() });
+//! let mut orders = std::collections::HashMap::new();
+//! orders.insert("links", results.get(&a).unwrap().order()); // <- an order kept by kind
+//! ```
+//!
+//! An order is never made by hand:
 //!
 //! ```compile_fail
 //! let order = splat::ownership::ResultOrder(7); // <- an order from a number
 //! ```
 //!
-//! A footer item's order and value come from the store only:
+//! A footer line's words and order come from one stored result:
 //!
 //! ```compile_fail
-//! # use splat::ownership::{ResultOrder, Shown};
-//! let shown = Shown { order: ResultOrder::default(), value: &"Links now say “Ash Wolf”." };
+//! # use splat::ownership::{FooterResult, ResultOrder};
+//! let line = FooterResult { order: ResultOrder::default(), words: String::from("B.") }; // <-
 //! ```
 //!
 //! There is no way to take an entry out except its end events and its press, so a failed Undo
@@ -88,7 +127,7 @@
 //! # use splat::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
 //! # #[derive(Clone, PartialEq, Eq)] struct Entry { id: u32, root: String }
 //! # impl Owner for Entry { type Scope = str; fn scope(&self) -> &str { &self.root } }
-//! # struct Done { entry: Entry }
+//! # struct Done { entry: Entry, words: String }
 //! # impl Kept for Done { type Owner = Entry; const ENDS: Ends = Ends { owner_changed: OwnerChanged::Ends, disk_changed: DiskChanged::Checked, press: Press::Undo }; fn owner(&self) -> Entry { self.entry.clone() } }
 //! # let a = Entry { id: 1, root: "campaign".into() };
 //! # let mut results: Results<Entry, Done> = Results::new();
@@ -101,7 +140,7 @@
 //! # use splat::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
 //! # #[derive(Clone, PartialEq, Eq)] struct Entry { id: u32, root: String }
 //! # impl Owner for Entry { type Scope = str; fn scope(&self) -> &str { &self.root } }
-//! # struct Done { entry: Entry }
+//! # struct Done { entry: Entry, words: String }
 //! # impl Kept for Done { type Owner = Entry; const ENDS: Ends = Ends { owner_changed: OwnerChanged::Ends, disk_changed: DiskChanged::Checked, press: Press::Undo }; fn owner(&self) -> Entry { self.entry.clone() } }
 //! # let a = Entry { id: 1, root: "campaign".into() };
 //! # let mut results: Results<Entry, Done> = Results::new();
@@ -130,10 +169,12 @@
 //!     // <- `press` left out
 //! };
 //! ```
-use super::components::ResultOrder;
+use super::components::{Footer, ResultOrder};
+use eframe::egui::Ui;
 
-/// The object a kept result belongs to: an entry in its root, a note, a run step. Two results of
-/// one kind with equal owners are one result: the newer one ends the older.
+/// The object a kept result belongs to: an entry in its root, a note, a run step. The store keys
+/// every lookup and every change by the owner's scope and the owner together, so an owner whose
+/// `PartialEq` compares its id only still never meets another scope's result.
 pub trait Owner: Clone + Eq {
     /// The campaign or content root the owner lives in. A result shows only in its own scope, so
     /// a campaign switch hides it and switching back shows it again.
@@ -188,20 +229,99 @@ pub enum Press {
     Nothing,
 }
 
-/// A kept result as the footer shows it: its value and the order its action issued. Only the
-/// store makes one.
+/// A kept result as the store holds it: its value and the order its action issued. Only the
+/// store makes one, and its order leaves it only inside a [`FooterResult`], with its own words.
 pub struct Shown<'a, T> {
     order: ResultOrder,
     value: &'a T,
 }
 
 impl<'a, T> Shown<'a, T> {
-    /// The order its action issued, for `Footer::result`.
-    pub fn order(&self) -> ResultOrder {
+    /// The order its action issued, for tests only. A caller gives the footer a [`FooterResult`],
+    /// so it cannot keep an order apart from its result.
+    #[cfg(test)]
+    pub(crate) fn order(&self) -> ResultOrder {
         self.order
     }
     pub fn value(&self) -> &'a T {
         self.value
+    }
+    /// This result's footer line: its words, made from its own value, with its own order.
+    pub fn footer(&self, words: impl FnOnce(&T) -> String) -> FooterResult {
+        FooterResult {
+            order: self.order,
+            words: words(self.value),
+        }
+    }
+}
+
+/// One kept result's words and its order, bound together. It is not `Clone`, and its order is
+/// private: [`Footer::kept_line`] is the only way to give it to the footer.
+pub struct FooterResult {
+    order: ResultOrder,
+    words: String,
+}
+
+impl FooterResult {
+    pub fn words(&self) -> &str {
+        &self.words
+    }
+}
+
+/// The footer's entries for kept results. Each takes a view that only a [`Results`] store makes
+/// and maps the stored value to what is drawn; none hands the order to the caller.
+///
+/// - [`Footer::kept`] takes the [`Shown`] view while the store is borrowed: `words` and `draw`
+///   get the value.
+/// - [`Footer::kept_line`] takes an owned [`FooterResult`] (made by [`Shown::footer`]), for a
+///   caller that draws after the store's borrow ends.
+///
+/// A typed outcome (package M) adds its entry beside these in `design`, as
+/// `footer.kept_outcome(shown, |value| -> Outcome)`, through [`Footer::add_kept`].
+impl<'a> Footer<'a> {
+    /// A kept result from a [`Results`] store, with the order its action issued. `words` gives
+    /// its words (the footer's order and accessible name), and `draw` draws it; both get the
+    /// stored value. `has_undo` is true while its Undo is live.
+    pub fn kept<T>(
+        &mut self,
+        shown: Shown<'a, T>,
+        has_undo: bool,
+        words: impl FnOnce(&'a T) -> std::borrow::Cow<'a, str>,
+        draw: impl FnOnce(&'a T, &mut Ui) + 'a,
+    ) -> &mut Self {
+        let value = shown.value;
+        self.add_kept(shown.order, words(value), has_undo, move |ui| {
+            draw(value, ui)
+        })
+    }
+
+    /// A kept result's owned footer line ([`Shown::footer`]): its words, with the order its
+    /// action issued. `draw` gets the line's own words.
+    pub fn kept_line(
+        &mut self,
+        line: &'a FooterResult,
+        has_undo: bool,
+        draw: impl FnOnce(&'a str, &mut Ui) + 'a,
+    ) -> &mut Self {
+        self.add_kept(line.order, line.words.as_str(), has_undo, move |ui| {
+            draw(&line.words, ui)
+        })
+    }
+
+    /// The one way from a stored order to the footer, for the kept entries in `design` (these,
+    /// and a typed outcome's).
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the one caller of `Footer::result` that keeps an order with its result"
+    )]
+    pub(in crate::design) fn add_kept(
+        &mut self,
+        order: ResultOrder,
+        words: impl Into<std::borrow::Cow<'a, str>>,
+        has_undo: bool,
+        draw: impl FnOnce(&mut Ui) + 'a,
+    ) -> &mut Self {
+        self.result(order, words, has_undo, draw)
     }
 }
 
@@ -209,6 +329,14 @@ struct Entry<O, T> {
     owner: O,
     order: ResultOrder,
     value: T,
+}
+
+impl<O: Owner, T> Entry<O, T> {
+    /// The same owner in the same scope. The scope is compared by the store, not left to the
+    /// owner's `PartialEq`.
+    fn is(&self, owner: &O) -> bool {
+        self.owner.scope() == owner.scope() && self.owner == *owner
+    }
 }
 
 /// Every kept result of one kind, each with its owner and its order. See the module comment.
@@ -234,12 +362,15 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
     /// Keep the result of an action done now. It gets a new order, newer than every result
     /// before it, and it ends its owner's earlier result of this kind. Call it where the action
     /// is done; Undo and then the same action again is a new action with a new order.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the store is where an order is issued"
+    )]
     pub fn record(&mut self, value: T) {
         let owner = value.owner();
-        self.entries.retain(|entry| entry.owner != owner);
+        self.entries.retain(|entry| !entry.is(&owner));
         self.entries.push(Entry {
             owner,
-            // The one place outside `components` that issues an order (see `staged`).
             order: ResultOrder::issue(),
             value,
         });
@@ -249,7 +380,7 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
     pub fn get(&self, owner: &O) -> Option<Shown<'_, T>> {
         self.entries
             .iter()
-            .find(|entry| entry.owner == *owner)
+            .find(|entry| entry.is(owner))
             .map(Self::shown)
     }
 
@@ -270,6 +401,10 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
         }
     }
 
+    fn position(&self, owner: &O) -> Option<usize> {
+        self.entries.iter().position(|entry| entry.is(owner))
+    }
+
     /// Undo the owner's result with `run`. The result leaves the store only when `run` returns
     /// `Ok`; then it is returned with `run`'s value. On `Err` it stays, with its order, so its
     /// Undo can be pressed again. `None`: the owner has no result.
@@ -284,10 +419,7 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
                 "this kind has no Undo: its press is not `Press::Undo`"
             )
         };
-        let at = self
-            .entries
-            .iter()
-            .position(|entry| entry.owner == *owner)?;
+        let at = self.position(owner)?;
         Some(run(&self.entries[at].value).map(|done| (self.entries.remove(at).value, done)))
     }
 
@@ -299,17 +431,14 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
                 "this kind is not used up by its press: its press is not `Press::Use`"
             )
         };
-        let at = self
-            .entries
-            .iter()
-            .position(|entry| entry.owner == *owner)?;
+        let at = self.position(owner)?;
         Some(self.entries.remove(at).value)
     }
 
     /// The owner changed by its own later action (a saved edit, a rename, a removal).
     pub fn owner_changed(&mut self, owner: &O) {
         match T::ENDS.owner_changed {
-            OwnerChanged::Ends => self.entries.retain(|entry| entry.owner != *owner),
+            OwnerChanged::Ends => self.entries.retain(|entry| !entry.is(owner)),
             OwnerChanged::Stays => {}
         }
     }
@@ -329,9 +458,41 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
     }
 }
 
-/// Calls of parts that a shared part replaces, by file. A count can only go down: a new call
-/// fails, and a file with fewer calls than its count asks to lower the count. When a pattern's
-/// counts are all 0, its old part becomes private and the compiler has the last word.
+/// Files that may still call `ResultOrder::issue`, `Footer::result` or `save_row_state`.
+/// Clippy's `disallowed-methods` (`clippy.toml`) fails `check` on any call of them, by any
+/// name (an alias, a function item); each file listed here has one
+/// `#![allow(clippy::disallowed_methods, reason = "staged: …")]`. The list can only shrink.
+/// When it is empty, those parts become private.
+#[cfg(test)]
+pub(crate) const STAGED_ALLOWS: &[&str] = &[
+    "src/campaign_content.rs",
+    "src/campaigns.rs",
+    "src/combat_sync.rs",
+    "src/design/components.rs",
+    "src/design/gallery.rs",
+    "src/dndbeyond.rs",
+    "src/encounter_run.rs",
+    "src/encounter_run/view.rs",
+    "src/encounters.rs",
+    "src/encounters/groups.rs",
+    "src/library.rs",
+    "src/party.rs",
+    "src/party_sync.rs",
+    "src/sessions/carry.rs",
+    "src/sessions/page.rs",
+    "src/sessions/plan.rs",
+    "src/timeline.rs",
+    "src/timeline/page.rs",
+    "src/trackers/history.rs",
+    "src/world.rs",
+    "src/world/edit.rs",
+    "src/world/page.rs",
+    "src/world/repair.rs",
+];
+
+/// Calls of parts that a shared part replaces, by file, counted in the source text. They are a
+/// second net inside the files of [`STAGED_ALLOWS`], whose file-wide allow would let a new call
+/// in: a count can only go down. A file with fewer calls than its count asks to lower the count.
 ///
 /// - `ResultOrder::issue(`: only [`Results::record`] issues an order. Elsewhere, an order
 ///   issued by hand can be keyed by kind, or issued while drawing (reviews of PR 298).
@@ -539,6 +700,107 @@ mod tests {
         assert_eq!(results.get(&A).unwrap().value().words, "A.");
         assert_eq!(results.get(&OTHER).unwrap().value().words, "Other.");
         assert!(words(&results, "Riverhold").is_empty());
+
+        // Review of PR 301: an owner whose `PartialEq` compares its id only. Campaign B's
+        // owner has A's id; B cannot read, replace, undo or clear A.
+        #[derive(Clone, Debug)]
+        struct ById {
+            id: u32,
+            campaign: &'static str,
+        }
+        impl PartialEq for ById {
+            fn eq(&self, other: &Self) -> bool {
+                self.id == other.id
+            }
+        }
+        impl Eq for ById {}
+        impl Owner for ById {
+            type Scope = str;
+            fn scope(&self) -> &str {
+                self.campaign
+            }
+        }
+        struct Linked(ById, &'static str);
+        impl Kept for Linked {
+            type Owner = ById;
+            const ENDS: Ends = Ends {
+                owner_changed: OwnerChanged::Ends,
+                disk_changed: DiskChanged::Checked,
+                press: Press::Undo,
+            };
+            fn owner(&self) -> ById {
+                self.0.clone()
+            }
+        }
+        let (a, b) = (
+            ById {
+                id: 7,
+                campaign: "Tidewater",
+            },
+            ById {
+                id: 7,
+                campaign: "Ashfall",
+            },
+        );
+        let mut links = Results::new();
+        links.record(Linked(a.clone(), "A."));
+        let a_order = links.get(&a).unwrap().order();
+        assert!(links.get(&b).is_none(), "B reads A");
+        assert!(links.undo(&b, |_| Ok::<(), ()>(())).is_none(), "B undoes A");
+        links.owner_changed(&b);
+        assert!(links.get(&a).is_some(), "B's saved edit ends A");
+        links.record(Linked(b.clone(), "B."));
+        let a_shown = links.get(&a).unwrap();
+        assert_eq!(
+            (a_shown.value().1, a_shown.order()),
+            ("A.", a_order),
+            "B's result replaces A's"
+        );
+        assert_eq!(links.get(&b).unwrap().value().1, "B.");
+        assert!(matches!(links.undo(&b, |_| Ok::<(), ()>(())), Some(Ok(_))));
+        assert_eq!(links.get(&a).unwrap().value().1, "A.", "B's Undo takes A");
+    }
+
+    /// The footer takes each kept result with the order its own action issued: added oldest
+    /// first, the newer one still leads; then the older one again, and it leads. `words` and
+    /// `draw` get the stored value.
+    #[test]
+    fn the_footer_takes_each_kept_result_with_its_own_order() {
+        use egui_kittest::kittest::Queryable;
+        let mut results = Results::new();
+        results.record(done(A, "Links now say “Ash Wolf”."));
+        results.record(done(B, "Links now say “Veilglass Lantern”."));
+        let tops = |results: &Results<Note, Done>| {
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(eframe::egui::vec2(600.0, 300.0))
+                .build_ui(|ui| {
+                    let mut footer = Footer::new("kept_test", 500.0);
+                    for owner in [&A, &B] {
+                        let shown = results.get(owner).unwrap();
+                        footer.kept(
+                            shown,
+                            true,
+                            |done| done.words.into(),
+                            |done, ui| {
+                                ui.label(done.words);
+                            },
+                        );
+                    }
+                    let _body_end = footer.show(ui);
+                });
+            crate::design::theme::install(&harness.ctx);
+            harness.run();
+            let top = |words: &str| harness.get_by_label(words).rect().top();
+            (
+                top("Links now say “Ash Wolf”."),
+                top("Links now say “Veilglass Lantern”."),
+            )
+        };
+        let (a, b) = tops(&results);
+        assert!(b < a, "B is newer, so it leads: A {a}, B {b}");
+        results.record(done(A, "Links now say “Ash Wolf”."));
+        let (a, b) = tops(&results);
+        assert!(a < b, "A again is newest: A {a}, B {b}");
     }
 
     #[test]
@@ -600,6 +862,88 @@ mod tests {
                 }
             }
         }
+        assert!(faults.is_empty(), "{}", faults.join("\n"));
+    }
+
+    /// The files with a staged allow are exactly `STAGED_ALLOWS`: a new allow fails, and a
+    /// removed one asks to shorten the list.
+    #[test]
+    fn staged_allows_only_shrink() {
+        let mut files = Vec::new();
+        collect(std::path::Path::new("src"), &mut files);
+        let marked = |text: &str| {
+            text.contains("#![allow(\n    clippy::disallowed_methods,\n    reason = \"staged:")
+        };
+        let mut faults = Vec::new();
+        for (path, text) in &files {
+            let listed = STAGED_ALLOWS.contains(&path.as_str());
+            if marked(text) && !listed {
+                faults.push(format!(
+                    "{path}: a new staged allow. Use `design::Results`, `Footer::kept` and `design::save_row` instead."
+                ));
+            } else if !marked(text) && listed {
+                faults.push(format!(
+                    "{path}: no staged allow is left. Remove it from `design::results::STAGED_ALLOWS`."
+                ));
+            }
+        }
+        assert!(faults.is_empty(), "{}", faults.join("\n"));
+    }
+
+    /// The one escape from `&Results` and `Revised`: interior mutability changes them through
+    /// `&`. A store or a revised value behind one, or one inside a revised value, fails here.
+    #[test]
+    fn results_are_never_behind_interior_mutability() {
+        let mut files = Vec::new();
+        collect(std::path::Path::new("src"), &mut files);
+        let cells = ["Cell<", "RefCell<", "Mutex<", "RwLock<", "OnceCell<"];
+        let mut faults = Vec::new();
+        for (path, text) in &files {
+            // This test names the patterns.
+            if path == "src/design/results.rs" {
+                continue;
+            }
+            let compact: String = text.split_whitespace().collect();
+            for cell in cells {
+                for held in ["Results<", "Revised<"] {
+                    for prefix in [
+                        "",
+                        "design::",
+                        "results::",
+                        "memo::",
+                        "design::results::",
+                        "design::memo::",
+                        "crate::design::",
+                        "crate::design::results::",
+                        "crate::design::memo::",
+                    ] {
+                        let outside = format!("{cell}{prefix}{held}");
+                        let inside = format!("{prefix}Revised<{cell}");
+                        for pattern in [outside, inside] {
+                            if compact.contains(&pattern) {
+                                faults.push(format!(
+                                    "{path}: `{pattern}` changes a kept result or a revised value through `&`. Keep it in a plain field."
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+            for path_cell in [
+                "std::cell::Cell<",
+                "std::cell::RefCell<",
+                "std::cell::OnceCell<",
+                "std::sync::Mutex<",
+                "std::sync::RwLock<",
+            ] {
+                if compact.contains(&format!("Revised<{path_cell}")) {
+                    faults.push(format!(
+                        "{path}: `Revised<{path_cell}…>` changes with no new revision."
+                    ));
+                }
+            }
+        }
+        faults.dedup();
         assert!(faults.is_empty(), "{}", faults.join("\n"));
     }
 

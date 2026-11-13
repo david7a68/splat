@@ -1,4 +1,8 @@
 //! Campaign encounter templates. Runtime state is deliberately separate.
+#![allow(
+    clippy::disallowed_methods,
+    reason = "staged: this file still calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+)]
 #[cfg(test)]
 use crate::content_workspace::patch_fields;
 use crate::{

@@ -1,5 +1,9 @@
 //! The Session page's plan: its rows (planned, open and played fights, groups and events), the
 //! Add strip, a row's menu and its opened detail.
+#![allow(
+    clippy::disallowed_methods,
+    reason = "staged: this file still calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+)]
 use super::{Added, Plan, Sessions, plan_summary, wrapped_words};
 use crate::{
     design::{self, Action, Density, Status, Tone, Type, colors, icons},

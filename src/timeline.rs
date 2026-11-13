@@ -2,6 +2,10 @@
 //! in story order. It stands apart from session notes. A note refers to an event by its
 //! stable ID, and the same link works in Obsidian, because each event is a block in
 //! `Timeline.md`. Version 2 keeps the events in the body.
+#![allow(
+    clippy::disallowed_methods,
+    reason = "staged: this file still calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+)]
 pub mod checks;
 pub(crate) mod formats;
 pub mod page;

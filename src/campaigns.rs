@@ -1,3 +1,7 @@
+#![allow(
+    clippy::disallowed_methods,
+    reason = "staged: this file still calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+)]
 use crate::{
     content_workspace::CampaignDocument,
     design::{self, Action, Density, Status, Tone, Type, colors, icons},

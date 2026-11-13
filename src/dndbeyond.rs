@@ -1,3 +1,7 @@
+#![allow(
+    clippy::disallowed_methods,
+    reason = "staged: this file still calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+)]
 use crate::{auth::Session, campaigns::Campaigns};
 use eframe::egui;
 use reqwest::{blocking::Client, redirect::Policy};

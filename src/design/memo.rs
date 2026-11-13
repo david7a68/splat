@@ -1,14 +1,26 @@
 //! Per-change caches: a value worked out once per change of its inputs, never per frame.
 //!
-//! A [`Revision`] names one version of a value. Only a real change makes one: a new
-//! [`Revised`] value, or its [`Revised::edit`], [`Revised::set`] or a [`Revised::set_if_changed`]
-//! that finds a change. Every revision is new in this run of the app, so the revisions of two
-//! values never meet. A [`Memo`] takes only revisions as its key (one, or a tuple of them), so a
-//! pointer address, a frame count or an input epoch cannot be a key: the cache type does not
-//! accept them.
+//! A [`Revision`] names one version of a value. A new [`Revised`] value gets one, and after
+//! that a revision advances only when a change says it changed: [`Revised::revise`] advances it
+//! only when its closure returns [`Changed::Yes`], and [`Revised::set`] only when the new value
+//! differs. A call made on every frame with no change keeps the revision. Every revision is new
+//! in this run of the app, so the revisions of two values never meet. A [`Memo`] takes only
+//! revisions as its key (one, or a tuple of them), so a pointer address, a frame count or an
+//! input epoch cannot be a key: the cache type does not accept them.
+//!
+//! **Caller limits that the types cannot hold** (stable Rust has no way to forbid them):
+//!
+//! - Interior mutability inside a `Revised` (a `Cell`, `RefCell`, `Mutex` or `RwLock`) changes
+//!   the value with no new revision. The source scan `results_are_never_behind_interior_mutability`
+//!   (`design::results`) fails on it.
+//! - `Revised::new` made again on every frame (for example around a frame counter) gives a new
+//!   revision every frame. Make a `Revised` where its value is made, and keep it; a reviewer
+//!   checks this.
+//! - `revise` trusts its closure's [`Changed`]. For an egui field, use
+//!   `Changed::from(response.changed())`.
 //!
 //! Caller duties left: keep each input that the cached work reads in a [`Revised`] (or take the
-//! revision of the [`Revised`] that holds it), and change it only through `Revised`.
+//! revision of the [`Revised`] that holds it).
 //!
 //! # What does not compile
 //!
@@ -16,11 +28,14 @@
 //! check a `compile_fail` test's error code).
 //!
 //! ```
-//! use splat::ownership::{Memo, Revised, Revision};
+//! use splat::ownership::{Changed, Memo, Revised, Revision};
 //! let mut draft = Revised::new(String::from("# Cinder Wolf"));
 //! let mut lines: Memo<Revision, usize> = Memo::new();
 //! assert_eq!(*lines.get_or(draft.revision(), || draft.lines().count()), 1);
-//! draft.edit().push_str("\nSize: Medium");
+//! draft.revise(|text| {
+//!     text.push_str("\nSize: Medium");
+//!     Changed::Yes
+//! });
 //! assert_eq!(*lines.get_or(draft.revision(), || draft.lines().count()), 2);
 //! let mut both: Memo<(Revision, Revision), bool> = Memo::new();
 //! let index = Revised::new(vec!["Cinder Wolf"]);
@@ -59,15 +74,43 @@
 //! let revision = Revision::default(); // <- no change made it
 //! ```
 //!
-//! A `Revised` value changes only through `edit`, `set` or `set_if_changed`, each of which
-//! gives a new revision:
+//! A `Revised` value changes only through `revise` or `set`. There is no bare `&mut` to it:
 //!
 //! ```compile_fail
 //! # use splat::ownership::Revised;
 //! let mut draft = Revised::new(String::from("# Cinder Wolf"));
 //! draft.push_str("\nSize: Medium"); // <- a change with no new revision
 //! ```
+//!
+//! ```compile_fail
+//! # use splat::ownership::Revised;
+//! let mut draft = Revised::new(String::from("# Cinder Wolf"));
+//! draft.edit().push_str("\nSize: Medium"); // <- a new revision whether or not it changed
+//! ```
+//!
+//! A change says whether it changed:
+//!
+//! ```compile_fail
+//! # use splat::ownership::Revised;
+//! let mut draft = Revised::new(String::from("# Cinder Wolf"));
+//! draft.revise(|text| text.push_str("\nSize: Medium")); // <- no `Changed`
+//! ```
 use std::num::NonZeroU64;
+
+/// Whether a draft or a revised value changed. Use it in place of a `bool`.
+#[must_use]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Changed {
+    No,
+    Yes,
+}
+
+impl From<bool> for Changed {
+    /// For a test that already answers the question, such as egui's `response.changed()`.
+    fn from(changed: bool) -> Self {
+        if changed { Self::Yes } else { Self::No }
+    }
+}
 
 /// One version of a value. See the module comment.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -100,27 +143,24 @@ impl<T> Revised<T> {
         self.revision
     }
 
-    /// Change the value: it gets a new revision now, whatever the change.
-    pub fn edit(&mut self) -> &mut T {
-        self.revision = Revision::next();
-        &mut self.value
+    /// Change the value with `change`, which says whether it changed. The revision advances
+    /// only on [`Changed::Yes`].
+    pub fn revise(&mut self, change: impl FnOnce(&mut T) -> Changed) {
+        if change(&mut self.value) == Changed::Yes {
+            self.revision = Revision::next();
+        }
     }
 
-    pub fn set(&mut self, value: T) {
-        *self.edit() = value;
-    }
-
-    /// Set the value, and give a new revision only when it differs. For small values (a file
-    /// stamp, a count): the comparison is as large as the value.
-    pub fn set_if_changed(&mut self, value: T) -> bool
+    /// Set the value. The revision advances only when it differs; the comparison is as large
+    /// as the value.
+    pub fn set(&mut self, value: T)
     where
         T: PartialEq,
     {
-        let changed = self.value != value;
-        if changed {
-            self.set(value);
+        if self.value != value {
+            self.value = value;
+            self.revision = Revision::next();
         }
-        changed
     }
 }
 
@@ -186,8 +226,9 @@ mod tests {
     use super::*;
     use std::cell::Cell;
 
-    /// The work runs once per change, and not for an unchanged read, a clone, or another value's
-    /// change. The counter is inside the work.
+    /// The work runs once per change, and not for an unchanged read, a clone, a change that
+    /// says it changed nothing, a `set` to the same value, or another value's change. The
+    /// counter is inside the work.
     #[test]
     fn a_memo_works_once_per_change() {
         let builds = Cell::new(0);
@@ -209,14 +250,26 @@ mod tests {
         let copy = draft.clone();
         assert_eq!(*memo.get_or(copy.revision(), || count(&copy)), 1);
         assert_eq!(builds.get(), 1, "unchanged reads and a clone do no work");
-        draft.edit().push_str("\nb");
+        // A revise on every frame that changes nothing (an egui field with no edit) keeps the
+        // revision (review of PR 301: a bare `edit` advanced it every frame).
+        let before = draft.revision();
+        for _ in 0..3 {
+            draft.revise(|_| Changed::from(false));
+            assert_eq!(*memo.get_or(draft.revision(), || count(&draft)), 1);
+        }
+        assert_eq!((draft.revision(), builds.get()), (before, 1));
+        draft.revise(|text| {
+            text.push_str("\nb");
+            Changed::Yes
+        });
+        assert_ne!(draft.revision(), before);
         assert_eq!(*memo.get_or(draft.revision(), || count(&draft)), 2);
         assert_eq!(builds.get(), 2);
-        // A set to the same value is no change.
+        // A set to the same value is no change; a different one is.
         let before = draft.revision();
-        assert!(!draft.set_if_changed(String::from("a\nb")));
+        draft.set(String::from("a\nb"));
         assert_eq!(draft.revision(), before);
-        assert!(draft.set_if_changed(String::from("a")));
+        draft.set(String::from("a"));
         assert_ne!(draft.revision(), before);
         assert_eq!(memo.get(before), Some(&2));
         assert_eq!(memo.get(draft.revision()), None);

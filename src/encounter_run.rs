@@ -1,4 +1,8 @@
 //! Manual DM controls. These record rulings; they do not execute creature rules.
+#![allow(
+    clippy::disallowed_methods,
+    reason = "staged: this file still calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+)]
 mod ad_hoc;
 mod dock;
 pub(crate) mod effect;

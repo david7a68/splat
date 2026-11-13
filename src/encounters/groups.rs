@@ -1,5 +1,9 @@
 //! Encounter groups: their notes, their editor, and the overrides form they share with the
 //! roster. A group is prepared here and added to a run from the run's own panel.
+#![allow(
+    clippy::disallowed_methods,
+    reason = "staged: this file still calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+)]
 use super::{
     ADD_PANE_MAX_WIDTH, Creature, Draft, EditorPane, Encounters, NAME_FIELD, ROSTER_MAX_WIDTH,
     Snapshot,

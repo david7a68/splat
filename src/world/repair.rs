@@ -1,4 +1,8 @@
 //! The same source editor for broken notes in Campaign and World.
+#![allow(
+    clippy::disallowed_methods,
+    reason = "staged: this file still calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+)]
 use super::file_fault::FileFault;
 use crate::{
     design::{self, colors},

@@ -1,4 +1,8 @@
 //! The World page: what is true in this world. One list of notes and entries, and the Reader.
+#![allow(
+    clippy::disallowed_methods,
+    reason = "staged: this file still calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+)]
 use super::{Nav, Reader, file_fault::FileFault};
 use crate::{
     design::{self, Type, colors, icons},

@@ -38,11 +38,18 @@ use super::{Action, Density, Status, colors, components::status, icons};
 use eframe::egui::{self, Ui};
 use std::borrow::Cow;
 
-/// Whether the draft differs from the saved text.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Changed {
-    No,
-    Yes,
+/// Whether the draft differs from the saved text: the same type as a revised value's change.
+pub use super::memo::Changed;
+
+/// Save's own refusal of the draft. One field holds its mode and its reason, so the last call
+/// decides both.
+#[derive(Clone, Debug)]
+enum Refusal<'a> {
+    None,
+    /// `Invalid`, changed or not.
+    Always(Cow<'a, str>),
+    /// `Invalid` only while the draft has changes (the encounter draft's exception).
+    WhenChanged(Cow<'a, str>),
 }
 
 /// Who owns the one accent-filled primary action in view.
@@ -120,9 +127,7 @@ pub const DISCARD_TO_SWITCH: &str = "Discard to switch campaign.";
 pub struct DraftState<'a> {
     changed: Changed,
     primary: Primary,
-    refused: Option<Cow<'a, str>>,
-    /// Refused only while it has changes (the encounter draft's exception).
-    refused_when_changed: bool,
+    refused: Refusal<'a>,
     invalid: bool,
     on_disk: bool,
     not_saved: bool,
@@ -135,8 +140,7 @@ impl<'a> DraftState<'a> {
         Self {
             changed,
             primary,
-            refused: None,
-            refused_when_changed: false,
+            refused: Refusal::None,
             invalid: false,
             on_disk: false,
             not_saved: false,
@@ -148,15 +152,14 @@ impl<'a> DraftState<'a> {
     /// Save's own check refuses the draft: `Invalid`, changed or not; Save waits with this reason
     /// and is not primary.
     pub fn refused(mut self, why: impl Into<Cow<'a, str>>) -> Self {
-        self.refused = Some(why.into());
+        self.refused = Refusal::Always(why.into());
         self
     }
 
     /// The encounter draft's exception to [`Self::refused`]: it says `Invalid` only while it has
     /// changes, because a clean one has nothing for Save to refuse, and its rows name the faults.
     pub fn refused_when_changed(mut self, why: impl Into<Cow<'a, str>>) -> Self {
-        self.refused = Some(why.into());
-        self.refused_when_changed = true;
+        self.refused = Refusal::WhenChanged(why.into());
         self
     }
 
@@ -197,9 +200,11 @@ impl<'a> DraftState<'a> {
     }
 
     fn refusal(&self) -> Option<&str> {
-        self.refused
-            .as_deref()
-            .filter(|_| !self.refused_when_changed || self.changed())
+        match &self.refused {
+            Refusal::None => None,
+            Refusal::Always(why) => Some(why.as_ref()),
+            Refusal::WhenChanged(why) => self.changed().then_some(why.as_ref()),
+        }
     }
 
     pub fn word(&self) -> SaveWord {
@@ -402,6 +407,16 @@ mod tests {
                 SaveWeight::Secondary,
                 None,
                 true,
+            ),
+            // Review of PR 301: the last refusal decides its mode too.
+            (
+                "when changed, then always",
+                no().refused_when_changed("Add a creature first.")
+                    .refused("Bad id."),
+                SaveWord::Invalid,
+                SaveWeight::Secondary,
+                Some(NO_CHANGES),
+                false,
             ),
             (
                 "refused on disk",
