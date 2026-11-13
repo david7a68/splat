@@ -9857,8 +9857,11 @@ mod tests {
                         // the rest of the count's whole target (`XL`), not the room of
                         // `· ⚠ time is up`.
                         let count = line.text().find("10").unwrap();
-                        let count = line.text()[..count].chars().count() + 2;
-                        let end = line.pos_from_cursor(egui::text::CCursor::new(count)).min.x;
+                        // The right of the `0` glyph: a cursor after it stands after any room
+                        // the line keeps there.
+                        let zero = line.text()[..count].chars().count() + 1;
+                        let end = line.pos_from_cursor(egui::text::CCursor::new(zero)).min.x
+                            + design::number_width(ui, "0", &font);
                         assert!(
                             at[0] - end <= joint + design::XL,
                             "iter-27-R-FK2: {end} to {} is more than {joint}",
