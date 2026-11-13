@@ -8,6 +8,7 @@ pub mod layout;
 pub mod memo;
 pub mod outcome;
 pub mod pane;
+pub mod popups;
 pub mod reader;
 pub mod results;
 pub mod save_row;
@@ -34,6 +35,9 @@ pub use layout::{
 // Wave 2 callers name the pane's escape through `design`.
 #[allow(unused_imports)]
 pub use pane::{Body, Fills, FillsReason, Placement};
+// Wave 2 callers name the popup parts through `design`, as they name the components.
+#[allow(unused_imports)]
+pub use popups::{Dropdown, DropdownResponse, Ghost, ImageSize, TipLine, drag_source, rich_tip};
 pub use results::Results;
 pub use save_row::{DraftState, save_row};
 pub use tokens::*;

@@ -714,7 +714,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         ("src/world.rs", "stamp", &[Ban::Results]),
         // Package K: raw egui calls that a layout part replaces.
-        ("src/art.rs", "show_viewer", &[Ban::Layout(1)]),
+        ("src/art.rs", "show_viewer", &[Ban::Layout(2)]),
         (
             "src/campaign_content.rs",
             "packages_content",
@@ -1003,11 +1003,6 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         (
             "src/design/components.rs",
-            "image_viewer",
-            &[Ban::Layout(1)],
-        ),
-        (
-            "src/design/components.rs",
             "iter3_text_input_placeholder_uses_body_and_faint",
             &[Ban::Layout(1)],
         ),
@@ -1117,6 +1112,11 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "scrolled_content_is_clipped_by_its_own_area_and_not_one_it_passes_behind",
             &[Ban::Layout(2)],
         ),
+        // Package K2: the popup parts.
+        ("src/design/popups.rs", "show", &[Ban::Layout(1)]),
+        ("src/design/popups.rs", "rich_tip", &[Ban::Layout(2)]),
+        ("src/design/popups.rs", "drag_source", &[Ban::Layout(3)]),
+        ("src/design/popups.rs", "image_viewer", &[Ban::Layout(1)]),
     ]
 };
 

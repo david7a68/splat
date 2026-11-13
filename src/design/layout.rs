@@ -1650,6 +1650,12 @@ pub fn menu_popup(response: &Response) -> egui::Popup<'_> {
     egui::Popup::menu(response)
 }
 
+// The popup parts, public here so their doc tests can name them (`splat::layout::Dropdown`).
+pub use super::popups::{
+    Dropdown, DropdownResponse, Ghost, HasChoices, ImageSize, NoChoice, TIP_WIDTH, TipLine,
+    drag_source, fitted, image_viewer, rich_tip,
+};
+
 #[cfg(test)]
 pub(crate) mod bans;
 #[cfg(test)]

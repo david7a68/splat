@@ -3295,44 +3295,11 @@ fn dialog_width<R>(
         .inner
 }
 
-/// An image at full size, within the window. Returns true when the DM closes it, by a click
-/// or Escape.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
-)]
+/// An image at full size, within the window, its size not known. Returns true when the DM closes
+/// it, by a click or Escape. Use `design::popups::image_viewer` with an `ImageSize`: Clippy bans
+/// this one outside `src/design/`.
 pub fn image_viewer(ctx: &egui::Context, name: &str, uri: &str) -> bool {
-    let viewport = ctx.content_rect();
-    let response = egui::Modal::new(Id::new("image_viewer"))
-        .backdrop_color(Color32::from_black_alpha(200))
-        .frame(egui::Frame::new())
-        .show(ctx, |ui| {
-            let mut close = false;
-            ui.horizontal(|ui| {
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    close = Action::quiet("Close")
-                        .icon(icons::CLOSE)
-                        .key("Esc")
-                        .show(ui)
-                        .clicked();
-                });
-            });
-            let image = egui::Image::from_uri(uri)
-                .fit_to_original_size(1.0)
-                .max_size(
-                    viewport.size()
-                        - vec2(
-                            XXL * 2.0,
-                            XXL * 2.0 + Density::Scan.control() + Type::Small.line() + S,
-                        ),
-                )
-                .sense(Sense::click());
-            let response = ui.add(image).on_hover_text(name);
-            response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, name));
-            ui.label(Type::Small.rich(ui, name).color(colors().text));
-            close || response.clicked()
-        });
-    response.should_close() || response.inner
+    super::popups::image_viewer(ctx, name, uri, super::popups::ImageSize::Unknown)
 }
 
 /// The width of a panel beside a page: Lookup, or the run's side panel.
