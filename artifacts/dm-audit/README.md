@@ -316,7 +316,7 @@ the second bell; on Day 2, the prize day's notice done and Favor at 5.
 | Design step | The DM wants | Measured | Designed | Today |
 |---|---|---|---:|---:|
 | 1 | The party searches the last fight (`Roll 2 × gems`) | Do 1 = **1** | 1 | 1 |
-| 2 | Verori died here | Panel 1, Find 1, Do 5 = **7** | 5 | 5 |
+| 2 | Verori died here (`Change Status` in Lookup) | Panel 1, Find 1, Do 3 = **5** | 5 | 5 |
 | 3 | He gave the gate key away first | Panel 1, Do 3 = **4** | 4 | 5 |
 | 4 | Back to the evening | Nav 1 = **1**, T | 1, T | 1 |
 | 5 | Rewards for each of the three fights | Do 3 = **3** | 3 | no route |
@@ -324,11 +324,11 @@ the second bell; on Day 2, the prize day's notice done and Favor at 5.
 | 7 | Carry over what the last session left (the recap, two fights and a scene, one open thread) | Do 1 = **1** | 1 | by hand |
 | 8 | Three scenes | Do 4 = **4** | 4 | 4 |
 | 9 | Is each fight right for this party? | **0** | 0 to 2 | by hand |
-| — | Make the Gate Watch harder in the encounter editor | Nav 2, Find 3, Do 2 = **7**, T T | — | — |
+| — | Make the Gate Watch harder: the fight's menu, `Edit encounter`, search, `Add`, `Save encounter`, `Back to session` | Nav 2, Find 3, Do 2 = **7**, T T | — | — |
 | — | Prepare the road: a Travel row with its checks | Find 2, Do 4 = **6** | — | — |
 | 10 | Start the first fight | Nav 1 = **1**, T | 1, T | 1 |
-| | **Steps 1 to 10** | **25, 2 T** (Nav 2, Panel 2, Find 1, Do 20) | **23 to 25, 2 T** | **20**, with no route for 5, 7 and 9 |
-| | **The whole journey** | **38, 4 T** (Nav 4, Panel 2, Find 6, Do 26) | | |
+| | **Steps 1 to 10** | **23, 2 T** (Nav 2, Panel 2, Find 1, Do 18) | **23 to 25, 2 T** | **20**, with no route for 5, 7 and 9 |
+| | **The whole journey** | **36, 4 T** (Nav 4, Panel 2, Find 6, Do 24) | | |
 
 Last week's note holds what `Carry over` reads: prose under `What happened`, two fights and a scene not played,
 and two threads, one ticked. Checked on the saved files: `NPCs/Verori.md` holds `status: dead` and each Log line
@@ -343,12 +343,11 @@ Oni.
 
 | Journey and step | Measured | Designed | The acts, in order | Why |
 |---|---:|---:|---|---|
-| J6 step 2 | 7 | 5 | Ctrl+K, type `verori`, `Edit Verori`, click Status, select all, type `dead`, `Save changes` | Lookup's reader is compact and has no `Change` on Status (FINDINGS J6-2) |
 | J3 step 2 | 5 | not counted; the walk implies 4 | select the wolf, **Conditions**, click `Other effect` and type, Enter | A limit the design accepts (section 7: `Effect` by the pointer costs 5 with Lookup open); the tab takes Lookup's place (FINDINGS J3-1) |
 | J4 steps 3 and 13, a bell's rolls | 5 and 6 | 4 and 5 | a scroll, `Roll Rival Track` three times, the wandering roll (and `Done` at step 13) | App fault since pull request 285: after a press, the view holds the pressed action where it was, so the new Due row's first roll is below the view (FINDINGS J4-2) |
 | J4, the arena fight's start | 2 | 1 (no tracker act in the fight) | `Start fight`, Ctrl+T | A limit the design accepts: a side panel stays until the DM closes it (section 1.2), and trackers in a fight are behind Ctrl+T (section 7). FINDINGS J4-1 |
 
-J6 step 2 and J4's bells are the app faults above the design. The others are limits that section 1.2 or 7 states; their
+J4's bells are the one app fault above the design (J6 step 2 costs 5 since pull request 287). The others are limits that section 1.2 or 7 states; their
 cost stays here so that a later change can be weighed. J3 step 6 costs less than its walk (3 against 4,
 FINDINGS J3-3). The design's own arithmetic is right in all four walks (J2: 21; J3: 8 for steps 1 to 5 and 4
 for step 6; J4: 25; J6: 23 to 25), so the design document is not changed.

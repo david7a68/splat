@@ -6,7 +6,8 @@ it is below, and the script takes the route a DM would have to take, so that the
 changed in this pull request. The journeys were first played on `main` at `9d3e0677`, frozen after the
 merge of `main` at `bd7ff4b0` (pull request 280), frozen again after review round 1, cost the same after the
 merge of `main` at `19cec3d2` (pull request 282), and were frozen again after the merge of `main` at `53bb0156`
-(pull requests 284, 285 and 288), where J4 costs 2 more (J4-2).
+(pull requests 284, 285 and 288), where J4 costs 2 more (J4-2). The last merge, of `main` at `4d0c799b`
+(pull requests 286, 287, 290, 291 and 292), repaired J6-2 and J6-3; J4-2 stays.
 
 Each entry is one of three kinds:
 
@@ -46,17 +47,6 @@ Every outcome that a journey states is an assertion on the saved file, read afte
 - **Known limit kept:** the choice keeps one version of the lines both sides changed (section 7). The saved note
   holds the DM's line and Obsidian's first edit, and not Obsidian's second line (asserted).
 
-## J6-2. Lookup's reader of an NPC has no `Change` on Status (app fault against step 2)
-
-- **Journey and step:** J6 step 2 (Verori died here), at 1200x800 in the ended view, Lookup open.
-- **What I did:** Ctrl+K, typed `verori`; looked for **Change** on Status, as step 2 says.
-- **What I saw:** Lookup's reader is compact: it shows `NPC · alive · Campaign`, `Edit Verori`, `Add to Log` and
-  `Add to fight`, and no Status row with `Change` (`src/world.rs`, the rows are drawn only when the reader is not
-  compact). The status goes by `Edit Verori`, the Status field (click, select all, type) and `Save changes`.
-- **The driver's words:** `journey-j6: no visible node for control "Change Status".` The Edit route still
-  writes the status and the stamped Log line (asserted on `NPCs/Verori.md`).
-- **Route measured:** Edit: 7 against the design's 5 (2 more).
-
 ## J3-1. At 960x640 with Lookup open, an effect with a time goes by the Conditions tab (limit the design accepts)
 
 - **Journey and step:** J3 step 2 (pin `Poisoned 3 rounds` to the wolf), case D.
@@ -82,15 +72,6 @@ Every outcome that a journey states is an assertion on the saved file, read afte
   and `Add Old Guard, 1-2 seals to the initiative list` (2). After the fight, step 8's Ctrl+T, as the design
   says.
 
-## J6-3. The plan has no way into the encounter editor (not walked by the design)
-
-- **Journey and step:** J6, the fight whose difficulty word the DM reads and changes.
-- **What I saw:** the opened planned row's `Read encounter` opens the encounter in Lookup, a reader; the row's
-  menu has `Remove from tonight` only. The DM goes to **Encounters**, `Edit` beside the encounter, searches (the
-  search field has no focus, so click and type), `Add`, `Save encounter`, and **Session**: 7 acts and 2 page
-  transitions. The saved encounter holds the Oni, the row's word changes from `Low` to `Moderate`, and the
-  next run holds the Oni (asserted).
-
 ## J2-1, J6-1. After `Roll for encounters`, the focus was not in `How long` (gone on `main` `bd7ff4b0`)
 
 - **What I saw on `9d3e0677`:** with one marked table in the campaign, nothing had focus after `Roll for
@@ -98,6 +79,23 @@ Every outcome that a journey states is an assertion on the saved file, read afte
 - **Now:** after the merge of `main` at `bd7ff4b0` (pull requests 280 and 281), the focus is in `How long`, and
   both steps cost what the design says. The script keeps both routes, so `summary.tsv` says where the focus
   is, and G6 goes red if it moves again.
+
+## J6-2. Lookup's reader of an NPC had no `Change` on Status (repaired by 287)
+
+- **What I saw on `53bb0156`:** Lookup's reader was compact and had no Status row with `Change`; the status went
+  by `Edit Verori`, the Status field and `Save changes`: 7 against the design's 5.
+- **Now:** on `4d0c799b` (pull request 287), Lookup's reader has `Change Status`: Ctrl+K, `verori`, `Change
+  Status`, `dead`, Enter: 5, as the design says. It still writes the status and the stamped Log line (asserted).
+
+## J6-3. The plan had no way into the encounter editor (repaired by 291)
+
+- **What I saw on `53bb0156`:** the DM made a planned fight harder by **Encounters**, `Edit` beside it, and
+  **Session** back: 7 acts and 2 page transitions.
+- **Now:** on `4d0c799b` (pull request 291), a planned fight's menu has `Edit encounter`, with `Back to session`
+  in the editor. J6 takes it: the menu, `Edit encounter`, the search (click and type), `Add`, `Save encounter`,
+  `Back to session`: 7 acts and 2 page transitions still, because the menu costs the act that the Encounters
+  page saved. The design does not walk this task. The saved encounter, the row's changed word and the next run's
+  Oni are asserted.
 
 ## J2-2. The fight that a road check names was on the day after the journey ended (repaired by 284)
 
