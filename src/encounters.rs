@@ -5192,19 +5192,29 @@ impl Encounters {
             } else {
                 START_FIGHT
             };
-            let actions = Action::secondary("Save encounter").natural_width(ui)
+            // Each button is measured in its wider form, primary or secondary (the weight
+            // changes with the draft), and rounded up to the pixel: a button given exactly its
+            // natural width can lose its last letter to rounding.
+            let button = |word: &str| {
+                Action::primary(word)
+                    .natural_width(ui)
+                    .max(Action::secondary(word).natural_width(ui))
+                    .ceil()
+            };
+            let actions = button("Save encounter")
                 + gap
-                + Action::primary(start_word).natural_width(ui)
+                + button(start_word)
                 + if unfinished.is_some() {
                     Action::quiet(icons::EXPAND)
                         .density(Density::Read)
                         .natural_width(ui)
+                        .ceil()
                         + gap
                 } else {
                     0.0
                 }
                 + if has_run {
-                    design::number_width(ui, BLOCKED_BY_RUN, &Type::Small.font(ui))
+                    design::number_width(ui, BLOCKED_BY_RUN, &Type::Small.font(ui)).ceil()
                         + design::L
                         + gap
                 } else {

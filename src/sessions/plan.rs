@@ -4986,12 +4986,22 @@ mod tests {
                 .iter()
                 .filter(|glyph| !glyph.0.is_whitespace())
                 .collect();
-            let blanks: Vec<(f32, f32)> = (1..ink.len() - 1)
+            // The difficulty form's separators, from its `XP` on (iter-27-B); the summary's own
+            // separators before it are FI7's.
+            let from = (1..ink.len())
+                .find(|at| ink[*at - 1].0 == 'X' && ink[*at].0 == 'P')
+                .unwrap_or(ink.len());
+            let blanks: Vec<(f32, f32)> = (from.max(1)..ink.len() - 1)
                 .filter(|at| ink[*at].0 == '·')
                 .map(|at| (ink[at].1 - ink[at - 1].2, ink[at + 1].1 - ink[at].2))
                 .collect();
+            // A form with a word has a separator; a reason has none.
+            let rated = words
+                .split(" · XP ")
+                .nth(1)
+                .is_some_and(|rest| rest.starts_with(|c: char| c.is_ascii_digit()));
             assert!(
-                !blanks.is_empty()
+                (!rated || !blanks.is_empty())
                     && blanks
                         .iter()
                         .all(|(before, after)| (before - after).abs() <= 1.0 && *before >= 2.0),
