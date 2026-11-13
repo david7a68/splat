@@ -24,13 +24,13 @@ disallowed-methods = [
     # layout branch cannot drop its focus or its cursor (PR 297). These are `TextEdit`'s
     # constructors, its id setters, and the `Ui` helpers that make one.
     { path = "egui::TextEdit::singleline", reason = "use design::line_field, design::labelled_field or FieldId::single_line", allow-invalid = true },
-    { path = "egui::TextEdit::multiline", reason = "use FieldId::multi_line", allow-invalid = true },
+    { path = "egui::TextEdit::multiline", reason = "use FieldId::multi_line or FieldId::editor", allow-invalid = true },
     { path = "egui::TextEdit::id", reason = "a FieldId gives the field its id", allow-invalid = true },
     { path = "egui::TextEdit::id_salt", reason = "a FieldId gives the field its id", allow-invalid = true },
     { path = "egui::TextEdit::id_source", reason = "a FieldId gives the field its id", allow-invalid = true },
     { path = "egui::Ui::text_edit_singleline", reason = "use design::line_field with a FieldId", allow-invalid = true },
-    { path = "egui::Ui::text_edit_multiline", reason = "use FieldId::multi_line", allow-invalid = true },
-    { path = "egui::Ui::code_editor", reason = "use FieldId::multi_line", allow-invalid = true },
+    { path = "egui::Ui::text_edit_multiline", reason = "use FieldId::multi_line or FieldId::editor", allow-invalid = true },
+    { path = "egui::Ui::code_editor", reason = "use FieldId::multi_line or FieldId::editor", allow-invalid = true },
     { path = "egui::DragValue::new", reason = "a DragValue's text edit takes its id from its place; use design::stepper or design::number_field", allow-invalid = true },
     { path = "egui::DragValue::from_get_set", reason = "a DragValue's text edit takes its id from its place; use design::stepper or design::number_field", allow-invalid = true },
     { path = "egui::Slider::new", reason = "a Slider's value field takes its id from its place", allow-invalid = true },
@@ -41,7 +41,7 @@ disallowed-methods = [
     # Words and field ids are checked when the program compiles: build them with `word!` and
     # `field_id!`, which take a literal and check it in a `const` block.
     { path = "splat::design::layout::Word::checked", reason = "use word!(\"…\")", allow-invalid = true },
-    { path = "splat::design::layout::FieldId::checked", reason = "use field_id!(\"…\")", allow-invalid = true },
+    { path = "splat::design::layout::FieldName::checked", reason = "use field_id!(\"…\")", allow-invalid = true },
     # The image viewer says its size, known or not (package K2).
     { path = "splat::design::components::image_viewer", reason = "use design::popups::image_viewer with an ImageSize, known when the file's header gives it", allow-invalid = true },
     # Row keys that take any number or text: each use is a counted row a reviewer reads.

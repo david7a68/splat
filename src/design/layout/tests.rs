@@ -403,7 +403,7 @@ fn inline_create_moves_nothing_while_the_dm_types() {
             let _ = InlineCreate::new()
                 .field(
                     CreateField::new(
-                        crate::field_id!("test_create_name"),
+                        crate::field_id!("test_create_name").once(Once::Example),
                         "Campaign name",
                         &mut name,
                     )
@@ -411,7 +411,7 @@ fn inline_create_moves_nothing_while_the_dm_types() {
                 )
                 .field(
                     CreateField::new(
-                        crate::field_id!("test_create_folder"),
+                        crate::field_id!("test_create_folder").once(Once::Example),
                         "Folder",
                         &mut folder,
                     )
@@ -513,7 +513,7 @@ fn inline_create_moves_nothing_while_the_dm_types() {
 /// place does not keep it, which is the fault this part rules out.
 ///
 /// The stated limit: the types refuse an `egui::Id` and a bare text as a key, but a number read
-/// from the layout still compiles, `NAME.with(RowIndex::from_data(ui.next_auto_id().value() as
+/// from the layout still compiles, `NAME.of(RowIndex::from_data(ui.next_auto_id().value() as
 /// usize))`, and so does `TextKey::from_data(format!("{:?}", ui.id()))`. That a key comes from
 /// the row's data is the caller's duty. Clippy bans both constructors outside `src/design/`, so
 /// each use is a counted row of `STAGED_ALLOWS` (`Ban::RowKey`) that a review reads.
@@ -523,15 +523,15 @@ fn inline_create_moves_nothing_while_the_dm_types() {
     reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
 )]
 fn a_field_id_keeps_focus_across_a_layout_branch() {
-    const NAME: FieldId = crate::field_id!("test_branch_name");
+    const NAME: FieldName = crate::field_id!("test_branch_name");
     let ctx = context();
     let (mut first, mut second) = (String::from("Copper"), String::from("Salt"));
     let mut placed = None;
     let mut draw = |wide: bool, focus: bool, events: Vec<egui::Event>| {
         frame_with(&ctx, vec2(800.0, 400.0), events, |ui| {
             let mut add = |ui: &mut Ui| {
-                let _ = line_field(ui, NAME.with(RowIndex(0)), "First", &mut first, "", 200.0);
-                let kept = line_field(ui, NAME.with(RowIndex(1)), "Second", &mut second, "", 200.0);
+                let _ = line_field(ui, NAME.of(RowIndex(0)), "First", &mut first, "", 200.0);
+                let kept = line_field(ui, NAME.of(RowIndex(1)), "Second", &mut second, "", 200.0);
                 let mut other = String::new();
                 let by_place = ui.add(egui::TextEdit::singleline(&mut other));
                 if focus {
@@ -553,7 +553,7 @@ fn a_field_id_keeps_focus_across_a_layout_branch() {
             }
         });
     };
-    let second_id = NAME.with(RowIndex(1)).id();
+    let second_id = NAME.of(RowIndex(1)).named_id("Second");
     draw(true, true, Vec::new());
     draw(true, false, Vec::new());
     assert!(ctx.memory(|memory| memory.has_focus(second_id)));
@@ -575,7 +575,7 @@ fn a_field_id_keeps_focus_across_a_layout_branch() {
             ui.label("Narrow");
             let _ = line_field(
                 ui,
-                NAME.with(RowIndex(0)),
+                NAME.of(RowIndex(0)),
                 "First",
                 &mut String::new(),
                 "",
@@ -583,7 +583,7 @@ fn a_field_id_keeps_focus_across_a_layout_branch() {
             );
             let _ = line_field(
                 ui,
-                NAME.with(RowIndex(1)),
+                NAME.of(RowIndex(1)),
                 "Second",
                 &mut String::new(),
                 "",
@@ -597,6 +597,78 @@ fn a_field_id_keeps_focus_across_a_layout_branch() {
         placed, moved,
         "an id from the place changes with the branch"
     );
+
+    // K3, the guard: the caller left out the owner, so another object's text ("Brine") comes
+    // under the focused field's id. egui's Undo history there is the first object's ("Salt",
+    // then "Salty"); Ctrl+Z must not bring "Salt" into the other object.
+    let ctrl_z = || egui::Event::Key {
+        key: egui::Key::Z,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: egui::Modifiers::COMMAND,
+    };
+    let edit = |text: &mut String, events: Vec<egui::Event>| {
+        let mut rect = Rect::NOTHING;
+        frame_with(&ctx, vec2(800.0, 400.0), events, |ui| {
+            ui.vertical(|ui| {
+                ui.label("Narrow");
+                rect = line_field(ui, NAME.of(RowIndex(1)), "Second", text, "", 200.0).rect;
+            });
+        });
+        rect
+    };
+    let mut other = String::from("Brine");
+    edit(&mut other, Vec::new());
+    assert!(ctx.memory(|memory| memory.has_focus(second_id)));
+    edit(&mut other, vec![ctrl_z()]);
+    assert_eq!(other, "Brine", "k3-rebind: another object's text keeps its words");
+    // Must stay true: the field's own history still works after the guard dropped the old one.
+    edit(&mut other, vec![egui::Event::Text("s".into())]);
+    assert_eq!(other, "Brines");
+    edit(&mut other, vec![ctrl_z()]);
+    assert_eq!(other, "Brine", "k3-own: Ctrl+Z undoes the DM's own typing");
+
+    // Cost: a field with no focus hashes nothing, whatever its length.
+    ctx.memory_mut(|memory| memory.surrender_focus(second_id));
+    let mut long = "a long note ".repeat(2_000);
+    edit(&mut long, Vec::new());
+    let hashes = || super::BOUND_TEXT_HASHES.with(std::cell::Cell::get);
+    let before = hashes();
+    edit(&mut long, Vec::new());
+    edit(&mut long, Vec::new());
+    assert_eq!(hashes(), before, "k3-cost: no work for a field with no focus");
+
+    // Focus by a click, with a third object's text bound while the field had no focus: egui
+    // feeds the old history in the click's frame, so the guard also runs when focus comes.
+    let mut gull = String::from("Gull");
+    let at = edit(&mut gull, Vec::new()).center();
+    edit(
+        &mut gull,
+        vec![
+            egui::Event::PointerMoved(at),
+            egui::Event::PointerButton {
+                pos: at,
+                button: egui::PointerButton::Primary,
+                pressed: true,
+                modifiers: egui::Modifiers::NONE,
+            },
+        ],
+    );
+    edit(
+        &mut gull,
+        vec![egui::Event::PointerButton {
+            pos: at,
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: egui::Modifiers::NONE,
+        }],
+    );
+    assert!(ctx.memory(|memory| memory.has_focus(second_id)), "the click gives focus");
+    let focused = hashes();
+    edit(&mut gull, vec![ctrl_z()]);
+    assert_eq!(gull, "Gull", "k3-click: the clicked field gets no other object's history");
+    assert!(hashes() - focused <= 2, "k3-cost: at most two hashes a frame with focus");
 }
 
 /// Rung 4 for `FieldId`, through the gate's own `widget-id-clash` function: two live fields with
@@ -604,7 +676,7 @@ fn a_field_id_keeps_focus_across_a_layout_branch() {
 /// with its id, also inside the field's rect, where egui gives no warning. Two keys stay clean.
 #[test]
 fn the_gate_finds_two_live_widgets_with_one_id() {
-    const NAME: FieldId = crate::field_id!("test_clash_name");
+    const NAME: FieldName = crate::field_id!("test_clash_name");
     let ctx = context();
     ctx.options_mut(|options| options.warn_on_id_clash = true);
     let clashes = |case: usize| {
@@ -617,7 +689,7 @@ fn the_gate_finds_two_live_widgets_with_one_id() {
                 let field = |ui: &mut Ui, key: usize| {
                     line_field(
                         ui,
-                        NAME.with(RowIndex(key)),
+                        NAME.of(RowIndex(key)),
                         "A",
                         &mut String::new(),
                         "",
@@ -652,7 +724,7 @@ fn the_gate_finds_two_live_widgets_with_one_id() {
                     3 => {
                         field(ui, 0);
                         let rect = Rect::from_min_size(pos2(300.0, 300.0), vec2(40.0, 30.0));
-                        ui.interact(rect, NAME.with(RowIndex(0)).id(), Sense::click());
+                        ui.interact(rect, NAME.of(RowIndex(0)).named_id("A"), Sense::click());
                     }
                     // Two other widgets with one id at the right edge: only egui's warning finds
                     // them, and it runs past the pane's clip.
@@ -667,7 +739,7 @@ fn the_gate_finds_two_live_widgets_with_one_id() {
                     _ => {
                         let response = field(ui, 0);
                         let inside = response.rect.shrink(4.0);
-                        ui.interact(inside, NAME.with(RowIndex(0)).id(), Sense::click());
+                        ui.interact(inside, NAME.of(RowIndex(0)).named_id("A"), Sense::click());
                     }
                 }
             });
@@ -686,7 +758,7 @@ fn the_gate_finds_two_live_widgets_with_one_id() {
 #[test]
 fn a_search_field_always_draws_its_clear() {
     use egui_kittest::kittest::Queryable;
-    const SEARCH: FieldId = crate::field_id!("test_search");
+    const SEARCH: FieldId = crate::field_id!("test_search").once(Once::PageSearch);
     #[derive(Default)]
     struct State {
         query: String,
@@ -719,7 +791,7 @@ fn a_search_field_always_draws_its_clear() {
     h.run_steps(2);
     assert!(h.state().query.is_empty() && h.state().cleared == 1);
     assert!(
-        h.ctx.memory(|memory| memory.has_focus(SEARCH.id())),
+        h.ctx.memory(|memory| memory.has_focus(SEARCH.named_id("Search"))),
         "n10-focus: the field has its focus back"
     );
     assert!(h.query_by_label("Clear").is_none(), "n10-empty: no Clear");

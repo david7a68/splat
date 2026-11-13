@@ -198,14 +198,14 @@ pub fn components(ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         let id = egui::Id::new("gallery_side");
         let mut side = ui.data(|data| data.get_temp::<usize>(id)).unwrap_or(1);
-        let _ = super::Dropdown::new(crate::field_id!("gallery_side"), "Side")
+        let _ = super::Dropdown::new(crate::field_id!("gallery_side").once(super::Once::Example), "Side")
             .choice(0, "Allies")
             .choices([(1, "Enemies"), (2, "Neutral")])
             .width(160.0)
             .show(ui, &mut side);
         ui.data_mut(|data| data.insert_temp(id, side));
         let mut locked = 0;
-        let _ = super::Dropdown::new(crate::field_id!("gallery_side_locked"), "Locked side")
+        let _ = super::Dropdown::new(crate::field_id!("gallery_side_locked").once(super::Once::Example), "Locked side")
             .choice(0, "Allies")
             .width(160.0)
             .blocked(Some("Close the run first."))
@@ -253,7 +253,9 @@ pub fn components(ui: &mut egui::Ui) {
         });
         ui.vertical(|ui| {
             let mut query = "Wolf".to_owned();
-            let _ = crate::field_id!("gallery_search").search(
+            let _ = crate::field_id!("gallery_search")
+                .once(super::Once::Example)
+                .search(
                 ui,
                 "Search",
                 &mut query,

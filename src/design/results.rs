@@ -1405,6 +1405,7 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/design/gallery.rs", "markdown", &[Ban::Layout(1)]),
         ("src/design/gallery.rs", "show", &[Ban::Layout(1)]),
         ("src/design/layout.rs", "area", &[Ban::Layout(2)]),
+        ("src/design/layout.rs", "editor", &[Ban::Layout(1)]),
         (
             "src/design/layout.rs",
             "field_id! statement",
