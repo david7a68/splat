@@ -397,8 +397,8 @@ fn click_by_focus(d: &mut Driver<'_>, name: &str) {
 
 /// Round 26: the pane footer whose words hold `words`: the smallest named group that holds them.
 /// R3f X43, X44: a footer's button below a message starts at the message's words and is whole
-/// inside the footer. Its label is the whole name, or the name shortened after a whole word with
-/// `…` (the whole name is its hover and accessible name).
+/// inside the footer. Its label is the name shortened, if at all, by whole words (the whole name
+/// is its hover and accessible name).
 fn move_at_words(d: &mut Driver<'_>, words: &str, name: &str) {
     let text = d.painted_rect_in(words, egui::Rect::EVERYTHING);
     let footer = d
@@ -413,10 +413,13 @@ fn move_at_words(d: &mut Driver<'_>, words: &str, name: &str) {
         .as_ref()
         .map(|button| d.painted_in(button.rect))
         .unwrap_or_default();
-    let whole_words = label == name
-        || label.strip_suffix('…').is_some_and(|start| {
-            name.strip_prefix(start)
-                .is_some_and(|rest| rest.starts_with(' '))
+    // Each word of the label, less a closing `…`, is a whole word of the name, in its order: the
+    // label shortens by whole words wherever it shortens (main's form shortens the arrival).
+    let mut of_name = name.split(' ');
+    let whole_words = !label.is_empty()
+        && label.split(' ').all(|shown| {
+            let shown = shown.strip_suffix('…').unwrap_or(shown);
+            of_name.any(|word| word == shown)
         });
     d.observe(
         "r3f-X43-X44-move-at-words",
