@@ -14665,6 +14665,7 @@ pub mod session_recording {
         d.click("Start recording");
         d.expect("Stop recording");
         d.expect("Waiting for sound");
+        d.expect_moves("Start recording answers the consent question, so the question goes.");
         d.state("recording-starting", Sizes::Default);
         d.app_mut()
             .sessions
@@ -16105,6 +16106,10 @@ pub mod session_recording {
                 .count(),
             2
         );
+        d.expect_moves(
+            "Start recording answers the consent question, so the question goes, and the new \
+             recording takes the top row.",
+        );
         d.state_prepared("processing-with-no-run", Sizes::All, |d| {
             check_processing_action(d, "Process:", true);
             check_duplicate_sessions(d);
@@ -17154,6 +17159,8 @@ pub mod encounter_groups {
         d.click(&add_group(GROUP_RIVALS));
         d.expect("placed after");
         let before = current_participant(d);
+        // The point of Move before is that the tied rows change places.
+        d.expect_moves("Move before puts the tied arrival above its twin.");
         d.click("Move Rival Team (Rival Captain 2) before Rival Team");
         d.at_size(DEFAULT, |d| {
             d.expect("Rival Team (Rival Captain 2) moved before Rival Team at\u{a0}14")

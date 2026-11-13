@@ -10607,6 +10607,7 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
         "Before the choice, the comparison names the group Overwrite adds and the outside group it keeps",
         |d| d.in_view(added) && d.in_view("Overwrite with my draft"),
     );
+    d.expect_moves("The disk-conflict choice takes the edit form's place until the DM chooses.");
     d.state("readable-group-conflict-names-each-change", Sizes::All);
     d.click("Overwrite with my draft");
     d.wait_for_text("Changes saved.");
@@ -10894,6 +10895,7 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
                 && d.in_view("Reload and lose my draft")
         },
     );
+    d.expect_moves("The disk-conflict choice takes the edit form's place until the DM chooses.");
     d.state_prepared("group-draft-disk-conflict", Sizes::All, |d| {
         choices_at_text(
             d,
@@ -10959,6 +10961,7 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
          note differs from the read picker state only by the footer's Changes saved. with Undo \
          changes and the Status value.",
     );
+    d.expect_moves("Overwrite ends the disk-conflict choice, and the note's rows come back.");
     d.state("overwrite-keeps-unread-disk-groups", Sizes::All);
     d.click("Undo changes");
     // The rows keep their place when the result goes with its Undo.
