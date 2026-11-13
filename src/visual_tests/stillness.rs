@@ -1245,7 +1245,8 @@ pub fn icon_wraps(lines: &[Line]) -> Vec<Raw> {
 #[derive(Clone, Debug)]
 pub struct Placed {
     pub words: String,
-    /// The x where its layout starts (its first row's left), the edge text lines up on.
+    /// The x of its first word: its first row's first glyph that is not an icon or a space. Text
+    /// lines up on this edge; an icon in front of the words hangs before it.
     pub start: f32,
     pub rect: egui::Rect,
     pub clip: egui::Rect,
@@ -1256,7 +1257,17 @@ pub fn placed(painted: &[(egui::epaint::TextShape, egui::Rect)]) -> Vec<Placed> 
         .iter()
         .map(|(text, clip)| Placed {
             words: text.galley.job.text.clone(),
-            start: text.pos.x + text.galley.rect.min.x,
+            start: text
+                .galley
+                .rows
+                .first()
+                .and_then(|row| {
+                    row.glyphs
+                        .iter()
+                        .find(|glyph| !is_icon(glyph.chr) && !glyph.chr.is_whitespace())
+                        .map(|glyph| text.pos.x + row.pos.x + glyph.pos.x)
+                })
+                .unwrap_or(text.pos.x + text.galley.rect.min.x),
             rect: text.visual_bounding_rect(),
             clip: *clip,
         })
