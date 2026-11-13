@@ -1,4 +1,15 @@
 {
+  "book-to-package": [
+    ["N4/quiet-action-line-start","02-book-creature-printed-record","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","02-book-creature-printed-record","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","02-book-creature-printed-record","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","03-book-creature-printed-record-ignored","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","03-book-creature-printed-record-ignored","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","03-book-creature-printed-record-ignored","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","04-book-creature-changed-in-package","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","04-book-creature-changed-in-package","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","04-book-creature-changed-in-package","960x640","Button \"Filter creatures\"",1]
+  ],
   "campaign-content": [
     ["G1b/pressed-control-moved","14-repair-save-failed","960x640","Button \"Save repaired note\"",1],
     ["G1b/pressed-control-moved","15-missing-campaign-manifest-needs-explicit-write","1200x800","Button \"Discard\"",2],
@@ -18,7 +29,13 @@
     ["G1b/pressed-control-moved","06-run-rail-keeps-roster-room","1200x800","Button \"Next turn\"",1],
     ["G6/footer-far-below-body","13-session-events-fill-their-column","1200x800","Button \"Add to notes: Major event\"",1],
     ["G6/footer-far-below-body","13-session-events-fill-their-column","1920x1080","Button \"Add to notes: Major event\"",1],
-    ["G6/footer-far-below-body","13-session-events-fill-their-column","960x640","Button \"Add to notes: Major event\"",1]
+    ["G6/footer-far-below-body","13-session-events-fill-their-column","960x640","Button \"Add to notes: Major event\"",1],
+    ["N4/quiet-action-line-start","09-roster-follows-add-panel","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","09-roster-follows-add-panel","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","09-roster-follows-add-panel","960x640","Button \"Filter creatures\"",1]
+  ],
+  "creature-filter": [
+    ["N4/quiet-action-line-start","02-search-terms","960x640","Button \"Filter creatures\"",1]
   ],
   "data-integrity": [
     ["G3/far-action","06-run-folder-gone","1920x1080","Button \"Start fight\"",2],
@@ -29,7 +46,10 @@
   "dialogs": [
     ["G6/footer-far-below-body","06-unsaved-changes-on-close","1200x800","Button \"Keep editing\"",1],
     ["G6/footer-far-below-body","06-unsaved-changes-on-close","1920x1080","Button \"Keep editing\"",1],
-    ["G6/footer-far-below-body","06-unsaved-changes-on-close","960x640","Button \"Keep editing\"",1]
+    ["G6/footer-far-below-body","06-unsaved-changes-on-close","960x640","Button \"Keep editing\"",1],
+    ["N4/quiet-action-line-start","05-edit-the-copy","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","05-edit-the-copy","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","05-edit-the-copy","960x640","Button \"Filter creatures\"",1]
   ],
   "dm-audit": [
     ["G1b/pressed-control-moved","(after the last state)","1200x800","Button \"Add to Log: Hobb the Miller\"",1],
@@ -44,12 +64,32 @@
     ["G3/far-action","01-encounter-list","1920x1080","Button \"Resume\"",1],
     ["G3/far-action","01-encounter-list","1920x1080","Button \"Start fight\"",1],
     ["G3/far-action","13-encounter-menu-remove","1920x1080","Button \"Start fight\"",1],
-    ["G3/far-action","14-encounter-removed","1920x1080","Button \"Start fight\"",1]
+    ["G3/far-action","14-encounter-removed","1920x1080","Button \"Start fight\"",1],
+    ["N4/quiet-action-line-start","02-new-encounter","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","03-find-creature","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","04-creatures-added","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","04-creatures-added","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","04-creatures-added","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","05-saved","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","06-stat-block-beside-editor","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","06-stat-block-beside-editor","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","06-stat-block-beside-editor","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","07-no-search-results","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","07-no-search-results","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","07-no-search-results","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","09-saved-roster","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","09-saved-roster","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","09-saved-roster","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","10-saved-roster-sync-off","960x640","Button \"Filter creatures\"",1]
   ],
   "encounter-difficulty": [
     ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Save encounter\"",1],
     ["G3/far-action","01-ready-to-run","1920x1080","Button \"Resume\"",1],
-    ["G3/far-action","01-ready-to-run","1920x1080","Button \"Start fight\"",4]
+    ["G3/far-action","01-ready-to-run","1920x1080","Button \"Start fight\"",4],
+    ["N4/quiet-action-line-start","03-editor-high","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","03-editor-high","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","03-editor-high","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","05-editor-unknown","960x640","Button \"Filter creatures\"",1]
   ],
   "encounter-groups": [
     ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Changes for Cinder Wolf\"",2],
@@ -72,6 +112,34 @@
     ["G6/footer-far-below-body","16-invalid-arrival-total","960x640","Label \"\\u{e3b2}\\u{a0}Changed\\n1\\u{a0}×\\u{a0}Rival\\u{a0}Captain (as\\u{a0}Ember\\u{a0}Cultist), 2\\u{a0}×\\u{a0}Cinder\\u{a0}Wolf\"",1],
     ["G6/footer-far-below-body","25-tied-arrival-moved-before","960x640","Button \"Edit group\"",1],
     ["G6/footer-far-below-body","27-group-added-in-setup","960x640","Button \"Edit group\"",1],
+    ["N4/quiet-action-line-start","02-group-editor","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","02-group-editor","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","02-group-editor","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","03-group-member-changes","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","03-group-member-changes","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","03-group-member-changes","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","04-group-changes-done","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","04-group-changes-done","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","04-group-changes-done","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","05-group-unavailable-creature","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","05-group-unavailable-creature","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","05-group-unavailable-creature","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","06-group-invalid-change","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","07-group-rejected-empty","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","08-group-find-creature","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","09-group-saved","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","10-group-member-removed-with-undo","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","10-group-member-removed-with-undo","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","10-group-member-removed-with-undo","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","11-group-member-restored","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","11-group-member-restored","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","11-group-member-restored","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","12-group-member-replacement-search","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","13-group-member-replaced","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","27-group-added-in-setup","960x640","Button \"Close run\"",1],
+    ["N4/quiet-action-line-start","28-broken-group-open-for-repair","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","28-broken-group-open-for-repair","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","28-broken-group-open-for-repair","960x640","Button \"Filter creatures\"",1],
     ["N5/icon-starts-wrapping-text","15-group-panel","960x640","Text \"\\u{e3b2}\\u{a0}Changed\\n1\\u{a0}×\\u{a0}Rival\\u{a0}Captain (as\\u{a0}Ember\\u{a0}Cultist), 2\\u{a0}×\\u{a0}Cinder\\u{a0}Wolf\"",1],
     ["N5/icon-starts-wrapping-text","16-invalid-arrival-total","960x640","Text \"\\u{e3b2}\\u{a0}Changed\\n1\\u{a0}×\\u{a0}Rival\\u{a0}Captain (as\\u{a0}Ember\\u{a0}Cultist), 2\\u{a0}×\\u{a0}Cinder\\u{a0}Wolf\"",1],
     ["N5/icon-starts-wrapping-text","17-available-member-added","960x640","Text \"\\u{e3b2}\\u{a0}Changed\\n1\\u{a0}×\\u{a0}Rival\\u{a0}Captain (as\\u{a0}Ember\\u{a0}Cultist), 2\\u{a0}×\\u{a0}Cinder\\u{a0}Wolf\"",1],
@@ -89,7 +157,10 @@
     ["G3/far-action","05-history-beside-open-run","1920x1080","Button \"Close the run of Old Mill Raid, Party fled · Ended · Round 1 · Saved just now\"",1],
     ["G3/far-action","06-keep-in-ready-blocked","1920x1080","Button \"Close the run of Old Mill Raid, Party fled · Ended · Round 1 · Saved just now\"",1],
     ["G3/far-action","06-keep-in-ready-blocked","1920x1080","Button \"Open the run of Goblin Crossing, Party won · Ended · Round 1 · Saved just now\"",1],
-    ["G3/far-action","06-keep-in-ready-blocked","1920x1080","Button \"Start fight\"",1]
+    ["G3/far-action","06-keep-in-ready-blocked","1920x1080","Button \"Start fight\"",1],
+    ["N4/quiet-action-line-start","07-draft-during-run","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","07-draft-during-run","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","07-draft-during-run","960x640","Button \"Filter creatures\"",1]
   ],
   "encounter-owned-groups": [
     ["G1b/pressed-control-moved","05-new-group-in-the-encounter","960x640","Button \"New group for this encounter\"",1],
@@ -105,10 +176,44 @@
     ["G3/far-action","02-groups-for-encounters-open","1920x1080","Button \"Edit group Watch Detail\"",1],
     ["G3/far-action","02-groups-for-encounters-open","1920x1080","Button \"Resume\"",2],
     ["G3/far-action","02-groups-for-encounters-open","1920x1080","Button \"Start fight\"",1],
+    ["N4/quiet-action-line-start","03-group-whose-encounter-is-gone","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","04-encounter-with-its-groups","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","04-encounter-with-its-groups","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","04-encounter-with-its-groups","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","05-new-group-in-the-encounter","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","05-new-group-in-the-encounter","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","05-new-group-in-the-encounter","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","06-creature-added-to-a-group","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","06-creature-added-to-a-group","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","06-creature-added-to-a-group","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","07-encounter-and-group-saved","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","08-move-encounter-group-menu","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","08-move-encounter-group-menu","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","08-move-encounter-group-menu","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","09-move-encounter-group-menu-after-shrink","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","10-saved-group-removed","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","10-saved-group-removed","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","10-saved-group-removed","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","11-belongs-to-open","960x640","Button \"Filter creatures\"",1],
     ["N5/icon-starts-wrapping-text","16-group-panel-of-an-older-save","960x640","Text \"\\u{e3b2}\\u{a0}Changed\\n1\\u{a0}×\\u{a0}Rival\\u{a0}Captain (as\\u{a0}Ember\\u{a0}Cultist), 2\\u{a0}×\\u{a0}Cinder\\u{a0}Wolf\"",1]
   ],
   "encounter-run": [
     ["G1b/pressed-control-moved","03-next-turn","960x640","Button \"Next turn\"",1]
+  ],
+  "gallery": [
+    ["N4/quiet-action-line-start","02-components","1200x800","Button \"Quiet\"",1],
+    ["N4/quiet-action-line-start","02-components","1920x1080","Button \"Quiet\"",1],
+    ["N4/quiet-action-line-start","02-components","960x640","Button \"Quiet\"",1],
+    ["N4/quiet-action-line-start","05-focus-ring","960x640","Button \"Quiet\"",1],
+    ["N4/quiet-action-line-start","08-submenu-spacing","1200x800","Button \"Group actions\"",1],
+    ["N4/quiet-action-line-start","08-submenu-spacing","1920x1080","Button \"Group actions\"",1],
+    ["N4/quiet-action-line-start","08-submenu-spacing","960x640","Button \"Group actions\"",1],
+    ["N4/quiet-action-line-start","09-row-menu","960x640","Button \"Group actions\"",1],
+    ["N4/quiet-action-line-start","10-save-rows-and-add-strip","1200x800","Button \"Group actions\"",1],
+    ["N4/quiet-action-line-start","10-save-rows-and-add-strip","1920x1080","Button \"Group actions\"",1],
+    ["N4/quiet-action-line-start","10-save-rows-and-add-strip","960x640","Button \"Group actions\"",1],
+    ["N4/quiet-action-line-start","11-empty-state","1200x800","Button \"Group actions\"",1],
+    ["N4/quiet-action-line-start","11-empty-state","960x640","Button \"Group actions\"",1]
   ],
   "generator-tables": [
     ["G1a/message-moved-content","06-generator-world-keeps-its-npc","960x640","Button \"Copy the marker\"",1],
@@ -133,6 +238,30 @@
   "journey-j6": [
     ["G1b/pressed-control-moved","(after the last state)","1200x800","Button \"Save encounter\"",1]
   ],
+  "library-browse": [
+    ["N4/quiet-action-line-start","02-search-dragon","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","02-search-dragon","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","02-search-dragon","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","03-creature-stat-block","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","03-creature-stat-block","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","03-creature-stat-block","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","04-spell","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","04-spell","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","04-spell","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","05-class-traits-and-features","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","05-class-traits-and-features","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","05-class-traits-and-features","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","06-class-scrolled","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","08-back-after-link","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","09-creature-list","960x640","Button \"Filter creatures\"",1]
+  ],
+  "library-file-fault": [
+    ["N4/quiet-action-line-start","01-package-file-not-text","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","01-package-file-not-text","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","03-campaign-file-not-text","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","03-campaign-file-not-text","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","03-campaign-file-not-text","960x640","Button \"Filter creatures\"",1]
+  ],
   "library-navigation": [
     ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Back\"",1],
     ["G1b/pressed-control-moved","05-reference-outside-package","960x640","Button \"Back\"",1],
@@ -140,10 +269,34 @@
     ["G6/footer-far-below-body","01-homebrew-reference","960x640","Label \"Missing place (not found in this campaign)\"",1],
     ["G6/footer-far-below-body","03-dependency-copy-reconnected","1200x800","Button \"Source and identifiers\"",1],
     ["G6/footer-far-below-body","03-dependency-copy-reconnected","1920x1080","Button \"Source and identifiers\"",1],
-    ["G6/footer-far-below-body","03-dependency-copy-reconnected","960x640","Label \"Missing place (not found in this campaign)\"",1]
+    ["G6/footer-far-below-body","03-dependency-copy-reconnected","960x640","Label \"Missing place (not found in this campaign)\"",1],
+    ["N4/quiet-action-line-start","05-reference-outside-package","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","05-reference-outside-package","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","05-reference-outside-package","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","06-draft-with-history","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","06-draft-with-history","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","06-draft-with-history","960x640","Button \"Filter creatures\"",1]
+  ],
+  "library-scope": [
+    ["N4/quiet-action-line-start","01-scope-menu","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","01-scope-menu","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","02-scope-everything","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","02-scope-everything","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","02-scope-everything","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","03-campaign-fireball","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","03-campaign-fireball","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","03-campaign-fireball","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","04-package-about-title","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","04-package-about-title","1920x1080","Button \"Filter creatures\"",1]
   ],
   "library-to-encounter": [
-    ["G1b/pressed-control-moved","05-copy-in-encounter","960x640","Button \"Save encounter\"",1]
+    ["G1b/pressed-control-moved","05-copy-in-encounter","960x640","Button \"Save encounter\"",1],
+    ["N4/quiet-action-line-start","01-draft-open","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","02-library-entry","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","04-copy-in-open-draft-results","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","05-copy-in-encounter","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","05-copy-in-encounter","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","05-copy-in-encounter","960x640","Button \"Filter creatures\"",1]
   ],
   "list-formats": [
     ["G1b/pressed-control-moved","01-timeline-v2-dm-prose","960x640","Button \"Old bridge · Travel · 10 minutes\"",1],
@@ -160,7 +313,22 @@
     ["G6/footer-far-below-body","04-rules-and-runs-flagged-choice","960x640","Button \"Save run settings\"",1],
     ["G6/footer-far-below-body","15-timeline-item-edited-and-flagged-in-obsidian","1200x800","Button \"Old bridge · Travel · 10 minutes\"",1],
     ["G6/footer-far-below-body","15-timeline-item-edited-and-flagged-in-obsidian","1920x1080","Button \"Old bridge · Travel · 10 minutes\"",1],
-    ["G6/footer-far-below-body","15-timeline-item-edited-and-flagged-in-obsidian","960x640","Button \"Old bridge · Travel · 10 minutes\"",1]
+    ["G6/footer-far-below-body","15-timeline-item-edited-and-flagged-in-obsidian","960x640","Button \"Old bridge · Travel · 10 minutes\"",1],
+    ["N4/quiet-action-line-start","09-group-flagged-changes-cell","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","09-group-flagged-changes-cell","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","09-group-flagged-changes-cell","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","10-flagged-member-menu","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","10-flagged-member-menu","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","10-flagged-member-menu","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","11-group-repair-changes-cell","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","11-group-repair-changes-cell","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","11-group-repair-changes-cell","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","12-group-changes-cell-repaired","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","12-group-changes-cell-repaired","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","12-group-changes-cell-repaired","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","13-flagged-roster-at-start-fight","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","13-flagged-roster-at-start-fight","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","13-flagged-roster-at-start-fight","960x640","Button \"Filter creatures\"",1]
   ],
   "log-from-play": [
     ["G1b/pressed-control-moved","02-log-line-added-in-lookup","1200x800","Button \"Add to Log: Captain Varra Black\"",1],
@@ -177,10 +345,28 @@
     ["N5/icon-starts-wrapping-text","07-log-words-of-a-deleted-entry","960x640","Text \"\\u{e4e0} Captain Varra Black: told the party who burned the ropes at the ford\"",1],
     ["N5/icon-starts-wrapping-text","08-log-words-without-an-entry","960x640","Text \"\\u{e4e0} Captain Varra Black: told the party who burned the ropes at the ford\"",1]
   ],
-  "nav-table": [
+  "markdown-links": [
+    ["N4/quiet-action-line-start","06-library-second-link-focused","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","06-library-second-link-focused","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","06-library-second-link-focused","960x640","Button \"Filter creatures\"",1]
+  ],
+  "nav-state": [
+    ["N4/quiet-action-line-start","01-library-set-up","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","03-encounters-set-up","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","05-library-returned","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","08-encounters-returned","960x640","Button \"Filter creatures\"",1]
   ],
   "npc-in-encounter": [
-    ["G1b/pressed-control-moved","03-npc-in-setup","960x640","Button \"Save encounter\"",1]
+    ["G1b/pressed-control-moved","03-npc-in-setup","960x640","Button \"Save encounter\"",1],
+    ["N4/quiet-action-line-start","01-npc-result","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","01-npc-result","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","01-npc-result","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","02-npc-in-roster","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","02-npc-in-roster","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","02-npc-in-roster","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","04-edit-encounter-from-prep","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","04-edit-encounter-from-prep","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","04-edit-encounter-from-prep","960x640","Button \"Filter creatures\"",1]
   ],
   "npc-in-lookup": [
     ["G3/far-action","07-npc-start-fight-in-lookup","1920x1080","Button \"Start fight\"",2],
@@ -195,6 +381,36 @@
     ["G6/footer-far-below-body","04-package-about-edited","960x640","Button \"Source and identifiers\"",1]
   ],
   "package-delete-entry": [
+    ["N4/quiet-action-line-start","01-package-entry-before-delete","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","01-package-entry-before-delete","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","01-package-entry-before-delete","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","02-deleted-package-entry-in-encounter","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","02-deleted-package-entry-in-encounter","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","02-deleted-package-entry-in-encounter","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","03-deleted-package-blocks-new-fight","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","03-deleted-package-blocks-new-fight","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","03-deleted-package-blocks-new-fight","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","04-deleted-package-entry-reader-link","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","04-deleted-package-entry-reader-link","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","04-deleted-package-entry-reader-link","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","05-deleted-package-entry-choose-replacement","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","05-deleted-package-entry-choose-replacement","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","05-deleted-package-entry-choose-replacement","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","06-deleted-package-entry-replaced","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","06-deleted-package-entry-replaced","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","06-deleted-package-entry-replaced","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","07-deleted-package-entry-replacement-undone","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","07-deleted-package-entry-replacement-undone","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","07-deleted-package-entry-replacement-undone","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","10-deleted-draft-file-saved","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","10-deleted-draft-file-saved","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","10-deleted-draft-file-saved","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","11-deleted-draft-let-go","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","11-deleted-draft-let-go","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","11-deleted-draft-let-go","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","13-deleted-draft-after-focus","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","13-deleted-draft-after-focus","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","13-deleted-draft-after-focus","960x640","Button \"Filter creatures\"",1],
     ["N5/icon-starts-wrapping-text","02-deleted-package-entry-in-encounter","960x640","Text \"\\u{e5ba} Enemies · \\u{e4e0} Not found. Its package entry was deleted.\"",2],
     ["N5/icon-starts-wrapping-text","03-deleted-package-blocks-new-fight","960x640","Text \"\\u{e5ba} Enemies · \\u{e4e0} Not found. Its package entry was deleted.\"",2],
     ["N5/icon-starts-wrapping-text","05-deleted-package-entry-choose-replacement","960x640","Text \"\\u{e5ba} Enemies · \\u{e4e0} Not found. Its package entry was deleted.\"",1],
@@ -204,7 +420,31 @@
     ["G6/footer-far-below-body","01-duplicate-package-library-list","1920x1080","Button \"Source and identifiers\"",1],
     ["G6/footer-far-below-body","04-duplicate-copy-reader","1920x1080","Button \"Source and identifiers\"",1],
     ["G6/footer-far-below-body","05-duplicate-copy-new-identity","1920x1080","Button \"Source and identifiers\"",1],
-    ["G6/footer-far-below-body","06-duplicate-identity-restored","1920x1080","Button \"Source and identifiers\"",1]
+    ["G6/footer-far-below-body","06-duplicate-identity-restored","1920x1080","Button \"Source and identifiers\"",1],
+    ["N4/quiet-action-line-start","01-duplicate-package-library-list","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","01-duplicate-package-library-list","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","01-duplicate-package-library-list","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","02-duplicate-original-editor","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","02-duplicate-original-editor","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","02-duplicate-original-editor","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","03-duplicate-package-in-roster","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","03-duplicate-package-in-roster","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","03-duplicate-package-in-roster","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","04-duplicate-copy-reader","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","04-duplicate-copy-reader","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","04-duplicate-copy-reader","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","05-duplicate-copy-new-identity","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","05-duplicate-copy-new-identity","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","05-duplicate-copy-new-identity","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","06-duplicate-identity-restored","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","06-duplicate-identity-restored","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","06-duplicate-identity-restored","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","07-repaired-encounter-keeps-original-wolves","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","07-repaired-encounter-keeps-original-wolves","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","07-repaired-encounter-keeps-original-wolves","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","08-repaired-creatures-are-separate-results","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","08-repaired-creatures-are-separate-results","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","08-repaired-creatures-are-separate-results","960x640","Button \"Filter creatures\"",1]
   ],
   "package-file-changed": [
     ["G1b/pressed-control-moved","16-repair-draft-parses","1920x1080","Button \"Read the new version\"",1],
@@ -214,6 +454,38 @@
     ["G6/footer-far-below-body","13-invalid-package-in-paused-run","1920x1080","Button \"Source and identifiers\"",1],
     ["G6/footer-far-below-body","15-repaired-package-in-paused-run","1200x800","Button \"Source and identifiers\"",1],
     ["G6/footer-far-below-body","15-repaired-package-in-paused-run","1920x1080","Button \"Source and identifiers\"",1],
+    ["N4/quiet-action-line-start","01-package-before-disk-edit","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","01-package-before-disk-edit","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","01-package-before-disk-edit","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","02-package-edit-round-trip","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","02-package-edit-round-trip","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","02-package-edit-round-trip","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","03-changed-package-in-lookup","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","03-changed-package-in-lookup","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","03-changed-package-in-lookup","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","05-package-disk-version-kept","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","05-package-disk-version-kept","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","05-package-disk-version-kept","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","06-package-yaml-broken-on-disk","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","06-package-yaml-broken-on-disk","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","07-package-yaml-repair-editor","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","07-package-yaml-repair-editor","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","08-repair-draft-discarded","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","08-repair-draft-discarded","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","09-package-yaml-repaired","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","09-package-yaml-repaired","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","10-invalid-package-in-encounter","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","10-invalid-package-in-encounter","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","10-invalid-package-in-encounter","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","11-invalid-package-blocks-new-fight","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","11-invalid-package-blocks-new-fight","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","11-invalid-package-blocks-new-fight","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","14-repaired-package-in-encounter","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","14-repaired-package-in-encounter","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","14-repaired-package-in-encounter","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","16-repair-draft-parses","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","16-repair-draft-parses","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","16-repair-draft-parses","960x640","Button \"Filter creatures\"",1],
     ["N5/icon-starts-wrapping-text","10-invalid-package-in-encounter","960x640","Text \"\\u{e5ba} Enemies · \\u{e4e4} Cinder Wolf.md cannot be read (line 4)\"",2],
     ["N5/icon-starts-wrapping-text","11-invalid-package-blocks-new-fight","960x640","Text \"\\u{e5ba} Enemies · \\u{e4e4} Cinder Wolf.md cannot be read (line 4)\"",2]
   ],
@@ -227,7 +499,38 @@
     ["G6/footer-far-below-body","14-copied-folder-identities-repaired-together","1920x1080","Button \"Source and identifiers\"",1],
     ["G6/footer-far-below-body","14-copied-folder-identities-repaired-together","960x640","Label \"Actions\"",1],
     ["G6/footer-far-below-body","15-copied-folder-identities-undone","1920x1080","Button \"Source and identifiers\"",1],
-    ["G6/footer-far-below-body","16-one-entry-copied-between-registered-packages","1920x1080","Button \"Source and identifiers\"",1]
+    ["G6/footer-far-below-body","16-one-entry-copied-between-registered-packages","1920x1080","Button \"Source and identifiers\"",1],
+    ["N4/quiet-action-line-start","06-copied-package-registered-alongside-original","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","06-copied-package-registered-alongside-original","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","06-copied-package-registered-alongside-original","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","07-registration-undo-blocked","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","09-copy-entries-used","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","09-copy-entries-used","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","09-copy-entries-used","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","10-encounter-uses-copy-with-kept-changes","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","10-encounter-uses-copy-with-kept-changes","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","10-encounter-uses-copy-with-kept-changes","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","11-copied-package-registration-undone","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","11-copied-package-registration-undone","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","11-copied-package-registration-undone","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","12-manifest-only-hand-repair-keeps-both-files","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","12-manifest-only-hand-repair-keeps-both-files","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","12-manifest-only-hand-repair-keeps-both-files","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","13-same-filenames-name-the-folder","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","13-same-filenames-name-the-folder","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","13-same-filenames-name-the-folder","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","14-copied-folder-identities-repaired-together","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","14-copied-folder-identities-repaired-together","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","14-copied-folder-identities-repaired-together","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","15-copied-folder-identities-undone","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","15-copied-folder-identities-undone","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","15-copied-folder-identities-undone","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","16-one-entry-copied-between-registered-packages","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","16-one-entry-copied-between-registered-packages","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","16-one-entry-copied-between-registered-packages","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","17-manifest-only-hand-repair-keeps-original-roster","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","17-manifest-only-hand-repair-keeps-original-roster","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","17-manifest-only-hand-repair-keeps-original-roster","960x640","Button \"Filter creatures\"",1]
   ],
   "package-manifest-broken": [
     ["G1b/pressed-control-moved","04-manifest-opened-for-repair","960x640","Button \"Replace with a basic Package.md\"",1],
@@ -236,7 +539,19 @@
     ["G6/footer-far-below-body","11-manifest-written-again-library","960x640","Button \"Source and identifiers\"",1],
     ["G6/footer-far-below-body","14-manifest-written-beside-readme","1200x800","Button \"Source and identifiers\"",1],
     ["G6/footer-far-below-body","14-manifest-written-beside-readme","1920x1080","Button \"Source and identifiers\"",1],
-    ["G6/footer-far-below-body","14-manifest-written-beside-readme","960x640","Button \"Source and identifiers\"",1]
+    ["G6/footer-far-below-body","14-manifest-written-beside-readme","960x640","Button \"Source and identifiers\"",1],
+    ["N4/quiet-action-line-start","01-manifest-invalid-library-keeps-entries","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","01-manifest-invalid-library-keeps-entries","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","01-manifest-invalid-library-keeps-entries","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","05-manifest-invalid-encounter-keeps-creatures","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","05-manifest-invalid-encounter-keeps-creatures","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","05-manifest-invalid-encounter-keeps-creatures","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","09-manifest-deleted-library-keeps-entries","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","09-manifest-deleted-library-keeps-entries","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","09-manifest-deleted-library-keeps-entries","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","12-manifest-restored-encounter-keeps-creatures","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","12-manifest-restored-encounter-keeps-creatures","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","12-manifest-restored-encounter-keeps-creatures","960x640","Button \"Filter creatures\"",1]
   ],
   "package-rename": [
     ["G6/footer-far-below-body","02-linked-entry-renamed-on-disk","1200x800","Button \"Source and identifiers\"",1],
@@ -253,7 +568,22 @@
     ["G6/footer-far-below-body","07-renamed-creature-link-update-undone","1920x1080","Button \"Source and identifiers\"",1],
     ["G6/footer-far-below-body","11-package-folder-restored-with-links","1200x800","Button \"Source and identifiers\"",1],
     ["G6/footer-far-below-body","11-package-folder-restored-with-links","1920x1080","Button \"Source and identifiers\"",1],
-    ["G6/footer-far-below-body","11-package-folder-restored-with-links","960x640","Button \"Source and identifiers\"",1]
+    ["G6/footer-far-below-body","11-package-folder-restored-with-links","960x640","Button \"Source and identifiers\"",1],
+    ["N4/quiet-action-line-start","04-stat-fix-undo-message","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","04-stat-fix-undo-message","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","05-renamed-creature-offers-link-update","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","05-renamed-creature-offers-link-update","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","06-renamed-creature-links-updated","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","06-renamed-creature-links-updated","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","07-renamed-creature-link-update-undone","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","07-renamed-creature-link-update-undone","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","13-draft-saved-at-moved-path","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","13-draft-saved-at-moved-path","1920x1080","Button \"Filter creatures\"",1]
+  ],
+  "package-to-table": [
+    ["N4/quiet-action-line-start","04-new-package-at-the-table","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","04-new-package-at-the-table","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","04-new-package-at-the-table","960x640","Button \"Filter creatures\"",1]
   ],
   "party": [
     ["N2/icon-off-text-centre","14-force-read-replaced","960x640","Button \"Dismiss this message\"",1]
@@ -262,7 +592,9 @@
     ["G1b/pressed-control-moved","(after the last state)","1200x800","Button \"Road to the ford · Travel · half a day · Session 8\"",1],
     ["G6/footer-far-below-body","04-session-last: played fight open","1200x800","Button \"More actions for Ask about the toll\"",1],
     ["G6/footer-far-below-body","04-session-last: played fight open","960x640","TextInput \"Where\"",1],
-    ["N2/icon-off-text-centre","04-session-last: played fight open","1200x800","Button \"More actions for Wolves at the Ford Below the Burning Shrine Road\"",1]
+    ["N2/icon-off-text-centre","04-session-last: played fight open","1200x800","Button \"More actions for Wolves at the Ford Below the Burning Shrine Road\"",1],
+    ["N4/quiet-action-line-start","08-encounter-editor","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","08-encounter-editor","960x640","Button \"Filter creatures\"",1]
   ],
   "recording-banner-priority": [
     ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Record again\"",1],
@@ -338,7 +670,9 @@
     ["G3/far-action","16-history-not-the-last-fight","1920x1080","Button \"Close the run of Sunken Vault, Fled · Ended · Round 2 · Saved just now\"",1],
     ["G3/far-action","17-history-not-the-last-fight-beside-lookup","1920x1080","Button \"Close the run of Sunken Vault, Fled · Ended · Round 2 · Saved just now\"",1],
     ["G6/footer-far-below-body","14-undo-steps-unread","1920x1080","Button \"Ember Cultist, enemies, HP 33/33, Temp 0, AC 12, Initiative 9\"",1],
-    ["G6/footer-far-below-body","15-undo-steps-unread-beside-lookup","1920x1080","Button \"Ember Cultist, enemies, HP 33/33, Temp 0, AC 12, Initiative 9\"",1]
+    ["G6/footer-far-below-body","15-undo-steps-unread-beside-lookup","1920x1080","Button \"Ember Cultist, enemies, HP 33/33, Temp 0, AC 12, Initiative 9\"",1],
+    ["N4/quiet-action-line-start","09-fight-continued-beside-lookup","1200x800","Button \"Death saves\"",1],
+    ["N4/quiet-action-line-start","09-fight-continued-beside-lookup","960x640","Button \"Death saves\"",1]
   ],
   "run-edge-states": [
     ["G1b/pressed-control-moved","01-long-effect-text","960x640","Button \"Add\"",1],
@@ -381,11 +715,21 @@
     ["N2/icon-off-text-centre","05-loot-in-the-editor","1200x800","Button \"More actions for the encounter loot line 3\"",1],
     ["N2/icon-off-text-centre","05-loot-in-the-editor","1200x800","Button \"More actions for the encounter loot line 4\"",1],
     ["N2/icon-off-text-centre","05-loot-in-the-editor","1920x1080","Button \"More actions for the encounter loot line 3\"",1],
-    ["N2/icon-off-text-centre","05-loot-in-the-editor","1920x1080","Button \"More actions for the encounter loot line 4\"",1]
+    ["N2/icon-off-text-centre","05-loot-in-the-editor","1920x1080","Button \"More actions for the encounter loot line 4\"",1],
+    ["N4/quiet-action-line-start","04-loot-table-suggestion","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","05-loot-in-the-editor","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","05-loot-in-the-editor","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","05-loot-in-the-editor","960x640","Button \"Filter creatures\"",1]
   ],
   "run-overrides": [
     ["G1b/pressed-control-moved","03-slot-changes-open","960x640","Button \"Options: starting HP, temporary HP, initiative group and changes\"",1],
-    ["N2/icon-off-text-centre","03-slot-changes-open","960x640","Button \"More actions for Blessed\"",1]
+    ["N2/icon-off-text-centre","03-slot-changes-open","960x640","Button \"More actions for Blessed\"",1],
+    ["N4/quiet-action-line-start","02-slot-with-changes","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","02-slot-with-changes","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","02-slot-with-changes","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","03-slot-changes-open","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","03-slot-changes-open","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","03-slot-changes-open","960x640","Button \"Filter creatures\"",1]
   ],
   "run-restart": [
     ["G1b/pressed-control-moved","01-before-restart","960x640","Button \"Next turn\"",1],
@@ -402,7 +746,16 @@
     ["N2/icon-off-text-centre","07-save-targets","1200x800","CheckBox \"Half damage: Cinder Wolf 2\"",1],
     ["N2/icon-off-text-centre","07-save-targets","1920x1080","CheckBox \"Half damage: Cinder Wolf 1\"",1],
     ["N2/icon-off-text-centre","07-save-targets","1920x1080","CheckBox \"Half damage: Cinder Wolf 2\"",1],
-    ["N2/icon-off-text-centre","07-save-targets","960x640","CheckBox \"Half damage: Cinder Wolf 2\"",1]
+    ["N2/icon-off-text-centre","07-save-targets","960x640","CheckBox \"Half damage: Cinder Wolf 2\"",1],
+    ["N4/quiet-action-line-start","02-attack-armed","1200x800","Button \"Stop\"",1],
+    ["N4/quiet-action-line-start","02-attack-armed","1920x1080","Button \"Stop\"",1],
+    ["N4/quiet-action-line-start","02-attack-armed","960x640","Button \"Stop\"",1],
+    ["N4/quiet-action-line-start","03-attack-rolled","1200x800","Button \"Stop\"",1],
+    ["N4/quiet-action-line-start","03-attack-rolled","1920x1080","Button \"Stop\"",1],
+    ["N4/quiet-action-line-start","03-attack-rolled","960x640","Button \"Stop\"",1],
+    ["N4/quiet-action-line-start","05-row-menu","960x640","Button \"Stop\"",1],
+    ["N4/quiet-action-line-start","09-player-attack","960x640","Button \"Roll for them\"",1],
+    ["N4/quiet-action-line-start","10-reroll-menu","960x640","Button \"Roll for them\"",1]
   ],
   "run-roster-conflict": [
     ["G1b/pressed-control-moved","05-after-full-round","960x640","Button \"Next turn\"",4]
@@ -443,7 +796,9 @@
     ["G6/footer-far-below-body","48-timeline-disk-conflict","1920x1080","Button \"Bridge Ambush · Fight · Round 2 · Paused · Session 2\"",1],
     ["G6/footer-far-below-body","48-timeline-disk-conflict","960x640","Button \"Bridge Ambush · Fight · Round 2 · Paused · Session 2\"",1],
     ["N2/icon-off-text-centre","27-session-long-title","1200x800","Button \"Dismiss\"",1],
-    ["N2/icon-off-text-centre","27-session-long-title","1920x1080","Button \"Dismiss\"",1]
+    ["N2/icon-off-text-centre","27-session-long-title","1920x1080","Button \"Dismiss\"",1],
+    ["N4/quiet-action-line-start","41-timeline-beside-lookup","1200x800","Button \"All events\"",1],
+    ["N4/quiet-action-line-start","41-timeline-beside-lookup","960x640","Button \"All events\"",1]
   ],
   "session-plan": [
     ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Save encounter\"",1],
@@ -475,7 +830,12 @@
     ["N2/icon-off-text-centre","09-several-targets","1920x1080","CheckBox \"Half damage: Cinder Wolf 1\"",1],
     ["N2/icon-off-text-centre","09-several-targets","1920x1080","CheckBox \"Half damage: Cinder Wolf 2\"",1],
     ["N2/icon-off-text-centre","09-several-targets","960x640","CheckBox \"Half damage: Cinder Wolf 1\"",1],
-    ["N2/icon-off-text-centre","09-several-targets","960x640","CheckBox \"Half damage: Cinder Wolf 2\"",1]
+    ["N2/icon-off-text-centre","09-several-targets","960x640","CheckBox \"Half damage: Cinder Wolf 2\"",1],
+    ["N4/quiet-action-line-start","40-roster-row-menu","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","40-roster-row-menu","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","42-read-aloud-field","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","42-read-aloud-field","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","42-read-aloud-field","960x640","Button \"Filter creatures\"",1]
   ],
   "session-plan-groups": [
     ["G1b/pressed-control-moved","02-plan-group-assembled","960x640","Button \"Add\"",1],
@@ -484,6 +844,12 @@
     ["G6/footer-far-below-body","10-plan-group-in-another-session","960x640","Label \"Rivals ·\\u{a0}3 members ·\\u{a0}XP 600 ·\\u{a0}\\u{e3b2}\\u{a0}Changed ·\\u{a0}1\\u{a0}×\\u{a0}Rival\\u{a0}Captain\\u{a0}(as\\u{a0}Ember\\u{a0}Cultist), 2\\u{a0}×\\u{a0}Cinder\\u{a0}Wolf\"",1],
     ["G6/footer-far-below-body","15-plan-group-no-member-can-join","1920x1080","Label \"Goblin Warrior · line\\u{a0}14: AC would become −35. It must be 0 or more.\"",1],
     ["N2/icon-off-text-centre","15-plan-group-no-member-can-join","960x640","Button \"More actions for Ash Pack\"",1],
+    ["N4/quiet-action-line-start","01-plan-group-empty","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","01-plan-group-empty","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","01-plan-group-empty","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","02-plan-group-assembled","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","02-plan-group-assembled","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","02-plan-group-assembled","960x640","Button \"Filter creatures\"",1],
     ["N5/icon-starts-wrapping-text","08-arrivals-tonight-first","960x640","Text \"\\u{e3b2}\\u{a0}Changed\\n1\\u{a0}×\\u{a0}Rival\\u{a0}Captain (as\\u{a0}Ember\\u{a0}Cultist), 2\\u{a0}×\\u{a0}Cinder\\u{a0}Wolf\"",1]
   ],
   "session-plan-scenes": [
@@ -600,17 +966,57 @@
     ["N2/icon-off-text-centre","47-processing-with-ended-run","1920x1080","Button \"More actions for 2026-01-01 19:00\"",1],
     ["N2/icon-off-text-centre","47-processing-with-ended-run","960x640","Button \"Dismiss\"",1],
     ["N2/icon-off-text-centre","47-processing-with-ended-run","960x640","Button \"More actions for 2026-01-01 19:00 (2)\"",1],
-    ["N2/icon-off-text-centre","47-processing-with-ended-run","960x640","Button \"More actions for 2026-01-01 19:00\"",1]
+    ["N2/icon-off-text-centre","47-processing-with-ended-run","960x640","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N4/quiet-action-line-start","15-key-for-another-service","1200x800","Button \"Remove transcript and summary key (OpenAI): Transcript and summary API key\"",1],
+    ["N4/quiet-action-line-start","15-key-for-another-service","1920x1080","Button \"Remove transcript and summary key (OpenAI): Transcript and summary API key\"",1],
+    ["N4/quiet-action-line-start","15-key-for-another-service","960x640","Button \"Remove transcript and summary key (OpenAI): Transcript and summary API key\"",1],
+    ["N4/quiet-action-line-start","17-processing-speech","960x640","Button \"Cancel processing\"",1],
+    ["N4/quiet-action-line-start","20-processing-second-pass","960x640","Button \"Cancel processing\"",1],
+    ["N4/quiet-action-line-start","25-marked-transcript","1200x800","Button \"Back to recordings\"",1],
+    ["N4/quiet-action-line-start","25-marked-transcript","1200x800","Button \"Earlier part\"",1],
+    ["N4/quiet-action-line-start","25-marked-transcript","1920x1080","Button \"Back to recordings\"",1],
+    ["N4/quiet-action-line-start","25-marked-transcript","1920x1080","Button \"Earlier part\"",1],
+    ["N4/quiet-action-line-start","25-marked-transcript","960x640","Button \"Back to recordings\"",1],
+    ["N4/quiet-action-line-start","25-marked-transcript","960x640","Button \"Earlier part\"",1],
+    ["N4/quiet-action-line-start","27-second-pass-review","960x640","Button \"Back to recordings\"",1],
+    ["N4/quiet-action-line-start","28-recording-summary","1200x800","Button \"Back to recordings\"",1],
+    ["N4/quiet-action-line-start","28-recording-summary","1920x1080","Button \"Back to recordings\"",1],
+    ["N4/quiet-action-line-start","28-recording-summary","960x640","Button \"Back to recordings\"",1],
+    ["N4/quiet-action-line-start","32-recording-processing-again","1200x800","Button \"Cancel processing\"",1],
+    ["N4/quiet-action-line-start","32-recording-processing-again","1920x1080","Button \"Cancel processing\"",1],
+    ["N4/quiet-action-line-start","32-recording-processing-again","960x640","Button \"Cancel processing\"",1],
+    ["N4/quiet-action-line-start","40-recording-summary-narrow","1200x800","Button \"Back to recordings\"",1],
+    ["N4/quiet-action-line-start","40-recording-summary-narrow","1920x1080","Button \"Back to recordings\"",1],
+    ["N4/quiet-action-line-start","40-recording-summary-narrow","960x640","Button \"Back to recordings\"",1]
   ],
   "settings": [
     ["G1b/pressed-control-moved","09-edit-campaign","960x640","Button \"Edit details\"",1],
     ["G1b/pressed-control-moved","11-campaign-details-discarded","960x640","Button \"Edit details\"",1],
     ["N2/icon-off-text-centre","15-sync-stopped-recovery","1200x800","Button \"Dismiss this message\"",1],
     ["N2/icon-off-text-centre","15-sync-stopped-recovery","1920x1080","Button \"Dismiss this message\"",1],
-    ["N2/icon-off-text-centre","15-sync-stopped-recovery","960x640","Button \"Dismiss this message\"",1]
+    ["N2/icon-off-text-centre","15-sync-stopped-recovery","960x640","Button \"Dismiss this message\"",1],
+    ["N4/quiet-action-line-start","05-account-connecting","960x640","Button \"Cancel\"",1]
+  ],
+  "share-to-package": [
+    ["N4/quiet-action-line-start","04-shared-entry-ready","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","04-shared-entry-ready","1920x1080","Button \"Filter creatures\"",1]
   ],
   "signed-in": [
     ["G1b/pressed-control-moved","15-link-tab-during-run","960x640","Button \"Add\"",1]
+  ],
+  "stat-formats": [
+    ["N4/quiet-action-line-start","01-schema-2-creature-library","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","01-schema-2-creature-library","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","01-schema-2-creature-library","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","02-flagged-hp-cell","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","02-flagged-hp-cell","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","02-flagged-hp-cell","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","03-flagged-spell-cell","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","03-flagged-spell-cell","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","03-flagged-spell-cell","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","04-item-facts","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","04-item-facts","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","04-item-facts","960x640","Button \"Filter creatures\"",1]
   ],
   "trackers": [
     ["G6/footer-far-below-body","03-trackers-three-notices","1920x1080","Button \"MORE TRACKERS 2\"",1],
@@ -622,7 +1028,16 @@
   ],
   "travel-checks": [
     ["G1b/pressed-control-moved","06-travel-checks-timeline","960x640","Button \"Travel · 1 day · Session 1\"",1],
-    ["G1b/pressed-control-moved","10-travel-checks-road-fight","960x640","Button \"Shrine of Cinders · Fight · Round 1 · Session 1 · Day 2 of Travel\"",1]
+    ["G1b/pressed-control-moved","10-travel-checks-road-fight","960x640","Button \"Shrine of Cinders · Fight · Round 1 · Session 1 · Day 2 of Travel\"",1],
+    ["N4/quiet-action-line-start","01-travel-checks-rolled","1200x800","Button \"On the road\"",1],
+    ["N4/quiet-action-line-start","01-travel-checks-rolled","1920x1080","Button \"On the road\"",1],
+    ["N4/quiet-action-line-start","01-travel-checks-rolled","960x640","Button \"On the road\"",1],
+    ["N4/quiet-action-line-start","02-travel-checks-rolled-lookup","960x640","Button \"On the road\"",1],
+    ["N4/quiet-action-line-start","04-travel-checks-planned-lookup","960x640","Button \"On the road\"",1],
+    ["N4/quiet-action-line-start","05-travel-checks-outside","960x640","Button \"On the road\"",1],
+    ["N4/quiet-action-line-start","06-travel-checks-timeline","960x640","Button \"On the road\"",1],
+    ["N4/quiet-action-line-start","07-travel-checks-timeline-lookup","960x640","Button \"All events\"",1],
+    ["N4/quiet-action-line-start","07-travel-checks-timeline-lookup","960x640","Button \"On the road\"",1]
   ],
   "world": [
     ["G1b/pressed-control-moved","08-world-generated-npc-saved","960x640","Button \"Reroll\"",1],
@@ -633,9 +1048,20 @@
     ["G6/footer-far-below-body","09-log-line-added","960x640","Link \"Session 1 (opens Session 1)\"",1],
     ["G6/footer-far-below-body","11-group-joined-with-log-in-prep","960x640","Link \"The Arena (opens The Arena)\"",1]
   ],
+  "world-note-deleted": [
+    ["N4/quiet-action-line-start","06-npc-deleted-stat-block-encounter-search","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","06-npc-deleted-stat-block-encounter-search","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","06-npc-deleted-stat-block-encounter-search","960x640","Button \"Filter creatures\"",1]
+  ],
   "world-note-duplicated": [
     ["G1b/pressed-control-moved","01-copied-world-npc-encounter-keeps-guard","960x640","Button \"Save encounter\"",1],
-    ["G6/footer-far-below-body","02-duplicate-npc-repaired-from-encounter","1920x1080","Button \"New group for this encounter\"",1]
+    ["G6/footer-far-below-body","02-duplicate-npc-repaired-from-encounter","1920x1080","Button \"New group for this encounter\"",1],
+    ["N4/quiet-action-line-start","01-copied-world-npc-encounter-keeps-guard","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","01-copied-world-npc-encounter-keeps-guard","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","01-copied-world-npc-encounter-keeps-guard","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","02-duplicate-npc-repaired-from-encounter","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","02-duplicate-npc-repaired-from-encounter","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","02-duplicate-npc-repaired-from-encounter","960x640","Button \"Filter creatures\"",1]
   ],
   "world-part-of-safety": [
     ["G1a/message-moved-content","02-read-picker-unread-disk-kept","1200x800","Button \"Change Part of\"",1],
