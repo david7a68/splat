@@ -45,9 +45,3 @@ src/encounter_run/loot.rs phrase-owner 2
 src/encounters.rs phrase-owner 1
 src/library.rs phrase-owner 1
 src/sessions/plan.rs phrase-owner 1
-# Words from outside the app (`Sentence::outside`): each use is a reviewed escape.
-src/trackers.rs outside-words 3
-src/trackers/view.rs outside-words 1
-# Body places (`banner`, `row_fault`, `PagePlaceholder`): each use is a reviewed choice.
-src/trackers/history.rs body-message 3
-src/trackers/view.rs body-message 4

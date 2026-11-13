@@ -1450,9 +1450,10 @@ impl crate::design::results::Owner for Played {
     }
 }
 
-/// The newest act of the played session, kept for its footer order; its words are worked out
-/// with the ledger (`Trackers::result`).
-pub(crate) struct NewestAct(Played);
+/// The newest act of the played session, kept for its footer order: its owner, and the ids of
+/// its entries, which tell one act from another. Its words are worked out with the ledger
+/// (`Trackers::result`).
+pub(crate) struct NewestAct(Played, Vec<String>);
 
 impl crate::design::results::Kept for NewestAct {
     type Owner = Played;
@@ -1637,6 +1638,9 @@ impl Trackers {
             *self = Self {
                 campaign: campaign.cloned(),
                 played,
+                // The kept acts are scoped by campaign: another campaign does not see them, and
+                // switching back finds each with its order.
+                results: std::mem::take(&mut self.results),
                 ..Self::default()
             };
         }
@@ -1762,9 +1766,7 @@ impl Trackers {
 
     /// The newest act of the session being played, and the result line's words for it.
     fn settle_result(&mut self) {
-        let newest = undo_target(&self.ledger, self.played);
-        let changed = newest != self.newest;
-        self.newest = newest;
+        self.newest = undo_target(&self.ledger, self.played);
         self.result = (!self.newest.is_empty()).then(|| {
             (
                 label(&self.rules, &self.ledger, &self.newest),
@@ -1774,10 +1776,17 @@ impl Trackers {
         let Some(owner) = self.played_owner() else {
             return;
         };
+        // Only a new act records, which issues its order. Selecting a session or a campaign again
+        // finds its act kept, with the order it had.
+        let act: Vec<String> = self.newest.iter().map(|entry| entry.id.clone()).collect();
         if self.result.is_none() {
             self.results.owner_changed(&owner);
-        } else if changed || self.results.get(&owner).is_none() {
-            self.results.record(NewestAct(owner));
+        } else if self
+            .results
+            .get(&owner)
+            .is_none_or(|shown| shown.value().1 != act)
+        {
+            self.results.record(NewestAct(owner, act));
         }
     }
 
@@ -3181,13 +3190,51 @@ mod tests {
         let t = &mut race.trackers;
         t.press("favor", None, "Crowd loves it", None);
         let a = t.newest().to_vec();
+        // Each session's newest act keeps the order its act issued: switching sessions records
+        // nothing, and a second act gets a newer order.
+        let order = |t: &Trackers| {
+            let owner = t.played_owner().unwrap();
+            t.results.get(&owner).map(|shown| shown.order())
+        };
+        let a_order = order(t).expect("act A is kept");
         t.played = Some(Uuid::from_u128(2));
         t.press("souls", None, "Crowd loves it", None);
         assert!(t.reason.is_some(), "souls has no such action");
         t.press("race_clock", None, "Enter room", None);
+        let b_order = order(t).expect("act B is kept");
+        assert!(b_order > a_order, "a second act gets a newer order");
         t.played = Some(TONIGHT);
         t.settle();
         assert_eq!(t.newest(), a.as_slice());
+        assert_eq!(
+            order(t),
+            Some(a_order),
+            "back in A's session, A keeps its order"
+        );
+        t.played = Some(Uuid::from_u128(2));
+        t.settle();
+        assert_eq!(
+            order(t),
+            Some(b_order),
+            "back in B's session, B keeps its order"
+        );
+        t.played = Some(TONIGHT);
+        t.settle();
+        // A campaign switch hides the kept acts; switching back finds A with its order.
+        let index = Some(race.index.clone());
+        race.trackers
+            .poll(None, None, Some(TONIGHT), &race.timeline);
+        assert!(race.trackers.played_owner().is_none());
+        race.trackers
+            .poll(index, Some(&race.campaign), Some(TONIGHT), &race.timeline);
+        let t = &mut race.trackers;
+        t.read_disk();
+        assert_eq!(t.newest(), a.as_slice());
+        assert_eq!(
+            order(t),
+            Some(a_order),
+            "after a campaign switch, A keeps its order"
+        );
         t.undo(&a);
         assert_eq!(value(&race, "favor", None), 1);
         assert_eq!(value(&race, "race_clock", None), 10, "B’s change stays");
@@ -3314,6 +3361,23 @@ mod tests {
         );
         assert_eq!(t.result, shown);
         assert_eq!(value(&race, "favor", None), 1);
+        // A failed Undo keeps the act's entry and its order.
+        let owner = t.played_owner().unwrap();
+        let kept = t
+            .results
+            .get(&owner)
+            .map(|shown| (shown.order(), shown.value().1.clone()));
+        assert!(kept.is_some(), "the newest act is kept");
+        let newest = t.newest().to_vec();
+        t.undo(&newest);
+        assert!(matches!(t.reason, Some(Unrecorded::NotSaved(_))));
+        assert_eq!(
+            t.results
+                .get(&owner)
+                .map(|shown| (shown.order(), shown.value().1.clone())),
+            kept,
+            "a failed Undo keeps the entry and its order"
+        );
         // A `Remove` whose save fails records nothing, and nothing waits.
         let t = &mut race.trackers;
         t.remove(note, &older);
