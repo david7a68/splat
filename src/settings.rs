@@ -640,7 +640,8 @@ impl Settings {
                             design::blocked_reason(ui, shown);
                         } else {
                             ui.with_layout(
-                                egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true),
+                                egui::Layout::left_to_right(egui::Align::Center)
+                                    .with_main_wrap(true),
                                 |ui| design::blocked_reason(ui, shown),
                             );
                         }

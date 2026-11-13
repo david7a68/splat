@@ -2346,7 +2346,9 @@ pub mod campaign_content {
         d.observe(
             "iter-28-C-FB7",
             forms.0 && forms.1.is_empty(),
-            format!("The locked row reads `Rule · needed by Ember Cultist`; other forms: {forms:?}"),
+            format!(
+                "The locked row reads `Rule · needed by Ember Cultist`; other forms: {forms:?}"
+            ),
         );
         d.state("packages-partial-selection", Sizes::All);
         d.goal("see a partial package selection");
@@ -2742,9 +2744,7 @@ pub mod campaign_content {
         d.observe_both(
             "iter-28-C-FB5",
             "Reload from disk stays, blocked, while a repair draft has changes",
-            |d| {
-                d.has_containing(RELOAD) && d.is_disabled(RELOAD)
-            },
+            |d| d.has_containing(RELOAD) && d.is_disabled(RELOAD),
         );
         d.state("repair-dirty", Sizes::All);
         // Lead ruling on round 23 FA3: a draft that parses but that Save refuses (a package
@@ -5246,7 +5246,9 @@ pub mod settings {
         d.observe(
             "iter-28-C-FA11",
             at_sizes.iter().all(|placed| *placed == Some(true)),
-            format!("Connect's cause beside Connect on one line, else from the field: {at_sizes:?}"),
+            format!(
+                "Connect's cause beside Connect on one line, else from the field: {at_sizes:?}"
+            ),
         );
         d.state("connect-failed", Sizes::All);
         d.goal("try to connect without a network");
@@ -10369,7 +10371,9 @@ pub mod signed_in {
             "With a session, the page and the rail both say Connected",
         );
         // Round 28 FO3: the compact account line names what it opens.
-        let named = d.at_size(SMALL, |d| d.in_view("Sign-in details…") && !d.has("Account…"));
+        let named = d.at_size(SMALL, |d| {
+            d.in_view("Sign-in details…") && !d.has("Account…")
+        });
         d.observe(
             "iter-28-C-FO3",
             named,

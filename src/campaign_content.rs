@@ -757,7 +757,7 @@ impl CampaignContent {
 
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: the package list's columns fill the page (`Fills::because`) (design::results::STAGED_ALLOWS)"
+        reason = "staged: the columns of the package list fill the page (`Fills::because`) (design::results::STAGED_ALLOWS)"
     )]
     pub fn show(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns) {
         let scope = (self.module, self.dependencies);
@@ -2379,61 +2379,61 @@ impl CampaignContent {
             }))
             .show_inside(ui, |ui| {
                 ui.set_clip_rect(ui.clip_rect().intersect(viewport));
-                design::ScrollColumn::new("package_list")
-                    .show(ui, |ui| {
-                        for module in catalogue.modules.iter().filter(|m| !m.private) {
-                            let existing = document.selections.iter().position(|s| {
-                                catalogue.resolve_ref(&s.package).ok() == Some(module.id)
+                design::ScrollColumn::new("package_list").show(ui, |ui| {
+                    for module in catalogue.modules.iter().filter(|m| !m.private) {
+                        let existing = document.selections.iter().position(|s| {
+                            catalogue.resolve_ref(&s.package).ok() == Some(module.id)
+                        });
+                        let total = module
+                            .entries
+                            .iter()
+                            .filter(|id| catalogue.selectable(**id))
+                            .count();
+                        let count =
+                            existing.map_or(0, |i| match &document.selections[i].selection {
+                                Selection::All => total,
+                                Selection::Selected { entries } => entries.len(),
                             });
-                            let total = module
-                                .entries
-                                .iter()
-                                .filter(|id| catalogue.selectable(**id))
-                                .count();
-                            let count =
-                                existing.map_or(0, |i| match &document.selections[i].selection {
-                                    Selection::All => total,
-                                    Selection::Selected { entries } => entries.len(),
-                                });
-                            // What the campaign's other choices pull in is ticked too.
-                            let required = module
-                                .entries
-                                .iter()
-                                .filter(|id| {
-                                    catalogue.selectable(**id)
-                                        && closure.required.contains_key(id)
-                                        && !closure.direct.contains(id)
-                                })
-                                .count();
-                            let partial = count + required < total
-                                && existing.is_some_and(|i| {
-                                    matches!(&document.selections[i].selection,
+                        // What the campaign's other choices pull in is ticked too.
+                        let required = module
+                            .entries
+                            .iter()
+                            .filter(|id| {
+                                catalogue.selectable(**id)
+                                    && closure.required.contains_key(id)
+                                    && !closure.direct.contains(id)
+                            })
+                            .count();
+                        let partial = count + required < total
+                            && existing.is_some_and(|i| {
+                                matches!(&document.selections[i].selection,
                                     Selection::Selected { entries } if !entries.is_empty())
-                                });
-                            let mut enabled = count > 0;
-                            ui.push_id(module.id, |ui| {
-                                let rect = egui::Rect::from_min_size(
-                                    ui.cursor().min,
-                                    egui::vec2(
-                                        ui.available_width(),
-                                        Density::Glance.row() + design::XS,
-                                    ),
+                            });
+                        let mut enabled = count > 0;
+                        ui.push_id(module.id, |ui| {
+                            let rect = egui::Rect::from_min_size(
+                                ui.cursor().min,
+                                egui::vec2(
+                                    ui.available_width(),
+                                    Density::Glance.row() + design::XS,
+                                ),
+                            );
+                            let selected = !self.dependencies && self.module == Some(module.id);
+                            let hovered = ui.rect_contains_pointer(rect);
+                            if selected || hovered {
+                                ui.painter().rect_filled(
+                                    rect,
+                                    design::RADIUS_CONTROL,
+                                    if selected {
+                                        colors().selected
+                                    } else {
+                                        colors().hover
+                                    },
                                 );
-                                let selected = !self.dependencies && self.module == Some(module.id);
-                                let hovered = ui.rect_contains_pointer(rect);
-                                if selected || hovered {
-                                    ui.painter().rect_filled(
-                                        rect,
-                                        design::RADIUS_CONTROL,
-                                        if selected {
-                                            colors().selected
-                                        } else {
-                                            colors().hover
-                                        },
-                                    );
-                                }
-                                // Round 28 FC12: where the row's name starts, for its note.
-                                let name_left = ui.horizontal(|ui| {
+                            }
+                            // Round 28 FC12: where the row's name starts, for its note.
+                            let name_left = ui
+                                .horizontal(|ui| {
                                     let check = ui
                                         .add(egui::Checkbox::new(&mut enabled, "").indeterminate(
                                             partial || (count == 0 && required > 0),
@@ -2507,60 +2507,60 @@ impl CampaignContent {
                                     row.rect.left() + design::S
                                 })
                                 .inner;
-                                if count == 0 && required > 0 {
-                                    let selection = PackageSelection {
-                                        name: Some(module.name.clone()),
-                                        package: EntryRef::id(module.id),
-                                        selection: Selection::All,
-                                    };
-                                    let users = selection.campaign_users(catalogue);
-                                    let mut users = users;
-                                    users.sort_by(|a, b| a.1.cmp(&b.1));
-                                    let names = users
-                                        .iter()
-                                        .map(|(_, name)| name.as_str())
-                                        .collect::<Vec<_>>();
-                                    let names = match names.as_slice() {
-                                        [] => String::new(),
-                                        [name] => (*name).to_owned(),
-                                        [rest @ .., last] => {
-                                            format!("{} and {last}", rest.join(", "))
-                                        }
-                                    };
-                                    if !names.is_empty() {
-                                        // It starts at the row's name, not at its checkbox.
-                                        let mut note = ui.available_rect_before_wrap();
-                                        note.min.x = name_left.max(note.min.x);
-                                        ui.scope_builder(egui::UiBuilder::new().max_rect(note), |ui| {
-                                            ui.label(
-                                                Type::Small
-                                                    .rich(ui, format!("{names} use its creatures."))
-                                                    .color(c.muted),
-                                            );
-                                        });
+                            if count == 0 && required > 0 {
+                                let selection = PackageSelection {
+                                    name: Some(module.name.clone()),
+                                    package: EntryRef::id(module.id),
+                                    selection: Selection::All,
+                                };
+                                let users = selection.campaign_users(catalogue);
+                                let mut users = users;
+                                users.sort_by(|a, b| a.1.cmp(&b.1));
+                                let names = users
+                                    .iter()
+                                    .map(|(_, name)| name.as_str())
+                                    .collect::<Vec<_>>();
+                                let names = match names.as_slice() {
+                                    [] => String::new(),
+                                    [name] => (*name).to_owned(),
+                                    [rest @ .., last] => {
+                                        format!("{} and {last}", rest.join(", "))
                                     }
+                                };
+                                if !names.is_empty() {
+                                    // It starts at the row's name, not at its checkbox.
+                                    let mut note = ui.available_rect_before_wrap();
+                                    note.min.x = name_left.max(note.min.x);
+                                    ui.scope_builder(egui::UiBuilder::new().max_rect(note), |ui| {
+                                        ui.label(
+                                            Type::Small
+                                                .rich(ui, format!("{names} use its creatures."))
+                                                .color(c.muted),
+                                        );
+                                    });
                                 }
-                            });
-                        }
-                        design::rule(ui);
-                        let needed_count = if closure.required.is_empty() {
-                            String::new()
-                        } else {
-                            design::count(closure.required.len(), "entry", "entries")
-                        };
-                        if design::two_line_row(
-                            ui,
-                            Density::Glance.row() + design::XS,
-                            self.dependencies,
-                            "Needed by your entries",
-                            &needed_count,
-                        )
-                        .clicked()
-                        {
-                            self.dependencies = true;
-                            self.search.clear();
-                        }
-                    });
+                            }
+                        });
+                    }
+                    design::rule(ui);
+                    let needed_count = if closure.required.is_empty() {
+                        String::new()
+                    } else {
+                        design::count(closure.required.len(), "entry", "entries")
+                    };
+                    if design::two_line_row(
+                        ui,
+                        Density::Glance.row() + design::XS,
+                        self.dependencies,
+                        "Needed by your entries",
+                        &needed_count,
+                    )
+                    .clicked()
+                    {
+                        self.dependencies = true;
+                        self.search.clear();
+                    }
+                });
             });
         egui::CentralPanel::default()
             .frame(egui::Frame::new().inner_margin(egui::Margin {
@@ -2790,7 +2790,10 @@ impl CampaignContent {
                                     if let Some(reasons) = closure.required.get(&id) {
                                         let lead = if subtitle.is_empty() { "" } else { " · " };
                                         job.append(
-                                            &format!("{lead}{}", needed_by(reasons.iter().cloned())),
+                                            &format!(
+                                                "{lead}{}",
+                                                needed_by(reasons.iter().cloned())
+                                            ),
                                             0.0,
                                             egui::TextFormat::simple(font, c.document.read_only),
                                         );
