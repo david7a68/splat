@@ -522,6 +522,53 @@ fn missing_name(name: &str) -> String {
 /// The state part of a missing link, in `Small` after the name.
 const NOT_FOUND: &str = " · Not found";
 
+/// A field of the reader. World's page and Lookup's compact reader can show one entry at once, so
+/// each has its own name; the entry's id tells the entries apart.
+#[derive(Clone, Copy)]
+struct ReaderField {
+    page: design::FieldId,
+    compact: design::FieldId,
+}
+
+impl ReaderField {
+    fn id(self, compact: bool, entry: Uuid) -> design::FieldId {
+        (if compact { self.compact } else { self.page }).with(entry)
+    }
+}
+
+const PICK_SEARCH: ReaderField = ReaderField {
+    page: crate::field_id!("world_pick_search"),
+    compact: crate::field_id!("lookup_pick_search"),
+};
+const NEW_LOCATION_NAME: ReaderField = ReaderField {
+    page: crate::field_id!("world_new_location_name"),
+    compact: crate::field_id!("lookup_new_location_name"),
+};
+const OTHER_TYPE: ReaderField = ReaderField {
+    page: crate::field_id!("world_other_type"),
+    compact: crate::field_id!("lookup_other_type"),
+};
+const STATUS: ReaderField = ReaderField {
+    page: crate::field_id!("world_status"),
+    compact: crate::field_id!("lookup_status"),
+};
+const ADD_STAT_BLOCK_SEARCH: ReaderField = ReaderField {
+    page: crate::field_id!("world_add_stat_block_search"),
+    compact: crate::field_id!("lookup_add_stat_block_search"),
+};
+const EDIT_STATUS: ReaderField = ReaderField {
+    page: crate::field_id!("world_edit_status"),
+    compact: crate::field_id!("lookup_edit_status"),
+};
+const EDIT_TEXT: ReaderField = ReaderField {
+    page: crate::field_id!("world_edit_text"),
+    compact: crate::field_id!("lookup_edit_text"),
+};
+const ADD_INITIATIVE: ReaderField = ReaderField {
+    page: crate::field_id!("world_add_initiative"),
+    compact: crate::field_id!("lookup_add_initiative"),
+};
+
 /// The width a missing link takes as `missing_link` draws it: one line, or with `stacked` its
 /// name line above `Not found`.
 fn missing_width(ui: &egui::Ui, name: &str, stacked: bool) -> f32 {
@@ -2995,7 +3042,7 @@ impl Reader {
             // In Lookup, a plain note's prose has the reader's gap below the kind line, as every
             // entry's has. World's plain note follows its file line directly.
             if self.compact && has_prose {
-                ui.add_space(design::L);
+                design::gap(ui, design::Gap::L);
             }
             let followed = style::measure(ui, |ui| {
                 style::markdown(ui, &item.entry.body);
@@ -3050,10 +3097,6 @@ impl Reader {
         go
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn make_entry_control(
         &mut self,
         ui: &mut egui::Ui,
@@ -3061,8 +3104,9 @@ impl Reader {
         campaign: Option<&Campaign>,
     ) -> Option<Go> {
         let campaign = campaign?;
+        let compact = self.compact;
         let mut chosen = None;
-        ui.add_space(design::M);
+        design::gap(ui, design::Gap::M);
         // The edit form's fields end at `FORM_WIDTH` from the reader's edge; the section's
         // indent must not move this field's right edge past them (round 27 FF7).
         let form_edge = ui.max_rect().left() + design::FORM_WIDTH;
@@ -3084,8 +3128,9 @@ impl Reader {
             });
             ui.scope(|ui| {
                 ui.set_max_width((form_edge - ui.max_rect().left()).min(ui.available_width()));
-                design::text_field(
+                design::labelled_field(
                     ui,
+                    OTHER_TYPE.id(compact, item.entry.id),
                     "Another type",
                     &mut self.other_type,
                     Some("A word of your own, such as faction or quest."),
@@ -3795,7 +3840,7 @@ impl Reader {
         let width = width.min((ui.available_width() - change_width - design::L).max(design::XXL));
         if stacked {
             // An `S` gap above each stacked label keeps each label with its own value.
-            ui.add_space(design::S);
+            design::gap(ui, design::Gap::S);
             ui.label(Type::Small.rich(ui, label).color(colors().muted));
         }
         ui.horizontal(|ui| {
@@ -4239,10 +4284,6 @@ impl Reader {
     }
 
     /// The open picker. Returns the value the DM chose, or `Value::Null` to clear it.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn pick(
         &mut self,
         ui: &mut egui::Ui,
@@ -4251,6 +4292,7 @@ impl Reader {
         campaign: &Campaign,
         draft_groups: Option<&[Value]>,
     ) -> Option<Value> {
+        let compact = self.compact;
         let picker = self.picker.as_mut()?;
         let key = picker.key;
         let label = match key {
@@ -4267,7 +4309,10 @@ impl Reader {
             .filter_map(|value| index.world_value_target(value))
             .collect();
         let width = ui.available_width();
-        let response = design::search_field(ui, label, &mut picker.search, label, width);
+        let response = PICK_SEARCH
+            .id(self.compact, item.entry.id)
+            .search(ui, label, &mut picker.search, label, width)
+            .field;
         if std::mem::take(&mut picker.focus) {
             response.request_focus();
         }
@@ -4318,7 +4363,14 @@ impl Reader {
         }
         if key == "in" {
             design::quiet_section(ui, "New location…", |ui| {
-                design::text_field(ui, "Location name", &mut picker.new_location, None, None);
+                design::labelled_field(
+                    ui,
+                    NEW_LOCATION_NAME.id(compact, item.entry.id),
+                    "Location name",
+                    &mut picker.new_location,
+                    None,
+                    None,
+                );
                 let reason = picker
                     .new_location
                     .trim()
@@ -4486,7 +4538,14 @@ impl Reader {
             }
         }
         if self.status_editing {
-            let response = design::text_field(ui, "Status", &mut self.status, None, None);
+            let response = design::labelled_field(
+                ui,
+                STATUS.id(self.compact, item.entry.id),
+                "Status",
+                &mut self.status,
+                None,
+                None,
+            );
             // Change puts the keyboard in the field with its words selected, so the DM types
             // the new value at once. A pass that still holds Change's click takes the keyboard
             // from a field that was not clicked, so the request waits for a pass with no click.
@@ -4570,7 +4629,7 @@ impl Reader {
             }
             return None;
         };
-        match add_form(ui, item, index, sides, adding)? {
+        match add_form(ui, item, index, sides, adding, self.compact)? {
             FormEnd::Cancel => self.adding = None,
             FormEnd::Add => {
                 let stat_block = &index.items[adding.stat_block?].entry;
@@ -4627,6 +4686,7 @@ fn add_form(
     index: &ContentIndex,
     sides: &[String],
     adding: &mut Adding,
+    compact: bool,
 ) -> Option<FormEnd> {
     ui.label(Type::Strong.rich(ui, format!("Add {} to the fight", item.entry.name)));
     match adding.stat_block.map(|at| &index.items[at].entry) {
@@ -4646,7 +4706,7 @@ fn add_form(
         }
         None => {
             let width = ui.available_width();
-            design::search_field(
+            let _ = ADD_STAT_BLOCK_SEARCH.id(compact, item.entry.id).search(
                 ui,
                 "Stat block",
                 &mut adding.search,
@@ -4670,10 +4730,11 @@ fn add_form(
                 .icon(design::combo_icon)
                 .show_ui(ui, |ui| {
                     for side in sides {
-                        ui.selectable_value(
+                        design::choice_value(
+                            ui,
                             &mut adding.side,
                             side.clone(),
-                            design::reader::human_label(side),
+                            &design::reader::human_label(side),
                         );
                     }
                 });
@@ -4686,8 +4747,9 @@ fn add_form(
         Some("Leave empty to roll it."),
         None,
         |ui| {
-            design::text_input(
+            design::line_field(
                 ui,
+                ADD_INITIATIVE.id(compact, item.entry.id),
                 "Initiative",
                 &mut adding.initiative,
                 "",

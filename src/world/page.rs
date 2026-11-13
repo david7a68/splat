@@ -11,6 +11,9 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 const ROW: f32 = 40.0;
+const WORLD_SEARCH: design::FieldId = crate::field_id!("world_search");
+const NEW_NAME: design::FieldId = crate::field_id!("world_new_name");
+const NEW_NOTE_TYPE: design::FieldId = crate::field_id!("world_new_note_type");
 const LIST_WIDTH: f32 = 260.0;
 /// More rows than this in one check are counted, not shown.
 const CHECK_ROWS: usize = 40;
@@ -221,10 +224,6 @@ struct BrokenDetail {
 
 /// The one row above another view while an unsaved generated NPC is held, on World and in
 /// Lookup: `Unsaved NPC: <name> · Show`. Returns whether the DM chose `Show`.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 pub(crate) fn unsaved_npc_row(ui: &mut egui::Ui, name: &str) -> bool {
     let mut show = false;
     ui.horizontal_wrapped(|ui| {
@@ -236,7 +235,7 @@ pub(crate) fn unsaved_npc_row(ui: &mut egui::Ui, name: &str) -> bool {
         ui.label(Type::Body.rich(ui, "·").color(colors().muted));
         show = design::link(ui, "Show").clicked();
     });
-    ui.add_space(design::S);
+    design::gap(ui, design::Gap::S);
     show
 }
 
@@ -590,7 +589,7 @@ impl WorldPage {
             }))
             .show_inside(ui, |ui| {
                 let width = ui.available_width();
-                design::search_field(
+                let _ = WORLD_SEARCH.search(
                     ui,
                     "Search the world",
                     &mut self.search,
@@ -620,8 +619,13 @@ impl WorldPage {
                             })
                             .collect();
                         if !broken.is_empty() {
-                            ui.add_space(design::XS);
-                            design::group_heading(ui, "Cannot be read", broken.len());
+                            design::heading(
+                                ui,
+                                design::Heading::Group {
+                                    title: "Cannot be read",
+                                    count: broken.len(),
+                                },
+                            );
                             for (path, problem) in broken {
                                 let detail = self.broken_details.get(path);
                                 let open = self.repair.as_ref().is_some_and(|r| r.path == *path)
@@ -651,7 +655,13 @@ impl WorldPage {
                             .map(|r| r.path.clone())
                             .collect();
                         if !drafts.is_empty() {
-                            design::group_heading(ui, "Repair drafts", drafts.len());
+                            design::heading(
+                                ui,
+                                design::Heading::Group {
+                                    title: "Repair drafts",
+                                    count: drafts.len(),
+                                },
+                            );
                             for path in drafts {
                                 if design::two_line_row(ui, ROW, false, &path, "Unsaved repair")
                                     .clicked()
@@ -960,7 +970,7 @@ impl WorldPage {
                 })
                 .inner
             });
-        ui.add_space(design::S);
+        design::gap(ui, design::Gap::S);
         design::quiet_section(ui, "Technical details", |ui| {
             ui.add(
                 egui::Label::new(Type::Small.rich(ui, &fault.system).color(colors().muted)).wrap(),
@@ -1033,13 +1043,13 @@ impl WorldPage {
     fn creation_body(&mut self, ui: &mut egui::Ui, index: &ContentIndex, campaign: &Campaign) {
         let mut made = None;
         if let Some(kind) = self.new_kind {
-            design::group_label(
+            design::heading(
                 ui,
-                match kind {
+                design::Heading::Label(match kind {
                     "npc" => "New NPC",
                     "location" => "New location",
                     _ => "New note",
-                },
+                }),
             );
             let reason = self
                 .new_name
@@ -1090,13 +1100,15 @@ impl WorldPage {
                         );
                         super::in_rect(ui, at, |ui| create().blocked(reason).show(ui).clicked())
                     };
-                let mut name_field =
-                    |ui: &mut egui::Ui| design::text_field(ui, "Name", name, None, None);
+                let mut name_field = |ui: &mut egui::Ui| {
+                    design::labelled_field(ui, NEW_NAME, "Name", name, None, None)
+                };
                 if kind == "note" {
                     field(ui, false, &mut name_field);
                     field(ui, true, &mut |ui: &mut egui::Ui| {
-                        design::text_field(
+                        design::labelled_field(
                             ui,
+                            NEW_NOTE_TYPE,
                             "Type (optional)",
                             note_type,
                             Some("Leave empty for a plain note. For example: faction or quest."),
@@ -1308,7 +1320,7 @@ impl WorldPage {
                             open = Some(CheckAct::Open(group[0].page, None));
                         }
                     });
-                    ui.add_space(design::S);
+                    design::gap(ui, design::Gap::S);
                 });
             }
             more(ui, found.chunk_by(|a, b| a.page == b.page).count());
@@ -1319,14 +1331,14 @@ impl WorldPage {
                 ui,
                 "Each unticked task line in the world’s notes. Tick a question when you decide.",
             );
-            ui.add_space(design::S);
+            design::gap(ui, design::Gap::S);
             by_page(ui, &checks.questions);
             return tick.map(CheckAct::Tick).or(open);
         }
         design::reader::title(ui, PROBLEMS_TITLE);
         design::reader::subtitle(ui, PROBLEMS_INTRO);
         if !checks.loose_dates.is_empty() {
-            design::reader::section_heading(ui, "Dates outside events");
+            design::heading(ui, design::Heading::Section("Dates outside events"));
             note(
                 ui,
                 "A date in words belongs on an event’s note. An event has a date that Splat can put in order.",
@@ -1341,7 +1353,7 @@ impl WorldPage {
             }
         };
         if !checks.wanted.is_empty() {
-            design::reader::section_heading(ui, "Pages to write");
+            design::heading(ui, design::Heading::Section("Pages to write"));
             note(
                 ui,
                 "A link names each of these, and no note has the name. The note that most lines want is first.",
@@ -1371,7 +1383,7 @@ impl WorldPage {
             ),
         ] {
             if !found.is_empty() {
-                design::reader::section_heading(ui, title);
+                design::heading(ui, design::Heading::Section(title));
                 note(ui, words);
                 ui.horizontal_wrapped(|ui| pages(ui, &found[..found.len().min(CHECK_ROWS)]));
                 more(ui, found.len());
@@ -1390,7 +1402,7 @@ impl WorldPage {
             ),
         ] {
             if !found.is_empty() {
-                design::reader::section_heading(ui, title);
+                design::heading(ui, design::Heading::Section(title));
                 note(ui, words);
                 for (said, on) in found.iter().take(CHECK_ROWS) {
                     ui.horizontal_wrapped(|ui| {
@@ -1537,11 +1549,17 @@ impl WorldPage {
     )]
     fn list(&mut self, ui: &mut egui::Ui, index: &ContentIndex, groups: &WorldGroups) {
         for ((kind, title), rows) in groups {
-            ui.add_space(design::XS);
             if *kind == 3 {
+                design::gap(ui, design::Gap::XS);
                 design::folder_group_heading(ui, title, rows.len());
             } else {
-                design::group_heading(ui, title, rows.len());
+                design::heading(
+                    ui,
+                    design::Heading::Group {
+                        title,
+                        count: rows.len(),
+                    },
+                );
             }
             let spacing = std::mem::replace(&mut ui.spacing_mut().item_spacing.y, 0.0);
             for &(position, depth) in rows {
@@ -1688,7 +1706,7 @@ fn question_row(
     index: &ContentIndex,
     found: &super::checks::Found,
 ) -> (bool, bool) {
-    ui.horizontal_top(|ui| {
+    let row = ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
         let (slot, _) =
             ui.allocate_exact_size(egui::vec2(QUESTION_BOX, design::XL), egui::Sense::hover());
@@ -1712,8 +1730,9 @@ fn question_row(
             .vertical(|ui| design::wrapped_link(ui, &found.words).clicked())
             .inner;
         (ticked, clicked)
-    })
-    .inner
+    });
+    design::register_row(ui, row.response.rect);
+    row.inner
 }
 
 /// The note's text with the box of an open question set: `question` is the question as read
