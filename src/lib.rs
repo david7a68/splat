@@ -1923,59 +1923,66 @@ impl Splat {
                     let (settings, dndbeyond) = (&mut self.settings, &mut self.dndbeyond);
                     let has_run = self.encounters.has_run();
                     footer.pane(ui, design::Body::Content, |ui| {
-                        let mut campaigns = campaigns.borrow_mut();
-                        let campaigns: &mut campaigns::Campaigns = &mut campaigns;
-                        ui.add_space(design::L);
-                        let list =
+                        // A child that starts empty, so the forms narrow themselves (`set_max_width`): the
+                        // pane's column holds its content at the column's width (gap sent to K).
+                        ui.vertical(|ui| {
+                            let mut campaigns = campaigns.borrow_mut();
+                            let campaigns: &mut campaigns::Campaigns = &mut campaigns;
+                            ui.add_space(design::L);
+                            let list =
                             |ui: &mut egui::Ui,
                              campaigns: &mut campaigns::Campaigns,
                              dndbeyond: &mut dndbeyond::DndBeyond| {
                                 campaigns.show(ui, session.clone(), dndbeyond, blocked);
                             };
-                        if ui.ctx().content_rect().width() >= 1000.0 {
-                            // A clear gutter, so that the left column's text does not run on.
-                            // Not `ui.columns`, whose justified layout stretches the words in a paragraph.
-                            let half = (ui.available_width() - design::XL) / 2.0;
-                            // Round 26 AG1: the account column starts an `XL` gap after the
-                            // campaign list, which is as wide as its rows need.
-                            let widths = [
-                                campaigns.list_width(half),
-                                ui.available_width() - design::XL - campaigns.list_width(half),
-                            ];
-                            ui.horizontal_top(|ui| {
-                                ui.spacing_mut().item_spacing.x = design::XL;
-                                let layout = egui::Layout::top_down(egui::Align::Min);
-                                for (place, width) in widths.into_iter().enumerate() {
-                                    let column = egui::vec2(width, 0.0);
-                                    ui.allocate_ui_with_layout(column, layout, |ui| {
-                                        // Both ways, so the second column starts in one place.
-                                        ui.set_width(width);
-                                        ui.spacing_mut().item_spacing.x = 8.0;
-                                        if place == 0 {
-                                            list(ui, campaigns, dndbeyond);
-                                        } else {
-                                            settings.campaign_form_open = campaigns.form_open();
-                                            settings.show(ui);
-                                        }
-                                    });
-                                }
-                            });
-                        } else {
-                            settings.campaign_form_open = campaigns.form_open();
-                            if has_run {
-                                settings.show_compact(ui);
-                                ui.add_space(design::L);
-                                list(ui, campaigns, dndbeyond);
+                            if ui.ctx().content_rect().width() >= 1000.0 {
+                                // A clear gutter, so that the left column's text does not run on.
+                                // Not `ui.columns`, whose justified layout stretches the words in a paragraph.
+                                let half = (ui.available_width() - design::XL) / 2.0;
+                                // Round 26 AG1: the account column starts an `XL` gap after the
+                                // campaign list, which is as wide as its rows need.
+                                let widths = [
+                                    campaigns.list_width(half),
+                                    ui.available_width() - design::XL - campaigns.list_width(half),
+                                ];
+                                ui.horizontal_top(|ui| {
+                                    ui.spacing_mut().item_spacing.x = design::XL;
+                                    let layout = egui::Layout::top_down(egui::Align::Min);
+                                    for (place, width) in widths.into_iter().enumerate() {
+                                        let column = egui::vec2(width, 0.0);
+                                        ui.allocate_ui_with_layout(column, layout, |ui| {
+                                            // Both ways, so the second column starts in one place.
+                                            ui.set_width(width);
+                                            ui.spacing_mut().item_spacing.x = 8.0;
+                                            if place == 0 {
+                                                list(ui, campaigns, dndbeyond);
+                                            } else {
+                                                settings.campaign_form_open = campaigns.form_open();
+                                                settings.show(ui);
+                                            }
+                                        });
+                                    }
+                                });
                             } else {
-                                list(ui, campaigns, dndbeyond);
-                                ui.add_space(design::L);
-                                settings.show_compact(ui);
+                                settings.campaign_form_open = campaigns.form_open();
+                                if has_run {
+                                    settings.show_compact(ui);
+                                    ui.add_space(design::L);
+                                    list(ui, campaigns, dndbeyond);
+                                } else {
+                                    list(ui, campaigns, dndbeyond);
+                                    ui.add_space(design::L);
+                                    settings.show_compact(ui);
+                                }
                             }
-                        }
-                        // After a failed Connect, Connect comes into view above the footer.
-                        if let Some(connect) = settings.take_reveal() {
-                            ui.scroll_to_rect(connect.expand2(egui::vec2(0.0, design::S)), None);
-                        }
+                            // After a failed Connect, Connect comes into view above the footer.
+                            if let Some(connect) = settings.take_reveal() {
+                                ui.scroll_to_rect(
+                                    connect.expand2(egui::vec2(0.0, design::S)),
+                                    None,
+                                );
+                            }
+                        });
                     });
                 });
             }
@@ -2188,15 +2195,34 @@ impl Splat {
                             // move result share this one footer; its scan is shared with
                             // the form below.
                             self.sessions.folder_messages(&mut footer, &self.timeline);
-                            let (sessions, timeline) = (&mut self.sessions, &self.timeline);
+                            // Round 28 (lead ruling): the session folder form's title line and
+                            // save row stand above the pane, so Save never scrolls away; its
+                            // fields are the pane's content.
+                            let details_open = campaigns.borrow().form_open();
+                            ui.vertical(|ui| {
+                                design::locked(ui, blocked, |ui| {
+                                    self.sessions.folder_save_row(
+                                        ui,
+                                        &self.timeline,
+                                        blocked,
+                                        details_open,
+                                    );
+                                });
+                            });
+                            ui.add_space(design::S);
+                            let sessions = &mut self.sessions;
                             let dndbeyond = &mut self.dndbeyond;
                             footer.pane(ui, design::Body::Content, |ui| {
-                                let mut campaigns = campaigns.borrow_mut();
-                                campaigns.show_active(ui, session, dndbeyond, blocked);
-                                design::locked(ui, blocked, |ui| {
-                                    let details_open = campaigns.show_form_if_editing(ui);
-                                    design::rule(ui);
-                                    sessions.folder_view(ui, timeline, blocked, details_open);
+                                // A child that starts empty, so the form narrows itself
+                                // (`set_max_width`) as it did in its own scroll area.
+                                ui.vertical(|ui| {
+                                    let mut campaigns = campaigns.borrow_mut();
+                                    campaigns.show_active(ui, session, dndbeyond, blocked);
+                                    design::locked(ui, blocked, |ui| {
+                                        campaigns.show_form_if_editing(ui);
+                                        design::rule(ui);
+                                        sessions.folder_view(ui, blocked);
+                                    });
                                 });
                             });
                         });

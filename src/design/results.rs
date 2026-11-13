@@ -617,12 +617,9 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Results],
         ),
         ("src/sessions/page.rs", "banner_notices", &[Ban::Results]),
-        (
-            "src/sessions/page.rs",
-            "folder_form",
-            &[Ban::Results, Ban::Layout(1)],
-        ),
+        ("src/sessions/page.rs", "folder_fields", &[Ban::Layout(1)]),
         ("src/sessions/page.rs", "folder_messages", &[Ban::Results]),
+        ("src/sessions/page.rs", "folder_save_row", &[Ban::Results]),
         ("src/sessions/page.rs", "markers", &[Ban::Results]),
         (
             "src/sessions/page.rs",
@@ -713,6 +710,8 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/art.rs", "show_viewer", &[Ban::Layout(1)]),
         ("src/campaigns.rs", "selector", &[Ban::Layout(1)]),
         ("src/copy_dialog.rs", "show", &[Ban::Layout(3)]),
+        ("src/creature_filter.rs", "filter_bar", &[Ban::Layout(1)]),
+        ("src/creature_filter.rs", "menu", &[Ban::Layout(2)]),
         (
             "src/encounter_run/ad_hoc.rs",
             "add_creature_form",

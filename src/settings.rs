@@ -179,8 +179,7 @@ impl Settings {
             Account::Failed => {
                 self.session = None;
                 self.connect_failed = true;
-                self.error =
-                    Some("Could not reach D&D Beyond. Check your connection and try again.".into());
+                self.error = Some("Could not reach D&D Beyond. Check your connection.".into());
             }
             Account::KeyringWarning => {
                 self.session = session();
@@ -191,7 +190,7 @@ impl Settings {
             Account::RefreshFailing => {
                 self.session = session();
                 self.refresh_error =
-                    Some("Could not reach D&D Beyond. Check your connection and try again.".into());
+                    Some("Could not reach D&D Beyond. Check your connection.".into());
             }
         }
         self.account_epoch += 1;

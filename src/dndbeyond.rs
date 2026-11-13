@@ -95,7 +95,7 @@ fn fetch(session: Session) -> Result<Vec<RemoteCampaign>, String> {
     let response = session
         .website_request(client.get(URL).header("Accept", "application/json"))?
         .send()
-        .map_err(|_| "Could not reach D&D Beyond. Check your connection and try again.")?;
+        .map_err(|_| "Could not reach D&D Beyond. Check your connection.")?;
     match response.status().as_u16() {
         200..=299 => {},
         401 | 403 => return Err("D&D Beyond rejected the request. Reconnect in Settings, or try again later if the site is blocking access.".into()),

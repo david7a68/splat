@@ -12736,6 +12736,22 @@ pub mod session_notes {
                 .map(|node| node.rect.top())
         };
         let row_clean = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, save_row));
+        // Round 28 (lead ruling): the save row stands above the pane, so at 960x640 its state
+        // word and every Save are whole in view with no scroll, whatever help and reasons the
+        // fields show. Each named control must be found, then be wholly in view.
+        let whole = |d: &Driver<'_>, names: &[&str]| {
+            let nodes = d.nodes();
+            names.iter().all(|name| {
+                nodes
+                    .iter()
+                    .find(|node| {
+                        node.name.ends_with(name) && node.role != egui::accesskit::Role::Label
+                    })
+                    .or_else(|| nodes.iter().find(|node| node.name.ends_with(name)))
+                    .is_some_and(|node| node.fully_in_view())
+            })
+        };
+        let clean_whole = d.at_size(SMALL, |d| whole(d, &["No changes", "Save folder"]));
         d.app_mut().timeline.save();
         d.replace_text_in("Folder", "30 Sessions");
         d.expect("Move files and save");
@@ -12779,6 +12795,25 @@ pub mod session_notes {
         );
         // FT4 (round 16): with no run and no other form, moving the files is the one primary,
         // as Move runs and save is on Rules and runs.
+        let offered_whole = d.at_size(SMALL, |d| {
+            whole(
+                d,
+                &[
+                    "Unsaved",
+                    "Discard",
+                    "Move files and save",
+                    "Save without moving",
+                ],
+            ) && d.visible_text(KEEPS)
+        });
+        d.observe(
+            "iter-28-C-folder-save-row",
+            clean_whole && offered_whole,
+            format!(
+                "At 960x640 with no scroll, the save row is whole: clean {clean_whole}, \
+                 move offered with its warning {offered_whole}"
+            ),
+        );
         d.state_prepared("session-folder-move-offered", Sizes::All, |d| {
             super::session_recording::check_one_primary(d, "Move files and save", "iter-16-C-FT4");
             // iter-23-S FK8: the warning names which choice hides the files.

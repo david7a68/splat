@@ -6629,14 +6629,10 @@ impl Sessions {
         }
     }
 
-    /// `details_open`: the campaign details form, with its own primary save, is in view above.
-    pub fn folder_view(
-        &mut self,
-        ui: &mut egui::Ui,
-        book: &Book,
-        locked: Option<&str>,
-        details_open: bool,
-    ) {
+    /// The Session folder form's fields, in the pane's body. Its title line and save row are
+    /// `folder_save_row`, drawn above the pane so Save never scrolls away (round 28, lead
+    /// ruling; a named lead exception split them from one function).
+    pub fn folder_view(&mut self, ui: &mut egui::Ui, locked: Option<&str>) {
         // Earlier sections can have a wider minimum rect. Give this form its own column.
         let rect = egui::Rect::from_min_size(
             ui.cursor().min,
@@ -6646,27 +6642,16 @@ impl Sessions {
             ),
         );
         ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
-            self.folder_form(ui, book, locked, details_open);
+            self.folder_fields(ui, locked);
         });
     }
 
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
     )]
-    fn folder_form(
-        &mut self,
-        ui: &mut egui::Ui,
-        book: &Book,
-        locked: Option<&str>,
-        details_open: bool,
-    ) {
-        let Some(campaign) = self.campaign.clone() else {
-            return;
-        };
+    fn folder_fields(&mut self, ui: &mut egui::Ui, locked: Option<&str>) {
         ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
-        ui.add_space(design::XS);
-        design::group_heading(ui, "Session folder", 0);
         let response = ui
             .add_enabled_ui(locked.is_none(), |ui| {
                 let response = ui.add(
@@ -6698,6 +6683,28 @@ impl Sessions {
                 "Notes, Timeline.md, Templates and Recordings are all here.",
             );
         }
+    }
+
+    /// The Session folder form's title line and save row: its state word, Discard, the reason
+    /// and Save, at the form's right edge. `details_open`: the campaign details form, with its
+    /// own primary save, is in view.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
+    pub fn folder_save_row(
+        &mut self,
+        ui: &mut egui::Ui,
+        book: &Book,
+        locked: Option<&str>,
+        details_open: bool,
+    ) {
+        let Some(campaign) = self.campaign.clone() else {
+            return;
+        };
+        ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
+        ui.add_space(design::XS);
+        design::group_heading(ui, "Session folder", 0);
         let changed = super::resolve(&campaign, &self.folder_text).ok() != self.folder.clone();
         // `folder_messages` scanned the folder this frame, before the pane's body.
         let files = self

@@ -133,7 +133,7 @@ pub fn connect(cookie: Zeroizing<String>) -> Result<Session, String> {
 // cannot reach the network, and the UI shows its ordinary connection failure.
 #[cfg(test)]
 pub fn connect(_: Zeroizing<String>) -> Result<Session, String> {
-    Err("Could not reach D&D Beyond. Check your connection and try again.".into())
+    Err("Could not reach D&D Beyond. Check your connection.".into())
 }
 
 /// For the `#[ignore]`d live tests only, which a person runs on purpose.
@@ -154,9 +154,7 @@ fn exchange(url: &str, cookie: Zeroizing<String>) -> Result<Session, String> {
         .header(header::COOKIE, value)
         .header(header::CONTENT_TYPE, "application/json")
         .send()
-        .map_err(|_| {
-            "Could not reach D&D Beyond. Check your connection and try again.".to_owned()
-        })?;
+        .map_err(|_| "Could not reach D&D Beyond. Check your connection.".to_owned())?;
     match response.status().as_u16() {
         200..=299 => {},
         401 | 403 => return Err("D&D Beyond rejected the session or blocked the request. Sign in again and copy a fresh cookie.".into()),
