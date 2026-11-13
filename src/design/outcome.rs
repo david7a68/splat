@@ -681,7 +681,7 @@ impl<'a> FaultMessage<'a> {
 ///     let mut pressed = None;
 ///     let mut footer = splat::outcome::Footer::new("f", 400.0);
 ///     footer.outcome(splat::outcome::Outcome::Refused(splat::sentence!("No.")), &mut pressed);
-///     let _ = footer.show(ui);
+///     footer.pane(ui, splat::pane::Body::Content, |_| ());
 /// }
 /// ```
 /// ```compile_fail
@@ -690,7 +690,7 @@ impl<'a> FaultMessage<'a> {
 ///     let mut footer = splat::outcome::Footer::new("f", 400.0);
 ///     let done = splat::outcome::Done::new(splat::outcome::Verb::Remove, "Bell");
 ///     footer.outcome(done, &mut pressed);
-///     let _ = footer.show(ui);
+///     footer.pane(ui, splat::pane::Body::Content, |_| ());
 /// }
 /// ```
 /// ```compile_fail
