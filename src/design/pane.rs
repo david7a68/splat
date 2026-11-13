@@ -209,6 +209,11 @@ struct Keep {
     pass: u64,
     now: Option<f32>,
     content: Option<f32>,
+    /// The keyboard focus at the press: a move of it ends the hold, so the hold never takes
+    /// back a scroll that brought the focused control into view.
+    focus: Option<Id>,
+    /// The room's height at the press: a footer that comes or goes ends the hold.
+    room: Option<f32>,
 }
 
 /// How many passes after a press the pane still moves its scroll to hold the control.
@@ -235,6 +240,7 @@ fn with_held(ui: &Ui, change: impl FnOnce(&mut Held, u64)) {
 /// The body pressed `control` (any stable key of it), whose top is `top`: hold it in place.
 pub fn hold_press(ui: &Ui, control: impl std::hash::Hash, top: f32) {
     let control = Id::new(control);
+    let focus = ui.ctx().memory(|memory| memory.focused());
     with_held(ui, |held, pass| {
         held.keep = Some(Keep {
             control,
@@ -242,6 +248,8 @@ pub fn hold_press(ui: &Ui, control: impl std::hash::Hash, top: f32) {
             pass,
             now: None,
             content: None,
+            focus,
+            room: None,
         });
     });
 }
@@ -397,8 +405,30 @@ fn hold_place<R>(ui: &Ui, mut held: Held, output: &egui::scroll_area::ScrollArea
             || i.smooth_scroll_delta != egui::Vec2::ZERO
             || i.pointer.is_decidedly_dragging()
     });
-    held.keep
-        .take_if(|keep| scrolled || pass > keep.pass + KEEP_PASSES);
+    let focus = ui.ctx().memory(|memory| memory.focused());
+    let room = output.inner_rect.height();
+    let ended = held.keep.as_mut().and_then(|keep| {
+        let room_changed = (*keep.room.get_or_insert(room) - room).abs() > 0.5;
+        if scrolled {
+            Some("scrolled")
+        } else if pass > keep.pass + KEEP_PASSES {
+            Some("passes")
+        } else if focus != keep.focus {
+            Some("focus moved")
+        } else if room_changed {
+            Some("room changed")
+        } else {
+            None
+        }
+    });
+    if let Some(why) = ended {
+        held.keep = None;
+        #[cfg(test)]
+        ui.ctx()
+            .data_mut(|data| data.insert_temp(Id::new("design_pane_hold_ended"), why));
+        #[cfg(not(test))]
+        let _ = why;
+    }
     if let Some(keep) = held.keep.as_mut()
         && (*keep.content.get_or_insert(content) - content).abs() > 0.5
         && let Some(now) = keep.now.take()
@@ -882,15 +912,23 @@ mod hold_tests {
     struct State {
         holds: bool,
         rows_above: usize,
+        message: bool,
     }
 
-    /// A list with rows above a button and many below; the button's press adds a row above it.
+    /// A list with rows above a button and many below, then a control far below; the button's
+    /// press adds rows above it. With `message`, the footer holds a reason.
     fn list(ui: &mut Ui, state: &mut State) {
+        use crate::design::outcome::{Messages, NoPress, Outcome, PaneFrame};
         let mut scroll = ContentScroll::default();
         if state.holds {
             scroll = scroll.holds_presses();
         }
-        Footer::new("held", ui.available_width()).pane_content(ui, scroll, |ui| {
+        let frame = PaneFrame::new(ui);
+        let mut messages = Messages::<NoPress>::new(&frame, "held", ui.available_width());
+        if state.message {
+            messages.outcome(Outcome::Refused(crate::sentence!("Save the draft first.")));
+        }
+        let _ = messages.pane_content(ui, scroll, |ui| {
             for row in 0..state.rows_above {
                 ui.label(format!("Row above {row}"));
             }
@@ -903,7 +941,63 @@ mod hold_tests {
             for row in 0..60 {
                 ui.label(format!("Row below {row}"));
             }
+            let _ = ui.button("Far control");
         });
+    }
+
+    fn ended(h: &Harness<'_, State>) -> Option<&'static str> {
+        h.ctx
+            .data(|data| data.get_temp::<&'static str>(Id::new("design_pane_hold_ended")))
+    }
+
+    /// A hold ends when keyboard focus moves (the focused control then comes whole into view
+    /// above the footer, and the hold does not take that scroll back) and when a footer comes
+    /// (the room changed).
+    #[test]
+    fn a_focus_move_or_a_new_footer_ends_the_hold() {
+        // Focus moves to a control far below, with a footer present.
+        let mut h = Harness::builder()
+            .with_size(egui::vec2(400.0, 300.0))
+            .build_ui_state(
+                list,
+                State {
+                    holds: true,
+                    rows_above: 2,
+                    message: true,
+                },
+            );
+        crate::design::theme::install(&h.ctx);
+        h.run_steps(4);
+        h.get_by_label("Add a row above").click();
+        h.run_steps(1);
+        h.get_by_label("Far control").focus();
+        h.run_steps(8);
+        assert_eq!(ended(&h), Some("focus moved"));
+        let far = h.get_by_label("Far control").rect();
+        let record = pane_records(&h.ctx).into_iter().next().unwrap();
+        let (viewport, footer) = (record.viewport().unwrap(), record.footer().unwrap());
+        assert!(
+            far.top() >= viewport.top() - 0.5 && far.bottom() <= footer.top() + 0.5,
+            "the focused control is whole above the footer: {far:?}, footer {footer:?}"
+        );
+        // A footer that comes after the press.
+        let mut h = Harness::builder()
+            .with_size(egui::vec2(400.0, 300.0))
+            .build_ui_state(
+                list,
+                State {
+                    holds: true,
+                    rows_above: 2,
+                    message: false,
+                },
+            );
+        crate::design::theme::install(&h.ctx);
+        h.run_steps(4);
+        h.get_by_label("Add a row above").click();
+        h.run_steps(1);
+        h.state_mut().message = true;
+        h.run_steps(8);
+        assert_eq!(ended(&h), Some("room changed"));
     }
 
     /// `ContentScroll::holds_presses`: a press that adds rows above its control keeps the
@@ -919,6 +1013,7 @@ mod hold_tests {
                     State {
                         holds,
                         rows_above: 2,
+                        message: false,
                     },
                 );
             crate::design::theme::install(&h.ctx);

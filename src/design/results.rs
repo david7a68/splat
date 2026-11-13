@@ -692,6 +692,16 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/library.rs", "add_reader_result", &[Ban::Results]),
         ("src/library.rs", "apply_page_press", &[Ban::Results]),
         (
+            "src/design/results.rs",
+            "a_failed_undo_keeps_its_entry_and_its_order",
+            &[Ban::Results],
+        ),
+        (
+            "src/design/results.rs",
+            "end_events_do_what_the_kind_says",
+            &[Ban::Results],
+        ),
+        (
             "src/library.rs",
             "editor_pane",
             &[Ban::Results, Ban::Layout(5), Ban::Extras(6), Ban::Pane(3)],
@@ -1817,6 +1827,10 @@ mod tests {
     /// Review of PR 299: a failed Undo dropped its change. Here A's Undo fails after an
     /// unrelated B; A stays with its order, and B is untouched. Then A's Undo works.
     #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the test of the by-owner Undo, staged until its callers use `undo_by`"
+    )]
     fn a_failed_undo_keeps_its_entry_and_its_order() {
         let mut results = Results::new();
         results.record(done(A, "A."));
@@ -1978,6 +1992,7 @@ mod tests {
             Some(ByTicket::Gone)
         );
         assert_eq!(results.get(&a).map(|shown| shown.value().words), Some("A2"));
+        assert_eq!(results.get(&b).map(|shown| shown.value().words), Some("B"));
         let old = ticket(&results, &a);
         results.owner_changed(&a);
         assert_eq!(
@@ -2000,6 +2015,10 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the test of the by-owner offer press, staged until its callers use `use_press_by`"
+    )]
     fn end_events_do_what_the_kind_says() {
         let mut results = Results::new();
         results.record(done(A, "A."));

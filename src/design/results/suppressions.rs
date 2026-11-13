@@ -44,7 +44,13 @@ impl Ban {
     /// Text that one of this ban's calls leaves in a function that still needs its allow.
     fn calls(self) -> &'static [&'static str] {
         match self {
-            Self::Results => &["::issue", "save_row_state", ".result("],
+            Self::Results => &[
+                "::issue",
+                "save_row_state",
+                ".result(",
+                ".undo(",
+                ".use_press(",
+            ],
             Self::Words => &["outside"],
             Self::Sentence => &[
                 "__formatted",

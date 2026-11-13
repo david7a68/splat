@@ -526,6 +526,11 @@ pub(in crate::design) enum Pressed {
     Choice(usize),
 }
 
+/// Keep the first activation of a drawing pass: a later one in the same pass is dropped.
+fn first<T>(slot: &mut Option<T>, pressed: T) {
+    slot.get_or_insert(pressed);
+}
+
 /// A pane with no choice and no Undo in its footer: its presses can never happen.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NoPress {}
@@ -539,8 +544,20 @@ pub enum NoPress {}
 pub struct Choice<A> {
     what: MessageChoice<'static>,
     id: A,
-    lock: Option<Sentence>,
+    lock: Lock,
     hover: Option<String>,
+}
+
+/// A control's lock: its reason, and whether it holds now. A control made with `locked_when`
+/// has its reason even while open, so the part keeps the reason's line for it and a lock that
+/// comes or goes moves nothing below; one made with `blocked(None)` has no lock and no line.
+type Lock = Option<(Sentence, bool)>;
+
+/// The reason to show now: a lock that holds.
+fn holding(lock: &Lock) -> Option<&str> {
+    lock.as_ref()
+        .filter(|(_, locked)| *locked)
+        .map(|(reason, _)| reason.as_str())
 }
 
 impl<A> Choice<A> {
@@ -559,9 +576,17 @@ impl<A> Choice<A> {
         self
     }
 
-    /// Locked while `reason` holds (a live run, a save under way); open with `None`.
+    /// Locked while `reason` holds (a live run, a save under way); open with `None`. A lock that
+    /// comes and goes in place is `locked_when`.
     pub fn blocked(mut self, reason: Option<Sentence>) -> Self {
-        self.lock = reason;
+        self.lock = reason.map(|reason| (reason, true));
+        self
+    }
+
+    /// Locked while `locked`, for `reason`. The reason's line is kept while it is open, so a
+    /// lock that comes or goes moves no line below it.
+    pub fn locked_when(mut self, locked: bool, reason: Sentence) -> Self {
+        self.lock = Some((reason, locked));
         self
     }
 }
@@ -572,7 +597,7 @@ impl<A> Choice<A> {
 pub struct Undo<A> {
     step: UndoStep,
     id: A,
-    lock: Option<Sentence>,
+    lock: Lock,
 }
 
 impl UndoStep {
@@ -589,7 +614,13 @@ impl UndoStep {
 impl<A> Undo<A> {
     /// Locked while `reason` holds; open with `None`.
     pub fn blocked(mut self, reason: Option<Sentence>) -> Self {
-        self.lock = reason;
+        self.lock = reason.map(|reason| (reason, true));
+        self
+    }
+
+    /// Locked while `locked`, for `reason`; the reason's line is kept while it is open.
+    pub fn locked_when(mut self, locked: bool, reason: Sentence) -> Self {
+        self.lock = Some((reason, locked));
         self
     }
 }
@@ -872,9 +903,9 @@ struct Body {
     tone: Tone,
     words: Sentence,
     undo: Option<UndoStep>,
-    undo_lock: Option<Sentence>,
+    undo_lock: Lock,
     choices: Vec<MessageChoice<'static>>,
-    locks: Vec<Option<Sentence>>,
+    locks: Vec<Lock>,
     hovers: Vec<Option<String>>,
 }
 
@@ -1218,7 +1249,9 @@ impl<'f, A: 'static> Messages<'f, A> {
                 // A global id from the ticket: egui's child ids count the children before them,
                 // so a line added above would hand this line's focus and press to another.
                 Some(ticket) => {
-                    let id = egui::Id::new(("design_kept_line", ticket.order()));
+                    // The pane's footer (this `Ui`) and the ticket: one stored entry shown in two
+                    // panes has two lines with their own ids.
+                    let id = egui::Id::new(("design_kept_line", ui.id(), ticket.order()));
                     ui.scope_builder(egui::UiBuilder::new().id(id), |ui| {
                         typed.body.draw(ui, MessagePlace::Footer)
                     })
@@ -1313,11 +1346,7 @@ impl Body {
             return self.draw_words(ui, place).0;
         };
         let size = Density::Read.control();
-        let lock = self
-            .locks
-            .get(at)
-            .and_then(Option::as_ref)
-            .map(Sentence::as_str);
+        let lock = self.locks.get(at).and_then(holding);
         let mut pressed = None;
         let words = ui
             .scope(|ui| {
@@ -1341,12 +1370,13 @@ impl Body {
                     },
                 );
                 if icon.clicked() {
-                    pressed = Some(Pressed::Choice(at));
+                    first(&mut pressed, Pressed::Choice(at));
                 }
                 words
             })
             .inner;
-        pressed.or(words)
+        // The words and their controls are drawn before the close icon: they come first.
+        words.or(pressed)
     }
 
     /// The choices that sit on rows under the words: all but `Dismiss`.
@@ -1379,11 +1409,11 @@ impl Body {
                             let label = step.label();
                             let shown = self.undo_words(ui, step);
                             let name = (shown != label).then_some(label.as_str());
-                            let lock = self.undo_lock.as_ref().map(Sentence::as_str);
+                            let lock = holding(&self.undo_lock);
                             let (undo, centre) =
                                 undo_message_line(ui, self.tone, words, &shown, name, lock);
                             if undo {
-                                pressed = Some(Pressed::Undo);
+                                first(&mut pressed, Pressed::Undo);
                             }
                             line = centre;
                         }
@@ -1422,17 +1452,17 @@ impl Body {
                                 .icon(icons::UNDO)
                                 .density(Density::Read)
                                 .line_start_in_column()
-                                .blocked(self.undo_lock.as_ref().map(Sentence::as_str));
+                                .blocked(holding(&self.undo_lock));
                             if shown != label {
                                 action = action.name(label);
                             }
                             if action.show(ui).clicked() {
-                                pressed = Some(Pressed::Undo);
+                                first(&mut pressed, Pressed::Undo);
                             }
                             space(ui, (L - gap).max(0.0));
                         }
                         if one_line && let Some(at) = self.draw_choices(ui) {
-                            pressed = Some(Pressed::Choice(at));
+                            first(&mut pressed, Pressed::Choice(at));
                         }
                     });
                 }
@@ -1441,7 +1471,7 @@ impl Body {
                         space(ui, inset);
                         ui.horizontal_wrapped(|ui| {
                             if let Some(at) = self.draw_choices(ui) {
-                                pressed = Some(Pressed::Choice(at));
+                                first(&mut pressed, Pressed::Choice(at));
                             }
                         });
                     });
@@ -1455,17 +1485,28 @@ impl Body {
 
     /// Why its Undo or a choice is locked, each reason once, in `Small` muted words on a line of
     /// its own at the message words, as every blocked action in the app says why: never only on
-    /// hover.
+    /// hover. The reason of a lock that is open now keeps its place, drawn but not shown, so a
+    /// lock that comes or goes moves no line below it.
     fn reasons(&self, ui: &mut Ui) {
         let mut said: Vec<&str> = Vec::new();
         let locks = std::iter::once(&self.undo_lock)
             .filter(|_| self.undo.is_some())
             .chain(&self.locks);
-        for reason in locks.flatten().map(Sentence::as_str) {
-            if !said.contains(&reason) {
-                said.push(reason);
-                message_choice_row(ui, self.tone, |ui| blocked_reason(ui, Some(reason)));
+        for (reason, locked) in locks.flatten() {
+            let reason = reason.as_str();
+            if said.contains(&reason) {
+                continue;
             }
+            said.push(reason);
+            message_choice_row(ui, self.tone, |ui| {
+                if *locked {
+                    blocked_reason(ui, Some(reason));
+                } else {
+                    ui.scope_builder(egui::UiBuilder::new().invisible(), |ui| {
+                        blocked_reason(ui, Some(reason));
+                    });
+                }
+            });
         }
     }
 
@@ -1494,11 +1535,7 @@ impl Body {
         let gap = ui.spacing().item_spacing.x;
         let mut pressed = None;
         for (at, choice) in self.row_choices() {
-            let lock = self
-                .locks
-                .get(at)
-                .and_then(Option::as_ref)
-                .map(Sentence::as_str);
+            let lock = self.locks.get(at).and_then(holding);
             let clicked = match choice {
                 MessageChoice::Choice(word) => Action::secondary(word)
                     .density(Density::Read)
@@ -1536,7 +1573,7 @@ impl Body {
                 MessageChoice::Dismiss(_) => false,
             };
             if clicked {
-                pressed = Some(at);
+                first(&mut pressed, at);
             }
         }
         pressed
@@ -2047,6 +2084,8 @@ mod tests {
         pub(super) enum Act {
             Undo,
             Register,
+            Rename,
+            Dismiss,
         }
         /// What a change inside the body does in the next frame drawn.
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -2056,14 +2095,26 @@ mod tests {
             End(&'static str),
             Add(&'static str),
         }
+        /// Settings' page lock (a round 26 review repair): long enough to wrap in a narrow pane.
+        pub(super) const LOCK: Sentence =
+            crate::sentence!("End the run first. Close the run to change campaigns.");
         #[derive(Default)]
         pub(super) struct App {
             pub dndbeyond: DndBeyond,
             pub run_live: bool,
             pub in_body: Option<InBody>,
+            /// The older line has a second choice after `Register as a new campaign`.
+            pub two_choices: bool,
+            /// Two panes side by side, each showing the same stored entries.
+            pub two_panes: bool,
+            /// The pane in a column this wide.
+            pub narrow: Option<f32>,
             /// What each Undo press did to the store: the words it took back, or `Gone`.
             pub acted: Vec<Result<&'static str, &'static str>>,
+            /// Each press: the pane, the kind, and its ticket's order.
+            pub presses: Vec<(usize, Act, Option<ResultOrder>)>,
             pub registered: usize,
+            pub renamed: usize,
         }
 
         /// The pilot's `show_active`: it needs the owner by `&mut`.
@@ -2082,18 +2133,20 @@ mod tests {
             ui.label("Link and folder");
         }
 
-        pub(super) fn frame(ui: &mut Ui, app: &mut App) {
-            let lock = app.run_live.then(|| crate::sentence!("End the run first."));
+        /// One pane: its footer shows the store's kept lines; its body changes the owner.
+        fn one_pane(ui: &mut Ui, app: &mut App, pane: usize) {
+            let live = app.run_live;
             let frame = PaneFrame::new(ui);
-            let mut messages = Messages::new(&frame, "pilot", ui.available_width());
+            let mut messages = Messages::new(&frame, ("pilot", pane), ui.available_width());
             for owner in ["older", "newer", "third"] {
                 if let Some(shown) = app.dndbeyond.results.get(&Campaign(owner)) {
+                    let two_choices = app.two_choices;
                     let line = shown.outcome(&frame, |saved| {
                         let mut said = Said::new(crate::sentence!("{}.", saved.1)).undo(
                             UndoStep::verb(Verb::Change)
                                 .tell_apart(owner)
                                 .pressed_as(Act::Undo)
-                                .blocked(lock.clone()),
+                                .locked_when(live, LOCK),
                         );
                         if owner == "older" {
                             // A choice attached to a kept result.
@@ -2102,7 +2155,20 @@ mod tests {
                                     MessageChoice::Choice("Register as a new campaign"),
                                     Act::Register,
                                 )
-                                .blocked(lock.clone()),
+                                .locked_when(live, LOCK),
+                            );
+                            if two_choices {
+                                said = said.choice(Choice::new(
+                                    MessageChoice::Choice("Rename the campaign"),
+                                    Act::Rename,
+                                ));
+                            }
+                        }
+                        if owner == "newer" {
+                            // N6: the part places the close icon.
+                            said = said.choice(
+                                Choice::new(MessageChoice::Dismiss(Lost::Nothing), Act::Dismiss)
+                                    .locked_when(live, LOCK),
                             );
                         }
                         said.into()
@@ -2110,7 +2176,11 @@ mod tests {
                     messages.kept(line);
                 }
             }
-            let change = app.in_body.take().unwrap_or(InBody::Nothing);
+            let change = if pane == 0 {
+                app.in_body.take().unwrap_or(InBody::Nothing)
+            } else {
+                InBody::Nothing
+            };
             // The body changes the store's owner by `&mut` while the footer holds its lines:
             // the gap the pilot found (E0502 with a borrowing entry).
             let paned = messages.pane(ui, crate::design::Body::Content, |ui| {
@@ -2119,6 +2189,8 @@ mod tests {
             });
             assert_eq!(paned.body, 7);
             if let Some(press) = paned.pressed {
+                app.presses
+                    .push((pane, press.id, press.ticket.as_ref().map(Ticket::order)));
                 match press.id {
                     Act::Undo => {
                         let ticket = press.ticket.expect("a kept line's press has its ticket");
@@ -2131,13 +2203,46 @@ mod tests {
                         );
                     }
                     Act::Register => app.registered += 1,
+                    Act::Rename => app.renamed += 1,
+                    Act::Dismiss => {}
                 }
             }
         }
 
+        pub(super) fn frame(ui: &mut Ui, app: &mut App) {
+            if app.two_panes {
+                ui.columns(2, |columns| {
+                    for (pane, column) in columns.iter_mut().enumerate() {
+                        one_pane(column, app, pane);
+                    }
+                });
+            } else if let Some(width) = app.narrow {
+                let height = ui.available_height();
+                ui.allocate_ui_with_layout(
+                    egui::vec2(width, height),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| one_pane(ui, app, 0),
+                );
+            } else {
+                one_pane(ui, app, 0);
+            }
+        }
+
+        /// The order of the stored entry of `owner`.
+        pub(super) fn order(app: &App, owner: &'static str) -> Option<ResultOrder> {
+            app.dndbeyond
+                .results
+                .get(&Campaign(owner))
+                .map(|shown| shown.order())
+        }
+
         pub(super) fn harness(app: App) -> Harness<'static, App> {
+            harness_sized(app, 700.0)
+        }
+
+        pub(super) fn harness_sized(app: App, width: f32) -> Harness<'static, App> {
             let mut h = Harness::builder()
-                .with_size(egui::vec2(700.0, 500.0))
+                .with_size(egui::vec2(width, 500.0))
                 .build_ui_state(frame, app);
             crate::design::theme::install(&h.ctx);
             h.run_steps(4);
@@ -2344,17 +2449,170 @@ mod tests {
         let register = h.get_by_label("Register as a new campaign");
         for node in [&register, &undo(&h, "older"), &undo(&h, "newer")] {
             assert!(disabled(node), "it is locked");
-            assert_eq!(description(node).as_deref(), Some("End the run first."));
+            assert_eq!(description(node).as_deref(), Some(LOCK.as_str()));
         }
+        // A locked Dismiss (the close icon) is disabled too.
         assert!(
-            h.query_all_by_role_and_label(egui::accesskit::Role::Label, "End the run first.")
+            disabled(&h.get_by_label(DISMISS_NAME)),
+            "the close icon is locked"
+        );
+        assert!(
+            h.query_all_by_role_and_label(egui::accesskit::Role::Label, LOCK.as_str())
                 .count()
                 >= 2,
             "each locked message paints its reason"
         );
         undo(&h, "older").click();
         h.get_by_label("Register as a new campaign").click();
+        h.get_by_label(DISMISS_NAME).click();
         h.run_steps(2);
-        assert!(h.state().acted.is_empty() && h.state().registered == 0);
+        assert!(
+            h.state().acted.is_empty() && h.state().registered == 0 && h.state().presses.is_empty()
+        );
+    }
+
+    /// The first activation of a frame wins through the whole drawing path: inside one message
+    /// (Undo before its choice, a choice before a later one, the words before the close icon)
+    /// and across messages. Two presses are queued for one frame.
+    #[test]
+    fn the_first_activation_of_a_frame_wins_through_the_real_ui() {
+        use pilot::*;
+        // The older line's Undo, then its choice, in one frame: the Undo, with its ticket.
+        let mut h = harness(two());
+        let older = order(h.state(), "older");
+        h.get_by_label("Register as a new campaign").click();
+        undo(&h, "older").click();
+        h.run_steps(1);
+        assert_eq!(h.state().presses, [(0, Act::Undo, older)]);
+        assert_eq!(
+            (h.state().acted.clone(), h.state().registered),
+            (vec![Ok("Campaign link saved")], 0)
+        );
+        // Two choices of one message: the first drawn, whatever order the clicks came in.
+        let mut app = two();
+        app.two_choices = true;
+        let mut h = harness(app);
+        let older = order(h.state(), "older");
+        h.get_by_label("Rename the campaign").click();
+        h.get_by_label("Register as a new campaign").click();
+        h.run_steps(1);
+        assert_eq!(h.state().presses, [(0, Act::Register, older)]);
+        assert_eq!((h.state().registered, h.state().renamed), (1, 0));
+        // The newer line's Undo and its close icon: the Undo, drawn first.
+        let mut h = harness(two());
+        let newer = order(h.state(), "newer");
+        h.get_by_label(DISMISS_NAME).click();
+        undo(&h, "newer").click();
+        h.run_steps(1);
+        assert_eq!(h.state().presses, [(0, Act::Undo, newer)]);
+        assert_eq!(h.state().acted, [Ok("Folder saved")]);
+    }
+
+    /// N6 (package X), on the typed path: the close icon sits at the right end of its message's
+    /// first line, centred on it, at least 24 px, and its press comes back as `Dismiss` with
+    /// that line's ticket.
+    #[test]
+    fn the_close_icon_sits_on_its_first_line_and_names_its_entry() {
+        use pilot::*;
+        let mut h = harness(two());
+        let newer = order(h.state(), "newer");
+        let dismiss = h.get_by_label(DISMISS_NAME).rect();
+        let line = h
+            .get_by_role_and_label(egui::accesskit::Role::Label, "Folder saved.")
+            .rect();
+        assert!(
+            (dismiss.center().y - line.center().y).abs() <= 1.0
+                && dismiss.left() > line.right()
+                && dismiss.height() >= 24.0
+                && dismiss.width() >= 24.0,
+            "n6: icon {dismiss:?}, first line {line:?}"
+        );
+        h.get_by_label(DISMISS_NAME).click();
+        h.run_steps(2);
+        assert_eq!(h.state().presses, [(0, Act::Dismiss, newer)]);
+    }
+
+    /// One stored entry shown in two panes: two lines with their own control ids (no clash),
+    /// a press comes back from the pane it was made in with the entry's ticket, and focus stays
+    /// on its control when a result is added above.
+    #[test]
+    fn one_entry_in_two_panes_has_two_lines_with_their_own_ids() {
+        use pilot::*;
+        let mut app = two();
+        app.two_panes = true;
+        let mut h = harness_sized(app, 1200.0);
+        let ids: Vec<_> = h
+            .get_all_by_label("Undo change older")
+            .map(|node| node.accesskit_node().id())
+            .collect();
+        assert!(ids.len() == 2 && ids[0] != ids[1], "{ids:?}");
+        let clashes = crate::design::layout::widget_id_clashes(&h.ctx, &h.output().shapes);
+        assert!(clashes.is_empty(), "{clashes:?}");
+        let older = order(h.state(), "older");
+        h.get_all_by_label("Undo change older")
+            .nth(1)
+            .unwrap()
+            .click();
+        h.run_steps(2);
+        assert_eq!(h.state().presses, [(1, Act::Undo, older)]);
+        // Focus on the right pane's newer Undo, then a result comes above it.
+        let mut app = two();
+        app.two_panes = true;
+        let mut h = harness_sized(app, 1200.0);
+        h.get_all_by_label("Undo change newer")
+            .nth(1)
+            .unwrap()
+            .focus();
+        h.run_steps(2);
+        let focused = h.ctx.memory(|memory| memory.focused());
+        assert!(focused.is_some());
+        h.state_mut().in_body = Some(InBody::Add("third"));
+        h.run_steps(4);
+        assert_eq!(h.ctx.memory(|memory| memory.focused()), focused);
+        h.key_press(egui::Key::Enter);
+        h.run_steps(2);
+        assert_eq!(h.state().acted, [Ok("Folder saved")]);
+        assert_eq!(h.state().presses.first().map(|press| press.0), Some(1));
+    }
+
+    /// At 960 in a narrow pane the lock's reason wraps at whole words under the message words;
+    /// a lock that comes and goes moves no line below it (its line is kept while it is open).
+    #[test]
+    fn a_lock_reason_wraps_under_the_words_and_moves_nothing_when_it_comes() {
+        use pilot::*;
+        let mut app = two();
+        app.narrow = Some(320.0);
+        let mut h = harness_sized(app, 960.0);
+        let tops = |h: &egui_kittest::Harness<'_, App>| {
+            ["Folder saved.", "Campaign link saved."].map(|words| {
+                h.get_by_role_and_label(egui::accesskit::Role::Label, words)
+                    .rect()
+                    .top()
+            })
+        };
+        let open = tops(&h);
+        h.state_mut().run_live = true;
+        h.run_steps(4);
+        assert_eq!(tops(&h), open, "a lock that comes moves no line");
+        let words = h
+            .get_by_role_and_label(egui::accesskit::Role::Label, "Campaign link saved.")
+            .rect();
+        let reasons: Vec<_> = h
+            .query_all_by_role_and_label(egui::accesskit::Role::Label, LOCK.as_str())
+            .map(|node| node.rect())
+            .collect();
+        let line = Type::Small.line();
+        assert!(
+            !reasons.is_empty()
+                && reasons
+                    .iter()
+                    .all(|reason| (reason.left() - words.left()).abs() <= 1.0
+                        && reason.height() >= 2.0 * line - 1.0
+                        && reason.right() <= 321.0),
+            "the reason wraps under the words: {reasons:?}, words {words:?}"
+        );
+        h.state_mut().run_live = false;
+        h.run_steps(4);
+        assert_eq!(tops(&h), open, "a lock that goes moves no line");
     }
 }
