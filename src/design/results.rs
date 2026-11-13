@@ -458,39 +458,192 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
     }
 }
 
-/// The staged allows of `ResultOrder::issue`, `Footer::result` and `save_row_state`, by file.
-/// Clippy's `disallowed-methods` (`clippy.toml`) fails `check` on any call of them, by any name
-/// (an alias, a function item). Each function (or, in a macro, statement) that still calls one
-/// has its own `#[allow(clippy::disallowed_methods, reason = "staged: …")]`; a call in another
-/// function of the same file still fails. Never on a file, a module or an `impl` block, so the
-/// allow frees no other banned method there. The counts can only go down; at 0 everywhere, those
-/// parts become private.
+/// Every suppression of `clippy::disallowed_methods` that may stay, one row per suppression:
+/// the file, the item it is on (a function's name, or `<function or macro!> statement`), and the
+/// bans it is for. Clippy's `disallowed-methods` (`clippy.toml`) fails `check` on any call of
+/// `ResultOrder::issue`, `Footer::result` and `save_row_state`, by any name (an alias, a function
+/// item, a qualified path); a suppression frees only what it sits on.
+///
+/// `staged_allows_only_shrink` finds every suppression (`allow` or `expect`, any reason or none,
+/// also in `cfg_attr`, also of a group that holds the lint) and fails on one that is not listed,
+/// on a file, module, `impl`, trait or macro, or on a function that holds a nested function. A
+/// listed one whose item no longer calls, or a row with no suppression, asks to remove the row.
+/// The rows can only go; at none with `Ban::Results`, those parts become private.
+///
+/// **Joining package K.** K bans raw egui calls through the same lint and counts its allows per
+/// function. When K merges after this, it adds a `Ban` variant for its bans and one row per
+/// suppression it needs; where one function holds both kinds of call, that function keeps one
+/// attribute and its row lists both bans (`&[Ban::Results, Ban::Layout]`).
 #[cfg(test)]
-pub(crate) const STAGED_ALLOWS: &[(&str, usize)] = &[
-    ("src/campaign_content.rs", 4),
-    ("src/campaigns.rs", 7),
-    ("src/combat_sync.rs", 2),
-    ("src/design/components.rs", 3),
-    ("src/design/gallery.rs", 1),
-    ("src/dndbeyond.rs", 2),
-    ("src/encounter_run.rs", 2),
-    ("src/encounter_run/view.rs", 2),
-    ("src/encounters.rs", 9),
-    ("src/encounters/groups.rs", 3),
-    ("src/library.rs", 10),
-    ("src/party.rs", 1),
-    ("src/party_sync.rs", 1),
-    ("src/sessions/carry.rs", 2),
-    ("src/sessions/page.rs", 10),
-    ("src/sessions/plan.rs", 5),
-    ("src/timeline.rs", 3),
-    ("src/timeline/page.rs", 3),
-    ("src/trackers/history.rs", 1),
-    ("src/world.rs", 3),
-    ("src/world/edit.rs", 3),
-    ("src/world/page.rs", 3),
-    ("src/world/repair.rs", 3),
-];
+pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
+    use suppressions::Ban;
+    &[
+        (
+            "src/campaign_content.rs",
+            "new_result! statement",
+            &[Ban::Results],
+        ),
+        ("src/campaign_content.rs", "page_footer", &[Ban::Results]),
+        (
+            "src/campaign_content.rs",
+            "repair_section_content",
+            &[Ban::Results],
+        ),
+        (
+            "src/campaign_content.rs",
+            "selection_bar_content",
+            &[Ban::Results],
+        ),
+        ("src/campaigns.rs", "at", &[Ban::Results]),
+        ("src/campaigns.rs", "default", &[Ban::Results]),
+        ("src/campaigns.rs", "footer_messages", &[Ban::Results]),
+        ("src/campaigns.rs", "form", &[Ban::Results]),
+        (
+            "src/campaigns.rs",
+            "one_to_one_links_replace_and_unlink_without_changing_other_campaigns",
+            &[Ban::Results],
+        ),
+        (
+            "src/campaigns.rs",
+            "register_campaign_copy",
+            &[Ban::Results],
+        ),
+        ("src/campaigns.rs", "save_form", &[Ban::Results]),
+        ("src/combat_sync.rs", "footer_messages", &[Ban::Results]),
+        ("src/combat_sync.rs", "noticed", &[Ban::Results]),
+        (
+            "src/design/components.rs",
+            "iter26_a_the_footer_keeps_the_body_top_and_reaches_its_last_message",
+            &[Ban::Results],
+        ),
+        (
+            "src/design/components.rs",
+            "iter27_a_footer_results_go_newest_first_by_their_action",
+            &[Ban::Results],
+        ),
+        (
+            "src/design/components.rs",
+            "iter27_a_the_footer_follows_a_short_body",
+            &[Ban::Results],
+        ),
+        ("src/design/gallery.rs", "components", &[Ban::Results]),
+        ("src/design/results.rs", "add_kept", &[Ban::Results]),
+        ("src/design/results.rs", "record", &[Ban::Results]),
+        ("src/dndbeyond.rs", "footer_messages", &[Ban::Results]),
+        ("src/dndbeyond.rs", "show", &[Ban::Results]),
+        ("src/encounter_run.rs", "keep_step", &[Ban::Results]),
+        ("src/encounter_run.rs", "open", &[Ban::Results]),
+        ("src/encounter_run/view.rs", "groups_tab", &[Ban::Results]),
+        (
+            "src/encounter_run/view.rs",
+            "message_footer",
+            &[Ban::Results],
+        ),
+        (
+            "src/encounters/groups.rs",
+            "group_editor_view",
+            &[Ban::Results],
+        ),
+        (
+            "src/encounters/groups.rs",
+            "member_result_into",
+            &[Ban::Results],
+        ),
+        (
+            "src/encounters/groups.rs",
+            "save_group_draft",
+            &[Ban::Results],
+        ),
+        ("src/encounters.rs", "creature_pane", &[Ban::Results]),
+        (
+            "src/encounters.rs",
+            "i20_w1_search_finds_a_hidden_duplicate_and_repairs_it_with_undo",
+            &[Ban::Results],
+        ),
+        ("src/encounters.rs", "kept_into_footer", &[Ban::Results]),
+        ("src/encounters.rs", "ledger_view", &[Ban::Results]),
+        ("src/encounters.rs", "results_into", &[Ban::Results]),
+        ("src/encounters.rs", "result_stamp", &[Ban::Results]),
+        ("src/encounters.rs", "run_settings", &[Ban::Results]),
+        ("src/encounters.rs", "save_draft", &[Ban::Results]),
+        ("src/encounters.rs", "stamp_kept", &[Ban::Results]),
+        ("src/library.rs", "add_reader_result", &[Ban::Results]),
+        ("src/library.rs", "apply_page_press", &[Ban::Results]),
+        ("src/library.rs", "editor_pane", &[Ban::Results]),
+        ("src/library.rs", "give_new_identity", &[Ban::Results]),
+        (
+            "src/library.rs",
+            "iter14_e_changed_files_end_every_undo_result",
+            &[Ban::Results],
+        ),
+        ("src/library.rs", "open_entry", &[Ban::Results]),
+        ("src/library.rs", "reader_messages", &[Ban::Results]),
+        ("src/library.rs", "register_copy", &[Ban::Results]),
+        ("src/library.rs", "reload_note_from_disk", &[Ban::Results]),
+        ("src/library.rs", "unregister_dialog", &[Ban::Results]),
+        ("src/party.rs", "page_footer", &[Ban::Results]),
+        ("src/party_sync.rs", "campaign_copy_saved", &[Ban::Results]),
+        ("src/sessions/carry.rs", "carry_in_footer", &[Ban::Results]),
+        ("src/sessions/carry.rs", "record", &[Ban::Results]),
+        (
+            "src/sessions/page.rs",
+            "accept_event_link_offer",
+            &[Ban::Results],
+        ),
+        ("src/sessions/page.rs", "banner_notices", &[Ban::Results]),
+        ("src/sessions/page.rs", "folder_form", &[Ban::Results]),
+        ("src/sessions/page.rs", "folder_messages", &[Ban::Results]),
+        ("src/sessions/page.rs", "markers", &[Ban::Results]),
+        (
+            "src/sessions/page.rs",
+            "move_run_to_session",
+            &[Ban::Results],
+        ),
+        ("src/sessions/page.rs", "new_notice", &[Ban::Results]),
+        ("src/sessions/page.rs", "reading_view", &[Ban::Results]),
+        ("src/sessions/page.rs", "session_footer", &[Ban::Results]),
+        ("src/sessions/page.rs", "template_editor", &[Ban::Results]),
+        ("src/sessions/plan.rs", "plan_pane", &[Ban::Results]),
+        (
+            "src/sessions/plan.rs",
+            "record_deleted_run",
+            &[Ban::Results],
+        ),
+        ("src/sessions/plan.rs", "scene_act", &[Ban::Results]),
+        (
+            "src/sessions/plan.rs",
+            "scenes_are_note_acts_with_their_own_undo statement",
+            &[Ban::Results],
+        ),
+        ("src/sessions/plan.rs", "travel_act", &[Ban::Results]),
+        ("src/timeline/page.rs", "into_footer", &[Ban::Results]),
+        ("src/timeline/page.rs", "list_footer", &[Ban::Results]),
+        ("src/timeline/page.rs", "show", &[Ban::Results]),
+        ("src/timeline.rs", "next_result_order", &[Ban::Results]),
+        ("src/timeline.rs", "remove", &[Ban::Results]),
+        ("src/timeline.rs", "touch", &[Ban::Results]),
+        ("src/trackers/history.rs", "remove", &[Ban::Results]),
+        ("src/world/edit.rs", "discard_lost", &[Ban::Results]),
+        ("src/world/edit.rs", "edit_form", &[Ban::Results]),
+        (
+            "src/world/edit.rs",
+            "lead_review_a_discarded_draft_belongs_to_its_campaign",
+            &[Ban::Results],
+        ),
+        ("src/world/page.rs", "creation_body", &[Ban::Results]),
+        ("src/world/page.rs", "creation_form", &[Ban::Results]),
+        ("src/world/page.rs", "show", &[Ban::Results]),
+        ("src/world/repair.rs", "choose", &[Ban::Results]),
+        ("src/world/repair.rs", "edit", &[Ban::Results]),
+        ("src/world/repair.rs", "footer", &[Ban::Results]),
+        ("src/world.rs", "draw_footer", &[Ban::Results]),
+        ("src/world.rs", "entry_controls", &[Ban::Results]),
+        ("src/world.rs", "stamp", &[Ban::Results]),
+    ]
+};
+
+#[cfg(test)]
+mod suppressions;
 
 /// Calls of parts that a shared part replaces, by file, counted in the source text. They are a
 /// second net inside the functions of [`STAGED_ALLOWS`], whose allow would let a new call
@@ -868,141 +1021,74 @@ mod tests {
         assert!(faults.is_empty(), "{}", faults.join("\n"));
     }
 
-    /// The staged allows, counted per file, are exactly `STAGED_ALLOWS`: a new one fails, and a
-    /// removed one asks to lower the count. Each sits on one function or statement: an allow of
-    /// `clippy::disallowed_methods` on a file, a module or an `impl` block fails here (it would
-    /// also free the banned methods of package K there).
+    /// Every suppression of `clippy::disallowed_methods` is a row of `STAGED_ALLOWS` (see
+    /// there); the checker's own cases are in `suppressions::tests`.
     #[test]
     fn staged_allows_only_shrink() {
         let mut files = Vec::new();
         collect(std::path::Path::new("src"), &mut files);
-        let mut faults = Vec::new();
-        for (path, text) in &files {
-            if path == "src/design/results.rs" {
-                continue;
-            }
-            let count = text.matches("reason = \"staged:").count();
-            let allowed = STAGED_ALLOWS
-                .iter()
-                .find(|(file, _)| file == path)
-                .map_or(0, |(_, count)| *count);
-            if count > allowed {
-                faults.push(format!(
-                    "{path}: {count} staged allows, {allowed} allowed. Use `design::Results`, `Footer::kept` and `design::save_row` instead."
-                ));
-            } else if count < allowed {
-                faults.push(format!(
-                    "{path}: only {count} staged allows remain. Lower its count in `design::results::STAGED_ALLOWS` to {count}."
-                ));
-            }
-            let lines: Vec<&str> = text.lines().map(str::trim).collect();
-            for (at, line) in lines.iter().enumerate() {
-                if !(line.starts_with("#![allow(") || line.starts_with("#[allow(")) {
-                    continue;
-                }
-                // The attribute, to its closing `)]`.
-                let end = (at..lines.len())
-                    .find(|&i| lines[i].ends_with(")]"))
-                    .unwrap_or(at);
-                if !lines[at..=end]
-                    .iter()
-                    .any(|l| l.contains("clippy::disallowed_methods"))
-                {
-                    continue;
-                }
-                if line.starts_with("#![") {
-                    faults.push(format!(
-                        "{path}:{}: an allow of `clippy::disallowed_methods` for a whole file or module. Put it on the one function that calls.",
-                        at + 1
-                    ));
-                    continue;
-                }
-                // The item it is on: the first line after other attributes and comments.
-                let mut in_attribute = false;
-                let item = lines[end + 1..]
-                    .iter()
-                    .find(|l| {
-                        if in_attribute {
-                            in_attribute = !l.ends_with(']');
-                            return false;
-                        }
-                        if l.starts_with("#[") {
-                            in_attribute = !l.ends_with(']');
-                            return false;
-                        }
-                        !(l.is_empty() || l.starts_with("//"))
-                    })
-                    .copied()
-                    .unwrap_or_default();
-                let wide = item
-                    .split(|c: char| c.is_whitespace() || c == '<')
-                    .take(3)
-                    .any(|word| word == "mod" || word == "impl");
-                if wide {
-                    faults.push(format!(
-                        "{path}:{}: an allow of `clippy::disallowed_methods` on `{item}`. Put it on the one function that calls.",
-                        at + 1
-                    ));
-                }
-            }
-        }
+        let faults = suppressions::check(&files, STAGED_ALLOWS);
         assert!(faults.is_empty(), "{}", faults.join("\n"));
     }
 
-    /// The one escape from `&Results` and `Revised`: interior mutability changes them through
-    /// `&`. A store or a revised value behind one, or one inside a revised value, fails here.
+    /// The escapes from `&Results` and `Revised` that the compiler cannot see. A store behind
+    /// a `Cell`, `RefCell`, `OnceCell`, `Mutex` or `RwLock` changes through `&` (rung 3: only
+    /// these spellings are caught, `Wrapper<Results<…>>` and `Wrapper::new(Results::…)`; a store
+    /// whose wrapper type is inferred from elsewhere is for a reviewer). A `Mutex`, `RwLock` or
+    /// atomic inside a `Revised` is `Sync`, so the compiler takes it; this scan does not. A `Cell`
+    /// or `RefCell` inside one is not `Sync` and does not compile.
     #[test]
     fn results_are_never_behind_interior_mutability() {
         let mut files = Vec::new();
         collect(std::path::Path::new("src"), &mut files);
-        let cells = ["Cell<", "RefCell<", "Mutex<", "RwLock<", "OnceCell<"];
+        let wrappers: Vec<String> = ["Cell", "RefCell", "OnceCell", "Mutex", "RwLock"]
+            .into_iter()
+            .flat_map(|w| {
+                ["", "cell::", "sync::", "std::cell::", "std::sync::"].map(|p| format!("{p}{w}"))
+            })
+            .collect();
+        let held = |name: &str| {
+            [
+                "",
+                "design::",
+                "results::",
+                "memo::",
+                "design::results::",
+                "design::memo::",
+                "crate::design::",
+                "crate::design::results::",
+                "crate::design::memo::",
+            ]
+            .map(|p| format!("{p}{name}"))
+        };
+        let mut patterns = Vec::new();
+        for wrapper in &wrappers {
+            for store in held("Results").into_iter().chain(held("Revised")) {
+                patterns.push(format!("{wrapper}<{store}<"));
+                patterns.push(format!("{wrapper}::new({store}::"));
+            }
+        }
+        for revised in held("Revised") {
+            for wrapper in &wrappers {
+                patterns.push(format!("{revised}<{wrapper}<"));
+                patterns.push(format!("{revised}::new({wrapper}::new("));
+            }
+            for atomic in ["Atomic", "atomic::Atomic", "std::sync::atomic::Atomic"] {
+                patterns.push(format!("{revised}<{atomic}"));
+                patterns.push(format!("{revised}::new({atomic}"));
+            }
+        }
         let mut faults = Vec::new();
         for (path, text) in &files {
-            // This test names the patterns.
-            if path == "src/design/results.rs" {
-                continue;
-            }
-            let compact: String = text.split_whitespace().collect();
-            for cell in cells {
-                for held in ["Results<", "Revised<"] {
-                    for prefix in [
-                        "",
-                        "design::",
-                        "results::",
-                        "memo::",
-                        "design::results::",
-                        "design::memo::",
-                        "crate::design::",
-                        "crate::design::results::",
-                        "crate::design::memo::",
-                    ] {
-                        let outside = format!("{cell}{prefix}{held}");
-                        let inside = format!("{prefix}Revised<{cell}");
-                        for pattern in [outside, inside] {
-                            if compact.contains(&pattern) {
-                                faults.push(format!(
-                                    "{path}: `{pattern}` changes a kept result or a revised value through `&`. Keep it in a plain field."
-                                ));
-                            }
-                        }
-                    }
-                }
-            }
-            for path_cell in [
-                "std::cell::Cell<",
-                "std::cell::RefCell<",
-                "std::cell::OnceCell<",
-                "std::sync::Mutex<",
-                "std::sync::RwLock<",
-            ] {
-                if compact.contains(&format!("Revised<{path_cell}")) {
+            let compact: String = suppressions::code_only(text).split_whitespace().collect();
+            for pattern in &patterns {
+                if compact.contains(pattern.as_str()) {
                     faults.push(format!(
-                        "{path}: `Revised<{path_cell}…>` changes with no new revision."
+                        "{path}: `{pattern}` changes a kept result or a revised value through `&`. Keep it in a plain field."
                     ));
                 }
             }
         }
-        faults.dedup();
         assert!(faults.is_empty(), "{}", faults.join("\n"));
     }
 

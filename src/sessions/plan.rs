@@ -5437,10 +5437,6 @@ mod tests {
     /// holds what an act wrote after a restart. An Undo survives an act that leaves the note's
     /// words alone, and ends at one that changes them.
     #[test]
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
     fn scenes_are_note_acts_with_their_own_undo() {
         use crate::sessions::{NewNote, create_note, plan_lines};
         use egui_kittest::kittest::Queryable;
@@ -5776,13 +5772,18 @@ mod tests {
             let day = *timeline::day_numbers(&book.events).last().unwrap();
             (event.id.clone(), event.label(day), book.events.len())
         };
-        harness.state_mut().0.added = Some(Added {
+        #[allow(
+            clippy::disallowed_methods,
+            reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+        )]
+        let added = Added {
             order: design::ResultOrder::issue(),
             id,
             label,
             at: Instant::now(),
             count,
-        });
+        };
+        harness.state_mut().0.added = Some(added);
         harness.run_steps(4);
         assert!(
             harness.query_by_label("Undo add").is_some(),

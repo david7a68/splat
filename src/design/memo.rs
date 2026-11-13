@@ -8,11 +8,17 @@
 //! revisions as its key (one, or a tuple of them), so a pointer address, a frame count or an
 //! input epoch cannot be a key: the cache type does not accept them.
 //!
+//! A `Revised` value and a `Memo` value must be `Sync`, so a `Cell` or `RefCell` at any depth
+//! (a draft that holds one too) does not compile: it would change the value through `&` with no
+//! new revision.
+//!
 //! **Caller limits that the types cannot hold** (stable Rust has no way to forbid them):
 //!
-//! - Interior mutability inside a `Revised` (a `Cell`, `RefCell`, `Mutex` or `RwLock`) changes
-//!   the value with no new revision. The source scan `results_are_never_behind_interior_mutability`
-//!   (`design::results`) fails on it.
+//! - A `Mutex`, `RwLock` or atomic inside a `Revised` is `Sync` and still changes the value
+//!   through `&`. That is a deliberate bypass: the source scan
+//!   `results_are_never_behind_interior_mutability` (`design::results`) fails on the spellings it
+//!   can see (`Revised<Mutex<…>>`, `Revised::new(Mutex::new(…))`, and their `std::sync` paths);
+//!   one hidden in a field of another type is for a reviewer.
 //! - `Revised::new` made again on every frame (for example around a frame counter) gives a new
 //!   revision every frame. Make a `Revised` where its value is made, and keep it; a reviewer
 //!   checks this.
@@ -74,6 +80,56 @@
 //! let revision = Revision::default(); // <- no change made it
 //! ```
 //!
+//! A `Cell` or `RefCell` inside a `Revised`, at any depth, changes it through `&`:
+//!
+//! ```compile_fail
+//! # use splat::ownership::Revised;
+//! let draft = Revised::new(std::cell::RefCell::new(String::new())); // <- not `Sync`
+//! draft.borrow_mut().push_str("# Cinder Wolf");
+//! ```
+//!
+//! ```compile_fail
+//! # use splat::ownership::Revised;
+//! struct Draft { text: String, cursor: std::cell::Cell<usize> }
+//! let draft = Revised::new(Draft { text: String::new(), cursor: std::cell::Cell::new(0) }); // <-
+//! ```
+//!
+//! The twin of both: the same draft with plain fields.
+//!
+//! ```
+//! # use splat::ownership::Revised;
+//! struct Draft { text: String, cursor: usize }
+//! let draft = Revised::new(Draft { text: String::new(), cursor: 0 });
+//! assert_eq!((draft.text.len(), draft.cursor), (0, 0));
+//! ```
+//!
+//! `set` compares, so it needs a value that equals itself. `NaN` does not, so a `set` of it would
+//! advance the revision on every call:
+//!
+//! ```compile_fail
+//! # use splat::ownership::Revised;
+//! let mut speed = Revised::new(f64::NAN);
+//! speed.set(f64::NAN); // <- `f64` is not `Eq`
+//! ```
+//!
+//! Its twin: a value that is `Eq` uses `set`; one that is not says its change with `revise`.
+//!
+//! ```
+//! # use splat::ownership::{Changed, Revised};
+//! let mut count = Revised::new(3_u32);
+//! let before = count.revision();
+//! count.set(3);
+//! assert_eq!(count.revision(), before);
+//! let mut speed = Revised::new(30.0_f64);
+//! speed.revise(|speed| {
+//!     let new = 40.0;
+//!     let changed = Changed::from(*speed != new);
+//!     *speed = new;
+//!     changed
+//! });
+//! assert_ne!(speed.revision(), before);
+//! ```
+//!
 //! A `Revised` value changes only through `revise` or `set`. There is no bare `&mut` to it:
 //!
 //! ```compile_fail
@@ -126,12 +182,12 @@ impl Revision {
 
 /// A value and its revision. A clone is the same version, with the same revision.
 #[derive(Clone, Debug)]
-pub struct Revised<T> {
+pub struct Revised<T: Sync> {
     value: T,
     revision: Revision,
 }
 
-impl<T> Revised<T> {
+impl<T: Sync> Revised<T> {
     pub fn new(value: T) -> Self {
         Self {
             value,
@@ -152,10 +208,11 @@ impl<T> Revised<T> {
     }
 
     /// Set the value. The revision advances only when it differs; the comparison is as large
-    /// as the value.
+    /// as the value. A value that is not `Eq` (a float: `NaN` never equals itself) says its
+    /// change with [`Self::revise`].
     pub fn set(&mut self, value: T)
     where
-        T: PartialEq,
+        T: Eq,
     {
         if self.value != value {
             self.value = value;
@@ -164,7 +221,7 @@ impl<T> Revised<T> {
     }
 }
 
-impl<T> std::ops::Deref for Revised<T> {
+impl<T: Sync> std::ops::Deref for Revised<T> {
     type Target = T;
     fn deref(&self) -> &T {
         &self.value
@@ -185,17 +242,18 @@ impl Key for (Revision, Revision) {}
 impl Key for (Revision, Revision, Revision) {}
 
 /// The last value worked out, and the revisions it was worked out from.
-pub struct Memo<K: Key, T> {
+/// Its value must be `Sync`, so a kept value cannot change through `&` with a `Cell`.
+pub struct Memo<K: Key, T: Sync> {
     kept: Option<(K, T)>,
 }
 
-impl<K: Key, T> Default for Memo<K, T> {
+impl<K: Key, T: Sync> Default for Memo<K, T> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<K: Key, T> Memo<K, T> {
+impl<K: Key, T: Sync> Memo<K, T> {
     pub const fn new() -> Self {
         Self { kept: None }
     }
