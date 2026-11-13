@@ -208,13 +208,10 @@
     ["N4/quiet-action-line-start","08-submenu-spacing","1200x800","Button \"Group actions\"",1],
     ["N4/quiet-action-line-start","08-submenu-spacing","1920x1080","Button \"Group actions\"",1],
     ["N4/quiet-action-line-start","08-submenu-spacing","960x640","Button \"Group actions\"",1],
-    ["N4/quiet-action-line-start","08-submenu-spacing","960x640","Button \"Paused run · Bridge Ambush · Round 2\"",1],
     ["N4/quiet-action-line-start","09-row-menu","960x640","Button \"Group actions\"",1],
-    ["N4/quiet-action-line-start","09-row-menu","960x640","Button \"Paused run · Bridge Ambush · Round 2\"",1],
     ["N4/quiet-action-line-start","10-save-rows-and-add-strip","1200x800","Button \"Group actions\"",1],
     ["N4/quiet-action-line-start","10-save-rows-and-add-strip","1920x1080","Button \"Group actions\"",1],
     ["N4/quiet-action-line-start","10-save-rows-and-add-strip","960x640","Button \"Group actions\"",1],
-    ["N4/quiet-action-line-start","10-save-rows-and-add-strip","960x640","Button \"Paused run · Bridge Ambush · Round 2\"",1],
     ["N4/quiet-action-line-start","11-empty-state","1200x800","Button \"Group actions\"",1],
     ["N4/quiet-action-line-start","11-empty-state","960x640","Button \"Group actions\"",1]
   ],
@@ -358,8 +355,6 @@
     ["N4/quiet-action-line-start","03-encounters-set-up","960x640","Button \"Filter creatures\"",1],
     ["N4/quiet-action-line-start","05-library-returned","960x640","Button \"Filter creatures\"",1],
     ["N4/quiet-action-line-start","08-encounters-returned","960x640","Button \"Filter creatures\"",1]
-  ],
-  "nav-table": [
   ],
   "npc-in-encounter": [
     ["G1b/pressed-control-moved","03-npc-in-setup","960x640","Button \"Save encounter\"",1],
