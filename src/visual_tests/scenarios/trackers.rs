@@ -987,7 +987,10 @@ pub fn run(d: &mut Driver<'_>) {
             "A typed amount crosses 1200 → 960 → 1200: focus and words {wide:?}, {narrow:?}, {back:?}; field {wide_field:?} then {back_field:?}; {saved} amount saved"
         ),
     );
-    d.click("Undo: Pay");
+    // The check above needs exactly one saved amount; take it back when there is one.
+    if saved == 1 {
+        d.click("Undo: Pay");
+    }
     if !shown {
         d.press_ctrl(Key::T);
     }
