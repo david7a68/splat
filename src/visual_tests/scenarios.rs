@@ -252,6 +252,35 @@ fn undo_keeps_a_target(d: &mut Driver<'_>, notice: &str, sheet: Option<&str>) {
     }
 }
 
+/// X6, X46: the run's Undo paints one form of the one rule (`undo_forms`): it starts with
+/// `start` (the act's words), names no row as only `…` and its number, and, when it names
+/// `row` at all, keeps that row's telling part `keeps` (a copy number). Its accessible name
+/// keeps the whole action.
+fn undo_paints_a_form(d: &mut Driver<'_>, start: &str, row: &str, keeps: &str) {
+    let size = d.window_size();
+    let undo = d
+        .nodes()
+        .into_iter()
+        .find(|node| node.in_view() && node.name.starts_with("Undo: "));
+    let painted = undo
+        .as_ref()
+        .map_or_else(String::new, |node| d.painted_in(node.rect));
+    let words = painted
+        .split_once("Undo")
+        .map_or("", |(_, words)| words.trim_end_matches(" U"));
+    let words = format!("Undo{words}");
+    let whole = !words.split([' ', '\u{a0}']).any(|word| word == "…");
+    let telling = !words.contains(row) || words.contains(keeps);
+    d.observe(
+        "X6-X46-undo-form",
+        words.starts_with(start) && whole && telling,
+        format!(
+            "At {size:?}, Undo for {:?} paints {words:?}: starts {start:?}, no lone `…`, keeps {keeps:?} with {row:?}",
+            undo.map(|node| node.name)
+        ),
+    );
+}
+
 /// Recovery actions keep the shared Undo icon, inside their own target.
 fn check_undo_icon(d: &mut Driver<'_>, action: &str, id: &str) {
     let target = d.place_of(action).expect("The Undo action is visible");
@@ -4312,6 +4341,31 @@ pub mod encounter_run {
         );
         d.state("next-turn", Sizes::Default);
         d.goal_within("T1.1", "advance the turn", 1);
+        // X49: at 960x640 the current turn's name takes the room of Next turn's `N` before
+        // it is cut: a cut name never stands beside the key letter.
+        let turn = after.clone().unwrap_or_default();
+        let (heading, key) = d.at_size(SMALL, |d| {
+            let first = turn.split(' ').next().unwrap_or_default();
+            let mut heading = None;
+            d.each_painted_text(|text, clip| {
+                let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                let words = &text.galley.job.text;
+                if clip.intersects(rect) && rect.top() < 48.0 && words.starts_with(first) {
+                    heading = Some(words.clone());
+                }
+            });
+            let next = d.place_of(NEXT_TURN).map(|rect| d.painted_in(rect));
+            (heading, next.unwrap_or_default())
+        });
+        let cut = heading
+            .as_deref()
+            .is_none_or(|words| !words.starts_with(&turn));
+        let keyed = key.split(' ').any(|word| word == "N");
+        d.observe(
+            "X49-turn-name-room",
+            !(cut && keyed),
+            format!("At 960x640 the turn paints {heading:?} beside Next turn's {key:?}"),
+        );
         let after = d.row_node(ANCHOR_ROW).map(|row| row.rect.min.y);
         d.observe(
             "Stable rows",
@@ -5491,6 +5545,39 @@ pub mod run_lookup {
     pub fn run(d: &mut Driver<'_>) {
         resume_run_from_cold_start(d);
         d.click_row(PARTICIPANT);
+        // X54: a tile's key hint says the keys, `Ctrl+1`; a tile with no room for it paints
+        // no bare digit that reads as a key.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (hints, bare) = d.at_size(size, |d| {
+                let tiles: Vec<egui::Rect> = d
+                    .nodes()
+                    .into_iter()
+                    .filter(|node| node.in_view() && node.name.contains(" Ctrl+"))
+                    .map(|node| node.rect)
+                    .collect();
+                let (mut hints, mut bare) = (Vec::new(), Vec::new());
+                d.each_painted_text(|text, clip| {
+                    let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                    let words = &text.galley.job.text;
+                    if clip.intersects(rect)
+                        && tiles.iter().any(|tile| tile.contains(rect.center()))
+                    {
+                        if words.starts_with("Ctrl+") {
+                            hints.push(words.clone());
+                        }
+                        if !words.is_empty() && words.chars().all(|c| c.is_ascii_digit()) {
+                            bare.push(words.clone());
+                        }
+                    }
+                });
+                (hints, bare)
+            });
+            d.observe(
+                "X54-tile-keys",
+                !hints.is_empty() && bare.is_empty(),
+                format!("At {size:?} the tiles paint key hints {hints:?} and bare digits {bare:?}"),
+            );
+        }
         d.state("in-the-run", Sizes::All);
         d.goal("be in a run, with a participant selected");
 
@@ -5883,6 +5970,23 @@ pub mod run_long_names {
             !d.has("Effect: words for this row"),
             "Effect gives up its place beside the longest name at 960x640",
         );
+        // X9, X53: where the room after Absent holds it, `Effect` shows also beside a name that
+        // its slot cut, and the cut name keeps its telling last word.
+        for size in [DEFAULT, LARGE] {
+            let (effect, name) = d.at_size(size, |d| {
+                let name = d
+                    .nodes()
+                    .iter()
+                    .find(|node| node.name == format!("Selected: {LONG_NAME}"))
+                    .map_or_else(String::new, |node| d.painted_in(node.rect));
+                (d.has("Effect: words for this row"), name)
+            });
+            d.observe(
+                "X9",
+                effect && name.starts_with(FIRST_NAME) && name.ends_with("… Bell"),
+                format!("At {size:?}: Effect {effect} beside the dock's name {name:?}"),
+            );
+        }
         d.begin_task();
         d.click_row(LONG_NAME);
         d.press(Key::E);
@@ -5911,6 +6015,16 @@ pub mod run_long_names {
         d.click(NEXT_TURN);
         d.state("long-name-has-the-turn", Sizes::All);
         check_columns_stay(d, "With the turn");
+        // X5: a row's lines are those of the same row with each time taken away, so the
+        // effect shows where its plain words would, beside a name of three lines too.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let words = d.at_size(size, |d| d.row_words(LONG_NAME));
+            d.observe(
+                "X5",
+                words.contains("Bless 10"),
+                format!("At {size:?} the long name's row paints: {words}"),
+            );
+        }
         let turn = current_participant(d);
         let header = d.header_rect();
         let words = d.painted_in(header);
@@ -6887,6 +7001,25 @@ pub mod run_sync_conflict {
         d.app_mut().encounters.simulate_sync_conflict(SYNCED);
         d.settle();
         d.state("conflict-with-nothing-expanded", Sizes::All);
+        // X47: the sheet-change notice keeps its count of removed Undo steps wherever it
+        // shows; at 1920x1080 the notice line has the room for it.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let painted = d.at_size(size, |d| {
+                let mut found = Vec::new();
+                d.each_painted_text(|text, clip| {
+                    let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                    if clip.intersects(rect) && text.galley.job.text.contains("HP 58 → 54") {
+                        found.push(text.galley.job.text.clone());
+                    }
+                });
+                found
+            });
+            d.observe(
+                "X47-removed-steps",
+                !painted.is_empty() && painted.iter().all(|words| words.contains(" removed")),
+                format!("At {size:?} the sheet-change notice paints {painted:?}"),
+            );
+        }
         // The footer's main way out says why it is off, with no hover.
         d.observe(
             "G1",
@@ -7091,7 +7224,8 @@ pub mod run_sync_conflict {
                 .zip(review)
                 .zip(undo)
                 .is_some_and(|((conflict, review), undo)| {
-                    conflict.right() <= review.left() + 1.0
+                    // X69: the conflict's name ends `S` before `Review`.
+                    conflict.right() + crate::design::S <= review.left() + 1.0
                         && review.right() < undo.left()
                         && reminders.is_none_or(|place| {
                             place.left() > review.right() && place.right() < undo.left()
@@ -10564,6 +10698,7 @@ pub mod world {
         d.settle();
         d.expect("Add to fight");
         d.expect("NPC · alive · Campaign");
+        d.expect("Change Status");
         d.state("world-new-npc", Sizes::Default);
         d.click("Add to fight");
         d.type_into("Stat block", "Guard");
@@ -15691,6 +15826,9 @@ pub mod encounter_groups {
                 && d.has_containing("Undo: move Rival Team (Rival Captain 2) before Rival Team"),
             "Move before keeps the current turn and offers Undo",
         );
+        for size in [SMALL, DEFAULT] {
+            d.at_size_mut(size, |d| undo_paints_a_form(d, "Undo: move", "Rival", "2"));
+        }
         d.state("tied-arrival-moved-before", Sizes::All);
         d.click_containing("Undo: move Rival Team (Rival Captain 2) before Rival Team");
         d.click_containing("Undo: add Rival Team");
@@ -15867,6 +16005,57 @@ pub mod encounter_history {
                 format!("{what}, opened at {size:?}: the row and Final state in view: {shown:?}"),
             );
         }
+        // X36: opened at 1200x800, then seen at 960x640: the run's row is still at the list's
+        // top, so the party's final HP is still in view.
+        let smaller = d.at_size(SMALL, |d| {
+            opened_run_in_view(d)?;
+            // The row's name, at most the row's own gap and padding below the list's top.
+            let mut below = None;
+            d.each_painted_text(|text, clip| {
+                if text.galley.job.text == "Old Mill Raid"
+                    && clip.intersects(text.visual_bounding_rect())
+                {
+                    below = Some(text.pos.y - clip.top());
+                }
+            });
+            below
+                .filter(|below| (0.0..=crate::design::L).contains(below))
+                .ok_or_else(|| vec![format!("Old Mill Raid's top below the list's: {below:?}")])
+        });
+        d.observe(
+            "X36-history-follows-resize",
+            smaller.is_ok(),
+            format!("{what}, opened at {DEFAULT:?} and seen at {SMALL:?}: {smaller:?}"),
+        );
+        // X37: also where little follows the run, its row reaches the top at a clean edge.
+        super::run_continue::history_edges(d);
+    }
+
+    /// X36: after the DM scrolls History, a resize does not pull the list back to the run.
+    /// The scenario's window is 960x640, where the list keeps the run; at 1200x800 the whole
+    /// list fits, so the way back to 960x640 is where a kept run would pull it again.
+    fn a_scroll_wins_over_a_resize(d: &mut Driver<'_>) {
+        let row = |d: &Driver<'_>| d.place_of(&d.name_starting(&OPEN_OLD.replace("Open", "Close")));
+        let Some(at) = row(d) else {
+            d.observe(
+                "X36-scroll-wins",
+                false,
+                "The opened run's row is not shown",
+            );
+            return;
+        };
+        let before = row(d);
+        // To the list's top, so that no size can hold the DM's offset in a shorter list.
+        d.scroll_up_at(at.center(), 10);
+        let scrolled = row(d);
+        let larger = d.at_size(DEFAULT, row);
+        let back = row(d);
+        d.observe(
+            "X36-scroll-wins",
+            scrolled.zip(before).is_some_and(|(scrolled, before)| scrolled.top() > before.top())
+                && back.map(|r| r.top().round()) == scrolled.map(|r| r.top().round()),
+            format!("The row before {before:?}, after the DM's scroll {scrolled:?}, at {DEFAULT:?} {larger:?}, back {back:?}"),
+        );
     }
 
     pub fn run(d: &mut Driver<'_>) {
@@ -15945,6 +16134,8 @@ pub mod encounter_history {
             "Reading History changes no story and leaves the live-run slot free",
         );
         d.state("ended-run-open", Sizes::All);
+        // The opened run stays at the list's top; the DM closes it to reach In progress.
+        d.click_starting(OPEN_OLD.replace("Open", "Close").as_str());
         resume_run(d, RUN);
         let live = d
             .app_mut()
@@ -15955,7 +16146,6 @@ pub mod encounter_history {
             .unwrap()
             .id;
         go_encounters(d);
-        d.click_starting(OPEN_OLD.replace("Open", "Close").as_str());
         d.click_starting(OPEN_OLD);
         d.expect("Read-only");
         let still_open = d
@@ -15975,6 +16165,7 @@ pub mod encounter_history {
             "An open unfinished run has one row; the strip keeps Next turn primary and Back to run secondary",
         );
         d.state("history-beside-open-run", Sizes::All);
+        a_scroll_wins_over_a_resize(d);
 
         open_saved_encounter(d, RUN);
         d.click("Keep in Ready during a run");
@@ -18924,6 +19115,25 @@ pub mod session_plan {
                 }),
             format!("At {size:?}, Log, Whole run and Timeline share one line: {words:?}"),
         );
+        // App round 2, X48: one gap, `S`, on each side of each `·`, at every size: from a
+        // word's painted end to the `·`, and from the `·` to the next word.
+        let gaps: Vec<f32> = words
+            .windows(2)
+            .filter_map(|pair| {
+                let (a, b) = pair[0].zip(pair[1])?;
+                let between = egui::Rect::from_x_y_ranges(a.right()..=b.left(), a.y_range());
+                let dot = d.painted_word_rect("·", between)?;
+                Some([dot.left() - a.right(), b.left() - dot.right()])
+            })
+            .flatten()
+            .collect();
+        d.observe(
+            "X48",
+            gaps.len() == 4 && gaps.iter().all(|gap| (gap - crate::design::S).abs() <= 1.0),
+            format!(
+                "At {size:?}, the gaps beside each `·` of Log · Whole run · Timeline: {gaps:?}"
+            ),
+        );
     }
 
     /// F7, T18.1: a played fight's rewards reach the note in 1, with its reference and one Undo,
@@ -18986,7 +19196,7 @@ pub mod session_plan {
             d.click(&action);
             d.audit_goal_within("T18.1", "put a played fight's rewards in the note", 1);
             d.wait_for_text("In notes");
-            let result = d.has_containing("Rewards added under Loot and rewards. XP added. Delete that line to leave XP out from now on. XP tonight: ");
+            let result = d.has_containing("Rewards added under Loot and rewards. XP line added. Delete it in the note to leave XP out from now on. XP tonight: ");
             let written = std::fs::read_to_string(&note).unwrap();
             // The counts assume the note in Write; this one shows as a reader.
             write_note(d);
@@ -19882,10 +20092,35 @@ pub mod session_plan {
             "Final HP names each character in the plan, with no run to reopen",
         );
         rewards_in_the_note(d);
+        // W2-D3 (app round 2): the opened played row has the Timeline detail's `Where`. It is
+        // that event's own field: typed here, the Timeline holds it, with no page change. At
+        // 960x640 the taller row leaves the next fight's primary action in view.
+        let next = d.at_size(SMALL, |d| {
+            d.nodes()
+                .into_iter()
+                .find(|node| node.name == format!("Start fight: {SECOND}"))
+                .is_some_and(|node| node.fully_in_view())
+        });
+        d.begin_task();
+        d.type_into("Where", "The ford");
+        let placed =
+            d.app().timeline.events.iter().any(|event| {
+                event.title == FIRST && event.run.is_some() && event.place == "The ford"
+            });
+        d.observe(
+            "W2-D3-where",
+            placed && next && d.page_title().as_deref() == Some("Session"),
+            format!("Where on the played row writes the Timeline's event {placed}; at 960x640 the next fight's Start fight is whole in view {next}"),
+        );
         d.click(FIRST);
 
         d.click(NAV_TIMELINE);
         assert!(d.has_containing("Held the bridge · Ended · Round 1"));
+        d.observe(
+            "W2-D3-where",
+            d.has_containing("The ford"),
+            "Timeline shows the place typed on the plan's row",
+        );
         d.state_prepared("timeline-after-fight", Sizes::All, |d| {
             d.observe(
                 "iter-23-S-FK2-timeline",

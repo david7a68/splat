@@ -1957,7 +1957,14 @@ fn conditions_row(ui: &mut egui::Ui, conditions: &mut Vec<String>) {
     let mut text = ui
         .data(|data| data.get_temp::<String>(id))
         .unwrap_or_default();
-    if crate::encounter_run::view::other_effect_field(ui, &mut text, width, false).0 {
+    if crate::encounter_run::view::other_effect_field(
+        ui,
+        &mut text,
+        (width, "Other effect…"),
+        false,
+    )
+    .0
+    {
         if !conditions.iter().any(|c| same_condition(c, text.trim())) {
             conditions.push(text.trim().to_owned());
         }

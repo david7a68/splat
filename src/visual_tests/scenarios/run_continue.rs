@@ -110,6 +110,31 @@ fn undo_keeps_its_target(d: &mut Driver<'_>, what: &str, beside: &str) {
     }
 }
 
+/// X38: the top of `FINAL STATE` at the minimum and the default size, which the ended
+/// header's height sets.
+fn final_state_tops(d: &mut Driver<'_>) -> Vec<Option<f32>> {
+    [SMALL, DEFAULT]
+        .into_iter()
+        .map(|size| {
+            d.at_size(size, |d| {
+                painted_paragraph(d, "FINAL STATE").map(|r| r.top())
+            })
+        })
+        .collect()
+}
+
+/// X38: the ended header has one height in every ended state at a size, whatever Undo's
+/// target is and whether Continue fight or its reason shows, so no act moves the final state,
+/// the loot or the next `Roll` under the pointer.
+fn same_header(d: &mut Driver<'_>, first: &[Option<f32>], what: &str) {
+    let tops = final_state_tops(d);
+    d.observe(
+        "X38-ended-header-height",
+        tops.iter().all(Option::is_some) && tops == first,
+        format!("{what}: FINAL STATE at {tops:?}, the first ended view at {first:?}"),
+    );
+}
+
 /// V11: in History, the line under Read-only (Continue fight, or the reason) is `S` below the
 /// Read-only line and `M` above `FINAL STATE`, at every size.
 fn history_line_gaps(d: &mut Driver<'_>, line: &str) {
@@ -150,6 +175,104 @@ fn history_line_gaps(d: &mut Driver<'_>, line: &str) {
                 (after - crate::design::S).abs() <= 0.5 && (before - crate::design::M).abs() <= 0.5
             }),
             format!("At {size:?}, {line:?} is S below Read-only and M above FINAL STATE: {gaps:?}"),
+        );
+    }
+    history_edges(d);
+}
+
+/// X37, X66: the opened run's list starts at a clean edge, with no line above it cut at the
+/// list's top; and `COMBAT LOG` is `M` below the last Final state row, as `FINAL STATE` is `M`
+/// below the line above it.
+pub(crate) fn history_edges(d: &mut Driver<'_>) {
+    for size in [SMALL, DEFAULT, LARGE] {
+        let edges = d.at_size(size, |d| {
+            let (mut list, mut state, mut log) = (None, None, None);
+            d.each_painted_text(|text, clip| {
+                let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                let words = text.galley.job.text.as_str();
+                if words == "FINAL STATE" && clip.intersects(rect) {
+                    (list, state) = (Some(clip), Some(rect));
+                }
+                if words == "COMBAT LOG" && clip.intersects(rect) {
+                    log = Some(rect);
+                }
+            });
+            let (list, state) = (list?, state?);
+            let (mut cut, mut above_log) = (Vec::new(), (f32::MIN, String::new()));
+            d.each_painted_text(|text, clip| {
+                let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                if (clip.top() - list.top()).abs() < 0.5
+                    && rect.top() < list.top() - 0.5
+                    && rect.bottom() > list.top() + 0.5
+                {
+                    cut.push(text.galley.job.text.clone());
+                }
+                // The list's own texts in Final state's column, between its label and the log's.
+                if log.is_some_and(|log| {
+                    (clip.top() - list.top()).abs() < 0.5
+                        && rect.left() >= state.left() - 0.5
+                        && rect.top() > state.bottom()
+                        && rect.bottom() <= log.top() + 0.5
+                }) && rect.bottom() > above_log.0
+                {
+                    above_log = (rect.bottom(), text.galley.job.text.clone());
+                }
+            });
+            Some((cut, log.map(|log| (log.top() - above_log.0, above_log.1))))
+        });
+        d.observe(
+            "X37-history-clean-edge",
+            edges.as_ref().is_some_and(|(cut, _)| cut.is_empty()),
+            format!("At {size:?}, the texts cut at the list's top: {edges:?}"),
+        );
+        let gap = edges.and_then(|(_, gap)| gap);
+        d.observe(
+            "X66-combat-log-gap",
+            gap.as_ref().map_or(size == SMALL, |(gap, _)| {
+                (gap - crate::design::M).abs() <= 0.5
+            }),
+            format!("At {size:?}, COMBAT LOG is M below the last Final state row: {gap:?}"),
+        );
+    }
+}
+
+/// The selected name as the dock paints it.
+fn dock_name(d: &Driver<'_>) -> String {
+    d.nodes()
+        .iter()
+        .find(|node| node.name.starts_with("Selected: "))
+        .map_or_else(String::new, |node| d.painted_in(node.rect))
+}
+
+/// X65, X53: beside Lookup a row at 0 HP has `Death saves` first on the tile line, over the
+/// dock, so the dock's toggles keep the places they have for a row with HP, and the selected
+/// name keeps its slot: `Vault Guard` whole, not `Vault…`.
+fn death_saves_move_nothing(d: &mut Driver<'_>) {
+    let toggles = |d: &Driver<'_>| [d.place_of("Concentrating"), d.place_of("Absent")];
+    for size in [SMALL, DEFAULT] {
+        let (down, saves, amount, name) = d.at_size(size, |d| {
+            (
+                toggles(d),
+                d.place_of("Death saves"),
+                d.place_of("Amount"),
+                dock_name(d),
+            )
+        });
+        d.click_row("Brannoch Vale");
+        let up = d.at_size(size, |d| toggles(d));
+        d.click_row("Vault Guard");
+        d.observe(
+            "X65",
+            down.iter().all(Option::is_some)
+                && down == up
+                && saves
+                    .zip(amount)
+                    .is_some_and(|(saves, amount)| saves.bottom() <= amount.top())
+                && name == "Vault Guard",
+            format!(
+                "At {size:?}: toggles at 0 HP {down:?}, with HP {up:?}; Death saves {saves:?} \
+                 over Amount {amount:?}; the dock's name {name:?}"
+            ),
         );
     }
 }
@@ -240,6 +363,7 @@ pub fn run(d: &mut Driver<'_>) {
         "Ended · Round 2",
     );
     d.state("ended-undo-is-the-way-on", Sizes::All);
+    let closed_tops = final_state_tops(d);
     // iter-25-R, results family: `Loot copied.` shows beside the loot's buttons and moves
     // neither of them.
     let buttons = |d: &Driver<'_>| (d.place_of("Roll all 2"), d.place_of("Copy loot"));
@@ -266,6 +390,11 @@ pub fn run(d: &mut Driver<'_>) {
         "T17.8",
         shown,
         "After a later rest and a restart, the saved ending has no Undo and says why",
+    );
+    same_header(
+        d,
+        &closed_tops,
+        "The saved ending of a fight that is not the last",
     );
     d.app_mut().encounters.run_mut().unwrap().wants_unend = Some(crate::encounter_run::Unend::Undo);
     d.settle();
@@ -297,6 +426,17 @@ pub fn run(d: &mut Driver<'_>) {
         &[CLOSE_RUN],
         "Ended · Round 2",
     );
+    // W6-D2: beside Lookup, where the header has its second line, the lone Undo there names
+    // what it takes back.
+    for size in [SMALL, DEFAULT] {
+        let shown = d.at_size(size, |d| d.visible_text(END_STEP));
+        d.observe(
+            "W6-D2-undo-names-the-ending",
+            shown,
+            format!("The ended view beside Lookup at {size:?} shows {END_STEP:?}: {shown}"),
+        );
+    }
+    let open_tops = final_state_tops(d);
     d.state("ended-beside-lookup", Sizes::All);
     d.begin_task();
     d.click_starting("Undo");
@@ -360,6 +500,7 @@ pub fn run(d: &mut Driver<'_>) {
         );
     }
     undo_keeps_its_target(d, "The ended view with loot beside Lookup", CONTINUE);
+    same_header(d, &open_tops, "The ended view with loot beside Lookup");
     d.state("ended-with-loot-beside-lookup", Sizes::All);
     close_lookup(d);
     whole_at_every_size(
@@ -370,6 +511,7 @@ pub fn run(d: &mut Driver<'_>) {
         "Ended · Round 2",
     );
     undo_keeps_its_target(d, "The ended view with loot", CONTINUE);
+    same_header(d, &closed_tops, "The ended view with loot");
     d.state("ended-continue-fight", Sizes::All);
 
     // Continue fight is for the fight that was played last. A long rest ruled after the
@@ -392,6 +534,11 @@ pub fn run(d: &mut Driver<'_>) {
         "Ended · Round 2",
     );
     undo_keeps_its_target(d, "The ended view of a fight that is not the last", LATER);
+    same_header(
+        d,
+        &closed_tops,
+        "The ended view of a fight that is not the last",
+    );
     d.state("ended-not-the-last-fight", Sizes::All);
     open_lookup(d);
     whole_at_every_size(
@@ -405,6 +552,11 @@ pub fn run(d: &mut Driver<'_>) {
         d,
         "The ended view of a fight that is not the last, beside Lookup",
         LATER,
+    );
+    same_header(
+        d,
+        &open_tops,
+        "The ended view of a fight that is not the last, beside Lookup",
     );
     d.state("ended-not-the-last-fight-beside-lookup", Sizes::All);
     close_lookup(d);
@@ -576,6 +728,7 @@ pub fn run(d: &mut Driver<'_>) {
         "Continue fight leaves Lookup on its entry",
     );
     d.state("fight-continued-beside-lookup", Sizes::All);
+    death_saves_move_nothing(d);
     close_lookup(d);
     // Everything that reads the fight says it is live again.
     let told = story(d);
@@ -653,6 +806,36 @@ pub fn run(d: &mut Driver<'_>) {
     whole_at_every_size(d, "T17.6", "The ended run in History", &[CONTINUE], "");
     history_line_gaps(d, CONTINUE);
     d.state("history-continue-fight", Sizes::All);
+    // X70: Final state shows the Vault Guard's saved concentration, in the mark the run's rows
+    // use, on its HP's line.
+    let (mark, _) = crate::encounter_run::view::concentration_mark();
+    for size in [SMALL, DEFAULT, LARGE] {
+        let marked = d.at_size(size, |d| {
+            let (mut name, mut marks) = (None, Vec::new());
+            d.each_painted_text(|text, clip| {
+                let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                if !clip.intersects(rect) {
+                    return;
+                }
+                if text.galley.job.text == "Vault Guard" {
+                    name = Some(rect);
+                }
+                if text.galley.job.text.contains(&mark) {
+                    marks.push(rect);
+                }
+            });
+            let name = name?;
+            Some(marks.iter().any(|mark| {
+                mark.left() > name.right()
+                    && (mark.center().y - name.center().y).abs() < name.height() / 2.0
+            }))
+        });
+        d.observe(
+            "X70-final-state-concentration",
+            marked == Some(true),
+            format!("At {size:?}, the Vault Guard's Final state row says {mark:?}: {marked:?}"),
+        );
+    }
     // AI1: Final state keeps one HP column: every row's HP starts at one x, at every size.
     // iter-26-B AI1, FI6, SI1: temporary HP has a column of its own, the conditions start after
     // it also on a row with no temporary HP, and each row's values sit on its name's baseline.

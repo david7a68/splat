@@ -269,7 +269,8 @@ file line below its title is not a message action and keeps its place.
 A pane that can hold such an action at its text edge keeps a gutter at least `L` wide, so the target never
 reaches a column splitter. The World page's centre has an `L` left gutter for this.
 Other message actions use a secondary border. Undo messages use `undo_message`: a quiet action and undo
-icon on the message line, or below when needed. An Undo never stands alone: its result is a short message
+icon on the message line, or below only when it is wider than the room after the words (the line is measured
+as it is drawn: the inset, the words, one gap and the action). An Undo never stands alone: its result is a short message
 that it follows (`Links now say “<name>”.` with `Undo link update`, after the offer `Change links from “<old>” to
 “<new>”.` with `Update N links`, `The first heading now says <name>.` with
 `Undo heading change`, `Encounters now use the copy.` with `Undo source change`, `The stat
@@ -922,7 +923,7 @@ group, a group moved or deleted on save, a removed encounter (`Removed encounter
 `Edit in Obsidian` with `message_with_actions`, so the link starts at the warning's words, in the edit form and in a
 reader with no file line.
 
-Set values show labelled rows: Stat block, In, Part of and Status. An NPC also shows its empty Stat block row. A full NPC reader's kind line shows NPC and its owner; Status stays in its own row. A compact reader keeps status on the kind line because it has no Status row. A compact reader has no file line either: while a duplicate-note repair message shows, its kind line drops the fault and names the open file instead (`NPC · Campaign · NPCs/Rook Ambry copy.md`). The result rows keep the fault. Use a fixed label column, aligned
+Set values show labelled rows: Stat block, In, Part of and Status. An NPC also shows its empty Stat block row. A full NPC reader's kind line shows NPC and its owner; Status stays in its own row. A compact reader (Lookup) keeps status on the kind line, as the plain evening's contract keeps every text of today, and shows a campaign entry's Status row with its Change below it, so the DM changes a status where the entry is read, with the same write, Log line and `Undo status change` in Lookup's footer. `Change` puts the keyboard in the field with its words selected, in both readers. A compact reader has no file line: while a duplicate-note repair message shows, its kind line drops the fault and names the open file instead (`NPC · Campaign · NPCs/Rook Ambry copy.md`). The result rows keep the fault. Use a fixed label column, aligned
 values and a 32 px pitch. Change uses one column at the widest visible value in the block plus an `L`
 gap, capped at the value measure. Values wrap within their column, with Change level with the value's first line (a missing link's name line, not
 `Not found` below it). Read mode hides empty relationship and status values. An NPC keeps its empty Stat block row and Change action, so assigning its first stat block still takes three interactions from the reader. This row says `not set`. A set value is `Body` in the text colour, as a set link is, so a value and its absence differ at a glance; only `not set` and `not read` stay muted `Small`. Edit on the title line opens all fields, including empty ones. A typed page with no set values shows its prose directly, except for this NPC Stat block row: with no row, the value block adds no gap, so the prose starts as far below the file line as a plain note's does. Missing links retain names and keep `Not found` on one line beside a label column. A missing link's icon and name
@@ -983,7 +984,7 @@ entry, or a package creature, whose header has no Edit) has a quiet `Start fight
 `XS` apart (after the measured title, one `L` on, when there is no Edit), named `Start a fight with <name>` and
 blocked as the encounter editor's `Start fight` is. While the encounter editor is the page, Lookup's reader has
 no `Start fight`: the editor's own primary `Start fight` is the one there. A campaign world entry also has a quiet `Add to Log`
-(`icons::ADD`) `XS` after `Start fight`, or after Edit when there is no `Start fight`, so `Start fight` keeps
+(`icons::ADD_TO_LOG`, a list with a plus, so it is not the bare `+` of `Add to fight`) `XS` after `Start fight`, or after Edit when there is no `Start fight`, so `Start fight` keeps
 its place whether or not the DM ever adds to a Log. They take only the room after the
 title on the title's line: the title keeps its width and the row gains no line and no menu. The header shows
 the first of these that fits: both words; `Start fight` and `Add to Log` as its icon (`icon_button`, its name
@@ -995,7 +996,8 @@ opens the run's made-up form in Arrivals, with the name filled in and the keyboa
 `add_field` under the kind line, named `Log line for <name>`, with the placeholder `What happened?` and the
 keyboard in it; the line's stamp (`Session 12, Day 3:`, the stamp of a Change at that moment, or the day alone
 when no session is being played) stands before it in `Type::Small` `muted`, on the field's line while the field
-keeps 224 px, else above it. Enter adds one line at the end of the entry's `## Log` (Splat makes the heading
+keeps 224 px and the words it holds fit whole, else above it, so a done scene's long words are never cut. Stamp and field end at the reader's measure
+(`READER_MEASURE`, 488 px), as its rules do. Enter adds one line at the end of the entry's `## Log` (Splat makes the heading
 when the note has none) and closes the field; Escape clears and closes it. Its result, `Added to <name>’s Log.`
 with `Undo Log line`, sits in the pane's message footer, as every World and Lookup result does; Undo removes
 that line only while the file holds what the act wrote, and ends when the entry's text changes or the reader
@@ -1003,8 +1005,10 @@ shows another entry. A failed read or write is the error of the last action, als
 file, and the field keeps its words. The typed words belong to the campaign and the entry, not the session:
 the stamp is the session being played at Enter. They wait while the reader shows another entry and across a
 campaign change, and the campaign switch's guard and the close warning count them. When the entry is gone
-(deleted, or another note took its ID), its draft waits for nothing, and the pane's footer says once:
-`“<name>” was deleted. The Log line was not added: “<words>”`. While the entry's edit form is open the field waits
+(deleted, or another note took its ID), its draft waits for nothing, and the pane's footer says
+`“<name>” was deleted. The Log line was not added: “<words>”` with `Copy text` and, an `L` gap after it, `Dismiss`
+(the choices of a lost draft), whatever the reader shows and also while Lookup shows no entry, until the DM copies
+or dismisses it. While the entry's edit form is open the field waits
 under `Save or discard your edit first.` A package's entry has no `Add to Log`. Edit replaces the rows and
 the text with one form. Read and Edit show Stat block, In, Part of, then Status, so a value keeps its place when the DM
 presses Edit; conflict lines after Overwrite use the same order. Text follows in the reader's prose type,
@@ -1054,6 +1058,12 @@ Task marks at the start of a list item show an empty box for `[ ]` and a checked
 A note row has selected fill only while its reader is open. Open questions, Things to check, creation and repair
 keep the remembered note without selected fill. Open questions answers "which questions are open?": each question is
 `Body` first and opens its note at its heading; `In <note>` follows in `Small`. Dates outside events use the same form.
+Each question has a box before its words, the theme's checkbox with a 24 px target and an `S` gap, named
+`Open: <words>`. A tick writes `[x]` into that line of its note at once, through the World's write path, only while
+the line is as it was read; otherwise it writes nothing and the pane's footer says `This question changed in <note>.
+Nothing was written.` Its result, `“<words>” ticked in <note>.` with `Undo tick`, sits in the pane's footer, kept by
+the note and the line, newest first. An open edit form of the note blocks it (`Save or discard your edit of <note>
+first.`). A question in a note without properties, which Splat does not write, keeps the box's room and has no box.
 `Things to check` lists advice (no summary, nothing points here, pages to write), not faults: its row counts
 suggestions (`3 suggestions`), and `needs fixing` stays for faults only.
 
@@ -1159,11 +1169,15 @@ back only where no file has its path. A plan line that linked it gets no row, an
 hover `Not found in this campaign`.
 
 History opens read-only final state and log in place, outside the live-run slot. When a run opens there, by `Open`
-or by `Whole run` from the plan, the list scrolls once, at that act, so the run's row is at its top and the outcome,
-the line under Read-only and the whole Final state are in view below it; the log follows. Final state has one name column, as
+or by `Whole run` from the plan, the list scrolls at that act so the run's row is at its top and the outcome,
+the line under Read-only and the whole Final state are in view below it; the log follows. The top is a clean edge: the
+row's top less its own gap, so no letters of the line above show cut. While the run is open, the list keeps room
+below its end, so the row reaches the top also when little follows it, and stays there when the list's visible height
+changes (a smaller window, a run opened beside it). After the DM scrolls, the DM's scroll wins. `COMBAT LOG` is `M` below the last Final state row, as `FINAL STATE` is below the
+line above it. Final state has one name column, as
 wide as the longest name up to half the room, so every HP starts at one x. HP and temporary HP follow in columns of
-their own, each as wide as its widest value, kept where a row has none; Absent and the conditions start after them and
-wrap inside the last column. Each row's values sit on its name's baseline. Rows put outcome before ended
+their own, each as wide as its widest value, kept where a row has none; Absent, a saved concentration (its icon and
+`Conc` in its colour, the mark of the run's rows) and the conditions start after them and wrap inside the last column. Each row's values sit on its name's baseline. Rows put outcome before ended
 state and retain outcome and round. The detail header shows only Read-only and end reason. History rows keep
 Open or Close and their menu; Start and Edit stay in that menu.
 
@@ -1216,7 +1230,8 @@ Notes retain their own width cap. Resizing keeps unsent notes, focus and scroll.
 creature` ends its Name field where Save creature ends. Rules and runs puts its save state, Discard and reasons at
 the start of one row with `Save run settings` at its end; without room, the state's words wrap before Save.
 
-The editor header keeps Save and Start on line one; the name field gives up width. While Save would refuse a
+The editor header keeps Save and Start on line one; the name field gives up width, also beside Lookup at the
+minimum window. They take a line of their own only when no name field fits beside them. While Save would refuse a
 changed draft (a roster row with no creature, or the refusal of the last Save while it still holds), the save row
 says `Invalid` and Save and Ctrl+S are blocked with the cause; otherwise a changed draft says `Unsaved`. A draft whose
 rows match the file again, as after `Undo replacement`, says `No changes`. A Save, also the one a start makes, ends the
@@ -1393,8 +1408,9 @@ after the DM stops sync for that character; an untouched linked row has no sync 
 ### Header, dock and panels
 
 The header has two lines. Round and current turn use bold sans larger than row names, beside Next turn.
-When the turn heading does not fit, drop `’s turn` before shortening the name. Keep the final copy number,
-such as `Cinder… 1`. Hover and accessibility keep the full name. Line
+When the turn heading does not fit, drop `’s turn` before shortening the name. When the name at its least size
+does not fit beside Next turn, Next turn gives up its `N` key letter before the name is cut (the Keys list keeps N).
+Keep the final copy number, such as `Cinder… 1`. Hover and accessibility keep the full name. Line
 two keeps a result icon and notice at the left and Undo at the right. Measure notice first; Undo gets the
 remainder less `L`. Undo always keeps the word `Undo`: shorten the target first, then drop the `Next:` notice
 (the roster still marks NEXT). A state notice stays whole. Beside one, Undo keeps a shortened target while
@@ -1405,7 +1421,12 @@ for that target goes below the roster. When no shortened target fits, Undo shows
 number; `participants` and the half count go),
 `Undo: exhaustion 0 → 3` or `Undo: initiative` for one row. Undo shows `Undo` alone only when not even that fits. A name
 is never cut to only `…` and its copy number; retain copy numbers, action words, amounts and condition
-directions. Hover and accessibility keep the full action. Empty history says Nothing to undo, to the left of
+directions. The target shortens by whole words and keeps the part that tells two rows apart: its copy number or
+letter (`Cinder… 2`), else its last word; a short form that another row's name also gives is not used. When no
+such form fits, the target goes. One function makes every Undo label of the run, in the live, ended and setup
+header (`undo_forms`), from the step's parts: the step keeps the row (or loot table) that its name names, as it
+made the name, so the target is never searched for in the label's words. A step read from the run file names the one
+row it changed; its loot table is not kept, so a reopened loot step that does not fit shows `Undo`. Hover and accessibility keep the full action. Empty history says Nothing to undo, to the left of
 blocked Undo on setup and live screens. A run file from before Undo steps were saved says Nothing to undo since
 reopening, and a file whose steps could not be read says so. A narrow slot uses
 Nothing to undo with full hover and accessible text. Sheet updates name whose sheet changed; only sheet reads
@@ -1413,12 +1434,14 @@ say sheet changed. Sync-panel choices stay in Log and Undo.
 
 Notice priority is conflict, recording silence, other sync notices, next name. Silence and short sync state
 stay together when space is tight. Connect to sync loses its link before either state loses its word. Keep the
-full `Sync off for the party` beside recording silence. If the Undo target cannot fit, show `Undo` and keep
+full `Sync off for the party` beside recording silence. A link after a notice's words (`Review`, `Connect to sync`)
+starts `S` after them, and the fit counts that gap. If the Undo target cannot fit, show `Undo` and keep
 its full target in hover and accessibility. An empty Undo can omit its adjacent reason when it cannot fit;
 the control keeps that reason in hover and accessibility. Keep the
 next participant visible when Undo is empty. Sheet notices fit after conflict with Log and Dismiss when
 possible; shorten to character name and first changed value, with full text in hover and Log. When the update removed
-Undo steps, the notice ends with their count (`Brannoch Vale: HP 49 → 46 · 1 Undo step removed`); the Log names each. Otherwise show
+Undo steps, the notice ends with their count (`Brannoch Vale: HP 49 → 46 · 1 Undo step removed`) in every form, in the
+header and below the roster; the Log names each. Otherwise show
 once below the roster, keeping Undo visible. Sheet-change notices use `small_message`: warning icon and bar,
 text-colour words. A result below the roster (`Brannoch Vale joined at 20 · acts next round.`) uses the same
 `small_message` in the success tone, with the past tense Arrivals uses (`joined at`, `moved to`). Centre compact notices with their Log and Dismiss controls, in the header and below
@@ -1428,8 +1451,9 @@ text colour, fitted to one line, with the full error on hover, then `Campaign �
 gap: a bordered secondary button, as Arrivals offers it. The words, the button and the close icon share one centre.
 
 Long local effects show four words and `…` (`Hexed until the hag…`), the last shown word a link to the whole effect;
-a hidden count keeps its number (`2 more`, never a bare `more`); Undo keeps four when they fit. Narrow Undo keeps Undo add or Undo
-remove, two effect words and target. Concentration Undo says start concentration or stop concentration before
+a hidden count keeps its number (`2 more`, never a bare `more`); Undo keeps four when they fit. An added effect's Undo has
+one form, `Undo: effect <words>`: narrower, it keeps two effect words and its target (`Undo: effect Wis save… on Cinder
+Wolf 2`), then the target shortens by the rule above, then the target goes (`Undo: effect Wis save…`). Concentration Undo says start concentration or stop concentration before
 the target. Exhaustion Undo keeps both levels, such as `exhaustion 2 → 3 on Oren`. Exhaustion level uses the shared `stepper` at Scan height. One drag on the level is one Undo step, from the level where the drag started, committed when the drag ends; each − or + press is one step. At a limit the button says `Exhaustion stops at 6.` or `Exhaustion is already 0.` Hover and accessibility keep full text.
 
 The dock has a fixed place above the footer: Amount, Damage, Heal, Temp HP, selected name, Conditions, Conc,
@@ -1444,15 +1468,20 @@ the dice, never before the name. In a wider dock the total (`= 4`, named `Rolled
 the block's edge, and a total of three digits gives up `=` there. Each place holds three digits whole; a longer total
 ends in `…`, and hover keeps the roll's whole line. No control of the dock moves when a total comes, changes or goes.
 Fit whole words, retain a distinguishing last word or copy number or
-letter, end shortened names with an ellipsis and drop trailing joining words. Hover and accessibility keep
-full names.
+letter, end shortened names with an ellipsis and drop trailing joining words: `Seraphina… Bell`, `Cinder… 2`.
+The dock's name keeps its last word while its slot holds the first word, `…` and the last word; else it is its
+first word's start and `…`, within the slot, so no control moves. The limit: in the 442 px dock at 960x640 the
+slot is 79 px (95 beside Lookup), and `Seraphina… Bell` needs 107, so it shows `Seraphina…`; from a 596 px
+dock the slot is 192 px. Hover and accessibility keep full names. A row at 0 HP with the panel hidden has `Death saves` first on the
+action tiles' line above the dock, so no control of the dock moves and the name keeps its slot.
 
 ### Effects and turn reminders
 
 An effect is words that the DM pins to one row, with or without a time. The dock's second line has a quiet
 `Effect` (`Action::quiet`, key `E`, icon `PIN`) `L` after Absent, in the room that is spare there, so no
-control of the line moves. It shows with its word while that room holds it and the selected name keeps its
-size and its words; else with its icon; and not at all otherwise. With several rows selected it is absent.
+control of the line moves. That room alone decides: it shows with its word while the room holds it, also
+beside a name that its slot cut; else with its icon; and not at all otherwise. Where it has no room, the
+Conditions tab's field says `Other effect, such as Bless 10 rounds`. With several rows selected it is absent.
 `Effect` makes line two one `add_field`, `Effect on <name>, such as Bless 10 rounds`, that belongs to its row:
 Enter adds and Escape clears, and both put focus in Amount; another selection or Next turn closes it, and its
 words wait for that row. `E` opens that field, or the Conditions tab's `Other effect…` field with focus when
@@ -1461,26 +1490,34 @@ words wait for that row. `E` opens that field, or the Conditions tab's `Other ef
 name with a time is that condition with a count, and words already on the row change their time.
 
 A row's effects never add a line or change its height: the row has the lines and the height of the same row
-with no effect. They take the conditions' place in today's order, before plain conditions; every other word
-keeps its place. Each effect shows whole while the line has room; else the first ones and a count of the rest,
-`⚑ +2`; else the first one's words shortened from their end and the count; else the count of all, `⚑ 3`; else
-nothing on the row. A count has a slot as wide as its widest form (`10`, `· last round`, `· ⚠ time is up`), so a
+with each time taken away, where each effect is its plain words and an official condition with a time is that
+condition. They take the conditions' place in today's order, before plain conditions; every other word keeps
+its place. On the row that has the turn, an effect shown on each turn comes first, and keeps its first words
+before the last plain condition folds into `1 more`. Each effect shows whole while the line has room; else the
+first ones and a count of the rest, `⚑ +2`, a space after their slot with no dot; else the first one's words
+shortened from their end and the count; else the count of all, `⚑ 3`; else the row shows the effects as their
+plain words, as the row with no time does. A count has a slot as wide as its widest form (`10`, `· last round`, `· ⚠ time is up`), so a
 change of count moves no word, and its underline stops at its last letter. Words read `Bless 9`, `Bless · last
 round`, `Bless · time is up` (the `result.warning` icon, words in `text`), `Legendary actions 2 of 3`, `Fire
 Breath ready`, `Fire Breath spent ⚄`. An official condition's name opens its rule; the count is its own
 target of at least `XL`: a running count or words shown on each turn open Conditions, `time is up` removes,
-uses spend one (at none, give all back), a ready recharge is marked spent and a spent one rolls 1d6. The row's
+uses spend one (at none, give all back), a ready recharge is marked spent and a spent one rolls 1d6: its die
+shows in the dice total's place, named `Rolled 2 for Cinder Drake: Fire Breath`, and the run's footer and the
+total's hover say `Rolled 2 for Cinder Drake: Fire Breath still spent.` until the DM's next act: any step, roll or
+Undo. The row's
 hover and accessible name hold every whole word. After damage to a row marked Conc, `Conc save DC 12` ends
 its second line until the next step, only in the room that the effects leave; else only in the hover and the
-accessible name. Conditions lists each effect with its whole words. An ended run shows them as words, and a
-click does nothing.
+accessible name. In Conditions an official condition's count is on its tick, `✓ Frightened 10`, while the
+grid fits its room; else it is listed under Other effects, which lists other words with their whole words. The
+tab's help says `No HP, AC or roll changes by itself. A time you type counts down on that creature’s turns.` An
+ended run shows them as words, and a click does nothing.
 
 The notice line has a third part after the state notice and the sheet summary: the current turn's reminders,
 from effects with a time, `Tone::Info` icon `PIN` and `text` words. They show whole in the room that the state
 notice, the summary and today's Undo label leave; else their count; else not at all, and the row has them.
 `Next:` gives way to them. No reminder makes Undo shorter or a state notice lose a word. A conflict's name
-wider than the line beside the bare Undo shortens as the dock's name does; the icon, `Conflict` and Review
-stay.
+wider than the line beside the bare Undo shortens by the header's rule for its names; the icon, `Conflict`
+and Review stay. The dock's selected name follows the dock's rule.
 
 Overflow clips above a separate page-filled band and hairline. Count rows above and below, including rows cut
 by the edge, and their Conflict, 0 HP and Bloodied states. Each turn scrolls current and next rows into view.
@@ -1528,8 +1565,9 @@ A stat block's actions are tiles: each rules paragraph with an attack, a save DC
 wrapping row with `S` gaps. As many 208 px tiles as fit share a line; a tile alone on its line (the only tile, or the
 last of an odd row) takes the line's width, up to the reader measure, in a run, the Library and Party. Tiles on one line
 share one height. A tile has a hairline frame with control radius:
-a Phosphor icon (sword, shield-check, fire) in muted Body, the name in Strong, its Ctrl number in faint Small at the
-right in a run, then its numbers in muted Small, then, when the text says, where it lands and what a save does
+a Phosphor icon (sword, shield-check, fire) in muted Body, the name in Strong, its keys in faint Small at the
+right in a run (`Ctrl+1`, never a bare digit; when the name would be cut beside them, the keys give way and the hover
+keeps them), then its numbers in muted Small, then, when the text says, where it lands and what a save does
 (`Reach 5 ft`, `Range 80/320 ft`, `10-ft emanation · half on a success`). Numbers and that line wrap; they are never
 cut. The rules paragraph shows on hover and on keyboard focus, and it is the tile's accessible description. Hover
 draws the frame in the focus colour. In a run a tile shows the numbers Splat rolls, with the run's attack and damage
@@ -1615,7 +1653,8 @@ one name, the arrival adds its first member: `Rival Team (Rival Captain 2) moved
 button cannot show those words whole, it gives up the whole parenthesis, never only the member's name
 (`Move Shrine Reserve before Brannoch Vale`): it sits under the message that names the arrival whole and moves only
 that arrival. Undo is not beside that message, so a shortened move Undo keeps the copy number and gives up the
-member's name (`Undo: move Rival… (… 2) before Rival…`). Hover and the accessible name keep the whole words. The
+member's name (`Undo: move Rival… (… 2) before Rival…`); narrower, the place goes (`Undo: move Rival Team (… 2)`),
+then the target (`Undo: move`). Hover and the accessible name keep the whole words. The
 result and its Move button stay while their step is the newest, also while the DM types search words; only a new
 step or Undo ends them. The Log keeps `Added by hand` and `entered by the DM`.
 
@@ -1662,10 +1701,15 @@ An ended view has one control that takes the ending away. While the ending is th
 `Undo: end encounter`, and no other control shows. Otherwise it is secondary `Continue fight` with the run icon,
 `S` left of primary Close run: the two ways out of an ended fight, with the one that changes nothing last. Undo stays
 at the roster's right edge. The title, the outcome and the save word keep their words. Beside Continue fight or the
-sentence that stands in its place, Undo keeps its target (`Undo: roll loot`); alone, Undo gives up its target first
-(`Undo`, with the full action in hover and its accessible name). When the actions cannot share the title's line with
-Undo's target, as beside Lookup at 960x640 or at 1200x800, Close run stays on that line and Undo and Continue fight
-take a line of their own below it, at the right edge, with Undo's full action. A closed, ended run read in History has the same
+sentence that stands in its place, Undo keeps its target (`Undo: roll loot`). The header's form and height depend on
+the width only: never on Undo's target, the loot, the reason or whether Continue fight shows yet. Undo keeps one room,
+`14 × L` (at least `Undo: end encounter`), and Continue fight one room, the widest of the control and every reason
+sentence. When the title's line cannot hold Close run (or Close after sync), those two rooms and the widest save
+word, as beside Lookup at 960x640 or at 1200x800, Close run stays on that line and Undo and Continue fight take a
+line of their own below it, at the roster's right edge (beside the log panel, the roster's width), from the start of
+the ended view; that line is as tall as the tallest reason at its room, so no reason is cut. So a loot roll moves nothing under the pointer, and the lone Undo names its
+target there too (`Undo: end encounter`). A target too long for Undo's room shortens by the rule of the run's Undo
+labels (`Undo: 2 loot rolls`), with the full action in hover and its accessible name. A closed, ended run read in History has the same
 secondary `Continue fight` on its own line under Read-only, blocked with `Close the open run first.` while another
 run is open. Continue fight is offered only for the fight that was played last (`README.md`, Running an encounter
 as DM). For any other ended fight the control is absent, and one muted `Small` sentence stands in its place and says
@@ -1802,7 +1846,7 @@ table of the latest journey with checks, else on `Choose a table`, and `Roll` wa
 A journey of more than 31 checks says `This journey has N checks. Split it into shorter journeys to roll them
 here.` Each act's message, with `Undo checks`, `Undo roll` or `Undo clear`, shows on one kept line under the table's
 line (`design::undo_line`): reserved while the block shows, so the message moves nothing; words that do not fit
-beside Undo end in `…` and keep their whole text on hover. It is kept by its journey's event: it
+beside Undo give up whole words and end in `…`, never inside a word, and keep their whole text on hover. It is kept by its journey's event: it
 lasts while that event is as the act left it, until the DM leaves the page, and an act on another journey
 leaves it. The length being typed has one owner, the Timeline book, whichever page shows the field; leaving
 the page gives it to the journey, as a loss of focus does. `Plan “<name>”` is a note act through `Draft::apply`: it writes
@@ -1826,8 +1870,16 @@ summary keeps its lines with it. The opened row's `Read encounter` line ends wit
 line has room for the whole; so a row whose summary had no room gives its word there, for 1 `Find`. The words start
 at the link's right edge, so each `·` has the same blank on each side. A fight with no word because an input is not
 known says why on that line, in `muted`: `Read encounter · XP not known: Nameless Thing`, or `Level not known:
-<name>`; with more names, the first and `and 2 more`. The names come from `Scale::weigh`'s typed answer
+<name>`; with more names, the first and `and 2 more`. Where the line has no room for the whole, the first name
+shortens from its end (`XP not known: Namel…`, `and 2 more` stays) and goes only when no letter of it fits; hover
+and the accessible name keep the whole. With no name known, the reason shows in its short form (`XP not known`). The names come from `Scale::weigh`'s typed answer
 (`Difficulty::missing`). Its closed row is as before. A running or played fight's row shows its status, not a word.
+<name>`; with more names, the first and `and 2 more`. The names come from `Scale::weigh`'s typed answer
+(`Difficulty::missing`). Its closed row is as before. The encounter editor, where the DM can repair the cause, ends
+its line the same way: `ROSTER 6 · XP not known: Nameless Thing`, or in the tab row below 760 px, where the word
+would be. Without room the names shorten from their end (`XP not known: Nameless Th…`) and go only when no letter
+fits; hover and the accessible name keep the whole reason. A roster member whose sheet cannot be read is named by its
+file, and a reason with no name known still shows (`· Level not known`). A running or played fight's row shows its status, not a word.
 
 The first upcoming fight gets primary Start fight when no run is open; later fights use secondary. Use Start
 fight here and in Encounters. Saved unfinished fights offer Resume, including timeline rows whose run
@@ -1845,7 +1897,17 @@ shows every fact, however many lines it takes. Plan and Timeline share fight sum
 without Paused; ended, named and custom results keep stored words. Played fights show result and last round
 once on line two, then final party HP in a grid of two or three first-name cells in the party bar's order
 (players the party no longer has come last), quiet Log, Whole run and
-Timeline links. Hover keeps full names and conditions; Remove stays in the name-aligned row menu.
+Timeline links, with one `S` gap on each side of each `·` at every size (the page's wider column gap beside the
+note does not reach them). Under them is `Where`, the Timeline detail's own field on the same event: typed here
+or on Timeline, it is one value, saved as any event edit is. Hover keeps full names and conditions; Remove stays
+in the name-aligned row menu. A planned fight's menu ends with `Edit encounter`, which opens that encounter, by
+its ID, in the editor, whose `Back to session` returns to the session it came from, through the Session page's
+own guards. The way back belongs to that route: leaving the editor another way (the rail, another page) ends it,
+and the editor then says `Back to encounters`. It is blocked while the editor holds unsaved words. When the
+encounter's file is gone or now holds another encounter, nothing opens and the Session page says `This encounter
+is no longer in the campaign. Open it from Encounters.` When the DM opens a played fight's row, the plan scrolls
+once, at that act: just enough that the row's fields and the next fight's primary action are both in view when
+they fit together; else that action at the pane's bottom, with as much of the row as fits above it.
 
 **Rewards (F7).** A played fight that ended has `Add rewards`, an `Action::quiet` in its row's action band left of
 the menu, only while its title keeps the width and the line breaks it has beside the menu alone at the action's
@@ -1858,7 +1920,7 @@ Timeline reference, then an XP line and the loot lines: the encounter's and each
 results in its place and a roll not made as `(not rolled)`, as `Copy loot` words them. XP has no switch: the
 newest rewards block that Splat can read, in this note and then in each earlier note, newest first, says whether
 the new one has an XP line; with no block, or a note that cannot be read before one, it has one, and the result
-says how to stop it. The XP comes from `Scale::weigh`; a creature at 0 HP whose XP is not known is named on the
+says how to stop it: `XP line added. Delete it in the note to leave XP out from now on.` The XP comes from `Scale::weigh`; a creature at 0 HP whose XP is not known is named on the
 line, and its amount is left out of every sum. The result, an `undo_message` under the row, says `Rewards added
 under Loot and rewards.`, the XP choice, `XP tonight: <sum> for <n> fights.` from the note as it stands, and the
 loot rolls not made and the awards not known. `Undo rewards` takes back exactly that block while it is still the
@@ -1892,13 +1954,19 @@ note. Every plan row has one leading slot, `Type::Body` wide: a fight's caret, a
 A scene's box is the theme's checkbox with a 24 px target that ends where the words start, so it reaches 2 px
 into the margin before the rows (the plan's scroll area starts there) and the scene's words start at the
 fights' title column. Its words are drawn at a plan row title's size, `Type::Body`, at every window size, with
-the Reader's links and emphasis (`markdown_view::show_row_words`), one `XL` line each, so the second line sits
-at a fight row's pitch; a link opens its entry in Lookup. A done scene's words and links are `muted`, and a
+the Reader's links and emphasis (`markdown_view::show_row_words`), one `XL` line each. A one-line scene's words
+start as far down as a one-line fight title's glyphs, which sit centred in their link's `XL` target, so the
+scene's first line is a fight title's line and its second line sits at a fight row's pitch, measured on the
+painted words; a link opens its entry in Lookup. A done scene's words and links are `muted`, and a
 link keeps its underline. No row changes height for a state. When the words link exactly one World entry, the
 second line gives its kind, status and place
-(`NPC · alive · Ashfall Keep`) in `Type::Small` `muted`. The action place is empty until the scene is done; then,
-when its words link exactly one World entry of the campaign, it holds a quiet `Add to Log` left of the menu
-(accessible name `Add to Log: <words>`) while the words keep their lines beside it; else `Add to Log` is a
+(`NPC · alive · Ashfall Keep`) in `Type::Small` `muted`; when its words link a name that no entry has any
+more (a name that two entries share is not gone), it says `Not found` in `Type::Small` and the warning tone, as
+Lookup and World say it, where the row has room, so no row changes height with its state: on the second line
+when the entry had one when it was last found; else after the warning mark at the end of the words' own line,
+the words giving up whole words first, with the whole words on hover. The action place is empty until the scene is done; then,
+when its words link exactly one World entry of the campaign, it holds a quiet `Add to Log` left of the menu, with no icon, as the row's other actions
+(accessible name `Add to Log: <words>`; its menu line and the reader's header keep the icon) while the words keep their lines beside it; else `Add to Log` is a
 line of the scene's menu, so the row keeps its words and its height. It opens Lookup on that entry with
 the Log field open, filled with the scene's words outside its link and selected, so typing replaces them and
 Enter keeps them; a field that already holds typed words keeps them. The menu holds, for a scene that links
@@ -1912,7 +1980,8 @@ leaves out link-only plan lines, and its count line names them: `1 fight, 1 grou
 Scenes fold first, so that the next fight's row and its primary action stay in view. Each row counts as it is
 when closed: when the closed rows, with the scenes, do not fit the pane, every scene folds. An opened row
 folds the scenes only when its details would push the next fight's primary action out of view and the scenes
-sit above that fight; the Scene field, its suggestions and the plan's results never fold them, and the fold
+sit above that fight, or, in a plan with no fight still to come (an older session), when the rows with its
+details do not fit the pane; the Scene field, its suggestions and the plan's results never fold them, and the fold
 does not change while the Scene field has focus. The fold measures the room the rows have with an empty
 message footer, so a result coming or going never folds or unfolds the scenes. With the scenes folded, the Tonight line says `N scenes`, a
 link with the expanded state after the section caret of a folded section (`icons::NEXT`, `icons::DOWN` when

@@ -2,7 +2,7 @@
 //! round and current turn, then every row's HP and conditions, then the actions.
 //! Rows never move when the selection changes: the entry controls have a fixed dock.
 use super::{
-    Command, MAX_FROM_SHEET, Panel, Participant, PartySync, Phase, Run, SAVED_HP_USED,
+    Command, END_STEP, MAX_FROM_SHEET, Panel, Participant, PartySync, Phase, Run, SAVED_HP_USED,
     SHEET_SOURCE, Unend, display, effect::Time, mode_label,
 };
 use crate::{
@@ -46,6 +46,10 @@ const TIGHT_ROW: f32 = 25.0;
 const NAME_ROOM: f32 = 8.0;
 /// A long name wraps to at most this many lines; the last one ends in `…`.
 const NAME_LINES: usize = 3;
+/// X8: the Conditions field's words while the dock has no room for `Effect`.
+const OTHER_EFFECT_TIMED: &str = "Other effect, such as Bless 10 rounds";
+/// X7: what the Conditions tab records, and what Splat does with a time the DM types.
+const CONDITIONS_HELP: &str = "No HP, AC or roll changes by itself. A time you type counts down on that creature’s turns. Other effects stay local and do not sync.";
 /// A creature's effects beyond the official conditions, in the run's Conditions tab and in a
 /// change form alike: the `Other effects` label, then each in Body text with its row menu.
 /// Returns the position in `effects` of the one the DM removed. `field` is the width of the
@@ -95,11 +99,11 @@ fn other_effect_add() -> Action<'static> {
 pub(crate) fn other_effect_field(
     ui: &mut egui::Ui,
     text: &mut String,
-    width: f32,
+    (width, placeholder): (f32, &str),
     focus: bool,
 ) -> (bool, egui::Response) {
     ui.horizontal(|ui| {
-        let response = design::text_input(ui, "Other effect", text, "Other effect…", width);
+        let response = design::text_input(ui, "Other effect", text, placeholder, width);
         if focus {
             response.request_focus();
         }
@@ -240,12 +244,35 @@ pub(crate) fn conditions_grid(
     salt: &str,
     on: impl Fn(&str) -> bool,
 ) -> Option<&'static str> {
+    conditions_grid_counted(ui, salt, &|name| on(name).then(|| name.to_owned())).0
+}
+
+/// The grid of `conditions_grid`, where `label` gives an on condition's words. X11: a
+/// condition with a time shows its count on its tick, `✓ Frightened 10`, while every column
+/// still fits the room; its column grows by the count. Else each tick shows its name only.
+/// Returns the pressed condition, and whether the counts show.
+fn conditions_grid_counted(
+    ui: &mut egui::Ui,
+    salt: &str,
+    label: &dyn Fn(&str) -> Option<String>,
+) -> (Option<&'static str>, bool) {
     let columns = if ui.available_width() >= design::CONDITION_THREE_COLUMNS_FROM {
         3
     } else {
         2
     };
-    let widths = condition_column_widths(ui, columns);
+    let mut widths = condition_column_widths(ui, columns);
+    let mut counted = widths.clone();
+    for (at, (_, name)) in crate::combat_sync::CONDITIONS.iter().enumerate() {
+        if let Some(words) = label(name).filter(|words| words != name) {
+            counted[at % columns] = counted[at % columns].max(toggle_width(ui, &words, icons::OK));
+        }
+    }
+    let gaps = design::S * (columns - 1) as f32;
+    let counts = counted.iter().sum::<f32>() + gaps <= ui.available_width();
+    if counts {
+        widths = counted;
+    }
     let height = Density::Read.control();
     let mut pressed = None;
     ui.push_id(salt, |ui| {
@@ -257,9 +284,12 @@ pub(crate) fn conditions_grid(
                     let size = vec2(*width, height);
                     ui.allocate_ui_with_layout(size, Layout::left_to_right(Align::Center), |ui| {
                         ui.set_min_size(size);
-                        let selected = on(name);
+                        let words = label(name);
+                        let selected = words.is_some();
                         let icon = if selected { icons::OK } else { icons::ADD };
-                        if toggle(ui, name, icon, selected, name, Density::Read).clicked() {
+                        let shown = words.filter(|_| counts);
+                        let shown = shown.as_deref().unwrap_or(name);
+                        if toggle(ui, shown, icon, selected, name, Density::Read).clicked() {
                             pressed = Some(*name);
                         }
                     });
@@ -267,7 +297,7 @@ pub(crate) fn conditions_grid(
             });
         }
     });
-    pressed
+    (pressed, counts)
 }
 
 /// Blank means roll; invalid text must never silently request a roll.
@@ -838,6 +868,10 @@ impl Run {
         let back_words = back
             .as_ref()
             .map(|(from, _)| format!("Party HP carries over from {from}."));
+        let recharged = self
+            .recharge_result()
+            .filter(|_| !setup)
+            .map(|recharged| recharged.words.clone());
         // After the words its messages borrow, so it is dropped first.
         let mut footer = design::Footer::new(("run_messages", self.id), rect.width());
         if used {
@@ -846,6 +880,12 @@ impl Run {
                 if design::undo_message(ui, Tone::Success, SAVED_HP_USED, "Undo use saved HP") {
                     undo_saved.set(true);
                 }
+            });
+        }
+        // X4: a recharge roll's result, until the next act. Its Undo is the header's.
+        if let Some(words) = recharged.as_deref() {
+            footer.result(words, false, |ui| {
+                design::message(ui, Tone::Info, words);
             });
         }
         if disk {
@@ -1306,12 +1346,17 @@ impl Run {
         let longest = self.state.participants.iter().fold(0.0_f32, |longest, p| {
             longest.max(design::number_width(ui, &p.name, &font) + 1.0)
         });
+        let current = self.current();
         self.state
             .order
             .iter()
             .map(|&index| {
                 let p = &self.state.participants[index];
-                let row = (self.row_sync_word(index), self.conc_save_dc(index));
+                let row = (
+                    self.row_sync_word(index),
+                    self.conc_save_dc(index),
+                    current == Some(index),
+                );
                 RowLayout::fitted(ui, width, p, row, scale, fit, longest)
                     .with_art(self.row_art(ui.ctx(), p))
                     .with_badge(ui, self.row_badge(index).as_deref())
@@ -1983,7 +2028,15 @@ impl Run {
                     })
                 };
                 // Fixed columns, `S` apart: never spread across the form, never moved by a toggle.
-                if let Some(name) = conditions_grid(ui, "official_conditions", |name| found(name).is_some()) {
+                // X11: a condition with a count shows it on its tick, `✓ Frightened 10`.
+                let label = |name: &str| {
+                    found(name).map(|at| {
+                        let c = &p.conditions[at];
+                        c.count().map_or_else(|| name.to_owned(), |_| c.words())
+                    })
+                };
+                let (pressed, counts) = conditions_grid_counted(ui, "official_conditions", &label);
+                if let Some(name) = pressed {
                     command = Some(found(name).map_or_else(
                         || Command::Condition(index, name.to_owned()),
                         |i| Command::RemoveCondition(index, i),
@@ -2040,10 +2093,11 @@ impl Run {
                     }
                 }
                 ui.add_space(design::S);
-                // Each effect with its whole words: an official condition's count is here too,
-                // where the DM removes it.
+                // Each other effect with its whole words. An official condition's count is on
+                // its tick; it is here only when the tick cannot show it.
                 let listed = |c: &super::Condition| {
-                    c.is_effect() || super::recognized_condition(c.name()).is_none()
+                    super::recognized_condition(c.name()).is_none()
+                        || (c.is_effect() && !(counts && c.count().is_some()))
                 };
                 let custom: Vec<_> = p
                     .conditions
@@ -2053,17 +2107,23 @@ impl Run {
                     .map(|(at, c)| (at, c.words()))
                     .collect();
                 let width = (ui.available_width() - 80.0).max(100.0);
-                if let Some(at) = other_effects_list(
-                    ui,
-                    custom.iter().map(|(_, words)| words.as_str()),
-                    width,
-                ) {
+                if let Some(at) =
+                    other_effects_list(ui, custom.iter().map(|(_, words)| words.as_str()), width)
+                {
                     command = Some(Command::RemoveCondition(index, custom[at].0));
                 }
                 let focus = std::mem::take(&mut self.focus_other_effect);
                 // The participant's one draft: the dock's field shows the same words.
                 let draft = self.effect_fields.entry(p.key.clone()).or_default();
-                let (add, field) = other_effect_field(ui, &mut draft.words, width, focus);
+                // X8: where the dock has no room for `Effect`, this field is the way, and its
+                // words say that a time counts.
+                let placeholder = if self.state.phase == Phase::Running && !self.effect_in_dock {
+                    OTHER_EFFECT_TIMED
+                } else {
+                    "Other effect…"
+                };
+                let (add, field) =
+                    other_effect_field(ui, &mut draft.words, (width, placeholder), focus);
                 // Escape clears the participant's draft, as in the dock's field.
                 if field.lost_focus() && ui.input(|i| i.key_pressed(Key::Escape)) {
                     draft.words.clear();
@@ -2080,10 +2140,7 @@ impl Run {
                     });
                     added = true;
                 }
-                design::help(
-                    ui,
-                    "These record your ruling. No number changes by itself. Other effects stay local and do not sync.",
-                );
+                design::help(ui, CONDITIONS_HELP);
             });
         if let Some(command) = command {
             self.run_command(command);
@@ -2510,8 +2567,12 @@ impl Run {
             .history
             .iter()
             .zip(&self.history_labels)
-            .filter(|(state, _)| state.log.len() >= saved_lines)
-            .map(|(_, label)| Self::change_with_result(&self.state, label))
+            .enumerate()
+            .filter(|(_, (state, _))| state.log.len() >= saved_lines)
+            .map(|(at, (_, label))| {
+                let target = self.history_targets.get(at).and_then(Option::as_deref);
+                Self::change_with_result(&self.state, label, target)
+            })
             .collect();
         if changes.is_empty() {
             vec!["Everything since the last save.".to_owned()]
@@ -3167,7 +3228,14 @@ impl Run {
                 design::message_choice_row(ui, Tone::Success, |ui| {
                     let room = ui.available_width() - design::M * 2.0;
                     let shown = move_words(ui, &arrival, &name, &font, room).unwrap_or_else(|| {
-                        undo_words(ui, &full, false, &self.state.participants, &font, room)
+                        undo_words(
+                            ui,
+                            (&full, None),
+                            false,
+                            &self.state.participants,
+                            &font,
+                            room,
+                        )
                     });
                     if Action::secondary(&shown)
                         .name(&full)
@@ -4636,7 +4704,10 @@ impl Run {
                             if self.history.is_empty() {
                                 self.empty_undo(ui)
                             } else {
-                                self.undo_action(&label)
+                                // The one rule of Undo labels, as in the live and ended header.
+                                let room = ui.available_width();
+                                let words = self.undo_words_in(ui, &label, room, Density::Read);
+                                self.undo_action(&words)
                                     .name(&label)
                                     .hint(&label)
                                     .show(ui)
@@ -5399,9 +5470,19 @@ impl Run {
         // line, as beside Lookup in a small window, Undo and Continue fight take a line below.
         let gap = ui.spacing().item_spacing.x;
         let title_width = self.ended_title_width(ui, &outcome);
-        let one_line = title_width + self.ended_actions_width(ui) <= ui.available_width();
+        let undo_room = self.ended_undo_room(ui);
+        let one_line =
+            title_width + self.ended_actions_width(ui, undo_room) <= ui.available_width();
         let first_line = design::L * 4.0;
-        let (reason_room, second_line) = self.ended_second_line(ui, ui.available_width());
+        // Beside the log panel the second line is the roster's: Undo stays at its right edge.
+        let line_width = if self.hide_panel {
+            ui.available_width()
+        } else {
+            ui.available_width()
+                - design::side_panel_width(ui.ctx().content_rect().width())
+                - design::S
+        };
+        let (reason_room, second_line) = self.ended_second_line(ui, line_width, undo_room);
         let (header_rect, _) = ui.allocate_exact_size(
             vec2(
                 ui.available_width(),
@@ -5622,7 +5703,15 @@ impl Run {
             let mut second = ui.new_child(
                 egui::UiBuilder::new()
                     .id_salt("ended_header_actions")
-                    .max_rect(header_rect.with_min_y(header_rect.top() + first_line)),
+                    .max_rect(
+                        header_rect
+                            .with_min_y(header_rect.top() + first_line)
+                            .with_max_x(if self.hide_panel {
+                                header_rect.right()
+                            } else {
+                                roster_right
+                            }),
+                    ),
             );
             second.with_layout(Layout::right_to_left(Align::Min), |ui| {
                 self.ended_continue(ui, reason_room);
@@ -5640,77 +5729,75 @@ impl Run {
         let title = design::number_width(ui, &self.state_words(false), &Type::Title.font(ui));
         // A long outcome wraps. A short one keeps its line.
         let outcome = design::number_width(ui, &format!("Outcome: {outcome}"), &small);
+        // The widest save word, so a step that saves never changes the header's form (X38).
         let status = self.save_status_value();
+        let word = "Not saved";
         let saved = match &self.copy_label {
-            Some(copy) => format!("{} {} · {copy}", status.icon, status.word),
-            None => format!("{} {}", status.icon, status.word),
+            Some(copy) => format!("{} {word} · {copy}", status.icon),
+            None => format!("{} {word}", status.icon),
         };
         title.max(outcome.min(title * 2.0))
             + ui.spacing().item_spacing.x
             + design::number_width(ui, &saved, &small)
     }
 
-    /// The width of the ended header's actions on the title's line. Beside Continue fight or
-    /// its reason, Undo keeps its target, so the actions take the second line when the whole
-    /// target does not fit (V26, V27). Undo is at the roster's right edge, so beside the log
-    /// panel the actions to its right take at least the panel's width.
-    fn ended_actions_width(&self, ui: &egui::Ui) -> f32 {
+    /// The width of the ended header's actions on the title's line: Close run (or Close after
+    /// sync), the room of Continue fight or its reason, and Undo's room. It is a function of the
+    /// width alone: never of Undo's target, of the reason or of Continue fight showing yet, so
+    /// no act changes the header's form (X38). Where the second line is needed at all, the
+    /// header has it from the start, and the lone Undo there names its target (W6-D2). Undo is
+    /// at the roster's right edge, so beside the log panel the actions to its right take at
+    /// least the panel's width.
+    fn ended_actions_width(&self, ui: &egui::Ui, undo_room: f32) -> f32 {
         let gap = ui.spacing().item_spacing.x;
         let glance = |action: Action<'_>| action.density(Density::Glance).natural_width(ui) + gap;
-        let mut actions = glance(Action::primary(if self.close_block().is_some() {
-            "Close after sync"
-        } else {
-            "Close run"
-        }));
-        if !self.undo_continues() || self.undo_blocked().is_some() {
-            actions += match self.continue_words() {
-                Some(reason) => continue_reason_width(ui, reason) + gap,
-                None => glance(continue_action()),
-            };
+        let close =
+            glance(Action::primary("Close after sync")).max(glance(Action::primary("Close run")));
+        let mut actions = close + ended_continue_room(ui) + gap;
+        if !self.hide_panel {
+            let panel = design::side_panel_width(ui.ctx().content_rect().width());
+            actions = actions.max(panel + design::S);
         }
-        match self.ended_undo_whole(ui) {
-            Some(whole) => {
-                if !self.hide_panel {
-                    let panel = design::side_panel_width(ui.ctx().content_rect().width());
-                    actions = actions.max(panel + design::S);
-                }
-                actions + whole + gap
-            }
-            None if !self.history.is_empty() && self.undo_blocked().is_none() => {
-                actions + glance(self.undo_action("Undo"))
-            }
-            None => actions,
-        }
+        actions + undo_room + gap
+    }
+
+    /// The room the ended header keeps for Undo, the same for every step: `Undo: end
+    /// encounter`, and at least `14 × L`, which holds a short loot step whole (`Undo: 2 loot
+    /// rolls on gems`). A longer target shortens in it by the rule of every Undo label
+    /// (`undo_forms`); it never takes room from the line.
+    fn ended_undo_room(&self, ui: &egui::Ui) -> f32 {
+        self.undo_action(&format!("Undo: {END_STEP}"))
+            .density(Density::Glance)
+            .natural_width(ui)
+            .max(design::L * 14.0)
     }
 
     /// The header's second line, when the actions take it: the room for the sentence that
-    /// stands where Continue fight would be, beside Undo's whole target, and the line's
-    /// height. The sentence wraps narrower there, so Undo keeps its target (V27).
-    fn ended_second_line(&self, ui: &egui::Ui, width: f32) -> (f32, f32) {
-        let control = Density::Glance.control();
-        let Some(reason) = self
-            .continue_words()
-            .filter(|_| !self.undo_continues() || self.undo_blocked().is_some())
-        else {
-            return (f32::INFINITY, control);
-        };
+    /// stands where Continue fight would be, beside Undo's room, and the line's height. Both
+    /// come from the width alone: the line is as tall as the tallest of the reasons at that
+    /// room, so no reason, target or step changes its height (X38), and none is ever cut.
+    fn ended_second_line(&self, ui: &egui::Ui, width: f32, undo_room: f32) -> (f32, f32) {
         let gap = ui.spacing().item_spacing.x;
-        let undo = self.ended_undo_whole(ui).map_or(0.0, |undo| undo + gap);
-        let room = continue_reason_width(ui, reason)
-            .min(width - undo - gap)
+        let room = ended_continue_room(ui)
+            .min(width - undo_room - 2.0 * gap)
             .max(design::L * 6.0);
-        let lines = ui.fonts_mut(|fonts| {
-            fonts
-                .layout(
-                    reason.to_owned(),
-                    Type::Small.font(ui),
-                    colors().muted,
-                    room,
-                )
-                .size()
-                .y
-        });
-        (room, control.max(lines))
+        let tallest = super::CONTINUE_REASONS
+            .iter()
+            .map(|reason| {
+                ui.fonts_mut(|fonts| {
+                    fonts
+                        .layout(
+                            (*reason).to_owned(),
+                            Type::Small.font(ui),
+                            colors().muted,
+                            room,
+                        )
+                        .size()
+                        .y
+                })
+            })
+            .fold(Density::Glance.control(), f32::max);
+        (room, tallest)
     }
 
     /// The width of Undo with its whole target, when the ended header shows it beside
@@ -5761,30 +5848,54 @@ impl Run {
             return;
         }
         let full = self.undo_label();
-        if self.ended_undo_action(ui, &full, room).show(ui).clicked() {
+        let words = self.undo_words_in(ui, &full, room, Density::Glance);
+        if self
+            .undo_action(&words)
+            .density(Density::Glance)
+            .name(&full)
+            .hint(&full)
+            .show(ui)
+            .clicked()
+        {
             self.undo();
             self.return_focus = self.lookup_open;
         }
     }
 
-    /// Undo as the ended header's line has `room` for it. Whole when it fits. Beside Continue
-    /// fight or its reason, Undo keeps its target in the line's room, and a target that is
-    /// still too long ends in `…`; alone, Undo gives up its target. A cut target keeps its
-    /// whole words in hover and in the accessible name.
-    fn ended_undo_action<'a>(&'a self, ui: &egui::Ui, full: &'a str, room: f32) -> Action<'a> {
-        let whole = self.undo_action(full).density(Density::Glance);
-        // The one-line header gives Undo exactly its whole width.
-        if whole.natural_width(ui) <= room + 0.5 {
-            whole
-        } else if self.ended_undo_whole(ui).is_some() {
-            whole.name(full).hint(full)
-        } else {
-            self.undo_action("Undo")
-                .density(Density::Glance)
-                .name(full)
-                .hint(full)
+    /// Undo's words as a header's line has `room` for them, in the ended and the setup view:
+    /// whole when they fit, else the first form of the one rule (`undo_forms`) that fits, and
+    /// `Undo` alone last.
+    fn undo_words_in(&self, ui: &egui::Ui, full: &str, room: f32, density: Density) -> String {
+        let fits =
+            |words: &str| self.undo_action(words).density(density).natural_width(ui) <= room + 0.5;
+        if fits(full) {
+            return full.to_owned();
         }
+        let forms = undo_forms(
+            full,
+            self.undo_target(),
+            self.undo_from_sheet(),
+            &self.state.participants,
+        );
+        forms
+            .target
+            .into_iter()
+            .chain(forms.bare)
+            .find(|words| fits(words))
+            .unwrap_or_else(|| "Undo".to_owned())
     }
+}
+
+/// The room of Continue fight or the sentence in its place, on the title's line: the widest
+/// of the control and every reason, so it is the same whichever shows.
+fn ended_continue_room(ui: &egui::Ui) -> f32 {
+    super::CONTINUE_REASONS
+        .iter()
+        .map(|reason| continue_reason_width(ui, reason))
+        .fold(
+            continue_action().density(Density::Glance).natural_width(ui),
+            f32::max,
+        )
 }
 
 /// The width of the sentence that stands where Continue fight would be. It wraps to the
@@ -6208,52 +6319,11 @@ fn move_words(
     })
 }
 
-/// A move's words with its arrival's copy number kept, for Undo. SJ1: Undo is not beside the
-/// message that names the arrival, so the copy number tells two same-name groups apart; the
-/// member's name goes first, then the group's and the other name's last words:
-/// `move Rival… (… 2) before Rival…`. None when the arrival has no copy number or no form fits.
-fn move_copy_words(
-    ui: &egui::Ui,
-    verb: &str,
-    arrival: &str,
-    before: &str,
-    font: &egui::FontId,
-    width: f32,
-) -> Option<String> {
-    let full = format!("{verb} {arrival} before {before}");
-    if design::number_width(ui, &full, font) <= width {
-        return Some(full);
-    }
-    let (group, member) = arrival.strip_suffix(')')?.rsplit_once(" (")?;
-    let copy = member
-        .rsplit_once(' ')
-        .map(|(_, last)| last)
-        .filter(|last| !last.is_empty() && last.chars().all(|c| c.is_ascii_digit()))?;
-    shortened_names(group, before).find_map(|(group, before)| {
-        let short = format!("{verb} {group} (…\u{a0}{copy}) before {before}");
-        (design::number_width(ui, &short, font) <= width).then_some(short)
-    })
-}
-
 /// Two names with their last words given up in turn, the other name's last: each pair from
 /// both whole to both at their first word and `…`.
 fn shortened_names<'a>(group: &'a str, before: &'a str) -> impl Iterator<Item = (String, String)> {
-    let words = |name: &str| -> Vec<String> {
-        let all: Vec<&str> = name.split_whitespace().collect();
-        (1..=all.len())
-            .rev()
-            .map(|n| {
-                let kept = all[..n].join(" ");
-                if n == all.len() {
-                    kept
-                } else {
-                    format!("{kept}…")
-                }
-            })
-            .collect()
-    };
-    let groups = words(group);
-    words(before).into_iter().flat_map(move |before| {
+    let groups = name_words(group);
+    name_words(before).into_iter().flat_map(move |before| {
         groups
             .clone()
             .into_iter()
@@ -6261,167 +6331,271 @@ fn shortened_names<'a>(group: &'a str, before: &'a str) -> impl Iterator<Item = 
     })
 }
 
-/// Cut only the target, keeping action words, amounts and copy numbers.
-/// `from_sheet`: a sheet made this step, so its source can go before its target.
+/// The forms of one Undo label, longest first: see `undo_forms`.
+pub(super) struct UndoForms {
+    /// Forms that name the act's target, from the whole label to its shortest telling form.
+    pub(super) target: Vec<String>,
+    /// Forms without the target, for an Undo too narrow for any of `target`:
+    /// `Undo: 8 damage × 3`. After them, the caller shows `Undo` alone.
+    pub(super) bare: Vec<String>,
+}
+
+/// The one rule of the run's Undo labels. A label names its act and its target, which
+/// `describe_named` gives as `target`: never read back out of the label's words. A long
+/// effect keeps four of its words, then two (`Undo: effect Wis save… on Cinder Wolf 2`). Then
+/// the target shortens by whole words and keeps the part that tells it from another row: its
+/// copy number or letter (`Cinder… 2`), else its last word. A sheet's step gives up its source
+/// before its target's short forms. When no telling form fits, the target goes (`bare`). No
+/// form cuts a name to only `…` and its number. Hover and the accessible name keep the whole
+/// label.
+pub(super) fn undo_forms(
+    label: &str,
+    target: Option<&str>,
+    from_sheet: bool,
+    participants: &[Participant],
+) -> UndoForms {
+    let (prefix, action) = label
+        .strip_prefix("Undo: ")
+        .map_or(("", label), |action| ("Undo: ", action));
+    let mut actions = vec![action];
+    if from_sheet && let Some(rest) = action.strip_prefix(SHEET_SOURCE) {
+        actions.push(rest);
+    }
+    let mut seen = std::collections::HashSet::new();
+    let forms = actions
+        .iter()
+        .flat_map(|action| action_forms(action, target, participants))
+        .filter(|words| keeps_names(words) && seen.insert(words.clone()))
+        .map(|words| format!("{prefix}{words}"))
+        .collect();
+    let bare = if let Some((verb, ..)) = move_parts(action) {
+        vec![verb.to_owned()]
+    } else if let Some((before, _)) = target.and_then(|target| split_target(action, target)) {
+        act_words(before)
+    } else {
+        undo_compact(label).into_iter().collect()
+    };
+    UndoForms {
+        target: forms,
+        bare: bare
+            .into_iter()
+            .map(|words| format!("{prefix}{}", words.trim_start_matches(prefix)))
+            .collect(),
+    }
+}
+
+/// The first of `undo_forms`' target forms that fits `width`, else its shortest one. The
+/// caller measures it, and goes on to the bare forms, then `Undo` alone.
 pub(super) fn undo_words(
     ui: &egui::Ui,
-    label: &str,
+    (label, target): (&str, Option<&str>),
     from_sheet: bool,
     participants: &[Participant],
     font: &egui::FontId,
     width: f32,
 ) -> String {
-    let mut shortened = label.to_owned();
-    for direction in [" on ", " off "] {
-        if let Some((effect, target)) = label
-            .strip_prefix("Undo: ")
-            .and_then(|s| s.rsplit_once(direction))
-            && effect.split_whitespace().count() > 4
-            && participants.iter().any(|p| p.name == target)
-        {
-            let effect = effect
-                .split_whitespace()
-                .take(4)
-                .collect::<Vec<_>>()
-                .join(" ");
-            shortened = format!("Undo: {effect}…{direction}{target}");
-            break;
-        }
-    }
-    let label = shortened.as_str();
-    if design::number_width(ui, label, font) <= width {
-        return label.to_owned();
-    }
-    let compact_effect = [" on ", " off "].into_iter().find_map(|direction| {
-        let (effect, target) = label.strip_prefix("Undo: ")?.rsplit_once(direction)?;
-        if !effect.ends_with('…') || !participants.iter().any(|p| p.name == target) {
-            return None;
-        }
-        let effect = effect
-            .split_whitespace()
-            .take(2)
-            .collect::<Vec<_>>()
-            .join(" ");
-        let verb = if direction == " on " { "add" } else { "remove" };
-        Some(format!(
-            "Undo {verb}: {}…{direction}{target}",
-            effect.trim_end_matches('…')
-        ))
-    });
-    // The button always says Undo: the target is shortened, never the verb.
-    let (prefix, action) = match &compact_effect {
-        Some(compact) => ("", compact.as_str()),
-        None => label
-            .strip_prefix("Undo: ")
-            .map_or(("", label), |action| ("Undo: ", action)),
-    };
-    let width = width - design::number_width(ui, prefix, font);
-    let shown = shortened_action(ui, action, participants, font, width);
-    // A sheet's step gives up its source before its target: `HP for Brannoch…`.
-    if from_sheet
-        && (design::number_width(ui, &shown, font) > width || !keeps_names(&shown))
-        && let Some(rest) = action.strip_prefix(SHEET_SOURCE)
-    {
-        let without = shortened_action(ui, rest, participants, font, width);
-        if design::number_width(ui, &without, font) <= width && keeps_names(&without) {
-            return format!("{prefix}{without}");
-        }
-    }
-    format!("{prefix}{shown}")
+    let forms = undo_forms(label, target, from_sheet, participants).target;
+    forms
+        .iter()
+        .find(|words| design::number_width(ui, words, font) <= width)
+        .or(forms.last())
+        .map_or_else(|| label.to_owned(), Clone::clone)
 }
 
-/// A step's words without its target, for an Undo too narrow for any shortened target:
-/// `Undo: 8 damage × 3` for a step on several rows, `Undo: exhaustion 0 → 3` for one row.
-/// FI4: the row count follows `×`, never `to`, so it cannot be read as a copy number
+/// An action's words before and after its target, which `describe_named` puts at the label's
+/// end, or at its start (`Brannoch Vale absent`).
+fn split_target<'a>(action: &'a str, target: &str) -> Option<(&'a str, &'a str)> {
+    if target.is_empty() {
+        return None;
+    }
+    action
+        .strip_suffix(target)
+        .map(|before| (before, ""))
+        .or_else(|| action.strip_prefix(target).map(|after| ("", after)))
+}
+
+/// The act's own words without the target and its joining word: an effect's four, then two
+/// (`effect Wis save…`), or `7 damage`, `initiative`, `2 loot rolls`. None for a name-first
+/// step.
+fn act_words(before: &str) -> Vec<String> {
+    if let Some((words, _)) = effect_words(before) {
+        return words;
+    }
+    [" on ", " off ", " for ", " to ", " from "]
+        .into_iter()
+        .find_map(|joining| before.strip_suffix(joining))
+        .map(str::trim)
+        .filter(|words| !words.is_empty())
+        .map(str::to_owned)
+        .into_iter()
+        .collect()
+}
+
+/// One action's forms with its target, longest first.
+fn action_forms(action: &str, target: Option<&str>, participants: &[Participant]) -> Vec<String> {
+    if let Some(forms) = move_forms(action) {
+        return forms;
+    }
+    let Some((name, (before, after))) =
+        target.and_then(|name| Some((name, split_target(action, name)?)))
+    else {
+        return vec![action.to_owned()];
+    };
+    let words: Vec<String> = match effect_words(before).filter(|_| after.is_empty()) {
+        Some((words, joining)) => words
+            .into_iter()
+            .map(|words| format!("{words}{joining}"))
+            .collect(),
+        None => vec![before.to_owned()],
+    };
+    let shortest = words.last().expect("one form of the words");
+    let mut forms: Vec<String> = words
+        .iter()
+        .map(|words| format!("{words}{name}{after}"))
+        .collect();
+    forms.extend(
+        target_forms(name, participants)
+            .into_iter()
+            .skip(1)
+            .map(|name| format!("{shortest}{name}{after}")),
+    );
+    forms
+}
+
+/// The words of an effect's step before its target (`effect Wis save DC 15 (Hold Person) on `)
+/// when they are more than four: four of them, then two, each with `…`, and the joining word.
+/// The verb (`effect`, `remove`) stays and is not counted. None for any other step's words,
+/// which stay whole.
+fn effect_words(before: &str) -> Option<(Vec<String>, &'static str)> {
+    let (words, joining) = [" on ", " off ", " from "]
+        .into_iter()
+        .find_map(|joining| Some((before.strip_suffix(joining)?, joining)))?;
+    let (verb, words) = match words.split_once(' ') {
+        Some((verb @ ("effect" | "remove"), rest)) => (format!("{verb} "), rest),
+        _ => (String::new(), words),
+    };
+    let words: Vec<&str> = words.split_whitespace().collect();
+    (words.len() > 4).then(|| {
+        let forms = [4, 2]
+            .into_iter()
+            .map(|n| format!("{verb}{}…", words[..n].join(" ")))
+            .collect();
+        (forms, joining)
+    })
+}
+
+/// A row's name by whole words, longest first, each form telling it from every other row:
+/// `Cinder Wolf 2` then `Cinder… 2`; `Brannoch Vale` then `Brannoch…`. A form that another
+/// row's name also gives (`Rival…` beside `Rival Captain 2`) keeps the last word instead, or is
+/// left out.
+fn target_forms(name: &str, participants: &[Participant]) -> Vec<String> {
+    let words: Vec<&str> = name.split_whitespace().collect();
+    let mut forms = vec![name.to_owned()];
+    let Some(last) = words.last().copied() else {
+        return forms;
+    };
+    let copy =
+        words.len() > 1 && (last.chars().all(|c| c.is_ascii_digit()) || last.chars().count() == 1);
+    let tells = |kept: &str, end: Option<&str>| {
+        !participants.iter().any(|p| {
+            p.name != name
+                && p.name.starts_with(&format!("{kept} "))
+                && end.is_none_or(|end| p.name.ends_with(&format!(" {end}")))
+        })
+    };
+    let longest = words.len().saturating_sub(if copy { 2 } else { 1 });
+    for count in (1..=longest).rev() {
+        let kept = words[..count].join(" ");
+        if !copy && tells(&kept, None) {
+            forms.push(format!("{kept}…"));
+        } else if count + 1 < words.len() && tells(&kept, Some(last)) {
+            forms.push(format!("{kept}… {last}"));
+        }
+    }
+    forms
+}
+
+/// A move's verb, its arrival and the name it moved before: `move <arrival> before <name>`.
+fn move_parts(action: &str) -> Option<(&'static str, &str, &str)> {
+    let (verb, words) = action
+        .strip_prefix("move ")
+        .map(|words| ("move", words))
+        .or_else(|| action.strip_prefix("Move ").map(|words| ("Move", words)))?;
+    let (moved, before) = words.split_once(" before ")?;
+    Some((verb, moved, before))
+}
+
+/// A move's forms with its target, longest first. SJ1: Undo is not beside the message that
+/// names the arrival, so an arrival with a copy number keeps it and gives up the member's
+/// name, `move Rival… (… 2) before Rival…`; then the place goes, `move Rival… (… 2)`. An
+/// arrival with no copy number shortens with the other name by whole words. None for any
+/// other step.
+fn move_forms(action: &str) -> Option<Vec<String>> {
+    let (verb, moved, before) = move_parts(action)?;
+    let parts = moved
+        .strip_suffix(')')
+        .and_then(|rest| rest.rsplit_once(" ("));
+    let copy = parts.and_then(|(group, member)| {
+        let (_, last) = member.rsplit_once(' ')?;
+        (!last.is_empty() && last.chars().all(|c| c.is_ascii_digit())).then_some((group, last))
+    });
+    let mut forms = vec![action.to_owned()];
+    match copy {
+        Some((group, copy)) => {
+            forms.extend(
+                shortened_names(group, before).map(|(group, before)| {
+                    format!("{verb} {group} (…\u{a0}{copy}) before {before}")
+                }),
+            );
+            forms.extend(
+                name_words(group)
+                    .into_iter()
+                    .map(|group| format!("{verb} {group} (…\u{a0}{copy})")),
+            );
+        }
+        None => {
+            let moved = parts.map_or(moved, |(group, _)| group);
+            forms.extend(
+                shortened_names(moved, before)
+                    .map(|(moved, before)| format!("{verb} {moved} before {before}")),
+            );
+        }
+    }
+    Some(forms)
+}
+
+/// A step on several rows without them, for an Undo too narrow for its words:
+/// `Undo: 8 damage × 3` (a step on one row gives up its row by `act_words`). FI4: the row count follows `×`, never `to`, so it cannot be read as a copy number
 /// (`to 2` beside `Cinder Wolf 2`). `None` when the words name no row to leave out.
-pub(super) fn undo_compact(label: &str, participants: &[Participant]) -> Option<String> {
+pub(super) fn undo_compact(label: &str) -> Option<String> {
     let action = label.strip_prefix("Undo: ")?;
     let several = action.split(super::HALF_FOR).next().unwrap_or(action);
-    if let Some(counted) = several.strip_suffix(super::SEVERAL_TARGETS) {
-        let (words, count) = counted.rsplit_once(" to ")?;
-        return Some(format!("Undo: {words} × {count}"));
-    }
-    // The row is named last, after its joining word: `initiative for Brannoch Vale`.
-    let target = participants
-        .iter()
-        .filter(|p| !p.name.is_empty() && action.ends_with(&p.name))
-        .max_by_key(|p| p.name.len())?;
-    let words = action.strip_suffix(&target.name)?;
-    let words = [" on ", " off ", " for ", " to "]
-        .into_iter()
-        .find_map(|joining| words.strip_suffix(joining))?;
-    (!words.trim().is_empty()).then(|| format!("Undo: {}", words.trim()))
+    let counted = several.strip_suffix(super::SEVERAL_TARGETS)?;
+    let (words, count) = counted.rsplit_once(" to ")?;
+    Some(format!("Undo: {words} × {count}"))
 }
 
-/// False when shortening left a name as only `…` and its copy number (`move … 2 before`):
-/// then the target cannot fit, and Undo shows its word alone.
+/// False when shortening left a name as only `…` and its copy number (`move … 2 before`,
+/// `effect Wis… on … 2`): such a form tells the DM nothing, so `undo_forms` never gives it.
 pub(super) fn keeps_names(words: &str) -> bool {
-    let mut parts = words.split("… ");
-    let first = parts.next().unwrap_or_default();
-    words == first || !(first.is_empty() || first.ends_with(' '))
+    !words.split(' ').any(|word| word == "…")
 }
 
-/// An action's words shortened to `width`, its target name first.
-fn shortened_action(
-    ui: &egui::Ui,
-    action: &str,
-    participants: &[Participant],
-    font: &egui::FontId,
-    width: f32,
-) -> String {
-    if design::number_width(ui, action, font) <= width {
-        return action.to_owned();
-    }
-    if let Some((moved, target)) = action
-        .strip_prefix("move ")
-        .or_else(|| action.strip_prefix("Move "))
-        .and_then(|words| words.split_once(" before "))
-    {
-        let verb = if action.starts_with("Move ") {
-            "Move"
-        } else {
-            "move"
-        };
-        if let Some(words) = move_copy_words(ui, verb, moved, target, font, width) {
-            return words;
-        }
-        let room = width - design::number_width(ui, "move  before ", font);
-        let target_room = design::number_width(ui, target, font).min(room / 2.0);
-        let moved = dock_name(ui, moved, font, room - target_room);
-        let target = dock_name(
-            ui,
-            target,
-            font,
-            room - design::number_width(ui, &moved, font),
-        );
-        return format!("{verb} {moved} before {target}");
-    }
-    let target = participants
-        .iter()
-        .filter(|p| action.contains(&p.name))
-        .max_by_key(|p| p.name.len());
-    if let Some(target) = target {
-        let (before, after) = action.split_once(&target.name).expect("target in action");
-        let words: Vec<_> = target.name.split_whitespace().collect();
-        let suffix = words
-            .last()
-            .copied()
-            .filter(|last| last.chars().all(|c| c.is_ascii_digit()) || last.chars().count() == 1);
-        for count in (1..words.len()).rev() {
-            let name = if let Some(last) = suffix {
-                format!("{}… {last}", words[..count].join(" "))
+/// A name with its last words given up in turn, by whole words: from the whole name to its
+/// first word and `…`.
+fn name_words(name: &str) -> Vec<String> {
+    let all: Vec<&str> = name.split_whitespace().collect();
+    (1..=all.len())
+        .rev()
+        .map(|n| {
+            let kept = all[..n].join(" ");
+            if n == all.len() {
+                kept
             } else {
-                format!("{}…", words[..count].join(" "))
-            };
-            let candidate = format!("{before}{name}{after}");
-            if design::number_width(ui, &candidate, font) <= width {
-                return candidate;
+                format!("{kept}…")
             }
-        }
-        let room = width - design::number_width(ui, &format!("{before}{after}"), font);
-        return format!("{before}{}{after}", dock_name(ui, &target.name, font, room));
-    }
-    action.to_owned()
+        })
+        .collect()
 }
 
 /// Keep the character's name; give up later values before shortening a sheet notice.
@@ -6529,19 +6703,51 @@ fn name_lines(ui: &egui::Ui, name: &str, font: &egui::FontId, width: f32) -> (Ar
 }
 
 /// The dock's selected name and its type. FJ5: it keeps `Heading`, as every other name there
-/// does, and gives up whole words by `dock_name`. `Small` only when that shows the name whole,
-/// so a smaller name never also loses letters.
+/// does, and gives up whole words by `dock_name`, keeping a telling last word first (X53).
+/// `Small` only when that shows the name whole, so a smaller name never also loses letters.
 pub(super) fn dock_name_shown(ui: &egui::Ui, name: &str, room: f32) -> (Type, String) {
     if design::number_width(ui, name, &Type::Heading.font(ui)) <= room {
         (Type::Heading, name.to_owned())
     } else if design::number_width(ui, name, &Type::Small.font(ui)) <= room {
         (Type::Small, name.to_owned())
     } else {
-        (
-            Type::Heading,
-            dock_name(ui, name, &Type::Heading.font(ui), room),
-        )
+        let font = Type::Heading.font(ui);
+        // While the first word, `…` and the last word fit, the last word stays: a copy number
+        // or letter by `dock_name`'s rule, other words by the telling-end rule. Else the first
+        // word's start (review of PR 292).
+        let mut words = name.split_whitespace();
+        let first = words
+            .next()
+            .unwrap_or(name)
+            .trim_end_matches([',', ';', ':']);
+        let last = words.last().unwrap_or(first);
+        let numbered = last.chars().all(|c| c.is_ascii_digit()) || last.chars().count() == 1;
+        let ends = design::number_width(ui, &format!("{first}… {last}"), &font) <= room;
+        let shown = match (ends, numbered) {
+            (true, true) => Some(dock_name(ui, name, &font, room)),
+            (true, false) => with_telling_end(ui, name, &font, room),
+            (false, _) => None,
+        }
+        .unwrap_or_else(|| first_word_start(ui, name, &font, room));
+        (Type::Heading, shown)
     }
+}
+
+/// The dock's name where its slot cannot hold the first word, `…` and the last word: its
+/// first word's start and `…`, as many letters as the slot holds (review of PR 292, X53). The
+/// hover and the accessible name hold it whole.
+fn first_word_start(ui: &egui::Ui, name: &str, font: &egui::FontId, room: f32) -> String {
+    let first: Vec<char> = name
+        .split_whitespace()
+        .next()
+        .unwrap_or(name)
+        .chars()
+        .collect();
+    (1..=first.len())
+        .rev()
+        .map(|letters| format!("{}…", first[..letters].iter().collect::<String>()))
+        .find(|shown| design::number_width(ui, shown, font) <= room)
+        .unwrap_or_else(|| "…".to_owned())
 }
 
 pub(super) fn dock_name(ui: &egui::Ui, name: &str, font: &egui::FontId, width: f32) -> String {
@@ -6575,6 +6781,24 @@ pub(super) fn dock_name(ui: &egui::Ui, name: &str, font: &egui::FontId, width: f
     } else {
         format!("… {last}")
     }
+}
+
+/// X53: the dock's name, when it loses words, keeps its last one, which tells it apart, after
+/// its first whole words: `Seraphina Thornwood-Ashgrave… Bell`. None when the last word is a
+/// number or a letter (`dock_name` keeps those its own way), or no first word fits before it.
+fn with_telling_end(ui: &egui::Ui, name: &str, font: &egui::FontId, width: f32) -> Option<String> {
+    let (first, last) = name.trim().rsplit_once(char::is_whitespace)?;
+    if last.chars().all(|c| c.is_ascii_digit()) || last.chars().count() == 1 {
+        return None;
+    }
+    let end = format!("… {last}");
+    let room = width - design::number_width(ui, &end, font);
+    let prefix = design::words_that_fit(ui, first, font, room);
+    let prefix = prefix
+        .trim_end_matches('…')
+        .trim_end_matches([',', ';', ':']);
+    let shown = format!("{prefix}{end}");
+    (!prefix.is_empty() && design::number_width(ui, &shown, font) <= width).then_some(shown)
 }
 
 pub(super) fn presence_action(present: bool) -> (&'static str, &'static str) {
@@ -6645,6 +6869,15 @@ pub(super) fn log_link(ui: &mut egui::Ui) -> egui::Response {
         }
     }
     response.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
+/// Concentration, as a run row marks it and History's Final state repeats it: its icon and
+/// `Conc`, in its own colour.
+pub(crate) fn concentration_mark() -> (String, egui::Color32) {
+    (
+        format!("{} Conc", icons::CONCENTRATING),
+        colors().participant.concentrating,
+    )
 }
 
 fn row_name(p: &Participant, turn: TurnMark, sync: Option<SyncState>) -> String {
@@ -6787,6 +7020,8 @@ struct RowInput {
     words: RowWords,
     sync: Option<SyncState>,
     conc_dc: Option<u32>,
+    /// The row has the turn: an effect due on it comes first (W1-D1).
+    turn: bool,
     scale: RunScale,
     fit: RowFit,
     width: f32,
@@ -6800,6 +7035,7 @@ impl std::hash::Hash for RowInput {
             words,
             sync,
             conc_dc,
+            turn,
             scale,
             fit,
             width,
@@ -6819,6 +7055,7 @@ impl std::hash::Hash for RowInput {
         words.hash(hash);
         sync.hash(hash);
         conc_dc.hash(hash);
+        turn.hash(hash);
         fit.hash(hash);
         for value in [
             width,
@@ -6843,12 +7080,9 @@ impl std::hash::Hash for RowInput {
 struct Extra {
     effects: EffectPart,
     conc_dc: Option<u32>,
-    /// An official condition with a time shows as the plain condition: the row as it was
-    /// before the DM gave it the time.
-    official_as_plain: bool,
-    /// Plain conditions shown before `N more`: all of them, or at fewest one, as the row's
-    /// folding of section 1.4 can leave them.
-    fewest_plain: bool,
+    /// Each effect shows as its plain words: the row with each time taken away (X5, the
+    /// ruling on PR 276), whose lines and height the row keeps.
+    as_plain: bool,
 }
 
 /// The effects a row shows: the first ones with their words, each with its count, then the
@@ -6858,6 +7092,10 @@ struct EffectPart {
     /// Each shown effect's place in the row's conditions, and the words of its name.
     shown: Vec<(usize, String)>,
     rest: usize,
+    /// The most plain conditions shown before `N more`, when the effects' words need their
+    /// room. None: all of them, or at fewest one, as the row's folding of section 1.4 can
+    /// leave them.
+    plain_at_most: Option<usize>,
 }
 
 /// What a click on an effect's target does.
@@ -7015,22 +7253,24 @@ impl RowLayout {
         fit: RowFit,
         longest_name: f32,
     ) -> Self {
-        Self::fitted(ui, width, p, (sync, None), scale, fit, longest_name)
+        Self::fitted(ui, width, p, (sync, None, false), scale, fit, longest_name)
     }
 
     /// The row's rule of section 1.4, as one rule: the row's height and lines are those of
-    /// the same row with each time taken away (an official condition with a time is that
-    /// condition). The effects then take only the room that is spare there, in the first of
-    /// these forms that keeps both: each effect whole; the first ones whole and a count of the
+    /// the same row with each time taken away (each effect is its plain words, and an official
+    /// condition with a time is that condition). The effects then take only the room that is
+    /// spare there, in the first of these forms that keeps both and shows by its words each
+    /// effect that row shows: each effect whole; the first ones whole and a count of the
     /// rest; the first one's words shortened from their end and a count; the count of them
-    /// all. Else the row shows none, and its hover has them. The save DC then takes the room
-    /// that the effects leave. A finished layout is kept by its whole input, so a frame that
-    /// changes nothing in a row lays it out no more.
+    /// all. Else the row is that row: its effects show as their words without their times,
+    /// and its hover has them whole. On the row that has the turn, an effect due on it comes
+    /// first. The save DC then takes the room that the effects leave. A finished layout is
+    /// kept by its whole input, so a frame that changes nothing in a row lays it out no more.
     fn fitted(
         ui: &egui::Ui,
         width: f32,
         p: &Participant,
-        (sync, conc_dc): (Option<SyncState>, Option<u32>),
+        (sync, conc_dc, turn): (Option<SyncState>, Option<u32>, bool),
         scale: RunScale,
         fit: RowFit,
         longest_name: f32,
@@ -7041,6 +7281,7 @@ impl RowLayout {
             words: RowWords::of(p),
             sync,
             conc_dc,
+            turn,
             scale,
             fit,
             width,
@@ -7075,36 +7316,39 @@ impl RowLayout {
 
     /// `fitted`'s work, for its input.
     fn laid_out(ui: &egui::Ui, input: &RowInput) -> Self {
-        let (scale, conc_dc, conditions) = (input.scale, input.conc_dc, &input.words.conditions);
+        let (conc_dc, conditions) = (input.conc_dc, &input.words.conditions);
         let measure = |extra: &Extra| {
-            let official = |c: &super::Condition| super::recognized_condition(c.name()).is_some();
             let plain = conditions
                 .iter()
-                .filter(|c| !c.is_effect() || (extra.official_as_plain && official(c)))
+                .filter(|c| !c.is_effect() || extra.as_plain)
                 .count();
-            let plain = if extra.fewest_plain {
-                plain.min(1)
-            } else {
-                plain
-            };
+            let plain = extra
+                .effects
+                .plain_at_most
+                .map_or(plain, |most| plain.min(most));
             Self::measured(ui, input, (plain, BonusFit::All, extra))
         };
-        // The row with each time taken away: an official condition that gained a time shows
-        // as the condition it is. Its lines, its height and the conditions it shows stay.
+        // X5, the ruling on PR 276: the row with each time taken away. Each effect shows as
+        // its plain words, and an official condition as the condition it is. Its lines, its
+        // height and the effects it shows by their words stay.
         let base = measure(&Extra {
-            official_as_plain: true,
+            as_plain: true,
             ..Extra::default()
         });
-        let effects: Vec<(usize, &str)> = conditions
+        let mut effects: Vec<(usize, &str)> = conditions
             .iter()
             .enumerate()
             .filter(|(_, c)| c.is_effect())
             .map(|(at, c)| (at, c.name()))
             .collect();
+        // W1-D1: on the row that has the turn, an effect due on it comes first.
+        if input.turn {
+            effects.sort_by_key(|(at, _)| !conditions[*at].due());
+        }
         if effects.is_empty() && conc_dc.is_none() {
             return base;
         }
-        let (effects, dc) = Self::choose(ui, &base, &effects, conc_dc, scale, measure);
+        let (effects, dc) = Self::choose(ui, &base, &effects, input, measure);
         if effects.shown.is_empty() && effects.rest == 0 && dc.is_none() {
             return base;
         }
@@ -7122,13 +7366,12 @@ impl RowLayout {
     /// The row's rule of section 1.4, as a choice: the effects to show and whether the save's
     /// DC shows. Each form must keep the lines and the height of `base`, and show each official
     /// condition with a time that `base` shows. The first that does wins; with none, the row
-    /// is `base`.
+    /// is `base`, which shows the effects as their words without their times.
     fn choose(
         ui: &egui::Ui,
         base: &Self,
         effects: &[(usize, &str)],
-        conc_dc: Option<u32>,
-        scale: RunScale,
+        input: &RowInput,
         measure: impl Fn(&Extra) -> Self,
     ) -> (EffectPart, Option<u32>) {
         let names = |layout: &Self| -> Vec<String> {
@@ -7139,15 +7382,17 @@ impl RowLayout {
                 .filter(|name| !["Run conditions", "Run changes"].contains(&name.as_str()))
                 .collect()
         };
-        // An official condition that gained a time stays in view: as its words with the
-        // count, or as the plain condition it was. Other plain conditions fold as today.
+        // An official condition that the row without times shows stays in view: as its words
+        // with the count, or as the plain condition it was. Other words show in a form by
+        // their words or in its count. Plain conditions fold as today.
         let shown: Vec<String> = names(base)
             .into_iter()
+            .filter(|name| super::recognized_condition(name).is_some())
             .filter(|name| effects.iter().any(|(_, effect)| effect == name))
             .collect();
         let keeps = |layout: &Self| {
             let now = names(layout);
-            layout.keeps_place_of(base, scale) && shown.iter().all(|name| now.contains(name))
+            layout.keeps_place_of(base, input.scale) && shown.iter().all(|name| now.contains(name))
         };
         let mut forms: Vec<EffectPart> = (0..=effects.len())
             .rev()
@@ -7157,34 +7402,47 @@ impl RowLayout {
                     .map(|(at, name)| (*at, (*name).to_owned()))
                     .collect(),
                 rest: effects.len() - whole,
+                plain_at_most: None,
             })
             .collect();
-        // The first effect alone, shortened to the room that the line leaves it.
-        if let Some(&(at, name)) = effects.first() {
-            // Its room is what the line leaves with the plain conditions folded as far as the
-            // row folds them, since the effects come first.
-            let bare = measure(&Extra {
-                effects: EffectPart {
-                    shown: vec![(at, String::new())],
-                    rest: effects.len() - 1,
-                },
-                fewest_plain: true,
+        // The first effect alone, shortened to the room that the line leaves it with the plain
+        // conditions folded to `most`, since the effects come first.
+        let shortened = |most: usize| {
+            let &(at, name) = effects.first()?;
+            let rest = effects.len() - 1;
+            let bare = EffectPart {
+                shown: vec![(at, String::new())],
+                rest,
+                plain_at_most: Some(most),
+            };
+            let measured = measure(&Extra {
+                effects: bare.clone(),
                 ..Extra::default()
             });
-            if let Some(line) = bare.second_line.as_ref().filter(|_| keeps(&bare)) {
-                let font = line.job.sections[0].format.font_id.clone();
-                let room = line.job.wrap.max_width - line.size().x;
-                let cut = design::words_that_fit(ui, name, &font, room);
-                if cut != name && cut != "…" && design::number_width(ui, &cut, &font) <= room {
-                    forms.insert(
-                        forms.len() - 1,
-                        EffectPart {
-                            shown: vec![(at, cut)],
-                            rest: effects.len() - 1,
-                        },
-                    );
-                }
-            }
+            let line = measured.second_line.as_ref().filter(|_| keeps(&measured))?;
+            let font = line.job.sections[0].format.font_id.clone();
+            let room = line.job.wrap.max_width - line.size().x;
+            let cut = design::words_that_fit(ui, name, &font, room);
+            (cut != name && cut != "…" && design::number_width(ui, &cut, &font) <= room).then(
+                || EffectPart {
+                    shown: vec![(at, cut)],
+                    ..bare
+                },
+            )
+        };
+        // At fewest one plain condition shows, as the row's folding leaves them.
+        if let Some(mut part) = shortened(1) {
+            part.plain_at_most = None;
+            forms.insert(forms.len() - 1, part);
+        }
+        // W1-D1: an effect due on this turn keeps its first words before the last plain
+        // condition folds into `N more`.
+        let due = input.turn
+            && effects
+                .first()
+                .is_some_and(|(at, _)| input.words.conditions[*at].due());
+        if due && let Some(part) = shortened(0) {
+            forms.insert(forms.len() - 1, part);
         }
         // The count of them all is the last form. With no effect, the one form is no part.
         let Some(effects) = forms.into_iter().find(|part| {
@@ -7207,7 +7465,7 @@ impl RowLayout {
         }));
         // The DC folds nothing that shows: the line without it is the start of the line with
         // it. Else it is in the hover and the accessible name only.
-        let dc = conc_dc.filter(|dc| {
+        let dc = input.conc_dc.filter(|dc| {
             let with = measure(&Extra {
                 effects: effects.clone(),
                 conc_dc: Some(*dc),
@@ -7316,12 +7574,14 @@ impl RowLayout {
         let role = if narrow { Type::Body } else { Type::Strong };
         let font = role.sized(ui, scale.condition);
         let mut first = true;
+        // X10: the count of the rest ends the effects' slot after a space, with no dot.
+        let dot = std::cell::Cell::new(true);
         // One part of the line: its words after ` · `, in one or more colours, and the room
         // after them that keeps a count's slot as wide as its widest form.
         let mut add_parts = |parts: &[(&str, egui::Color32)], pad: f32| {
             if !first {
                 job.append(
-                    " ·\u{a0}",
+                    if dot.replace(true) { " ·\u{a0}" } else { " " },
                     0.0,
                     egui::TextFormat {
                         font_id: font.clone(),
@@ -7358,13 +7618,8 @@ impl RowLayout {
         let initiative_span =
             (w.present && !w.initiative).then(|| add_parts(&[("No initiative", c.accent)], 0.0));
         if w.concentration {
-            add_parts(
-                &[(
-                    &*format!("{} Conc", icons::CONCENTRATING),
-                    c.participant.concentrating,
-                )],
-                0.0,
-            );
+            let (words, color) = concentration_mark();
+            add_parts(&[(&*words, color)], 0.0);
         }
         // Effects take the conditions' place, before the plain conditions (section 1.4). Each
         // count has a slot as wide as its widest form, so that a change of count moves no word.
@@ -7416,16 +7671,16 @@ impl RowLayout {
             let words = if extra.effects.shown.is_empty() {
                 format!("{}\u{a0}{}", icons::PIN, extra.effects.rest)
             } else {
+                dot.set(false);
                 format!("{}\u{a0}+{}", icons::PIN, extra.effects.rest)
             };
             let span = add_parts(&[(&*words, c.participant.condition)], 0.0);
             effect_spans.push((EffectAct::Open, usize::MAX, span));
         }
-        let official = |c: &super::Condition| super::recognized_condition(c.name()).is_some();
         let plain: Vec<&super::Condition> = w
             .conditions
             .iter()
-            .filter(|c| !c.is_effect() || (extra.official_as_plain && official(c)))
+            .filter(|c| !c.is_effect() || extra.as_plain)
             .collect();
         for condition in plain.iter().take(condition_count) {
             let condition = condition.name();
@@ -8390,8 +8645,10 @@ fn optional_number(
 #[cfg(test)]
 mod tests {
     /// V26, V27 and the review of PR 275: beside Continue fight on the ended header's second
-    /// line, a target too long for the line ends in `…` inside the line, and the hover and the
-    /// accessible name hold the whole words, as the one-line header does.
+    /// line, a target too long for the line stays inside the line, and the hover and the
+    /// accessible name hold the whole words, as the one-line header does. X6: it shortens by
+    /// the one rule of Undo labels, so a table name that is one long word goes whole and the
+    /// act stays (`Undo: 2 loot rolls`), never cut inside a word.
     #[test]
     fn ended_undo_long_target_ends_in_view_with_its_whole_words_in_hover_and_name() {
         use egui_kittest::kittest::Queryable;
@@ -8405,6 +8662,10 @@ mod tests {
             "2 loot rolls on treasure-from-the-ancient-dragon-vault-and-the-forgotten-kings-tomb";
         run.history_labels.push(target.into());
         run.history_from_sheet.push(false);
+        // The step's target, as `describe_named` records it for one loot table.
+        run.history_targets.push(Some(
+            "treasure-from-the-ancient-dragon-vault-and-the-forgotten-kings-tomb".into(),
+        ));
         run.lookup_open = true;
         run.hide_panel = true;
         let full = format!("Undo: {target}");
@@ -8442,9 +8703,9 @@ mod tests {
             clip.contains_rect(*rect),
             "Undo is cut by its clip: {painted:?}"
         );
-        assert!(
-            glyphs.starts_with("Undo: 2 loot rolls on treasure") && glyphs.ends_with('…'),
-            "Undo keeps its target in the line's room and ends in …: {glyphs:?}"
+        assert_eq!(
+            glyphs, "Undo: 2 loot rolls",
+            "Undo keeps its act in the line's room: {glyphs:?}"
         );
         // The accessible name, and the hover, hold the whole words.
         harness.get_by_label(&full).hover();
@@ -8454,6 +8715,129 @@ mod tests {
             2,
             "Undo's hover holds its whole words"
         );
+        // The setup view's Undo has the same rule: a long name shortens by whole words, never
+        // inside a word, and the whole step is its accessible name.
+        let mut setup = super::super::tests::run();
+        let name = "Oren Thistlewick, Keeper of the Southern Road";
+        setup.state.participants[0].name = name.into();
+        setup.history.push(setup.state.clone());
+        setup.history_labels.push(format!("initiative for {name}"));
+        setup.history_targets.push(Some(name.into()));
+        setup.history_from_sheet.push(false);
+        setup.lookup_open = true;
+        setup.hide_panel = true;
+        let full = format!("Undo: initiative for {name}");
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(454.0, 640.0))
+            .build(move |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    setup.setup_view(ui);
+                });
+            });
+        crate::design::theme::install(&harness.ctx);
+        harness.run_steps(4);
+        let painted: Vec<_> = harness
+            .output()
+            .shapes
+            .iter()
+            .filter_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.job.text.starts_with("Undo") => {
+                    Some((text.galley.job.text.clone(), text.galley.elided))
+                }
+                _ => None,
+            })
+            .collect();
+        assert!(
+            matches!(&painted[..], [(words, false)]
+                if words.starts_with("Undo: initiative for Oren") && keeps_names(words)),
+            "the setup Undo is one form of the rule: {painted:?}"
+        );
+        assert!(harness.query_by_label(&full).is_some(), "{full}");
+        // X38 and review round 1 of PR 286: at a width, the ended header has one height for
+        // every target, loot key and reason, the fight played last or not; its controls stay
+        // whole and apart, and the reason touches none of them.
+        let key = "treasure-from-the-ancient-dragon-vault-and-the-forgotten-kings-tomb";
+        for width in [454.0, 608.0, 800.0, 1040.0, 1760.0] {
+            let mut tops = Vec::new();
+            for long in [false, true] {
+                for older in [false, true] {
+                    for action in [
+                        "end encounter",
+                        "2 loot rolls on gems",
+                        "loot roll on coins",
+                    ] {
+                        let mut run = super::super::tests::run();
+                        run.state.phase = super::super::Phase::Ended {
+                            outcome: "Party won".into(),
+                        };
+                        run.state.round = 2;
+                        if long {
+                            run.setup_details = format!("## Loot\n- Roll 2× {key}\n");
+                        }
+                        run.history.push(run.state.clone());
+                        run.history_labels.push(action.into());
+                        run.history_from_sheet.push(false);
+                        run.hide_panel = width <= 608.0;
+                        run.lookup_open = width <= 608.0;
+                        if older {
+                            run.continue_blocked = Some(super::super::CONTINUE_LATER);
+                            run.saved_steps = run.history.len();
+                        }
+                        let mut harness = egui_kittest::Harness::builder()
+                            .with_size(egui::vec2(width, 800.0))
+                            .build(move |ctx| {
+                                egui::CentralPanel::default().show(ctx, |ui| {
+                                    run.ended_view(ui);
+                                });
+                            });
+                        crate::design::theme::install(&harness.ctx);
+                        harness.run_steps(4);
+                        let top = harness
+                            .output()
+                            .shapes
+                            .iter()
+                            .find_map(|shape| match &shape.shape {
+                                egui::Shape::Text(text)
+                                    if text.galley.job.text == "FINAL STATE" =>
+                                {
+                                    Some(text.pos.y)
+                                }
+                                _ => None,
+                            })
+                            .expect("FINAL STATE");
+                        let full = format!("Undo: {action}");
+                        let controls: Vec<_> = ["Close run", "Continue fight", full.as_str()]
+                            .into_iter()
+                            .filter_map(|label| harness.query_by_label(label).map(|n| n.rect()))
+                            .collect();
+                        assert!(
+                            controls
+                                .iter()
+                                .all(|r| r.width() >= 24.0 && r.height() >= 24.0),
+                            "a small header target at {width}: {controls:?}"
+                        );
+                        for (at, a) in controls.iter().enumerate() {
+                            assert!(
+                                controls[at + 1..].iter().all(|b| !a.intersects(*b)),
+                                "header controls overlap at {width}: {controls:?}"
+                            );
+                        }
+                        if older {
+                            let reason = harness.get_by_label(super::super::CONTINUE_LATER).rect();
+                            assert!(
+                                controls.iter().all(|r| !r.intersects(reason)),
+                                "the reason overlaps a control at {width}: {reason:?} {controls:?}"
+                            );
+                        }
+                        tops.push((top, long, older, action));
+                    }
+                }
+            }
+            assert!(
+                tops.iter().all(|(top, ..)| *top == tops[0].0),
+                "the ended header's height at {width}: {tops:?}"
+            );
+        }
     }
 
     #[test]
@@ -9218,51 +9602,97 @@ mod tests {
                     );
                 }
                 // F2, section 1.4: effects take the conditions' place, before the plain ones,
-                // and a row keeps the lines and the height it has with no effect. What does
-                // not fit is a count; with no room for that, the row shows none.
+                // and a row keeps the lines and the height of the same row with each time taken
+                // away (X5: each effect as its plain words). What does not fit is a count.
                 use super::super::Condition;
                 let mut q = p.clone();
                 q.conditions = vec![
                     Condition::from("Poisoned"),
-                    Condition::read("Wis save DC 15 (Hold Person) on its turn"),
                     Condition::read("Bless 10 rounds"),
+                    Condition::read("Wis save DC 15 (Hold Person) on its turn"),
                     Condition::read("Frightened 10 rounds"),
                 ];
                 let mut plain = q.clone();
                 plain.conditions.retain(|c| !c.is_effect());
+                let mut labels = q.clone();
+                labels.conditions = q
+                    .conditions
+                    .iter()
+                    .map(|c| Condition::from(c.name()))
+                    .collect();
                 let mut counted = 0;
+                let row = |width, q, scale, fit, turn| {
+                    RowLayout::fitted(ui, width, q, (None, None, turn), scale, fit, 0.0)
+                };
                 for (width, scale) in [
                     (442.0, design::RUN_REGULAR),
                     (596.0, design::RUN_REGULAR),
                     (442.0, design::RUN_COMPACT),
                     (1040.0, design::RUN_LARGE),
                 ] {
-                    for fit in [RowFit::Natural, RowFit::Compressed, RowFit::Summary] {
-                        let base = RowLayout::new(ui, width, &plain, None, scale, fit, 0.0);
-                        let layout = RowLayout::new(ui, width, &q, None, scale, fit, 0.0);
+                    for (fit, turn) in [RowFit::Natural, RowFit::Compressed, RowFit::Summary]
+                        .into_iter()
+                        .flat_map(|fit| [(fit, false), (fit, true)])
+                    {
+                        let base = RowLayout::new(ui, width, &labels, None, scale, fit, 0.0);
+                        let layout = row(width, &q, scale, fit, turn);
                         assert_eq!(layout.height(scale), base.height(scale), "{width} {fit:?}");
                         let rows =
                             |l: &RowLayout| l.second_line.as_ref().map_or(0, |g| g.rows.len());
                         assert!(rows(&layout) <= rows(&base).max(1), "{width} {fit:?}");
-                        let Some(line) = &layout.second_line else {
-                            continue;
+                        let text = layout.second_line.as_ref().unwrap().text();
+                        // The first effect leads, before the plain condition. W1-D1: on the
+                        // row that has the turn, the effect due on it leads.
+                        let (lead, other) = if turn {
+                            ("Wis", "Bless")
+                        } else {
+                            ("Bless", "Wis")
                         };
-                        let text = line.text();
-                        // The first effect leads, before the plain condition.
+                        if let Some(at) = text.find(other) {
+                            assert!(text.find(lead).is_some_and(|lead| lead < at), "{text}");
+                        }
                         if let (Some(effect), Some(poisoned)) =
-                            (text.find("Wis save"), text.find("Poisoned"))
+                            (text.find(lead), text.find("Poisoned"))
                         {
                             assert!(effect < poisoned, "{text}");
                         }
                         if text.contains(icons::PIN) {
                             counted += 1;
                             assert!(!text.contains("Frightened 10"), "{text}");
-                        } else if base.tight {
-                            assert!(!text.contains("Wis"), "a tight row shows none: {text}");
+                            // X10: a count of the rest follows its effects' slot after a
+                            // space, with no dot that reads as a mark of the column above.
+                            assert!(
+                                !text.contains(&format!("·\u{a0}{}\u{a0}+", icons::PIN)),
+                                "{width} {fit:?}: {text}"
+                            );
                         }
                     }
                 }
                 assert!(counted > 0, "some width counts the effects that do not fit");
+                // W1-D1: the effect due on the turn keeps its first words before the last plain
+                // condition folds into `1 more`, at some width; a row without the turn never
+                // folds its one plain condition for an effect.
+                let mut folded = 0;
+                for width in 300..700 {
+                    for scale in [design::RUN_COMPACT, design::RUN_REGULAR] {
+                        let line = |turn| {
+                            let layout = row(width as f32, &q, scale, RowFit::Natural, turn);
+                            layout.second_line.unwrap().text().to_owned()
+                        };
+                        let (turn, other) = (line(true), line(false));
+                        assert!(other.contains("Poisoned"), "{width}: {other}");
+                        let due = turn.find("Wis");
+                        if due.is_some_and(|due| {
+                            turn.find("1\u{a0}more").is_some_and(|more| due < more)
+                        }) {
+                            folded += 1;
+                        }
+                    }
+                }
+                assert!(
+                    folded > 0,
+                    "W1-D1: the due effect's words outrank a plain condition"
+                );
                 // A count's slot is as wide as its widest form: `2`, `last round` and `time is
                 // up` move no word after it.
                 let mut timed = p.clone();
@@ -9299,9 +9729,11 @@ mod tests {
                 // apart by one pixel. No word moves more, or to another line.
                 assert!(at.iter().all(|x| (x - at[0]).abs() <= 1.0), "{at:?}");
                 // Rule P, as one rule (reviews of PR 276): a row's height and lines are those of
-                // the same row with each time taken away, where an official condition with a time
-                // is that condition. So no change of a time moves a row: none to a timed effect,
-                // a plain condition given a time, a count down, `time is up`, a time removed.
+                // the same row with each time taken away: each effect is its plain words, and an
+                // official condition with a time is that condition. So no change of a time moves
+                // a row: none to a timed effect, a plain condition given a time, a count down,
+                // `time is up`, a time removed. X5: so an effect shows wherever its plain words
+                // show, also beside a name of three lines.
                 let mut guard = p.clone();
                 guard.name = "Guard".into();
                 guard.initiative = Some(10);
@@ -9336,16 +9768,17 @@ mod tests {
                 ];
                 let official =
                     |c: &Condition| super::super::recognized_condition(c.name()).is_some();
-                for state in &states {
+                let long = "Seraphina Thornwood-Ashgrave of the Ninth Bell";
+                for (state, name) in states
+                    .iter()
+                    .flat_map(|state| [(state, "Guard"), (state, long)])
+                {
                     let mut timed = guard.clone();
+                    timed.name = name.into();
                     timed.conditions = state.clone();
-                    let mut untimed = guard.clone();
-                    untimed.conditions = state
-                        .iter()
-                        .filter(|c| !c.is_effect() || official(c))
-                        .map(|c| Condition::from(c.name()))
-                        .collect();
-                    for width in [300.0, 442.0, 596.0, 900.0] {
+                    let mut untimed = timed.clone();
+                    untimed.conditions = state.iter().map(|c| Condition::from(c.name())).collect();
+                    for width in [300.0, 442.0, 596.0, 900.0, 1040.0] {
                         for scale in [design::RUN_COMPACT, design::RUN_REGULAR] {
                             for fit in [RowFit::Natural, RowFit::Compressed, RowFit::Summary] {
                                 let with = RowLayout::new(ui, width, &timed, None, scale, fit, 0.0);
@@ -9366,13 +9799,21 @@ mod tests {
                                     words(&with)
                                 );
                                 assert!(rows(&with) <= rows(&without).max(1));
-                                // An official condition that shows without its time still shows.
-                                for name in state.iter().filter(|c| official(c)).map(|c| c.name()) {
-                                    if words(&without).is_some_and(|w| w.contains(name)) {
+                                // An effect that shows without its time still shows: an official
+                                // condition by its whole name, other words by their first word
+                                // or in the row's count of effects. Never nothing.
+                                for c in state.iter().filter(|c| c.is_effect()) {
+                                    let first = c.name().split(' ').next().unwrap();
+                                    if words(&without).is_some_and(|w| w.contains(first)) {
+                                        let with = words(&with).unwrap_or_default();
                                         assert!(
-                                            words(&with).is_some_and(|w| w.contains(name)),
-                                            "{width} {fit:?}: {name} in {:?}",
-                                            words(&with)
+                                            if official(c) {
+                                                with.contains(c.name())
+                                            } else {
+                                                with.contains(first) || with.contains(icons::PIN)
+                                            },
+                                            "{name} {width} {fit:?}: {} in {with:?}",
+                                            c.name()
                                         );
                                     }
                                 }
@@ -9457,7 +9898,7 @@ mod tests {
                         ui,
                         width,
                         &conc,
-                        (None, Some(12)),
+                        (None, Some(12), false),
                         scale,
                         RowFit::Natural,
                         0.0,
@@ -9479,7 +9920,7 @@ mod tests {
                             ui,
                             width,
                             &crowded,
-                            (None, dc),
+                            (None, dc, false),
                             scale,
                             RowFit::Natural,
                             0.0,
@@ -10400,7 +10841,7 @@ mod tests {
                 let words = |label: &str, width: f32| {
                     undo_words(
                         ui,
-                        label,
+                        (label, Some(p.name.as_str())),
                         true,
                         std::slice::from_ref(&p),
                         &font,
@@ -10445,15 +10886,30 @@ mod tests {
                 let undo = format!("Undo: move {rival} before Rival Team");
                 let kept = "Undo: move Rival… (…\u{a0}2) before Rival…";
                 let kept_width = design::number_width(ui, kept, &font);
-                let shown = undo_words(ui, &undo, false, &[], &font, kept_width + 0.5);
+                let shown = undo_words(ui, (&undo, None), false, &[], &font, kept_width + 0.5);
                 assert_eq!(shown, kept, "iter-26-R-SJ1");
                 let roomy = "Undo: move Rival Team (…\u{a0}2) before Rival Team";
                 let roomy_width = design::number_width(ui, roomy, &font);
                 assert_eq!(
-                    undo_words(ui, &undo, false, &[], &font, roomy_width + 0.5),
+                    undo_words(ui, (&undo, None), false, &[], &font, roomy_width + 0.5),
                     roomy,
                     "iter-26-R-SJ1-roomy"
                 );
+                // X46: narrower, the place goes before the copy number does; with no room
+                // for that either, the target goes: never `move Rival… before Rival…`.
+                let placeless = "Undo: move Rival Team (…\u{a0}2)";
+                let width = design::number_width(ui, placeless, &font) + 0.5;
+                assert_eq!(
+                    undo_words(ui, (&undo, None), false, &[], &font, width),
+                    placeless
+                );
+                let forms = undo_forms(&undo, None, false, &[]);
+                assert!(
+                    forms.target.iter().all(|words| words.contains('2')),
+                    "{:?}",
+                    forms.target
+                );
+                assert_eq!(forms.bare, ["Undo: move"]);
                 // An arrival named by its group alone has no member to give up.
                 let plain = "Move Shrine Reserve before Brannoch Vale";
                 let plain_width = design::number_width(ui, plain, &font);
@@ -10479,7 +10935,7 @@ mod tests {
                 let tight = design::number_width(ui, "Undo: boon on Brannoch…", &font);
                 let shown = undo_words(
                     ui,
-                    &effect,
+                    (&effect, Some(p.name.as_str())),
                     false,
                     std::slice::from_ref(&p),
                     &font,
@@ -10527,8 +10983,14 @@ mod tests {
                     let full = format!("Undo: {before}{}{after}", p.name);
                     let width =
                         design::number_width(ui, &format!("Undo: {before}Cinder… 3{after}"), &font);
-                    let shown =
-                        undo_words(ui, &full, false, std::slice::from_ref(&p), &font, width);
+                    let shown = undo_words(
+                        ui,
+                        (&full, Some(&p.name)),
+                        false,
+                        std::slice::from_ref(&p),
+                        &font,
+                        width,
+                    );
                     // iter10-B-FT2: the word Undo stays; the target is shortened.
                     assert!(
                         shown.starts_with(&format!("Undo: {before}")) && shown.ends_with(after),
@@ -10542,19 +11004,62 @@ mod tests {
                         "Undo: Wreathed in the cinders of the old shrine {direction} {}",
                         p.name
                     );
-                    let verb = if direction == "on" { "add" } else { "remove" };
-                    let expected = format!("Undo {verb}: Wreathed in… {direction} Cinder… 3");
+                    // X6: one form, `Undo: <words>`, never `Undo add:` or `Undo remove:`.
+                    let expected = format!("Undo: Wreathed in… {direction} Cinder… 3");
                     let width = design::number_width(ui, &expected, &font);
                     assert_eq!(
-                        undo_words(ui, &full, false, std::slice::from_ref(&p), &font, width),
+                        undo_words(
+                            ui,
+                            (&full, Some(&p.name)),
+                            false,
+                            std::slice::from_ref(&p),
+                            &font,
+                            width
+                        ),
                         expected
                     );
                 }
+                // X6: an added effect's Undo has one form, `Undo: effect <words>`: four words,
+                // then two, then the target by whole words with its copy number, then no
+                // target. Never a name cut to `…` and its number.
+                let effect = format!("Undo: effect Wis save DC 15 (Hold Person) on {}", p.name);
+                let rows = std::slice::from_ref(&p);
+                let forms = undo_forms(&effect, Some(&p.name), false, rows);
+                assert_eq!(
+                    forms.target,
+                    [
+                        "Undo: effect Wis save DC 15… on Cinder Wolf 3",
+                        "Undo: effect Wis save… on Cinder Wolf 3",
+                        "Undo: effect Wis save… on Cinder… 3",
+                    ]
+                );
+                assert_eq!(
+                    forms.bare,
+                    ["Undo: effect Wis save DC 15…", "Undo: effect Wis save…"]
+                );
+                let narrow = "Undo: effect Wis save… on Cinder… 3";
+                let width = design::number_width(ui, narrow, &font) + 0.5;
+                assert_eq!(
+                    undo_words(ui, (&effect, Some(&p.name)), false, rows, &font, width),
+                    narrow
+                );
+                // A form that another row's name also gives does not tell the row apart.
+                let mut plain = p.clone();
+                plain.name = "Cinder Wolf".into();
+                let both = [p.clone(), plain];
+                assert_eq!(target_forms("Cinder Wolf", &both), ["Cinder Wolf"]);
+                assert_eq!(target_forms(&p.name, &both), ["Cinder Wolf 3", "Cinder… 3"]);
             });
         });
         // SJ1, SH1: when no target fits, Undo keeps the step's words without the row. A step
         // that names no row in that place has no short form, so it shows `Undo` alone.
-        let compact = |label: &str| undo_compact(label, std::slice::from_ref(&p));
+        // The row is the step's own target (`describe_named`), never found in the words.
+        let compact = |label: &str| {
+            undo_forms(label, Some(&p.name), false, std::slice::from_ref(&p))
+                .bare
+                .first()
+                .cloned()
+        };
         for (label, short) in [
             // FI4: the count follows `×`, so `2` is not read as Cinder Wolf 2.
             (
@@ -10590,6 +11095,35 @@ mod tests {
         ] {
             assert_eq!(compact(label).as_deref(), short, "{label}");
         }
+        // Review round 1 of PR 286: the row is the step's own target, never found in its
+        // words. A row named `2` is not the `2` of `DC 12`, so the effect keeps two words and
+        // the row.
+        let mut run = super::super::tests::run();
+        run.state.participants[0].name = "2".into();
+        let (label, target) = run.describe_named(&Command::Condition(
+            0,
+            "Wis save DC 12 Against the Ancient Archmage on its turn".into(),
+        ));
+        assert_eq!(
+            (label.as_str(), target.as_deref()),
+            (
+                "effect Wis save DC 12 Against the Ancient Archmage on 2",
+                Some("2")
+            )
+        );
+        let forms = undo_forms(
+            &format!("Undo: {label}"),
+            target.as_deref(),
+            false,
+            &run.state.participants,
+        );
+        assert!(
+            forms
+                .target
+                .contains(&"Undo: effect Wis save… on 2".to_owned()),
+            "{:?}",
+            forms.target
+        );
     }
 
     /// FT3: a long name wraps in the shared name column, and AC, temporary HP and HP keep the
@@ -11328,6 +11862,7 @@ mod tests {
             ("Undo: next turn", true),
             ("Undo: move … 2 before Rival Team", false),
             ("Undo: … 3", false),
+            ("Undo add: effect Wis… on … 2", false),
             ("… 2", false),
         ] {
             assert_eq!(keeps_names(words), keeps, "iter10-B-FT2-lost-name: {words}");
@@ -11865,8 +12400,44 @@ mod tests {
                 assert_eq!(notice(named_width), named);
                 assert!(design::number_width(ui, &notice(named_width - 1.0), &font) <= named_width - 1.0);
                 let (role, shown) = at(small - 1.0);
-                assert!(role == Type::Heading && shown.ends_with('…'), "{shown}");
+                // X53: a cut name keeps its telling last word.
+                assert!(role == Type::Heading && shown.ends_with("… Bell"), "{shown}");
                 assert!(design::number_width(ui, &shown, &heading) <= small - 1.0);
+                // X53, review of PR 292: at every room the dock's name keeps to its slot, and
+                // keeps its last word wherever the first word, `…` and the last word fit. Else
+                // it is its first word's start and `…`.
+                for name in [
+                    long,
+                    "Ashfang, Eldest Wolf of the Southern Ridge",
+                    "Vault Guard",
+                    "Ember Cultist of the Southern Watch 12",
+                ] {
+                    let first = name.split(' ').next().unwrap().trim_end_matches(',');
+                    let last = name.rsplit(' ').next().unwrap();
+                    let telling = design::number_width(ui, &format!("{first}… {last}"), &heading);
+                    for room in 20..=320 {
+                        let room = room as f32;
+                        let (role, shown) = dock_name_shown(ui, name, room);
+                        let font = if role == Type::Heading { &heading } else { &font };
+                        assert!(
+                            design::number_width(ui, &shown, font) <= room,
+                            "{room}: {shown}"
+                        );
+                        if shown == name {
+                            continue;
+                        }
+                        if telling <= room {
+                            assert!(shown.ends_with(&format!("… {last}")), "{room}: {shown}");
+                        } else {
+                            let start = shown.trim_end_matches('…');
+                            let written = name.split(' ').next().unwrap();
+                            assert!(
+                                shown.ends_with('…') && written.starts_with(start),
+                                "{room}: {shown}"
+                            );
+                        }
+                    }
+                }
             });
         });
         harness.run_steps(2);
