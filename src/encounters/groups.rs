@@ -1034,13 +1034,22 @@ pub(super) fn list(
     blocked: Option<&'static str>,
     action: &mut Option<super::ListAction>,
 ) {
+    // FB8: a sub-heading after a group has `M` more above it, so it reads as the start of its
+    // own groups, not the end of the ones above. The first follows the Groups heading as it is.
+    let mut first = true;
+    let mut sub_heading = |ui: &mut egui::Ui, title: &str, count: usize| {
+        if !std::mem::take(&mut first) {
+            ui.add_space(design::M);
+        }
+        design::group_heading(ui, title, count);
+    };
     let any: Vec<_> = snapshot
         .groups
         .iter()
         .filter(|group| group.encounter.is_none())
         .collect();
     if !any.is_empty() {
-        design::group_heading(ui, "For any encounter", any.len());
+        sub_heading(ui, "For any encounter", any.len());
         for group in any {
             list_row(ui, group, blocked, action);
         }
@@ -1052,7 +1061,7 @@ pub(super) fn list(
             .filter(|group| group.encounter == Some(id))
             .collect();
         if !own.is_empty() {
-            design::group_heading(ui, &format!("For {name}"), own.len());
+            sub_heading(ui, &format!("For {name}"), own.len());
             for group in own {
                 list_row(ui, group, blocked, action);
             }
@@ -1064,7 +1073,7 @@ pub(super) fn list(
         .filter(|group| group.encounter.is_some() && group.encounter_name.is_none())
         .collect();
     if !orphans.is_empty() {
-        design::group_heading(ui, ENCOUNTER_DELETED, orphans.len());
+        sub_heading(ui, ENCOUNTER_DELETED, orphans.len());
         for group in orphans {
             list_row(ui, group, blocked, action);
         }
@@ -2363,10 +2372,13 @@ impl Encounters {
             design::Footer::new(("group_editor_footer", footer_id), ui.available_width());
         // The member result is newer than the discard: it was made on the draft that the
         // discard left open.
+        let identity = std::cell::Cell::new(false);
+        let separated = super::identity_line(ui.ctx());
         if let Some(draft) = self.group_draft.as_mut() {
-            member_result_into(draft, &mut footer, member_ref);
+            member_result_into(draft, &mut footer, member_ref, separated, &identity);
         }
         self.kept_into_footer(&mut footer, &kinds, pressed_ref);
+        super::identity_failure_into(ui.ctx(), &mut footer);
         // Save's reason: the last refusal, or the check's fault when the editor shows it at no
         // other place (a member row or the reason beside Save already says theirs).
         let reason = self.error.clone().or_else(|| {
@@ -2388,6 +2400,9 @@ impl Encounters {
         let bottom = footer.show(ui);
         if let Some(kind) = pressed.get() {
             self.undo_kept(kind, Some((active, campaigns.modules())));
+        }
+        if identity.get() {
+            super::undo_identity(ui.ctx());
         }
         if member_undo.get()
             && let Some(draft) = self.group_draft.as_mut()
@@ -2508,7 +2523,7 @@ fn add_pane(
     if !compact {
         design::group_heading(ui, "Add creatures", 0);
     }
-    design::help(
+    super::lane_help(
         ui,
         "From this campaign and the packages it uses. Party members go on an encounter’s roster.",
     );
@@ -2555,12 +2570,24 @@ fn column_right_id(path: &str) -> egui::Id {
 
 /// The newest member result, with its Undo, in the editor's footer. A pressed Undo is recorded
 /// in `pressed` and applied with `undo_member_result` after the footer is drawn.
+/// FF8: the creature search's separation result takes its place beside it, newest first;
+/// its pressed Undo is recorded in `identity`.
 fn member_result_into<'a>(
     draft: &mut GroupDraft,
     footer: &mut design::Footer<'a>,
     pressed: &'a std::cell::Cell<bool>,
+    separated: Option<(u64, String, &'static str)>,
+    identity: &'a std::cell::Cell<bool>,
 ) {
-    if let Some((words, undo, _)) = draft.member_result() {
+    let mut results = Vec::new();
+    if let Some((words, undo, stamp)) = draft.member_result() {
+        results.push((stamp, words, undo, pressed));
+    }
+    if let Some((stamp, words, undo)) = separated {
+        results.push((stamp, words, undo, identity));
+    }
+    results.sort_by_key(|(stamp, ..)| std::cmp::Reverse(*stamp));
+    for (_, words, undo, pressed) in results {
         footer.result(words.clone(), true, move |ui| {
             if design::undo_message(ui, Tone::Success, &words, undo) {
                 pressed.set(true);
@@ -3281,7 +3308,8 @@ mod tests {
     ) {
         let pressed = std::cell::Cell::new(false);
         let mut footer = design::Footer::new("members_test_footer", ui.available_width());
-        member_result_into(&mut state.0, &mut footer, &pressed);
+        let identity = std::cell::Cell::new(false);
+        member_result_into(&mut state.0, &mut footer, &pressed, None, &identity);
         let bottom = footer.show(ui);
         if pressed.get() {
             state.0.undo_member_result();
@@ -4456,7 +4484,7 @@ mod tests {
                             let pressed = super::super::DraftUndo::default();
                             let mut footer =
                                 design::Footer::new("group_test_footer", ui.available_width());
-                            draft.results_into(&mut footer, &pressed);
+                            draft.results_into(&mut footer, &pressed, None);
                             let bottom = footer.show(ui);
                             draft.apply_undo(&pressed);
                             let mut body = super::super::body_above(ui, bottom);

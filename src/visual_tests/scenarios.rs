@@ -402,7 +402,11 @@ fn words_left_in(d: &Driver<'_>, area: egui::Rect) -> Option<f32> {
     let mut left = None::<f32>;
     d.each_painted_text(|text, _| {
         let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
-        if area.contains(rect.center()) && !is_icon(&text.galley.job.text) {
+        // An empty icon slot (iter-27-B FM1) paints no glyph.
+        if area.contains(rect.center())
+            && !is_icon(&text.galley.job.text)
+            && !text.galley.job.text.trim().is_empty()
+        {
             left = Some(left.map_or(rect.left(), |left| left.min(rect.left())));
         }
     });
@@ -5365,6 +5369,10 @@ pub mod empty {
             d.has_containing(NO_CAMPAIGN) && d.has(NAME_FIELD) && d.has(ADD_CAMPAIGN);
         go_encounters(d);
         let encounters_says = d.has_containing(NO_CAMPAIGN_ENCOUNTERS) && d.has(OPEN_SETTINGS);
+        // iter-27-B FG3: the empty state's title y here, for the page's other empty state.
+        let no_campaign_title = d
+            .painted_rect_in(NO_CAMPAIGN_ENCOUNTERS, egui::Rect::EVERYTHING)
+            .map(|title| title.top());
         d.state("encounters-no-campaign", Sizes::Default);
         go_party(d);
         let party_says = d.has_containing(NO_CAMPAIGN_PARTY) && d.has(OPEN_SETTINGS);
@@ -5517,6 +5525,19 @@ pub mod empty {
                         && group.left() - encounter.right() >= crate::design::L
                 })
         });
+        let no_encounters_title = d
+            .painted_rect_in("No encounters yet", egui::Rect::EVERYTHING)
+            .map(|title| title.top());
+        d.observe(
+            "iter-27-B-FG3",
+            no_campaign_title.is_some()
+                && no_encounters_title.is_some_and(|y| {
+                    no_campaign_title.is_some_and(|other| (y - other).abs() <= 0.5)
+                }),
+            format!(
+                "The empty states' titles: no encounters {no_encounters_title:?}, no campaign {no_campaign_title:?}"
+            ),
+        );
         d.state("no-encounters", Sizes::Default);
         go_party(d);
         d.expect(NOT_LINKED);
@@ -16458,6 +16479,28 @@ pub mod encounter_owned_groups {
             "Groups opens one flat list, with headings for each encounter and deleted encounters last",
         );
         d.expect(&edit_group(GROUP_SHRINE));
+        // iter-27-B FB8: a sub-heading has more room above it (from the group before) than
+        // below it (to its own first group).
+        let gaps = d.at_size(LARGE, |d| {
+            let all = egui::Rect::EVERYTHING;
+            let heading = d.painted_rect_in("FOR ARENA FINAL", all);
+            let above = d.painted_rect_in("1 × Captain Varra", all);
+            let below = d.painted_rect_in("Arena Beasts", all);
+            heading
+                .zip(above)
+                .zip(below)
+                .map(|((heading, above), below)| {
+                    (
+                        heading.top() - above.bottom(),
+                        below.top() - heading.bottom(),
+                    )
+                })
+        });
+        d.observe(
+            "iter-27-B-FB8",
+            gaps.is_some_and(|(above, below)| above >= below + crate::design::M - 0.5),
+            format!("FOR ARENA FINAL: gap above and below {gaps:?}"),
+        );
         d.state("groups-for-encounters-open", Sizes::All);
         d.observe(
             "T13.5",
@@ -18260,6 +18303,29 @@ pub mod session_plan_groups {
             format!("Find a creature top, empty {empty:?}, with members {assembled:?}"),
         );
         d.state("plan-group-assembled", Sizes::All);
+        // iter-27-B FL3: the search field ends where each result's Add ends, at the scroll
+        // lane, with or without the bar.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let edges = d.at_size(size, |d| {
+                let search = d.place_of(FIND_CREATURE)?;
+                let adds: Vec<f32> = d
+                    .nodes()
+                    .into_iter()
+                    .filter(|node| {
+                        node.name == ADD && node.in_view() && node.rect.left() > search.left()
+                    })
+                    .map(|node| node.rect.right())
+                    .collect();
+                Some((search.right(), adds))
+            });
+            d.observe(
+                "iter-27-B-FL3",
+                edges.as_ref().is_some_and(|(search, adds)| {
+                    !adds.is_empty() && adds.iter().all(|add| (add - search).abs() <= 0.5)
+                }),
+                format!("At {size:?}, the search's right edge and each Add's: {edges:?}"),
+            );
+        }
         for size in [DEFAULT, LARGE] {
             let edges = d.at_size(size, |d| group_field_edges(d, "Ash Pack"));
             d.observe(
@@ -18295,10 +18361,10 @@ pub mod session_plan_groups {
                 && gap.1.is_some_and(|(edge, line, pane)| {
                     (0.0..=crate::design::XL).contains(&edge)
                         && line <= 1.0
-                        && pane.abs() <= 1.0
+                        && (-0.5..=crate::design::M + 0.5).contains(&pane)
                 }),
             format!(
-                "The compact name field runs on to Save group on its line, and Save ends at the pane's edge (Save left minus name right, centre gap, Save minus search): {gap:?}"
+                "The compact name field runs on to Save group on its line, and Save ends at the pane's edge, the search at its scroll lane (iter-27-B FL3) (Save left minus name right, centre gap, Save minus search): {gap:?}"
             ),
         );
         let summary_visible = d.at_size(SMALL, |d| d.visible_text("2 × Wolf"));
@@ -20757,6 +20823,36 @@ pub mod session_plan {
                 "iter-21-B-FT2",
                 notes.iter().all(Result::is_ok),
                 format!("At {size:?}, the roster row menu's notes: {notes:?}"),
+            );
+            // iter-27-B FM1: every choice's words start at one x, with or without an icon.
+            let lefts = d.at_size(size, |d| {
+                let first = d.place_of("Move up")?;
+                let last = d.place_of("Remove")?;
+                let menu = egui::Rect::from_min_max(
+                    egui::pos2(
+                        first.left() - crate::design::L,
+                        first.top() - crate::design::XXL - crate::design::L,
+                    ),
+                    egui::pos2(last.right() + crate::design::XXL, last.bottom()),
+                );
+                [
+                    "Edit",
+                    "Move up",
+                    "Move down",
+                    "Duplicate",
+                    "Make it yours",
+                    "Remove",
+                ]
+                .map(|word| d.painted_word_rect(word, menu).map(|rect| rect.left()))
+                .into_iter()
+                .collect::<Option<Vec<f32>>>()
+            });
+            d.observe(
+                "iter-27-B-FM1",
+                lefts
+                    .as_ref()
+                    .is_some_and(|xs| xs.iter().all(|x| (x - xs[0]).abs() <= 0.5)),
+                format!("At {size:?}, the roster row menu's word x: {lefts:?}"),
             );
         }
         d.click("Make it yours");

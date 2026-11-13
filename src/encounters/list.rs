@@ -94,7 +94,7 @@ pub(super) fn choice_note(ui: &mut egui::Ui, word: &str, note: Option<&str>) {
     if note.is_none() {
         return;
     }
-    let inset = design::S + menu_icon(word).map_or(0.0, |_| design::ICON_SLOT);
+    let inset = design::S + menu_slot_icon(ui, word).map_or(0.0, |_| design::ICON_SLOT);
     ui.horizontal(|ui| {
         ui.add_space(inset);
         let gap = ui.spacing().item_spacing.x;
@@ -108,7 +108,8 @@ pub(super) fn choice_note(ui: &mut egui::Ui, word: &str, note: Option<&str>) {
 }
 
 pub(super) fn menu_action(ui: &mut egui::Ui, word: &str, blocked: Option<&str>) -> bool {
-    let action = match menu_icon(word) {
+    let icon = menu_slot_icon(ui, word);
+    let action = match icon {
         Some(icon) => Action::quiet(word).icon(icon),
         None => Action::quiet(word),
     };
@@ -122,6 +123,23 @@ pub(super) fn menu_action(ui: &mut egui::Ui, word: &str, blocked: Option<&str>) 
         ui.close();
     }
     pressed
+}
+
+/// FM1: a choice's icon, or an empty icon slot when its menu has a choice with an icon, so every
+/// choice's words start at one x. The menu is its popup's layer; a choice with an icon marks it,
+/// and the menu draws first on a frame it is not shown, so the mark is there when it shows.
+fn menu_slot_icon(ui: &egui::Ui, word: &str) -> Option<&'static str> {
+    let mark = ui.layer_id().id.with("menu has icons");
+    match menu_icon(word) {
+        Some(icon) => {
+            ui.data_mut(|data| data.insert_temp(mark, true));
+            Some(icon)
+        }
+        None => ui
+            .data(|data| data.get_temp::<bool>(mark))
+            .unwrap_or(false)
+            .then_some(""),
+    }
 }
 
 /// The same named side picker serves roster slots and groups. Other opens a text field.

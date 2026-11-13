@@ -552,7 +552,14 @@ impl Draft {
     /// rows ends the replacement's result. A pressed Undo is recorded in `pressed` (made by
     /// `DraftUndo::for_draft` for this draft); `apply_undo` sends it to the result's owner after
     /// the footer is drawn.
-    fn results_into<'a>(&mut self, footer: &mut design::Footer<'a>, pressed: &'a DraftUndo) {
+    /// `identity` is the creature search's separation result, if any: its stamp, words and
+    /// Undo. It takes its place among the draft's results by when it was made (FF8).
+    fn results_into<'a>(
+        &mut self,
+        footer: &mut design::Footer<'a>,
+        pressed: &'a DraftUndo,
+        identity: Option<(u64, String, &'static str)>,
+    ) {
         if self
             .replacement
             .as_ref()
@@ -587,6 +594,9 @@ impl Draft {
                 ));
             }
         }
+        if let Some((stamp, words, undo)) = identity {
+            results.push((stamp, Tone::Success, words, undo, DraftResult::Identity));
+        }
         results.sort_by_key(|(stamp, ..)| std::cmp::Reverse(*stamp));
         for (_, tone, words, undo, which) in results {
             footer.result(words.clone(), true, move |ui| {
@@ -613,7 +623,8 @@ impl Draft {
                     group.undo_member_result();
                 }
             }
-            None => return false,
+            // The campaign owns it; `undo_identity` applies it.
+            Some(DraftResult::Identity) | None => return false,
         }
         true
     }
@@ -1356,6 +1367,15 @@ pub(super) fn scroll_lane(ui: &egui::Ui) -> f32 {
     (ui.available_width() - ui.spacing().scroll.allocated_width()).max(0.0)
 }
 
+/// Help above a list that can gain a scroll bar: it wraps at the bar's lane, as the list's
+/// rows end there (FL3).
+pub(super) fn lane_help(ui: &mut egui::Ui, text: &str) {
+    ui.scope(|ui| {
+        ui.set_max_width(scroll_lane(ui));
+        design::help(ui, text);
+    });
+}
+
 /// The run folder is known not to be there. A folder that cannot be looked for (a parent
 /// without permission) is not "missing": it cannot be read.
 fn folder_missing(directory: &std::path::Path) -> bool {
@@ -2014,6 +2034,70 @@ fn creature_result_row(
     (chosen, read)
 }
 
+/// FF8: the creature search's separation of a copied note (`Rook Ambry copy.md is now a
+/// separate note.`) with its Undo, or why a separation or its Undo failed. Its owner is the
+/// campaign it changed (kept by campaign id, so a switch and back keeps it); it shows in the
+/// footer of the editor whose search made it. A new separation replaces it; its Undo ends it, or
+/// replaces it with the Undo's failure.
+#[derive(Clone)]
+enum IdentityResult {
+    Done {
+        change: crate::world::Change,
+        stamp: u64,
+    },
+    Failed(String),
+}
+
+fn identity_key(campaign: Uuid) -> egui::Id {
+    egui::Id::new(("encounter_identity_undo", campaign))
+}
+
+/// The campaign the creature search reads, and its separation result.
+fn identity_result(ctx: &egui::Context) -> Option<(Campaign, IdentityResult)> {
+    let index = ctx.data(|data| {
+        data.get_temp::<Arc<crate::lookup::ContentIndex>>(egui::Id::new("reader_link_index"))
+    })?;
+    let campaign = index.campaign.clone()?;
+    let result = ctx.data(|data| data.get_temp::<IdentityResult>(identity_key(campaign.id)))?;
+    Some((campaign, result))
+}
+
+/// The separation result's place among an editor's results: its stamp, words and Undo.
+fn identity_line(ctx: &egui::Context) -> Option<(u64, String, &'static str)> {
+    match identity_result(ctx)?.1 {
+        IdentityResult::Done { change, stamp } => Some((
+            stamp,
+            change.message().to_owned(),
+            change.identity_undo_label(),
+        )),
+        IdentityResult::Failed(_) => None,
+    }
+}
+
+/// A failed separation, or its failed Undo, as a reason in an editor's footer.
+fn identity_failure_into(ctx: &egui::Context, footer: &mut design::Footer<'_>) {
+    if let Some((_, IdentityResult::Failed(error))) = identity_result(ctx) {
+        footer.reason(error.clone(), move |ui| {
+            design::message(ui, Tone::Warning, &error);
+        });
+    }
+}
+
+/// Undo the separation, after its Undo was pressed in a footer.
+fn undo_identity(ctx: &egui::Context) {
+    let Some((campaign, IdentityResult::Done { change, .. })) = identity_result(ctx) else {
+        return;
+    };
+    let key = identity_key(campaign.id);
+    match change.undo(&campaign) {
+        Ok(()) => ctx.data_mut(|data| {
+            data.remove::<IdentityResult>(key);
+            data.insert_temp(egui::Id::new("encounter_identity_changed"), true);
+        }),
+        Err(error) => ctx.data_mut(|data| data.insert_temp(key, IdentityResult::Failed(error))),
+    }
+}
+
 /// A copied note is still a search result, with the same repair used by Lookup.
 fn duplicate_creature_results(ui: &mut egui::Ui, query: &str) -> bool {
     let Some(index) = ui.ctx().data(|data| {
@@ -2024,28 +2108,6 @@ fn duplicate_creature_results(ui: &mut egui::Ui, query: &str) -> bool {
     let Some(campaign) = &index.campaign else {
         return false;
     };
-    let undo_key = egui::Id::new(("encounter_identity_undo", campaign.id));
-    let undo = ui.data(|data| data.get_temp::<crate::world::Change>(undo_key));
-    if let Some(undo) = undo
-        && design::undo_message(
-            ui,
-            Tone::Success,
-            undo.message(),
-            undo.identity_undo_label(),
-        )
-    {
-        match undo.undo(campaign) {
-            Ok(()) => {
-                ui.data_mut(|data| {
-                    data.remove::<crate::world::Change>(undo_key);
-                    data.insert_temp(egui::Id::new("encounter_identity_changed"), true);
-                });
-            }
-            Err(error) => {
-                design::message(ui, Tone::Warning, &error);
-            }
-        }
-    }
     let mut seen = BTreeSet::new();
     for item in &index.items {
         if !item.entry.name.to_lowercase().contains(query)
@@ -2077,15 +2139,20 @@ fn duplicate_creature_results(ui: &mut egui::Ui, query: &str) -> bool {
                 let filename = path.rsplit('/').next().unwrap_or(path);
                 let action = noun.action(filename);
                 if Action::secondary(&action).hint(&action).show(ui).clicked() {
-                    match crate::world::new_identity(campaign, path) {
-                        Ok((undo, _)) => ui.data_mut(|data| {
-                            data.insert_temp(undo_key, undo);
-                            data.insert_temp(egui::Id::new("encounter_identity_changed"), true);
-                        }),
-                        Err(error) => {
-                            design::message(ui, Tone::Warning, &error);
+                    // FF8: the result, its Undo or the failure goes to the editor's footer.
+                    let result = match crate::world::new_identity(campaign, path) {
+                        Ok((change, _)) => {
+                            ui.data_mut(|data| {
+                                data.insert_temp(egui::Id::new("encounter_identity_changed"), true)
+                            });
+                            IdentityResult::Done {
+                                change,
+                                stamp: result_stamp(),
+                            }
                         }
-                    }
+                        Err(error) => IdentityResult::Failed(error),
+                    };
+                    ui.data_mut(|data| data.insert_temp(identity_key(campaign.id), result));
                 }
                 if let Some(remaining) = paths.iter().find(|other| *other != path) {
                     crate::library::duplicate_repair_consequence(
@@ -2545,6 +2612,8 @@ enum DraftResult {
     Replacement,
     /// The newest member result of the group at this index in `Draft::groups`.
     Member(usize),
+    /// The creature search's separation result (`IdentityResult`), which the campaign owns.
+    Identity,
 }
 
 /// Which of a draft's own results had its Undo pressed in the editor's footer this frame.
@@ -4629,7 +4698,15 @@ impl Encounters {
             });
         }
         let used = header.min_rect();
-        ui.advance_cursor_after_rect(used.with_min_x(room.min.x));
+        // FG3: the empty state starts where every page's empty state starts, `L` below the
+        // header's hairline, so the step past the header leaves out its item spacing.
+        let bare = empty && self.snapshot.as_ref().is_some_and(|s| s.issues.is_empty());
+        let step = if bare {
+            used.with_max_y(used.max.y - ui.spacing().item_spacing.y)
+        } else {
+            used
+        };
+        ui.advance_cursor_after_rect(step.with_min_x(room.min.x));
         if new {
             self.start_new_draft();
             return;
@@ -5315,9 +5392,10 @@ impl Encounters {
         // The draft's own results are newer than a discard's: they were made on the draft that
         // the discard left open.
         if let Some(draft) = self.draft.as_mut() {
-            draft.results_into(&mut footer, draft_undo_ref);
+            draft.results_into(&mut footer, draft_undo_ref, identity_line(ui.ctx()));
         }
         self.kept_into_footer(&mut footer, &kinds, pressed_ref);
+        identity_failure_into(ui.ctx(), &mut footer);
         if let Some(e) = self.error.clone() {
             // A deleted entry and an unreadable file are stated in the rows' tone too.
             let tone = self.error_tone();
@@ -5341,6 +5419,9 @@ impl Encounters {
         let bottom = footer.show(ui);
         if let Some(kind) = pressed.get() {
             self.undo_kept(kind, Some((active, campaigns.modules())));
+        }
+        if draft_undo.which.get() == Some(DraftResult::Identity) {
+            undo_identity(ui.ctx());
         }
         if let Some(draft) = self.draft.as_mut()
             && draft.apply_undo(&draft_undo)
@@ -5511,7 +5592,7 @@ impl Encounters {
         // FB2: the party lines stay whatever the search adds to (the party always joins the
         // roster), and `Adding to …` has one place directly above the search, so a change of
         // target moves neither the search nor its results.
-        design::help(ui, PARTY_SOURCE);
+        lane_help(ui, PARTY_SOURCE);
         // Who is still to come: a party member belongs on a roster once.
         let on_roster = |draft: &Draft, id: Uuid| {
             draft
@@ -5615,12 +5696,14 @@ impl Encounters {
         summary: &str,
     ) -> Option<(Uuid, bool)> {
         let mut chosen = None;
+        // FL3: the field ends at the results' scroll lane, where each row's Add ends, whether or
+        // not the bar shows.
         let response = design::search_field(
             ui,
             SEARCH_FIELD,
             search,
             "Find a creature by name or detail…",
-            ui.available_width(),
+            scroll_lane(ui),
         );
         if std::mem::take(focus_search) {
             design::focus_and_select(ui, response.id, search);
@@ -5635,8 +5718,7 @@ impl Encounters {
             ui.data_mut(|data| data.insert_temp(filter_id, filter.clone()));
         }
         if !summary.is_empty() {
-            let shown =
-                design::words_that_fit(ui, summary, &Type::Small.font(ui), ui.available_width());
+            let shown = design::words_that_fit(ui, summary, &Type::Small.font(ui), scroll_lane(ui));
             ui.label(Type::Small.rich(ui, shown).color(colors().muted))
                 .on_hover_text(summary);
         }
