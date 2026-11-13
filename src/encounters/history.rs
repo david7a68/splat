@@ -1,6 +1,7 @@
 //! What the Encounters page shows where: what is in play, what is ready, and what has happened.
 //! An encounter with an unfinished run leaves Ready until it ends, unless Keep in Ready is on.
 //! Nothing is written to the encounter note. The story's sessions come from the timeline.
+#![warn(deprecated)] // Its parent allows old message functions; this file does not.
 use crate::{
     encounter_run::{SavedRunInfo, Standing},
     timeline::{Event, page::SessionLink},

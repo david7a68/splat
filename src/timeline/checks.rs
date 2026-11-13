@@ -1,6 +1,7 @@
 //! A journey's encounter checks: one roll on a marked table for each day or watch of a Travel
 //! event, kept in that event's lines of `Timeline.md` by its offset from the journey's start.
 //! The plan's Travel row and Timeline's detail column draw the same block from here.
+#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use super::{Book, Check, DAY, Event, HOUR, Kind, clock_words, read_duration};
 use crate::design::{self, Action, Density, Status, Tone, Type, colors, icons};
 use crate::roll_table::{Per, Table};

@@ -134,17 +134,26 @@ mod sealed {
 /// A key that tells one field of many apart. Sealed: only the kinds below are keys, and
 /// `egui::Id` is not one. That is all the type proves. That a key comes from the row's data, not
 /// from its place on screen, is the caller's duty: a number or a text can still be read from the
-/// layout. So the two keys that take any number or text are named, and the source lint counts
-/// their uses per file (`row-key`), so a review sees each new one.
+/// layout. So the two keys that take any number or text are named, and each use is a counted
+/// row of `design::results::STAGED_ALLOWS` (`Ban::RowKey`), so a review sees each new one.
 pub trait RowKey: sealed::Sealed + Hash {}
 
 /// A row's place in its data (an entry's index in a saved list), as a [`RowKey`]. Give it a
-/// data index, not a value read from the layout.
+/// data index, not a value read from the layout. Clippy bans `from_data` outside `src/design/`,
+/// so each use is a counted row of `design::results::STAGED_ALLOWS` (`Ban::RowKey`) that a
+/// reviewer reads.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct RowIndex(pub usize);
+pub struct RowIndex(usize);
+
+impl RowIndex {
+    pub const fn from_data(index: usize) -> Self {
+        Self(index)
+    }
+}
 
 /// A text from the row's data (a file name, an entry's name), as a [`RowKey`]. Named, so that a
-/// key made with `format!` is seen and counted.
+/// key made with `format!` is seen: Clippy bans `from_data` outside `src/design/`, and each use
+/// is a counted row (`Ban::RowKey`).
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct TextKey(String);
 
@@ -175,7 +184,13 @@ impl<K: RowKey> RowKey for Option<K> {}
 /// ```
 /// use splat::layout::RowIndex;
 /// const NAME: splat::layout::FieldId = splat::field_id!("doc_name");
-/// assert_ne!(NAME.with(RowIndex(1)).id(), NAME.with(RowIndex(2)).id());
+/// assert_ne!(NAME.with(RowIndex::from_data(1)).id(), NAME.with(RowIndex::from_data(2)).id());
+/// ```
+///
+/// A row index is made only by its named constructor:
+///
+/// ```compile_fail,E0603
+/// let _ = splat::layout::RowIndex(1);
 /// ```
 ///
 /// An `egui::Id` is not a [`RowKey`], and neither is a bare text:
@@ -454,8 +469,6 @@ pub fn lane_width() -> f32 {
 /// content always ends one lane before the area's right edge, so nothing moves when the bar
 /// comes or goes. It sets the app's solid scroll style on its own `Ui`, so a caller's style
 /// (floating bars that take no width) cannot remove the lane. The caller has no lane to keep.
-/// A `Footer::pane` with `Body::Content` is one already: a vertical scroll column inside such a
-/// pane is refused (a panic in debug builds and tests).
 ///
 /// ```
 /// fn list(ui: &mut eframe::egui::Ui) {
@@ -546,10 +559,7 @@ impl ScrollColumn {
 
     /// Run `add` in a child `Ui` with the app's scroll style, and the content's width: the
     /// width the column is given, less the lane.
-    fn styled<R>(
-        ui: &mut Ui,
-        add: impl FnOnce(&mut Ui, f32) -> ScrollAreaOutput<R>,
-    ) -> ScrollAreaOutput<R> {
+    fn styled<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui, f32) -> R) -> R {
         // A `Body::Content` pane is a scroll column already: one inside it is refused.
         super::pane::refuse_column_in_content(ui);
         ui.scope(|ui| {
@@ -1084,10 +1094,9 @@ impl<'a> TitleLine<'a> {
 
 /// Every reason an [`InlineCreate`]'s Create can be blocked with. The kept line keeps room for
 /// the tallest of them, and Create's reason is one of them, so a reason that is not declared
-/// does not compile. Declare them with [`create_reasons!`](crate::create_reasons); the lint
-/// refuses an `impl CreateReasons` by hand, which could leave a reason out of `ALL`. When
-/// package M's `Sentence` lands, `words` returns a `Sentence` and the macro checks each
-/// literal with `sentence!`.
+/// does not compile. Declare them with [`create_reasons!`](crate::create_reasons), which checks
+/// each reason with package M's `sentence!`; the lint refuses an `impl CreateReasons` by hand,
+/// which could leave a reason out of `ALL`.
 pub trait CreateReasons: Copy + 'static {
     const ALL: &'static [Self];
     fn words(self) -> &'static str;
@@ -1102,24 +1111,6 @@ impl CreateReasons for NoReason {
     fn words(self) -> &'static str {
         match self {}
     }
-}
-
-/// Checks a creation reason's form when the program compiles: a capital first, a full stop,
-/// question mark or exclamation mark last.
-#[doc(hidden)]
-pub const fn reason_checked(words: &'static str) -> &'static str {
-    let bytes = words.as_bytes();
-    assert!(!bytes.is_empty(), "A reason is not empty.");
-    assert!(
-        bytes[0].is_ascii_uppercase(),
-        "A reason starts with a capital."
-    );
-    let last = bytes[bytes.len() - 1];
-    assert!(
-        last == b'.' || last == b'?' || last == b'!',
-        "A reason ends with a full stop."
-    );
-    words
 }
 
 /// Declare an enum of an [`InlineCreate`]'s reasons, with each variant's words. `ALL` holds every
@@ -1153,7 +1144,11 @@ macro_rules! create_reasons {
             const ALL: &'static [Self] = &[$(Self::$variant),+];
             fn words(self) -> &'static str {
                 match self {
-                    $(Self::$variant => const { $crate::layout::reason_checked($words) }),+
+                    $(Self::$variant => {
+                        // Each reason is a checked sentence (package M's `sentence!`).
+                        const _: $crate::outcome::Sentence = $crate::sentence!($words);
+                        $words
+                    }),+
                 }
             }
         }
@@ -1626,5 +1621,7 @@ pub fn menu_popup(response: &Response) -> egui::Popup<'_> {
     egui::Popup::menu(response)
 }
 
+#[cfg(test)]
+pub(crate) mod bans;
 #[cfg(test)]
 mod tests;

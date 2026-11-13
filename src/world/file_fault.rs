@@ -3,6 +3,7 @@
 //! The DM reads what happened to which file and how to recover it. The system's own words
 //! (`stream did not contain valid UTF-8`, `Permission denied (os error 13)`) go only to
 //! Technical details. Nothing here changes the file.
+#![warn(deprecated)] // Its parent allows old message functions; this file does not.
 use std::{io, path::Path};
 
 /// What went wrong, from the system error's kind. Never from its words.

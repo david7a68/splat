@@ -1,5 +1,6 @@
 //! One catalogue: built-in, package and campaign-owned entries, with their authoring.
 //! Browsing it never changes the active campaign.
+#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 mod class;
 mod creature;
 pub(crate) mod presentation;

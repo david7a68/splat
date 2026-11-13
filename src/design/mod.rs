@@ -6,6 +6,7 @@ pub mod components;
 pub mod icons;
 pub mod layout;
 pub mod memo;
+pub mod outcome;
 pub mod pane;
 pub mod reader;
 pub mod results;
@@ -13,6 +14,8 @@ pub mod save_row;
 pub mod theme;
 pub mod tokens;
 
+#[cfg(test)]
+pub(crate) mod attributes;
 #[cfg(test)]
 pub mod gallery;
 #[cfg(test)]

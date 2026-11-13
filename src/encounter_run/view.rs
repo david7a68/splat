@@ -1,6 +1,7 @@
 //! The run's three views: setup, live and ended. Prominence follows the brief:
 //! round and current turn, then every row's HP and conditions, then the actions.
 //! Rows never move when the selection changes: the entry controls have a fixed dock.
+#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use super::{
     Command, END_STEP, MAX_FROM_SHEET, Panel, Participant, PartySync, Phase, Run, SAVED_HP_USED,
     SHEET_SOURCE, Unend, display, effect::Time, mode_label,

@@ -2,58 +2,49 @@
 # File content: the initiative rule note's YAML and the NPC generator's note text.
 src/encounter_settings.rs straight-apostrophe 1
 src/npc_generator.rs straight-apostrophe 3
-# A hand-built layer (`LayerId { order: … }` or `Order::…`) that Clippy's method list cannot see.
+# Messages (round 28, package M). Each file that still calls an old message function holds one
+# `#![allow(deprecated)]`; a child module of such a file writes its own `#![warn(deprecated)]`, so
+# the compiler finds every call, import and alias. Wave 2 moves each file to `design::outcome` and
+# deletes its line. When none is left, the old functions become private. A count raised together
+# with its allowance passes this test: a reviewer reads every raised line.
+src/campaign_content.rs allow-deprecated 1
+src/campaigns.rs allow-deprecated 1
+src/combat_sync.rs allow-deprecated 1
+src/copy_dialog.rs allow-deprecated 1
+src/dndbeyond.rs allow-deprecated 1
+src/encounter_run/notice.rs allow-deprecated 1
+src/encounter_run/view.rs allow-deprecated 1
+src/encounters.rs allow-deprecated 1
+src/encounters/disk.rs allow-deprecated 1
+src/encounters/groups.rs allow-deprecated 1
+src/lib.rs allow-deprecated 1
+src/library.rs allow-deprecated 1
+src/library/view.rs allow-deprecated 1
+src/lookup.rs allow-deprecated 1
+src/loot_editor.rs allow-deprecated 1
+src/party.rs allow-deprecated 1
+src/processing/settings.rs allow-deprecated 1
+src/roll_table.rs allow-deprecated 1
+src/sessions/carry.rs allow-deprecated 1
+src/sessions/page.rs allow-deprecated 1
+src/sessions/plan.rs allow-deprecated 1
+src/sessions/slash.rs allow-deprecated 1
+src/settings.rs allow-deprecated 1
+src/timeline/checks.rs allow-deprecated 1
+src/timeline/page.rs allow-deprecated 1
+src/world.rs allow-deprecated 1
+src/world/edit.rs allow-deprecated 1
+src/world/page.rs allow-deprecated 1
+src/world/repair.rs allow-deprecated 1
+# Phrases outside their owner: the stat block's printed XP (core) is the creature's, not an
+# encounter's; the others move to their owner in Wave 2.
+crates/core/src/content/stat_blocks.rs phrase-owner 2
+src/campaign_content.rs phrase-owner 1
+src/encounter_run.rs phrase-owner 2
+src/encounter_run/loot.rs phrase-owner 2
+src/encounters.rs phrase-owner 1
+src/library.rs phrase-owner 1
+src/sessions/plan.rs phrase-owner 1
+# A layer built by hand (`LayerId { order: … }`, `Order::…`), which Clippy's method list cannot see
+# (package K). Wave 2 moves the drag ghost to a design part.
 src/encounter_run/view.rs foreground-layer 1
-# Banned egui names as text, per file (clippy.toml's set): a second raw call inside an allowed
-# function raises the count. Wave 2 lowers these with the allows.
-src/art.rs raw-egui-call 1
-src/campaign_content.rs raw-egui-call 6
-src/campaigns.rs raw-egui-call 1
-src/copy_dialog.rs raw-egui-call 3
-src/creature_filter.rs raw-egui-call 3
-src/dndbeyond.rs raw-egui-call 1
-src/encounter_run/ad_hoc.rs raw-egui-call 2
-src/encounter_run/dock.rs raw-egui-call 2
-src/encounter_run/rolling.rs raw-egui-call 2
-src/encounter_run/view.rs raw-egui-call 23
-src/encounters.rs raw-egui-call 12
-src/encounters/groups.rs raw-egui-call 12
-src/encounters/list.rs raw-egui-call 4
-src/lib.rs raw-egui-call 5
-src/library.rs raw-egui-call 27
-src/lookup.rs raw-egui-call 3
-src/loot_editor.rs raw-egui-call 2
-src/markdown_source.rs raw-egui-call 2
-src/markdown_view.rs raw-egui-call 2
-src/party_bar.rs raw-egui-call 3
-src/processing/settings.rs raw-egui-call 5
-src/rolls.rs raw-egui-call 8
-src/sessions/page.rs raw-egui-call 27
-src/sessions/plan.rs raw-egui-call 8
-src/sessions/slash.rs raw-egui-call 8
-src/timeline/checks.rs raw-egui-call 2
-src/timeline/page.rs raw-egui-call 12
-src/trackers.rs raw-egui-call 1
-src/trackers/view.rs raw-egui-call 2
-src/world.rs raw-egui-call 5
-src/world/edit.rs raw-egui-call 3
-src/world/page.rs raw-egui-call 8
-src/world/repair.rs raw-egui-call 2
-# A footer placed by hand (`Footer::show_by_hand`) or the pane's escape (`Fills::because`), as text,
-# per file (round 28, package P). Clippy refuses them by name; each calling function has its row
-# in `design::results::STAGED_ALLOWS` (`Ban::Pane`). Wave 2 lowers these counts.
-src/campaign_content.rs pane-call 1
-src/encounter_run/view.rs pane-call 3
-src/encounters.rs pane-call 6
-src/encounters/groups.rs pane-call 3
-src/lib.rs pane-call 3
-src/library.rs pane-call 4
-src/party.rs pane-call 1
-src/sessions/carry.rs pane-call 1
-src/sessions/page.rs pane-call 4
-src/sessions/plan.rs pane-call 1
-src/settings.rs pane-call 1
-src/timeline/page.rs pane-call 1
-src/world.rs pane-call 1
-src/world/page.rs pane-call 1
-src/world/repair.rs pane-call 1

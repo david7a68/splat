@@ -42,6 +42,9 @@ disallowed-methods = [
     # `field_id!`, which take a literal and check it in a `const` block.
     { path = "splat::design::layout::Word::checked", reason = "use word!(\"…\")", allow-invalid = true },
     { path = "splat::design::layout::FieldId::checked", reason = "use field_id!(\"…\")", allow-invalid = true },
+    # Row keys that take any number or text: each use is a counted row a reviewer reads.
+    { path = "splat::design::layout::RowIndex::from_data", reason = "a row key from the row's data: one row in design::results::STAGED_ALLOWS (Ban::RowKey)", allow-invalid = true },
+    { path = "splat::design::layout::TextKey::from_data", reason = "a row key from the row's data: one row in design::results::STAGED_ALLOWS (Ban::RowKey)", allow-invalid = true },
     # Foreground layers: a popup, menu, window, tooltip or free area drawn by hand chooses its own
     # place and can cover a splitter or a scroll bar. Shared parts in `src/design/` own them. A
     # `LayerId` written as a struct with an `egui::Order` is the lint's `foreground-layer` rule.
@@ -94,16 +97,6 @@ disallowed-methods = [
     { path = "egui::show_tooltip_text", reason = "tooltips belong to src/design/", allow-invalid = true },
     { path = "egui::popup_below_widget", reason = "use design::menu_popup", allow-invalid = true },
     { path = "egui::popup_above_or_below_widget", reason = "use design::menu_popup", allow-invalid = true },
-    # A pane's footer: `Footer::pane` draws the body, measures where its content ends and places
-    # the footer, so the caller gets no y to size the body by hand (round 28, package P). The
-    # source lint also counts each call left (`footer-by-hand`), shrink only.
-    { path = "splat::design::components::Footer::show_by_hand", reason = "use Footer::pane, which places the footer below the body", allow-invalid = true },
-    # The pane's one escape: a body that manages its own room. Each use carries a counted allow.
-    { path = "splat::design::pane::Fills::because", reason = "use Body::Content: the pane is the scroll column, and its footer follows short content", allow-invalid = true },
-    # Content placed by the room's height moves when a message shrinks the room (round 28 review
-    # of PR 305). The app's empty state is a part that keeps its top.
-    { path = "egui::Ui::centered_and_justified", reason = "keep content at the body's top; use design::empty_state for an empty state", allow-invalid = true },
-    { path = "egui::Ui::vertical_centered_justified", reason = "keep content at the body's top; use design::empty_state for an empty state", allow-invalid = true },
     { path = "egui::Ui::dnd_drag_source", reason = "a dragged item is drawn on a tooltip layer", allow-invalid = true },
     { path = "egui::Ui::dnd_drop_zone", reason = "drag and drop belongs to src/design/", allow-invalid = true },
     { path = "egui::Response::dnd_set_drag_payload", reason = "drag and drop belongs to src/design/", allow-invalid = true },
@@ -144,4 +137,25 @@ disallowed-methods = [
     { path = "egui::Context::style_ui", reason = "layers, windows and egui's own panels belong to src/design/", allow-invalid = true },
     { path = "egui::Context::show_viewport_deferred", reason = "layers, windows and egui's own panels belong to src/design/", allow-invalid = true },
     { path = "egui::Context::show_viewport_immediate", reason = "layers, windows and egui's own panels belong to src/design/", allow-invalid = true },
+    # Package M: the escapes and helpers of `design::outcome`. A named escape stays where a
+    # reviewer agreed to it: one suppression on the innermost function, one row in
+    # `design::results::STAGED_ALLOWS` (`Ban::Words`, `Ban::Order`, `Ban::Body`).
+    { path = "splat::design::outcome::Sentence::outside", reason = "write the words with `sentence!`; words from outside the app (disk, the system, the DM) are a named escape: `Ban::Words`" },
+    { path = "splat::design::outcome::Sentence::__formatted", reason = "make sentences with `sentence!`" },
+    { path = "splat::design::outcome::Sentence::__literal", reason = "make sentences with `sentence!`" },
+    { path = "splat::design::outcome::check_template", reason = "make sentences with `sentence!`" },
+    { path = "splat::design::outcome::check_literal", reason = "make sentences with `sentence!`" },
+    { path = "splat::design::components::Footer::outcome_at", reason = "record the result in a `design::Results` store and use `Footer::kept_outcome`; a hand-issued order is staged: `Ban::Order`" },
+    { path = "splat::design::outcome::banner", reason = "put the notice in the pane's `Footer`; a body place is a review decision: `Ban::Body`" },
+    { path = "splat::design::outcome::row_fault", reason = "put the fault in the pane's `Footer`; a body place is a review decision: `Ban::Body`" },
+    { path = "splat::design::outcome::PagePlaceholder::show", reason = "a page placeholder is a review decision: `Ban::Body`" },
+    # Package P: the pane places its footer (`Footer::pane`). A footer placed by hand is staged out,
+    # and a body that manages its own room is the one named escape; each function that still calls
+    # one has its row in `design::results::STAGED_ALLOWS` with the number of calls it holds
+    # (`Ban::Pane(n)`). Content placed by the room's height moves when a message comes: the app's
+    # empty state is a part that keeps its top.
+    { path = "splat::design::components::Footer::show_by_hand", reason = "give the body to Footer::pane, which places the footer: `Ban::Pane`" },
+    { path = "splat::design::pane::Fills::because", reason = "use Body::Content: the pane is the scroll column; a body that manages its own room is a review decision: `Ban::Pane`" },
+    { path = "egui::Ui::centered_and_justified", reason = "keep content at the body's top; use design::empty_state for an empty state", allow-invalid = true },
+    { path = "egui::Ui::vertical_centered_justified", reason = "keep content at the body's top; use design::empty_state for an empty state", allow-invalid = true },
 ]

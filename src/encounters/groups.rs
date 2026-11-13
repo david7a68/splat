@@ -1,5 +1,6 @@
 //! Encounter groups: their notes, their editor, and the overrides form they share with the
 //! roster. A group is prepared here and added to a run from the run's own panel.
+#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use super::{
     ADD_PANE_MAX_WIDTH, Creature, Draft, EditorPane, Encounters, NAME_FIELD, ROSTER_MAX_WIDTH,
     Snapshot,
