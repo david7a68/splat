@@ -339,15 +339,19 @@ impl Run {
                             <= slot - width_of("", drop_key) - design::XS
                     };
                     let mut shown = "Undo".to_owned();
+                    // iter-27-R SJ1: the key letter gives way before any word does: only the
+                    // whole label keeps it, and every shorter form is tried without it.
                     'fit: for (tier, measured) in [(&forms.target, true), (&forms.bare, false)] {
-                        for drop_key in [false, true] {
-                            if let Some(words) = tier.iter().find(|words| {
-                                width_of(words, drop_key) <= slot
+                        for (at, words) in tier.iter().enumerate() {
+                            let whole = measured && at == 0;
+                            for drop_key in [!whole, true] {
+                                if width_of(words, drop_key) <= slot
                                     && (!measured || target(words, drop_key))
-                            }) {
-                                shown.clone_from(words);
-                                keyless = drop_key;
-                                break 'fit;
+                                {
+                                    shown.clone_from(words);
+                                    keyless = drop_key;
+                                    break 'fit;
+                                }
                             }
                         }
                     }
