@@ -30,5 +30,5 @@ pub use layout::{
 };
 // Wave 2 callers name the pane's escape through `design`.
 #[allow(unused_imports)]
-pub use pane::{Body, FillsReason, Placement};
+pub use pane::{Body, Fills, FillsReason, Placement};
 pub use tokens::*;

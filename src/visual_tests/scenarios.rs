@@ -3953,9 +3953,8 @@ pub mod party {
         const LOCAL_EDITS: &str = "so Splat stopped updating it.";
         party_body_takes_presses(d, "iter-27-C-press-local-edits", LOCAL_EDITS);
         // Round 27 review: typing in a field outside the footer reaches that field, and the
-        // footer keeps its words. Round 28 (package P): the footer follows the content, so on
-        // another sheet page it may stand elsewhere; the part placed it (`S` below the content,
-        // or pinned). Proof steps: the page goes back after.
+        // footer keeps its words, and no footer stands far below a short body (G6, from the
+        // accessibility tree). Proof steps: the page goes back after.
         let footer_before = footer_with(d, LOCAL_EDITS);
         let typed = d.aside(|d| {
             d.click_containing(SECOND_MEMBER);
@@ -3968,8 +3967,7 @@ pub mod party {
                 d.type_into("Filter this page", "fire");
             }
             let text = d.field_text("Filter this page");
-            let footer = footer_with(d, LOCAL_EDITS)
-                .filter(|_| d.footer_placed("party_page_footer") == Some(true));
+            let footer = footer_with(d, LOCAL_EDITS).filter(|_| d.short_body_gaps().is_empty());
             if shown {
                 d.clear_text_in("Filter this page");
             }
@@ -3981,9 +3979,30 @@ pub mod party {
             "iter-27-C-press-outside-field",
             typed.0.as_deref() == Some("fire") && footer_before.is_some() && typed.1.is_some(),
             format!(
-                "The filter field holds {:?}; the footer {footer_before:?} → {:?}, placed by the pane",
+                "The filter field holds {:?}; the footer {footer_before:?} → {:?}, and no footer far below a short body",
                 typed.0, typed.1
             ),
+        );
+        // Round 28 (package P): an empty party whose read failed is short content, and its
+        // footer stands `S` below the empty state. G6 from the accessibility tree; the record
+        // says the content fits, so the check can fail. Proof steps: the party comes back after.
+        const READ_FAILED: &str = "D&D Beyond did not answer. Refresh to try again.";
+        let kept = d
+            .app_mut()
+            .party
+            .swap_members_and_error(Vec::new(), Some(READ_FAILED.into()));
+        d.settle();
+        let short = d
+            .pane_records()
+            .iter()
+            .any(|record| record.footer().is_some() && record.fits());
+        let gaps = d.short_body_gaps();
+        d.app_mut().party.swap_members_and_error(kept.0, kept.1);
+        d.settle();
+        d.observe(
+            "iter-28-P-short-party-page",
+            short && gaps.is_empty() && d.has_containing(LOCAL_EDITS),
+            format!("A short party page with a footer: fits {short}, G6 findings {gaps:?}"),
         );
         let title_before = party_sheet_title(d, footer_with(d, LOCAL_EDITS));
         d.click(FORCE_READ);

@@ -399,9 +399,11 @@ pub struct Reader {
     pub error: Option<String>,
     pub warnings: BTreeMap<Stored, String>,
     /// Characters whose campaign notes have local edits, each with the note that stopped its save.
-    pub conflicts: BTreeMap<String, PathBuf>,
-    /// Archives that hold edits a force read replaced. They stay listed until dismissed.
-    pub archived: Vec<PathBuf>,
+    /// Shared, so the page's footer holds them each frame with no copy.
+    pub conflicts: BTreeMap<String, std::sync::Arc<std::path::Path>>,
+    /// Archives that hold edits a force read replaced. They stay listed until dismissed. Shared,
+    /// so the page's footer holds them each frame with no copy.
+    pub archived: Vec<std::sync::Arc<std::path::Path>>,
     pub archived_owners: BTreeMap<PathBuf, String>,
     /// When each archive was made: its result's place in the footer.
     pub archived_orders: BTreeMap<PathBuf, crate::design::ResultOrder>,
@@ -933,11 +935,12 @@ impl Reader {
                     self.archived_orders
                         .insert(path.clone(), crate::design::ResultOrder::issue());
                 }
-                self.archived.extend(archived);
+                self.archived
+                    .extend(archived.into_iter().map(std::sync::Arc::from));
                 self.stored(what, Ok(()));
             }
             Err(CampaignCopyError::Conflict(path)) => {
-                self.conflicts.insert(id, path);
+                self.conflicts.insert(id, std::sync::Arc::from(path));
                 self.stored(what, Ok(()));
             }
             Err(CampaignCopyError::Failed(message)) => self.stored(what, Err(message)),
@@ -1160,10 +1163,10 @@ mod tests {
         let mut reader = Reader::default();
         reader
             .conflicts
-            .insert("12".into(), "/campaign/12.md".into());
+            .insert("12".into(), std::path::Path::new("/campaign/12.md").into());
         reader
             .conflicts
-            .insert("13".into(), "/campaign/13.md".into());
+            .insert("13".into(), std::path::Path::new("/campaign/13.md").into());
         reader.force_read_character("12");
         reader.force_read_character("missing");
         assert_eq!(
@@ -1198,7 +1201,7 @@ mod tests {
         reader.campaign_copy_saved("12".into(), Ok(vec![path.clone()]));
         reader.campaign_copy_saved("13".into(), Ok(Vec::new()));
         assert!(reader.conflicts.is_empty());
-        assert_eq!(reader.archived, [path]);
+        assert_eq!(reader.archived, [std::sync::Arc::from(path)]);
         assert_eq!(
             reader.warnings.keys().collect::<Vec<_>>(),
             [&Stored::Roster]

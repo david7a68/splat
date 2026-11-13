@@ -130,6 +130,20 @@ impl Party {
 
     /// A read of the selected sheet, in D&D Beyond's own fields. Test builds have no route
     /// to a live one, so a visual test shows the sync panel's editable values this way.
+    /// For visual tests: swap in a party's members and its read error, and get the old ones back
+    /// (an empty party whose read failed, then the party as it was).
+    #[cfg(test)]
+    pub fn swap_members_and_error(
+        &mut self,
+        members: Vec<crate::party_sync::Member>,
+        error: Option<String>,
+    ) -> (Vec<crate::party_sync::Member>, Option<String>) {
+        (
+            std::mem::replace(&mut self.reader.members, members),
+            std::mem::replace(&mut self.reader.error, error),
+        )
+    }
+
     #[cfg(test)]
     pub fn simulate_sheet_read(&mut self, max_hp: i64, sheet: &Value) {
         let id = self
@@ -297,6 +311,7 @@ impl Party {
         self.reader.select(id);
     }
 
+    #[allow(clippy::disallowed_methods)]
     pub fn show(&mut self, ui: &mut egui::Ui, session: Option<Session>, linked: bool) {
         let c = colors();
         let fetched = self
@@ -379,7 +394,15 @@ impl Party {
         // member row and no sheet. Round 28: the pane places it, `S` below the content or pinned.
         let presses = PagePresses::default();
         let footer = self.page_footer(&presses, session.is_some(), linked);
-        footer.pane(ui, design::Body::Content, |ui| {
+        // The list and the sheet are columns that each scroll; the footer is pinned below them.
+        // An empty state is short content, and the footer follows it.
+        let columns = linked && !self.reader.members.is_empty();
+        let body = if columns {
+            design::Body::Fills(design::Fills::because(design::FillsReason::Columns))
+        } else {
+            design::Body::Content
+        };
+        footer.pane(ui, body, |ui| {
             self.page_body(ui, session, linked);
         });
         self.page_pressed(presses);
@@ -574,7 +597,7 @@ impl Party {
             for path in &reader.archived {
                 let name = reader
                     .archived_owners
-                    .get(path)
+                    .get(&**path)
                     .map(|id| reader.member_name(id))
                     .unwrap_or("This character");
                 let words =
@@ -582,10 +605,11 @@ impl Party {
                 let dismiss = &presses.dismiss_archived;
                 let order = reader
                     .archived_orders
-                    .get(path)
+                    .get(&**path)
                     .copied()
                     .unwrap_or_default();
-                let path = path.clone();
+                // A shared path: no copy each frame.
+                let path = std::sync::Arc::clone(path);
                 footer.result(order, words.clone(), false, move |ui| {
                     if dismissable(ui, |ui| {
                         storage_notice(ui, Tone::Success, &words, &["Show file"], |ui| {
@@ -616,7 +640,9 @@ impl Party {
                     "Replace with D&D Beyond sheet"
                 };
                 let (settings, replace) = (&presses.wants_settings, &presses.replace);
-                let (id, path) = (id.clone(), path.clone());
+                // The notice's place among the conflicts: its id is looked up at the press.
+                let at = reader.conflicts.keys().position(|key| key == id);
+                let path = std::sync::Arc::clone(path);
                 footer.notice(words.clone(), move |ui| {
                     storage_notice(ui, Tone::Warning, &words, &[action, "Show file"], |ui| {
                         if !connected {
@@ -637,7 +663,7 @@ impl Party {
                             .show(ui)
                             .clicked()
                         {
-                            replace.set(Some(several.then(|| id.clone())));
+                            replace.set(Some(at.filter(|_| several)));
                         }
                         show_file(ui, &path);
                     });
@@ -677,7 +703,11 @@ impl Party {
         self.wants_settings |= presses.wants_settings.get();
         match presses.replace.take() {
             Some(None) => self.reader.force_read(),
-            Some(Some(id)) => self.reader.force_read_character(&id),
+            Some(Some(at)) => {
+                if let Some(id) = self.reader.conflicts.keys().nth(at).cloned() {
+                    self.reader.force_read_character(&id);
+                }
+            }
             None => {}
         }
     }
@@ -786,27 +816,30 @@ impl Party {
             });
         }
         // Round 26: the sync panel's result sits in the sheet's footer, below the sheet, so what
-        // is above stays. It ends at its close icon.
+        // is above stays. It ends at its close icon. Round 28: the sheet's pane is its scroll
+        // column, one per page, so each page keeps its own scroll.
         let dismissed = std::cell::Cell::new(false);
-        let mut footer = design::Footer::new(("party_sheet_footer", id), design::LIST_MEASURE);
-        if session.is_some() {
-            self.combat.footer_messages(&mut footer, &dismissed);
-        }
+        let sheet_footer = |page: Option<usize>, combat: &crate::combat_sync::CombatSync| {
+            let mut footer =
+                design::Footer::new(("party_sheet_footer", id, page), design::LIST_MEASURE);
+            if session.is_some() {
+                combat.footer_messages(&mut footer, &dismissed);
+            }
+            footer
+        };
         let Some(record) = newer(self.combat.record(), self.reader.sheets.get(id)) else {
-            footer.pane(ui, design::Body::Content, |ui| {
-                // The panel scrolls above the footer when it needs more room.
-                design::ScrollColumn::new(("party_sheet_no_copy", id)).show(ui, |ui| {
-                    if session.is_some() && self.sync_heading(ui) {
-                        self.sync_panel(ui);
-                    }
-                    if !self.reader.loading() {
-                        ui.label(
-                            Type::Body
-                                .rich(ui, "No local copy is available for this character.")
-                                .color(c.muted),
-                        );
-                    }
-                });
+            // The panel scrolls above the footer when it needs more room.
+            sheet_footer(None, &self.combat).pane(ui, design::Body::Content, |ui| {
+                if session.is_some() && self.sync_heading(ui) {
+                    self.sync_panel(ui);
+                }
+                if !self.reader.loading() {
+                    ui.label(
+                        Type::Body
+                            .rich(ui, "No local copy is available for this character.")
+                            .color(c.muted),
+                    );
+                }
             });
             if dismissed.get() {
                 self.combat.end_action_notice();
@@ -852,8 +885,8 @@ impl Party {
             self.content_entry = Some((record.source.content_hash.clone(), entry));
         }
         // The sheet pane starts below the tabs.
-        footer.pane(ui, design::Body::Content, |ui| {
-            design::ScrollColumn::new((id, self.page)).show(ui, |ui| {
+        sheet_footer(Some(self.page), &self.combat).pane(ui, design::Body::Content, |ui| {
+            {
                 // The heading and its body are one block, below the tabs: the tabs never sit
                 // between them. Both scroll with the sheet, as one scroll is easier at the table
                 // than a scroll inside a scroll.
@@ -888,7 +921,7 @@ impl Party {
                         );
                     });
                 }
-            });
+            }
         });
         if dismissed.get() {
             self.combat.end_action_notice();
@@ -903,7 +936,8 @@ struct PagePresses {
     dismiss_archived: std::cell::Cell<bool>,
     wants_settings: std::cell::Cell<bool>,
     /// The local-edit notice whose Replace the DM pressed: `None` inside replaces every one.
-    replace: std::cell::Cell<Option<Option<String>>>,
+    /// The notice's place among the conflicts, so no id is copied each frame.
+    replace: std::cell::Cell<Option<Option<usize>>>,
 }
 
 /// Keep each storage message and its actions together at the list measure.

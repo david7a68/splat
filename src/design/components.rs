@@ -5399,38 +5399,41 @@ mod tests {
                                 message(ui, Tone::Error, REASON);
                             });
                         }
-                        let body = |ui: &mut Ui, bottom: f32| {
-                            // The pane's own press area, as a pane that ends a selection on a
-                            // press has: it holds the whole pane, so it lies under a following
-                            // footer.
+                        // The pane's own press area, as a pane that ends a selection on a press
+                        // has: it holds the whole pane, so it lies under a following footer.
+                        let background = |ui: &mut Ui| {
                             if ui
                                 .interact(whole, Id::new("pane_background"), Sense::click())
                                 .clicked()
                             {
                                 background_in.set(background_in.get() + 1);
                             }
+                        };
+                        let lines = |ui: &mut Ui| {
+                            for line in 0..lines_in.get() {
+                                if ui.button(format!("Editor line {line}")).clicked() {
+                                    line_in.set(Some(line));
+                                }
+                            }
+                        };
+                        if by_hand {
+                            let bottom = footer.show_by_hand(ui);
+                            background(ui);
                             // The editor leaves room for its save row above `bottom`, as World's
                             // does.
                             let row = Type::Body.line() + ui.spacing().item_spacing.y;
                             super::super::layout::ScrollColumn::new("follow_body")
                                 .fit_height()
                                 .max_height((bottom - ui.cursor().top() - row).max(0.0))
-                                .show(ui, |ui| {
-                                    for line in 0..lines_in.get() {
-                                        if ui.button(format!("Editor line {line}")).clicked() {
-                                            line_in.set(Some(line));
-                                        }
-                                    }
-                                });
+                                .show(ui, lines);
                             ui.label(SAVE_ROW);
-                        };
-                        if by_hand {
-                            let bottom = footer.show_by_hand(ui);
-                            body(ui, bottom);
                         } else {
-                            // The part's `Ui` ends at the body's room.
+                            // The pane is the scroll column: the lines, then the save row as its
+                            // last line.
                             footer.pane(ui, super::super::pane::Body::Content, |ui| {
-                                body(ui, ui.max_rect().bottom());
+                                background(ui);
+                                lines(ui);
+                                ui.label(SAVE_ROW);
                             });
                         }
                     });
@@ -5473,15 +5476,22 @@ mod tests {
             };
             // The last body action whole in the editor's view (which ends at the save row, `S` or
             // more above the footer): its index and its centre.
+            // Where the editor's view ends: by hand, at its save row; in the pane, `S` above the
+            // footer (the save row is the column's last line).
             let last_line = |harness: &egui_kittest::Harness<'_>, at: Rect| {
-                let save = place(harness, SAVE_ROW)?;
-                assert!(
-                    save.bottom() <= at.top() - S + 0.5,
-                    "the save row is above the footer"
-                );
+                let end = if by_hand {
+                    let save = place(harness, SAVE_ROW)?;
+                    assert!(
+                        save.bottom() <= at.top() - S + 0.5,
+                        "the save row is above the footer"
+                    );
+                    save.top()
+                } else {
+                    at.top() - S + 0.5
+                };
                 (0..lines.get()).rev().find_map(|line| {
                     place(harness, &format!("Editor line {line}"))
-                        .filter(|rect| rect.bottom() <= save.top())
+                        .filter(|rect| rect.bottom() <= end)
                         .map(|rect| (line, rect.center()))
                 })
             };
@@ -5563,15 +5573,13 @@ mod tests {
             harness.run_steps(3);
             let at = footer(&harness).expect("the footer shows");
             let save = place(&harness, SAVE_ROW).unwrap();
-            // By hand, the footer is pinned with its hairline. The pane cuts nothing here: the
-            // editor scrolls above its save row, which ends at the body's room, so the footer is
-            // `S` below that row, at the pane's bottom, with no hairline.
+            // Pinned with its hairline. By hand the save row stays above it; in the pane the save
+            // row is the column's last line, scrolled below the footer.
             assert!(
                 at.bottom() >= size.y - L
-                    && save.bottom() <= at.top() - S + 0.5
-                    && hairline(&harness, at) == by_hand
-                    && (by_hand || (at.top() - (save.bottom() + S)).abs() <= 1.0),
-                "{mode} at {size:?} with 60 lines the footer {at:?} is at the pane's bottom below the save row {save:?}, with its hairline only by hand ({by_hand})"
+                    && (!by_hand || save.bottom() <= at.top() - S + 0.5)
+                    && hairline(&harness, at),
+                "{mode} at {size:?} with 60 lines the footer {at:?} is pinned with its hairline (save row {save:?})"
             );
             assert_eq!(
                 text(&harness, "Editor line 0").map(|line| line.top()),
@@ -5751,34 +5759,33 @@ mod tests {
         }
     }
 
-    /// Round 28, package P: `Footer::pane` places its footer for every body shape of the round 28
-    /// investigation (`footer-escape.md`), each drawn in the pane's body below a title: a title
-    /// then a scroll column that shrinks; a scroll column that does not shrink, straight in the
-    /// body (class W); the same in a `Ui` that starts at the body's top (W); in a `Frame` and a
-    /// `push_id`; in a `Column` beside a `CentralPanel` (class P); in a full-room allocation
-    /// around it, as `gutter_scroll` makes (P); rows with no scroll area; a nested pane with a
-    /// footer of its own; and an editor that fills its room (`Body::Fills`). With 2 lines the
-    /// footer's top is the content's end plus `S` (±1 px), with no hairline, and the gate's
-    /// record says so; with 200 lines it is pinned at the pane's bottom, with its hairline only
-    /// where lines go on past the body's clip (not over a frame's margin or a nested pane's own
-    /// footer). A filling body pins the footer, also below 2 lines, with no hairline then.
+    /// Round 28, package P (repair of PR 305's review): `Footer::pane` places its footer for each
+    /// body shape, checked against rects the test reads itself (the accessibility tree, painted
+    /// words and their clip), never against the part's own placement. `Body::Content` is the
+    /// pane's scroll column: rows, rows in a scope, rows in a `Frame` with a margin, and two
+    /// `ui.columns` with a control as tall as the room. `Body::Fills`: a side `Column` with two
+    /// labels and an action (Astra 1a), a nested `Content` pane, and an editor as tall as the
+    /// room. With 2 rows a `Content` footer's top is `S` (±1) below the last body rect, with no
+    /// hairline, and G6 finds nothing; a body that takes all the room, or 200 rows, pins the
+    /// footer below the room: every painted body word ends `S` above it, the 200 rows draw the
+    /// hairline, and the body control next to the footer takes its press. The pane's record is
+    /// of the last completed pass only: present, absent (no record), present. A vertical
+    /// `ScrollColumn` inside a `Content` pane is refused.
     fn iter28_p_the_pane_places_its_footer_for_every_body() {
         use super::super::{
             layout::ScrollColumn,
-            pane::{Body, FillsReason, Placement, pane_records},
+            pane::{Body, Fills, FillsReason, pane_record, pane_records, short_body_gap},
         };
-        use egui_kittest::kittest::Queryable;
+        use std::{cell::Cell, rc::Rc};
         #[derive(Clone, Copy, Debug, PartialEq)]
         enum Shape {
-            Shrinking,
-            Straight,
+            Rows,
             InScope,
             InFrame,
-            Panels,
-            FullRoom,
-            NoScroll,
+            TallColumn,
+            SideColumn,
             Nested,
-            Fills,
+            Editor,
         }
         const REASON: &str = "Line 1 opens a list.";
         let rows = |ui: &mut Ui, count: usize| {
@@ -5786,19 +5793,49 @@ mod tests {
                 ui.label(format!("Line {line}"));
             }
         };
+        let click = |harness: &mut egui_kittest::Harness<'_>, pos: egui::Pos2| {
+            harness.event(egui::Event::PointerMoved(pos));
+            for pressed in [true, false] {
+                harness.event(egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: egui::Modifiers::NONE,
+                });
+                harness.run_steps(1);
+            }
+            harness.run_steps(2);
+        };
+        // Every accessible rect on screen, as the gate reads them: the whole tree.
+        let access = |harness: &egui_kittest::Harness<'_>| -> Vec<(String, Rect)> {
+            use egui_kittest::kittest::{NodeT, Queryable};
+            harness
+                .query_all(egui_kittest::kittest::By::new().predicate(|_| true))
+                .filter_map(|node| {
+                    let b = node.accesskit_node().bounding_box()?;
+                    Some((
+                        node.accesskit_node().label().unwrap_or_default(),
+                        Rect::from_min_max(
+                            pos2(b.x0 as f32, b.y0 as f32),
+                            pos2(b.x1 as f32, b.y1 as f32),
+                        ),
+                    ))
+                })
+                .collect()
+        };
         for size in [vec2(960.0, 640.0), vec2(1920.0, 1080.0)] {
             for shape in [
-                Shape::Shrinking,
-                Shape::Straight,
+                Shape::Rows,
                 Shape::InScope,
                 Shape::InFrame,
-                Shape::Panels,
-                Shape::FullRoom,
-                Shape::NoScroll,
+                Shape::TallColumn,
+                Shape::SideColumn,
                 Shape::Nested,
-                Shape::Fills,
+                Shape::Editor,
             ] {
                 for count in [2, 200] {
+                    let pressed = Rc::new(Cell::new(None::<&'static str>));
+                    let pressed_in = pressed.clone();
                     let mut harness =
                         egui_kittest::Harness::builder()
                             .with_size(size)
@@ -5809,39 +5846,55 @@ mod tests {
                                     message(ui, Tone::Error, REASON);
                                 });
                                 let body = match shape {
-                                    Shape::Fills => Body::Fills(FillsReason::NoteEditor),
+                                    Shape::SideColumn | Shape::Nested => {
+                                        Body::Fills(Fills::because(FillsReason::Columns))
+                                    }
+                                    Shape::Editor => {
+                                        Body::Fills(Fills::because(FillsReason::NoteEditor))
+                                    }
                                     _ => Body::Content,
                                 };
-                                footer.pane(ui, body, |ui| match shape {
-                                    Shape::Shrinking => {
-                                        ui.label("Body title");
-                                        ScrollColumn::new("shape_rows")
-                                            .fit_height()
-                                            .show(ui, |ui| rows(ui, count));
+                                let press = |ui: &mut Ui, name: &'static str| {
+                                    if ui.button(name).clicked() {
+                                        pressed_in.set(Some(name));
                                     }
-                                    Shape::Straight => {
-                                        ScrollColumn::new("shape_rows")
-                                            .show(ui, |ui| rows(ui, count));
+                                };
+                                footer.pane(ui, body, |ui| match shape {
+                                    Shape::Rows => {
+                                        rows(ui, count);
+                                        press(ui, "Last action");
                                     }
                                     Shape::InScope => {
                                         let rect = ui.available_rect_before_wrap();
                                         ui.scope_builder(
                                             egui::UiBuilder::new().max_rect(rect),
                                             |ui| {
-                                                ScrollColumn::new("shape_rows")
-                                                    .show(ui, |ui| rows(ui, count));
+                                                rows(ui, count);
+                                                press(ui, "Last action");
                                             },
                                         );
                                     }
                                     Shape::InFrame => {
                                         egui::Frame::new().inner_margin(4).show(ui, |ui| {
                                             ui.push_id("inner", |ui| {
-                                                ScrollColumn::new("shape_rows")
-                                                    .show(ui, |ui| rows(ui, count));
+                                                rows(ui, count);
+                                                press(ui, "Last action");
                                             });
                                         });
                                     }
-                                    Shape::Panels => {
+                                    Shape::TallColumn => {
+                                        ui.columns(2, |columns| {
+                                            rows(&mut columns[0], count);
+                                            let room = columns[1].available_size();
+                                            if columns[1]
+                                                .add_sized(room, egui::Button::new("Tall action"))
+                                                .clicked()
+                                            {
+                                                pressed_in.set(Some("Tall action"));
+                                            }
+                                        });
+                                    }
+                                    Shape::SideColumn => {
                                         super::super::Column::left(
                                             "shape_left",
                                             200.0,
@@ -5850,15 +5903,12 @@ mod tests {
                                         .show_inside(
                                             ui,
                                             |ui| {
-                                                ScrollColumn::new("shape_left_rows").show(
-                                                    ui,
-                                                    |ui| {
-                                                        ui.label("Left row");
-                                                    },
-                                                );
+                                                ui.label("Left row 0");
+                                                ui.label("Left row 1");
+                                                press(ui, "Left action");
                                             },
                                         );
-                                        // No margin, as Party's sheet: `InFrame` proves a margin.
+                                        // A column of its own may scroll inside a `Fills` body.
                                         egui::CentralPanel::default()
                                             .frame(egui::Frame::new())
                                             .show_inside(ui, |ui| {
@@ -5866,15 +5916,6 @@ mod tests {
                                                     .show(ui, |ui| rows(ui, count));
                                             });
                                     }
-                                    Shape::FullRoom => {
-                                        let room = ui.available_rect_before_wrap();
-                                        let mut child =
-                                            ui.new_child(egui::UiBuilder::new().max_rect(room));
-                                        ScrollColumn::new("shape_rows")
-                                            .show(&mut child, |ui| rows(ui, count));
-                                        ui.allocate_rect(room, Sense::hover());
-                                    }
-                                    Shape::NoScroll => rows(ui, count),
                                     Shape::Nested => {
                                         let mut inner =
                                             Footer::new("inner_footer", ui.available_width());
@@ -5882,21 +5923,19 @@ mod tests {
                                             message(ui, Tone::Warning, "Inner reason.");
                                         });
                                         inner.pane(ui, Body::Content, |ui| {
-                                            ScrollColumn::new("shape_rows")
-                                                .show(ui, |ui| rows(ui, count));
+                                            rows(ui, count);
+                                            press(ui, "Last action");
                                         });
                                     }
-                                    Shape::Fills => {
+                                    Shape::Editor => {
                                         let mut text = (0..count)
                                             .map(|line| format!("Line {line}"))
                                             .collect::<Vec<_>>()
                                             .join("\n");
-                                        // An editor as tall as its lines: the footer is pinned
-                                        // all the same, and cuts only lines past its room.
-                                        ui.add(
+                                        ui.add_sized(
+                                            ui.available_size(),
                                             egui::TextEdit::multiline(&mut text)
-                                                .id(Id::new("editor"))
-                                                .desired_rows(1),
+                                                .id(Id::new("editor")),
                                         );
                                     }
                                 });
@@ -5915,56 +5954,165 @@ mod tests {
                                 && (points[0].y - footer.top()).abs() <= 1.0
                                 && (points[0].x - footer.left()).abs() <= 1.0)
                     });
-                    let record = pane_records(&harness.ctx)
-                        .into_iter()
-                        .find(|record| record.id() == Id::new("shape_footer"))
+                    let record = pane_record(&harness.ctx, Id::new("shape_footer"))
                         .unwrap_or_else(|| panic!("{case}: the pane keeps its record"));
-                    let pinned = (footer.bottom() - record.room().bottom()).abs() <= 1.0;
-                    if shape == Shape::Fills || count == 200 {
-                        // Cut content: lines that go on past the body's clip. A frame's margin under its
-                        // column, or a nested pane's own footer, is not cut.
-                        let cuts = count == 200 && !matches!(shape, Shape::InFrame | Shape::Nested);
-                        assert!(
-                            pinned
-                                && record.placement() == Placement::Pinned
-                                && hairline == cuts
-                                && record.cut() == cuts,
-                            "{case}: the footer {footer:?} is pinned at the pane's bottom ({:?}), with its hairline only over cut content ({hairline}, cut {}, expected {cuts})",
-                            record.placement(),
-                            record.cut()
-                        );
-                        continue;
-                    }
-                    // The content's end: the last line (and the frame's 4 px margin under it), or
-                    // the nested pane's footer.
-                    let margin = if shape == Shape::InFrame { 4.0 } else { 0.0 };
-                    let end = margin
-                        + if shape == Shape::Nested {
-                            harness
-                                .ctx
-                                .read_response(Id::new("inner_footer").with("focus"))
-                                .map(|response| response.rect.bottom())
-                        } else {
-                            harness
-                                .query_by_label("Line 1")
-                                .map(|node| node.rect().bottom())
+                    let room = record.room();
+                    let nodes = access(&harness);
+                    // The body's accessible rects: below the title, above the footer, not the
+                    // footer's own and not the nested pane's footer.
+                    let inner_footer = harness
+                        .ctx
+                        .read_response(Id::new("inner_footer").with("focus"))
+                        .map(|response| response.rect);
+                    let body: Vec<(String, Rect)> = nodes
+                        .iter()
+                        .filter(|(_, rect)| {
+                            rect.is_positive()
+                                && rect.top() >= room.top() - 0.5
+                                && rect.bottom() <= footer.top() + 0.5
+                                && rect.bottom() < room.bottom()
+                        })
+                        .cloned()
+                        .collect();
+                    let end = body
+                        .iter()
+                        .map(|(_, rect)| rect.bottom())
+                        .chain(inner_footer.map(|rect| rect.bottom()))
+                        .fold(room.top(), f32::max);
+                    // Every painted body word, as clipped, ends `S` above the footer: it never
+                    // lies under it.
+                    for shape in &harness.output().shapes {
+                        if let egui::Shape::Text(text) = &shape.shape {
+                            let rect = Rect::from_min_size(text.pos, text.galley.size())
+                                .intersect(shape.clip_rect);
+                            if rect.is_positive()
+                                && rect.top() >= room.top()
+                                && !footer.intersects(rect)
+                                && inner_footer.is_none_or(|inner| !inner.intersects(rect))
+                            {
+                                assert!(
+                                    rect.bottom() <= footer.top() - S + 0.5,
+                                    "{case}: {:?} at {rect:?} ends `S` above the footer {footer:?}",
+                                    text.galley.job.text
+                                );
+                            }
                         }
-                        .unwrap_or_else(|| panic!("{case}: the content shows"));
-                    assert!(
-                        (footer.top() - (end + S)).abs() <= 1.0
-                            && !hairline
-                            && !pinned
-                            && !record.cut()
-                            && (record.content_end() - end).abs() <= 1.0
-                            && record.placement() == Placement::Follows
-                            && record.footer_top() == Some(footer.top()),
-                        "{case}: the footer {footer:?} is `S` below the content's end {end}, with no hairline ({hairline}); the record says end {} and footer {:?}",
-                        record.content_end(),
-                        record.footer()
-                    );
+                    }
+                    let follows = count == 2
+                        && matches!(shape, Shape::Rows | Shape::InScope | Shape::InFrame);
+                    if follows {
+                        // The frame's 4 px margin is under its last rect.
+                        let margin = if shape == Shape::InFrame { 4.0 } else { 0.0 };
+                        assert!(
+                            (footer.top() - (end + margin + S)).abs() <= 1.0
+                                && !hairline
+                                && short_body_gap(
+                                    &record,
+                                    1.0,
+                                    footer,
+                                    body.iter().map(|(_, rect)| *rect)
+                                )
+                                .is_none(),
+                            "{case}: the footer {footer:?} is `S` below the last body rect {end} (and the frame's margin {margin}), with no hairline ({hairline})"
+                        );
+                    } else {
+                        let cut = count == 200
+                            && matches!(
+                                shape,
+                                Shape::Rows | Shape::InScope | Shape::InFrame | Shape::TallColumn
+                            );
+                        assert!(
+                            (footer.bottom() - room.bottom()).abs() <= 1.0 && hairline == cut,
+                            "{case}: the footer {footer:?} is pinned at the pane's bottom {}, with its hairline only over cut rows ({hairline}, expected {cut})",
+                            room.bottom()
+                        );
+                    }
+                    // The body control next to the footer takes its press.
+                    let target = match shape {
+                        Shape::TallColumn => Some("Tall action"),
+                        Shape::SideColumn => Some("Left action"),
+                        Shape::Editor => None,
+                        _ if count == 2 => Some("Last action"),
+                        _ => None,
+                    };
+                    if let Some(name) = target {
+                        let rect = nodes
+                            .iter()
+                            .find(|(label, _)| label == name)
+                            .map(|(_, rect)| *rect)
+                            .unwrap_or_else(|| panic!("{case}: {name} shows"));
+                        assert!(
+                            rect.bottom() <= footer.top() - S + 0.5,
+                            "{case}: {name} {rect:?} ends `S` above the footer {footer:?}"
+                        );
+                        click(&mut harness, pos2(rect.center().x, rect.bottom() - 2.0));
+                        assert_eq!(
+                            pressed.get(),
+                            Some(name),
+                            "{case}: {name}, next to the footer, takes its press"
+                        );
+                    }
                 }
             }
         }
+        // The record is of the last completed pass: present, absent, present.
+        let present = Rc::new(Cell::new(true));
+        let present_in = present.clone();
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(vec2(960.0, 640.0))
+            .build_ui(move |ui| {
+                if present_in.get() {
+                    let mut footer = Footer::new("toggled_footer", ui.available_width());
+                    footer.reason(REASON, |ui| {
+                        message(ui, Tone::Error, REASON);
+                    });
+                    footer.pane(ui, Body::Content, |ui| ui.label("A row"));
+                }
+            });
+        let id = Id::new("toggled_footer");
+        for shown in [true, false, true] {
+            present.set(shown);
+            harness.run_steps(3);
+            let record = pane_record(&harness.ctx, id);
+            assert_eq!(
+                (record.is_some(), pane_records(&harness.ctx).is_empty()),
+                (shown, !shown),
+                "the pane's record is there exactly while the pane is ({shown})"
+            );
+            assert!(
+                !shown || record.is_some_and(|record| record.footer().is_some()),
+                "a present pane's record holds its footer"
+            );
+        }
+        // A vertical scroll column inside a `Content` pane is refused.
+        let refused = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(vec2(960.0, 640.0))
+                .build_ui(|ui| {
+                    Footer::new("refusing_footer", ui.available_width()).pane(
+                        ui,
+                        Body::Content,
+                        |ui| {
+                            ScrollColumn::new("inside").show(ui, |ui| ui.label("A row"));
+                        },
+                    );
+                });
+            harness.run_steps(1);
+        }));
+        let message = refused
+            .err()
+            .and_then(|panic| {
+                panic.downcast_ref::<String>().cloned().or_else(|| {
+                    panic
+                        .downcast_ref::<&str>()
+                        .map(|words| (*words).to_owned())
+                })
+            })
+            .unwrap_or_default();
+        assert!(
+            message.contains("inside a `Body::Content` pane"),
+            "a ScrollColumn inside a Content pane panics with the rule: {message:?}"
+        );
     }
 
     #[test]

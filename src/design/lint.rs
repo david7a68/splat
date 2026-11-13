@@ -9,7 +9,8 @@
 //!
 //! Staged calls are counted one by one, also inside a function whose allow already lets Clippy
 //! pass them: `Footer::show_by_hand` (`footer-by-hand`; use `Footer::pane`) and the pane's one
-//! escape, `Body::Fills` (`fills-escape`).
+//! escape, `Fills::because` (`fills-escape`). Clippy refuses both by name; these counts are a
+//! second net inside a function whose allow covers another raw call.
 use std::{collections::BTreeMap, fs, path::Path};
 
 const ALLOWLIST: &str = include_str!("lint_allowlist.txt");
@@ -294,7 +295,7 @@ fn staged_calls(line: &str) -> Vec<&'static str> {
     let mut found = Vec::new();
     for (pattern, rule) in [
         (".show_by_hand(", "footer-by-hand"),
-        ("Body::Fills(", "fills-escape"),
+        ("Fills::because(", "fills-escape"),
     ] {
         found.extend(std::iter::repeat_n(rule, code.matches(pattern).count()));
     }
@@ -372,7 +373,7 @@ fn raw_colours_and_sizes_stay_inside_the_design_system() {
             } else if key.ends_with("footer-by-hand") {
                 "Give the body to `Footer::pane`, which places the footer"
             } else if key.ends_with("fills-escape") {
-                "Use `Body::Content`: the footer follows the content. `Body::Fills` is only for an editor or the live roster that fills its room"
+                "Use `Body::Content`: the pane is the scroll column. `Fills::because` is only for a body that manages its own room"
             } else {
                 "Use design tokens"
             };
@@ -447,7 +448,7 @@ fn the_lint_finds_staged_calls() {
         ["footer-by-hand"]
     );
     assert_eq!(
-        staged_calls("footer.pane(ui, design::Body::Fills(FillsReason::NoteEditor), |ui| {"),
+        staged_calls("let body = Body::Fills(Fills::because(FillsReason::NoteEditor));"),
         ["fills-escape"]
     );
     assert!(staged_calls("// footer.show_by_hand(ui) in a comment").is_empty());

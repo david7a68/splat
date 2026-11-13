@@ -316,8 +316,8 @@ pub fn lane_width() -> f32 {
 /// content always ends one lane before the area's right edge, so nothing moves when the bar
 /// comes or goes. It sets the app's solid scroll style on its own `Ui`, so a caller's style
 /// (floating bars that take no width) cannot remove the lane. The caller has no lane to keep.
-/// Drawn in a pane's body (`Footer::pane`), it records its content's end there, so the pane's
-/// footer follows short content.
+/// A `Footer::pane` with `Body::Content` is one already: a vertical scroll column inside such a
+/// pane is refused (a panic in debug builds and tests).
 ///
 /// ```
 /// fn list(ui: &mut eframe::egui::Ui) {
@@ -408,18 +408,14 @@ impl ScrollColumn {
         ui: &mut Ui,
         add: impl FnOnce(&mut Ui, f32) -> ScrollAreaOutput<R>,
     ) -> ScrollAreaOutput<R> {
-        // Drawn in a pane's body (`Footer::pane`), the column records its content's end there, so
-        // the pane's footer follows short content.
-        let start = super::pane::column_start(ui);
-        let output = ui
-            .scope(|ui| {
-                ui.spacing_mut().scroll = theme::scroll_style();
-                let width = (ui.available_width() - lane_width()).max(0.0);
-                add(ui, width)
-            })
-            .inner;
-        super::pane::column_drawn(ui, start, &output);
-        output
+        // A `Body::Content` pane is a scroll column already: one inside it is refused.
+        super::pane::refuse_column_in_content(ui);
+        ui.scope(|ui| {
+            ui.spacing_mut().scroll = theme::scroll_style();
+            let width = (ui.available_width() - lane_width()).max(0.0);
+            add(ui, width)
+        })
+        .inner
     }
 
     pub fn show<R>(self, ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> ScrollAreaOutput<R> {

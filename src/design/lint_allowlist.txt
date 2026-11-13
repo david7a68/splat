@@ -24,6 +24,7 @@ src/lookup.rs disallowed-methods-allow 2
 src/loot_editor.rs disallowed-methods-allow 2
 src/markdown_source.rs disallowed-methods-allow 2
 src/markdown_view.rs disallowed-methods-allow 2
+src/party.rs disallowed-methods-allow 1
 src/party_bar.rs disallowed-methods-allow 2
 src/processing/settings.rs disallowed-methods-allow 4
 src/rolls.rs disallowed-methods-allow 4
@@ -59,3 +60,5 @@ src/timeline/page.rs footer-by-hand 1
 src/world.rs footer-by-hand 1
 src/world/page.rs footer-by-hand 1
 src/world/repair.rs footer-by-hand 1
+# The pane's one escape (`Fills::because`), counted per file, shrink only (round 28, package P).
+src/party.rs fills-escape 1

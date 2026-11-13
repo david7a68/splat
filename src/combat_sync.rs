@@ -3149,10 +3149,8 @@ mod tests {
                             crate::design::LIST_MEASURE,
                         );
                         sync.footer_messages(&mut footer, &dismissed);
-                        footer.pane(ui, crate::design::Body::Content, |ui| {
-                            crate::design::ScrollColumn::new("sync_test_sheet_body")
-                                .show(ui, |ui| sync.show(ui));
-                        });
+                        // The pane is the sheet's scroll column.
+                        footer.pane(ui, crate::design::Body::Content, |ui| sync.show(ui));
                         if dismissed.get() {
                             sync.end_action_notice();
                         }
@@ -3178,8 +3176,29 @@ mod tests {
                         .flatten()
                 })
             });
-            (top, notice)
+            // Round 28 (package P), G6 from the painted words: when the sheet's scroll output
+            // says it fits, its footer stands no more than `2 × L` below the last word.
+            let footer = ctx
+                .read_response(egui::Id::new("sync_test_sheet").with("focus"))
+                .map(|response| response.rect);
+            let record = crate::design::pane::pane_record(&ctx, egui::Id::new("sync_test_sheet"));
+            let words = out
+                .shapes
+                .iter()
+                .filter_map(|clipped| match &clipped.shape {
+                    egui::Shape::Text(text) => Some(
+                        egui::Rect::from_min_size(text.pos, text.galley.size())
+                            .intersect(clipped.clip_rect),
+                    ),
+                    _ => None,
+                });
+            let fits = record.is_some_and(|record| record.fits());
+            let gap = footer.zip(record).and_then(|(footer, record)| {
+                crate::design::pane::short_body_gap(&record, 1.0, footer, words)
+            });
+            (top, notice, fits, gap)
         };
+        let mut fitting = Vec::new();
         for size in [
             egui::vec2(960.0, 640.0),
             egui::vec2(1200.0, 800.0),
@@ -3187,6 +3206,7 @@ mod tests {
         ] {
             let mut tops = Vec::new();
             let mut shown = Vec::new();
+            let mut gaps = Vec::new();
             for notice in [
                 None,
                 Some(ActionNotice::Taken(TAKEN.into())),
@@ -3199,9 +3219,13 @@ mod tests {
                 sync.action_notice = notice.and_then(noticed);
                 // Two passes: the first lays out, the second reads the settled place.
                 field_top(&mut sync, size);
-                let (top, notice) = field_top(&mut sync, size);
+                let (top, notice, fits, gap) = field_top(&mut sync, size);
                 tops.push(top);
                 shown.push(notice.is_some() == expected);
+                if expected {
+                    fitting.push(fits);
+                    gaps.push(gap);
+                }
             }
             assert!(
                 tops[0].is_some() && tops.iter().all(|top| *top == tops[0]),
@@ -3212,7 +3236,15 @@ mod tests {
                 shown.iter().all(|shown| *shown),
                 "At {size:?}, the result is in view exactly while it lives: {shown:?}"
             );
+            assert!(
+                gaps.iter().all(Option::is_none),
+                "At {size:?}, the sheet's footer stands below a short sheet: gaps {gaps:?}"
+            );
         }
+        assert!(
+            fitting.iter().any(|fits| *fits),
+            "the sheet is short at one size at least, so the footer check above can fail: {fitting:?}"
+        );
         sync.action_notice = noticed(ActionNotice::Taken(TAKEN.into()));
         let before = sync.desired.clone();
         for form in [

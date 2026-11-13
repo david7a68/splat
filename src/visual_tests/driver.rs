@@ -1083,29 +1083,35 @@ impl<'a> Driver<'a> {
             .collect()
     }
 
-    /// What each `Footer::pane` measured and placed now (package P's registry, in points): the
-    /// footer's id, the content's end, the footer's top, and whether it follows the content or is
-    /// pinned. The check "a footer below a short body" (G6) reads it: a following footer's top is
-    /// at most `S + 1` below the content's end.
+    /// What each `Footer::pane` did in the last completed pass (package P's registry, in points):
+    /// its id, room, body kind, the scroll output of a `Content` body (viewport, content height,
+    /// offset), its footer's rect and its placement.
     pub fn pane_records(&self) -> Vec<crate::design::pane::PaneRecord> {
         crate::design::pane::pane_records(&self.harness.ctx)
     }
 
-    /// Whether the pane whose footer has `id` placed it as the part does: `S` (±1) below the
-    /// content's end while it follows, or pinned. `None` when no such pane holds a message.
-    pub fn footer_placed(&self, id: impl std::hash::Hash) -> Option<bool> {
-        let id = egui::Id::new(id);
-        let record = self
-            .pane_records()
-            .into_iter()
-            .find(|record| record.id() == id)?;
-        let top = record.footer_top()?;
-        Some(match record.placement() {
-            crate::design::Placement::Follows => {
-                (top - record.content_end() - crate::design::S).abs() <= 1.0
-            }
-            crate::design::Placement::Pinned => true,
-        })
+    /// G6, "a footer below a short body", from this driver's own accessibility rects: for each
+    /// pane that is not `Body::Fills` and whose scroll output says its content fits, a gap of
+    /// more than `2 × L` from the last body widget to its footer is a finding.
+    pub fn short_body_gaps(&self) -> Vec<String> {
+        let scale = self.harness.ctx.pixels_per_point();
+        let nodes = self.nodes();
+        self.pane_records()
+            .iter()
+            .filter_map(|record| {
+                let focus = accesskit::NodeId(record.id().with("focus").value());
+                let footer = nodes.iter().find(|node| node.id == focus)?.rect;
+                let body = nodes
+                    .iter()
+                    .filter(|node| node.id != focus)
+                    .map(|node| node.rect);
+                let gap = crate::design::pane::short_body_gap(record, scale, footer, body)?;
+                Some(format!(
+                    "{:?}: footer {footer:?}, {gap} px below the body",
+                    record.id()
+                ))
+            })
+            .collect()
     }
 
     /// Can a person see this text or control right now?
