@@ -668,6 +668,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::disallowed_methods)]
     fn a_failed_removal_keeps_disconnect_until_it_works() {
         let ctx = egui::Context::default();
         let (worker, commands, results) = Worker::test_channels();
@@ -697,7 +698,7 @@ mod tests {
                 |ui, settings: &mut Settings| {
                     let mut footer = design::Footer::new("settings_footer", 600.0);
                     settings.footer_messages(&mut footer);
-                    let _ = footer.show(ui);
+                    let _ = footer.show_by_hand(ui);
                     settings.show(ui);
                 },
                 std::mem::take(&mut settings),

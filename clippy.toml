@@ -40,4 +40,8 @@ disallowed-methods = [
     { path = "egui::Popup::from_toggle_button_response", reason = "use design::menu_popup", allow-invalid = true },
     { path = "egui::Ui::menu_button", reason = "use design::row_menu or design::menu_popup", allow-invalid = true },
     { path = "egui::Response::context_menu", reason = "use design::menu_popup", allow-invalid = true },
+    # A pane's footer: `Footer::pane` draws the body, measures where its content ends and places
+    # the footer, so the caller gets no y to size the body by hand (round 28, package P). The
+    # source lint also counts each call left (`footer-by-hand`), shrink only.
+    { path = "splat::design::components::Footer::show_by_hand", reason = "use Footer::pane, which places the footer below the body", allow-invalid = true },
 ]

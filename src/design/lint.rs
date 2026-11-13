@@ -5,7 +5,12 @@
 //! The same allowlist counts the functions that may still make a raw egui call that
 //! `clippy.toml` disallows (`#[allow(clippy::disallowed_methods)]`, rule
 //! `disallowed-methods-allow`). An allow for a whole module or for a Clippy group would let a
-//! new file or a new function through, so it is never allowed (`broad-clippy-allow`).
+//! new file or a new function through, so it is never allowed (`broad-clippy-allow`), nor one
+//! on an `impl` block or a `mod` item.
+//!
+//! Staged calls are counted one by one, also inside a function that holds an allow for another
+//! raw call: `Footer::show_by_hand` (`footer-by-hand`; use `Footer::pane`) and the pane's one
+//! escape, `Body::Fills` (`fills-escape`).
 use std::{collections::BTreeMap, fs, path::Path};
 
 const ALLOWLIST: &str = include_str!("lint_allowlist.txt");
@@ -141,6 +146,34 @@ fn clippy_allows(line: &str) -> Vec<&'static str> {
     found
 }
 
+/// The staged calls on one line of code, by the rule that counts them: each one counts, even in
+/// a function whose allow already lets Clippy pass it.
+fn staged_calls(line: &str) -> Vec<&'static str> {
+    let code = line.split("//").next().unwrap_or("");
+    let mut found = Vec::new();
+    for (pattern, rule) in [
+        (".show_by_hand(", "footer-by-hand"),
+        ("Body::Fills(", "fills-escape"),
+    ] {
+        found.extend(std::iter::repeat_n(rule, code.matches(pattern).count()));
+    }
+    found
+}
+
+/// Whether the item after an attribute on `lines[at]` is an `impl` block or a `mod`: an allow
+/// there covers many functions.
+fn allows_a_block(lines: &[&str], at: usize) -> bool {
+    lines[at + 1..]
+        .iter()
+        .map(|line| line.trim_start())
+        .find(|line| !line.starts_with("#[") && !line.starts_with("//") && !line.is_empty())
+        .is_some_and(|item| {
+            let item = item.strip_prefix("pub ").unwrap_or(item);
+            let item = item.strip_prefix("pub(crate) ").unwrap_or(item);
+            item.starts_with("impl") || item.starts_with("mod ")
+        })
+}
+
 fn scan(folder: &Path, counts: &mut BTreeMap<String, usize>) {
     for item in fs::read_dir(folder).expect("read source folder") {
         let path = item.expect("read source entry").path();
@@ -157,8 +190,14 @@ fn scan(folder: &Path, counts: &mut BTreeMap<String, usize>) {
             let root = concat!(env!("CARGO_MANIFEST_DIR"), "/");
             let key = relative.strip_prefix(root).unwrap_or(&relative);
             // Every allow counts, in tests too: a test's raw call is still a raw call.
-            for line in text.lines() {
-                for rule in clippy_allows(line) {
+            let lines: Vec<&str> = text.lines().collect();
+            for (at, line) in lines.iter().enumerate() {
+                let mut rules = clippy_allows(line);
+                if rules.contains(&"disallowed-methods-allow") && allows_a_block(&lines, at) {
+                    rules.push("broad-clippy-allow");
+                }
+                rules.extend(staged_calls(line));
+                for rule in rules {
                     *counts.entry(format!("{key} {rule}")).or_default() += 1;
                 }
             }
@@ -203,7 +242,11 @@ fn raw_colours_and_sizes_stay_inside_the_design_system() {
             } else if key.ends_with("disallowed-methods-allow") {
                 "Use the design part that clippy.toml names, not a raw egui call"
             } else if key.ends_with("broad-clippy-allow") {
-                "Allow `clippy::disallowed_methods` on one function, never on a module or a group"
+                "Allow `clippy::disallowed_methods` on one function, never on a module, an impl or a group"
+            } else if key.ends_with("footer-by-hand") {
+                "Give the body to `Footer::pane`, which places the footer"
+            } else if key.ends_with("fills-escape") {
+                "Use `Body::Content`: the footer follows the content. `Body::Fills` is only for an editor or the live roster that fills its room"
             } else {
                 "Use design tokens"
             };
@@ -269,6 +312,28 @@ fn each_field_id_name_is_used_once() {
         "One name per field id:\n{}",
         twice.join("\n")
     );
+}
+
+#[test]
+fn the_lint_finds_staged_calls_and_block_allows() {
+    assert_eq!(
+        staged_calls("        let bottom = footer.show_by_hand(ui);"),
+        ["footer-by-hand"]
+    );
+    assert_eq!(
+        staged_calls("footer.pane(ui, design::Body::Fills(FillsReason::NoteEditor), |ui| {"),
+        ["fills-escape"]
+    );
+    assert!(staged_calls("// footer.show_by_hand(ui) in a comment").is_empty());
+    assert!(staged_calls("footer.pane(ui, Body::Content, |ui| ui.label(\"x\"));").is_empty());
+    let block = ["#[allow(clippy::disallowed_methods)]", "impl Party {", "}"];
+    assert!(allows_a_block(&block, 0));
+    let function = [
+        "#[allow(clippy::disallowed_methods)]",
+        "/// Doc.",
+        "    fn body(ui: &mut Ui) {",
+    ];
+    assert!(!allows_a_block(&function, 0));
 }
 
 #[test]

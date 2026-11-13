@@ -947,6 +947,7 @@ impl CampaignContent {
     /// or refusal, then the page's errors), then the plain results and the package warnings.
     /// Each message keeps its owner and end event: a repair's messages name its file and end with
     /// that repair's state, as before.
+    #[allow(clippy::disallowed_methods)]
     fn page_footer(
         &mut self,
         ui: &mut egui::Ui,
@@ -1038,7 +1039,7 @@ impl CampaignContent {
                         .package_warnings(ui, campaigns, active, warnings.unavailable);
                 });
             }
-            footer.show(ui)
+            footer.show_by_hand(ui)
         };
         let this = me.into_inner();
         this.press_result(press.take());

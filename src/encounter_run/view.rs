@@ -832,6 +832,7 @@ impl Run {
     /// never moves when one comes or goes. It is drawn in a child of `ui` over `rect`, at its
     /// bottom, and the y where the body above it ends is returned. A stat-block error is one
     /// of them: its whole fault wraps there, with its repair place under its words.
+    #[allow(clippy::disallowed_methods)]
     fn message_footer(
         &mut self,
         ui: &mut egui::Ui,
@@ -988,7 +989,7 @@ impl Run {
                 }
             });
         }
-        let bottom = footer.show(&mut child);
+        let bottom = footer.show_by_hand(&mut child);
         let outcome = if save_new.get() {
             Some(self.save_as_new_run())
         } else if replace.get() {
@@ -2994,7 +2995,7 @@ impl Run {
                 design::small_message(ui, Tone::Warning, reason);
             });
         }
-        let body_bottom = footer.show(ui);
+        let body_bottom = footer.show_by_hand(ui);
         // FJ1: the list keeps the scroll bar's lane whether or not the bar shows, as the
         // Encounters list does, so a list that grows long moves no field and no Add.
         let lane = (ui.available_width() - ui.spacing().scroll.allocated_width()).max(0.0);
@@ -4324,7 +4325,7 @@ impl Run {
                 }
             });
         }
-        let body_bottom = footer.show(ui);
+        let body_bottom = footer.show_by_hand(ui);
         if let Some(at) = read.get() {
             self.lookup_request = Some(at);
         }

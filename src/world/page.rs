@@ -998,7 +998,7 @@ impl WorldPage {
                     design::message(ui, design::Tone::Error, &words);
                 });
             }
-            footer.show(ui)
+            footer.show_by_hand(ui)
         };
         egui::ScrollArea::vertical()
             .id_salt("world_creation")
@@ -1011,6 +1011,7 @@ impl WorldPage {
     /// action after the last field on that field's line, centred on it, then one kept line
     /// below, as tall as a control: quiet `Cancel` at its start, then the reason or the new
     /// file's path. Typing moves nothing.
+    #[allow(clippy::disallowed_methods)]
     fn creation_body(&mut self, ui: &mut egui::Ui, index: &ContentIndex, campaign: &Campaign) {
         let mut made = None;
         if let Some(kind) = self.new_kind {

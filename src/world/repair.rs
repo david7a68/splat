@@ -304,6 +304,7 @@ impl Repair {
     /// or Undo reload), then Save's reason. It sits at the bottom of the pane, as tall as what it
     /// holds, so the editor never moves and both messages show whole. Returns whether Undo is
     /// pressed, and the y where the body ends.
+    #[allow(clippy::disallowed_methods)]
     fn footer(&self, ui: &mut egui::Ui, problem: Option<&str>) -> (bool, f32) {
         let name = self.path.rsplit('/').next().unwrap_or(&self.path);
         let undo = if self.discarded.is_some() {
@@ -337,7 +338,7 @@ impl Repair {
                 design::message(ui, design::Tone::Error, reason);
             });
         }
-        let bottom = footer.show(ui);
+        let bottom = footer.show_by_hand(ui);
         (pressed.get(), bottom)
     }
 

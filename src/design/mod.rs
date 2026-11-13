@@ -8,6 +8,7 @@ mod comparison;
 pub mod components;
 pub mod icons;
 pub mod layout;
+pub mod pane;
 pub mod reader;
 pub mod theme;
 pub mod tokens;
@@ -26,4 +27,7 @@ pub use layout::{
     SlotType, TitleAction, TitleLine, TitlePlacement, TitleType, Word, labelled_field, lane_width,
     line_field, menu_popup, status_slot, title_placement,
 };
+// Wave 2 callers name the pane's escape through `design`.
+#[allow(unused_imports)]
+pub use pane::{Body, FillsReason, Placement};
 pub use tokens::*;

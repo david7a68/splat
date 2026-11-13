@@ -886,6 +886,7 @@ impl TimelinePage {
     /// pinned below the rows, so a result never moves a row: the link update after a rename and
     /// its Undo, the open event's rest ruling, the file's notices, a removal and an add. Each
     /// keeps its owner and end event; the footer only places them. Returns where the rows end.
+    #[allow(clippy::disallowed_methods)]
     fn list_footer(
         &mut self,
         ui: &mut egui::Ui,
@@ -1001,7 +1002,7 @@ impl TimelinePage {
             });
         }
         undos.into_footer(&mut footer);
-        let bottom = footer.show(ui);
+        let bottom = footer.show_by_hand(ui);
         file_act(book, file.take());
         match act.take() {
             Some(ListAct::UndoLinks) => notes.undo_event_link_update(),

@@ -243,7 +243,8 @@ pub fn lane_width(ui: &Ui) -> f32 {
 
 /// A vertical scroll area that keeps the scroll bar's lane whether or not the bar shows: its
 /// content always ends one lane before the area's right edge, so nothing moves when the bar
-/// comes or goes. The caller has no lane to keep.
+/// comes or goes. The caller has no lane to keep. Drawn in a pane's body (`Footer::pane`), it
+/// records its content's end there, so the pane's footer follows short content.
 ///
 /// ```compile_fail,E0599
 /// // There is no way to give the lane back.
@@ -327,13 +328,16 @@ impl ScrollColumn {
     pub fn show<R>(self, ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> ScrollAreaOutput<R> {
         let width = Self::content_width(ui);
         let sideways = self.sideways;
-        self.area().show(ui, |ui| {
+        let start = super::pane::column_start(ui);
+        let output = self.area().show(ui, |ui| {
             if !sideways {
                 ui.set_max_width(width);
             }
             ui.set_min_width(width);
             add(ui)
-        })
+        });
+        super::pane::column_drawn(ui, start, &output);
+        output
     }
 
     /// For a long list of rows of one height: only the rows in view are drawn.
@@ -345,11 +349,14 @@ impl ScrollColumn {
         add: impl FnOnce(&mut Ui, Range<usize>) -> R,
     ) -> ScrollAreaOutput<R> {
         let width = Self::content_width(ui);
-        self.area().show_rows(ui, row_height, rows, |ui, range| {
+        let start = super::pane::column_start(ui);
+        let output = self.area().show_rows(ui, row_height, rows, |ui, range| {
             ui.set_max_width(width);
             ui.set_min_width(width);
             add(ui, range)
-        })
+        });
+        super::pane::column_drawn(ui, start, &output);
+        output
     }
 
     /// For content that draws only what is in view of the given viewport.
@@ -359,11 +366,14 @@ impl ScrollColumn {
         add: impl FnOnce(&mut Ui, egui::Rect) -> R,
     ) -> ScrollAreaOutput<R> {
         let width = Self::content_width(ui);
-        self.area().show_viewport(ui, |ui, viewport| {
+        let start = super::pane::column_start(ui);
+        let output = self.area().show_viewport(ui, |ui, viewport| {
             ui.set_max_width(width);
             ui.set_min_width(width);
             add(ui, viewport)
-        })
+        });
+        super::pane::column_drawn(ui, start, &output);
+        output
     }
 }
 

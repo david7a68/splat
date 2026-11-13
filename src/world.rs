@@ -2299,6 +2299,7 @@ pub(crate) fn with_lines(mut lines: Vec<FooterLine>, more: Vec<FooterLine>) -> V
 /// what is left of `ui`, in the footer's order: results with a live Undo, then reasons, then
 /// notices. `id` is the pane instance's own. Returns the action pressed and the y where the body
 /// drawn next ends.
+#[allow(clippy::disallowed_methods)]
 pub(crate) fn draw_footer(
     ui: &mut egui::Ui,
     id: impl std::hash::Hash,
@@ -2319,7 +2320,7 @@ pub(crate) fn draw_footer(
             FooterRank::Notice => footer.notice(line.words.as_str(), draw),
         };
     }
-    let bottom = footer.show(ui);
+    let bottom = footer.show_by_hand(ui);
     (pressed.get(), bottom)
 }
 

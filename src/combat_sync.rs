@@ -1638,7 +1638,12 @@ impl CombatSync {
     /// Round 26: a sync action's result (a rest taken, or why it failed), in the footer of the
     /// sheet pane. It lives until its dismiss, the next action or another character; the
     /// dismiss is the close icon at the message end, in the one Party form.
-    pub fn footer_messages<'a>(&'a mut self, footer: &mut crate::design::Footer<'a>) {
+    /// A press on its close icon sets `dismissed`; then call `end_action_notice`.
+    pub fn footer_messages<'a>(
+        &self,
+        footer: &mut crate::design::Footer<'a>,
+        dismissed: &'a std::cell::Cell<bool>,
+    ) {
         use crate::design::{self, Tone};
         let Some((tone, words, order)) =
             self.action_notice
@@ -1650,14 +1655,18 @@ impl CombatSync {
         else {
             return;
         };
-        let notice = &mut self.action_notice;
         footer.result(order, words.clone(), false, move |ui| {
             if crate::party::dismissable(ui, |ui| {
                 design::message(ui, tone, &words);
             }) {
-                *notice = None;
+                dismissed.set(true);
             }
         });
+    }
+
+    /// The action's result ends: its close icon was pressed.
+    pub fn end_action_notice(&mut self) {
+        self.action_notice = None;
     }
     /// The conflict heading for a group: its name on the sheet, where it has one.
     fn group_name(&self, key: &str) -> String {
@@ -3123,9 +3132,9 @@ mod tests {
         // Round 25 FD3: the action notice ends with its close icon, after its words.
         const TAKEN: &str = "D&D Beyond took the long rest.";
         // Round 25 review, round 26: the result sits in the sheet's footer, drawn as Party draws
-        // it (the footer, then the sheet's scroll area sized to the footer's top), so the first
-        // editable field keeps its y before the result, while it shows, after an error result
-        // and after it ends, at 960, 1200 and 1920. The result must be in view while it lives.
+        // it (the sheet's scroll column in the footer's pane), so the first editable field keeps
+        // its y before the result, while it shows, after an error result and after it ends, at
+        // 960, 1200 and 1920. The result must be in view while it lives.
         let field_top = |sync: &mut CombatSync, size: egui::Vec2| {
             let out = ctx.run(
                 egui::RawInput {
@@ -3134,18 +3143,19 @@ mod tests {
                 },
                 |ctx| {
                     egui::CentralPanel::default().show(ctx, |ui| {
-                        let rest = ui.available_rect_before_wrap();
-                        ui.scope_builder(egui::UiBuilder::new().max_rect(rest), |ui| {
-                            let width = ui.available_width().min(crate::design::LIST_MEASURE);
-                            let mut footer = crate::design::Footer::new("sync_test_sheet", width);
-                            sync.footer_messages(&mut footer);
-                            let bottom = footer.show(ui);
-                            egui::ScrollArea::vertical()
-                                .id_salt("sync_test_sheet_body")
-                                .max_height((bottom - ui.cursor().top()).max(0.0))
-                                .auto_shrink([false, false])
+                        let dismissed = std::cell::Cell::new(false);
+                        let mut footer = crate::design::Footer::new(
+                            "sync_test_sheet",
+                            crate::design::LIST_MEASURE,
+                        );
+                        sync.footer_messages(&mut footer, &dismissed);
+                        footer.pane(ui, crate::design::Body::Content, |ui| {
+                            crate::design::ScrollColumn::new("sync_test_sheet_body")
                                 .show(ui, |ui| sync.show(ui));
                         });
+                        if dismissed.get() {
+                            sync.end_action_notice();
+                        }
                     });
                 },
             );
@@ -3228,10 +3238,13 @@ mod tests {
                 |ctx| {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         // Round 26: the result sits in the sheet's footer.
+                        let dismissed = std::cell::Cell::new(false);
                         let mut footer = crate::design::Footer::new("sync_test_footer", 600.0);
-                        sync.footer_messages(&mut footer);
-                        let _ = footer.show(ui);
-                        sync.show(ui);
+                        sync.footer_messages(&mut footer, &dismissed);
+                        footer.pane(ui, crate::design::Body::Content, |ui| sync.show(ui));
+                        if dismissed.get() {
+                            sync.end_action_notice();
+                        }
                     });
                 },
             );

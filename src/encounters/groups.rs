@@ -2429,7 +2429,7 @@ impl Encounters {
                 design::message(ui, Tone::Warning, &warning);
             });
         }
-        let bottom = footer.show(ui);
+        let bottom = footer.show_by_hand(ui);
         if let Some(kind) = pressed.get() {
             self.undo_kept(kind, Some((active, campaigns.modules())));
         }
@@ -3376,6 +3376,7 @@ mod tests {
     }
 
     /// The members with the editor's footer, as the group editor draws them.
+    #[allow(clippy::disallowed_methods)]
     fn editor_members(
         ui: &mut egui::Ui,
         state: &mut (GroupDraft, Option<String>),
@@ -3385,7 +3386,7 @@ mod tests {
         let mut footer = design::Footer::new("members_test_footer", ui.available_width());
         let identity = std::cell::Cell::new(false);
         member_result_into(&mut state.0, &mut footer, &pressed, None, &identity);
-        let bottom = footer.show(ui);
+        let bottom = footer.show_by_hand(ui);
         if pressed.get() {
             state.0.undo_member_result();
             state.1 = None;
@@ -4510,6 +4511,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::disallowed_methods)]
     fn a_group_changed_on_disk_blocks_the_whole_save_and_keeps_the_draft() {
         let dir = tempfile::tempdir().unwrap();
         let campaign = campaign(dir.path());
@@ -4560,7 +4562,7 @@ mod tests {
                             let mut footer =
                                 design::Footer::new("group_test_footer", ui.available_width());
                             draft.results_into(&mut footer, &pressed, None);
-                            let bottom = footer.show(ui);
+                            let bottom = footer.show_by_hand(ui);
                             draft.apply_undo(&pressed);
                             let mut body = super::super::body_above(ui, bottom);
                             of_encounter(&mut body, draft, snapshot, &mut false, &mut None);
