@@ -2773,11 +2773,19 @@ mod tests {
             ..text("Rook Ambry", 372.0, 226.0, 120.0)
         };
         let edit_words = text("Edit", 392.0, 271.0, 30.0);
-        assert!(line_starts(&[edit.clone()], &row, &[title, edit_words.clone()], &[]).is_empty());
+        assert!(
+            line_starts(
+                std::slice::from_ref(&edit),
+                &row,
+                &[title, edit_words.clone()],
+                &[]
+            )
+            .is_empty()
+        );
         let body = text("A note for tonight", 372.0, 242.0, 120.0);
         assert_eq!(
             line_starts(
-                &[edit.clone()],
+                std::slice::from_ref(&edit),
                 &row,
                 &[body.clone(), edit_words.clone()],
                 &[]
