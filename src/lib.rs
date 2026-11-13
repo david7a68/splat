@@ -19,6 +19,16 @@ mod copy_dialog;
 mod creature_filter;
 mod credentials;
 mod design;
+/// The ownership and cost parts of `design` (kept results, the save row, per-change caches),
+/// public only so that their compile-fail doc tests can name them. The app uses them through
+/// `design`.
+#[doc(hidden)]
+pub mod ownership {
+    pub use crate::design::components::ResultOrder;
+    pub use crate::design::memo::*;
+    pub use crate::design::results::*;
+    pub use crate::design::save_row::*;
+}
 mod difficulty;
 mod dndbeyond;
 mod encounter_run;

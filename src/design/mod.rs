@@ -4,7 +4,10 @@ pub mod column;
 mod comparison;
 pub mod components;
 pub mod icons;
+pub mod memo;
 pub mod reader;
+pub mod results;
+pub mod save_row;
 pub mod theme;
 pub mod tokens;
 
@@ -15,4 +18,6 @@ mod lint;
 
 pub use column::*;
 pub use components::*;
+pub use results::Results;
+pub use save_row::{DraftState, save_row};
 pub use tokens::*;

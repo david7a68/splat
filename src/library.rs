@@ -2027,15 +2027,46 @@ fn gone_file_parts(ui: &mut egui::Ui, root: &Path, relative: &str) {
 /// its root) and shows only in that entry's reader. It carries the version of the entry's file
 /// it was made from: the root, the path and the exact text the rename saved. The offer holds
 /// only while that file still has those bytes (round 26 review).
+/// Its footer order is the store's (`Library::renamed_links`), issued when the rename (or the
+/// Undo that gave the offer back) made it.
 #[derive(Clone)]
 struct LinkOffer {
     owner: Uuid,
     source: OfferSource,
     old: String,
     new: String,
-    /// When the rename (or the Undo that gave the offer back) made this offer: its place in the
-    /// footer. Each offer has its own.
-    order: design::ResultOrder,
+}
+
+/// The entry a link offer or a link result belongs to: its identity in its root. The root is
+/// its scope, so another campaign's or package's entry with the same identity never shows it.
+#[derive(Clone, PartialEq, Eq, Debug)]
+struct LinkOwner {
+    id: Uuid,
+    root: PathBuf,
+}
+
+impl design::results::Owner for LinkOwner {
+    type Scope = Path;
+    fn scope(&self) -> &Path {
+        &self.root
+    }
+}
+
+impl design::results::Kept for LinkOffer {
+    type Owner = LinkOwner;
+    /// A saved edit of its entry ends it (a rename that passes the check gives a new one); a
+    /// reload keeps it while it still holds; its press uses it up, written or not.
+    const ENDS: design::results::Ends = design::results::Ends {
+        owner_changed: design::results::OwnerChanged::Ends,
+        disk_changed: design::results::DiskChanged::Checked,
+        press: design::results::Press::Use,
+    };
+    fn owner(&self) -> LinkOwner {
+        LinkOwner {
+            id: self.owner,
+            root: self.source.root.clone(),
+        }
+    }
 }
 
 /// The renamed entry's file as the rename saved it.
@@ -2058,8 +2089,23 @@ struct LinkResult {
     edits: crate::content_workspace::ContentEdits,
     old: String,
     new: String,
-    /// When this link update was done: its place in the footer. Each result has its own.
-    order: design::ResultOrder,
+}
+
+impl design::results::Kept for LinkResult {
+    type Owner = LinkOwner;
+    /// A saved edit of its entry ends it; a reload keeps it while its files hold what it wrote;
+    /// it leaves by its Undo only when the Undo works.
+    const ENDS: design::results::Ends = design::results::Ends {
+        owner_changed: design::results::OwnerChanged::Ends,
+        disk_changed: design::results::DiskChanged::Checked,
+        press: design::results::Press::Undo,
+    };
+    fn owner(&self) -> LinkOwner {
+        LinkOwner {
+            id: self.owner,
+            root: self.source.root.clone(),
+        }
+    }
 }
 
 /// The page's results that are not about the open entry: the offer to change links after a rename
@@ -2067,13 +2113,10 @@ struct LinkResult {
 /// a result never moves the columns, the tabs, the file line, the title or the body.
 #[derive(Default)]
 struct PageResults {
-    /// The offer's words and its action's words.
-    link_offer: Option<(String, String)>,
-    /// The link update's result.
-    links: Option<String>,
-    /// The shown offer's and the shown link result's own orders (`LinkOffer::order`,
-    /// `LinkResult::order`).
-    link_orders: (design::ResultOrder, design::ResultOrder),
+    /// The offer's words, its action's words, and its order from the store.
+    link_offer: Option<(String, String, design::ResultOrder)>,
+    /// The link update's result and its order from the store.
+    links: Option<(String, design::ResultOrder)>,
     /// The registration's result, and why its Undo waits.
     registration: Option<(String, Option<&'static str>)>,
     /// `Use the copy in encounters` shows, with why it waits.
@@ -2181,10 +2224,14 @@ impl ReaderResults {
         add(ResultKind::ScopeNotice, page.scope_notice.clone(), false);
         add(
             ResultKind::LinkOffer,
-            page.link_offer.as_ref().map(|(words, _)| words.clone()),
+            page.link_offer.as_ref().map(|(words, ..)| words.clone()),
             false,
         );
-        add(ResultKind::Links, page.links.clone(), true);
+        add(
+            ResultKind::Links,
+            page.links.as_ref().map(|(words, _)| words.clone()),
+            true,
+        );
         add(
             ResultKind::Registration,
             page.registration.as_ref().map(|(words, _)| words.clone()),
@@ -2243,14 +2290,14 @@ fn show_result(
             }
         }
         ResultKind::LinkOffer => {
-            if let Some((words, action)) = &page.link_offer {
+            if let Some((words, action, _)) = &page.link_offer {
                 // The offer names both names, so the DM can check the words before the write.
                 pressed.page.link_offer =
                     design::message_with_action(ui, Tone::Info, words, action);
             }
         }
         ResultKind::Links => {
-            if let Some(words) = &page.links {
+            if let Some((words, _)) = &page.links {
                 // The result is a message, so its Undo keeps its icon on the message line.
                 pressed.page.links =
                     design::undo_message(ui, Tone::Success, words, "Undo link update");
@@ -3298,16 +3345,19 @@ struct IdentityUndo {
     after: String,
 }
 
-type ParsedDraft = std::sync::Arc<Result<Entry, String>>;
+/// The draft as parsed, with the revision of that parse: a new parse (new draft text) is a new
+/// revision, and caches of what the parse holds are keyed by it.
+type ParsedDraft = design::memo::Revised<std::sync::Arc<Result<Entry, String>>>;
 
 /// A missing link Campaign's repair sent to a file: the file, the typed reference and the
-/// fault's words. `found` is the row that links it in one parse of the draft; the draft's
-/// parse is rebuilt only when its text changes, so the row is looked up again only then.
+/// fault's words. `found` is the row that links it in one parse of the draft, keyed by that
+/// parse's revision; the draft's parse is rebuilt only when its text changes, so the row is
+/// looked up again only then.
 struct RepairLink {
     path: PathBuf,
     target: splat::content::Reference,
     words: String,
-    found: Option<(ParsedDraft, Option<usize>)>,
+    found: design::memo::Memo<design::memo::Revision, Option<usize>>,
 }
 
 #[cfg(test)]
@@ -3382,9 +3432,9 @@ fn broken_link_warnings(
 
 /// The broken-link warnings of one parsed draft against one link index, with the line Campaign's
 /// link has. A new draft (a new parse), a new index or another such line prepares them again; an
-/// unchanged frame prepares nothing and borrows them.
+/// unchanged frame prepares nothing and borrows them. The parse is known by its revision.
 type BrokenLines = (
-    ParsedDraft,
+    design::memo::Revision,
     std::sync::Arc<crate::lookup::ContentIndex>,
     Option<usize>,
     (Vec<String>, String),
@@ -3421,9 +3471,9 @@ pub struct Library {
     unregistered: Option<Module>,
     copied_rosters: Option<crate::content_workspace::ContentEdits>,
     /// Offers to change links after a rename, each owned by the renamed entry.
-    renamed_links: Vec<LinkOffer>,
+    renamed_links: design::Results<LinkOwner, LinkOffer>,
     /// Link updates and the names their links now say, each owned by the renamed entry.
-    link_edits: Vec<LinkResult>,
+    link_edits: design::Results<LinkOwner, LinkResult>,
     /// This frame's page results (link update, registration), drawn in the pane's message footer.
     page_results: PageResults,
     /// Which page result's action the reader pressed, applied after the reader is drawn.
@@ -3535,18 +3585,20 @@ enum OrderKey {
 type ResultOrders = std::collections::HashMap<OrderKey, design::ResultOrder>;
 
 /// The footer order of the reader's result `kind`, in Read and in Edit Markdown alike. A link
-/// offer and a link result each belong to one renamed entry and carry their own order; the other
-/// kinds hold one result at a time, so their kind's slot is that result's.
+/// offer and a link result each belong to one renamed entry and carry the order their store
+/// issued; the other kinds hold one result at a time, so their kind's slot is that result's.
 fn reader_order(
     results: &ReaderResults,
     orders: &ResultOrders,
     kind: ResultKind,
 ) -> design::ResultOrder {
+    let page = &results.page;
     match kind {
-        ResultKind::LinkOffer => results.page.link_orders.0,
-        ResultKind::Links => results.page.link_orders.1,
-        kind => order_of(orders, OrderKey::Reader(kind)),
+        ResultKind::LinkOffer => page.link_offer.as_ref().map(|(.., order)| *order),
+        ResultKind::Links => page.links.as_ref().map(|(_, order)| *order),
+        kind => Some(order_of(orders, OrderKey::Reader(kind))),
     }
+    .unwrap_or_default()
 }
 
 /// The order of the result `key`, issued when its action was done.
@@ -3674,13 +3726,17 @@ impl Place {
 }
 impl Library {
     /// The footer order of the open entry's link result: the order its own update issued
-    /// (review of PR 298). The footer reads it here, and so does the check that proves it.
+    /// (review of PR 298), for the check that proves it.
+    #[cfg(test)]
     pub(crate) fn open_link_result_order(&self) -> Option<design::ResultOrder> {
+        let owner = self.open_link_owner()?;
+        self.link_edits.get(&owner).map(|shown| shown.order())
+    }
+
+    /// The open entry as the owner of its link offer and link result.
+    fn open_link_owner(&self) -> Option<LinkOwner> {
         let (id, root) = self.open_entry_key()?;
-        self.link_edits
-            .iter()
-            .find(|result| result.owner == id && result.source.root == root)
-            .map(|result| result.order)
+        Some(LinkOwner { id, root })
     }
 
     pub fn refocus_draft(&mut self) {
@@ -3816,7 +3872,8 @@ impl Library {
         }) {
             self.selection_undo = None;
         }
-        self.link_edits.retain(|result| result.edits.on_disk());
+        self.link_edits
+            .disk_changed(|result| result.edits.on_disk());
         self.rosters_changed = self
             .copied_rosters
             .as_ref()
@@ -4175,7 +4232,7 @@ impl Library {
             path: path.clone(),
             target,
             words,
-            found: None,
+            found: design::memo::Memo::new(),
         });
         self.pending_repair = Some(path);
         self.stale = true;
@@ -4317,7 +4374,8 @@ impl Library {
         {
             return parsed.clone();
         }
-        let parsed = std::sync::Arc::new(Entry::parse(path, &self.draft));
+        let parsed =
+            design::memo::Revised::new(std::sync::Arc::new(Entry::parse(path, &self.draft)));
         self.draft_parse = Some((path.clone(), self.draft.clone(), parsed.clone()));
         parsed
     }
@@ -4396,7 +4454,8 @@ impl Library {
                             self.forget_changed_undos();
                             // An offer whose entry changed outside Splat, or whose names now name
                             // another entry, goes; it is checked again before any write too.
-                            self.renamed_links.retain(|offer| l.offer_holds(offer));
+                            self.renamed_links
+                                .disk_changed(|offer| l.offer_holds(offer));
                             self.loaded = Some(l);
                             self.invalidate();
                         }
@@ -4687,35 +4746,33 @@ impl Library {
         // empty reader or a form), so they never move the columns, the tabs, the file line, the
         // title or the body. Their presses are applied after the reader is drawn.
         // A link offer and a link result show only in their own entry's reader.
-        let open = self.open_entry_key();
-        let owns = |owner: Uuid, source: &OfferSource| {
-            open.as_ref()
-                .is_some_and(|(id, root)| *id == owner && *root == source.root)
-        };
+        // Each comes with the order its store issued at its action; this draw issues none.
+        let open = self.open_link_owner();
         self.page_results = PageResults {
-            link_offer: self
-                .renamed_links
-                .iter()
-                .find(|offer| owns(offer.owner, &offer.source))
-                .and_then(|offer| {
+            link_offer: open
+                .as_ref()
+                .and_then(|owner| self.renamed_links.get(owner))
+                .and_then(|shown| {
+                    let offer = shown.value();
                     let count = self.link_rename_count(&offer.old, &offer.new);
                     (count > 0).then(|| {
-                        crate::content_workspace::link_offer_words(&[&offer.old], &offer.new, count)
+                        let (words, action) = crate::content_workspace::link_offer_words(
+                            &[&offer.old],
+                            &offer.new,
+                            count,
+                        );
+                        (words, action, shown.order())
                     })
                 }),
-            links: self
-                .link_edits
-                .iter()
-                .find(|result| owns(result.owner, &result.source))
-                .map(|result| format!("Links now say “{}”.", result.new)),
-            link_orders: (
-                self.renamed_links
-                    .iter()
-                    .find(|offer| owns(offer.owner, &offer.source))
-                    .map(|offer| offer.order)
-                    .unwrap_or_default(),
-                self.open_link_result_order().unwrap_or_default(),
-            ),
+            links: open
+                .as_ref()
+                .and_then(|owner| self.link_edits.get(owner))
+                .map(|shown| {
+                    (
+                        format!("Links now say “{}”.", shown.value().new),
+                        shown.order(),
+                    )
+                }),
             registration: self.package_copy.as_ref().map(|copy| {
                 (
                     package_registered(&copy.module.name, self.copy_campaign_before.is_some()),
@@ -5429,19 +5486,13 @@ impl Library {
                 Err(error) => self.error = Some(error),
             }
         }
-        let open = self.open_entry_key();
-        let owns = |owner: Uuid, source: &OfferSource| {
-            open.as_ref()
-                .is_some_and(|(id, root)| *id == owner && *root == source.root)
-        };
+        let open = self.open_link_owner();
         if pressed.link_offer
-            && let Some(at) = self
-                .renamed_links
-                .iter()
-                .position(|offer| owns(offer.owner, &offer.source))
             && let Some(loaded) = &self.loaded
+            && let Some(offer) = open
+                .as_ref()
+                .and_then(|owner| self.renamed_links.use_press(owner))
         {
-            let offer = self.renamed_links.remove(at);
             // The offer is checked again before the write: its entry still has the new name, and
             // neither name names another entry. A stale offer goes and writes nothing.
             // The offer is checked against the loaded notes first, then, directly before the
@@ -5484,14 +5535,12 @@ impl Library {
                 match written {
                     Ok(edits) => {
                         // The owner's new update ends its earlier result.
-                        self.link_edits.retain(|result| result.owner != owner);
-                        self.link_edits.push(LinkResult {
+                        self.link_edits.record(LinkResult {
                             owner,
                             source,
                             edits,
                             old,
                             new,
-                            order: design::ResultOrder::issue(),
                         });
                         self.stale = true;
                         self.content_changed =
@@ -5502,39 +5551,36 @@ impl Library {
             }
         }
         if pressed.links
-            && let Some(at) = self
-                .link_edits
-                .iter()
-                .position(|result| owns(result.owner, &result.source))
+            && let Some(owner) = &open
         {
             // Undo restores only the files this update wrote, and only while they hold what it
-            // wrote, so another entry's link update stays.
-            match self.link_edits[at].edits.undo() {
-                Ok(()) => {
+            // wrote, so another entry's link update stays. A failed Undo keeps the result and
+            // its Undo.
+            match self.link_edits.undo(owner, |result| result.edits.undo()) {
+                None => {}
+                Some(Ok((result, ()))) => {
                     // The links say the old name again: the rename's offer comes back in the
-                    // result's place. The reload checks it again, as every offer.
-                    // The offer keeps the source version it was made from: its write checks it
-                    // again.
+                    // result's place, with a new order. The reload checks it again, as every
+                    // offer. The offer keeps the source version it was made from: its write
+                    // checks it again.
                     let LinkResult {
                         owner,
                         source,
                         old,
                         new,
                         ..
-                    } = self.link_edits.remove(at);
-                    self.renamed_links.retain(|offer| offer.owner != owner);
-                    self.renamed_links.push(LinkOffer {
+                    } = result;
+                    self.renamed_links.record(LinkOffer {
                         owner,
                         source,
                         old,
                         new,
-                        order: design::ResultOrder::issue(),
                     });
                     self.stale = true;
                     self.content_changed =
                         campaigns.active_campaign().map(|campaign| campaign.path);
                 }
-                Err(error) => self.error = Some(error),
+                Some(Err(error)) => self.error = Some(error),
             }
         }
         if pressed.registration
@@ -6628,15 +6674,18 @@ impl Library {
                 // A saved edit of the entry ends its link update's result and its earlier offer,
                 // whatever this save offers. A rename that passes the check gives a new offer.
                 // Other entries keep theirs.
-                self.link_edits.retain(|result| result.owner != entry.id);
-                self.renamed_links.retain(|offer| offer.owner != entry.id);
+                let owner = LinkOwner {
+                    id: entry.id,
+                    root: root.clone(),
+                };
+                self.link_edits.owner_changed(&owner);
+                self.renamed_links.owner_changed(&owner);
                 if let Some(old) = &l.notes[i].entry
                     && old.name != entry.name
                     && entry.kind != "package"
                     && l.can_rename_links(i, &old.name, &entry.name)
                 {
-                    self.renamed_links.push(LinkOffer {
-                        order: design::ResultOrder::issue(),
+                    self.renamed_links.record(LinkOffer {
                         owner: entry.id,
                         source: OfferSource {
                             root: root.clone(),
@@ -7038,18 +7087,12 @@ impl Library {
             .filter(|link| here.as_ref() == Some(&link.path))
             .and_then(|link| {
                 // Looked up again only for a new parse, that is, new draft text.
-                let stale = !link
-                    .found
-                    .as_ref()
-                    .is_some_and(|(seen, _)| std::sync::Arc::ptr_eq(seen, &parsed_draft));
-                if stale {
-                    let line = parsed
+                let line = (*link.found.get_or(parsed_draft.revision(), || {
+                    parsed
                         .as_ref()
                         .ok()
-                        .and_then(|entry| repair_row(entry, &link.target));
-                    link.found = Some((parsed_draft.clone(), line));
-                }
-                let line = link.found.as_ref()?.1?;
+                        .and_then(|entry| repair_row(entry, &link.target))
+                }))?;
                 let words = &link.words;
                 Some((
                     line,
@@ -7082,65 +7125,37 @@ impl Library {
         if save_refusal.is_some() && !overwrite {
             save = false;
         }
-        // A parse fault ends with the draft that parses: the saved file stays unreadable on the
-        // owner line until Save, but the draft is not Invalid.
-        let state = if fault.is_some() || repair_problem.is_some() {
-            Status {
-                icon: icons::ERROR,
-                word: "Invalid",
-                color: d.invalid,
-            }
-        } else if conflict {
-            Status {
-                icon: icons::WARN,
-                word: "Changed on disk",
-                color: d.external,
-            }
-        } else if failed.is_some() {
+        // The save row's state. Its word, Save's weight and why Save waits all come from it
+        // (`design::save_row`). A parse fault ends with the draft that parses: the saved file
+        // stays unreadable on the owner line until Save, but the draft is not Invalid.
+        let mut draft_state = design::DraftState::new(
+            if dirty {
+                design::save_row::Changed::Yes
+            } else {
+                design::save_row::Changed::No
+            },
+            if self.run_open {
+                design::save_row::Primary::Elsewhere
+            } else {
+                design::save_row::Primary::Draft
+            },
+        );
+        if let Some(refusal) = &save_refusal {
+            draft_state = draft_state.refused(refusal.as_str());
+        }
+        if fault.is_some() || repair_problem.is_some() {
+            draft_state = draft_state.invalid();
+        }
+        if conflict {
+            draft_state = draft_state.changed_on_disk();
+        }
+        if failed.is_some() {
             // An action-time failure: the disk refused the last Save of this draft.
-            Status {
-                icon: icons::ERROR,
-                word: "Not saved",
-                color: d.invalid,
-            }
-        } else if dirty {
-            Status {
-                icon: icons::DRAFT,
-                word: "Unsaved",
-                color: d.unsaved,
-            }
-        } else if self.just_saved {
-            // In the status slot beside Save, so that saving moves nothing.
-            Status {
-                icon: icons::OK,
-                word: "Saved",
-                color: d.saved,
-            }
-        } else if self.source && !matches!(note.owner, Owner::Builtin) {
-            Status {
-                icon: icons::OK,
-                word: "No changes",
-                color: d.clean,
-            }
-        } else {
-            match &note.owner {
-                Owner::Builtin => Status {
-                    icon: icons::READ_ONLY,
-                    word: "Built-in · Read only",
-                    color: d.read_only,
-                },
-                Owner::Package(_) => Status {
-                    icon: icons::EDIT,
-                    word: &package_word,
-                    color: d.clean,
-                },
-                Owner::Campaign(_) => Status {
-                    icon: icons::EDIT,
-                    word: "Campaign · Editable",
-                    color: d.clean,
-                },
-            }
-        };
+            draft_state = draft_state.not_saved();
+        }
+        if self.just_saved {
+            draft_state = draft_state.just_saved();
+        }
         let save_row = editable && (self.source || dirty);
         let mut step = history::take_if(ui.ctx(), |_| true);
         // Edit Markdown's save row, with the pane's message footer below the editor.
@@ -7584,43 +7599,24 @@ impl Library {
         let mut body_bottom = f32::INFINITY;
         // Save and Discard are one row, as far apart as the pane allows.
         if slot_row {
-            ui.horizontal(|ui| {
-                ui.set_max_width(editor_width);
-                ui.set_min_height(Density::Scan.control());
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let blocked = if conflict {
-                        Some("Choose what to do with the changed file first.")
-                    } else if !dirty {
-                        Some("No changes to save.")
-                    } else {
-                        save_refusal.as_deref()
-                    };
-                    save |= (if self.run_open {
-                        Action::secondary("Save")
-                    } else {
-                        Action::primary("Save")
-                    })
-                    .density(Density::Read)
-                    .blocked(blocked)
-                    .key("Ctrl+S")
-                    .show(ui)
-                    .clicked();
-                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                        if design::save_row_state(ui, state, dirty && !conflict, None) {
-                            self.result_orders.insert(
-                                OrderKey::Reader(ResultKind::Discarded),
-                                design::ResultOrder::issue(),
-                            );
-                            self.discarded =
-                                Some((note.owner.id(), note.path.clone(), self.draft.clone()));
-                            self.draft = note.text.clone();
-                            // The draft changed: a failed Save of the old words no longer owns it.
-                            self.draft_revision += 1;
-                            self.error = None;
-                        }
-                    });
-                });
-            });
+            let row = ui
+                .scope(|ui| {
+                    ui.set_max_width(editor_width);
+                    design::save_row(ui, &draft_state, "Save")
+                })
+                .inner;
+            save |= row.save;
+            if row.discard {
+                self.result_orders.insert(
+                    OrderKey::Reader(ResultKind::Discarded),
+                    design::ResultOrder::issue(),
+                );
+                self.discarded = Some((note.owner.id(), note.path.clone(), self.draft.clone()));
+                self.draft = note.text.clone();
+                // The draft changed: a failed Save of the old words no longer owns it.
+                self.draft_revision += 1;
+                self.error = None;
+            }
             // The pane's message footer, pinned at the bottom of the pane below the editor, so
             // no message moves the editor: its top stays and only its visible height changes.
             // Results that carry a live Undo come first (Discard's, the heading and stat fixes',
@@ -7658,14 +7654,14 @@ impl Library {
                         .broken_lines
                         .as_ref()
                         .is_some_and(|(seen, known, at, _)| {
-                            std::sync::Arc::ptr_eq(seen, &parsed_draft)
+                            *seen == parsed_draft.revision()
                                 && std::sync::Arc::ptr_eq(known, index)
                                 && *at == skip
                         });
                     if !fresh {
                         let warnings = broken_link_warnings(&self.draft, entry, index, skip);
                         self.broken_lines =
-                            Some((parsed_draft.clone(), index.clone(), skip, warnings));
+                            Some((parsed_draft.revision(), index.clone(), skip, warnings));
                     }
                     broken_taken = true;
                     self.broken_lines
@@ -11280,7 +11276,7 @@ mod tests {
         assert!(library.dependency_undos.is_empty());
 
         // `Undo link update`.
-        library.link_edits = vec![LinkResult {
+        library.link_edits.record(LinkResult {
             owner: Uuid::nil(),
             source: OfferSource {
                 root: root.clone(),
@@ -11290,8 +11286,7 @@ mod tests {
             edits: edit("links"),
             old: "Cinder Wolf".into(),
             new: "Ash Wolf".into(),
-            order: design::ResultOrder::issue(),
-        }];
+        });
         library.forget_changed_undos();
         assert!(!library.link_edits.is_empty());
         change_outside(&mut library);
