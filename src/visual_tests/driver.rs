@@ -3024,6 +3024,11 @@ impl<'a> Driver<'a> {
         if size == SMALL {
             found.extend(stillness::doubled_words(&items, &lines));
         }
+        found.extend(stillness::line_starts(
+            &items,
+            &stillness::quiet_rects(shapes),
+            &stillness::placed(&painted),
+        ));
         self.stillness.headers.push(stillness::HeaderView {
             window: window.clone(),
             width: size.0,
