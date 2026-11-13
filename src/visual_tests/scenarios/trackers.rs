@@ -206,6 +206,78 @@ fn notice_line_tops(d: &Driver<'_>, words: &str, done: &str) -> (Vec<f32>, f32) 
     (tops, line)
 }
 
+/// The quick actions of the pinned trackers that record at case D, by their accessible names.
+/// `Throw a gift` and `Lose seal` on a line at 0 are refused at their `min`, so they record
+/// nothing to take back.
+const QUICK: [&str; 13] = [
+    "Enter room",
+    "Cistern or Sands",
+    "Reach Kitchens seal",
+    "Alcove rest",
+    "Fight minute",
+    "Collect soul",
+    "Crowd loves it",
+    "Take seal: Party",
+    "Lose seal: Party",
+    "Take seal: Old Guard",
+    "Lose seal: Old Guard",
+    "Take seal: Keyring",
+    "Take seal: Convicts",
+];
+
+/// With the result line at the panel's bottom, the lowest quick action that is wholly in view
+/// takes its own press, and the footer's Undo takes the next: each press changes only its own
+/// target. The act before stays the result line's after the Undo.
+fn presses_at_the_footer_edge(d: &mut Driver<'_>) -> (bool, String) {
+    let whole = |d: &Driver<'_>| {
+        QUICK.iter().any(|name| {
+            d.nodes()
+                .iter()
+                .any(|node| node.name == *name && node.fully_in_view())
+        })
+    };
+    // Where the Due rows fill the panel (960), the DM scrolls to the trackers first.
+    let wheel = d
+        .place_of(SEARCH_LOOKUP)
+        .map_or(egui::pos2(780.0, 300.0), |field| {
+            egui::pos2(field.center().x, field.bottom() + 200.0)
+        });
+    for _ in 0..15 {
+        if whole(d) {
+            break;
+        }
+        d.scroll_points_at(wheel, 40.0);
+    }
+    let lowest = QUICK
+        .iter()
+        .filter_map(|name| {
+            d.nodes()
+                .into_iter()
+                .find(|node| node.name == *name && node.fully_in_view())
+                .map(|node| (*name, node.rect.bottom()))
+        })
+        .max_by(|a, b| a.1.total_cmp(&b.1));
+    let Some((name, bottom)) = lowest else {
+        return (false, "no quick action wholly in view".into());
+    };
+    let label = name.split(": ").next().unwrap_or(name);
+    let why = format!("why: {label}");
+    let entries = |d: &Driver<'_>| ledger(d).matches(&why).count();
+    let (before, total) = (entries(d), ledger(d).matches("why: ").count());
+    d.click(name);
+    let pressed = entries(d) > before && d.has(&format!("Undo: {label}"));
+    d.click(&format!("Undo: {label}"));
+    let undone = entries(d) == before
+        && ledger(d).matches("why: ").count() == total
+        && d.has_containing("Seals for Party changed to 1.");
+    (
+        pressed && undone,
+        format!(
+            "{name} (bottom {bottom:.0}): pressed {pressed}, footer Undo took it back {undone}"
+        ),
+    )
+}
+
 /// A tracker with an amount the DM types, on two lines, and a mark that the amount can pass.
 const PURSES: &str = "> trackers:\n>   purses:\n>     name: Purses\n>     pin: true\n>     per: [Ann, Bo]\n>     quick:\n>     - {label: Pay, add: ask}\n>     - {label: Tip, add: 1}\n>     marks:\n>     - {at: 3, say: Paid.}\n";
 
@@ -568,6 +640,15 @@ pub fn run(d: &mut Driver<'_>) {
         format!("Undo's words start at the result's words: {small_undo:?} at 960x640, {wide_undo:?} at 1200x800"),
     );
     d.state("trackers-three-notices", Sizes::All);
+    // Optimizer scan 26: with the result line at the bottom, a press near its edge goes to the
+    // action under the pointer, and a press on the footer to the footer's action.
+    let (edge, edge_detail) = presses_at_the_footer_edge(d);
+    let (wide_edge, wide_detail) = d.act_at_size(DEFAULT, presses_at_the_footer_edge);
+    d.observe(
+        "T19.2",
+        edge && wide_edge,
+        format!("At 960x640: {edge_detail}. At 1200x800: {wide_detail}"),
+    );
 
     // A wrong press seen late: the opposite action corrects the value, and the history keeps
     // both presses. The notice the wrong press raised has nothing on it, so it ends.

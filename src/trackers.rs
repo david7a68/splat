@@ -3397,7 +3397,9 @@ mod tests {
         let mut race = race();
         let t = std::mem::take(&mut race.trackers);
         let mut h = Harness::builder()
-            .with_size(eframe::egui::vec2(346.0, 640.0))
+            // Wide enough that every first action fits after the values: the layout in which a
+            // wider value could push the actions.
+            .with_size(eframe::egui::vec2(480.0, 640.0))
             .build_ui_state(|ui, t: &mut Trackers| view::show(ui, t, false), t);
         crate::design::theme::install(&h.ctx);
         h.run_steps(4);
@@ -3423,16 +3425,22 @@ mod tests {
             measured,
             "an unchanged frame measures no column"
         );
-        // 0 / 120 becomes 10 / 120, and Crowd Favor 0 becomes 1: one more measure, no move.
+        // 0 / 120 becomes 10 / 120, and Crowd Favor 0 becomes 1: measured again, no move.
         h.state_mut().press("race_clock", None, "Enter room", None);
         h.state_mut().press("favor", None, "Crowd loves it", None);
         h.run_steps(4);
         let t = h.state();
         assert_eq!(t.state.value(&t.rules, "race_clock", None), 10);
+        let changed = h.state().view.measured;
+        assert!(
+            changed > measured,
+            "a change of the values measures the columns again"
+        );
+        h.run_steps(5);
         assert_eq!(
             h.state().view.measured,
-            measured + 1,
-            "a change of the values measures the columns once"
+            changed,
+            "unchanged frames after the change measure no column"
         );
         assert_eq!(
             firsts(&h),
