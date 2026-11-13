@@ -2031,19 +2031,8 @@ impl Lookup {
         if self.trackers_shown {
             let mut back = false;
             ui.horizontal(|ui| {
+                // The count belongs to the `DUE N` heading below; the title says nothing more (FH8).
                 ui.label(Type::Heading.rich(ui, "Trackers"));
-                // The view's heading holds the Due count.
-                let due = trackers.due();
-                if due > 0 {
-                    design::status(
-                        ui,
-                        design::Status {
-                            icon: icons::BELL,
-                            word: &format!("Due {due}"),
-                            color: colors().text,
-                        },
-                    );
-                }
                 back = self.holds_something()
                     && Action::quiet("Back")
                         .icon(icons::BACK)

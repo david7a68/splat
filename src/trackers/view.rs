@@ -28,6 +28,107 @@ pub(crate) struct ViewState {
     /// How many times a name was shortened.
     #[cfg(test)]
     shortened: usize,
+    /// The panel's columns, with the trackers' revision and the width they were measured for.
+    columns: Option<(u64, u32, Columns)>,
+    /// How many times the columns were measured.
+    #[cfg(test)]
+    pub(super) measured: usize,
+}
+
+/// The columns that every tracker line of the panel shares, so the values end at one edge
+/// and the first actions start at one edge, whatever the values are (FE1, AE2).
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Columns {
+    /// The name column, from the line's start, with the indent of a tracker with `per`.
+    name: f32,
+    /// The value column: as wide as the widest value slot of the panel.
+    value: f32,
+    /// Does every line's first quick action fit after the value column? Then each line's
+    /// actions follow its value, all from one edge, and wrap to the line's start; else every
+    /// line has its actions on the rows under it, from its name's edge, so no line's first
+    /// action starts at another edge.
+    beside: bool,
+}
+
+/// The fewest digits a value slot holds, so a value that gains a digit moves no action.
+const SLOT_DIGITS: usize = 3;
+
+/// The text a value's slot is measured on: its digits and its goal's, at least
+/// `SLOT_DIGITS`, as zeros. The digits are tabular, so every value up to that many digits
+/// fits the slot exactly.
+fn value_slot(value: i64, goal: Option<i64>) -> String {
+    let digits = |n: i64| n.unsigned_abs().to_string().len();
+    let wide = digits(value).max(goal.map_or(0, digits)).max(SLOT_DIGITS);
+    let sign = if value < 0 { "-" } else { "" };
+    let zeros = "0".repeat(wide);
+    match goal {
+        Some(goal) => format!("{sign}{zeros} / {goal}"),
+        None => format!("{sign}{zeros}"),
+    }
+}
+
+/// Measure the panel's columns: every line of every tracker that can be used, pinned or not,
+/// so opening `More trackers` moves no pinned value. Only `columns` calls it, when the
+/// trackers' revision or the width changed.
+fn measure_columns(
+    ui: &egui::Ui,
+    rules: &Rules,
+    state: &State,
+    #[cfg_attr(not(test), allow(unused_variables))] view: &mut ViewState,
+) -> Columns {
+    #[cfg(test)]
+    {
+        view.measured += 1;
+    }
+    let name_font = Type::Body.font(ui);
+    let value_font = Type::Numeral.font(ui);
+    let mut name: f32 = 0.0;
+    let mut value: f32 = 0.0;
+    let mut first: f32 = 0.0;
+    for tracker in &rules.trackers {
+        let Ok(def) = &tracker.def else { continue };
+        if let Some(quick) = def.quick.first() {
+            first = first.max(
+                Action::secondary(&quick.label)
+                    .density(Density::Read)
+                    .natural_width(ui),
+            );
+        }
+        let indent = if def.per.is_empty() { 0.0 } else { design::L };
+        for instance in def.instances() {
+            let line = instance.unwrap_or(&def.name);
+            name = name.max(indent + design::number_width(ui, line, &name_font));
+            let slot = value_slot(state.value(rules, &tracker.key, instance), def.goal);
+            value = value.max(design::number_width(ui, &slot, &value_font));
+        }
+    }
+    let name = name.min(ui.available_width() * NAME_SHARE);
+    // The line's parts and the gaps between them: name, S, value, S, then the actions.
+    let used = name + value + 2.0 * design::S + 4.0 * ui.spacing().item_spacing.x;
+    Columns {
+        name,
+        value,
+        beside: first <= ui.available_width() - used,
+    }
+}
+
+/// The panel's columns, measured again only when the trackers' revision or the width changed.
+fn columns(
+    ui: &egui::Ui,
+    rules: &Rules,
+    state: &State,
+    view: &mut ViewState,
+    revision: u64,
+) -> Columns {
+    let width = ui.available_width().to_bits();
+    match view.columns {
+        Some((seen, at, columns)) if seen == revision && at == width => columns,
+        _ => {
+            let columns = measure_columns(ui, rules, state, view);
+            view.columns = Some((revision, width, columns));
+            columns
+        }
+    }
 }
 
 /// How many passes after a press the view still holds the pressed action in place. The Due
@@ -79,6 +180,9 @@ impl ViewState {
         self.asking.as_ref().map(|(_, _, _, typed)| typed.as_str())
     }
 }
+
+/// The empty state's route to the switches of the house rules in play.
+pub(crate) const RULES_ROUTE: &str = "Campaign → Rules and runs";
 
 /// The Due list's words after the Timeline's own, while the day count is not known.
 pub(crate) const DAY_MARKS_WAIT: &str = "No day mark shows until the Timeline is read.";
@@ -151,8 +255,13 @@ pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, from_top: bool) {
             ui,
             icons::BELL,
             "No house rules in play",
-            "Turn one on in Campaign → Rules and runs.",
-            |_| {},
+            "Turn one on to see its trackers here.",
+            |ui| {
+                // One route has one form: a bordered button, as `Campaign → Packages` is.
+                if Action::secondary(RULES_ROUTE).show(ui).clicked() {
+                    trackers.wants_rules = true;
+                }
+            },
         );
         trackers.view.pressed = act;
         return;
@@ -276,6 +385,7 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
         state,
         view,
         problems,
+        revision,
         ..
     } = trackers;
     // A definition that cannot be read shows no value, never an old one.
@@ -307,10 +417,11 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
             .filter_map(move |t| t.def.as_ref().ok().map(|def| (t.key.as_str(), def)))
             .filter(move |(_, def)| def.pin == pin)
     };
+    let columns = columns(ui, rules, state, view, *revision);
     if usable(true).next().is_some() {
         design::group_heading(ui, "Pinned", 0);
         for (key, def) in usable(true) {
-            tracker_lines(ui, rules, state, view, key, def, act);
+            tracker_lines(ui, rules, state, view, columns, key, def, act);
         }
     }
     let more = usable(false).count();
@@ -322,7 +433,7 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
             design::group_heading_text(ui, "More trackers", more),
             |ui| {
                 for (key, def) in usable(false) {
-                    tracker_lines(ui, rules, state, view, key, def, act);
+                    tracker_lines(ui, rules, state, view, columns, key, def, act);
                 }
             },
         );
@@ -569,12 +680,15 @@ fn finish(
     }
 }
 
-/// A tracker's lines: one line, or a heading and one line for each instance.
+/// A tracker's lines: one line, or a heading and one line for each instance. Every line stands
+/// in the panel's columns.
+#[allow(clippy::too_many_arguments)]
 fn tracker_lines(
     ui: &mut egui::Ui,
     rules: &Rules,
     state: &State,
     view: &mut ViewState,
+    columns: Columns,
     key: &str,
     def: &super::Definition,
     act: &mut Option<Act>,
@@ -586,42 +700,25 @@ fn tracker_lines(
             None => value.to_string(),
         }
     };
-    let font = Type::Body.font(ui);
-    let measure = |ui: &egui::Ui, text: &str, font: egui::FontId| {
-        ui.painter()
-            .layout_no_wrap(text.to_owned(), font, colors().text)
-            .size()
-            .x
-    };
-    let instances = def.instances();
     let indent = if def.per.is_empty() {
         0.0
     } else {
         ui.label(Type::Body.rich(ui, &def.name));
         design::L
     };
-    // Names and values stand in columns, so the values of one tracker read down a line and its
-    // actions start at one edge. A long name is cut at a whole word, and its hover keeps it.
-    let name_limit = (ui.available_width() - indent) * NAME_SHARE;
-    let name_width = instances
-        .iter()
-        .map(|i| measure(ui, i.unwrap_or(&def.name), font.clone()))
-        .fold(0.0, f32::max)
-        .min(name_limit);
-    let value_width = instances
-        .iter()
-        .map(|i| measure(ui, &value_text(*i), Type::Numeral.font(ui)))
-        .fold(0.0, f32::max);
-    for instance in instances {
-        let place = (key.to_owned(), instance.map(str::to_owned));
-        ui.horizontal_wrapped(|ui| {
+    // Names and values stand in the panel's columns, so the values read down one edge and the
+    // first actions start at one edge. A long name is cut at a whole word, and its hover keeps it.
+    let name_width = (columns.name - indent).max(0.0);
+    let top = egui::Layout::left_to_right(egui::Align::Min);
+    for instance in def.instances() {
+        let head = |ui: &mut egui::Ui, view: &mut ViewState| {
             ui.add_space(indent);
             let height = Density::Read.control();
             let name = instance.unwrap_or(&def.name);
             name_cell(ui, view, name, egui::vec2(name_width, height));
             ui.add_space(design::S);
             let (rect, _) =
-                ui.allocate_exact_size(egui::vec2(value_width, height), egui::Sense::hover());
+                ui.allocate_exact_size(egui::vec2(columns.value, height), egui::Sense::hover());
             design::number(
                 ui.painter(),
                 rect.right(),
@@ -630,56 +727,86 @@ fn tracker_lines(
                 &Type::Numeral.font(ui),
                 colors().text,
             );
-            ui.add_space(design::S);
-            for quick in &def.quick {
-                let here = view.asking.as_ref().is_some_and(|(k, i, l, _)| {
-                    *k == place.0 && *i == place.1 && *l == quick.label
+        };
+        if columns.beside {
+            // The actions follow the value, and the ones that do not fit wrap to the line's
+            // start, so a wrapped row holds as many as the panel's width allows.
+            ui.horizontal_wrapped(|ui| {
+                head(ui, view);
+                ui.add_space(design::S);
+                quick_actions(ui, view, key, def, instance, act);
+            });
+        } else {
+            // A first action does not fit after the values: every line has its actions on the
+            // rows under it, from its name's edge.
+            ui.with_layout(top, |ui| head(ui, view));
+            if !def.quick.is_empty() {
+                ui.with_layout(top, |ui| {
+                    ui.add_space(indent);
+                    ui.horizontal_wrapped(|ui| quick_actions(ui, view, key, def, instance, act));
                 });
-                if here {
-                    // The field takes exactly its action's column, so nothing after it moves.
-                    let width = Action::secondary(&quick.label)
-                        .density(Density::Read)
-                        .natural_width(ui);
-                    amount_field(ui, view, &quick.label, width, act);
-                    continue;
-                }
-                let response = Action::secondary(&quick.label)
-                    .density(Density::Read)
-                    .name(&match instance {
-                        Some(name) => format!("{}: {name}", quick.label),
-                        None => quick.label.clone(),
-                    })
-                    .show(ui);
-                if let Some(keep) = view.keep.as_mut().filter(|keep| {
-                    (&keep.place.0, &keep.place.1, &keep.place.2)
-                        == (&place.0, &place.1, &quick.label)
-                }) {
-                    keep.now = Some(response.rect.top());
-                }
-                if response.clicked() {
-                    view.hold(ui, &place.0, &place.1, &quick.label, response.rect.top());
-                    // Read on the click only: a dice amount is parsed to tell it from `ask`.
-                    if quick.asks() {
-                        view.asking = Some((
-                            place.0.clone(),
-                            place.1.clone(),
-                            quick.label.clone(),
-                            String::new(),
-                        ));
-                        view.focus_asking = true;
-                    } else {
-                        *act = Some(Act::Press {
-                            key: key.to_owned(),
-                            instance: place.1.clone(),
-                            label: quick.label.clone(),
-                            asked: None,
-                        });
-                    }
-                }
             }
-        });
+        }
     }
     ui.add_space(design::XS);
+}
+
+/// A line's quick actions, or the amount field in the place of the one that asks.
+fn quick_actions(
+    ui: &mut egui::Ui,
+    view: &mut ViewState,
+    key: &str,
+    def: &super::Definition,
+    instance: Option<&str>,
+    act: &mut Option<Act>,
+) {
+    let place = (key.to_owned(), instance.map(str::to_owned));
+    for quick in &def.quick {
+        let here = view
+            .asking
+            .as_ref()
+            .is_some_and(|(k, i, l, _)| *k == place.0 && *i == place.1 && *l == quick.label);
+        if here {
+            // The field takes exactly its action's column, so nothing after it moves.
+            let width = Action::secondary(&quick.label)
+                .density(Density::Read)
+                .natural_width(ui);
+            amount_field(ui, view, &quick.label, width, act);
+            continue;
+        }
+        let response = Action::secondary(&quick.label)
+            .density(Density::Read)
+            .name(&match instance {
+                Some(name) => format!("{}: {name}", quick.label),
+                None => quick.label.clone(),
+            })
+            .show(ui);
+        if let Some(keep) = view.keep.as_mut().filter(|keep| {
+            (&keep.place.0, &keep.place.1, &keep.place.2) == (&place.0, &place.1, &quick.label)
+        }) {
+            keep.now = Some(response.rect.top());
+        }
+        if response.clicked() {
+            view.hold(ui, &place.0, &place.1, &quick.label, response.rect.top());
+            // Read on the click only: a dice amount is parsed to tell it from `ask`.
+            if quick.asks() {
+                view.asking = Some((
+                    place.0.clone(),
+                    place.1.clone(),
+                    quick.label.clone(),
+                    String::new(),
+                ));
+                view.focus_asking = true;
+            } else {
+                *act = Some(Act::Press {
+                    key: key.to_owned(),
+                    instance: place.1.clone(),
+                    label: quick.label.clone(),
+                    asked: None,
+                });
+            }
+        }
+    }
 }
 
 /// The most of a tracker's line that its name column takes, so the value and an action keep room.
@@ -798,7 +925,8 @@ fn result_line(ui: &mut egui::Ui, trackers: &Trackers, act: &mut Option<Act>) {
     let undo = Action::quiet(&undo_label)
         .icon(icons::UNDO)
         .density(Density::Read);
-    let add = Action::quiet("Add to Timeline").density(Density::Read);
+    // A message action without an icon is bordered (FE3).
+    let add = Action::secondary(ADD_TO_TIMELINE).density(Density::Read);
     // `Undo`'s words start at the message's words, its icon in the message's icon column;
     // `Add to Timeline` ends the line, or has a line of its own that starts at the words.
     let one_line =
@@ -817,9 +945,8 @@ fn result_line(ui: &mut egui::Ui, trackers: &Trackers, act: &mut Option<Act>) {
     if !one_line {
         ui.horizontal(|ui| {
             ui.add_space(inset);
-            add_clicked = Action::quiet("Add to Timeline")
+            add_clicked = Action::secondary(ADD_TO_TIMELINE)
                 .density(Density::Read)
-                .line_start()
                 .show(ui)
                 .clicked();
         });
@@ -832,6 +959,9 @@ fn result_line(ui: &mut egui::Ui, trackers: &Trackers, act: &mut Option<Act>) {
         *act = Some(Act::AddToTimeline(first.id.clone(), title));
     }
 }
+
+/// The result line's action that makes a Major event of the act.
+const ADD_TO_TIMELINE: &str = "Add to Timeline";
 
 /// The words of a failed save: the file, the reason, and that nothing was recorded.
 pub(super) fn not_saved(error: &str) -> String {

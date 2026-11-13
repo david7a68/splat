@@ -594,8 +594,8 @@ shows what Lookup showed before: its entry, its found note or its results; when 
 press closes it. Ctrl+K opens Lookup on what it showed last, also on Trackers. `Back` (and Alt+Left) returns to
 the entry that Lookup held. While Trackers is the view, the search field is empty with its placeholder and no
 `Clear`, so it never reads as a filter of the trackers; Lookup keeps its words for its own view, and words typed in
-the field are a new search that leaves Trackers for its results. An entry that opens from elsewhere takes the panel. The title line says `Trackers` in `Heading`, then the bell (`icons::BELL`) and
-`Due N` while a notice is due, then `Back` when Lookup holds an entry, and the close icon. The view is one scroll
+the field are a new search that leaves Trackers for its results. An entry that opens from elsewhere takes the panel. The title line says `Trackers` in `Heading`, then `Back` when Lookup holds an entry, and the
+close icon. It holds no count: the count of due notices is the `DUE N` heading's, and the rail's on the other pages. The view is one scroll
 area that opens at its top: the Due rows under `DUE N`, the pinned trackers under `PINNED` in the note's order,
 then a collapsed `MORE TRACKERS N` (`group_heading`). A Due row is its words, its `Roll <table’s heading>` buttons
 (`Action::secondary`, `icons::DICE`, Read) with their results listed under them in Body, a theme checkbox for each
@@ -614,10 +614,14 @@ Timeline edit that is not saved), the top of the scroll area says so as a small 
 `No day mark shows until the Timeline is read.`, and no day row shows. With `for:` each roll is for the next name; after the
 last name the button is off and says `Each name has its roll.` beside it. A tracker's line is its name, its value
 in `Numeral` right-aligned in a column (`value / goal` with a goal), then its quick actions (`Action::secondary`,
-Read), which wrap below. A tracker with `per` has a line for each instance, under its name. The lines of one tracker
-stand in columns: the name column is as wide as its longest name, at most 40 % of the line, and a longer name ends
-at a whole word with `…` (or is `…` alone when its first word does not fit) and is whole on hover; every value ends at one edge, and every first action starts at one
-edge. A press that raises or ends a Due row scrolls the view by the row's height, so the pressed action stays under
+Read). A tracker with `per` has a line for each instance, under its name. Every line of the panel, pinned or under
+`More trackers`, stands in the same columns: the name column is as wide as the panel's longest name, at most 40 % of
+the line, and a longer name ends at a whole word with `…` (or is `…` alone when its first word does not fit) and is
+whole on hover; every value ends at one edge. The value column holds the widest value slot of the panel: a value's
+digits and its goal's, at least three, so a value that gains a digit moves no action. When every line's first action
+fits after the value column (measured, not a fixed width), each line's actions follow its value from one edge and
+the ones that do not fit wrap to the line's start; else every line has its actions on the rows under it, from its
+name's edge. The columns are measured again only when a value, a definition or the panel's width changes. A press that raises or ends a Due row scrolls the view by the row's height, so the pressed action stays under
 the pointer and a second press of a still pointer presses it again. It acts only in the few frames after the
 press and only while the content's height changed; the DM's own wheel or drag, or the view opened again, ends it.
 The scroll area keeps blank room after the trackers only while that needs it. `add: ask` puts a
@@ -625,9 +629,11 @@ number field in the action's place, exactly the action's width and one control h
 holds focus until Enter or Escape, and Escape there does not close Lookup. Enter is the press, and the action keeps
 its place as after a click.
 The result line keeps its place at the panel's bottom
-edge above a hairline: the last act of the session being played as a success message, then `Undo: <label>`
-(`line_start`: its words at the message's words, its icon in the message's icon column) and `Add to Timeline` at
-the right end, or each on its own line, at the words, when both do not fit. `Add to Timeline` makes a Major event
+edge above a hairline: the last act of the session being played as a success message in sentences
+(`Seals for Party changed to 1. First seal for Party is due.`; two notices with one name say their marks, `Bell at
+20 and Bell at 40 are due.`), then `Undo: <label>` (`line_start`: its words at the message's words, its icon in the
+message's icon column), which names the act, and `Add to Timeline` (`Action::secondary`, Read: a message action
+without an icon is bordered) at the right end, or each on its own line, at the words, when both do not fit. `Add to Timeline` makes a Major event
 whose title is the act's label with the line it changed (`Take seal: Old Guard`). After `Add to Timeline` it says `Added to the Timeline.` with `Undo add` for 30 seconds; while the Timeline cannot save that event, it says the Timeline's own words as an error (`The timeline was not saved. <reason>`) with `Undo add`, and the event waits in the Timeline's draft. Why an act recorded nothing shows on
 the result line too, above the last act, until the next act or until the ledger is read again: a refusal as a
 warning, and a failed save as the error `Trackers.md was not saved: <reason>. Nothing was recorded.` The result line
@@ -637,8 +643,9 @@ waits after a failed save: the DM presses again, and a number typed for `add: as
 or no house rule note, a definition that cannot be used, and the count of `Trackers.md` entries that name a tracker
 no note in play has, with its key, which are not counted, and a value below its `min` (`Crowd Favor is -2, below its
 min of 0.`), which an edit in Obsidian can force and Splat never changes. With no house rule note in play the view is the empty state
-(`empty_state`, the bell): `No house rules in play` and `Turn one on in Campaign → Rules and runs.`; the rail then
-says nothing about trackers. In Campaign → Rules and runs, **House rules in play** has a switch for each house rule
+(`empty_state`, the bell): `No house rules in play`, `Turn one on to see its trackers here.` and the bordered
+button `Campaign → Rules and runs` (`Action::secondary`), which shows that tab; the rail then says nothing about
+trackers. In Campaign → Rules and runs, **House rules in play** has a switch for each house rule
 note, and its help line says `Trackers (Ctrl+T) shows the trackers of each note in play.` A campaign with no house
 rule note shows neither.
 
@@ -652,7 +659,9 @@ seal: Keyring +1`, `Bell done.`, `End of month, Day 32 done.`), cut with `…` w
 the value it left as a right-aligned `Numeral` (`number`), and the row's menu (`row_menu`) with a quiet `Remove`
 only on an entry with another session's stamp; every row keeps the menu's place, so the values stand in one column.
 Only the rows inside the reader's clip are laid out and drawn. `Remove` takes the entry, the others of its press, and the entries of the notices
-it raised, and the reader's footer says `Removed: <label>.` (with `With it: …` for what went with it) and offers
+it raised, and the reader's footer names the line and the change that went, so two rows with one label differ:
+`Removed Take seal: Keyring +1.` (a tracker without lines gives its name, a notice's press its label, `Removed End
+of month, Day 32 done: Crowd Favor +1.`), with `With it: …` for what went with it, and offers
 `Undo remove`, one step, as the Timeline's removal; it shows only while the note is in play. A refusal (the entry
 changed or is gone on disk, or a notice or a roll on a notice depends on it) and a failed save are the footer's reason line. When `Trackers.md` cannot be read the
 reader names it and shows no history and no value; when `Campaign.md` or a note in play cannot be read it says

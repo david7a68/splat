@@ -4,6 +4,7 @@
 //! rail's `Due N`, the ledger's Undo through a restart, `Add to Timeline`, and a fight started
 //! beside the view.
 use super::*;
+use crate::trackers::view::RULES_ROUTE;
 use std::fs;
 
 const EXAMPLE: &str = include_str!("../../../docs/design/world-examples/heralds-tournament.md");
@@ -61,32 +62,115 @@ fn write_the_race(d: &Driver<'_>) {
     .unwrap();
 }
 
-/// The lines of Seals: the right edge of each painted value, and the left edge of each line's
-/// first action. A value is the painted text nearest the action, on its line, before it.
-fn seal_columns(d: &Driver<'_>) -> (Vec<f32>, Vec<f32>) {
-    let (mut values, mut actions) = (Vec::new(), Vec::new());
-    for line in ["Party", "Old Guard", "Keyring", "Convicts"] {
-        let Some(action) = d.place_of(&format!("Take seal: {line}")) else {
-            continue;
-        };
-        actions.push(action.left());
-        let mut right: Option<f32> = None;
-        d.each_painted_text(|text, _| {
-            let bounds = text.visual_bounding_rect();
-            if (action.top()..action.bottom()).contains(&bounds.center().y)
-                && bounds.right() < action.left()
-            {
-                right = Some(right.map_or(bounds.right(), |r| r.max(bounds.right())));
-            }
-        });
-        values.extend(right);
-    }
-    (values, actions)
+/// Each pinned tracker line with actions, by its name, with its first action: Elapsed race time,
+/// Crowd Favor, and the four lines of Seals. Souls in the jar has no action.
+const LINES: [(&str, &str); 6] = [
+    ("Elapsed race time", "Enter room"),
+    ("Crowd Favor", "Crowd loves it"),
+    ("Party", "Take seal: Party"),
+    ("Old Guard", "Take seal: Old Guard"),
+    ("Keyring", "Take seal: Keyring"),
+    ("Convicts", "Take seal: Convicts"),
+];
+
+/// The pinned lines in the Lookup panel: the left edge of each name, the right edge of each
+/// painted value (the text nearest the name on its line, after it), and the left edge of each
+/// line's first action.
+struct Lines {
+    names: Vec<f32>,
+    values: Vec<f32>,
+    actions: Vec<f32>,
 }
 
-/// Four edges, all the same.
+fn panel_columns(d: &Driver<'_>) -> Lines {
+    let mut lines = Lines {
+        names: Vec::new(),
+        values: Vec::new(),
+        actions: Vec::new(),
+    };
+    let panel = d
+        .place_of(SEARCH_LOOKUP)
+        .map_or(f32::MAX, |field| field.left() - 1.0);
+    for (name, first) in LINES {
+        let mut named = None;
+        d.each_painted_text(|text, _| {
+            let bounds = text.visual_bounding_rect();
+            if text.galley.job.text == name && bounds.left() >= panel {
+                named = Some(bounds);
+            }
+        });
+        let (Some(named), Some(action)) = (named, d.place_of(first)) else {
+            continue;
+        };
+        let mut value: Option<egui::Rect> = None;
+        d.each_painted_text(|text, _| {
+            let bounds = text.visual_bounding_rect();
+            if (named.top()..named.bottom()).contains(&bounds.center().y)
+                && bounds.left() > named.right()
+                && value.is_none_or(|v| bounds.left() < v.left())
+            {
+                value = Some(bounds);
+            }
+        });
+        lines.names.push(named.left());
+        lines.values.extend(value.map(|v| v.right()));
+        lines.actions.push(action.left());
+    }
+    lines
+}
+
+/// One edge for every pinned line with an action. A right-aligned number's text snaps to a
+/// whole pixel, so its painted edge can differ by up to 1 px with its width.
 fn one_edge(edges: &[f32]) -> bool {
-    edges.len() == 4 && edges.iter().all(|edge| (edge - edges[0]).abs() < 0.5)
+    edges.len() == LINES.len() && edges.iter().all(|edge| (edge - edges[0]).abs() <= 1.0)
+}
+
+/// The same edges as before, each within the 1 px a snapped number can move.
+fn same_edges(now: &[f32], before: &[f32]) -> bool {
+    now.len() == LINES.len()
+        && now.len() == before.len()
+        && now.iter().zip(before).all(|(a, b)| (a - b).abs() <= 1.0)
+}
+
+/// The panel's columns hold: every value ends at one edge, and the first actions either all
+/// follow the values at one edge (`beside`) or each starts at its own line's name, under it.
+fn columns_hold(lines: &Lines, beside: bool) -> bool {
+    one_edge(&lines.values)
+        && if beside {
+            one_edge(&lines.actions) && lines.actions[0] > lines.values[0]
+        } else {
+            same_edges(&lines.actions, &lines.names)
+        }
+}
+
+/// The words painted on the Trackers title line after `Trackers`, inside the Lookup panel.
+fn title_line_words(d: &Driver<'_>) -> Vec<String> {
+    let Some(field) = d.place_of(SEARCH_LOOKUP) else {
+        return vec!["no Lookup".into()];
+    };
+    let mut title = None;
+    d.each_painted_text(|text, _| {
+        let bounds = text.visual_bounding_rect();
+        if text.galley.job.text == "Trackers"
+            && bounds.left() >= field.left() - 1.0
+            && bounds.bottom() <= field.top()
+        {
+            title = Some(bounds);
+        }
+    });
+    let Some(title) = title else {
+        return vec!["no title".into()];
+    };
+    let mut words = Vec::new();
+    d.each_painted_text(|text, _| {
+        let bounds = text.visual_bounding_rect();
+        if (title.top()..title.bottom()).contains(&bounds.center().y)
+            && bounds.left() > title.right()
+        {
+            words.push(text.galley.job.text.clone());
+        }
+    });
+    words
 }
 
 /// The tops of the painted lines of a Due row's words, from the line that starts them to the
@@ -131,6 +215,27 @@ const PURSES: &str = "> trackers:\n>   purses:\n>     name: Purses\n>     pin: t
 fn amount_in_its_column(d: &mut Driver<'_>) -> (bool, String) {
     let place = |d: &Driver<'_>, name: &str| d.place_of(name).unwrap_or(egui::Rect::NOTHING);
     let same = |a: egui::Rect, b: egui::Rect| (a.min - b.min).length() < 0.5;
+    // Where a line's actions are under it (960 beside Lookup), the DM scrolls Purses into view
+    // first, as the panel's footer covers its lower rows.
+    let wheel = d
+        .place_of(SEARCH_LOOKUP)
+        .map_or(egui::pos2(780.0, 300.0), |field| {
+            egui::pos2(field.center().x, field.bottom() + 200.0)
+        });
+    let whole = |d: &Driver<'_>| {
+        ["Pay: Ann", "Tip: Bo"].iter().all(|name| {
+            d.nodes()
+                .iter()
+                .any(|node| node.name == *name && node.fully_in_view())
+        })
+    };
+    for _ in 0..12 {
+        if whole(d) {
+            break;
+        }
+        d.scroll_points_at(wheel, 40.0);
+    }
+    let visible = whole(d);
     let (pay, tip, bo) = (
         place(d, "Pay: Ann"),
         place(d, "Tip: Ann"),
@@ -141,10 +246,11 @@ fn amount_in_its_column(d: &mut Driver<'_>) -> (bool, String) {
     let (tip_now, bo_now) = (place(d, "Tip: Ann"), place(d, "Tip: Bo"));
     d.type_text("3");
     d.press(Key::Enter);
-    d.expect("Due: Paid for Ann.");
+    d.expect("Paid for Ann is due.");
     let pay_now = place(d, "Pay: Ann");
     d.click("Undo: Pay");
-    let held = same(field, pay)
+    let held = visible
+        && same(field, pay)
         && (field.width() - pay.width()).abs() < 0.5
         && field.height() >= 24.0
         && same(tip_now, tip)
@@ -258,6 +364,30 @@ pub fn run(d: &mut Driver<'_>) {
         !d.has_containing("due. Open Trackers") && ledger(d).is_empty(),
         "With no house rule note in play, the rail says nothing about trackers",
     );
+    // FN6: the empty state's route is a bordered button that shows Campaign → Rules and runs.
+    d.aside(|d| {
+        d.press_ctrl(Key::T);
+        d.expect("No house rules in play");
+        let framed = d.control_frame(RULES_ROUTE).is_some();
+        let away = !d.has("House rules in play");
+        d.click(RULES_ROUTE);
+        d.expect("House rules in play");
+        d.observe(
+            "T19.1",
+            framed
+                && away
+                && d.has_containing("Trackers (Ctrl+T) shows the trackers of each note in play."),
+            format!(
+                "The empty state's {RULES_ROUTE} is bordered ({framed}) and shows the switches of the house rules"
+            ),
+        );
+        d.press_ctrl(Key::T);
+        d.observe(
+            "T19.1",
+            !d.has(SEARCH_LOOKUP),
+            "Ctrl+T again closes the Lookup that Ctrl+T opened",
+        );
+    });
 
     // Campaign → Rules and runs has a switch for each house rule note.
     d.click(NAV_CAMPAIGN);
@@ -292,18 +422,19 @@ pub fn run(d: &mut Driver<'_>) {
         d.has_label("PINNED") && d.has_containing("MORE TRACKERS 2") && !d.has_label("DUE"),
         "The view lists the pinned trackers, then More trackers, and no Due row yet",
     );
-    // The lines of Seals stand in columns: each value ends at one edge and each first action
-    // starts at one edge, at 960x640 beside Lookup and at 1200x800.
-    let (values, actions) = seal_columns(d);
-    let (wide_values, wide_actions) = d.at_size(DEFAULT, seal_columns);
+    // FE1: every pinned line stands in the panel's columns, not only the lines of Seals: each
+    // value ends at one edge. Where every first action fits after the values (1200x800 and
+    // 1920x1080) each first action starts at one edge after them; at 960x640 beside Lookup
+    // `Enter room` does not, and every line's actions start under its name.
+    let small = panel_columns(d);
+    let wide = d.at_size(DEFAULT, panel_columns);
+    let big = d.at_size(LARGE, panel_columns);
     d.observe(
         "T19.2",
-        one_edge(&values)
-            && one_edge(&actions)
-            && one_edge(&wide_values)
-            && one_edge(&wide_actions),
+        columns_hold(&small, false) && columns_hold(&wide, true) && columns_hold(&big, true),
         format!(
-            "The values of Seals end at one edge and its first actions start at one edge: {values:?} {actions:?} at 960x640, {wide_values:?} {wide_actions:?} at 1200x800"
+            "Values, actions and names of the pinned lines: {:?} {:?} {:?} at 960x640, {:?} {:?} at 1200x800, {:?} {:?} at 1920x1080",
+            small.values, small.actions, small.names, wide.values, wide.actions, big.values, big.actions
         ),
     );
     d.state("trackers-beside-the-plan", Sizes::All);
@@ -312,7 +443,7 @@ pub fn run(d: &mut Driver<'_>) {
     // pressed action keeps its place, so a still pointer presses it again, not a roll.
     let pressed = d.place_of("Cistern or Sands");
     d.click("Cistern or Sands");
-    d.expect("Cistern or Sands: Elapsed race time 20. Due: Bell.");
+    d.expect("Elapsed race time changed to 20. Bell is due.");
     let now = d.place_of("Cistern or Sands");
     d.observe(
         "T19.2",
@@ -332,7 +463,18 @@ pub fn run(d: &mut Driver<'_>) {
     // The race reaches 40: the second bell rolls each rival by name, and the wandering table.
     d.click("Enter room");
     d.click("Enter room");
-    d.expect("Enter room: Elapsed race time 40. Due: Bell.");
+    d.expect("Elapsed race time changed to 40. Bell is due.");
+    // AE2: `0 / 120` became `40 / 120`, and the panel's columns held: no value edge and no
+    // first action moved.
+    let forty = d.at_size(LARGE, panel_columns);
+    d.observe(
+        "T19.2",
+        same_edges(&forty.values, &big.values) && same_edges(&forty.actions, &big.actions),
+        format!(
+            "At 1920x1080, at 40 / 120 the values end and the first actions start where they did at 0 / 120: {:?} {:?}, then {:?} {:?}",
+            big.values, big.actions, forty.values, forty.actions
+        ),
+    );
     for _ in 0..3 {
         d.click("Roll Rival Track");
     }
@@ -349,7 +491,7 @@ pub fn run(d: &mut Driver<'_>) {
     // An instance's line has its own action: one press.
     d.click("Take seal: Old Guard");
     d.click("Take seal: Party");
-    d.expect("Take seal: Seals (Party) 1. Due: First seal for Party.");
+    d.expect("Seals for Party changed to 1. First seal for Party is due.");
     d.observe(
         "T19.3",
         d.has_label("DUE 3") && d.has_containing("3 notices are due"),
@@ -374,7 +516,7 @@ pub fn run(d: &mut Driver<'_>) {
             "Wandering, 0:40 to 1:19: ",
             "Old Guard: First seal.",
             "Party: First seal.",
-            "Take seal: Seals (Party) 1.",
+            "Seals for Party changed to 1.",
         ];
         let missing: Vec<_> = parts
             .iter()
@@ -403,7 +545,7 @@ pub fn run(d: &mut Driver<'_>) {
     let undo_at_words = |d: &Driver<'_>| {
         let (undo, words) = (
             d.painted_left("Undo: Take seal"),
-            d.painted_left("Take seal: Seals (Party) 1."),
+            d.painted_left("Seals for Party changed to 1."),
         );
         (
             matches!((undo, words), (Some(u), Some(w)) if (u - w).abs() < 0.5),
@@ -428,7 +570,7 @@ pub fn run(d: &mut Driver<'_>) {
     // A wrong press seen late: the opposite action corrects the value, and the history keeps
     // both presses. The notice the wrong press raised has nothing on it, so it ends.
     d.click("Lose seal: Party");
-    d.expect("Lose seal: Seals (Party) 0. First seal for Party is no longer due.");
+    d.expect("Seals for Party changed to 0. First seal for Party is no longer due.");
     d.observe(
         "T19.2",
         ledger(d).matches("why: Take seal").count() == 2
@@ -441,14 +583,14 @@ pub fn run(d: &mut Driver<'_>) {
     );
     // Undo steps back through tonight's acts, newest first: the notice comes back.
     d.click("Undo: Lose seal");
-    d.expect("Take seal: Seals (Party) 1. Due: First seal for Party.");
+    d.expect("Seals for Party changed to 1. First seal for Party is due.");
     d.observe(
         "T19.2",
         d.has_label("DUE 3") && d.has("Done: First seal for Party"),
         "Undo of the opposite press brings the notice back",
     );
     d.click("Undo: Take seal");
-    d.expect("Take seal: Seals (Old Guard) 1. Due: First seal for Old Guard.");
+    d.expect("Seals for Old Guard changed to 1. First seal for Old Guard is due.");
     d.observe(
         "T19.2",
         d.has_label("DUE 2") && !ledger(d).contains("for: Party"),
@@ -476,6 +618,19 @@ pub fn run(d: &mut Driver<'_>) {
         "T19.1",
         d.field_text(SEARCH_LOOKUP).unwrap_or_default().is_empty() && !d.has("Clear"),
         "Over Trackers the search field shows its placeholder, not the last search",
+    );
+    // FH8: the count belongs to the `DUE 2` heading; the title line says only `Trackers` and
+    // its actions. FE3: `Add to Timeline` has no icon, so it is bordered.
+    let title = title_line_words(d);
+    d.observe(
+        "T19.3",
+        d.has_label("DUE 2") && !title.iter().any(|words| words.starts_with("Due")),
+        format!("The title line holds no Due count beside the DUE 2 heading: {title:?}"),
+    );
+    d.observe(
+        "T19.2",
+        d.in_view("Add to Timeline") && d.control_frame("Add to Timeline").is_some(),
+        "Add to Timeline, a message action without an icon, has a border",
     );
     d.state("trackers-over-an-entry", Sizes::Small);
     // Words typed there are a new search, which leaves Trackers for its result.
@@ -542,7 +697,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.click(NAV_SESSIONS);
     show_plan(d);
     d.press_ctrl(Key::T);
-    d.expect("Take seal: Seals (Old Guard) 1. Due: First seal for Old Guard.");
+    d.expect("Seals for Old Guard changed to 1. First seal for Old Guard is due.");
     d.observe(
         "T19.2",
         d.has("Undo: Take seal") && d.has_label("DUE 2"),
@@ -584,7 +739,8 @@ pub fn run(d: &mut Driver<'_>) {
     d.state("tracker-history-in-the-reader", Sizes::All);
     d.click(keyring);
     d.click("Remove");
-    d.expect("Removed: Take seal.");
+    // AE1, FE11: of two rows named `Take seal`, the result names the one that went.
+    d.expect("Removed Take seal: Keyring +1.");
     d.observe(
         "T19.6",
         !ledger(d).contains("c-01de5ea1")
@@ -598,7 +754,7 @@ pub fn run(d: &mut Driver<'_>) {
     // place at the top, and B stays.
     d.press_ctrl(Key::T);
     d.click("Crowd loves it");
-    d.expect("Crowd loves it: Crowd Favor 2.");
+    d.expect("Crowd Favor changed to 2.");
     d.press_ctrl(Key::T);
     d.click("Undo remove");
     let text = ledger(d);
