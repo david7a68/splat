@@ -496,7 +496,7 @@ pub enum Pressed {
 ///
 /// ```compile_fail
 /// use splat::outcome::{Done, ResultOrder, Verb};
-/// let _ = Done::new(ResultOrder::issue(), Verb::Remove, "Take seal");
+/// let _ = Done::new(ResultOrder::default(), Verb::Remove, "Take seal");
 /// ```
 #[must_use = "give it to `Footer::kept_outcome`"]
 pub struct Done<'a> {

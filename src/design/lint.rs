@@ -278,6 +278,8 @@ const OUTCOME_INTERNALS: [&str; 4] = [
 /// - `phrase-owner`: a phrase outside its owner file.
 /// - `outcome-internal`: a helper of `sentence!`, or `Sentence` renamed in a `use`.
 /// - `outside-words`: each `Sentence::outside(`, the escape for words from outside the app.
+/// - `raw-order`: each `Footer::outcome_at`, the staged path for a result whose order its caller
+///   issued by hand (the typed path is `Footer::kept_outcome`, with a `Results` store's view).
 /// - `body-message`: each body place (`outcome::banner(`, `outcome::row_fault(`,
 ///   `PagePlaceholder::new(`), or an import that would hide one from this count.
 fn message_rules(path: &str, code: &str) -> Vec<&'static str> {
@@ -304,6 +306,7 @@ fn message_rules(path: &str, code: &str) -> Vec<&'static str> {
             found.push("outcome-internal");
         }
         found.extend(line.matches("Sentence::outside(").map(|_| "outside-words"));
+        found.extend(line.matches(".outcome_at(").map(|_| "raw-order"));
         for place in [
             "outcome::banner(",
             "outcome::row_fault(",
@@ -456,6 +459,9 @@ fn raw_colours_and_sizes_stay_inside_the_design_system() {
                     "Call the phrase's owner: `XP {` in src/difficulty.rs, `· line {` in `fault_words`, `N of M chosen` in `chosen_count`"
                 }
                 "outcome-internal" => "Make sentences with `sentence!` or `Sentence::outside`",
+                "raw-order" => {
+                    "Record the result in a `design::Results` store and give it to `Footer::kept_outcome`"
+                }
                 "outside-words" => {
                     "Use `sentence!`; words from outside the app go through `Sentence::outside`, and a reviewer reads each new use"
                 }
@@ -565,6 +571,10 @@ fn the_message_rules_find_what_they_should() {
     assert_eq!(
         rules("src/a.rs", "Sentence::outside(error)"),
         ["outside-words"]
+    );
+    assert_eq!(
+        rules("src/a.rs", "footer.outcome_at(order, done, &mut pressed);"),
+        ["raw-order"]
     );
     assert_eq!(
         rules(
