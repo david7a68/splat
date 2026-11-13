@@ -855,11 +855,7 @@ fn starts_line(ui: &Ui) -> bool {
         matches!(
             frame.kind(),
             Some(
-                UiKind::Menu
-                    | UiKind::Popup
-                    | UiKind::Picker
-                    | UiKind::Tooltip
-                    | UiKind::TableCell
+                UiKind::Menu | UiKind::Popup | UiKind::Picker | UiKind::Tooltip | UiKind::TableCell
             )
         )
     })
@@ -1429,8 +1425,11 @@ pub fn segmented<T: PartialEq + Copy>(ui: &mut Ui, value: &mut T, options: &[(T,
                     ui.painter()
                         .rect_filled(rect, corner(RADIUS_CONTROL), c.hover);
                 }
-                ui.painter()
-                    .galley(pos2(rect.left() + S, rect.center().y - galley.size().y / 2.0), galley, color);
+                ui.painter().galley(
+                    pos2(rect.left() + S, rect.center().y - galley.size().y / 2.0),
+                    galley,
+                    color,
+                );
                 if selected {
                     let bar = Rect::from_min_max(
                         pos2(rect.left() + 2.0, rect.bottom() - 2.0),
@@ -2088,7 +2087,10 @@ impl Tone {
 /// secondary (bordered) action in it, so its border starts there; on a result, only Undo is quiet.
 pub fn message_choice_row<R>(ui: &mut Ui, tone: Tone, add: impl FnOnce(&mut Ui) -> R) -> R {
     ui.horizontal(|ui| {
-        space(ui, S + 1.0 + number_width(ui, tone.parts().0, &Type::Body.font(ui)) + XS);
+        space(
+            ui,
+            S + 1.0 + number_width(ui, tone.parts().0, &Type::Body.font(ui)) + XS,
+        );
         add(ui)
     })
     .inner
@@ -3711,7 +3713,10 @@ pub fn counted_tab<T: PartialEq + Copy>(
     // As wide as its widest state, as a segment is, so nothing moves when the tab changes.
     let width = segment_width(ui, &format!("{label} {}", super::count(count, "", "")));
     let (rect, response) = ui.allocate_exact_size(
-        egui::vec2(width.max(galley.size().x) + 2.0 * S, Density::Read.control()),
+        egui::vec2(
+            width.max(galley.size().x) + 2.0 * S,
+            Density::Read.control(),
+        ),
         egui::Sense::click(),
     );
     response.widget_info(|| {
@@ -3726,8 +3731,11 @@ pub fn counted_tab<T: PartialEq + Copy>(
         if response.hovered() {
             ui.painter().rect_filled(rect, RADIUS_CONTROL, c.hover);
         }
-        ui.painter()
-            .galley(pos2(rect.left() + S, rect.center().y - galley.size().y / 2.0), galley, color);
+        ui.painter().galley(
+            pos2(rect.left() + S, rect.center().y - galley.size().y / 2.0),
+            galley,
+            color,
+        );
         if selected {
             let inset = XS / 2.0;
             ui.painter().rect_filled(

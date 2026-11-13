@@ -63,6 +63,10 @@ const CONDITIONS_HELP: &str = "No HP, AC or roll changes by itself. A time you t
 /// Returns the position in `effects` of the one the DM removed. `field` is the width of the
 /// `Other effect…` field below: each row ends where that field's Add ends, so the form has one
 /// right edge (FH2).
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 pub(crate) fn other_effects_list<'a>(
     ui: &mut egui::Ui,
     effects: impl IntoIterator<Item = &'a str>,
@@ -1044,6 +1048,10 @@ impl Run {
 
     // ---- Live -------------------------------------------------------------------
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn live_view(&mut self, ui: &mut egui::Ui) -> bool {
         // Before the keys, which give way to the keyboard beside a panel.
         self.back_out_on_escape(ui);
@@ -2461,6 +2469,10 @@ impl Run {
     }
 
     /// All close paths share the same safe default and separate loss from saving.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn close_dialog(&mut self, ui: &egui::Ui, note: &str) -> bool {
         let cannot_save = self.strip().not_saved;
         let stranded = self.stranded_names();
@@ -2718,6 +2730,10 @@ impl Run {
 
     /// Setup and the ended view have no row panel, but a sync can still be running. Its
     /// conflicts, and a way to stop it, must be here or the run cannot close.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn sync_block(&mut self, ui: &mut egui::Ui) {
         let names: Vec<(usize, String)> = self
             .syncs
@@ -3435,6 +3451,10 @@ impl Run {
     }
 
     /// Returns the group the DM chooses to add. Those in tonight's plan come first.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn group_list(&mut self, ui: &mut egui::Ui, arrival: Option<(f32, f32)>) -> Option<Uuid> {
         let c = colors();
         let Some(groups) = self.groups.clone() else {
@@ -4073,6 +4093,10 @@ impl Run {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn keys_tab(&self, ui: &mut egui::Ui) {
         let c = colors();
         // The panel's title names them (FE14), so the list has no label of its own.
@@ -4109,6 +4133,10 @@ impl Run {
     }
 
     /// Recording only. Colour says nothing here, because nothing is wrong.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn death_saves(&mut self, ui: &mut egui::Ui, index: usize, successes: u8, failures: u8) {
         let c = colors();
         design::group_heading(ui, "Death saves", 0);
@@ -6089,6 +6117,10 @@ fn snapshot_values_line(notice_shown: bool) -> &'static str {
 /// taller than the message's first line, so the message starts lower by half the difference:
 /// the cross is centred on the first line, not on the top of the words. True when the DM
 /// dismisses it.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn dismissable(ui: &mut egui::Ui, close: &str, message: impl FnOnce(&mut egui::Ui)) -> bool {
     ui.horizontal_top(|ui| {
         let width = ui.available_width() - Density::Read.control() - design::S;
@@ -6187,6 +6219,10 @@ fn change_origin(p: &Participant) -> Option<String> {
     (!parts.is_empty()).then(|| parts.join(" · "))
 }
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn changes_block(ui: &mut egui::Ui, p: &Participant, above_stat_block: bool) {
     let c = colors();
     let heading = |ui: &mut egui::Ui| {
@@ -6269,6 +6305,10 @@ fn changes_block(ui: &mut egui::Ui, p: &Participant, above_stat_block: bool) {
 }
 
 /// Each change, with the value it replaces. The editors and the run say it the same way.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 pub(crate) fn change_rows(ui: &mut egui::Ui, rows: &[Row]) {
     let c = colors();
     // What the DM must do comes first, in larger type. The rest the run has done.
@@ -8774,6 +8814,10 @@ fn correction_label(ui: &mut egui::Ui, label: &str) {
 
 /// A Correct reason on its own line below its field, starting at the field. The line stays
 /// while the reason is gone, so nothing below moves as the DM types.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn correction_reason(ui: &mut egui::Ui, reason: &str, shown: bool) {
     ui.horizontal(|ui| {
         ui.add_space(correction_label_width(ui) + ui.spacing().item_spacing.x);

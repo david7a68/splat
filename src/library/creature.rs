@@ -701,6 +701,10 @@ fn stat_identity(entry: &Entry) -> String {
 }
 
 /// Identity, vitals, abilities and details: what the entry has, and no empty cells.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 pub(super) fn stat_head(ui: &mut egui::Ui, entry: &Entry, values: Option<&super::view::RunValues>) {
     ui.add_space(design::S);
     reader_style::identity(ui, &stat_identity(entry));
@@ -766,6 +770,10 @@ pub(super) fn stat_head(ui: &mut egui::Ui, entry: &Entry, values: Option<&super:
     ui.spacing_mut().item_spacing.y = design::XS;
 }
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 pub(super) fn show(
     ui: &mut egui::Ui,
     entry: &Entry,

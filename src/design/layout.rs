@@ -23,8 +23,8 @@ use eframe::egui::{
 };
 
 use super::{
-    Action, Density, FORM_WIDTH, extras::space, L, M, PANEL_MIN_WIDTH, S, Status, Type, XS, colors, field, named,
-    number_width, placeholder, theme,
+    Action, Density, FORM_WIDTH, L, M, PANEL_MIN_WIDTH, S, Status, Type, XS, colors, extras::space,
+    field, named, number_width, placeholder, theme,
 };
 
 /// The longest word an action may have, in characters. With this limit and an icon, the widest

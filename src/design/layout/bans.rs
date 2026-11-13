@@ -344,8 +344,14 @@ mod tests {
             0
         );
         // K's count does not see X's calls, nor X's K's.
-        assert_eq!(count("fn f() { ui.add_space(8.0); }", Group::Layout).unwrap(), 0);
-        assert_eq!(extras("fn f() { let a = egui::ScrollArea::vertical(); }"), 0);
+        assert_eq!(
+            count("fn f() { ui.add_space(8.0); }", Group::Layout).unwrap(),
+            0
+        );
+        assert_eq!(
+            extras("fn f() { let a = egui::ScrollArea::vertical(); }"),
+            0
+        );
     }
 
     #[test]

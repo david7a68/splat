@@ -660,6 +660,10 @@ impl Splat {
         items
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn close_prompt(&mut self, ctx: &egui::Context) {
         let items = self.unsaved_items();
         // Sync finished, or a draft was saved, while the prompt was open.
@@ -835,6 +839,10 @@ impl Splat {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn rail(&mut self, ctx: &egui::Context, connection: Connection) {
         let c = colors();
         let at_table = self.visible_page() == Some(Page::Run);

@@ -105,6 +105,10 @@ fn page_row(ui: &mut egui::Ui, index: &ContentIndex, position: usize) -> bool {
 /// History rows put each date in one column, as wide as the widest date plus an `S` gap, so
 /// names and summaries share their left edges. The column takes at most a third of the width,
 /// and a longer date wraps in it. A row without a date keeps the column empty.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn history_rows(ui: &mut egui::Ui, index: &ContentIndex, history: &[usize]) -> Option<Go> {
     let dates: Vec<Option<String>> = history
         .iter()
@@ -177,6 +181,10 @@ fn source_name(index: &ContentIndex, item: &Item, source: usize) -> String {
 
 /// The lines other pages hold about this one, by the kind of page and then by page.
 /// `listed` holds the pages that a list above already shows with their summaries.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn from_other_pages(
     ui: &mut egui::Ui,
     item: &Item,
@@ -276,6 +284,10 @@ fn from_other_pages(
 }
 
 /// What is here, who is part of this, its history, and what other pages say about it.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 pub(super) fn related(ui: &mut egui::Ui, item: &Item, index: &ContentIndex) -> Option<Go> {
     let mut go = None;
     let here = index.inside(&item.entry);

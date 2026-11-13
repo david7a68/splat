@@ -221,6 +221,10 @@ struct BrokenDetail {
 
 /// The one row above another view while an unsaved generated NPC is held, on World and in
 /// Lookup: `Unsaved NPC: <name> · Show`. Returns whether the DM chose `Show`.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 pub(crate) fn unsaved_npc_row(ui: &mut egui::Ui, name: &str) -> bool {
     let mut show = false;
     ui.horizontal_wrapped(|ui| {
@@ -891,6 +895,10 @@ impl WorldPage {
 
     /// A note that the system will not read. The pane names the file and how to recover it;
     /// the system's words wait in Technical details. Nothing here writes the file.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn unread_pane(&mut self, ui: &mut egui::Ui, index: &ContentIndex, campaign: &Campaign) {
         let Some(PageError::Unread(unread)) = &mut self.error else {
             return;
@@ -1250,6 +1258,10 @@ impl WorldPage {
 
     /// The open questions, or the problems. Returns the page a press asks for, with the
     /// heading to show.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn checks_view(&mut self, ui: &mut egui::Ui, index: &ContentIndex) -> Option<CheckAct> {
         let (_, checks) = self.checks.as_ref()?;
         let mut open = None;
@@ -1519,6 +1531,10 @@ impl WorldPage {
         bottom
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn list(&mut self, ui: &mut egui::Ui, index: &ContentIndex, groups: &WorldGroups) {
         for ((kind, title), rows) in groups {
             ui.add_space(design::XS);

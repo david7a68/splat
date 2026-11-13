@@ -113,6 +113,10 @@ fn fetch(session: Session) -> Result<Vec<RemoteCampaign>, String> {
     parse(&bytes)
 }
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn connection_help(ui: &mut egui::Ui) {
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
@@ -252,6 +256,10 @@ impl DndBeyond {
         });
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     pub fn show_import(
         &mut self,
         ui: &mut egui::Ui,

@@ -262,6 +262,10 @@ pub fn rest_ruling(ui: &mut egui::Ui, event: &Event, undo: bool) -> Option<RestR
 
 /// The ruling now in force and the action that changes it. The action changes data, so it is a
 /// quiet button after the status, never a link.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 pub fn rest_ruling_line(ui: &mut egui::Ui, event: &Event) -> Option<RestRulingAction> {
     if event.kind != Kind::LongRest {
         return None;
@@ -470,6 +474,10 @@ pub fn file_act(book: &mut Book, act: Option<FileAct>) {
 
 /// What stops the timeline from saving. The DM must choose, so this cannot be dismissed.
 /// Returns true when the comparison needs the rest of the pane.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 pub fn problems(ui: &mut egui::Ui, book: &mut Book) -> bool {
     if let Some(error) = book.unreadable.clone() {
         // Message choices start at the message text. The old-format notice draws its own.

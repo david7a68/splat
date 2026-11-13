@@ -583,6 +583,10 @@ pub fn span(start: Option<u64>, length: &str) -> Option<String> {
 }
 
 /// One line for each check, then `Roll all`, then results that are no longer on a line.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 pub fn lines(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<Act> {
     state.follow(&view.event.id);
     let c = colors();
@@ -772,6 +776,10 @@ pub fn lines(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<Ac
 
 /// A result: its number and words, `Clear` at the line's end, and an offer for each encounter
 /// or group that it links.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn result(ui: &mut egui::Ui, label: &str, check: &Check, view: &View<'_>) -> Option<Act> {
     let planned = view.planned;
     let c = colors();

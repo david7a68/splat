@@ -2941,6 +2941,10 @@ impl Sessions {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn record_control(&mut self, ui: &mut egui::Ui, settings: &ProcessingSettings) {
         // Stop is here whichever session is open. It can be urgent, if a player asks.
         if self.live.as_ref().is_some_and(|live| {
@@ -3001,6 +3005,10 @@ impl Sessions {
     }
 
     /// The live state, or the step before it. Always in the same place.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn record_line(&mut self, ui: &mut egui::Ui, settings: &ProcessingSettings) {
         if self.tab == Tab::Recordings
             && self.reading.is_none()
@@ -3229,6 +3237,10 @@ impl Sessions {
 
     /// What the file did to a draft: changed on disk, gone or moved, or not saved. It arrives on
     /// its own, so it is drawn in the bottom banner, never above the editor.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn draft_warning(ui: &mut egui::Ui, draft: &mut Draft) {
         // A new file could not be made: why, above the choices that are still open.
         if draft.state == DraftState::Missing
@@ -4248,6 +4260,10 @@ impl Sessions {
 
     /// What play changed in the world in this session, from each entry's Log. The entry holds
     /// the line, so this list needs no store of its own.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn world_changes(&mut self, ui: &mut egui::Ui) {
         let Some(index) = ui.ctx().data(|data| {
             data.get_temp::<std::sync::Arc<crate::lookup::ContentIndex>>(egui::Id::new(
@@ -4508,6 +4524,10 @@ impl Sessions {
         self.last_time_line(ui, selected, plan, book);
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn recording_row(
         &mut self,
         ui: &mut egui::Ui,
@@ -5594,6 +5614,10 @@ impl Sessions {
             });
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn delete_dialog(&mut self, ctx: &egui::Context) {
         let focus_id = egui::Id::new("delete_recording_default_focused");
         let Some(path) = self.confirm_delete.clone() else {
@@ -5992,6 +6016,10 @@ impl Sessions {
     }
 
     /// The session page below its title and state line, above its message footer.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn session_body(
         &mut self,
         ui: &mut egui::Ui,

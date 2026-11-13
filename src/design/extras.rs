@@ -186,7 +186,12 @@ pub fn choice(ui: &mut Ui, selected: bool, label: &str) -> Response {
     let height = Density::Read.control();
     let (rect, response) = ui.allocate_exact_size(vec2(width, height), Sense::click());
     response.widget_info(|| {
-        WidgetInfo::selected(WidgetType::SelectableLabel, ui.is_enabled(), selected, label)
+        WidgetInfo::selected(
+            WidgetType::SelectableLabel,
+            ui.is_enabled(),
+            selected,
+            label,
+        )
     });
     if ui.is_rect_visible(rect) {
         let fill = if response.is_pointer_button_down_on() {
@@ -197,11 +202,8 @@ pub fn choice(ui: &mut Ui, selected: bool, label: &str) -> Response {
             None
         };
         if let Some(fill) = fill {
-            ui.painter().rect_filled(
-                rect,
-                egui::CornerRadius::same(RADIUS_CONTROL as u8),
-                fill,
-            );
+            ui.painter()
+                .rect_filled(rect, egui::CornerRadius::same(RADIUS_CONTROL as u8), fill);
         }
         if selected {
             ui.painter().text(
@@ -212,13 +214,7 @@ pub fn choice(ui: &mut Ui, selected: bool, label: &str) -> Response {
                 c.accent,
             );
         }
-        let galley = one_line(
-            ui,
-            label,
-            font,
-            c.text,
-            rect.width() - 2.0 * S - ICON_SLOT,
-        );
+        let galley = one_line(ui, label, font, c.text, rect.width() - 2.0 * S - ICON_SLOT);
         ui.painter().galley(
             pos2(
                 rect.left() + S + ICON_SLOT,

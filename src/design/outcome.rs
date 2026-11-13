@@ -20,7 +20,8 @@
 //! just before it that differs only in the forbidden part and compiles: the failure can only come
 //! from that part.
 use super::components::{
-    Action, FooterRank, icon_button, link, number_width, small_tone_message, tone_message, undo_message_capped,
+    Action, FooterRank, icon_button, link, number_width, small_tone_message, tone_message,
+    undo_message_capped,
 };
 pub use super::components::{Footer, ResultOrder, Tone};
 use super::{extras::space, icons, tokens::*};

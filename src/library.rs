@@ -71,6 +71,10 @@ fn recovery_paragraph(ui: &mut egui::Ui, fault: &FileFault) {
     });
 }
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn fault_notice(ui: &mut egui::Ui, fault: &FileFault) -> bool {
     let again = design::message_with_actions(ui, Tone::Error, &fault_here(fault), |ui| {
         recovery_paragraph(ui, fault);
@@ -125,6 +129,10 @@ fn draft_repair_problem(
 /// A manifest's recovery in Edit Markdown: the bordered action at the message text edge, then
 /// its consequence. It follows the error in the pane's message footer: the action depends on the
 /// saved file only, so it stays while the DM edits and moves nothing.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn recovery_action(
     ui: &mut egui::Ui,
     (_, path, exists): &(Module, String, bool),
@@ -169,6 +177,10 @@ fn recovery_action(
 }
 
 /// Keep the error with its repair and consequence in both reader and source views.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn repair_notice(
     ui: &mut egui::Ui,
     problem: &str,
@@ -568,6 +580,10 @@ fn reader_messages<'a>(
     }
 }
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn duplicate_choices(
     ui: &mut egui::Ui,
     loaded: &Loaded,
@@ -2417,6 +2433,10 @@ pub(crate) const PACKAGE_USE_RESULT: &str =
 /// Undo greys: the result's words keep the text colour, because the change still happened. With
 /// `say_why`, the reason follows in `Small` muted words at the message words. Without it, the
 /// reason is already on screen (a draft's reason in its save row) and on Undo's hover.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 pub(crate) fn kept_undo_message(
     ui: &mut egui::Ui,
     tone: Tone,
@@ -2941,6 +2961,10 @@ pub(crate) fn folder_field(
 
 /// `Choose for this campaign` and its help, which `help` gives for the box's state after this
 /// frame's click.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 pub(crate) fn use_checkbox(
     ui: &mut egui::Ui,
     not_used: &mut bool,
@@ -3663,6 +3687,10 @@ fn natural_key(name: &str) -> Vec<(String, u64)> {
 
 pub(crate) const EDITOR_MAX_WIDTH: f32 = 720.0;
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn form_heading(ui: &mut egui::Ui, title: &str) {
     ui.add_space(design::L);
     ui.label(

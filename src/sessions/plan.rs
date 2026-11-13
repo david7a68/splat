@@ -683,6 +683,10 @@ fn glyph_link(
     response.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn plan_details(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
     ui.horizontal_top(|ui| {
         ui.add_space(Type::Body.size() + design::S);
@@ -909,6 +913,10 @@ fn reveal_opened_played(
 }
 
 /// The rule below a row. Returns its height, which the scenes' fold counts with the row's.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn plan_rule(ui: &mut egui::Ui) -> f32 {
     let top = ui.cursor().top();
     ui.add_space(design::S);
@@ -1657,6 +1665,10 @@ fn scene_row(
 /// target (`design::wrapped_link`), and a row's words start at the top of their row, so a
 /// one-line scene starts that much lower: its line is the fights' title line, and its second
 /// line keeps a fight row's pitch (app round 2, X12).
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn scene_words(ui: &mut egui::Ui, task: &TaskLine, plain: &str) {
     let font = Type::Body.font(ui);
     let width = ui.available_width();
@@ -1677,6 +1689,10 @@ fn scene_words(ui: &mut egui::Ui, task: &TaskLine, plain: &str) {
 /// warning mark and `Not found` at the end of their line, in the lines the words take alone, so
 /// the row keeps its height. Where the mark has no room, the words give up whole words from
 /// their end first; hover keeps them whole (review round 1).
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn gone_scene_words(ui: &mut egui::Ui, task: &TaskLine, plain: &str) {
     let c = colors();
     let width = ui.available_width();
@@ -2377,6 +2393,10 @@ impl Sessions {
 
     /// The open Travel row's checks: the table, **How long**, the lines and the last results.
     /// Returns the act the DM asked for, whether the length changed, and which Undo was pressed.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn travel_block(
         &mut self,
         ui: &mut egui::Ui,
@@ -3570,6 +3590,10 @@ impl Sessions {
     }
 
     /// The scene act's words under the place where the DM acted, while they show there.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn row_fault(&self, ui: &mut egui::Ui, place: Place, shown: Shown) {
         if let Some(fault) = &self.scenes.fault
             && shown.fault == Some(place)
@@ -3666,6 +3690,10 @@ impl Sessions {
 
     /// `Removed “…” from tonight.` with `Undo remove`, at `place`, while the note is as the
     /// removal left it. A finished change: the success tone.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn removed_scene_message(&self, ui: &mut egui::Ui, place: Place, act: &mut Option<SceneAct>) {
         let Some((_, words, undo)) = &self.scenes.removed else {
             return;
@@ -3731,6 +3759,10 @@ impl Sessions {
     /// `Scene`'s field at the end of the plan. Enter adds a scene and keeps the field open for
     /// the next; Escape clears and closes it. What the field did shows directly under it while
     /// it is open, so the field never moves for its own result.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn scene_field(
         &mut self,
         ui: &mut egui::Ui,
@@ -3794,6 +3826,10 @@ impl Sessions {
     /// The Scene field's fault, and `Scene added to tonight.` with `Undo scene`, under the open
     /// field, so the field never moves for its own result. With `reveal`, the field's rectangle,
     /// the field and its words scroll into view together.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn field_result(
         &self,
         ui: &mut egui::Ui,
@@ -3897,6 +3933,10 @@ impl Sessions {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn removed_fight_message(&mut self, ui: &mut egui::Ui, session: Option<Uuid>, position: usize) {
         let Some((id, at, name, undo)) = &self.removed_fight else {
             return;

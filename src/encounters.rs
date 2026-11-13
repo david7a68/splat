@@ -1208,6 +1208,10 @@ const RESULT_ROW: f32 = design::XL + design::L + design::S;
 /// first place holds a party copy's word, which has no challenge rating. The package follows
 /// if the row has room for it.
 /// `hp_missing` comes from the creature's stats: the HP fault is data, never found in the words.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 pub(crate) fn detail_columns(
     ui: &mut egui::Ui,
     detail: &str,
@@ -2145,6 +2149,10 @@ pub(crate) fn identity_copies() -> usize {
 }
 
 /// A copied note is still a search result, with the same repair used by Lookup.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn duplicate_creature_results(ui: &mut egui::Ui, query: &str) -> bool {
     let Some(index) = ui.ctx().data(|data| {
         data.get_temp::<Arc<crate::lookup::ContentIndex>>(egui::Id::new("reader_link_index"))
@@ -2221,6 +2229,10 @@ fn duplicate_creature_results(ui: &mut egui::Ui, query: &str) -> bool {
     !seen.is_empty()
 }
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn replace_missing_creature(
     ui: &mut egui::Ui,
     snapshot: &Snapshot,
@@ -5704,6 +5716,10 @@ impl Encounters {
         self.after_panes(creature_step, make_yours, active, campaigns.modules());
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn add_pane(
         ui: &mut egui::Ui,
         draft: &mut Draft,
@@ -6083,6 +6099,10 @@ impl Encounters {
 
     /// What the party finds when this fight is over, one line each. The note keeps it as its
     /// `## Loot` list, which Obsidian shows too.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn loot_field(ui: &mut egui::Ui, draft: &mut Draft) {
         design::group_heading(ui, LOOT_FIELD, draft.loot.len());
         if !draft.loot_owned {

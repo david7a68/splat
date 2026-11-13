@@ -1534,6 +1534,10 @@ mod tests {
     /// to `design::register_row`, in either mode) are not help. A mark on a label outside every
     /// row changes nothing.
     #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+    )]
     fn help_measure_fails_on_a_wide_muted_small_label() {
         use crate::design::{Type, colors};
         let words = "Splat fills the template with the session’s name, its date and its number. ";

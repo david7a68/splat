@@ -925,6 +925,10 @@ impl Party {
 }
 
 /// Keep each storage message and its actions together at the list measure.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn storage_notice(
     ui: &mut egui::Ui,
     tone: Tone,
@@ -1633,6 +1637,10 @@ pub const SHEET_PAGES: [(usize, &str); 6] = [
 ];
 
 /// Labelled prose, one paragraph at a time, at a reading width.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn prose(ui: &mut egui::Ui, label: Option<&str>, text: &str) {
     design::reader::measure(ui, |ui| {
         if let Some(label) = label {
@@ -1650,6 +1658,10 @@ fn prose(ui: &mut egui::Ui, label: Option<&str>, text: &str) {
 }
 
 /// Who the character is, as the player wrote it on D&D Beyond.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn background(ui: &mut egui::Ui, record: &EntitySnapshot) {
     use splat::character::profile::{characteristic_rows, companion_line, detail_rows, story_rows};
     let profile = record.profile();
@@ -1821,6 +1833,10 @@ fn text(v: &Value) -> &str {
 fn array(v: &Value) -> &[Value] {
     v.as_array().map(Vec::as_slice).unwrap_or(&[])
 }
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn section_heading(ui: &mut egui::Ui, title: &str) {
     ui.add_space(design::L);
     design::group_heading(ui, title, 0);
@@ -1971,6 +1987,10 @@ fn overview_death_saves(record: &EntitySnapshot, live: Option<&LiveValues>) -> O
     ))
 }
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<&LiveValues>) {
     let narrow = ui.available_width() < 560.0;
     section_heading(ui, "Combat");
@@ -2451,6 +2471,10 @@ pub(crate) fn sheet_chips(record: &EntitySnapshot) -> Vec<Chip> {
         .collect()
 }
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn detail_intro(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search: &str) {
     match page {
         1 => {
@@ -2517,11 +2541,19 @@ fn detail_intro(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search:
     }
 }
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn sheet_heading(ui: &mut egui::Ui, title: &str, count: usize) {
     ui.add_space(design::L);
     design::group_heading(ui, title, count);
 }
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search: &str) {
     detail_intro(ui, record, page, search);
     let entries = sheet_entries(record, page);
