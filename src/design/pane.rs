@@ -163,6 +163,9 @@ pub enum FillsReason {
     LiveRoster,
     /// Several columns side by side, each with its own scroll (Party's list and sheet).
     Columns,
+    /// A list that steers its own scroll so a pressed action stays under the pointer when a
+    /// press adds or ends a row above it (Trackers' Due list).
+    HeldPlace,
 }
 
 /// Where a pane's footer stands.

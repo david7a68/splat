@@ -246,6 +246,16 @@ impl<'a, T> Shown<'a, T> {
     pub fn value(&self) -> &'a T {
         self.value
     }
+    /// This result as an owned, typed footer line, made from its own value and bound to its own
+    /// order (package M). The call takes the view, so the store's borrow ends here: the pane's
+    /// body may then change the store or its owner. Give the line to `Messages::kept`.
+    pub fn outcome<A>(
+        self,
+        make: impl FnOnce(&T) -> super::outcome::KeptOutcome<A>,
+    ) -> super::outcome::KeptLine<A> {
+        super::outcome::KeptLine::new(self.order, make(self.value))
+    }
+
     /// This result's footer line: its words, made from its own value, with its own order.
     pub fn footer(&self, words: impl FnOnce(&T) -> String) -> FooterResult {
         FooterResult {
@@ -282,6 +292,9 @@ impl<'a> Footer<'a> {
     /// A kept result from a [`Results`] store, with the order its action issued. `words` gives
     /// its words (the footer's order and accessible name), and `draw` draws it; both get the
     /// stored value. `has_undo` is true while its Undo is live.
+    #[deprecated(
+        note = "A footer holds only owned, typed data: make a `KeptLine` with `Shown::outcome` and give it to `Messages::kept` (src/design/outcome.rs)."
+    )]
     pub fn kept<T>(
         &mut self,
         shown: Shown<'a, T>,
@@ -297,6 +310,9 @@ impl<'a> Footer<'a> {
 
     /// A kept result's owned footer line ([`Shown::footer`]): its words, with the order its
     /// action issued. `draw` gets the line's own words.
+    #[deprecated(
+        note = "A footer holds only owned, typed data: make a `KeptLine` with `Shown::outcome` and give it to `Messages::kept` (src/design/outcome.rs)."
+    )]
     pub fn kept_line(
         &mut self,
         line: &'a FooterResult,
@@ -888,7 +904,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Layout(1)],
         ),
         ("src/trackers/view.rs", "amount_field", &[Ban::Layout(1)]),
-        ("src/trackers/view.rs", "show", &[Ban::Layout(1)]),
+        (
+            "src/trackers/view.rs",
+            "show",
+            &[Ban::Layout(1), Ban::Pane(1)],
+        ),
         ("src/world.rs", "add_form", &[Ban::Layout(2)]),
         ("src/world.rs", "make_entry_control", &[Ban::Layout(1)]),
         ("src/world.rs", "pick", &[Ban::Layout(1)]),
@@ -932,11 +952,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/trackers.rs", "cause", &[Ban::Words]),
         ("src/trackers/history.rs", "show", &[Ban::Body]),
         ("src/trackers/view.rs", "body", &[Ban::Body]),
-        (
-            "src/trackers/view.rs",
-            "footer",
-            &[Ban::Words, Ban::Pane(1)],
-        ),
+        ("src/trackers/view.rs", "messages", &[Ban::Words]),
         (
             "src/encounters/groups.rs",
             "editor_members",
@@ -1398,6 +1414,10 @@ mod tests {
     /// The footer takes each kept result with the order its own action issued: added oldest
     /// first, the newer one still leads; then the older one again, and it leads. `words` and
     /// `draw` get the stored value.
+    #[allow(
+        deprecated,
+        reason = "the test of `Footer::kept`, deprecated until Wave 3 removes it"
+    )]
     #[test]
     fn the_footer_takes_each_kept_result_with_its_own_order() {
         use egui_kittest::kittest::Queryable;

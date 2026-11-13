@@ -386,7 +386,10 @@ pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, note: &splat::content::E
     let id = note.id;
     if let Some(error) = &trackers.rules.unreadable {
         ui.add_space(design::L);
-        let _ = PagePlaceholder::new(&TrackerFault::NotesUnreadable(error.clone())).show(ui);
+        let _ = PagePlaceholder::<crate::design::outcome::NoPress>::new(
+            &TrackerFault::NotesUnreadable(error.clone()),
+        )
+        .show(ui);
         return;
     }
     if !in_play(&trackers.rules, id) {
@@ -394,7 +397,10 @@ pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, note: &splat::content::E
     }
     ui.add_space(design::L);
     if let Some(error) = &trackers.unreadable {
-        let _ = PagePlaceholder::new(&TrackerFault::LedgerUnreadable(error.clone())).show(ui);
+        let _ = PagePlaceholder::<crate::design::outcome::NoPress>::new(
+            &TrackerFault::LedgerUnreadable(error.clone()),
+        )
+        .show(ui);
         return;
     }
     for (_, problem) in trackers
