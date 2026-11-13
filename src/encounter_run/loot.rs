@@ -270,7 +270,14 @@ impl Rewards {
         let downed = scale.weigh(&[], self.downed.iter().map(|(_, xp)| *xp));
         let grouped = crate::encounter_run::grouped_number;
         let known = self.downed.len() as u64 - downed.unknown;
-        let mut line = format!("XP {} for {known} at 0 HP", grouped(downed.xp));
+        // Round 27 FM4: with nothing counted, the line says so in words, not `XP 0 for 0 at 0 HP`.
+        let mut line = if known == 0 && downed.unknown == 0 {
+            "XP 0 · no creature at 0 HP".to_owned()
+        } else if known == 0 {
+            "XP 0".to_owned()
+        } else {
+            format!("XP {} for {known} at 0 HP", grouped(downed.xp))
+        };
         if downed.unknown > 0 {
             let names: Vec<&str> = self
                 .downed

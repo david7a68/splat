@@ -4596,36 +4596,13 @@ impl Encounters {
             .is_some_and(|s| s.templates.is_empty() && s.runs.is_empty() && s.groups.is_empty());
         // A group can be prepared while a run is open. It only joins the run when it is added.
         let group_blocked = self.draft_dirty().then_some(BLOCKED_BY_DRAFT);
-        let open_run = self
-            .run
-            .as_ref()
-            .and_then(crate::encounter_run::Run::live_info);
-        let context = self
-            .snapshot
-            .as_ref()
-            .map(|snapshot| {
-                let page = history::arrange(
-                    &snapshot.templates,
-                    &snapshot.runs,
-                    open_run.as_ref(),
-                    story.events,
-                    story.sessions,
-                );
-                let mut counts = Vec::new();
-                let ready = page.ready.len();
-                if ready > 0 {
-                    counts.push(design::count(ready, "ready", "ready"));
-                }
-                if !page.in_progress.is_empty() {
-                    counts.push(design::count(
-                        page.in_progress.len(),
-                        "in progress",
-                        "in progress",
-                    ));
-                }
-                counts.join(" · ")
-            })
-            .unwrap_or_else(|| "Reading encounters…".into());
+        // Round 27 FM3: the counts belong to the list headings (`IN PROGRESS 2`, `READY TO RUN
+        // 1`), so the header's context says only that the page is still reading.
+        let context = if self.snapshot.is_none() {
+            "Reading encounters…".to_owned()
+        } else {
+            String::new()
+        };
         // FE4, FA5: the title starts at the shell's edge (x 148), as Library's and World's do,
         // and the content below it starts there too. The header is a child that the page only
         // steps past.
@@ -4657,7 +4634,7 @@ impl Encounters {
                 - words;
             let counts_fit = spare
                 >= design::XS + gap + design::number_width(ui, &context, &Type::Small.font(ui));
-            let context = counts_fit.then_some(context.as_str());
+            let context = (counts_fit && !context.is_empty()).then_some(context.as_str());
             design::page_header(ui, "Encounters", context, |ui| {
                 if !empty {
                     new = new_button()

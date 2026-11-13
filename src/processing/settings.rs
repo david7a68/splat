@@ -611,12 +611,25 @@ impl ProcessingSettings {
     /// Round 26 FM6: a missing value's reason is the plain `Small` line directly below its
     /// field, as the key row's `Paste a key first.` is. The page's top notice has the icon and
     /// the bar, and names the first missing value.
-    fn field_reason(&mut self, ui: &mut egui::Ui, blocks: bool, words: &str) {
+    /// Round 27 FI7: the reason is `XS` below its field; when a label follows it, `M` comes
+    /// before that label, so the reason reads as its own field's.
+    fn field_reason(
+        &mut self,
+        ui: &mut egui::Ui,
+        field: egui::Rect,
+        blocks: bool,
+        words: &str,
+        label_next: bool,
+    ) {
         if blocks {
+            ui.add_space(field.bottom() + design::XS - ui.cursor().top());
             let rect = ui
                 .add(egui::Label::new(Type::Small.rich(ui, words).color(colors().muted)).wrap())
                 .rect;
             self.reason_rect.get_or_insert(rect);
+            if label_next {
+                ui.add_space(rect.bottom() + design::M - ui.cursor().top());
+            }
         }
     }
 
@@ -670,19 +683,20 @@ impl ProcessingSettings {
         design::named(ui, &response, "Speech address");
         changed |= response.changed();
         let empty = self.config.speech_url.trim().is_empty();
-        self.field_reason(ui, empty, "Enter the address.");
+        self.field_reason(ui, response.rect, empty, "Enter the address.", true);
         let response =
             design::small_text_field(ui, "Model", &mut self.config.speech_model, None, None);
         design::named(ui, &response, "Speech model");
         changed |= response.changed();
         let empty = self.config.speech_model.trim().is_empty();
-        // The reason sits directly below the field, as Address's does; the help follows it.
-        self.field_reason(ui, empty, "Enter the model’s name.");
-        design::help(
+        // The reason sits directly below the field, as Address's does; the help follows it, and
+        // `L` comes before the next label.
+        self.field_reason(ui, response.rect, empty, "Enter the model’s name.", false);
+        let help = design::help(
             ui,
             "The name your service gives it. For OpenAI, gpt-transcribe.",
         );
-        ui.add_space(design::XS);
+        ui.add_space(help.rect.bottom() + design::L - ui.cursor().top());
         if changed {
             self.persist();
         }
@@ -738,16 +752,16 @@ impl ProcessingSettings {
             design::named(ui, &response, "Transcript and summary address");
             changed |= response.changed();
             let empty = self.config.llm_url.trim().is_empty();
-            self.field_reason(ui, empty, "Enter the address.");
+            self.field_reason(ui, response.rect, empty, "Enter the address.", true);
         }
         let response =
             design::small_text_field(ui, "Model", &mut self.config.llm_model, None, None);
         design::named(ui, &response, "Transcript and summary model");
         changed |= response.changed();
         let empty = self.config.llm_model.trim().is_empty();
-        self.field_reason(ui, empty, "Enter the model’s name.");
-        design::help(ui, "The name your service gives it.");
-        ui.add_space(design::XS);
+        self.field_reason(ui, response.rect, empty, "Enter the model’s name.", false);
+        let help = design::help(ui, "The name your service gives it.");
+        ui.add_space(help.rect.bottom() + design::L - ui.cursor().top());
         if changed {
             self.persist();
         }
@@ -813,15 +827,36 @@ impl ProcessingSettings {
             ui,
             "Recording is your choice in each session. Splat sends nothing until you select Process on a recording. Changes here save as you type. A key needs Save key.",
         );
-        ui.add_space(design::S);
+        // The notice that stood here is in the tab's footer (round 27 FI7): `L` before the
+        // first group heading, as after any help.
         let reveal = std::mem::take(&mut self.reveal_problem);
         self.reason_rect = None;
-        let mut notice = None;
-        if let Some(error) = &self.load_error {
-            design::message(ui, Tone::Warning, error);
+        ui.add_space(design::L);
+        self.input_section(ui);
+        ui.add_space(design::L);
+        ui.push_id("speech_settings", |ui| self.speech_section(ui));
+        ui.add_space(design::L);
+        ui.push_id("llm_settings", |ui| self.llm_section(ui));
+        // After the DM chooses a service that leaves a field empty, that field's reason comes
+        // into view; the notice is in the tab's footer. A key problem has its reason at the key
+        // row beside the choice, so the view stays where the DM is.
+        if reveal && let Some(reason) = self.reason_rect {
+            ui.scroll_to_rect(reason, None);
         }
-        if let Some(error) = &self.save_error {
-            design::message(ui, Tone::Error, error);
+    }
+
+    /// Round 27 FI7: the Recording tab's notices sit in its message footer, so the form never
+    /// moves when one comes or goes (the DM fills the last missing value, a save fails).
+    pub fn footer_messages(&self, footer: &mut design::Footer<'_>) {
+        if let Some(error) = self.load_error.clone() {
+            footer.notice(error.clone(), move |ui| {
+                design::message(ui, Tone::Warning, &error);
+            });
+        }
+        if let Some(error) = self.save_error.clone() {
+            footer.reason(error.clone(), move |ui| {
+                design::message(ui, Tone::Error, &error);
+            });
         }
         if let Some(problem) = self.problem() {
             let problem = if problem.starts_with("Save an API key for this speech service") {
@@ -837,26 +872,10 @@ impl ProcessingSettings {
             } else {
                 problem.replace(" in Settings", "")
             };
-            notice = Some(
-                design::message(
-                    ui,
-                    Tone::Info,
-                    &format!("You cannot process yet. {problem}"),
-                )
-                .rect,
-            );
-        }
-        ui.add_space(design::L);
-        self.input_section(ui);
-        ui.add_space(design::L);
-        ui.push_id("speech_settings", |ui| self.speech_section(ui));
-        ui.add_space(design::L);
-        ui.push_id("llm_settings", |ui| self.llm_section(ui));
-        // After the DM chooses a service that leaves a field empty, the notice shows whole, with
-        // that field's reason below it when both fit. A key problem has its reason at the key
-        // row beside the choice, so the view stays where the DM is.
-        if reveal && let (Some(notice), Some(reason)) = (notice, self.reason_rect) {
-            ui.scroll_to_rect(notice.union(reason), None);
+            let words = format!("You cannot process yet. {problem}");
+            footer.notice(words.clone(), move |ui| {
+                design::message(ui, Tone::Info, &words);
+            });
         }
     }
 }

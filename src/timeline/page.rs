@@ -50,6 +50,8 @@ pub struct SessionLink {
 pub struct TimelinePage {
     /// When each kept result in the list's footer was made, so live Undo results go newest first.
     orders: ResultOrder,
+    /// Each road fight's day on its journey (round 27 FE10), for the Timeline's count of changes.
+    road: Option<(u64, std::rc::Rc<std::collections::HashMap<String, String>>)>,
     removed_mentions: usize,
     filter: Filter,
     search: String,
@@ -686,6 +688,7 @@ impl TimelinePage {
         day: u32,
         session: Option<&str>,
         written_as: Option<u32>,
+        on_road: Option<&str>,
     ) {
         let c = colors();
         let selected = self.selected.as_deref() == Some(event.id.as_str());
@@ -693,6 +696,13 @@ impl TimelinePage {
         let open = event.run.is_some() && event.run == self.open_run;
         let summary = super::played_fight_summary(event, open);
         let mut detail = event.summary_with_result(session, &summary);
+        // Round 27 FE10: a fight on the road says its day of the journey, as its plan row does.
+        if let Some(on_road) = on_road {
+            if !detail.is_empty() {
+                detail.push_str(" · ");
+            }
+            detail.push_str(on_road);
+        }
         // Repeat the day only when a filter or search can hide its heading.
         if event.kind != Kind::Day
             && day > 0
@@ -1093,6 +1103,17 @@ impl TimelinePage {
             .into_iter()
             .collect();
         let days = day_numbers(&book.events);
+        if self
+            .road
+            .as_ref()
+            .is_none_or(|(changes, _)| *changes != book.changes())
+        {
+            self.road = Some((
+                book.changes(),
+                std::rc::Rc::new(super::road_days(&book.events)),
+            ));
+        }
+        let road = self.road.as_ref().map(|(_, road)| road.clone());
         let rows: Vec<usize> = (0..book.events.len())
             .filter(|&index| self.matches(&book.events[index], days[index]))
             .collect();
@@ -1131,12 +1152,14 @@ impl TimelinePage {
                     .session
                     .and_then(|id| sessions.iter().find(|session| session.id == id))
                     .map(|session| short_session(&session.label));
+                let on_road = road.as_ref().and_then(|road| road.get(&event.id));
                 self.row(
                     ui,
                     event,
                     days[index],
                     session,
                     flagged.get(&event.id).copied(),
+                    on_road.map(String::as_str),
                 );
             }
         });
@@ -1359,9 +1382,12 @@ impl TimelinePage {
             area = area.vertical_scroll_offset(0.0);
         }
         let clip = ui.available_rect_before_wrap().intersect(ui.clip_rect());
+        // Round 27 FL1: the form leaves the scroll bar's lane free whether or not the bar shows,
+        // so its fields and the header's `⋯` end at one x for every event.
+        let lane_width = ui.available_width() - ui.spacing().scroll.allocated_width();
         area.show(ui, |ui| {
             ui.set_clip_rect(ui.clip_rect().intersect(clip));
-            let form_width = ui.available_width().min(design::FORM_WIDTH);
+            let form_width = lane_width.min(ui.available_width()).min(design::FORM_WIDTH);
             ui.ctx()
                 .data_mut(|data| data.insert_temp(width_id, form_width));
             if (form_width - header_width).abs() > design::HAIRLINE_WIDTH {
@@ -1448,7 +1474,6 @@ impl TimelinePage {
                     length: &length,
                     tables,
                     planned: &|_| None,
-                    plan_line: None,
                 };
                 checks_act = checks::header(ui, &view, &mut self.checks).or(checks_act.take());
                 // The act's result keeps its line under the table, so it moves no field.
@@ -1911,7 +1936,7 @@ mod tests {
             let expected = format!("{} · {icon} {word}", event.label(0));
             let mut harness = egui_kittest::Harness::builder().build(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    TimelinePage::default().row(ui, &event, 0, None, None);
+                    TimelinePage::default().row(ui, &event, 0, None, None, None);
                 });
             });
             design::theme::install(&harness.ctx);
@@ -1948,7 +1973,7 @@ mod tests {
                     if filtered {
                         page.filter = Filter::Rests;
                     }
-                    page.row(ui, &event, 1, None, None);
+                    page.row(ui, &event, 1, None, None, None);
                 });
             });
             design::theme::install(&harness.ctx);
