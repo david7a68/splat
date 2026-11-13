@@ -5,7 +5,7 @@
 //! its first lines, and the labels several share are in `steps.rs`, so a script
 //! says what the user does and a rename changes one line.
 use super::{
-    driver::{DEFAULT, Driver, Found, LARGE, SMALL, Sizes},
+    driver::{DEFAULT, Driver, LARGE, SMALL, Sizes},
     fixture::{
         CAMPAIGN, GROUP_ARENA, GROUP_GOBLINS, GROUP_LOST, GROUP_ORPHAN, GROUP_RIVALS, GROUP_SHRINE,
         GROUP_WATCH, MODULE, PAST_SESSION, QUIET_CAMPAIGN, RUN, RUN_12, RUN_20, RUN_ARENA, RUN_OLD,
@@ -5080,28 +5080,8 @@ pub mod settings {
             })
         };
         let entered = places(d);
-        // R3f, one owner for a reveal: Settings brings Connect into view itself after a failed
-        // Connect (its cause is beside Connect, so no footer takes room). The footer's reveal
-        // rule does not also act: its count of reveals of Connect stays as it was.
-        let reveals = |d: &Driver<'_>| {
-            d.nodes()
-                .iter()
-                .find(|node| node.name == CONNECT && node.role == egui::accesskit::Role::Button)
-                .and_then(|node| d.next_action_at(node.rect))
-                .map(|seen| seen.reveals)
-        };
-        let reveals_before = reveals(d);
         d.click(CONNECT);
         d.expect(OFFLINE_ERROR);
-        let reveals_after = reveals(d);
-        d.observe(
-            "r3f-connect-one-owner",
-            reveals_before.is_some() && reveals_before == reveals_after,
-            format!(
-                "The footer's reveals of Connect before {reveals_before:?} and after \
-                 {reveals_after:?} a failed Connect"
-            ),
-        );
         // Round 23 SF1: the failure scrolls the form so its cause, the kept cookie and the retry
         // show together, at the 960 size where the error pushed Connect out of view.
         let fully = |d: &Driver<'_>, name: &str, exact: bool| {
@@ -12529,29 +12509,6 @@ pub mod session_notes {
         d.click("Campaign");
         d.click("Link and folder");
         d.expect("SESSION FOLDER");
-        let scroll_whole = |d: &mut Driver<'_>, name: &str| {
-            for _ in 0..15 {
-                let whole = d.nodes().iter().any(|node| {
-                    (node.name == name || node.name.ends_with(name)) && node.fully_in_view()
-                });
-                if whole {
-                    break;
-                }
-                d.scroll_points_at(pos2(600.0, 300.0), 40.0);
-            }
-            d.pointer_away();
-        };
-        let save_row_whole = |d: &mut Driver<'_>| {
-            let row = if d.has_containing("Unsaved") {
-                "Unsaved"
-            } else {
-                "No changes"
-            };
-            scroll_whole(d, row);
-        };
-        // A long folder path (a deep checkout) puts the save row below a 960x640 window; the
-        // DM scrolls to it, and so does the scenario, so no check depends on the path.
-        save_row_whole(d);
         d.observe_both(
             "iter-2-C-FT11",
             "The clean session folder has a No changes status",
@@ -12561,48 +12518,20 @@ pub mod session_notes {
         d.state("session-folder-in-campaign", Sizes::All);
         // Round 26 FN2, FN5: the form's warning and its result sit in the pane's message footer,
         // so the save row keeps its y when the first letter brings the warning, and after a move.
-        // The save row's top, with the top of the Folder field above it in the same scrolled
-        // content: a scroll moves both by one amount, any other layout move parts them.
         let save_row = |d: &Driver<'_>| {
-            let nodes = d.nodes();
-            let row = nodes
-                .iter()
+            d.nodes()
+                .into_iter()
                 .find(|node| {
                     (node.name.ends_with("No changes") || node.name.ends_with("Unsaved"))
                         && node.in_view()
                 })
-                .map(|node| node.rect.top())?;
-            let field = nodes
-                .iter()
-                .find(|node| node.name == "Folder" && node.role == egui::accesskit::Role::TextInput)
-                .map(|node| node.rect.top())?;
-            Some((row, field))
+                .map(|node| node.rect.top())
         };
-        save_row_whole(d);
         let row_clean = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, save_row));
-        // The height of the room the footer takes (the footer and `S` above it).
-        let footer_room = |d: &Driver<'_>| {
-            d.footer_bands()
-                .iter()
-                .map(|band| band.height())
-                .fold(0.0, f32::max)
-        };
-        // The save row whole in view before a letter brings the warning, as the DM sees it with
-        // a short folder path. A long path (a deep checkout) puts it lower; the reveal never pulls
-        // back a row that was already cut, so the scenario scrolls it whole first.
         d.app_mut().timeline.save();
-        save_row_whole(d);
         d.replace_text_in("Folder", "30 Sessions");
         d.expect("Move files and save");
         d.expect("Unsaved");
-        // R3f X40: at 960x640 the warning came while the save row was whole, with no scroll of
-        // the scenario's since, so only the reveal can bring it back whole above the footer.
-        super::session_recording::check_row_clear_of_footer(
-            d,
-            "Move files and save",
-            "r3f-X40-move-clear",
-            true,
-        );
         d.click("Discard");
         d.observe(
             "iter-7-S3",
@@ -12611,7 +12540,6 @@ pub mod session_notes {
         );
         const KEEPS: &str = "If you save without moving, Splat no longer shows these files.";
         let row_typed = d.aside(|d| {
-            save_row_whole(d);
             d.replace_text_in("Folder", "3");
             d.expect("Save without moving");
             [SMALL, DEFAULT, LARGE].map(|size| {
@@ -12621,11 +12549,10 @@ pub mod session_notes {
                         .into_iter()
                         .find(|node| node.name.contains(KEEPS) && node.in_view())
                         .map(|node| node.rect.top());
-                    (save_row(d), warning, footer_room(d))
+                    (save_row(d), warning)
                 })
             })
         });
-        save_row_whole(d);
         d.replace_text_in("Folder", "30 Sessions");
         d.expect("Save without moving");
         // Review of PR 274, item 3: the footer and the form share one scan of the current folder,
@@ -12645,9 +12572,6 @@ pub mod session_notes {
         // FT4 (round 16): with no run and no other form, moving the files is the one primary,
         // as Move runs and save is on Rules and runs.
         d.state_prepared("session-folder-move-offered", Sizes::All, |d| {
-            // After a resize the rule may stop short (a narrower window wraps a long folder path
-            // onto more lines than the room lost); the DM scrolls, and so does the scenario.
-            scroll_whole(d, "Move files and save");
             super::session_recording::check_one_primary(d, "Move files and save", "iter-16-C-FT4");
             // iter-23-S FK8: the warning names which choice hides the files.
             d.observe(
@@ -12665,9 +12589,6 @@ pub mod session_notes {
             .field_text("Campaign name")
             .expect("the campaign name field");
         d.type_into("Campaign name", " (edited)");
-        // Save details became the primary under the footer: the rule owes it nothing, and the
-        // DM scrolls to it.
-        scroll_whole(d, "Save details");
         super::session_recording::check_one_primary(
             d,
             "Save details",
@@ -12703,41 +12624,22 @@ pub mod session_notes {
                     .into_iter()
                     .find(|node| node.name.starts_with("Moved 1 note") && node.in_view())
                     .map(|node| node.rect.top());
-                (save_row(d), result, footer_room(d))
+                (save_row(d), result)
             })
         });
-        // R3f: where the footer's room would cut the save row (960x640), the pane scrolls it up
-        // by no more than the room the footer took (`r3f-X40-move-clear` checks it whole). The
-        // scroll is the Folder field's move; the row's place in the unscrolled content (its top
-        // plus that scroll) never changes, so no other layout move passes. Where the window has
-        // room, nothing scrolls and the row keeps its y.
-        let kept = |clean: Option<(f32, f32)>, now: Option<(f32, f32)>, room: f32, small: bool| {
-            clean
-                .zip(now)
-                .is_some_and(|((row, field), (now_row, now_field))| {
-                    let scroll = field - now_field;
-                    (now_row + scroll - row).abs() < 0.5
-                        && (-0.5..=room + 0.5).contains(&scroll)
-                        && (small || scroll.abs() < 0.5)
-                })
-        };
         d.observe(
             "iter-26-S-FN2",
-            row_clean.iter().zip(&row_typed).zip(&row_moved).enumerate().all(
-                |(at, ((clean, (typed, warning, typed_room)), (moved, result, moved_room)))| {
+            row_clean.iter().zip(&row_typed).zip(&row_moved).all(
+                |((clean, (typed, warning)), (moved, result))| {
                     clean.is_some()
-                        && kept(*clean, *typed, *typed_room, at == 0)
-                        && kept(*clean, *moved, *moved_room, at == 0)
-                        && warning
-                            .zip(*typed)
-                            .is_some_and(|(warning, (row, _))| warning > row)
-                        && result
-                            .zip(*moved)
-                            .is_some_and(|(result, (row, _))| result > row)
+                        && clean == typed
+                        && clean == moved
+                        && warning.zip(*clean).is_some_and(|(warning, row)| warning > row)
+                        && result.zip(*clean).is_some_and(|(result, row)| result > row)
                 },
             ),
             format!(
-                "Save row and Folder field clean {row_clean:?}; first letter (row and field, warning, room) {row_typed:?}; moved (row and field, result, room) {row_moved:?}"
+                "Save row clean {row_clean:?}; first letter (row, warning) {row_typed:?}; moved (row, result) {row_moved:?}"
             ),
         );
         d.observe_both(
@@ -13745,84 +13647,6 @@ pub mod session_recording {
             id,
             primary == [expected],
             format!("Exactly one accent-filled control is visible, {expected}: {primary:?}"),
-        );
-        check_row_clear_of_footer(d, expected, &format!("{id}-clear"), false);
-    }
-
-    /// R3f: a pane's content ends above its message footer. `action` is a next action the
-    /// reveal knows (a primary, or an action marked with `keep_above_footer`). When a footer took room from it while it was whole (`came`, when the scenario
-    /// knows a footer did; else the reveal's own record says so), the action and every control on
-    /// its line are whole and clear of every footer's room (the footer and the `S` above it),
-    /// also when it is wholly hidden, unless a guard holds the reveal back.
-    pub(super) fn check_row_clear_of_footer(
-        d: &mut Driver<'_>,
-        action: &str,
-        id: &str,
-        came: bool,
-    ) {
-        let nodes = d.nodes();
-        let bands = d.footer_bands();
-        let detail = |rows: &[&Found]| {
-            rows.iter()
-                .map(|node| format!("{} {:?} shown {:?}", node.name, node.rect, node.shown))
-                .collect::<Vec<_>>()
-                .join("; ")
-        };
-        let Some(target) = nodes
-            .iter()
-            .find(|node| node.name == action && node.role != egui::accesskit::Role::Label)
-        else {
-            d.observe(id, false, format!("{action} is not drawn"));
-            return;
-        };
-        // An accent-filled control that is no `Action` owes nothing; where the scenario knows a
-        // footer came, the action must be one the reveal knows.
-        let Some(seen) = d.next_action_at(target.rect) else {
-            d.observe(
-                id,
-                !came,
-                format!("{action} is not a next action the reveal knows"),
-            );
-            return;
-        };
-        // The row: every control whose middle is on the action's line, in the action's pane.
-        let pane = bands
-            .iter()
-            .find(|band| band.x_range().intersects(target.rect.x_range()))
-            .map_or(target.rect.x_range(), |band| band.x_range());
-        let row: Vec<&Found> = nodes
-            .iter()
-            .filter(|node| {
-                node.role != egui::accesskit::Role::Label
-                    && node.role != egui::accesskit::Role::GenericContainer
-                    && node.rect.is_positive()
-                    && target.rect.y_range().contains(node.rect.center().y)
-                    && pane.intersects(node.rect.x_range())
-                    // A footer's own words and actions are not the pane's row.
-                    && !bands.iter().any(|band| band.contains_rect(node.rect))
-            })
-            .collect();
-        let clear = |node: &Found| {
-            bands.iter().all(|band| {
-                !band.x_range().intersects(node.rect.x_range())
-                    || node.rect.bottom() <= band.top() + 0.5
-            })
-        };
-        // The action itself is checked apart, so a row filtered to nothing cannot pass.
-        let whole = target.fully_in_view()
-            && clear(target)
-            && row.iter().all(|node| node.fully_in_view() && clear(node));
-        // Where the scenario knows a footer came, the row needed no more than the room lost, so
-        // a capped reveal fails too.
-        let owed = came || (seen.promised && !seen.capped);
-        d.observe(
-            id,
-            seen.held.is_some() || !owed || whole,
-            format!(
-                "{action} (reveal: {seen:?}; a footer came while it was whole: {owed}) and its row \
-                 are whole above every footer band {bands:?}: {}",
-                detail(&row)
-            ),
         );
     }
 

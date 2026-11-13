@@ -2799,49 +2799,53 @@ impl<'a> Driver<'a> {
         self.check_footer_room(state);
     }
 
-    /// R3f, the shared footer check, for a captured state or a step that names it: a pane's content ends above its message footer. Each next action the reveal knows
-    /// (every primary, and each action marked with `keep_above_footer`), also one wholly
-    /// hidden, that a footer took room from while it was whole is measured where it is
-    /// painted after the frame: it fails when that row is cut, unless a guard holds the reveal
-    /// back or the row needed more than the room lost. Each state with a footer names its words.
+    /// R3f, the shared footer check, on every captured state: a pane's content ends above its
+    /// message footer, so no control and no text of the content is painted into a footer's band
+    /// (the footer and the `S` above it). Content is what begins above the band; egui paints a
+    /// scroll area's content up to its clip margin past its edge, so that much is allowed. It does
+    /// not ask that an action is in view: the DM scrolls to it.
     pub(super) fn check_footer_room(&mut self, state: &str) {
-        let window = format!("{}x{}", self.window.0, self.window.1);
         let bands = self.footer_bands();
-        if !bands.is_empty() {
-            let nodes = self.nodes();
-            let footers: Vec<String> = nodes
-                .iter()
-                .filter(|node| {
-                    node.role == Role::GenericContainer
-                        && bands.iter().any(|band| band.contains_rect(node.rect))
-                })
-                .map(|node| node.name.chars().take(80).collect())
-                .collect();
-            let scale = self.harness.ctx.pixels_per_point();
-            let seen = crate::design::next_actions(&self.harness.ctx);
-            let cut: Vec<_> = seen
-                .iter()
-                .filter(|next| next.promised && !next.capped && next.held.is_none())
-                .filter(|next| {
-                    let at = (next.rect * scale).center();
-                    // Painted whole: the pane's clip, which ends at the footer's room, cuts none
-                    // of it (egui paints a row a few pixels into the gap above the footer).
-                    !nodes
-                        .iter()
-                        .any(|node| node.rect.center().distance(at) < 1.0 && node.fully_in_view())
-                })
-                .collect();
-            let held: Vec<_> = seen.iter().filter(|next| next.held.is_some()).collect();
-            self.observe(
-                &format!("r3f-footer-room {state}"),
-                cut.is_empty(),
-                format!(
-                    "{window}: footers {footers:?}; {} next actions; painted cut after a footer \
-                     took their room: {cut:?}; held by a guard: {held:?}",
-                    seen.len()
-                ),
-            );
+        if bands.is_empty() {
+            return;
         }
+        let window = format!("{}x{}", self.window.0, self.window.1);
+        let margin = self.harness.ctx.style().visuals.clip_rect_margin + 0.5;
+        // Nodes are in AccessKit's pixels, painted texts in points.
+        let points = crate::design::footer_bands(&self.harness.ctx);
+        let into = |bands: &[egui::Rect], shown: egui::Rect, top: f32| {
+            bands
+                .iter()
+                .find(|band| top < band.top() - 0.5 && shown.intersect(**band).height() > margin)
+                .copied()
+        };
+        let mut over: Vec<String> = self
+            .nodes()
+            .into_iter()
+            .filter(|node| {
+                node.role != Role::Label
+                    && node.role != Role::GenericContainer
+                    && node.shown.is_positive()
+            })
+            .filter_map(|node| {
+                into(&bands, node.shown, node.rect.top())
+                    .map(|band| format!("{} {:?} into {band:?}", node.name, node.shown))
+            })
+            .collect();
+        self.each_painted_text(|text, clip| {
+            let bounds = text.visual_bounding_rect();
+            if let Some(band) = into(&points, bounds.intersect(clip), bounds.top()) {
+                over.push(format!(
+                    "text {:?} {bounds:?} into {band:?}",
+                    text.galley.job.text
+                ));
+            }
+        });
+        self.observe(
+            &format!("r3f-footer-room {state}"),
+            over.is_empty(),
+            format!("{window}: content painted into a footer's band {bands:?}: {over:?}"),
+        );
     }
 
     /// The AccessKit IDs among `ids` that Tab reaches in `presses` presses.
@@ -2873,14 +2877,6 @@ impl<'a> Driver<'a> {
         self.harness.remove_cursor();
         self.settle();
         shown
-    }
-
-    /// The next action the reveal saw at this rect (AccessKit's pixels) in the last pass.
-    pub fn next_action_at(&self, rect: egui::Rect) -> Option<crate::design::NextSeen> {
-        let scale = self.harness.ctx.pixels_per_point();
-        crate::design::next_actions(&self.harness.ctx)
-            .into_iter()
-            .find(|next| (next.rect * scale).center().distance(rect.center()) < 1.0)
     }
 
     fn capture(
