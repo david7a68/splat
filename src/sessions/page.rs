@@ -5073,17 +5073,16 @@ impl Sessions {
                                     // Add moves no row below it.
                                     if placement.is_empty() {
                                         // As tall as the label it stands for.
-                                        let height = egui::WidgetText::from(
-                                            Type::Small.rich(ui, "After"),
-                                        )
-                                        .into_galley(
-                                            ui,
-                                            Some(egui::TextWrapMode::Wrap),
-                                            f32::INFINITY,
-                                            egui::TextStyle::Body,
-                                        )
-                                        .size()
-                                        .y;
+                                        let height =
+                                            egui::WidgetText::from(Type::Small.rich(ui, "After"))
+                                                .into_galley(
+                                                    ui,
+                                                    Some(egui::TextWrapMode::Wrap),
+                                                    f32::INFINITY,
+                                                    egui::TextStyle::Body,
+                                                )
+                                                .size()
+                                                .y;
                                         ui.allocate_space(egui::vec2(0.0, height));
                                     } else {
                                         ui.add(

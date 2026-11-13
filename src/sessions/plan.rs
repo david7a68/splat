@@ -6049,7 +6049,11 @@ mod tests {
         let after_act = reads();
         harness.run_steps(4);
         assert!(shown(&harness, "Rewards for “Bridge”"));
-        assert_eq!(reads(), after_act, "a render searched the Timeline for a fight's name");
+        assert_eq!(
+            reads(),
+            after_act,
+            "a render searched the Timeline for a fight's name"
+        );
 
         // A: Bridge. B: Shrine, another fight. It follows the newest block, which has XP, and
         // names the award that is not known, which the sum leaves out. A's Undo stays.

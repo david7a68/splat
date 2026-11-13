@@ -14320,9 +14320,9 @@ pub mod session_recording {
         d.observe(
             "iter-27-S-FI3-press",
             events(d) == start_events
-                && presses
-                    .iter()
-                    .all(|(_, shown, emptied, appeared, tab)| *shown && *emptied && *appeared && *tab),
+                && presses.iter().all(|(_, shown, emptied, appeared, tab)| {
+                    *shown && *emptied && *appeared && *tab
+                }),
             format!("Footer Undo, body Add and Tab each act on their own control: {presses:?}"),
         );
         // Round 27 FI3: the result is in the session's footer, so the next marker's Add keeps
