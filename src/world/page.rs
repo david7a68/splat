@@ -1566,7 +1566,14 @@ impl WorldPage {
                 // A folder's heading is not one of the part's kinds: it takes the space that the
                 // part gives a group heading. No token is the `10` that follows the first group
                 // after the search field, so that one keeps its old `XS`.
-                design::gap(ui, if at > 0 { design::Gap::L } else { design::Gap::XS });
+                design::gap(
+                    ui,
+                    if at > 0 {
+                        design::Gap::L
+                    } else {
+                        design::Gap::XS
+                    },
+                );
                 ui.spacing_mut().item_spacing.y = spacing;
                 design::folder_group_heading(ui, title, rows.len());
             } else {
