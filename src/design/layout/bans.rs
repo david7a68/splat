@@ -135,7 +135,7 @@ fn flatten(stream: TokenStream, out: &mut Vec<Token>) {
     }
 }
 
-fn ident<'t>(token: Option<&'t Token>) -> Option<&'t str> {
+fn ident(token: Option<&Token>) -> Option<&str> {
     match token {
         Some(Token::Ident(word)) => Some(word),
         _ => None,
