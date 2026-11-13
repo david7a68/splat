@@ -182,7 +182,7 @@ eye during long sessions.
 | Status | `status`, `wrapped_status`, `status_link`, `Status`, `rail_status_detail` | Icon, word and colour; `status_link` opens where the DM can act. A status that wraps (`wrapped_status`, `status_link`, `rail_status_detail`) paints its icon and its word where a one-line status paints them; every line after the first starts at the word, never under the icon |
 | Stat tile | `stat_tile` | Sentence-case muted `Small` label over a large value, no box |
 | HP | `hp_bar`, `hp_readout`, `hp_state` | Fixed slots; separate temporary HP |
-| Empty state | `empty_state` | Icon, serif title with no full stop (`Nothing planned yet`), purpose and one next step at the top of an empty pane or page, with normal padding |
+| Empty state | `empty_state` | Icon, serif title with no full stop (`Nothing planned yet`), purpose and one next step at the top of an empty pane or page, with normal padding; it starts at one y on every page (the Encounters page steps past its header without an extra item gap) |
 | Group heading | `group_heading` | `Label` capitals and muted, nonzero count; no rule; serif headings belong to readers and stat blocks |
 | Submenu | `menu_submenu` | Match quiet Read actions: `S` horizontal padding, Strong type and Read height. Ends with the icon set's muted caret (`icons::NEXT`), as sections and dropdowns do, never egui's solid triangle. Opens right of its menu when it fits inside the opening pane with `S` to spare, else left, else as far right as fits; never over a splitter or scroll bar |
 | Row menu | `row_menu` | Quiet `⋯` at the right end of the row's content, never at the pane's edge when the row is narrower than the pane, named `More actions for <name>`; holds Remove and Delete. Opens under the `⋯`, and ends at its right edge when it would cross the pane's splitter or scroll bar |
@@ -299,7 +299,9 @@ Several safe choices after a message share one line when they fit. Put a destruc
 after an `L` gap, or on its own line below after an `M` gap.
 
 Library, Lookup and encounter search rank equal names in this order: campaign entries, book and package
-entries, then character sheet copies. Creature results keep names close to stats with an `S` gap between
+entries, then character sheet copies. A creature search (the encounter editor, the group editor and Arrivals) has
+one order, `matching::creature_tier`: the exact name, then names that start with the search, then names that hold it
+anywhere, in the list's order (`wolf`: Wolf, then Werewolf before Winter Wolf). Creature results keep names close to stats with an `S` gap between
 results. The CR column fits `CR 1/8` plus an `M` gap. Paths shorten before file actions wrap; hover keeps the
 full path.
 
@@ -708,7 +710,10 @@ duplicate notes and offers file-specific identity repair with Undo.
 Library and creature repairs say “These two files claim to be the same entry,” with the file names.
 World note repairs use “note”, including in Encounter search, their actions and Undo.
 Sessions use “session” for their repair and Undo actions. World rows say `Same note in two files`, including in Lookup. Other rows say `Same entry in two files`. World repairs say `Make <file> a separate note` and offer `Undo separate note`. Other bordered secondary repairs say `Make <file> a separate entry`. Their result
-names the file and keeps `Undo separate entry` on the message line. Folder repairs use `separate
+names the file and keeps `Undo separate entry` on the message line. In the encounter and group editors, the
+creature search's repair puts its result, its Undo and a failure in the editor's footer, newest first among the
+editor's results; the campaign owns it. Its Undo ends it, or a new repair replaces it; an Undo that fails (the file
+moved away) keeps it, with the reason, so the DM can try again. Folder repairs use `separate
 entries` and `Undo separate entries`, with one guarded Undo for the batch. In Library, each single-file
 or folder choice states which file or folder an encounter will keep or use, in `Small` muted text an
 `XS` gap below its own action. Library, World and Lookup draw the choices and these lines through
@@ -1178,9 +1183,10 @@ for its main action, quiet Edit and row menu. The menu holds deletion and starti
 with an unfinished run appears in In progress; when it ends, it returns to Ready. Keep in Ready during a run
 leaves a blocked Start fight and a reason to resume from In progress. In the editor, a muted line below the option
 says what it does. The header counts all Ready rows,
-including these repeatable fights. Ready rows name creatures; an empty roster blocks Start with Add
-participants first. The open-run block appears once under READY TO RUN. Its Ready action says Go back to the
-run. When the header cannot hold every word, as beside Lookup at 960x640, the counts go first. Then Reload from
+including these repeatable fights. Ready rows name creatures; an empty roster blocks Start with `Add
+participants first.`. The open-run block appears once under READY TO RUN. A Ready row whose run is open says why
+Start is blocked, `This fight is open.`, with the link `Go to the run`; one whose run is unfinished says `This fight is
+unfinished.`. Start's hover keeps the long form. Every blocked reason that is a sentence ends with a full stop. When the header cannot hold every word, as beside Lookup at 960x640, the counts go first. Then Reload from
 disk keeps its icon, with its name, hint and blocked reason on hover. New encounter and New group stay whole.
 
 Unfinished rows show Setup · Paused or Round 2 · Paused and Resume. Every paused run's line two starts with the
@@ -1199,12 +1205,16 @@ the party with the party's budget from the campaign's rules (`splat_rule/paramet
 is in the line's own type in `text`; its numbers and separators are `muted`; it has no icon and no state colour,
 because a colour would be a verdict. Its hover and accessible description give the budgets: `Budget for 5 at
 level 3: Low 750 · Moderate 1,125 · High 2,000` (`at levels 3 to 4`; `for the party of 5` when the roster has no
-character). The editor's `ROSTER 8` heading ends `· XP 1,050 of 1,125 · Moderate` (`XP 2,400 · Above High`);
-below 760 px the tab row ends at its right with `Moderate · XP 1,050 of 1,125`. A Ready to run row's summary ends
-`· Low`; where the word gives way, the row's hover and its accessible name keep it. Each shows only while the line
-keeps its lines and words with it, and only when the XP, every level and
-the table are known and something stands against the party; otherwise the line is as before. A row with an
-unfinished run shows no word. The answer is worked out when the encounter, the saved sheets or the rules
+character). It has one form on every line that shows it (`Rating::parts`, drawn with `difficulty::append_form`):
+`XP 1,050 · Moderate (up to 1,125)`. The number in brackets is the word's limit; `Above High` has none
+(`XP 2,400 · Above High`). The editor's `ROSTER 8` heading ends `· XP 1,050 · Moderate (up to 1,125)`; below 760 px
+the tab row ends at its right with the same form. A Ready to run row's summary and a planned fight's row end with it
+too. The word never gives way. Where a line has no room, the limit goes first (`XP 1,050 · Moderate`), then the
+summary before it, from its end, by whole facts and members (`5 party · 1 × Cinder Tyrant, … · XP 6,300 · High`);
+the row's hover and its accessible name keep the whole line. A fight with no word because an input is not known says
+`XP not known` in the word's place (`Difficulty::form`). With no table or no party, or nothing against the party,
+the line is as before. A row with an unfinished run shows no word. Arrivals names what the XP is for: a group's
+heading ends `· Fight after: XP 450 · Low`, the fight once the group joins, without the limit. The answer is worked out when the encounter, the saved sheets or the rules
 change, and when the editor's draft changes; never on a frame with no change.
 
 A Ready row's menu has `Remove…` after Edit encounter, only for an encounter with no saved run (unfinished,
@@ -1255,7 +1265,9 @@ that line. Undo puts back only the creature, so later edits stay; a move or a re
 Roster rows have name and detail, quiet Edit and a row menu. Sides sit on the second line and change in Edit.
 Menus hold ordering, duplication, Make it yours and Remove; missing rows keep Edit and Remove there. A menu choice's
 reason (`Already last.`) or help line (`Edit a copy in this campaign.`) starts at the choice's words, after its
-padding and any icon, and ends that padding (`S`) before the menu's right edge: the menu asks for its width with
+padding and any icon. In a menu with any choice that has an icon (Move up, Move down, Remove), a choice without one
+keeps an empty icon slot, so every choice's words start at one x. The reason or help line ends that padding (`S`)
+before the menu's right edge: the menu asks for its width with
 both, so a long note keeps the right margin and wraps before it. A row menu opens below or above its button
 inside the pane that holds the button, never beside it over a splitter or scroll bar; while it is open, the pane
 keeps its button in view, also after the window shrinks. Side
@@ -1284,7 +1296,9 @@ replacement's result and its Undo. Save encounter
 also gives the open fight from that encounter its new read-aloud text and notes for Prep; its roster and combat
 state stay, and other changes wait for the next fight. An unfinished encounter
 offers Resume, moves Start another fight into its menu and keeps run state in the save row. Blocked Start
-fight says Close the open run first beside it. Sync and repeat options follow the roster. Use group_heading
+fight says `Close the open run first.` beside it. The actions are measured as they are drawn, and the name field
+takes the rest of the line: they move to a line under the name only when the saved name does not fit beside them
+(the saved name, so nothing moves while the DM types). Sync and repeat options follow the roster. Use group_heading
 for groups of controls and sentence-case field labels over single inputs; tabbed Add participants has no repeated heading. Group frames choose where Add goes;
 search says `Adding to <name>` as read-only text. The frame's Add slot keeps the width of `Adding here` with its
 check in every frame, so every name field ends at one edge and does not move with the Add target. Each encounter group has a frame below the roster with name,
@@ -1298,8 +1312,14 @@ says so below Belongs to as a warning `small_message`, not as muted field help.
 Member rows and Group notes end at the members column's right edge (at most `LIST_MEASURE`), inside the scroll
 content and anchored left. The column keeps the scroll bar's lane whether or not the bar shows, so no field or
 action moves when a long list starts to scroll. The group editor's header is one block that ends at that column's
-edge: the name on line one, then the save row with the state and Discard at its start and Save group at the
-column's edge. A reason without room on the save row takes its own line below it. The group name field and Belongs to end at one edge: the column's edge, or
+edge: the name on line one with Save group after it at the column's edge, as Save encounter is on the encounter
+editor's title line; then the save row with the state and Discard at its start and the reasons. A reason without
+room on the save row takes its own line below it. A group draft that Save's check refuses (a member's change that
+cannot stand, a missing creature, an empty group) says `Invalid`, changed or not, and Save group is not primary;
+the check runs when the draft, the campaign's read or the open group changes, never on an unchanged frame. The fault
+shows at its own place: on the member's row, in the one member-fault form with its name and line
+(`Cinder Wolf · line 14: Maximum HP would become −28. It must be 1 or more.`), or beside Save; a fault with no
+place of its own is Save's reason in the footer. The group name field and Belongs to end at one edge: the column's edge, or
 `FORM_WIDTH` when that comes first by at least `XL`. So the edges are the same or clearly apart. In an
 encounter's group frame, the name starts at the frame's left edge and ends at `FORM_WIDTH` or before its
 actions. Removing any member shows `Removed <name>.` and `Undo remove member` in the editor's footer. Undo restores the full member at its place and keeps other draft edits.
@@ -1312,15 +1332,16 @@ one dot-separated line. Members and XP share one heading. Keep a member summary 
 members, also in compact editors. Member names and stats sit above Count, Edit and the menu; count stays at
 the left and actions together at the right. Changes stay on one line, such as `Changed · 1 to add by hand`,
 until opened. Empty frames use one muted line, no zero count or duplicate search summary. Empty groups block
-Save group with Add a creature first, and the save row says `Invalid`, as it does after any refusal of Save group
-while that refusal holds. The save row's reasons (`Add a creature first`, `Save or discard to switch campaign.`) each
-have one place, chosen as if both showed: beside Save while there is room, else a line below the save row. Those
+Save group with `Add a creature first.`, and the save row says `Invalid`. The save row's reasons
+(`Add a creature first.`, `Save or discard to switch campaign.`) each have one place, chosen as if both showed: at
+the save row's end, under Save, while there is room, else a line below the save row. Those
 lines are reserved whether or not their reason shows, so the first edit or the first member moves no field.
 
 A change form (group member or roster slot) has one right edge: Display name, Note, the Other effect field with its
 Add, and the Loot field end at one x. `Roll on a table` follows the Loot field.
 
-Groups has one level of headings: For any encounter, each encounter, then Encounter deleted. Rows keep Edit
+Groups has one level of headings: For any encounter, each encounter, then Encounter deleted. A heading after a
+group has `M` more room above it than below it, so it reads as the start of its groups. Rows keep Edit
 and a Remove menu action with Undo. Planned groups use Remove from tonight and Undo remove. Remove isolated
 plan links; retain words inside sentences. Moving an encounter group to any encounter says `<name> moves to
 any encounter when you save.`, with Undo move until save, in the info tone in the editor's footer: nothing is written until Save. Move to… lists named encounters only. Make available
@@ -1924,18 +1945,15 @@ It stays in place when messages or rows change. Empty plans use empty_state
 below the strip. Add-strip messages stay below Add. In notes ends at the button
 text's inner edge.
 
-A planned fight's summary ends with its difficulty word (`5 party · 2 × Ember Cultist · Low`) only while the
-summary keeps its lines with it. The opened row's `Read encounter` line ends with `· Low · XP 550 of 750` when the
-line has room for the whole; so a row whose summary had no room gives its word there, for 1 `Find`. The words start
-at the link's right edge, so each `·` has the same blank on each side. A fight with no word because an input is not
-known says why on that line, in `muted`: `Read encounter · XP not known: Nameless Thing`, or `Level not known:
-<name>`; with more names, the first and `and 2 more`. Where the line has no room for the whole, the first name
-shortens from its end (`XP not known: Namel…`, `and 2 more` stays) and goes only when no letter of it fits; hover
-and the accessible name keep the whole. With no name known, the reason shows in its short form (`XP not known`). The names come from `Scale::weigh`'s typed answer
-(`Difficulty::missing`). Its closed row is as before. A running or played fight's row shows its status, not a word.
-<name>`; with more names, the first and `and 2 more`. The names come from `Scale::weigh`'s typed answer
-(`Difficulty::missing`). Its closed row is as before. The encounter editor, where the DM can repair the cause, ends
-its line the same way: `ROSTER 6 · XP not known: Nameless Thing`, or in the tab row below 760 px, where the word
+A planned fight's summary ends with its difficulty in the one form
+(`5 party · 2 × Ember Cultist · XP 400 · Low (up to 2,800)`), and it keeps its lines: the limit gives way first, then
+the members from their end (Encounter difficulty, above). Every `·` on the row, the summary's and the form's, has the
+same blank on each side: the font's own spacing around `·` is uneven, so the row moves each `·` by whole pixels. The
+opened row's `Read encounter` line does not say the difficulty again. A fight with no word because an input is not
+known ends its row with that, and whose, in the word's place: `XP not known: Nameless Thing`, or `Level not known:
+<name>`; with more names, the first and `and 2 more`. Where the row has no room, the first name shortens from its end
+(`XP not known: Namel…`) and goes only when no letter of it fits (X1); hover and the accessible name keep the whole. The names come from `Scale::weigh`'s typed answer
+(`Difficulty::missing`). The encounter editor, where the DM can repair the cause, ends its line with the names: `ROSTER 6 · XP not known: Nameless Thing`, or in the tab row below 760 px, where the word
 would be. Without room the names shorten from their end (`XP not known: Nameless Th…`) and go only when no letter
 fits; hover and the accessible name keep the whole reason. A roster member whose sheet cannot be read is named by its
 file, and a reason with no name known still shows (`· Level not known`). A running or played fight's row shows its status, not a word.
