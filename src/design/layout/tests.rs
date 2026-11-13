@@ -188,6 +188,8 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
 /// title, else rows that wrap at whole actions. Every action once, in order; never a wrap while
 /// one row fits; an action wider than the pane has its own row.
 #[test]
+// One row of all three actions is the point of these cases.
+#[allow(clippy::single_range_in_vec_init)]
 fn title_placement_follows_the_ruling_at_each_boundary() {
     let widths = [60.0, 100.0, 80.0];
     let row = 60.0 + 100.0 + 80.0 + 2.0 * XS;

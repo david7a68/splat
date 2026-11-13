@@ -553,11 +553,11 @@ impl<'a> TitleAction<'a> {
 /// loses its word.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TitlePlacement {
-    /// 1. The title and every action on one line, when they fit.
+    /// First choice: the title and every action on one line, when they fit.
     OnTitle,
-    /// 2. Else every action on one row under the title, when that row fits the pane. 3. Only
-    /// when one row cannot fit, the rows wrap at whole actions, filled from the left. Each range
-    /// is one row of actions, in order; together they hold every action once.
+    /// Else every action on one row under the title, when that row fits the pane; only when one
+    /// row cannot fit, the rows wrap at whole actions, filled from the left. Each range is one
+    /// row of actions, in order; together they hold every action once.
     Under(Vec<Range<usize>>),
 }
 
