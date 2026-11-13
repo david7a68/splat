@@ -115,9 +115,9 @@ mod groups;
 mod history;
 // The one member-fault form and its row, for Arrivals in the run (Contract B, R).
 use groups::GroupDraft;
-#[cfg(test)]
-pub(crate) use groups::member_comparisons;
 pub(crate) use groups::{ENCOUNTER_DELETED, NO_MAX_HP_CAUSE, member_fault, member_fault_row};
+#[cfg(test)]
+pub(crate) use groups::{group_checks, member_comparisons};
 pub(crate) use history::{Template, template_of};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -2600,6 +2600,9 @@ pub struct Encounters {
     /// How often frames reached that key's guard.
     #[cfg(test)]
     validation_reached: usize,
+    /// Save's check of the open group draft (FN5, AI2), with the snapshot revision, edit epoch
+    /// and group path it was made for. An unchanged frame does not check again.
+    group_check: Option<((Uuid, u64, String), Option<groups::Refusal>)>,
     /// The open draft's difficulty, with the snapshot revision, edit epoch and draft it was
     /// worked out for.
     difficulty: Option<((Uuid, u64, Uuid), Arc<crate::difficulty::Difficulty>)>,
@@ -5038,17 +5041,39 @@ impl Encounters {
                 )
                 .show(ui)
                 .clicked();
-            // X51: Save and Start keep their width on line one, and the name field takes the
-            // rest. They take a line of their own only when no field fits beside them.
-            let rest = ui.available_rect_before_wrap().width()
-                - design::S * if unfinished.is_some() { 38.0 } else { 33.0 }
-                - if has_run {
-                    design::number_width(ui, "Close the open run first", &Type::Small.font(ui))
+            // X51, SB1: Save and Start keep their width on line one, and the name field takes
+            // the rest. The actions are measured, as they are drawn. They take a line of their
+            // own only when the saved name does not fit beside them: the saved name, not the
+            // typed one, so nothing moves while the DM types.
+            let gap = ui.spacing().item_spacing.x;
+            let start_word = if unfinished.is_some() {
+                "Resume"
+            } else {
+                START_FIGHT
+            };
+            let actions = Action::secondary("Save encounter").natural_width(ui)
+                + gap
+                + Action::primary(start_word).natural_width(ui)
+                + if unfinished.is_some() {
+                    Action::quiet(icons::EXPAND)
+                        .density(Density::Read)
+                        .natural_width(ui)
+                        + gap
+                } else {
+                    0.0
+                }
+                + if has_run {
+                    design::number_width(ui, BLOCKED_BY_RUN, &Type::Small.font(ui))
                         + design::L
+                        + gap
                 } else {
                     0.0
                 };
-            let stack_actions = rest < Density::Scan.control();
+            // The field's margins are outside its desired width.
+            let rest = ui.available_rect_before_wrap().width() - actions - 2.0 * design::S - gap;
+            let saved_name =
+                design::number_width(ui, &draft_ref.saved_name, &Type::Heading.font(ui));
+            let stack_actions = rest < saved_name.max(Density::Scan.control());
             let width = if stack_actions {
                 (ui.available_rect_before_wrap().width() - 2.0 * design::S)
                     .max(Density::Scan.control())
@@ -5098,17 +5123,13 @@ impl Encounters {
                                     .setup
                                     .roster
                                     .is_empty()
-                                    .then_some("Add participants first")));
+                                    .then_some("Add participants first.")));
                     if unfinished.is_some() {
                         row_menu(ui, &draft_ref.name, |ui| {
                             start_another = menu_action(ui, "Start another fight", start_blocked);
                         });
                     }
-                    let word = if unfinished.is_some() {
-                        "Resume"
-                    } else {
-                        START_FIGHT
-                    };
+                    let word = start_word;
                     // Unsaved changes own the primary: Resume waits until they are saved or
                     // discarded.
                     run_it = if has_run || dirty {
@@ -5132,7 +5153,7 @@ impl Encounters {
                     .show(ui)
                     .clicked();
                     if has_run {
-                        blocked_reason(ui, Some("Close the open run first"));
+                        blocked_reason(ui, Some(BLOCKED_BY_RUN));
                         ui.add_space(design::L);
                     }
                     save = if dirty && !has_run && refusal.is_none() {
@@ -5211,7 +5232,7 @@ impl Encounters {
                     .or(loading.then_some("Still reading this campaign."))
                     .or(
                         (!has_run && unfinished.is_none() && draft_ref.setup.roster.is_empty())
-                            .then_some("Add participants first"),
+                            .then_some("Add participants first."),
                     ),
             );
         });
@@ -6681,7 +6702,7 @@ use crate::design::LIST_MEASURE;
 mod list;
 pub(crate) use list::run_state_word;
 #[cfg(test)]
-pub(crate) use list::{ENDED_UNREAD, UNFINISHED_UNREAD};
+pub(crate) use list::{ENDED_UNREAD, FIGHT_OPEN, GO_TO_RUN, UNFINISHED_UNREAD};
 use list::{
     blocked_reason, choice_note, group_list, history_list, in_progress_list, menu_action,
     ready_list, row_menu, side_control,

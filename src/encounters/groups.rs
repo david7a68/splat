@@ -64,7 +64,7 @@ struct GroupSetup {
     extra: Mapping,
 }
 /// Why Save group waits on an empty group.
-const EMPTY_REASON: &str = "Add a creature first";
+const EMPTY_REASON: &str = "Add a creature first.";
 
 #[derive(Clone)]
 pub(super) struct GroupDraft {
@@ -96,6 +96,14 @@ pub(super) struct GroupDraft {
     members_saved: Option<bool>,
     edited_last_frame: bool,
     repair_error: Option<String>,
+}
+
+/// Why Save would refuse a group draft (FN5, AI2).
+#[derive(Clone, Debug, PartialEq)]
+pub(super) struct Refusal {
+    pub(super) text: String,
+    /// The editor shows this fault at its own place, so no other place repeats it.
+    pub(super) in_place: bool,
 }
 
 /// A member's creature before and after `Use`, with the result's words.
@@ -471,53 +479,19 @@ impl GroupDraft {
     }
     /// An encounter being saved with this group counts as there, though it is not on disk yet.
     pub(super) fn validate(&self, snapshot: &Snapshot, saving: Option<Uuid>) -> Result<(), String> {
-        let name = self.name.trim();
-        if name.is_empty() {
-            return Err("Enter a group name.".into());
-        }
-        // A plan links a group for any encounter by its name, so that name must mean one thing.
-        // A group that belongs to an encounter is not linked, and each can have "Reinforcements".
-        let linkable = self.setup.encounter.is_none();
-        if linkable
-            && snapshot.groups.iter().any(|group| {
-                group.encounter.is_none()
-                    && group.path != self.path
-                    && group.name.eq_ignore_ascii_case(name)
-            })
-        {
-            return Err(format!(
-                "Another group is named {name}. Choose another name."
-            ));
-        }
-        if linkable
-            && snapshot
-                .templates
-                .iter()
-                .any(|template| template.name.eq_ignore_ascii_case(name))
-        {
-            return Err(format!(
-                "An encounter is named {name}. Choose another name."
-            ));
-        }
-        if self.setup.side.trim().is_empty() {
-            return Err("Enter a default side for this group.".into());
-        }
-        if self.setup.members.is_empty() {
-            return Err("This group is empty. Add at least one creature.".into());
-        }
-        if self
-            .setup
-            .encounter
-            .as_ref()
-            .and_then(|reference| reference.id)
-            .is_some_and(|id| {
-                Some(id) != saving && !snapshot.encounter_choices().any(|(known, _)| known == id)
-            })
-        {
-            return Err(format!(
-                "This campaign no longer has the encounter this group belongs to. Under {BELONGS_TO}, choose another, or {ANY_ENCOUNTER}."
-            ));
-        }
+        self.check(snapshot, saving).map_err(|refusal| refusal.text)
+    }
+    /// Save's check, without writing. A refusal says whether the editor already shows the fault
+    /// in its place (a member row's missing creature or change that cannot stand, or the empty
+    /// group's reason beside Save), so the footer does not repeat it.
+    pub(super) fn check(&self, snapshot: &Snapshot, saving: Option<Uuid>) -> Result<(), Refusal> {
+        #[cfg(test)]
+        GROUP_CHECKS.with(|counts| counts.set((counts.get().0, counts.get().1 + 1)));
+        let in_place = |text: String| Refusal {
+            text,
+            in_place: true,
+        };
+        self.check_group(snapshot, saving)?;
         for member in &self.setup.members {
             // FA1: Save's check names a member as every view does. A draft's lines may have
             // moved since the note was read, so it names no line.
@@ -538,25 +512,92 @@ impl GroupDraft {
                 _ => missing_member_name(None, member.creature.link.as_deref()),
             };
             let fault = |cause: &str| member_fault(&shown, base.as_deref(), None, cause);
+            let not_in_place = |cause: &str| Refusal {
+                text: fault(cause),
+                in_place: false,
+            };
             if !(1..=MAX_COUNT).contains(&member.count) {
-                return Err(fault(&format!("count must be from 1 to {MAX_COUNT}")));
+                return Err(not_in_place(&format!(
+                    "count must be from 1 to {MAX_COUNT}"
+                )));
             }
-            let id = resolved_id.map_err(|_| fault("not in this campaign’s packages"))?;
+            let id = resolved_id.map_err(|_| in_place(fault("not in this campaign’s packages")))?;
             let creature = snapshot
                 .creatures
                 .iter()
                 .find(|c| c.id == id)
-                .ok_or_else(|| fault("this creature is unavailable in campaign content"))?;
+                .ok_or_else(|| not_in_place("this creature is unavailable in campaign content"))?;
             if creature.linked {
-                return Err(fault(LINKED_CAUSE));
+                return Err(not_in_place(LINKED_CAUSE));
             }
-            let overrides = Overrides::parse(&member.overrides).map_err(|e| fault(&e))?;
+            let overrides = Overrides::parse(&member.overrides).map_err(|e| in_place(fault(&e)))?;
             let resolved = overrides
                 .resolve_for(&snapshot.catalogue.entries[&id].entry, &self.setup.side)
-                .map_err(|e| fault(&e))?;
+                .map_err(|e| in_place(fault(&e)))?;
             if resolved.max_hp.is_none() {
-                return Err(fault(NO_MAX_HP_CAUSE));
+                return Err(not_in_place(NO_MAX_HP_CAUSE));
             }
+        }
+        Ok(())
+    }
+    /// The group's own fields, before its members.
+    fn check_group(&self, snapshot: &Snapshot, saving: Option<Uuid>) -> Result<(), Refusal> {
+        let refuse = |text: String| {
+            Err(Refusal {
+                text,
+                in_place: false,
+            })
+        };
+        let name = self.name.trim();
+        if name.is_empty() {
+            return refuse("Enter a group name.".into());
+        }
+        // A plan links a group for any encounter by its name, so that name must mean one thing.
+        // A group that belongs to an encounter is not linked, and each can have "Reinforcements".
+        let linkable = self.setup.encounter.is_none();
+        if linkable
+            && snapshot.groups.iter().any(|group| {
+                group.encounter.is_none()
+                    && group.path != self.path
+                    && group.name.eq_ignore_ascii_case(name)
+            })
+        {
+            return refuse(format!(
+                "Another group is named {name}. Choose another name."
+            ));
+        }
+        if linkable
+            && snapshot
+                .templates
+                .iter()
+                .any(|template| template.name.eq_ignore_ascii_case(name))
+        {
+            return refuse(format!(
+                "An encounter is named {name}. Choose another name."
+            ));
+        }
+        if self.setup.side.trim().is_empty() {
+            return refuse("Enter a default side for this group.".into());
+        }
+        if self.setup.members.is_empty() {
+            // Its reason (`Add a creature first.`) is beside Save.
+            return Err(Refusal {
+                text: "This group is empty. Add at least one creature.".into(),
+                in_place: true,
+            });
+        }
+        if self
+            .setup
+            .encounter
+            .as_ref()
+            .and_then(|reference| reference.id)
+            .is_some_and(|id| {
+                Some(id) != saving && !snapshot.encounter_choices().any(|(known, _)| known == id)
+            })
+        {
+            return refuse(format!(
+                "This campaign no longer has the encounter this group belongs to. Under {BELONGS_TO}, choose another, or {ANY_ENCOUNTER}."
+            ));
         }
         Ok(())
     }
@@ -1517,12 +1558,15 @@ pub(super) fn change_words(
     }
 }
 
+/// `fault` puts a cause into the member-fault form (name and line), so the editor says a
+/// member's fault as the Encounters list and Arrivals do (FJ6).
 pub(super) fn changes_link(
     ui: &mut egui::Ui,
     block: &Mapping,
     entry: &Entry,
     side: &str,
     form_open: bool,
+    fault: &dyn Fn(&str) -> String,
 ) -> bool {
     if block.is_empty() || form_open {
         return false;
@@ -1534,14 +1578,22 @@ pub(super) fn changes_link(
             let word = change_words(&overrides, entry, side, &missing);
             let clicked = design::link(ui, &word).clicked();
             if let Err(error) = overrides.resolve_for(entry, side) {
-                design::message(ui, FaultKind::InvalidChange.tone(), &override_error(&error));
+                design::message(
+                    ui,
+                    FaultKind::InvalidChange.tone(),
+                    &fault(&override_error(&error)),
+                );
                 // The failed change stays visible beside its fault.
                 change_rows(ui, &rows);
             }
             clicked
         }
         Err(error) => {
-            design::message(ui, FaultKind::InvalidChange.tone(), &override_error(&error));
+            design::message(
+                ui,
+                FaultKind::InvalidChange.tone(),
+                &fault(&override_error(&error)),
+            );
             false
         }
     }
@@ -1974,6 +2026,30 @@ fn conditions_row(ui: &mut egui::Ui, conditions: &mut Vec<String>) {
 }
 
 impl Encounters {
+    /// Why Save would refuse the open group now, if it would. Checked again only when the
+    /// campaign's read (its revision), an edit (the edit epoch) or the open group changes.
+    fn group_refusal(&mut self) -> Option<Refusal> {
+        let (snapshot, draft) = (self.snapshot.as_ref()?, self.group_draft.as_ref()?);
+        #[cfg(test)]
+        GROUP_CHECKS.with(|counts| counts.set((counts.get().0 + 1, counts.get().1)));
+        let fresh = self
+            .group_check
+            .as_ref()
+            .is_some_and(|((revision, epoch, path), _)| {
+                *revision == snapshot.revision && *epoch == self.edit_epoch && *path == draft.path
+            });
+        if !fresh {
+            let refusal = draft.check(snapshot, None).err();
+            self.group_check = Some((
+                (snapshot.revision, self.edit_epoch, draft.path.clone()),
+                refusal,
+            ));
+        }
+        self.group_check
+            .as_ref()
+            .and_then(|(_, refusal)| refusal.clone())
+    }
+
     pub(super) fn save_group_draft(
         &mut self,
         ctx: &egui::Context,
@@ -2075,12 +2151,12 @@ impl Encounters {
         }
         let dirty = self.draft_dirty();
         let has_run = self.has_run();
+        // FN5, AI2: a draft that Save's check refuses says Invalid, changed or not, before any
+        // Save, and Save is blocked and not primary.
+        let refusal = self.group_refusal();
         // The Session page has no save of its own to give this key to.
         let save_key = in_plan
-            && self
-                .group_draft
-                .as_ref()
-                .is_some_and(|draft| !draft.setup.members.is_empty())
+            && refusal.is_none()
             && dirty
             && ui
                 .ctx()
@@ -2094,7 +2170,7 @@ impl Encounters {
 
         let saved_note = self.message.clone();
         // AH1: a draft that Save's check refused says Invalid, as the encounter editor does.
-        let refused = self.shows_validation_error();
+        let refused = self.shows_validation_error() || refusal.is_some();
         let focus_name = std::mem::take(&mut self.focus_name);
         let draft = self.group_draft.as_mut().expect("the editor has a draft");
         let column_right = ui.data(|data| data.get_temp::<f32>(column_right_id(&draft.path)));
@@ -2108,6 +2184,21 @@ impl Encounters {
         let block_right = column_right.map_or(ui.max_rect().right(), |right| {
             right.min(ui.max_rect().right())
         });
+        let empty = draft.setup.members.is_empty();
+        // FB7: Save group is on the title line at the block's right edge, where Save encounter
+        // is in the encounter editor. The save row below keeps the state, Discard and reasons.
+        let button = if dirty && !has_run && !empty && !refused {
+            Action::primary("Save group")
+        } else {
+            Action::secondary("Save group")
+        }
+        .blocked(if empty {
+            Some(EMPTY_REASON)
+        } else if !dirty {
+            Some("No changes to save.")
+        } else {
+            refusal.as_ref().map(|refusal| refusal.text.as_str())
+        });
         ui.horizontal(|ui| {
             back = Action::quiet(icons::BACK)
                 .name(back_name)
@@ -2115,7 +2206,10 @@ impl Encounters {
                 .blocked_if(dirty, "Save or discard this group first.")
                 .show(ui)
                 .clicked();
-            let room = (block_right - ui.cursor().left()).min(ui.available_width());
+            let gap = ui.spacing().item_spacing.x;
+            let room = (block_right - ui.cursor().left()).min(ui.available_width())
+                - button.natural_width(ui)
+                - gap;
             let width = (room - 2.0 * design::S).max(Density::Scan.control());
             let column = column_right.map_or(f32::INFINITY, |right| {
                 right - ui.cursor().left() - 2.0 * design::S
@@ -2133,18 +2227,30 @@ impl Encounters {
             if focus_name {
                 design::focus_and_select(ui, response.id, &draft.name);
             }
+            ui.allocate_ui_with_layout(
+                egui::vec2(
+                    (block_right - ui.cursor().left()).max(0.0),
+                    Density::Scan.control(),
+                ),
+                egui::Layout::right_to_left(egui::Align::Center),
+                |ui| {
+                    let response = button.show(ui);
+                    save = response.clicked();
+                    // The title line ends at Save; Belongs to ends there too.
+                    name_right = response.rect.right();
+                },
+            );
         });
         // The save row: the state and Discard at its start, Save group at the block's edge. A
         // reason that has no room on the row takes its own line below it. AK1, FK1: each reason
         // has one place, chosen as if both were shown, and the lines below are reserved, so a
         // reason that comes or goes moves no field.
-        let empty = draft.setup.members.is_empty();
         // Each reason: the words its place is measured by (the longest form), and the words it
         // shows now, if any.
         let mut below: Vec<(&'static str, Option<&'static str>)> = Vec::new();
         ui.horizontal(|ui| {
             ui.set_min_height(Density::Scan.control());
-            let (icon, word, color) = if dirty && (empty || refused) {
+            let (icon, word, color) = if empty || refused {
                 (icons::ERROR, "Invalid", colors().document.invalid)
             } else if dirty {
                 (icons::DRAFT, "Unsaved", colors().document.unsaved)
@@ -2156,24 +2262,12 @@ impl Encounters {
                 (icons::OK, "No changes", colors().muted)
             };
             discard = super::editor_save_state(ui, Status { icon, word, color }, dirty, None);
-            let button = if dirty && !has_run && !empty && !refused {
-                Action::primary("Save group")
-            } else {
-                Action::secondary("Save group")
-            }
-            .blocked(if empty {
-                Some(EMPTY_REASON)
-            } else if !dirty {
-                Some("No changes to save.")
-            } else {
-                None
-            });
             let gap = ui.spacing().item_spacing.x;
             let font = Type::Small.font(ui);
-            let mut room = block_right - ui.cursor().left() - button.natural_width(ui) - gap;
-            // Save's own reason first: it stays beside Save while there is room. A dirty group
-            // blocks the campaign switch wherever it is open, so it says so, as the encounter
-            // editor does.
+            let mut room = block_right - ui.cursor().left();
+            // Save's own reason first: it stays at the row's end, under Save, while there is
+            // room. A dirty group blocks the campaign switch wherever it is open, so it says so,
+            // as the encounter editor does.
             let mut beside = |measure: &'static str, shown: Option<&'static str>| {
                 let width = design::number_width(ui, measure, &font) + gap;
                 if width <= room {
@@ -2203,10 +2297,7 @@ impl Encounters {
                     Density::Scan.control(),
                 ),
                 egui::Layout::right_to_left(egui::Align::Center),
-                |ui| {
-                    save = button.show(ui).clicked();
-                    super::blocked_reason(ui, empty_reason);
-                },
+                |ui| super::blocked_reason(ui, empty_reason),
             );
         });
         for (reason, shown) in below {
@@ -2276,7 +2367,15 @@ impl Encounters {
             member_result_into(draft, &mut footer, member_ref);
         }
         self.kept_into_footer(&mut footer, &kinds, pressed_ref);
-        if let Some(e) = self.error.clone() {
+        // Save's reason: the last refusal, or the check's fault when the editor shows it at no
+        // other place (a member row or the reason beside Save already says theirs).
+        let reason = self.error.clone().or_else(|| {
+            refusal
+                .as_ref()
+                .filter(|refusal| !refusal.in_place)
+                .map(|refusal| refusal.text.clone())
+        });
+        if let Some(e) = reason {
             footer.reason(e.clone(), move |ui| {
                 design::message(ui, Tone::Error, &e);
             });
@@ -2532,6 +2631,16 @@ fn choice_label(ui: &mut egui::Ui, text: &str) {
 thread_local! {
     /// (frames that reached `members_are_saved`, comparisons it made)
     static MEMBER_COMPARISONS: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
+}
+#[cfg(test)]
+thread_local! {
+    /// (frames that asked for the open group's check, checks that ran in `GroupDraft::check`)
+    static GROUP_CHECKS: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
+}
+/// The counts of Save's check of a group, for `CachedWork`.
+#[cfg(test)]
+pub(crate) fn group_checks() -> (usize, usize) {
+    GROUP_CHECKS.with(std::cell::Cell::get)
 }
 /// The counts of `members_are_saved`, for `CachedWork`.
 #[cfg(test)]
@@ -2795,15 +2904,15 @@ fn members(
                     }
                 });
             });
+            // FA1, FJ6: every member fault is in the one member-fault form, with its line while
+            // the members are the saved ones (a draft's lines can move).
+            let line = saved_members
+                .then(|| draft.member_lines.get(index).copied())
+                .flatten();
             if entry.is_none() {
                 // The reference is on hover: it is what a repair needs, and not a word to read.
                 // The repair link is a notice action, so its words start at the warning text.
-                // FA1, FJ6: the fault in the one member-fault form, with its line while the
-                // members are the saved ones (a draft's lines can move), then its help, then the
-                // repair at the words.
-                let line = saved_members
-                    .then(|| draft.member_lines.get(index).copied())
-                    .flatten();
+                // The fault, then its help, then the repair at the words.
                 let changed = member
                     .overrides
                     .get("name")
@@ -2846,7 +2955,8 @@ fn members(
                 }
             }
             if let Some(entry) = entry {
-                if changes_link(ui, &member.overrides, entry, &side, is_open) {
+                let fault = |cause: &str| member_fault(&name, Some(&entry.name), line, cause);
+                if changes_link(ui, &member.overrides, entry, &side, is_open, &fault) {
                     show_form_when_it_opens(ui);
                     *expanded = Some(key.clone());
                 }

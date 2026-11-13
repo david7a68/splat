@@ -3,6 +3,10 @@ use super::*;
 use crate::encounter_run::{FightSummary, SavedRunInfo};
 use std::path::Path;
 
+/// Why a Ready row's Start fight is blocked while its run is open (FJ7), and the link to it.
+pub(crate) const FIGHT_OPEN: &str = "This fight is open.";
+pub(crate) const GO_TO_RUN: &str = "Go to the run";
+
 pub(super) fn blocked_reason(ui: &mut egui::Ui, reason: Option<&str>) {
     if let Some(reason) = reason {
         ui.add(egui::Label::new(Type::Small.rich(ui, reason).color(colors().muted)).wrap());
@@ -599,12 +603,14 @@ pub(super) fn ready_list(
                 || (run.source.is_none() && run.encounter == template.name)
         });
         let open = unfinished.is_some_and(|run| live.is_some_and(|live| live.id == run.id));
+        // FJ7: the short reason says why Start is blocked; the long form is on Start's hover.
+        // An open run also gets its link, at the reason.
         let short_reason = if open {
-            Some("Go back to the run".to_owned())
+            Some(FIGHT_OPEN.to_owned())
         } else if row.unfinished_run {
-            Some("Resume it in In progress".to_owned())
+            Some("This fight is unfinished.".to_owned())
         } else if template.summary.as_deref().is_none_or(str::is_empty) {
-            Some("Add participants first".to_owned())
+            Some("Add participants first.".to_owned())
         } else {
             None
         };
@@ -615,7 +621,7 @@ pub(super) fn ready_list(
                 "This encounter has an unfinished run. Resume it in In progress."
             })
         } else if template.summary.as_deref().is_none_or(str::is_empty) {
-            Some("Add participants first")
+            Some("Add participants first.")
         } else {
             blocked
         };
@@ -666,6 +672,9 @@ pub(super) fn ready_list(
                     *action = Some(ListAction::Run(template.path.clone()));
                 }
                 if let Some(reason) = &short_reason {
+                    if open && design::small_link(ui, GO_TO_RUN).clicked() {
+                        *action = Some(ListAction::BackToRun);
+                    }
                     ui.add(
                         egui::Label::new(Type::Small.rich(ui, reason).color(colors().muted))
                             .extend(),
@@ -777,7 +786,7 @@ pub(super) fn history_list(
                                     .summary
                                     .as_deref()
                                     .is_none_or(str::is_empty)
-                                    .then_some("Add participants first"));
+                                    .then_some("Add participants first."));
                                 if menu_action(ui, START_FIGHT, start_blocked) {
                                     *action = Some(ListAction::Run(template.path.clone()));
                                 }
