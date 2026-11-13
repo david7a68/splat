@@ -1842,8 +1842,17 @@ impl Splat {
                     viewport.min.y += design::L;
                     let clip = viewport.intersect(ui.clip_rect());
                     ui.scope_builder(egui::UiBuilder::new().max_rect(viewport), |ui| {
+                        // Round 27 FI7: the tab's notices sit in its message footer.
+                        let bottom = {
+                            let width = ui.available_width().min(design::LIST_MEASURE);
+                            let mut footer =
+                                design::Footer::new("recording_settings_footer", width);
+                            self.processing.footer_messages(&mut footer);
+                            footer.show(ui)
+                        };
                         egui::ScrollArea::vertical()
                             .id_salt("recording_settings")
+                            .max_height((bottom - ui.cursor().top()).max(0.0))
                             .auto_shrink([false, false])
                             .show(ui, |ui| {
                                 ui.set_clip_rect(ui.clip_rect().intersect(clip));
@@ -2429,6 +2438,10 @@ impl Splat {
         if std::mem::take(&mut self.sessions.wants_campaign_link) {
             self.page = Page::Campaign;
             self.campaign_tab = CampaignTab::Link;
+        }
+        if std::mem::take(&mut self.trackers.wants_rules) {
+            self.page = Page::Campaign;
+            self.campaign_tab = CampaignTab::RunSettings;
         }
         if std::mem::take(&mut self.encounters.wants_run_folder) {
             self.page = Page::Campaign;
