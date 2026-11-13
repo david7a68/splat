@@ -1189,18 +1189,33 @@ fn record_age(record: &EntitySnapshot) -> String {
     fetch_age(crate::hermetic::now().saturating_sub(record.source.fetched_at))
 }
 
+/// `Fighter · Level 6`: the one form of a member's classes and level, in the sheet's kind line
+/// and in the member's row (round 28 FB12).
+fn classes_and_level(classes: &str, level: Option<impl std::fmt::Display>) -> String {
+    [
+        classes.to_owned(),
+        level.map(|n| format!("Level {n}")).unwrap_or_default(),
+    ]
+    .into_iter()
+    .filter(|s| !s.is_empty())
+    .collect::<Vec<_>>()
+    .join(" · ")
+}
+
 fn class_line(record: &EntitySnapshot) -> String {
     format!(
-        "{} · {} · Level {}",
+        "{} · {}",
         record.character.species,
-        record
-            .character
-            .classes
-            .iter()
-            .map(|c| text(&c["name"]))
-            .collect::<Vec<_>>()
-            .join(" / "),
-        record.character.level
+        classes_and_level(
+            &record
+                .character
+                .classes
+                .iter()
+                .map(|c| text(&c["name"]))
+                .collect::<Vec<_>>()
+                .join(" / "),
+            Some(record.character.level),
+        )
     )
 }
 
@@ -1321,14 +1336,7 @@ fn member_row(
             .join(" / ")
     });
     let conditions = record.map_or_else(Vec::new, sheet_conditions);
-    let mut summary = [
-        level.map(|n| format!("Level {n}")).unwrap_or_default(),
-        classes,
-    ]
-    .into_iter()
-    .filter(|s| !s.is_empty())
-    .collect::<Vec<_>>()
-    .join(" ");
+    let mut summary = classes_and_level(&classes, level);
     if record.is_none() {
         summary = "No local copy yet".into();
     }

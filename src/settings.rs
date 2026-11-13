@@ -41,6 +41,13 @@ pub struct Settings {
     warning: Option<String>,
     /// A saved session failed to restore, so one is still in the keyring.
     saved_session: bool,
+    /// Round 28 FH6: the session in use is saved on this computer (a restored one, or a Connect
+    /// with the box ticked whose save worked). It is set by the reply to a Restore or Connect
+    /// and ends with Disconnect, a failed sign-in or a failed save; a refresh keeps it.
+    remembered: bool,
+    /// The request in progress saves the session it gets (a Restore, or a Connect with the box
+    /// ticked).
+    saves: bool,
     /// The worker is removing the saved session.
     forgetting: bool,
     /// The request in progress renews a working session. The DM need not hear of it.
@@ -112,6 +119,8 @@ impl Default for Settings {
             error: None,
             warning: None,
             saved_session: false,
+            remembered: false,
+            saves: false,
             forgetting: false,
             refreshing: false,
             refresh_failures: 0,
@@ -159,15 +168,18 @@ impl Settings {
         self.error = None;
         self.warning = None;
         self.refresh_error = None;
+        self.remembered = false;
         match account {
             Account::Busy => self.simulated = Some(Account::Busy),
-            Account::Connected => self.session = session(),
+            Account::Connected => {
+                self.session = session();
+                self.remembered = true;
+            }
             Account::NotConnected => self.session = None,
             Account::Failed => {
                 self.session = None;
                 self.connect_failed = true;
-                self.error =
-                    Some("Could not reach D&D Beyond. Check your connection and try again.".into());
+                self.error = Some("Could not reach D&D Beyond. Check your connection.".into());
             }
             Account::KeyringWarning => {
                 self.session = session();
@@ -178,7 +190,7 @@ impl Settings {
             Account::RefreshFailing => {
                 self.session = session();
                 self.refresh_error =
-                    Some("Could not reach D&D Beyond. Check your connection and try again.".into());
+                    Some("Could not reach D&D Beyond. Check your connection.".into());
             }
         }
         self.account_epoch += 1;
@@ -230,6 +242,10 @@ impl Settings {
         self.reveal_retry = false;
         self.forgetting = matches!(&action, Action::Forget);
         self.refreshing = matches!(&action, Action::Refresh(_));
+        self.saves = matches!(
+            &action,
+            Action::Restore | Action::Connect { remember: true, .. }
+        );
         if !matches!(&action, Action::Refresh(_)) {
             self.warning = None;
             self.account_epoch += 1;
@@ -265,6 +281,11 @@ impl Settings {
                                     self.cookie_input.zeroize();
                                     self.sign_in_again = false;
                                 }
+                                if !self.refreshing {
+                                    self.remembered = self.saves
+                                        && outcome.session.is_some()
+                                        && outcome.warning.is_none();
+                                }
                                 self.session = outcome.session;
                                 self.saved_session = false;
                                 self.refresh_failures = 0;
@@ -289,6 +310,7 @@ impl Settings {
                             }
                             Err(error) => {
                                 self.session = None;
+                                self.remembered = false;
                                 self.error = Some(error);
                                 self.connect_failed = self.connecting;
                                 self.reveal_retry = self.connecting;
@@ -383,8 +405,15 @@ impl Settings {
             data.insert_temp(egui::Id::new("account_heading_content_y"), heading_top)
         });
         design::group_heading(ui, "D&D Beyond account", 0);
+        // Round 28 FO3: a connected account opens its sign-in and Disconnect as a caret section,
+        // as the other inline forms on this page open (`Add campaign`).
+        let details = !open
+            && !matches!(
+                self.account(),
+                Account::NotConnected | Account::Failed | Account::RefreshFailing
+            );
         if open {
-            self.show_account(ui, false);
+            self.show_account(ui, false, true);
         } else {
             ui.horizontal(|ui| {
                 // A fixed slot: the action after the status stays in place when the state
@@ -406,41 +435,54 @@ impl Settings {
                             .color(colors().muted),
                     );
                 }
-                if design::Action::quiet(
-                    if matches!(self.account(), Account::NotConnected | Account::Failed) {
-                        "Connect…"
-                    } else if self.account() == Account::RefreshFailing {
-                        "Connect again…"
-                    } else {
-                        "Account…"
-                    },
-                )
-                .show(ui)
-                .clicked()
+                if !details
+                    && design::Action::quiet(
+                        if matches!(self.account(), Account::NotConnected | Account::Failed) {
+                            "Connect…"
+                        } else {
+                            "Connect again…"
+                        },
+                    )
+                    .show(ui)
+                    .clicked()
                 {
                     open = true;
                 }
             });
+            if details {
+                let section = egui::CollapsingHeader::new("Sign-in details")
+                    .icon(design::section_icon)
+                    .id_salt("compact_sign_in_details")
+                    .show(ui, |ui| self.show_account(ui, false, false));
+                // egui gives a caret section no expanded state; screen readers need it.
+                let expanded = section.body_response.is_some();
+                ui.ctx()
+                    .accesskit_node_builder(section.header_response.id, |node| {
+                        node.set_expanded(expanded)
+                    });
+            }
         }
         ui.ctx().data_mut(|data| data.insert_temp(id, open));
     }
 
     pub fn show(&mut self, ui: &mut egui::Ui) {
-        self.show_account(ui, true);
+        self.show_account(ui, true, true);
     }
 
     /// The account's errors that are not a failed Connect (a failed removal, restore or worker),
     /// in the Settings footer, so their recovery stays in view whatever the cookie field holds.
     /// A failed Connect's cause sits beside Connect instead (round 27 FA1); an ended session is
     /// the account's state, said in the account column. Each lives until the next request.
-    pub fn footer_messages<'a>(&'a self, footer: &mut design::Footer<'a>) {
+    /// The message owns its words, so the pane's body can change the account while the footer
+    /// waits for it (`Footer::pane`).
+    pub fn footer_messages(&self, footer: &mut design::Footer<'_>) {
         if let Some(error) = self
             .error
-            .as_deref()
+            .clone()
             .filter(|error| !self.connect_failed && *error != SESSION_ENDED)
         {
-            footer.reason(error, move |ui| {
-                design::message(ui, Tone::Error, error);
+            footer.reason(error.clone(), move |ui| {
+                design::message(ui, Tone::Error, &error);
             });
         }
     }
@@ -450,11 +492,13 @@ impl Settings {
         self.reveal_rect.take()
     }
 
+    /// `status`: draw the account's status line (a caret section under the compact status line
+    /// does not say it again).
     #[allow(
         clippy::disallowed_methods,
         reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
     )]
-    fn show_account(&mut self, ui: &mut egui::Ui, heading: bool) {
+    fn show_account(&mut self, ui: &mut egui::Ui, heading: bool, status: bool) {
         if heading {
             ui.allocate_ui_with_layout(
                 egui::vec2(ui.available_width(), Density::Read.control()),
@@ -471,12 +515,16 @@ impl Settings {
         });
         let account = self.account();
         let state = self.connection_status();
-        {
+        if status {
             ui.horizontal(|ui| {
                 design::status(ui, state);
             });
         }
         match account {
+            // Round 28 FH6: the help says whether the sign-in was saved.
+            Account::Connected if self.remembered => {
+                small(ui, "Splat signs in again when it starts.");
+            }
             Account::Connected => {
                 small(ui, "Splat stays signed in while it is open.");
             }
@@ -605,7 +653,23 @@ impl Settings {
                             self.reveal_rect = Some(connect.rect);
                         }
                         ui.spacing_mut().item_spacing.x = design::S;
-                        design::blocked_reason(ui, reason.or(failure));
+                        // Round 28 FA11: a reason that fits on one line sits `S` left of
+                        // Connect; a longer one starts at the field's left edge and wraps from
+                        // there, so no line is left with one word. Measured, not a fixed width.
+                        let shown = reason.or(failure);
+                        let fits = shown.is_none_or(|words| {
+                            design::number_width(ui, words, &Type::Small.font(ui))
+                                <= ui.available_width()
+                        });
+                        if fits {
+                            design::blocked_reason(ui, shown);
+                        } else {
+                            ui.with_layout(
+                                egui::Layout::left_to_right(egui::Align::Center)
+                                    .with_main_wrap(true),
+                                |ui| design::blocked_reason(ui, shown),
+                            );
+                        }
                         connect.clicked()
                     })
                     .inner;
@@ -632,7 +696,11 @@ impl Settings {
         ) {
             small(
                 ui,
-                "Disconnect removes Splat’s saved D&D Beyond sign-in. It does not sign your browser out of D&D Beyond.",
+                if self.remembered {
+                    "Disconnect removes Splat’s saved D&D Beyond sign-in. It does not sign your browser out of D&D Beyond."
+                } else {
+                    "Disconnect signs Splat out. It does not sign your browser out of D&D Beyond."
+                },
             );
         }
         // Only when there is something to forget. It follows the trust text.
@@ -676,8 +744,48 @@ mod tests {
         (settings, ctx, commands, results)
     }
 
+    /// Round 28 FO3: in the compact layout a connected account opens `Sign-in details` as a
+    /// caret section, by keyboard too; its expanded state is in the accessible tree, and it
+    /// holds Disconnect.
     #[test]
-    #[allow(clippy::disallowed_methods)]
+    fn sign_in_details_is_a_caret_section_that_opens_by_keyboard() {
+        use egui_kittest::kittest::{NodeT, Queryable};
+        let mut settings = Settings::default();
+        settings.simulate(Account::Connected);
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(600.0, 600.0))
+            .build_ui_state(
+                |ui, settings: &mut Settings| settings.show_compact(ui),
+                settings,
+            );
+        design::theme::install(&harness.ctx);
+        harness.run_steps(3);
+        let expanded = |harness: &egui_kittest::Harness<'_, Settings>| {
+            harness
+                .get_by_label("Sign-in details")
+                .accesskit_node()
+                .data()
+                .is_expanded()
+        };
+        assert_eq!(expanded(&harness), Some(false));
+        assert!(harness.query_all_by_label("Disconnect").next().is_none());
+        harness.get_by_label("Sign-in details").focus();
+        harness.run_steps(2);
+        harness.key_press(egui::Key::Enter);
+        harness.run_steps(4);
+        assert_eq!(expanded(&harness), Some(true), "Enter opens the section");
+        assert!(
+            harness.query_all_by_label("Disconnect").next().is_some(),
+            "the open section holds Disconnect"
+        );
+        assert_eq!(
+            harness.query_all_by_label_contains("Connected").count(),
+            1,
+            "the status shows once"
+        );
+    }
+
+    #[test]
     fn a_failed_removal_keeps_disconnect_until_it_works() {
         let ctx = egui::Context::default();
         let (worker, commands, results) = Worker::test_channels();
@@ -707,8 +815,7 @@ mod tests {
                 |ui, settings: &mut Settings| {
                     let mut footer = design::Footer::new("settings_footer", 600.0);
                     settings.footer_messages(&mut footer);
-                    let _ = footer.show_by_hand(ui);
-                    settings.show(ui);
+                    footer.pane(ui, design::Body::Content, |ui| settings.show(ui));
                 },
                 std::mem::take(&mut settings),
             );

@@ -2333,6 +2333,23 @@ pub mod campaign_content {
                 format!("At {size:?}, heading, mode and Choose none centres: {centres:?}"),
             );
         }
+        // Round 28 FB7: a locked row says what keeps it in the form of `Needed by your
+        // entries`, on its one detail line.
+        let mut forms = (false, Vec::new());
+        d.each_painted_text(|text, _| {
+            let words = &text.galley.job.text;
+            forms.0 |= words == "Rule · needed by Ember Cultist";
+            if words.starts_with("Needed by ") && words != REQUIRED {
+                forms.1.push(words.clone());
+            }
+        });
+        d.observe(
+            "iter-28-C-FB7",
+            forms.0 && forms.1.is_empty(),
+            format!(
+                "The locked row reads `Rule · needed by Ember Cultist`; other forms: {forms:?}"
+            ),
+        );
         d.state("packages-partial-selection", Sizes::All);
         d.goal("see a partial package selection");
 
@@ -2721,6 +2738,13 @@ pub mod campaign_content {
                     && d.is_disabled("Save repaired note")
                     && super::session_recording::accent_filled(d).is_empty()
             },
+        );
+        // Round 28 FB5: Reload stays in its place, blocked with the reason, while the repair's
+        // draft would be lost.
+        d.observe_both(
+            "iter-28-C-FB5",
+            "Reload from disk stays, blocked, while a repair draft has changes",
+            |d| d.has_containing(RELOAD) && d.is_disabled(RELOAD),
         );
         d.state("repair-dirty", Sizes::All);
         // Lead ruling on round 23 FA3: a draft that parses but that Save refuses (a package
@@ -3696,7 +3720,8 @@ pub mod party {
     ];
     const OVERVIEW: &str = "Overview";
     const SOURCE: &str = "Technical details";
-    const COMPARE: [&str; 3] = ["AC 19", "HP 58/62", "Level 6 Fighter"];
+    // Round 28 FB12: the row says classes and level in the sheet's order.
+    const COMPARE: [&str; 3] = ["AC 19", "HP 58/62", "Fighter · Level 6"];
     const NO_CHARACTERS: &str = "No characters yet";
     const NOT_LINKED: &str = "Connect D&D Beyond to see the party";
 
@@ -5173,10 +5198,12 @@ pub mod settings {
             |d| {
                 // The slot's words are right-aligned, so their painted bounds, not the galley's
                 // origin, give their right edge.
+                // Round 28 FA11: a cause on two lines starts at the field instead (checked
+                // below), still on Connect's line.
                 painted_bounds(d, OFFLINE_ERROR)
                     .zip(d.place_of(CONNECT))
                     .is_some_and(|(cause, connect)| {
-                        (connect.left() - cause.right() - crate::design::S).abs() <= 1.0
+                        cause.right() <= connect.left() - crate::design::S + 1.0
                             && cause.top() <= connect.center().y
                             && cause.bottom() >= connect.center().y
                     })
@@ -5198,6 +5225,30 @@ pub mod settings {
             "iter-24-C-FA6",
             d.visible_text("Connect failed") && rail.contains("Connect failed"),
             format!("After a failed Connect, the page and the rail say Connect failed: {rail}"),
+        );
+        // Round 28 FA11: a cause on two lines starts at the cookie field's left edge, so its
+        // last line is not one word right-aligned under the first; on one line it stays beside
+        // Connect.
+        let placed = |d: &Driver<'_>| {
+            let line = crate::design::Type::Small.line();
+            painted_bounds(d, OFFLINE_ERROR)
+                .zip(d.place_of(CONNECT))
+                .zip(d.place_of(COOKIE_FIELD))
+                .map(|((cause, connect), field)| {
+                    let one_line = cause.height() < line * 1.5;
+                    let beside = (connect.left() - cause.right() - crate::design::S).abs() <= 1.0;
+                    let from_field = (cause.left() - field.left()).abs() <= 2.0
+                        && cause.right() <= connect.left() - crate::design::S + 1.0;
+                    (one_line && beside) || (!one_line && from_field)
+                })
+        };
+        let at_sizes = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, placed));
+        d.observe(
+            "iter-28-C-FA11",
+            at_sizes.iter().all(|placed| *placed == Some(true)),
+            format!(
+                "Connect's cause beside Connect on one line, else from the field: {at_sizes:?}"
+            ),
         );
         d.state("connect-failed", Sizes::All);
         d.goal("try to connect without a network");
@@ -5253,9 +5304,11 @@ pub mod settings {
                 // Also supplies signed-in's shared Settings image at the wide size.
                 Account::Connected => {
                     one_line = d.painted_rect_in(" Connected", rail);
+                    // Round 28 FH6: this sign-in was saved, and the help says so.
                     d.observe(
                         "iter-23-C-FM4-connected",
-                        d.visible_text("Splat stays signed in while it is open.")
+                        d.visible_text("Splat signs in again when it starts.")
+                            && !d.visible_text("Splat stays signed in while it is open.")
                             && d.visible_text("Disconnect removes Splat’s saved D&D Beyond sign-in. It does not sign your browser out of D&D Beyond.")
                             && !d.has_containing("access token")
                             && !d.has_containing("local credentials"),
@@ -5264,6 +5317,13 @@ pub mod settings {
                     d.state("account-connected", Sizes::All);
                 }
                 Account::KeyringWarning => {
+                    // Round 28 FH6: nothing was saved, so Disconnect only signs Splat out.
+                    d.observe(
+                        "iter-28-C-FH6",
+                        d.visible_text("Disconnect signs Splat out.")
+                            && !d.has_containing("Disconnect removes Splat’s saved"),
+                        "With nothing saved, the help does not speak of a saved sign-in",
+                    );
                     d.state("account-keyring-warning", Sizes::Default);
                     d.observe_both(
                         "iter-12-U3",
@@ -10310,6 +10370,25 @@ pub mod signed_in {
             d.visible_text(RAIL_CONNECTED) && d.rail_words().contains(RAIL_CONNECTED),
             "With a session, the page and the rail both say Connected",
         );
+        // Round 28 FO3: the compact account line names what it opens.
+        // Round 28 FO3 (review of PR 309): `Sign-in details` is a caret section, as `Add
+        // campaign` is. Tab to it and press Enter: Disconnect shows; Enter again closes it.
+        let named = d.in_view("Sign-in details") && !d.has("Account…");
+        let (opened, closed) = d.aside(|d| {
+            let reached = d.activate_by_keyboard("Sign-in details");
+            let opened = reached && d.in_view("Disconnect");
+            let again = d.activate_by_keyboard("Sign-in details");
+            let closed = again && !d.has("Disconnect");
+            (opened, closed)
+        });
+        d.observe(
+            "iter-28-C-FO3",
+            named && opened && closed,
+            format!(
+                "At 960, the caret section Sign-in details: named {named}, Enter opens it with \
+                 Disconnect {opened}, Enter closes it {closed}"
+            ),
+        );
         // Settings / account-connected supplies the larger views. Keep this compact view.
         d.state_captured_at("settings-connected", Sizes::All, Sizes::Small);
         d.click(REMOTE);
@@ -10846,6 +10925,24 @@ pub mod signed_in {
             "Sign in again opens Settings with the cookie field focused",
         );
         d.state("sign-in-from-run", Sizes::Default);
+        // Round 28 FO2: `Sync stopped` shows once, as the rail's link; the run strip does not
+        // say it again.
+        // The rail is the window's first 136 px (`Driver::rail_words`).
+        let rail_edge = 136.0;
+        let mut elsewhere = 0;
+        d.each_painted_text(|text, clip| {
+            if text.galley.job.text.contains(RAIL_STOPPED)
+                && clip.intersects(text.visual_bounding_rect())
+                && text.pos.x > rail_edge
+            {
+                elsewhere += 1;
+            }
+        });
+        d.observe(
+            "iter-28-C-FO2",
+            d.rail_words().contains(RAIL_STOPPED) && elsewhere == 0,
+            format!("Sync stopped in the rail, and {elsewhere} times outside it"),
+        );
         d.observe_both(
             "iter-12-R4",
             "Sign-in recovery shows the cookie field without unexplained locked actions",
@@ -10954,11 +11051,13 @@ pub mod signed_in {
         d.click(STOP_SYNC);
         go_campaign(d);
         d.click(LINK_TAB);
+        // Round 28 FO7: Refresh list takes the lock too, so no control of the pane stays bright.
         d.observe(
             "Locked link",
             d.visible_text(BLOCKED_REASON)
                 && d.is_disabled(EDIT_DETAILS)
-                && d.is_disabled("Folder"),
+                && d.is_disabled("Folder")
+                && d.is_disabled("Refresh list"),
             "With a run open, the link tab states why it is locked, and its controls are",
         );
         // Round 26 FN6: the locked picker keeps the form's width, so it ends with the session
@@ -12647,6 +12746,22 @@ pub mod session_notes {
                 .map(|node| node.rect.top())
         };
         let row_clean = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, save_row));
+        // Round 28 (lead ruling): the save row stands above the pane, so at 960x640 its state
+        // word and every Save are whole in view with no scroll, whatever help and reasons the
+        // fields show. Each named control must be found, then be wholly in view.
+        let whole = |d: &Driver<'_>, names: &[&str]| {
+            let nodes = d.nodes();
+            names.iter().all(|name| {
+                nodes
+                    .iter()
+                    .find(|node| {
+                        node.name.ends_with(name) && node.role != egui::accesskit::Role::Label
+                    })
+                    .or_else(|| nodes.iter().find(|node| node.name.ends_with(name)))
+                    .is_some_and(|node| node.fully_in_view())
+            })
+        };
+        let clean_whole = d.at_size(SMALL, |d| whole(d, &["No changes", "Save folder"]));
         d.app_mut().timeline.save();
         d.replace_text_in("Folder", "30 Sessions");
         d.expect("Move files and save");
@@ -12690,6 +12805,25 @@ pub mod session_notes {
         );
         // FT4 (round 16): with no run and no other form, moving the files is the one primary,
         // as Move runs and save is on Rules and runs.
+        let offered_whole = d.at_size(SMALL, |d| {
+            whole(
+                d,
+                &[
+                    "Unsaved",
+                    "Discard",
+                    "Move files and save",
+                    "Save without moving",
+                ],
+            ) && d.visible_text(KEEPS)
+        });
+        d.observe(
+            "iter-28-C-folder-save-row",
+            clean_whole && offered_whole,
+            format!(
+                "At 960x640 with no scroll, the save row is whole: clean {clean_whole}, \
+                 move offered with its warning {offered_whole}"
+            ),
+        );
         d.state_prepared("session-folder-move-offered", Sizes::All, |d| {
             super::session_recording::check_one_primary(d, "Move files and save", "iter-16-C-FT4");
             // iter-23-S FK8: the warning names which choice hides the files.
@@ -12780,6 +12914,9 @@ pub mod session_notes {
                     })
             },
         );
+        // Round 28: Edit details scrolls its form and Save into view once, because the session
+        // folder's save row above the pane takes room at 960 (campaigns.rs `reveal_details`).
+        d.expect_moves("Edit details brings its form and its Save into view");
         d.state("session-folder-moved", Sizes::All);
         d.click(NAV_SESSIONS);
         d.expect(&format!("Session 1: {TITLE}"));
