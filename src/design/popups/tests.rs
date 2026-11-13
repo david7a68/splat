@@ -233,15 +233,16 @@ fn in_a_pane_the_list_stays_above_the_footer() {
     const COLUMN: f32 = 316.0;
     for width in [960.0, 1200.0, 1920.0] {
         let ctx = context();
-        let size = vec2(width, 640.0);
+        // A short column in a tall window: the window has room below the pane, the body has
+        // none below its footer.
+        let size = vec2(width, 900.0);
         let current = Cell::new(3);
         let control = Cell::new(Rect::NOTHING);
         let column = Cell::new(Rect::NOTHING);
         let link = Cell::new(false);
         let draw = |events| {
             frame(&ctx, size, events, |ui| {
-                let rect =
-                    Rect::from_min_size(ui.max_rect().min, vec2(COLUMN, ui.max_rect().height()));
+                let rect = Rect::from_min_size(ui.max_rect().min, vec2(COLUMN, 320.0));
                 column.set(rect);
                 let mut child = ui.new_child(
                     egui::UiBuilder::new()
@@ -921,7 +922,8 @@ fn a_submenu_in_a_narrow_pane_keeps_its_parent_reachable() {
                 );
                 let filter = child.button("Filter");
                 egui::Popup::menu(&filter).show(|ui| {
-                    let _ = ui.button("Sort by name");
+                    // A menu as wide as most of the column: the submenu fits on neither side.
+                    let _ = ui.button("Sort by challenge rating, then by name");
                     crate::design::menu_submenu(ui, "Type", usable, |ui| {
                         for kind in ["Aberration", "Beast", "Celestial"] {
                             if ui.button(kind).clicked() {
@@ -965,7 +967,8 @@ fn a_submenu_in_a_narrow_pane_keeps_its_parent_reachable() {
         let aberration = bounds(&open, "Aberration").expect("the submenu is open");
         let row = bounds(&open, "Type").expect("its row");
         assert!(
-            !aberration.intersects(row),
+            // Touching edges are fine; an overlap is not.
+            aberration.intersect(row).area() < 1.0,
             "the submenu leaves its row reachable at {width}: {aberration:?} {row:?}"
         );
         assert!(
