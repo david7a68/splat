@@ -294,7 +294,7 @@ impl Run {
     /// or None. The same reasons as Arrivals' Add, for a creature that has no typed values.
     #[allow(
         dead_code,
-        reason = "package D of iter-27 draws Lookup's Add to fight with it"
+        reason = "package D of iter-27 draws Add to fight in Lookup with it"
     )]
     pub(crate) fn add_to_fight_reason(&self, stat_block: &Entry) -> Option<String> {
         if !self.takes_arrivals() {
@@ -323,7 +323,7 @@ impl Run {
     /// it did not join (`add_to_fight_reason`, or the step's refusal).
     #[allow(
         dead_code,
-        reason = "package D of iter-27 draws Lookup's Add to fight with it"
+        reason = "package D of iter-27 draws Add to fight in Lookup with it"
     )]
     pub(crate) fn add_entry_to_fight(
         &mut self,

@@ -2977,7 +2977,7 @@ mod allowed_classes {
         use std::sync::OnceLock;
 
         const OLD_HELP: &str = "These record your ruling. No number changes by itself. Other effects stay local and do not sync.";
-        const NEW_HELP: &str = "No HP, AC or roll changes by itself. A number after the words counts down at the end of that creature’s turn: Bless 10 becomes Bless 9. Other effects stay local and do not sync.";
+        const NEW_HELP: &str = "No HP, AC or roll changes by itself. A time you type counts down on that creature’s turns. Other effects stay local and do not sync.";
         const OLD_FIELD: &str = "Other effect…";
         const NEW_FIELD: &str = "Other effect, such as Bless 10 rounds";
         const EFFECT: &str = "Button: Effect: words for this row";
@@ -7137,7 +7137,7 @@ mod allowed_classes {
             };
         let (twelve, closed) = ("run-twelve", "1200x800 Lookup closed");
         let (conditions, small) = ("run-conditions", "960x640 Lookup closed");
-        let help = "No HP, AC or roll changes by itself. A number after the words counts down at the end of that creature’s turn: Bless 10 becomes Bless 9. Other effects stay local and do not sync.";
+        let help = "No HP, AC or roll changes by itself. A time you type counts down on that creature’s turns. Other effects stay local and do not sync.";
         let r3a_faults = [
             (
                 33,
