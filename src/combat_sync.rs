@@ -3186,9 +3186,7 @@ mod tests {
             });
             // Round 28 (package P), G6 from the painted words: when the sheet's scroll output
             // says it fits, its footer stands no more than `2 × L` below the last word.
-            let footer = ctx
-                .read_response(egui::Id::new("sync_test_sheet").with("focus"))
-                .map(|response| response.rect);
+            let footer = crate::design::pane::footer_rect(&ctx, egui::Id::new("sync_test_sheet"));
             let record = crate::design::pane::pane_record(&ctx, egui::Id::new("sync_test_sheet"));
             let words = out
                 .shapes

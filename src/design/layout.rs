@@ -560,8 +560,6 @@ impl ScrollColumn {
     /// Run `add` in a child `Ui` with the app's scroll style, and the content's width: the
     /// width the column is given, less the lane.
     fn styled<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui, f32) -> R) -> R {
-        // A `Body::Content` pane is a scroll column already: one inside it is refused.
-        super::pane::refuse_column_in_content(ui);
         ui.scope(|ui| {
             ui.spacing_mut().scroll = theme::scroll_style();
             let width = (ui.available_width() - lane_width()).max(0.0);
@@ -571,6 +569,9 @@ impl ScrollColumn {
     }
 
     pub fn show<R>(self, ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> ScrollAreaOutput<R> {
+        if super::pane::column_in_content(ui) {
+            return self.inline(ui, add);
+        }
         let sideways = self.sideways;
         Self::styled(ui, |ui, width| {
             self.area().show(ui, |ui| {
@@ -591,6 +592,9 @@ impl ScrollColumn {
         rows: usize,
         add: impl FnOnce(&mut Ui, Range<usize>) -> R,
     ) -> ScrollAreaOutput<R> {
+        if super::pane::column_in_content(ui) {
+            return self.inline(ui, |ui| add(ui, 0..rows));
+        }
         Self::styled(ui, |ui, width| {
             self.area().show_rows(ui, row_height, rows, |ui, range| {
                 ui.set_max_width(width);
@@ -606,6 +610,12 @@ impl ScrollColumn {
         ui: &mut Ui,
         add: impl FnOnce(&mut Ui, Rect) -> R,
     ) -> ScrollAreaOutput<R> {
+        if super::pane::column_in_content(ui) {
+            // Inline, everything is in view.
+            let all =
+                Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(f32::INFINITY, f32::INFINITY));
+            return self.inline(ui, |ui| add(ui, all));
+        }
         Self::styled(ui, |ui, width| {
             self.area().show_viewport(ui, |ui, viewport| {
                 ui.set_max_width(width);
@@ -613,6 +623,25 @@ impl ScrollColumn {
                 add(ui, viewport)
             })
         })
+    }
+
+    /// Inside a `Body::Content` pane, which is a scroll column already, a release build draws the
+    /// column's content in place: the pane scrolls it, and no scroll sits inside a scroll. (Debug
+    /// builds and tests refuse such a column first, so that its caller is fixed.)
+    pub(super) fn inline<R>(
+        self,
+        ui: &mut Ui,
+        add: impl FnOnce(&mut Ui) -> R,
+    ) -> ScrollAreaOutput<R> {
+        let output = ui.scope(add);
+        let rect = output.response.rect;
+        ScrollAreaOutput {
+            inner: output.inner,
+            id: self.id,
+            state: Default::default(),
+            content_size: rect.size(),
+            inner_rect: rect,
+        }
     }
 }
 

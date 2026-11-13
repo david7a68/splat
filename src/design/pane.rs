@@ -206,21 +206,77 @@ fn open(ui: &Ui, content: Option<bool>) {
     });
 }
 
-/// A vertical `ScrollColumn` is about to be drawn on `ui`: refuse it inside a `Body::Content`
-/// pane, which is a scroll column already (a panic in debug builds and tests).
-pub(super) fn refuse_column_in_content(ui: &Ui) {
-    if cfg!(debug_assertions) {
-        let (layer, pass) = (ui.layer_id(), ui.ctx().cumulative_pass_nr());
-        let inside = ui.ctx().data(|data| {
-            data.get_temp::<Open>(open_id())
-                .is_some_and(|open| open.pass == pass && open.panes.last() == Some(&(layer, true)))
-        });
-        assert!(
-            !inside,
-            "a ScrollColumn inside a `Body::Content` pane: the pane is the scroll column. Give its \
-             content to the pane, draw a header that must not scroll before the pane, or use \
-             `Body::Fills(Fills::because(FillsReason::Columns))` for columns that each scroll"
+/// Whether a vertical `ScrollColumn` about to be drawn on `ui` is inside a `Body::Content` pane,
+/// which is a scroll column already. Debug builds and tests refuse it (a panic, so that its caller
+/// is fixed); a release build draws its content in place (`ScrollColumn::inline`), and the pane
+/// scrolls it.
+pub(super) fn column_in_content(ui: &Ui) -> bool {
+    let (layer, pass) = (ui.layer_id(), ui.ctx().cumulative_pass_nr());
+    let inside = ui.ctx().data(|data| {
+        data.get_temp::<Open>(open_id())
+            .is_some_and(|open| open.pass == pass && open.panes.last() == Some(&(layer, true)))
+    });
+    assert!(
+        !(inside && cfg!(debug_assertions)),
+        "a ScrollColumn inside a `Body::Content` pane: the pane is the scroll column. Give its \
+         content to the pane, draw a header that must not scroll before the pane, or use \
+         `Body::Fills(Fills::because(FillsReason::Columns))` for columns that each scroll"
+    );
+    inside
+}
+
+/// Each pane identity drawn in this pass. Two live panes with one identity would share their
+/// footer's height, scroll and focus; debug builds and tests refuse the second.
+fn claim(ui: &Ui, id: Id) {
+    let pass = ui.ctx().cumulative_pass_nr();
+    let fresh = ui.ctx().data_mut(|data| {
+        let claimed = data.get_temp_mut_or_default::<(u64, std::collections::HashSet<Id>)>(
+            Id::new("design_pane_identities"),
         );
+        if claimed.0 != pass {
+            *claimed = (pass, Default::default());
+        }
+        claimed.1.insert(id)
+    });
+    assert!(
+        fresh || !cfg!(debug_assertions),
+        "two panes with one identity in one `Ui`: give each its own footer id or `push_id` scope"
+    );
+}
+
+fn widget_count(ui: &Ui) -> usize {
+    let layer = ui.layer_id();
+    ui.ctx()
+        .viewport(|viewport| viewport.this_pass.widgets.get_layer(layer).count())
+}
+
+/// A body control that gained keyboard focus in this pass comes whole into the pane's view,
+/// above the footer: Tab never reaches a control hidden under it. Only a control that the body
+/// added (`widgets`, on the pane's layer) is scrolled to; a change of focus with a pointer press,
+/// hold or release is not, as `scroll_part` does for the footer.
+fn reveal_focus(ui: &mut Ui, id: Id, widgets: std::ops::Range<usize>) {
+    let focused = ui.ctx().memory(|memory| memory.focused());
+    let seen = id.with("seen_focus");
+    if ui.ctx().data(|data| data.get_temp::<Option<Id>>(seen)) == Some(focused) {
+        return;
+    }
+    ui.ctx().data_mut(|data| data.insert_temp(seen, focused));
+    let pointer = ui.input(|input| {
+        let pointer = &input.pointer;
+        pointer.any_down() || pointer.any_pressed() || pointer.any_released()
+    });
+    let layer = ui.layer_id();
+    let rect = focused.filter(|_| !pointer).and_then(|focused| {
+        ui.ctx().viewport(|viewport| {
+            let widgets_now = &viewport.this_pass.widgets;
+            let (at_layer, at) = widgets_now.order(focused)?;
+            (at_layer == layer && widgets.contains(&at))
+                .then(|| widgets_now.get(focused).map(|widget| widget.rect))
+                .flatten()
+        })
+    });
+    if let Some(rect) = rect {
+        ui.scroll_to_rect(rect, None);
     }
 }
 
@@ -250,6 +306,7 @@ impl Scroll {
 #[derive(Clone, Copy, Debug)]
 pub struct PaneRecord {
     id: Id,
+    local: Id,
     room: Rect,
     body: Body,
     viewport: Option<Rect>,
@@ -261,9 +318,14 @@ pub struct PaneRecord {
 }
 
 impl PaneRecord {
-    /// The footer's id.
+    /// The footer's id, scoped to the pane's parent `Ui` (its focus group is `id().with("focus")`).
     pub fn id(&self) -> Id {
         self.id
+    }
+
+    /// The id the caller gave `Footer::new`, before the pane scoped it.
+    pub fn local(&self) -> Id {
+        self.local
     }
 
     /// The pane's room: from the body's top to the pane's bottom.
@@ -352,10 +414,13 @@ pub fn pane_records(ctx: &egui::Context) -> Vec<PaneRecord> {
         .unwrap_or_default()
 }
 
-/// The record of the pane whose footer has `id`, in the last completed pass.
+/// The record of the pane whose footer the caller made with `Footer::new(local, …)`, in the last
+/// completed pass (the first, when several scopes draw one).
 #[cfg(test)]
-pub fn pane_record(ctx: &egui::Context, id: Id) -> Option<PaneRecord> {
-    pane_records(ctx).into_iter().find(|record| record.id == id)
+pub fn pane_record(ctx: &egui::Context, local: Id) -> Option<PaneRecord> {
+    pane_records(ctx)
+        .into_iter()
+        .find(|record| record.local == local)
 }
 
 /// G6 from rects the gate reads itself (the accessibility tree), not from the record's placement.
@@ -389,6 +454,15 @@ pub fn short_body_gap(
     (gap > 2.0 * super::tokens::L * scale).then_some(gap)
 }
 
+/// The rect of the footer that the caller made with `Footer::new(local, …)`, as egui laid out its
+/// focus group in the last pass (the first, when several scopes draw one).
+#[cfg(test)]
+pub fn footer_rect(ctx: &egui::Context, local: Id) -> Option<Rect> {
+    let id = pane_record(ctx, local)?.id;
+    ctx.read_response(id.with("focus"))
+        .map(|response| response.rect)
+}
+
 /// The body's clip: what is left of `ui`'s clip above the body's room. The one place that
 /// decides where the body is cut. Seam for round 28's N12 (package X, ruling R4: a footer never
 /// cuts through a registered row): X narrows this clip to the last whole row the pane's column
@@ -412,7 +486,11 @@ impl Footer<'_> {
             "a pane's message footer ends a top-down Ui"
         );
         let room = ui.available_rect_before_wrap();
+        // The pane's identity is scoped to its parent `Ui`, so one pane function drawn in two
+        // `push_id` scopes keeps two footers apart; two in one scope are refused.
+        let local = self.rescope(ui.id());
         let (id, width) = self.id_and_width(room.width());
+        claim(ui, id);
         let key = id.with("height");
         let stored = ui
             .ctx()
@@ -446,12 +524,21 @@ impl Footer<'_> {
         body_ui.set_clip_rect(body_clip(ui, body_room));
         let (inner, scroll) = match body {
             Body::Content => {
-                let output = ScrollColumn::new(id.with("column")).show(&mut body_ui, |ui| {
-                    open(ui, Some(true));
-                    let inner = add(ui);
-                    open(ui, None);
-                    inner
-                });
+                // The viewport is the real room, however small: egui's own 64 px minimum would
+                // leave the last rows of a small room out of reach under the clip.
+                let room_height = body_room.height();
+                let output = ScrollColumn::new(id.with("column"))
+                    .max_height(room_height)
+                    .min_scrolled_height(room_height)
+                    .show(&mut body_ui, |ui| {
+                        open(ui, Some(true));
+                        let first = widget_count(ui);
+                        let inner = add(ui);
+                        let last = widget_count(ui);
+                        open(ui, None);
+                        reveal_focus(ui, id, first..last);
+                        inner
+                    });
                 let scroll = Scroll {
                     viewport: output.inner_rect,
                     height: output.content_size.y,
@@ -508,6 +595,7 @@ impl Footer<'_> {
             ui,
             PaneRecord {
                 id,
+                local,
                 room,
                 body,
                 viewport: scroll.map(|scroll| scroll.viewport),
@@ -519,7 +607,7 @@ impl Footer<'_> {
             },
         );
         #[cfg(not(test))]
-        let _ = (footer, placement);
+        let _ = (footer, placement, local);
         inner
     }
 }
