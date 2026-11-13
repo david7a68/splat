@@ -1266,10 +1266,10 @@ impl Campaigns {
                             && campaign.path == std::path::Path::new(self.path.trim())
                     });
                 let reason = match (self.name.trim().is_empty(), self.path.trim().is_empty()) {
-                    (true, true) => Some(FormReason::NoNameNoFolder),
-                    (true, false) => Some(FormReason::NoName),
-                    (false, true) => Some(FormReason::NoFolder),
-                    (false, false) if unchanged => Some(FormReason::NoChanges),
+                    (true, true) => Some(FormReason::NameAndFolder),
+                    (true, false) => Some(FormReason::Name),
+                    (false, true) => Some(FormReason::Folder),
+                    (false, false) if unchanged => Some(FormReason::Unchanged),
                     (false, false) => None,
                 };
                 let missing = reason.is_some();
@@ -1467,10 +1467,10 @@ crate::create_reasons! {
     /// Why the campaign form cannot add or save yet: every reason it can show, so its kept line
     /// keeps room for the tallest.
     enum FormReason {
-        NoNameNoFolder => "Enter a campaign name and a folder first.",
-        NoName => "Enter a campaign name first.",
-        NoFolder => "Choose a folder first.",
-        NoChanges => "No changes to save.",
+        NameAndFolder => "Enter a campaign name and a folder first.",
+        Name => "Enter a campaign name first.",
+        Folder => "Choose a folder first.",
+        Unchanged => "No changes to save.",
     }
 }
 const CAMPAIGN_NAME: design::FieldId = crate::field_id!("campaign_name");

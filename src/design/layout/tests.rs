@@ -464,7 +464,6 @@ fn a_field_id_keeps_focus_across_a_layout_branch() {
         ctx.memory(|memory| memory.has_focus(second_id)),
         "the field keeps its focus"
     );
-    drop(draw);
     assert_eq!(
         (first.as_str(), second.as_str()),
         ("Copper", "Salty"),
