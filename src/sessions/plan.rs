@@ -301,6 +301,81 @@ fn without_loose_separators(
     text
 }
 
+/// V9 (review of PR 299): every `·` on a plan row has the same blank on each side. The font's
+/// own spacing around `·` is not even, so the row is laid out once, each `·` gets a section of its
+/// own, and it moves by half the difference between its two blanks, in whole pixels
+/// (`leading_space`; the text after it moves back by as much, so nothing else on the row moves).
+fn even_separators(ui: &egui::Ui, job: egui::text::LayoutJob) -> egui::text::LayoutJob {
+    // Each `·` in a section of its own, and the text after it in the next one. `dots` holds
+    // their sections in text order, which is the galley's glyph order.
+    let mut dots = Vec::new();
+    let mut split = egui::text::LayoutJob {
+        text: job.text.clone(),
+        wrap: job.wrap.clone(),
+        ..Default::default()
+    };
+    for section in &job.sections {
+        let mut from = section.byte_range.start;
+        for (at, chr) in job.text[section.byte_range.clone()].char_indices() {
+            let at = section.byte_range.start + at;
+            if chr != '·' {
+                continue;
+            }
+            for range in [from..at, at..at + chr.len_utf8()] {
+                if range.start == at {
+                    dots.push(split.sections.len());
+                }
+                if !range.is_empty() {
+                    split.sections.push(egui::text::LayoutSection {
+                        leading_space: 0.0,
+                        byte_range: range,
+                        format: section.format.clone(),
+                    });
+                }
+            }
+            from = at + chr.len_utf8();
+        }
+        if from < section.byte_range.end {
+            split.sections.push(egui::text::LayoutSection {
+                leading_space: 0.0,
+                byte_range: from..section.byte_range.end,
+                format: section.format.clone(),
+            });
+        }
+    }
+    let galley = ui.fonts_mut(|fonts| fonts.layout_job(split.clone()));
+    let mut dot_sections = dots.into_iter();
+    for row in &galley.rows {
+        let glyphs = &row.glyphs;
+        for (at, dot) in glyphs.iter().enumerate() {
+            if dot.chr != '·' {
+                continue;
+            }
+            let Some(section) = dot_sections.next() else {
+                break;
+            };
+            let previous = glyphs[..at].iter().rev().find(|g| !g.chr.is_whitespace());
+            let next = glyphs[at + 1..].iter().find(|g| !g.chr.is_whitespace());
+            let (Some(previous), Some(next)) = (previous, next) else {
+                continue;
+            };
+            let before = dot.pos.x - (previous.pos.x + previous.advance_width);
+            let after = next.pos.x - (dot.pos.x + dot.advance_width);
+            // Glyphs sit on whole pixels, so the `·` moves by whole pixels: half the
+            // difference, rounded, leaves the two blanks within one pixel.
+            let pixel = 1.0 / ui.ctx().pixels_per_point();
+            let half = ((after - before) / 2.0 / pixel).round() * pixel;
+            if let Some(dot_section) = split.sections.get_mut(section) {
+                dot_section.leading_space += half;
+            }
+            if let Some(following) = split.sections.get_mut(section + 1) {
+                following.leading_space -= half;
+            }
+        }
+    }
+    split
+}
+
 /// FL2: a planned fight's summary for the plan: each fact keeps its words together, and the
 /// members (`2 × Cinder Wolf, 1 × Ember Cultist`) wrap between members, never inside one.
 fn fight_summary_text(summary: &str) -> String {
@@ -614,14 +689,20 @@ fn plan_details(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
     });
 }
 
-/// A planned fight's summary. Its difficulty word (F1) ends it only when the summary keeps its
-/// lines with the word. FL2, FI7: each fact keeps its words together, the members wrap between
-/// members and never inside one, and no line starts or ends with `·`.
-fn planned_summary(ui: &mut egui::Ui, summary: &str, rating: Option<&crate::difficulty::Rating>) {
+/// A planned fight's summary, ended by its difficulty in the one form (F1, FB6):
+/// `5 party · 2 × Ember Cultist · XP 400 · Low (up to 2,800)`, or `XP not known` (FB4). The
+/// form never gives way (FB2): where it would add a line, the summary gives way from its end,
+/// by whole words, with `…`; hover and the accessible name keep the whole summary. FL2, FI7:
+/// each fact keeps its words together, the members wrap between members and never inside one,
+/// and no line starts or ends with `·`.
+fn planned_summary(
+    ui: &mut egui::Ui,
+    summary: &str,
+    difficulty: Option<&crate::difficulty::Difficulty>,
+) {
     let c = colors();
     let font = Type::Small.font(ui);
     let width = ui.available_width();
-    let text = fight_summary_text(summary);
     let laid = |text: String| without_loose_separators(ui, text, &font, width);
     let rows = |text: &str| {
         ui.fonts_mut(|fonts| {
@@ -631,111 +712,168 @@ fn planned_summary(ui: &mut egui::Ui, summary: &str, rating: Option<&crate::diff
                 .len()
         })
     };
-    let alone = laid(text.clone());
-    let with_word = rating.map(|rating| {
-        let word = rating.word.text().replace(' ', "\u{a0}");
-        (laid(format!("{text}{FACT_SEPARATOR}{word}")), word)
-    });
-    match rating
-        .zip(with_word)
-        .filter(|(_, (whole, _))| rows(whole) == rows(&alone))
-    {
-        Some((rating, (whole, word))) => {
-            // The word keeps the text colour; the facts before it are muted.
-            let facts = whole.strip_suffix(word.as_str()).unwrap_or(&whole);
-            let mut job = egui::text::LayoutJob::default();
-            crate::difficulty::append(&mut job, ui, Type::Small, facts, c.muted);
-            crate::difficulty::append(&mut job, ui, Type::Small, &word, c.text);
-            job.wrap.max_width = width;
-            let response = ui.add(egui::Label::new(job).wrap());
-            design::named(
-                ui,
-                &response,
-                &format!("{summary} · {}", rating.word.text()),
-            );
-            crate::difficulty::describe(ui, response, rating);
+    let alone = laid(fight_summary_text(summary));
+    let Some(parts) = difficulty.and_then(crate::difficulty::Difficulty::parts) else {
+        let response = ui.add(egui::Label::new(Type::Small.rich(ui, alone).color(c.muted)).wrap());
+        // The breaks only steer the wrap; the name keeps the summary's words.
+        design::named(ui, &response, summary);
+        return;
+    };
+    // The form keeps its words together and wraps whole. Where the row has no room for it,
+    // the word's limit gives way first, then the summary from its end.
+    let nb = |parts: Vec<(String, bool)>| -> Vec<(String, bool)> {
+        parts
+            .into_iter()
+            .map(|(words, word)| (words.replace(' ', "\u{a0}"), word))
+            .collect()
+    };
+    let joined = |parts: &[(String, bool)]| -> String {
+        parts.iter().map(|(words, _)| words.as_str()).collect()
+    };
+    let with_form = |facts: &str, form: &str| {
+        laid(format!(
+            "{}{FACT_SEPARATOR}{form}",
+            fight_summary_text(facts)
+        ))
+    };
+    let lines = rows(&alone);
+    let missing = difficulty
+        .filter(|difficulty| difficulty.rating.is_none())
+        .and_then(|difficulty| difficulty.missing.as_ref());
+    // The summary's facts and members, each with the separator before it. It gives way by
+    // whole ones, from its end: `5 party · 1 × Cinder Tyrant, …`.
+    let mut units: Vec<(&str, &str)> = Vec::new();
+    for (index, fact) in summary.split(" · ").enumerate() {
+        for (at, member) in fact.split(", ").enumerate() {
+            let before = match (index, at) {
+                (0, 0) => "",
+                (_, 0) => " · ",
+                _ => ", ",
+            };
+            units.push((before, member));
+        }
+    }
+    let cut_at = |count: usize| {
+        let kept: String = units[..count]
+            .iter()
+            .map(|(before, unit)| format!("{before}{unit}"))
+            .collect();
+        format!("{kept}{}…", units[count].0)
+    };
+    // The most whole facts and members before `form` that keep the lines, by halves.
+    let most = |form: &str| {
+        let (mut fits, mut over) = (0, units.len());
+        while over - fits > 1 {
+            let middle = (fits + over) / 2;
+            if rows(&with_form(&cut_at(middle), form)) <= lines {
+                fits = middle;
+            } else {
+                over = middle;
+            }
+        }
+        fits
+    };
+    let (full, short) = match missing {
+        // W1-D2, X1: whose input is not known, in the `XP not known` place: whole, else the
+        // first name shortened from its end. Where even its first letter has no room, the
+        // summary gives way first; the reason alone only where nothing else fits.
+        Some(missing) => {
+            let fits_with = |facts: &str, words: &str| {
+                rows(&with_form(facts, &words.replace(' ', "\u{a0}"))) <= lines
+            };
+            let short = missing.short();
+            let mut fitted = missing.fitted(|words| fits_with(summary, words));
+            if fitted.as_deref() == Some(short)
+                && let Some(first) = missing.names.first().and_then(|name| name.chars().next())
+            {
+                let least = format!("{short}: {first}…").replace(' ', "\u{a0}");
+                let kept = most(&least);
+                fitted = if kept > 0 {
+                    let facts = cut_at(kept);
+                    missing.fitted(|words| fits_with(&facts, words))
+                } else {
+                    // No fact or member keeps its place: the named reason alone, in the room the
+                    // summary leaves (review of PR 299).
+                    missing.fitted(|words| rows(&laid(words.replace(' ', "\u{a0}"))) <= lines)
+                };
+            }
+            let form = nb(vec![(fitted.unwrap_or_else(|| short.to_owned()), false)]);
+            (form.clone(), form)
         }
         None => {
-            let response =
-                ui.add(egui::Label::new(Type::Small.rich(ui, alone).color(c.muted)).wrap());
-            // The breaks only steer the wrap; the name keeps the summary's words.
-            design::named(ui, &response, summary);
+            let full = nb(parts);
+            let short = difficulty
+                .and_then(|difficulty| difficulty.rating.as_ref())
+                .map_or_else(|| full.clone(), |rating| nb(rating.parts(false)));
+            (full, short)
         }
+    };
+    let whole = [&full, &short]
+        .into_iter()
+        .map(|parts| (with_form(summary, &joined(parts)), parts))
+        .find(|(shown, _)| rows(shown) <= lines);
+    let (shown, parts, cut) = if let Some((shown, parts)) = whole {
+        (shown, parts.clone(), false)
+    } else {
+        // The most whole facts and members that keep the lines, by halves; with none, the
+        // form alone.
+        let form = joined(&short);
+        let fits = most(&form);
+        let shown = if fits == 0 {
+            form
+        } else {
+            with_form(&cut_at(fits), &form)
+        };
+        (shown, short.clone(), true)
+    };
+    let form = joined(&parts);
+    let facts = shown.strip_suffix(form.as_str()).unwrap_or("");
+    let mut job = egui::text::LayoutJob::default();
+    crate::difficulty::append(&mut job, ui, Type::Small, facts, c.muted);
+    crate::difficulty::append_form(&mut job, ui, Type::Small, &parts);
+    job.wrap.max_width = width;
+    let job = even_separators(ui, job);
+    let response = ui.add(egui::Label::new(job).wrap());
+    // The accessible name keeps the whole summary and the whole form.
+    let plain_form = missing.map_or_else(
+        || joined(&full).replace('\u{a0}', " "),
+        |missing| {
+            missing
+                .words()
+                .unwrap_or_else(|| missing.short().to_owned())
+        },
+    );
+    design::named(ui, &response, &format!("{summary} · {plain_form}"));
+    let difficulty = difficulty.expect("the form came from it");
+    match (&difficulty.rating, &difficulty.missing) {
+        (Some(rating), _) => {
+            let response = if cut {
+                response.on_hover_text(summary)
+            } else {
+                response
+            };
+            crate::difficulty::describe(ui, response, rating);
+        }
+        // W1-D2: whose input is not known, on hover.
+        (None, Some(missing)) => {
+            let names = missing.words().unwrap_or_default();
+            let hover = match (cut, names.is_empty()) {
+                (true, true) => summary.to_owned(),
+                (true, false) => format!("{summary}\n{names}"),
+                (false, _) => names,
+            };
+            if !hover.is_empty() {
+                response.on_hover_text(hover);
+            }
+        }
+        (None, None) => {}
     }
 }
 
-/// The opened planned fight's link to its encounter. With its difficulty known, the line ends
-/// with ` · Low · XP 550 of 750` (F1), when the line has room for the whole. With no word
-/// because an input is not known, it says whose: ` · XP not known: Nameless Thing` (W1-D2).
-fn read_encounter(
-    ui: &mut egui::Ui,
-    difficulty: Option<&crate::difficulty::Difficulty>,
-) -> egui::Response {
-    // The link keeps its place; the words take the room to its right on the same line.
-    let link = design::link(ui, "Read encounter");
-    let Some(difficulty) = difficulty else {
-        return link;
-    };
-    let c = colors();
-    let room = ui.max_rect().right() - link.rect.right();
-    let muted = |words: &str| {
-        let mut job = egui::text::LayoutJob::default();
-        crate::difficulty::append(&mut job, ui, Type::Body, &format!(" · {words}"), c.muted);
-        job
-    };
-    // The reason whole, else with the name shortened from its end, else without the name (X1);
-    // hover and the accessible name keep it whole.
-    let mut whole = None;
-    let job = match (&difficulty.rating, &difficulty.missing) {
-        (Some(rating), _) => {
-            let mut job = egui::text::LayoutJob::default();
-            crate::difficulty::append(&mut job, ui, Type::Body, " · ", c.muted);
-            crate::difficulty::append(&mut job, ui, Type::Body, rating.word.text(), c.text);
-            crate::difficulty::append(
-                &mut job,
-                ui,
-                Type::Body,
-                &format!(" · {}", rating.numbers()),
-                c.muted,
-            );
-            job
-        }
-        (None, Some(missing)) => {
-            // With no name known, the reason in its short form, as the editor's heading has it
-            // (pull request 290).
-            let fitted = missing
-                .fitted(|words| crate::difficulty::width(ui, &muted(words)) <= room)
-                .unwrap_or_else(|| missing.short().to_owned());
-            if let Some(words) = missing.words().filter(|words| *words != fitted) {
-                whole = Some(words);
-            }
-            muted(&fitted)
-        }
-        (None, None) => return link,
-    };
-    let width = crate::difficulty::width(ui, &job);
-    if width <= room {
-        // The words start at the link's right edge, so the blank before the first separator
-        // is the blank of the job's own leading space (V9). `ui.put` would lay them out
-        // justified and centred. The label keeps the link's height, as before.
-        let rect =
-            egui::Rect::from_min_size(link.rect.right_top(), egui::vec2(width, link.rect.height()));
-        let response = ui
-            .scope_builder(
-                egui::UiBuilder::new().max_rect(rect).layout(
-                    egui::Layout::left_to_right(egui::Align::Center).with_cross_justify(true),
-                ),
-                |ui| ui.add(egui::Label::new(job).extend()),
-            )
-            .inner;
-        if let Some(rating) = &difficulty.rating {
-            crate::difficulty::describe(ui, response, rating);
-        } else if let Some(whole) = whole {
-            design::named(ui, &response, &whole);
-            response.on_hover_text(whole);
-        }
-    }
-    link
+/// The opened planned fight's link to its encounter. FH6: the row above it already says the
+/// difficulty, so this line does not say it again.
+fn read_encounter(ui: &mut egui::Ui) -> egui::Response {
+    design::link(ui, "Read encounter")
 }
 
 /// A planned fight's menu line that opens its encounter in the editor, with the way back to this
@@ -3083,7 +3221,7 @@ impl Sessions {
                                 }
                             } else if let Some(saved) = saved {
                                 design::status(ui, Status { icon: icons::RUN, word: &plan_saved_status(saved), color: c.muted });
-                            } else { planned_summary(ui, &on_road(ui, &fight.summary, day.as_deref()), fight.difficulty.rating.as_ref()); }
+                            } else { planned_summary(ui, &on_road(ui, &fight.summary, day.as_deref()), Some(&fight.difficulty)); }
                         }, |ui| {
                             design::row_menu(ui, &fight.name, |ui| {
                                 if Action::quiet("Remove from tonight").show(ui).clicked() {
@@ -3129,7 +3267,7 @@ impl Sessions {
                         let details_top = ui.cursor().top();
                         if self.open_planned.as_ref() == Some(&fight.path) {
                             plan_details(ui, |ui| {
-                                if read_encounter(ui, Some(&fight.difficulty).filter(|_| !running && saved.is_none())).clicked() { self.wants_lookup = Some(fight.name.clone()); }
+                                if read_encounter(ui).clicked() { self.wants_lookup = Some(fight.name.clone()); }
                             });
                         }
                         // The next fight's row, to the end of its own details, and what is above it.
@@ -4574,7 +4712,7 @@ mod tests {
     fn pr284_review_row_height_and_long_journey_name() {
         let ctx = egui::Context::default();
         design::theme::install(&ctx);
-        let rating = crate::difficulty::above_high();
+        let rating = rated(crate::difficulty::above_high());
         let summary = "5 party · 2 × Ember Cultist";
         let day = "Day 2 of The road to the ford beyond the old northern quarry";
         let (mut full, mut short, mut hidden) = (0, 0, 0);
@@ -4889,8 +5027,19 @@ mod tests {
         });
     }
 
-    /// V9 and W1-D2: the opened planned fight's line has the same blank on each side of every
-    /// separator, with the word and its numbers, and with the reason when no word shows.
+    /// A planned fight's difficulty with this word.
+    fn rated(rating: crate::difficulty::Rating) -> crate::difficulty::Difficulty {
+        crate::difficulty::Difficulty {
+            xp: rating.xp,
+            rating: Some(rating),
+            unknown: 0,
+            missing: None,
+        }
+    }
+
+    /// V9 and W1-D2: the planned fight's row has the same blank on each side of every
+    /// separator, with the form (FB6) and with `XP not known` when no word shows (FB4). FH6:
+    /// the opened line under it says the difficulty no more.
     #[test]
     fn read_encounter_has_one_blank_each_side_of_each_separator() {
         use crate::difficulty::{Difficulty, Missing, Unknown};
@@ -4912,6 +5061,9 @@ mod tests {
                 names: vec!["Nameless Thing".into(), "Wisp".into()],
             }),
         };
+        let mut low = crate::difficulty::above_high();
+        low.word = crate::difficulty::Word::Low;
+        low.xp = 400;
         // A roster member whose name cannot be read: the reason in its short form.
         let nameless = Difficulty {
             xp: 0,
@@ -4924,21 +5076,23 @@ mod tests {
             }),
         };
         for (difficulty, words) in [
-            (rated, "Read encounter · Above High · XP 6,300"),
+            (rated, "5 party · 2 × Ember Cultist · XP 6,300 · Above High"),
+            (
+                self::rated(low),
+                "5 party · 2 × Ember Cultist · XP 400 · Low (up to 750)",
+            ),
             (
                 unknown,
-                "Read encounter · XP not known: Nameless Thing and 1 more",
+                "5 party · 2 × Ember Cultist · XP not known: Nameless Thing and 1 more",
             ),
-            (nameless, "Read encounter · Level not known"),
+            (nameless, "5 party · 2 × Ember Cultist · Level not known"),
         ] {
             // The second frame has the app's fonts.
             let frame = || {
                 ctx.run(Default::default(), |ctx| {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         ui.set_width(design::LIST_MEASURE);
-                        plan_details(ui, |ui| {
-                            read_encounter(ui, Some(&difficulty));
-                        });
+                        planned_summary(ui, "5 party · 2 × Ember Cultist", Some(&difficulty));
                     });
                 })
             };
@@ -4965,6 +5119,8 @@ mod tests {
                 .iter()
                 .filter(|glyph| !glyph.0.is_whitespace())
                 .collect();
+            // Every separator on the row: the summary's, the join before the difficulty form,
+            // and the form's own.
             let blanks: Vec<(f32, f32)> = (1..ink.len() - 1)
                 .filter(|at| ink[*at].0 == '·')
                 .map(|at| (ink[at].1 - ink[at - 1].2, ink[at + 1].1 - ink[at].2))
@@ -4980,42 +5136,127 @@ mod tests {
     }
 
     #[test]
-    fn the_difficulty_word_joins_a_summary_only_when_the_summary_keeps_its_lines() {
+    fn the_difficulty_form_ends_a_summary_and_the_summary_gives_way() {
         let ctx = egui::Context::default();
         design::theme::install(&ctx);
-        let rating = crate::difficulty::above_high();
-        let summary = "5 party · Cinder Tyrant · 2 × Ember Cultist";
-        let widths: Vec<f32> = (120..=360).map(|width| width as f32).collect();
-        let output = ctx.run(Default::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| {
-                for width in &widths {
-                    let height = |ui: &mut egui::Ui, rating| {
-                        ui.scope(|ui| {
-                            ui.set_width(*width);
-                            planned_summary(ui, summary, rating);
-                        })
-                        .response
-                        .rect
-                        .height()
-                    };
-                    let plain = height(ui, None);
-                    assert_eq!(height(ui, Some(&rating)), plain, "at {width} px");
-                }
+        let rating = rated(crate::difficulty::above_high());
+        let summary = "5 party · Cinder Tyrant · 2 × Ember Cultist, 1 × Wolf";
+        let (mut whole, mut cut) = (0, 0);
+        for width in (120..=640).step_by(4).map(|width| width as f32) {
+            let mut heights = (0.0, 0.0);
+            // The second frame has the app's fonts.
+            let mut output = None;
+            for _ in 0..2 {
+                output = Some(ctx.run(Default::default(), |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        let height = |ui: &mut egui::Ui, rating| {
+                            ui.scope(|ui| {
+                                ui.set_width(width);
+                                planned_summary(ui, summary, rating);
+                            })
+                            .response
+                            .rect
+                            .height()
+                        };
+                        heights = (height(ui, None), height(ui, Some(&rating)));
+                    });
+                }));
+            }
+            let (plain, with) = heights;
+            assert!(with <= plain + 0.5, "at {width} px: {with} > {plain}");
+            let texts: Vec<String> = output
+                .unwrap()
+                .shapes
+                .iter()
+                .filter_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) if text.galley.job.text.contains("XP") => Some(
+                        text.galley
+                            .job
+                            .text
+                            .replace('\u{a0}', " ")
+                            .replace('\n', " · ")
+                            .replace(" · · ", " · "),
+                    ),
+                    _ => None,
+                })
+                .collect();
+            // FB2: the form ends the row at every width.
+            let [line] = texts.as_slice() else {
+                panic!("at {width} px: {texts:?}");
+            };
+            let facts = line
+                .strip_suffix("XP 6,300 · Above High")
+                .unwrap_or_else(|| panic!("at {width} px: {line:?}"));
+            let facts = facts.trim_end_matches([' ', '·']);
+            if facts.replace(" · ", " ") == summary.replace(" · ", " ") {
+                whole += 1;
+            } else {
+                // The summary gives way by whole facts and members, never inside one.
+                cut += 1;
+                let kept = facts
+                    .strip_suffix('…')
+                    .unwrap_or_else(|| panic!("{line:?}"));
+                let kept = kept.trim_end_matches([' ', '·', ',']);
+                assert!(
+                    kept.is_empty()
+                        || [
+                            "5 party",
+                            "5 party · Cinder Tyrant",
+                            "5 party · Cinder Tyrant · 2 × Ember Cultist"
+                        ]
+                        .iter()
+                        .any(|unit| kept.replace(" · ", " ") == unit.replace(" · ", " ")),
+                    "at {width} px a member was cut inside: {line:?}"
+                );
+            }
+        }
+        assert!(whole > 0 && cut > 0, "whole {whole}, cut {cut}");
+        // Review of PR 299: one creature whose XP is not known, at a width where the named
+        // reason fits alone but not after the summary: the summary gives way, the name shows.
+        use crate::difficulty::{Difficulty, Missing, Unknown};
+        let nameless = Difficulty {
+            xp: 0,
+            rating: None,
+            unknown: 1,
+            missing: Some(Missing {
+                what: Unknown::Xp,
+                at: vec![0],
+                names: vec!["Nameless Thing".into()],
+            }),
+        };
+        let one = "1 × Nameless Thing";
+        let mut painted = None;
+        let mut widths = None;
+        for _ in 0..3 {
+            let output = ctx.run(Default::default(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let font = Type::Small.font(ui);
+                    let wide =
+                        |text: &str| design::number_width(ui, &text.replace(' ', "\u{a0}"), &font);
+                    let alone = wide("XP not known: Nameless Thing");
+                    let after = wide(&format!("{one} · XP not known: N…"));
+                    let width = (alone + after) / 2.0;
+                    widths = Some((alone, after, width, wide(one)));
+                    ui.scope(|ui| {
+                        ui.set_width(width);
+                        planned_summary(ui, one, Some(&nameless));
+                    });
+                });
             });
-        });
-        let shown = output
-            .shapes
-            .iter()
-            .filter(|shape| match &shape.shape {
-                egui::Shape::Text(text) => text.galley.job.text.ends_with("Above\u{a0}High"),
-                _ => false,
-            })
-            .count();
-        // The word shows where it fits, and gives way where it would add a line.
+            painted = output.shapes.iter().find_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.job.text.contains("XP") => {
+                    Some(text.galley.job.text.replace('\u{a0}', " "))
+                }
+                _ => None,
+            });
+        }
+        let (alone, after, width, summary_width) = widths.unwrap();
+        assert!(alone < width && width < after && summary_width < width);
         assert!(
-            shown > 0 && shown < widths.len(),
-            "{shown} of {}",
-            widths.len()
+            painted
+                .as_deref()
+                .is_some_and(|line| line.contains("XP not known: Nameless")),
+            "at {width} px: {painted:?}"
         );
     }
 
