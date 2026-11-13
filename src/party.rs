@@ -1063,7 +1063,7 @@ pub(crate) const SHEET_SEARCH: design::FieldId = crate::field_id!("sheet_search"
 /// so each character has their own.
 #[allow(
     clippy::disallowed_methods,
-    reason = "staged: a text key from a character's id, so each character's field keeps its own Undo (design::results::STAGED_ALLOWS)"
+    reason = "staged: a text key from the character id, so each character keeps its own field Undo (design::results::STAGED_ALLOWS)"
 )]
 fn character_key(id: &str) -> design::TextKey {
     design::TextKey::from_data(id)
