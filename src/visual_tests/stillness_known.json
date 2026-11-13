@@ -12,11 +12,7 @@
     ["G1b/pressed-control-moved","17-campaign-manifest-write-undone","960x640","Button \"Undo write Campaign.md\"",1]
   ],
   "campaign-copy-registered": [
-    ["G1b/pressed-control-moved","01-copy-registered","960x640","Button \"Add campaign\"",1],
-    ["G6/footer-far-below-body","01-copy-registered","1200x800","Label \"Splat keeps this campaign’s notes, encounters and runs here. A folder in your Obsidian vault works.\"",1],
-    ["G6/footer-far-below-body","01-copy-registered","1920x1080","Label \"Splat keeps this campaign’s notes, encounters and runs here. A folder in your Obsidian vault works.\"",1],
-    ["G6/footer-far-below-body","02-copy-registered-after-build","1200x800","Label \"Splat keeps this campaign’s notes, encounters and runs here. A folder in your Obsidian vault works.\"",1],
-    ["G6/footer-far-below-body","02-copy-registered-after-build","1920x1080","Label \"Splat keeps this campaign’s notes, encounters and runs here. A folder in your Obsidian vault works.\"",1]
+    ["G1b/pressed-control-moved","01-copy-registered","960x640","Button \"Add campaign\"",1]
   ],
   "column-resize": [
     ["G1b/pressed-control-moved","06-run-rail-keeps-roster-room","1200x800","Button \"Next turn\"",1],
@@ -40,8 +36,7 @@
     ["G1b/pressed-control-moved","(after the last state)","1200x800","Button \"Save encounter\"",3]
   ],
   "empty": [
-    ["G1b/pressed-control-moved","07-campaign-added","960x640","Button \"Add campaign\"",1],
-    ["G6/footer-far-below-body","07-campaign-added","960x640","Button \"Connect…\"",1]
+    ["G1b/pressed-control-moved","07-campaign-added","960x640","Button \"Add campaign\"",1]
   ],
   "encounter-build": [
     ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Next turn\"",1],
@@ -509,8 +504,6 @@
     ["G1b/pressed-control-moved","37-input-during-recording","960x640","Button \"Record again\"",1],
     ["G1b/pressed-control-moved","37-input-during-recording","960x640","Button \"Recording and processing\"",1],
     ["G6/footer-far-below-body","11-recording-saved-no-key","960x640","Button \"Process: 2026-01-01 19-00\"",1],
-    ["G6/footer-far-below-body","12-processing-settings","1920x1080","Button \"Transcript and summary instructions\"",1],
-    ["G6/footer-far-below-body","14-processing-settings-anthropic","1920x1080","Button \"Transcript and summary instructions\"",1],
     ["G6/footer-far-below-body","16-recording-ready","1200x800","Label \"Process sends the audio and the session and campaign names to api.openai.com for a transcript. Then the transcript, this session’s name, notes and events go to Codex (gpt-6.1-sol) twice: once to clean them, and once to check that work against the raw words.\"",1],
     ["G6/footer-far-below-body","16-recording-ready","1920x1080","Label \"Process sends the audio and the session and campaign names to api.openai.com for a transcript. Then the transcript, this session’s name, notes and events go to Codex (gpt-6.1-sol) twice: once to clean them, and once to check that work against the raw words.\"",1],
     ["G6/footer-far-below-body","16-recording-ready","960x640","Label \"Process sends the audio and the session and campaign names to api.openai.com for a transcript. Then the transcript, this session’s name, notes and events go to Codex (gpt-6.1-sol) twice: once to clean them, and once to check that work against the raw words.\"",1],
@@ -523,7 +516,6 @@
     ["G6/footer-far-below-body","40-recording-summary-narrow","1200x800","Label \"The party held the bridge against the cinder wolves.\"",1],
     ["G6/footer-far-below-body","40-recording-summary-narrow","1920x1080","Label \"The party held the bridge against the cinder wolves.\"",1],
     ["G6/footer-far-below-body","40-recording-summary-narrow","960x640","Label \"The party held the bridge against the cinder wolves.\"",1],
-    ["G6/footer-far-below-body","41-processing-custom-speech-service","1920x1080","Button \"Transcript and summary instructions\"",1],
     ["G6/footer-far-below-body","44-processing-with-no-run","1200x800","Button \"Process: 2026-01-01 19-00\"",1],
     ["G6/footer-far-below-body","44-processing-with-no-run","1920x1080","Button \"Process: 2026-01-01 19-00\"",1],
     ["G6/footer-far-below-body","44-processing-with-no-run","960x640","Button \"Process: 2026-01-01 19-00\"",1],
