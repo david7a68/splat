@@ -24,10 +24,6 @@ pub(super) fn lists_features(entry: &Entry) -> bool {
 
 /// Only recognize the imported core-traits block. Authored text and any trailing
 /// source material stay in the ordinary Markdown reader.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 pub(super) fn show_source(ui: &mut egui::Ui, source: &str, name: &str) -> bool {
     const LABELS: &[&str] = &[
         "Primary Ability",
@@ -94,7 +90,6 @@ pub(super) fn show_source(ui: &mut egui::Ui, source: &str, name: &str) -> bool {
         return false;
     }
     design::heading(ui, design::Heading::Section("Core traits"));
-    ui.add_space(6.0);
     let mut equipment = None;
     let mut facts = Vec::new();
     for (label, value) in rows {
@@ -119,7 +114,6 @@ pub(super) fn show_source(ui: &mut egui::Ui, source: &str, name: &str) -> bool {
     style::facts(ui, &facts);
     if let Some(value) = equipment {
         design::heading(ui, design::Heading::Section("Starting equipment"));
-        ui.add_space(6.0);
         // Preserve the choice instruction and each option, including classes
         // with three alternatives. Do not split on punctuation inside items.
         let value = value

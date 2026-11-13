@@ -1247,7 +1247,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/library.rs", "recovery_action", &[Ban::Extras(2)]),
         ("src/library.rs", "repair_notice", &[Ban::Extras(1)]),
         ("src/library.rs", "use_checkbox", &[Ban::Extras(1)]),
-        ("src/library/class.rs", "show_source", &[Ban::Extras(2)]),
         ("src/library/creature.rs", "show", &[Ban::Extras(1)]),
         ("src/library/reader.rs", "show", &[Ban::Extras(1)]),
         ("src/lookup.rs", "generator_card", &[Ban::Extras(1)]),

@@ -8278,8 +8278,14 @@ impl Library {
                                                 },
                                             );
                                             let mut draft = self.draft.as_str();
+                                            // The field belongs to this note: its owner and path key it.
+                                            let field = note
+                                                .owner
+                                                .id()
+                                                .map_or(DISK_DRAFT, |owner| DISK_DRAFT.with(owner));
+                                            let field = field.with(Path::new(&note.path));
                                             let response =
-                                                DISK_DRAFT.multi_line(ui, &mut draft, |edit| {
+                                                field.multi_line(ui, &mut draft, |edit| {
                                                     edit.font(egui::TextStyle::Monospace)
                                                         .margin(egui::vec2(design::S, design::S))
                                                         .desired_width(
