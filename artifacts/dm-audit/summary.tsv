@@ -1,9 +1,9 @@
 Phase totals
 phase	tasks	transitions	interactions	nav	sub	panel	find	do
-before	9	5	35	5	0	1	7	22
+before	10	7	41	7	0	1	8	25
 during	33	9	202	9	2	17	47	127
-after	11	7	34	7	5	4	1	17
-total	53	21	271	21	7	22	55	166
+after	11	5	33	5	5	4	2	17
+total	54	21	276	21	7	22	57	169
 
 Tasks
 phase	task	transitions	interactions	overhead	path
@@ -15,6 +15,7 @@ before	Make the boss your own: copy it, change it, and swap it in	0	5	0	Encounte
 before	Write the read-aloud text and tactics for the encounter	0	4	0	Encounters
 before	Back to the session plan, with tonight's encounter in it	1	4	2	Encounters > Session
 before	Is each planned fight right for this party?	0	0	0	Session
+before	Change a planned fight's roster from the plan, and come back	2	6	3	Session > Encounters > Session
 before	Carry over what last week left into tonight's note	0	1	0	Session
 during	Start recording	0	2	0	Session
 during	Read last session's recap aloud	0	0	0	Session
@@ -50,14 +51,14 @@ during	The players start a fight you did not plan, and then talk their way out	3
 during	A fight that nobody planned, with a Bandit from the book, then talk	2	5	5	Session > Run > Session
 during	Stop recording	0	1	0	Session
 after	Review how the fight went: log and final HP	0	1	1	Session
-after	Say where the fight happened	2	4	2	Session > Timeline > Session
+after	Say where the fight happened	0	2	0	Session
 after	Process the recording and read the summary	0	4	3	Session
 after	Add a suggested event to the timeline	0	1	0	Session
 after	Write the wrap-up in the note	0	4	1	Session
 after	Link the fight in the note	2	6	2	Session > Timeline > Session
 after	Put the fight's rewards in the note	0	1	0	Session
 after	Check the party's HP for next time	1	1	1	Session > Party
-after	Put what an NPC said in the NPC's own note	0	4	2	Session
+after	Put what an NPC said in the NPC's own note	0	5	3	Session
 after	A new day starts: take the supply wagon's torches	1	5	3	Session > Timeline
 after	The table settles an open question: tick it	1	3	2	Timeline > World
 
@@ -72,6 +73,7 @@ during	the campaign has a house rule note in play
 during	last session's ledger holds a wrong press
 after	save, quit and open the app after the session
 after	the recording service has its keys
+after	the opened row and the next fight's action, at both sizes
 after	the plan holds a done scene with Hobb the Miller, in view
 after	the torch rules have a supply wagon on the next day
 after	Hobb's note holds an open question
@@ -85,6 +87,9 @@ before / Compare the party's passive Perception, to plan an ambush: Party compar
 before / Make the boss your own: copy it, change it, and swap it in: the roster has a row for the copy: true
 before / Back to the session plan, with tonight's encounter in it: the plan offers tonight's fight: true
 before / Is each planned fight right for this party?: the planned fights' rows say ["Low", "Low"]
+before / Change a planned fight's roster from the plan, and come back: the plan says ["Low", "Low"] before
+before / Change a planned fight's roster from the plan, and come back: the editor holds Shrine of Cinders: true
+before / Change a planned fight's roster from the plan, and come back: back on Session with the plan saying ["Low", "Low"]
 before / Carry over what last week left into tonight's note: tonight's note holds last week's open thread: true
 during / Open the app at the table: the app reopened on Session
 during / Read last session's recap aloud: the Last time line shows last week's words with no act: true
@@ -107,9 +112,11 @@ during / A fight that nobody planned, with a Bandit from the book, then talk: th
 during / A fight that nobody planned, with a Bandit from the book, then talk: closing it comes back to: Session
 after / Stop recording: the app reopened on Session
 after / Review how the fight went: log and final HP: final HP reads in place: true
+after / Say where the fight happened: the Timeline's event says where: true
 after / Link the fight in the note: the note holds the fight's link: true
 after / Put the fight's rewards in the note: the note holds the fight's rewards block: true
 after / Check the party's HP for next time: Kestrel on Party after the evening: [Kestrel Dunmoor · Level 5 Rogue · Per 11 · Ins 11 · HP 9/41 · AC 15 · Poisoned]
+after / Put what an NPC said in the NPC's own note: the done scene with Hobb the Miller is in view: true
 after / Put what an NPC said in the NPC's own note: the NPC's note holds the line: true
 after / A new day starts: take the supply wagon's torches: the rail counts the day mark: true
 after / A new day starts: take the supply wagon's torches: the ledger holds the wagon's Done: true

@@ -127,6 +127,30 @@ impl Missing {
         })
     }
 
+    /// The longest form of `words` that `fits`: whole, else the first name shortened from its
+    /// end with `…` (the `and 2 more` stays), else `short` where no letter of the name fits
+    /// (app round 2, X1). `None` before the names are known.
+    pub fn fitted(&self, fits: impl Fn(&str) -> bool) -> Option<String> {
+        let whole = self.words()?;
+        if fits(&whole) {
+            return Some(whole);
+        }
+        let first = self.names.first()?;
+        let more = match self.names.len() - 1 {
+            0 => String::new(),
+            more => format!(" and {more} more"),
+        };
+        let letters: Vec<char> = first.chars().collect();
+        (1..letters.len())
+            .rev()
+            .map(|kept| {
+                let name: String = letters[..kept].iter().collect();
+                format!("{}: {}…{more}", self.short(), name.trim_end())
+            })
+            .find(|words| fits(words))
+            .or_else(|| Some(self.short().to_owned()))
+    }
+
     /// The reason with no names, where a line has no room for them.
     pub fn short(&self) -> &'static str {
         match self.what {
@@ -436,9 +460,34 @@ mod tests {
             .weigh(&five, [Some(100), None, None, None])
             .named(|_, at| Some(["Ox", "Nameless Thing", "Nameless Thing", "Wisp"][at].into()));
         assert_eq!(
-            named.missing.and_then(|missing| missing.words()).as_deref(),
+            named
+                .missing
+                .as_ref()
+                .and_then(|missing| missing.words())
+                .as_deref(),
             Some("XP not known: Nameless Thing and 1 more")
         );
+        // X1: with less room, the name shortens from its end, and goes only when no letter fits.
+        let fitted = |room: usize| {
+            named
+                .missing
+                .as_ref()
+                .and_then(|missing| missing.fitted(|words| words.chars().count() <= room))
+        };
+        assert_eq!(
+            fitted(39).as_deref(),
+            Some("XP not known: Nameless Thing and 1 more")
+        );
+        assert_eq!(
+            fitted(38).as_deref(),
+            Some("XP not known: Nameless Thi… and 1 more")
+        );
+        assert_eq!(
+            fitted(34).as_deref(),
+            Some("XP not known: Nameless… and 1 more")
+        );
+        assert_eq!(fitted(27).as_deref(), Some("XP not known: N… and 1 more"));
+        assert_eq!(fitted(26).as_deref(), Some("XP not known"));
         // A level that is not known, or not in the table.
         let level = scale.weigh(&[Some(3), None], [Some(100)]);
         assert_eq!(
