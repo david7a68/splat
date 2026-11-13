@@ -6400,12 +6400,12 @@ mod tests {
                 .min_by(|x, y| x.room().left().total_cmp(&y.room().left()))
                 .and_then(|record| record.footer())
         };
-        fn harness_undo_id(harness: &egui_kittest::Harness<'_>) -> Option<egui::accesskit::NodeId> {
+        let harness_undo_id = |harness: &egui_kittest::Harness<'_>| {
             use egui_kittest::kittest::{NodeT, Queryable};
             harness
                 .query_by_label("Undo 0")
                 .map(|node| node.accesskit_node().id())
-        }
+        };
         let focused = |harness: &egui_kittest::Harness<'_>| {
             harness
                 .ctx

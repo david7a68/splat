@@ -965,6 +965,11 @@ impl Reader {
             self.next = None;
         }
     }
+    /// For tests: the characters whose next read replaces their local edits.
+    #[cfg(test)]
+    pub fn forced(&self) -> Vec<&str> {
+        self.force.iter().map(String::as_str).collect()
+    }
     pub fn force_waiting(&self) -> bool {
         !self.force.is_empty() || !self.forcing.is_empty()
     }

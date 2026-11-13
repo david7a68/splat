@@ -627,7 +627,8 @@ impl Party {
             }
             let several = reader.conflicts.len() > 1;
             let waiting = reader.force_waiting();
-            for (id, path) in &reader.conflicts {
+            // `at` is the notice's place among the conflicts: its id is looked up at the press.
+            for (at, (id, path)) in reader.conflicts.iter().enumerate() {
                 let name = reader.member_name(id);
                 let next = if connected {
                     "Replacing keeps your version as a copy."
@@ -645,8 +646,6 @@ impl Party {
                     "Replace with D&D Beyond sheet"
                 };
                 let (settings, replace) = (&presses.wants_settings, &presses.replace);
-                // The notice's place among the conflicts: its id is looked up at the press.
-                let at = reader.conflicts.keys().position(|key| key == id);
                 let path = std::sync::Arc::clone(path);
                 footer.notice(words.clone(), move |ui| {
                     storage_notice(ui, Tone::Warning, &words, &[action, "Show file"], |ui| {
@@ -668,7 +667,7 @@ impl Party {
                             .show(ui)
                             .clicked()
                         {
-                            replace.set(Some(at.filter(|_| several)));
+                            replace.set(Some(several.then_some(at)));
                         }
                         show_file(ui, &path);
                     });
@@ -2725,6 +2724,54 @@ mod sheet_now_tests {
                 assert!(action.left() - message.right() <= design::L + design::XS);
             }
         }
+        // Two characters with local edits, A and B, in the page's real footer: B's Replace
+        // forces a read of B alone, and A stays as it was (the press keeps its notice's place
+        // among the conflicts, not a copy of its id).
+        let party = std::rc::Rc::new(std::cell::RefCell::new(super::Party::default()));
+        for (id, path) in [("a", "/campaign/a.md"), ("b", "/campaign/b.md")] {
+            party
+                .borrow_mut()
+                .reader
+                .conflicts
+                .insert(id.into(), std::path::Path::new(path).into());
+        }
+        let drawn = party.clone();
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(960.0, 640.0))
+            .build_ui(move |ui| {
+                let presses = super::PagePresses::default();
+                let footer = drawn.borrow().page_footer(&presses, true, true);
+                footer.pane(ui, design::Body::Content, |_| ());
+                drawn.borrow_mut().page_pressed(presses);
+            });
+        design::theme::install(&harness.ctx);
+        harness.run_steps(3);
+        let replaces: Vec<_> = harness
+            .get_all_by_label("Replace with D&D Beyond sheet")
+            .map(|node| node.rect())
+            .collect();
+        assert_eq!(replaces.len(), 2, "each local-edit notice has its Replace");
+        let second = replaces
+            .iter()
+            .max_by(|x, y| x.top().total_cmp(&y.top()))
+            .copied()
+            .unwrap();
+        harness.event(egui::Event::PointerMoved(second.center()));
+        for pressed in [true, false] {
+            harness.event(egui::Event::PointerButton {
+                pos: second.center(),
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: egui::Modifiers::NONE,
+            });
+            harness.run_steps(1);
+        }
+        harness.run_steps(2);
+        assert_eq!(
+            party.borrow().reader.forced(),
+            ["b"],
+            "Replace on the second notice forces a read of B only; A is unchanged"
+        );
     }
 
     #[test]
