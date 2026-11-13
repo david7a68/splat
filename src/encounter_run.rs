@@ -5209,6 +5209,43 @@ impl Run {
     pub fn simulate_error(&mut self, message: &str) {
         self.error = (!message.is_empty()).then(|| message.to_owned());
     }
+    /// Copies of the last participant, until the run has `count` rows.
+    #[cfg(test)]
+    pub fn simulate_rows(&mut self, count: usize) {
+        while self.state.participants.len() < count {
+            let at = self.state.participants.len();
+            let mut copy = self
+                .state
+                .participants
+                .last()
+                .expect("a participant")
+                .clone();
+            copy.key = format!("simulated-row-{at}");
+            copy.name = format!("Guard {at}");
+            self.state.participants.push(copy);
+            self.state.order.push(at);
+        }
+    }
+    /// Every participant has this condition, by its word.
+    #[cfg(test)]
+    pub fn simulate_condition(&mut self, word: &str) {
+        for p in &mut self.state.participants {
+            p.conditions = vec![Condition::Label(word.into())];
+        }
+    }
+    /// The named participant takes the turn and is selected, with no scroll to it.
+    #[cfg(test)]
+    pub fn simulate_current(&mut self, name: &str) {
+        let at = self
+            .state
+            .participants
+            .iter()
+            .position(|p| p.name == name)
+            .expect("participant in this run");
+        self.state.cursor = self.state.order.iter().position(|i| *i == at).unwrap();
+        self.selected = at;
+        self.scroll_to_selected = false;
+    }
     /// Show one participant in a sync state test builds cannot reach by themselves.
     pub fn simulate_sync_state(&mut self, name: &str, state: crate::combat_sync::SyncState) {
         let (index, participant) = self
