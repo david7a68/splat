@@ -97,6 +97,21 @@ pub fn run(d: &mut Driver<'_>) {
             && d.in_view("1 content issue to repair"),
         format!("The issue count paints {colours:?}"),
     );
+    // Round 28 FC12: the note starts at its row's name, not at the row's checkbox.
+    let mut lefts = (None, None);
+    d.each_painted_text(|text, _| {
+        let words = &text.galley.job.text;
+        if words == "Ashen Marches" {
+            lefts.0 = Some(text.pos.x);
+        } else if words.starts_with("Arena Final, ") {
+            lefts.1 = Some(text.pos.x);
+        }
+    });
+    d.observe(
+        "iter-28-C-FC12",
+        matches!(lefts, (Some(name), Some(note)) if (name - note).abs() <= 1.0),
+        format!("Package name and its note start at x: {lefts:?}"),
+    );
     d.state("campaign-package-off-in-obsidian", Sizes::All);
     assert_eq!(fs::read_to_string(&manifest).unwrap(), after);
 

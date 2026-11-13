@@ -20,6 +20,9 @@ pub struct Campaigns {
     writable: bool,
     editing: Option<Uuid>,
     focus_name: bool,
+    /// Edit details was pressed on Link and folder: the details form comes into view once, with
+    /// its Save, in that pane (round 28: the session folder's save row stands above the pane).
+    reveal_details: bool,
     form_open: bool,
     add_name: String,
     add_path: String,
@@ -63,6 +66,7 @@ impl Default for Campaigns {
             writable: false,
             editing: None,
             focus_name: false,
+            reveal_details: false,
             form_open: false,
             add_name: String::new(),
             add_path: String::new(),
@@ -349,6 +353,7 @@ impl Campaigns {
             writable: true,
             editing: None,
             focus_name: false,
+            reveal_details: false,
             form_open: false,
             add_name: String::new(),
             add_path: String::new(),
@@ -727,6 +732,10 @@ impl Campaigns {
     }
 
     /// The active campaign's folder and D&D Beyond link.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     pub fn show_active(
         &mut self,
         ui: &mut egui::Ui,
@@ -760,6 +769,7 @@ impl Campaigns {
                     }
                     self.remote = None;
                     self.editing = Some(campaign.id);
+                    self.reveal_details = true;
                     self.name = campaign.name.clone();
                     self.path = campaign.path.to_string_lossy().into_owned();
                 }
@@ -809,6 +819,10 @@ impl Campaigns {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn remove_dialog(&mut self, ctx: &egui::Context) {
         let Some(id) = self.confirm_remove else {
             return;
@@ -901,6 +915,10 @@ impl Campaigns {
     }
 
     /// The campaign list. Which exist, where, and how each is linked.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     pub fn show(
         &mut self,
         ui: &mut egui::Ui,
@@ -1251,11 +1269,19 @@ impl Campaigns {
 
     /// Edit the active campaign's details from the page that links to them.
     /// Draws the details form while it is open, and says whether it drew it (with its primary save).
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     pub fn show_form_if_editing(&mut self, ui: &mut egui::Ui) -> bool {
         let open = self.editing.is_some();
         if open {
             ui.add_space(design::S);
-            self.form(ui, false, true);
+            let form = ui.scope(|ui| self.form(ui, false, true)).response.rect;
+            // Once, when Edit details opened it: the form and its Save come into view.
+            if std::mem::take(&mut self.reveal_details) {
+                ui.scroll_to_rect(form, None);
+            }
         }
         open
     }
@@ -1878,6 +1904,7 @@ mod tests {
             writable: true,
             editing: None,
             focus_name: false,
+            reveal_details: false,
             form_open: false,
             add_name: String::new(),
             add_path: String::new(),

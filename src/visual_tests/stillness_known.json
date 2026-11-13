@@ -1,0 +1,670 @@
+{
+  "campaign-content": [
+    ["G1b/pressed-control-moved","14-repair-save-failed","960x640","Button \"Save repaired note\"",1],
+    ["G1b/pressed-control-moved","15-missing-campaign-manifest-needs-explicit-write","1200x800","Button \"Discard\"",2],
+    ["G1b/pressed-control-moved","15-missing-campaign-manifest-needs-explicit-write","1200x800","CheckBox \"Use Ash Wraith\"",1],
+    ["G1b/pressed-control-moved","15-missing-campaign-manifest-needs-explicit-write","1920x1080","Button \"Discard\"",2],
+    ["G1b/pressed-control-moved","15-missing-campaign-manifest-needs-explicit-write","960x640","Button \"Close repair\"",1],
+    ["G1b/pressed-control-moved","15-missing-campaign-manifest-needs-explicit-write","960x640","Button \"Discard\"",5],
+    ["G1b/pressed-control-moved","15-missing-campaign-manifest-needs-explicit-write","960x640","Button \"Save repaired note\"",2],
+    ["G1b/pressed-control-moved","15-missing-campaign-manifest-needs-explicit-write","960x640","CheckBox \"Use Ash Wraith\"",2],
+    ["G1b/pressed-control-moved","15-missing-campaign-manifest-needs-explicit-write","960x640","MultilineTextInput \"Note text: Notes/Cracked.md\"",4],
+    ["G1b/pressed-control-moved","17-campaign-manifest-write-undone","960x640","Button \"Undo write Campaign.md\"",1]
+  ],
+  "campaign-copy-registered": [
+    ["G1b/pressed-control-moved","01-copy-registered","960x640","Button \"Add campaign\"",1]
+  ],
+  "column-resize": [
+    ["G1b/pressed-control-moved","06-run-rail-keeps-roster-room","1200x800","Button \"Next turn\"",1],
+    ["G6/footer-far-below-body","13-session-events-fill-their-column","1200x800","Button \"Add to notes: Major event\"",1],
+    ["G6/footer-far-below-body","13-session-events-fill-their-column","1920x1080","Button \"Add to notes: Major event\"",1],
+    ["G6/footer-far-below-body","13-session-events-fill-their-column","960x640","Button \"Add to notes: Major event\"",1]
+  ],
+  "data-integrity": [
+    ["G3/far-action","06-run-folder-gone","1920x1080","Button \"Start fight\"",2],
+    ["N2/icon-off-text-centre","04-recording-audio-removed","1200x800","Button \"More actions for Evening\"",1],
+    ["N2/icon-off-text-centre","04-recording-audio-removed","1920x1080","Button \"More actions for Evening\"",1],
+    ["N2/icon-off-text-centre","04-recording-audio-removed","960x640","Button \"More actions for Evening\"",1]
+  ],
+  "dialogs": [
+    ["G6/footer-far-below-body","06-unsaved-changes-on-close","1200x800","Button \"Keep editing\"",1],
+    ["G6/footer-far-below-body","06-unsaved-changes-on-close","1920x1080","Button \"Keep editing\"",1],
+    ["G6/footer-far-below-body","06-unsaved-changes-on-close","960x640","Button \"Keep editing\"",1]
+  ],
+  "dm-audit": [
+    ["G1b/pressed-control-moved","(after the last state)","1200x800","Button \"Add to Log: Hobb the Miller\"",1],
+    ["G1b/pressed-control-moved","(after the last state)","1200x800","Button \"Save encounter\"",3]
+  ],
+  "empty": [
+    ["G1b/pressed-control-moved","07-campaign-added","960x640","Button \"Add campaign\"",1]
+  ],
+  "encounter-build": [
+    ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Next turn\"",1],
+    ["G1b/pressed-control-moved","05-saved","960x640","Button \"Save encounter\"",1],
+    ["G3/far-action","01-encounter-list","1920x1080","Button \"Resume\"",1],
+    ["G3/far-action","01-encounter-list","1920x1080","Button \"Start fight\"",1],
+    ["G3/far-action","13-encounter-menu-remove","1920x1080","Button \"Start fight\"",1],
+    ["G3/far-action","14-encounter-removed","1920x1080","Button \"Start fight\"",1]
+  ],
+  "encounter-difficulty": [
+    ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Save encounter\"",1],
+    ["G3/far-action","01-ready-to-run","1920x1080","Button \"Resume\"",1],
+    ["G3/far-action","01-ready-to-run","1920x1080","Button \"Start fight\"",4]
+  ],
+  "encounter-groups": [
+    ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Changes for Cinder Wolf\"",2],
+    ["G1b/pressed-control-moved","03-group-member-changes","960x640","Button \"Changes for Ember Cultist\"",1],
+    ["G1b/pressed-control-moved","06-group-invalid-change","960x640","Button \"Changes for Cinder Wolf\"",1],
+    ["G1b/pressed-control-moved","24-a-named-side-on-its-turn","960x640","Button \"Next turn\"",2],
+    ["G1c/content-moved-with-bar","25-tied-arrival-moved-before","960x640","Button \"Brannoch Vale, party, HP 58/62, Temp 5, AC 19, Initiative 18\"",1],
+    ["G3/far-action","01-groups-in-the-list","1920x1080","Button \"Edit group Goblin Wave\"",1],
+    ["G3/far-action","01-groups-in-the-list","1920x1080","Button \"Edit group Lost Patrol\"",1],
+    ["G3/far-action","01-groups-in-the-list","1920x1080","Button \"Edit group Rival Team\"",1],
+    ["G3/far-action","01-groups-in-the-list","1920x1080","Button \"Edit group Watch Detail\"",1],
+    ["G3/far-action","01-groups-in-the-list","1920x1080","Button \"Resume\"",2],
+    ["G3/far-action","01-groups-in-the-list","1920x1080","Button \"Start fight\"",1],
+    ["G3/far-action","14-group-removed","1920x1080","Button \"Edit group Ash Pack\"",1],
+    ["G3/far-action","14-group-removed","1920x1080","Button \"Edit group Lost Patrol\"",1],
+    ["G3/far-action","14-group-removed","1920x1080","Button \"Edit group Rival Team\"",1],
+    ["G3/far-action","14-group-removed","1920x1080","Button \"Edit group Watch Detail\"",1],
+    ["G3/far-action","14-group-removed","1920x1080","Button \"Resume\"",2],
+    ["G3/far-action","14-group-removed","1920x1080","Button \"Start fight\"",1],
+    ["G6/footer-far-below-body","16-invalid-arrival-total","960x640","Label \"\\u{e3b2}\\u{a0}Changed\\n1\\u{a0}×\\u{a0}Rival\\u{a0}Captain (as\\u{a0}Ember\\u{a0}Cultist), 2\\u{a0}×\\u{a0}Cinder\\u{a0}Wolf\"",1],
+    ["G6/footer-far-below-body","25-tied-arrival-moved-before","960x640","Button \"Edit group\"",1],
+    ["G6/footer-far-below-body","27-group-added-in-setup","960x640","Button \"Edit group\"",1],
+    ["N5/icon-starts-wrapping-text","15-group-panel","960x640","Text \"\\u{e3b2}\\u{a0}Changed\\n1\\u{a0}×\\u{a0}Rival\\u{a0}Captain (as\\u{a0}Ember\\u{a0}Cultist), 2\\u{a0}×\\u{a0}Cinder\\u{a0}Wolf\"",1],
+    ["N5/icon-starts-wrapping-text","16-invalid-arrival-total","960x640","Text \"\\u{e3b2}\\u{a0}Changed\\n1\\u{a0}×\\u{a0}Rival\\u{a0}Captain (as\\u{a0}Ember\\u{a0}Cultist), 2\\u{a0}×\\u{a0}Cinder\\u{a0}Wolf\"",1],
+    ["N5/icon-starts-wrapping-text","17-available-member-added","960x640","Text \"\\u{e3b2}\\u{a0}Changed\\n1\\u{a0}×\\u{a0}Rival\\u{a0}Captain (as\\u{a0}Ember\\u{a0}Cultist), 2\\u{a0}×\\u{a0}Cinder\\u{a0}Wolf\"",1],
+    ["N5/icon-starts-wrapping-text","19-group-total-typed","960x640","Text \"\\u{e3b2}\\u{a0}Changed\\n1\\u{a0}×\\u{a0}Rival\\u{a0}Captain (as\\u{a0}Ember\\u{a0}Cultist), 2\\u{a0}×\\u{a0}Cinder\\u{a0}Wolf\"",1],
+    ["N5/icon-starts-wrapping-text","26-group-panel-in-setup","960x640","Text \"\\u{e3b2}\\u{a0}Changed\\n1\\u{a0}×\\u{a0}Rival\\u{a0}Captain (as\\u{a0}Ember\\u{a0}Cultist), 2\\u{a0}×\\u{a0}Cinder\\u{a0}Wolf\"",1]
+  ],
+  "encounter-history": [
+    ["G3/far-action","01-encounters-with-history","1920x1080","Button \"Resume\"",1],
+    ["G3/far-action","01-encounters-with-history","1920x1080","Button \"Start fight\"",1],
+    ["G3/far-action","02-history-open","1920x1080","Button \"Open the run of Goblin Crossing, Party won · Ended · Round 1 · Saved just now\"",1],
+    ["G3/far-action","02-history-open","1920x1080","Button \"Open the run of Old Mill Raid, Party fled · Ended · Round 1 · Saved just now\"",1],
+    ["G3/far-action","02-history-open","1920x1080","Button \"Resume\"",1],
+    ["G3/far-action","02-history-open","1920x1080","Button \"Start fight\"",1],
+    ["G3/far-action","04-ended-run-open","1920x1080","Button \"Close the run of Old Mill Raid, Party fled · Ended · Round 1 · Saved just now\"",1],
+    ["G3/far-action","05-history-beside-open-run","1920x1080","Button \"Close the run of Old Mill Raid, Party fled · Ended · Round 1 · Saved just now\"",1],
+    ["G3/far-action","06-keep-in-ready-blocked","1920x1080","Button \"Close the run of Old Mill Raid, Party fled · Ended · Round 1 · Saved just now\"",1],
+    ["G3/far-action","06-keep-in-ready-blocked","1920x1080","Button \"Open the run of Goblin Crossing, Party won · Ended · Round 1 · Saved just now\"",1],
+    ["G3/far-action","06-keep-in-ready-blocked","1920x1080","Button \"Start fight\"",1]
+  ],
+  "encounter-owned-groups": [
+    ["G1b/pressed-control-moved","05-new-group-in-the-encounter","960x640","Button \"New group for this encounter\"",1],
+    ["G1b/pressed-control-moved","07-encounter-and-group-saved","960x640","Button \"Save encounter\"",1],
+    ["G3/far-action","01-groups-for-encounters-closed","1920x1080","Button \"Resume\"",2],
+    ["G3/far-action","01-groups-for-encounters-closed","1920x1080","Button \"Start fight\"",1],
+    ["G3/far-action","02-groups-for-encounters-open","1920x1080","Button \"Edit group Arena Beasts\"",1],
+    ["G3/far-action","02-groups-for-encounters-open","1920x1080","Button \"Edit group Cellar Rats\"",1],
+    ["G3/far-action","02-groups-for-encounters-open","1920x1080","Button \"Edit group Goblin Wave\"",1],
+    ["G3/far-action","02-groups-for-encounters-open","1920x1080","Button \"Edit group Lost Patrol\"",1],
+    ["G3/far-action","02-groups-for-encounters-open","1920x1080","Button \"Edit group Rival Team\"",1],
+    ["G3/far-action","02-groups-for-encounters-open","1920x1080","Button \"Edit group Shrine Reserve\"",1],
+    ["G3/far-action","02-groups-for-encounters-open","1920x1080","Button \"Edit group Watch Detail\"",1],
+    ["G3/far-action","02-groups-for-encounters-open","1920x1080","Button \"Resume\"",2],
+    ["G3/far-action","02-groups-for-encounters-open","1920x1080","Button \"Start fight\"",1],
+    ["N5/icon-starts-wrapping-text","16-group-panel-of-an-older-save","960x640","Text \"\\u{e3b2}\\u{a0}Changed\\n1\\u{a0}×\\u{a0}Rival\\u{a0}Captain (as\\u{a0}Ember\\u{a0}Cultist), 2\\u{a0}×\\u{a0}Cinder\\u{a0}Wolf\"",1]
+  ],
+  "encounter-run": [
+    ["G1b/pressed-control-moved","03-next-turn","960x640","Button \"Next turn\"",1]
+  ],
+  "generator-tables": [
+    ["G1a/message-moved-content","06-generator-world-keeps-its-npc","960x640","Button \"Copy the marker\"",1],
+    ["G1a/message-moved-content","06-generator-world-keeps-its-npc","960x640","Button \"Discard\"",1],
+    ["G1a/message-moved-content","06-generator-world-keeps-its-npc","960x640","Button \"Reroll\"",1],
+    ["G1a/message-moved-content","06-generator-world-keeps-its-npc","960x640","Button \"Save NPC\"",1],
+    ["G1a/message-moved-content","06-generator-world-keeps-its-npc","960x640","Label \"Built-in names. To use your own, add a table of names to a note. Paste the marker on the line above the table.\"",1],
+    ["G1a/message-moved-content","06-generator-world-keeps-its-npc","960x640","Label \"GENERATED NPC\"",1],
+    ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Reroll\"",1],
+    ["G1b/pressed-control-moved","03-generator-built-in-names-in-lookup","960x640","Button \"Open Names.md\"",1]
+  ],
+  "journey-j2": [
+    ["G1b/pressed-control-moved","(after the last state)","1200x800","Button \"Add to Log: Warden Ostrel\"",1]
+  ],
+  "journey-j3": [
+    ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Conditions for this participant\"",1],
+    ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Next turn\"",8]
+  ],
+  "journey-j4": [
+    ["G1b/pressed-control-moved","(after the last state)","1200x800","Button \"Add Old Guard, 1-2 seals to the initiative list\"",1]
+  ],
+  "journey-j6": [
+    ["G1b/pressed-control-moved","(after the last state)","1200x800","Button \"Save encounter\"",1]
+  ],
+  "library-navigation": [
+    ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Back\"",1],
+    ["G1b/pressed-control-moved","05-reference-outside-package","960x640","Button \"Back\"",1],
+    ["G6/footer-far-below-body","01-homebrew-reference","1920x1080","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","01-homebrew-reference","960x640","Label \"Missing place (not found in this campaign)\"",1],
+    ["G6/footer-far-below-body","03-dependency-copy-reconnected","1200x800","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","03-dependency-copy-reconnected","1920x1080","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","03-dependency-copy-reconnected","960x640","Label \"Missing place (not found in this campaign)\"",1]
+  ],
+  "library-to-encounter": [
+    ["G1b/pressed-control-moved","05-copy-in-encounter","960x640","Button \"Save encounter\"",1]
+  ],
+  "list-formats": [
+    ["G1b/pressed-control-moved","01-timeline-v2-dm-prose","960x640","Button \"Old bridge · Travel · 10 minutes\"",1],
+    ["G1b/pressed-control-moved","11-group-repair-changes-cell","960x640","Button \"Changes for Scout\"",1],
+    ["G3/far-action","06-flagged-group-in-groups-list","1920x1080","Button \"Edit group Bridge guards\"",1],
+    ["G3/far-action","06-flagged-group-in-groups-list","1920x1080","Button \"Edit group Goblin Wave\"",1],
+    ["G3/far-action","06-flagged-group-in-groups-list","1920x1080","Button \"Edit group Lost Patrol\"",1],
+    ["G3/far-action","06-flagged-group-in-groups-list","1920x1080","Button \"Edit group Rival Team\"",1],
+    ["G3/far-action","06-flagged-group-in-groups-list","1920x1080","Button \"Edit group Watch Detail\"",1],
+    ["G3/far-action","06-flagged-group-in-groups-list","1920x1080","Button \"Resume\"",2],
+    ["G3/far-action","06-flagged-group-in-groups-list","1920x1080","Button \"Start fight\"",1],
+    ["G6/footer-far-below-body","04-rules-and-runs-flagged-choice","1200x800","Button \"Save run settings\"",1],
+    ["G6/footer-far-below-body","04-rules-and-runs-flagged-choice","1920x1080","Button \"Save run settings\"",1],
+    ["G6/footer-far-below-body","04-rules-and-runs-flagged-choice","960x640","Button \"Save run settings\"",1],
+    ["G6/footer-far-below-body","15-timeline-item-edited-and-flagged-in-obsidian","1200x800","Button \"Old bridge · Travel · 10 minutes\"",1],
+    ["G6/footer-far-below-body","15-timeline-item-edited-and-flagged-in-obsidian","1920x1080","Button \"Old bridge · Travel · 10 minutes\"",1],
+    ["G6/footer-far-below-body","15-timeline-item-edited-and-flagged-in-obsidian","960x640","Button \"Old bridge · Travel · 10 minutes\"",1]
+  ],
+  "log-from-play": [
+    ["G1b/pressed-control-moved","02-log-line-added-in-lookup","1200x800","Button \"Add to Log: Captain Varra Black\"",1],
+    ["N2/icon-off-text-centre","01-done-scene-add-to-log","1200x800","Button \"More actions for Captain Varra Black: told the party who burned the ropes at the ford\"",1],
+    ["N2/icon-off-text-centre","01-done-scene-add-to-log","1920x1080","Button \"More actions for Captain Varra Black: told the party who burned the ropes at the ford\"",1],
+    ["N2/icon-off-text-centre","02-log-line-added-in-lookup","1920x1080","Button \"More actions for Captain Varra Black: told the party who burned the ropes at the ford\"",1],
+    ["N2/icon-off-text-centre","04-log-field-from-scene","1920x1080","Button \"More actions for Captain Varra Black: told the party who burned the ropes at the ford\"",1],
+    ["N2/icon-off-text-centre","04-log-field-from-scene","960x640","Button \"More actions for Captain Varra Black: told the party who burned the ropes at the ford\"",1],
+    ["N2/icon-off-text-centre","05-log-header-long-title","1920x1080","Button \"More actions for Captain Varra Black: told the party who burned the ropes at the ford\"",1],
+    ["N2/icon-off-text-centre","06-log-field-blocked-by-edit","960x640","Button \"More actions for Ashfall Keep\"",1],
+    ["N2/icon-off-text-centre","06-log-field-blocked-by-edit","960x640","Button \"More actions for Captain Varra Black: told the party who burned the ropes at the ford\"",1],
+    ["N2/icon-off-text-centre","07-log-words-of-a-deleted-entry","960x640","Button \"More actions for Captain Varra Black: told the party who burned the ropes at the ford\"",1],
+    ["N2/icon-off-text-centre","08-log-words-without-an-entry","960x640","Button \"More actions for Captain Varra Black: told the party who burned the ropes at the ford\"",1],
+    ["N5/icon-starts-wrapping-text","07-log-words-of-a-deleted-entry","960x640","Text \"\\u{e4e0} Captain Varra Black: told the party who burned the ropes at the ford\"",1],
+    ["N5/icon-starts-wrapping-text","08-log-words-without-an-entry","960x640","Text \"\\u{e4e0} Captain Varra Black: told the party who burned the ropes at the ford\"",1]
+  ],
+  "nav-table": [
+  ],
+  "npc-in-encounter": [
+    ["G1b/pressed-control-moved","03-npc-in-setup","960x640","Button \"Save encounter\"",1]
+  ],
+  "npc-in-lookup": [
+    ["G3/far-action","07-npc-start-fight-in-lookup","1920x1080","Button \"Start fight\"",2],
+    ["G3/far-action","08-package-creature-start-fight","1920x1080","Button \"Start fight\"",2]
+  ],
+  "package-about": [
+    ["G6/footer-far-below-body","02-package-every-entry-used","1200x800","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","02-package-every-entry-used","1920x1080","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","02-package-every-entry-used","960x640","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","04-package-about-edited","1200x800","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","04-package-about-edited","1920x1080","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","04-package-about-edited","960x640","Button \"Source and identifiers\"",1]
+  ],
+  "package-delete-entry": [
+    ["N5/icon-starts-wrapping-text","02-deleted-package-entry-in-encounter","960x640","Text \"\\u{e5ba} Enemies · \\u{e4e0} Not found. Its package entry was deleted.\"",2],
+    ["N5/icon-starts-wrapping-text","03-deleted-package-blocks-new-fight","960x640","Text \"\\u{e5ba} Enemies · \\u{e4e0} Not found. Its package entry was deleted.\"",2],
+    ["N5/icon-starts-wrapping-text","05-deleted-package-entry-choose-replacement","960x640","Text \"\\u{e5ba} Enemies · \\u{e4e0} Not found. Its package entry was deleted.\"",1],
+    ["N5/icon-starts-wrapping-text","07-deleted-package-entry-replacement-undone","960x640","Text \"\\u{e5ba} Enemies · \\u{e4e0} Not found. Its package entry was deleted.\"",2]
+  ],
+  "package-duplicate-id": [
+    ["G6/footer-far-below-body","01-duplicate-package-library-list","1920x1080","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","04-duplicate-copy-reader","1920x1080","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","05-duplicate-copy-new-identity","1920x1080","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","06-duplicate-identity-restored","1920x1080","Button \"Source and identifiers\"",1]
+  ],
+  "package-file-changed": [
+    ["G1b/pressed-control-moved","16-repair-draft-parses","1920x1080","Button \"Read the new version\"",1],
+    ["G6/footer-far-below-body","05-package-disk-version-kept","1200x800","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","05-package-disk-version-kept","1920x1080","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","13-invalid-package-in-paused-run","1200x800","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","13-invalid-package-in-paused-run","1920x1080","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","15-repaired-package-in-paused-run","1200x800","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","15-repaired-package-in-paused-run","1920x1080","Button \"Source and identifiers\"",1],
+    ["N5/icon-starts-wrapping-text","10-invalid-package-in-encounter","960x640","Text \"\\u{e5ba} Enemies · \\u{e4e4} Cinder Wolf.md cannot be read (line 4)\"",2],
+    ["N5/icon-starts-wrapping-text","11-invalid-package-blocks-new-fight","960x640","Text \"\\u{e5ba} Enemies · \\u{e4e4} Cinder Wolf.md cannot be read (line 4)\"",2]
+  ],
+  "package-folder-copied": [
+    ["G6/footer-far-below-body","06-copied-package-registered-alongside-original","1920x1080","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","06-copied-package-registered-alongside-original","960x640","Label \"1 (XP 200; PB +2)\"",1],
+    ["G6/footer-far-below-body","09-copy-entries-used","1920x1080","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","09-copy-entries-used","960x640","Label \"1 (XP 200; PB +2)\"",1],
+    ["G6/footer-far-below-body","12-manifest-only-hand-repair-keeps-both-files","1920x1080","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","13-same-filenames-name-the-folder","1920x1080","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","14-copied-folder-identities-repaired-together","1920x1080","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","14-copied-folder-identities-repaired-together","960x640","Label \"Actions\"",1],
+    ["G6/footer-far-below-body","15-copied-folder-identities-undone","1920x1080","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","16-one-entry-copied-between-registered-packages","1920x1080","Button \"Source and identifiers\"",1]
+  ],
+  "package-manifest-broken": [
+    ["G1b/pressed-control-moved","04-manifest-opened-for-repair","960x640","Button \"Replace with a basic Package.md\"",1],
+    ["G6/footer-far-below-body","11-manifest-written-again-library","1200x800","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","11-manifest-written-again-library","1920x1080","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","11-manifest-written-again-library","960x640","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","14-manifest-written-beside-readme","1200x800","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","14-manifest-written-beside-readme","1920x1080","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","14-manifest-written-beside-readme","960x640","Button \"Source and identifiers\"",1]
+  ],
+  "package-rename": [
+    ["G6/footer-far-below-body","02-linked-entry-renamed-on-disk","1200x800","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","02-linked-entry-renamed-on-disk","1920x1080","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","02-linked-entry-renamed-on-disk","960x640","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","03-renamed-entry-heading-fixed","1200x800","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","03-renamed-entry-heading-fixed","1920x1080","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","03-renamed-entry-heading-fixed","960x640","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","05-renamed-creature-offers-link-update","1200x800","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","05-renamed-creature-offers-link-update","1920x1080","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","06-renamed-creature-links-updated","1200x800","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","06-renamed-creature-links-updated","1920x1080","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","07-renamed-creature-link-update-undone","1200x800","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","07-renamed-creature-link-update-undone","1920x1080","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","11-package-folder-restored-with-links","1200x800","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","11-package-folder-restored-with-links","1920x1080","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","11-package-folder-restored-with-links","960x640","Button \"Source and identifiers\"",1]
+  ],
+  "party": [
+    ["N2/icon-off-text-centre","14-force-read-replaced","960x640","Button \"Dismiss this message\"",1]
+  ],
+  "plain-evening": [
+    ["G1b/pressed-control-moved","(after the last state)","1200x800","Button \"Road to the ford · Travel · half a day · Session 8\"",1],
+    ["G6/footer-far-below-body","04-session-last: played fight open","1200x800","Button \"More actions for Ask about the toll\"",1],
+    ["G6/footer-far-below-body","04-session-last: played fight open","960x640","TextInput \"Where\"",1],
+    ["N2/icon-off-text-centre","04-session-last: played fight open","1200x800","Button \"More actions for Wolves at the Ford Below the Burning Shrine Road\"",1]
+  ],
+  "recording-banner-priority": [
+    ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Record again\"",1],
+    ["G1b/pressed-control-moved","03-blocked-banner-retry","960x640","Button \"Record again\"",1],
+    ["G6/footer-far-below-body","03-blocked-banner-retry","1200x800","Label \"Process sends the audio and the session and campaign names to api.openai.com for a transcript. Then the transcript, this session’s name, notes and events go to Codex (gpt-6.1-sol) twice: once to clean them, and once to check that work against the raw words.\"",1],
+    ["G6/footer-far-below-body","03-blocked-banner-retry","1920x1080","Label \"Process sends the audio and the session and campaign names to api.openai.com for a transcript. Then the transcript, this session’s name, notes and events go to Codex (gpt-6.1-sol) twice: once to clean them, and once to check that work against the raw words.\"",1],
+    ["G6/footer-far-below-body","03-blocked-banner-retry","960x640","Label \"Process sends the audio and the session and campaign names to api.openai.com for a transcript. Then the transcript, this session’s name, notes and events go to Codex (gpt-6.1-sol) twice: once to clean them, and once to check that work against the raw words.\"",1],
+    ["G6/footer-far-below-body","05-recording-retry-with-input","1920x1080","Label \"Long rest · 8 hours\"",1],
+    ["N2/icon-off-text-centre","01-failed-elsewhere-with-unprocessed-row","1200x800","Button \"Dismiss this error\"",1],
+    ["N2/icon-off-text-centre","01-failed-elsewhere-with-unprocessed-row","1200x800","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","01-failed-elsewhere-with-unprocessed-row","1920x1080","Button \"Dismiss this error\"",1],
+    ["N2/icon-off-text-centre","01-failed-elsewhere-with-unprocessed-row","1920x1080","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","01-failed-elsewhere-with-unprocessed-row","960x640","Button \"Dismiss this error\"",1],
+    ["N2/icon-off-text-centre","01-failed-elsewhere-with-unprocessed-row","960x640","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","02-failed-processing-and-stopped-recording","1200x800","Button \"Dismiss this error\"",1],
+    ["N2/icon-off-text-centre","02-failed-processing-and-stopped-recording","1200x800","Button \"More actions for 2026-01-01 19:00 (2)\"",1],
+    ["N2/icon-off-text-centre","02-failed-processing-and-stopped-recording","1200x800","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","02-failed-processing-and-stopped-recording","1920x1080","Button \"Dismiss this error\"",1],
+    ["N2/icon-off-text-centre","02-failed-processing-and-stopped-recording","1920x1080","Button \"More actions for 2026-01-01 19:00 (2)\"",1],
+    ["N2/icon-off-text-centre","02-failed-processing-and-stopped-recording","1920x1080","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","02-failed-processing-and-stopped-recording","960x640","Button \"Dismiss this error\"",1],
+    ["N2/icon-off-text-centre","02-failed-processing-and-stopped-recording","960x640","Button \"More actions for 2026-01-01 19:00 (2)\"",1],
+    ["N2/icon-off-text-centre","02-failed-processing-and-stopped-recording","960x640","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","03-blocked-banner-retry","1200x800","Button \"Dismiss this error\"",1],
+    ["N2/icon-off-text-centre","03-blocked-banner-retry","1200x800","Button \"Dismiss\"",1],
+    ["N2/icon-off-text-centre","03-blocked-banner-retry","1200x800","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","03-blocked-banner-retry","1920x1080","Button \"Dismiss this error\"",1],
+    ["N2/icon-off-text-centre","03-blocked-banner-retry","1920x1080","Button \"Dismiss\"",1],
+    ["N2/icon-off-text-centre","03-blocked-banner-retry","1920x1080","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","03-blocked-banner-retry","960x640","Button \"Dismiss this error\"",1],
+    ["N2/icon-off-text-centre","03-blocked-banner-retry","960x640","Button \"Dismiss\"",1],
+    ["N2/icon-off-text-centre","03-blocked-banner-retry","960x640","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","04-stalled-elsewhere-with-unprocessed-row","1200x800","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","04-stalled-elsewhere-with-unprocessed-row","1920x1080","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","04-stalled-elsewhere-with-unprocessed-row","960x640","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","05-recording-retry-with-input","1200x800","Button \"More actions for 2026-01-01 19:00 (2)\"",1],
+    ["N2/icon-off-text-centre","05-recording-retry-with-input","1200x800","Button \"More actions for 2026-01-01 19:00 (3)\"",1],
+    ["N2/icon-off-text-centre","05-recording-retry-with-input","1200x800","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","05-recording-retry-with-input","1920x1080","Button \"More actions for 2026-01-01 19:00 (2)\"",1],
+    ["N2/icon-off-text-centre","05-recording-retry-with-input","1920x1080","Button \"More actions for 2026-01-01 19:00 (3)\"",1],
+    ["N2/icon-off-text-centre","05-recording-retry-with-input","1920x1080","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","05-recording-retry-with-input","960x640","Button \"More actions for 2026-01-01 19:00 (2)\"",1],
+    ["N2/icon-off-text-centre","05-recording-retry-with-input","960x640","Button \"More actions for 2026-01-01 19:00 (3)\"",1]
+  ],
+  "remove-package-in-use": [
+    ["G1b/pressed-control-moved","04-missing-package-technical-details","960x640","Button \"Technical details\"",1],
+    ["G1b/pressed-control-moved","05-missing-package-removed-with-undo","960x640","Button \"Technical details\"",1],
+    ["G6/footer-far-below-body","02-package-unregistered-with-undo","1200x800","Label \"None yet.\"",1],
+    ["G6/footer-far-below-body","02-package-unregistered-with-undo","1920x1080","Label \"None yet.\"",1],
+    ["G6/footer-far-below-body","07-paused-run-after-package-removal","1200x800","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","07-paused-run-after-package-removal","1920x1080","Button \"Source and identifiers\"",1]
+  ],
+  "run-absent-player": [
+    ["N2/icon-off-text-centre","05-initiative-set-in-combat","960x640","Button \"Dismiss this message\"",1]
+  ],
+  "run-add-creature": [
+    ["N5/icon-starts-wrapping-text","01-arrivals-empty","960x640","Text \"\\u{e3b2}\\u{a0}Changed\\n1\\u{a0}×\\u{a0}Rival\\u{a0}Captain (as\\u{a0}Ember\\u{a0}Cultist), 2\\u{a0}×\\u{a0}Cinder\\u{a0}Wolf\"",1],
+    ["N5/icon-starts-wrapping-text","04-arrivals-made-up-added","960x640","Text \"\\u{e3b2}\\u{a0}Changed\\n1\\u{a0}×\\u{a0}Rival\\u{a0}Captain (as\\u{a0}Ember\\u{a0}Cultist), 2\\u{a0}×\\u{a0}Cinder\\u{a0}Wolf\"",1]
+  ],
+  "run-continue": [
+    ["G1b/pressed-control-moved","14-undo-steps-unread","960x640","Button \"Next turn\"",1],
+    ["G1b/pressed-control-moved","16-history-not-the-last-fight","960x640","Button \"Next turn\"",1],
+    ["G1c/content-moved-with-bar","04-ended-with-loot-beside-lookup","1200x800","Button \"Brannoch Vale, party, HP 58/62, Temp 5, AC 19, Initiative 18\"",1],
+    ["G1c/content-moved-with-bar","04-ended-with-loot-beside-lookup","1200x800","Button \"Cinder Wolf, enemies, HP 22/22, Temp 0, AC 13, Initiative 9\"",1],
+    ["G1c/content-moved-with-bar","04-ended-with-loot-beside-lookup","1200x800","Button \"Copy loot\"",1],
+    ["G1c/content-moved-with-bar","04-ended-with-loot-beside-lookup","1200x800","Button \"Iselle Marrowind, party, HP 18/38, Temp 0, AC 13, Initiative 16, Bloodied, Prone\"",1],
+    ["G1c/content-moved-with-bar","04-ended-with-loot-beside-lookup","1200x800","Button \"Kestrel Dunmoor, party, HP 11/41, Temp 0, AC 15, Initiative 14, Bloodied, Poisoned\"",1],
+    ["G1c/content-moved-with-bar","04-ended-with-loot-beside-lookup","1200x800","Button \"Oren Thistlewick, party, HP 45/45, Temp 0, AC 18, Initiative 12\"",1],
+    ["G1c/content-moved-with-bar","04-ended-with-loot-beside-lookup","1200x800","Button \"Sable Harrowgate, party, HP 32/38, Temp 3, AC 14, Initiative 10\"",1],
+    ["G1c/content-moved-with-bar","04-ended-with-loot-beside-lookup","1200x800","Button \"Vault Guard, enemies, HP 0/33, Temp 0, AC 12, Initiative 15, 0 HP, Concentrating, as Ember Cultist, Changed, Loot\"",1],
+    ["G3/far-action","12-history-continue-fight","1920x1080","Button \"Close the run of Sunken Vault, Undecided · Ended · Round 2 · Saved just now\"",1],
+    ["G3/far-action","13-history-beside-lookup","1920x1080","Button \"Close the run of Sunken Vault, Undecided · Ended · Round 2 · Saved just now\"",1],
+    ["G3/far-action","16-history-not-the-last-fight","1920x1080","Button \"Close the run of Sunken Vault, Fled · Ended · Round 2 · Saved just now\"",1],
+    ["G3/far-action","17-history-not-the-last-fight-beside-lookup","1920x1080","Button \"Close the run of Sunken Vault, Fled · Ended · Round 2 · Saved just now\"",1],
+    ["G6/footer-far-below-body","14-undo-steps-unread","1920x1080","Button \"Ember Cultist, enemies, HP 33/33, Temp 0, AC 12, Initiative 9\"",1],
+    ["G6/footer-far-below-body","15-undo-steps-unread-beside-lookup","1920x1080","Button \"Ember Cultist, enemies, HP 33/33, Temp 0, AC 12, Initiative 9\"",1]
+  ],
+  "run-edge-states": [
+    ["G1b/pressed-control-moved","01-long-effect-text","960x640","Button \"Add\"",1],
+    ["G3/far-action","09-saved-new-run-and-closed","1920x1080","Button \"Resume\"",2],
+    ["G3/far-action","09-saved-new-run-and-closed","1920x1080","Button \"Start fight\"",1],
+    ["G6/footer-far-below-body","07-close-while-not-saved","960x640","Button \"Keep running\"",1],
+    ["G6/footer-far-below-body","08-save-new-run-before-close","1200x800","Button \"Keep running\"",1],
+    ["G6/footer-far-below-body","08-save-new-run-before-close","960x640","Button \"Keep running\"",1],
+    ["N2/icon-off-text-centre","01-long-effect-text","1200x800","Button \"More actions for Wreathed in the cinders of the old shrine, so every light within thirty feet burns low\"",1],
+    ["N2/icon-off-text-centre","01-long-effect-text","960x640","Button \"More actions for Wreathed in the cinders of the old shrine, so every light within thirty feet burns low\"",1],
+    ["N2/icon-off-text-centre","02-start-concentration-undo","1200x800","Button \"More actions for Wreathed in the cinders of the old shrine, so every light within thirty feet burns low\"",1],
+    ["N2/icon-off-text-centre","02-start-concentration-undo","960x640","Button \"More actions for Wreathed in the cinders of the old shrine, so every light within thirty feet burns low\"",1],
+    ["N2/icon-off-text-centre","03-stop-concentration-undo","1200x800","Button \"More actions for Wreathed in the cinders of the old shrine, so every light within thirty feet burns low\"",1],
+    ["N2/icon-off-text-centre","03-stop-concentration-undo","960x640","Button \"More actions for Wreathed in the cinders of the old shrine, so every light within thirty feet burns low\"",1],
+    ["N2/icon-off-text-centre","04-full-effect-in-conditions","960x640","Button \"More actions for Wreathed in the cinders of the old shrine, so every light within thirty feet burns low\"",1]
+  ],
+  "run-effects": [
+    ["G1b/pressed-control-moved","03-effects-beside-lookup","960x640","Button \"Conditions for this participant\"",1],
+    ["G6/footer-far-below-body","02-effects-on-rows","960x640","Link \"Roll 1d6. 5–6 makes it ready\"",1]
+  ],
+  "run-folder-defect": [
+    ["G6/footer-far-below-body","01-run-folder-edited","1200x800","Button \"Save without moving\"",1],
+    ["G6/footer-far-below-body","01-run-folder-edited","1920x1080","Button \"Save without moving\"",1],
+    ["G6/footer-far-below-body","01-run-folder-edited","960x640","Button \"Save without moving\"",1]
+  ],
+  "run-large-roster": [
+    ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Next turn\"",4],
+    ["G1c/content-moved-with-bar","02-roster-of-20","960x640","Button \"Brannoch Vale, party, HP 58/62, Temp 5, AC 19, Initiative 18\"",1]
+  ],
+  "run-long-names": [
+    ["G6/footer-far-below-body","06-creature-changed-since","1200x800","Button \"Source and identifiers\"",1],
+    ["G6/footer-far-below-body","06-creature-changed-since","1920x1080","Button \"Source and identifiers\"",1]
+  ],
+  "run-loot": [
+    ["G1b/pressed-control-moved","07-rewards-for-loot","960x640","Button \"Save encounter\"",2],
+    ["G1b/pressed-control-moved","07-rewards-for-loot","960x640","Button \"Sunken Vault · Fight · Undecided · Ended · Round 2\"",1],
+    ["G6/footer-far-below-body","09-rewards-with-loot-added","1200x800","Label \"Undecided ·\\u{a0}Ended\\u{a0}·\\u{a0}Round\\u{a0}2\"",1],
+    ["G6/footer-far-below-body","09-rewards-with-loot-added","1920x1080","Label \"Undecided ·\\u{a0}Ended\\u{a0}·\\u{a0}Round\\u{a0}2\"",1],
+    ["G6/footer-far-below-body","09-rewards-with-loot-added","960x640","Label \"Undecided ·\\u{a0}Ended\\u{a0}·\\u{a0}Round\\u{a0}2\"",1],
+    ["N2/icon-off-text-centre","05-loot-in-the-editor","1200x800","Button \"More actions for the encounter loot line 3\"",1],
+    ["N2/icon-off-text-centre","05-loot-in-the-editor","1200x800","Button \"More actions for the encounter loot line 4\"",1],
+    ["N2/icon-off-text-centre","05-loot-in-the-editor","1920x1080","Button \"More actions for the encounter loot line 3\"",1],
+    ["N2/icon-off-text-centre","05-loot-in-the-editor","1920x1080","Button \"More actions for the encounter loot line 4\"",1]
+  ],
+  "run-overrides": [
+    ["G1b/pressed-control-moved","03-slot-changes-open","960x640","Button \"Options: starting HP, temporary HP, initiative group and changes\"",1],
+    ["N2/icon-off-text-centre","03-slot-changes-open","960x640","Button \"More actions for Blessed\"",1]
+  ],
+  "run-restart": [
+    ["G1b/pressed-control-moved","01-before-restart","960x640","Button \"Next turn\"",1],
+    ["G3/far-action","04-run-closed-in-one-step","1920x1080","Button \"Resume\"",1],
+    ["G3/far-action","04-run-closed-in-one-step","1920x1080","Button \"Start fight\"",1]
+  ],
+  "run-rolls": [
+    ["G1b/pressed-control-moved","02-attack-armed","960x640","Button \"Bite · +4 · 2d4+2 piercing, 1d6 fire. Reach 5 ft. Ctrl+1.\"",1],
+    ["G1b/pressed-control-moved","04-tile-menu","960x640","Button \"Bite · +4 · 2d4+2 piercing, 1d6 fire. Reach 5 ft. Ctrl+1.\"",1],
+    ["G1c/content-moved-with-bar","02-attack-armed","960x640","Button \"Bite · +4 · 2d4+2 piercing, 1d6 fire. Reach 5 ft. Ctrl+1.\"",1],
+    ["G1c/content-moved-with-bar","04-tile-menu","960x640","Button \"Bite · +4 · 2d4+2 piercing, 1d6 fire. Reach 5 ft. Ctrl+1.\"",1],
+    ["G1c/content-moved-with-bar","05-row-menu","960x640","Button \"Bite · +4 · 2d4+2 piercing, 1d6 fire. Reach 5 ft. Ctrl+1.\"",1],
+    ["N2/icon-off-text-centre","07-save-targets","1200x800","CheckBox \"Half damage: Cinder Wolf 1\"",1],
+    ["N2/icon-off-text-centre","07-save-targets","1200x800","CheckBox \"Half damage: Cinder Wolf 2\"",1],
+    ["N2/icon-off-text-centre","07-save-targets","1920x1080","CheckBox \"Half damage: Cinder Wolf 1\"",1],
+    ["N2/icon-off-text-centre","07-save-targets","1920x1080","CheckBox \"Half damage: Cinder Wolf 2\"",1],
+    ["N2/icon-off-text-centre","07-save-targets","960x640","CheckBox \"Half damage: Cinder Wolf 2\"",1]
+  ],
+  "run-roster-conflict": [
+    ["G1b/pressed-control-moved","05-after-full-round","960x640","Button \"Next turn\"",4]
+  ],
+  "run-sync-conflict": [
+    ["N5/icon-starts-wrapping-text","06-conflict-resolved","960x640","Text \"\\u{e1b0} Connected · Sync reads this sheet · HP from this run\"",1],
+    ["N5/icon-starts-wrapping-text","07-party-sync-on","960x640","Text \"\\u{e1b0} Connected · Sync reads this sheet · HP from this run\"",1],
+    ["N5/icon-starts-wrapping-text","08-undo-boundary-for-one-character","960x640","Text \"\\u{e1b0} Connected · Sync reads this sheet · HP from this run\"",1]
+  ],
+  "run-sync-states": [
+    ["G1b/pressed-control-moved","04-conflict-on-strip","960x640","Button \"Keep Splat values and retry\"",1]
+  ],
+  "session-carry-over": [
+    ["G6/footer-far-below-body","03-carried-over","960x640","Button \"More actions for Talk to Hobb the miller about the ropes\"",1],
+    ["G6/footer-far-below-body","04-carried-over-beside-lookup","960x640","Button \"More actions for Talk to Hobb the miller about the ropes\"",1],
+    ["G6/footer-far-below-body","05-carried-recap-in-read","1200x800","Label \"Open\"",1]
+  ],
+  "session-notes": [
+    ["G1b/pressed-control-moved","22-timeline-time-not-counted","960x640","Button \"Travel · Session 1\"",1],
+    ["G1b/pressed-control-moved","27-session-long-title","960x640","Button \"Save details\"",1],
+    ["G1b/pressed-control-moved","38-sessions-with-notes","960x640","Button \"Conditions for this participant\"",1],
+    ["G6/footer-far-below-body","10-session-event-added","960x640","Label \"\\u{e182}\\u{a0}Everyone\\u{a0}at\\u{a0}full\"",1],
+    ["G6/footer-far-below-body","11-plan-event-title","960x640","Link \"Timeline\"",1],
+    ["G6/footer-far-below-body","12-session-events","960x640","Button \"Add to notes: Major event\"",1],
+    ["G6/footer-far-below-body","16-timeline-day-added","1200x800","Button \"Major event · Session 1\"",1],
+    ["G6/footer-far-below-body","16-timeline-day-added","1920x1080","Button \"Major event · Session 1\"",1],
+    ["G6/footer-far-below-body","16-timeline-day-added","960x640","Button \"Major event · Session 1\"",1],
+    ["G6/footer-far-below-body","17-timeline-event","1200x800","Button \"Major event · Session 1\"",1],
+    ["G6/footer-far-below-body","17-timeline-event","1920x1080","Button \"Major event · Session 1\"",1],
+    ["G6/footer-far-below-body","17-timeline-event","960x640","Button \"Major event · Session 1\"",1],
+    ["G6/footer-far-below-body","18-event-link-update-offered","1200x800","Button \"Major event · Session 1\"",1],
+    ["G6/footer-far-below-body","18-event-link-update-offered","1920x1080","Button \"Major event · Session 1\"",1],
+    ["G6/footer-far-below-body","18-event-link-update-offered","960x640","Button \"Major event · Session 1\"",1],
+    ["G6/footer-far-below-body","19-event-links-updated","960x640","Button \"Major event · Session 1\"",1],
+    ["G6/footer-far-below-body","21-timeline-removed","960x640","Button \"Major event · Session 1\"",1],
+    ["G6/footer-far-below-body","35-session-events-older","960x640","Button \"Add to notes: Major event\"",1],
+    ["G6/footer-far-below-body","48-timeline-disk-conflict","1200x800","Button \"Bridge Ambush · Fight · Round 2 · Paused · Session 2\"",1],
+    ["G6/footer-far-below-body","48-timeline-disk-conflict","1920x1080","Button \"Bridge Ambush · Fight · Round 2 · Paused · Session 2\"",1],
+    ["G6/footer-far-below-body","48-timeline-disk-conflict","960x640","Button \"Bridge Ambush · Fight · Round 2 · Paused · Session 2\"",1],
+    ["N2/icon-off-text-centre","27-session-long-title","1200x800","Button \"Dismiss\"",1],
+    ["N2/icon-off-text-centre","27-session-long-title","1920x1080","Button \"Dismiss\"",1]
+  ],
+  "session-plan": [
+    ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Save encounter\"",1],
+    ["G3/far-action","38-saved-runs-history","1920x1080","Button \"Resume\"",3],
+    ["G6/footer-far-below-body","19-rewards-added","1200x800","Label \"5\\u{a0}party ·\\u{a0}2\\u{a0}×\\u{a0}Ember\\u{a0}Cultist ·\\u{a0}XP\\u{a0}400\\u{a0}·\\u{a0}Low\"",1],
+    ["G6/footer-far-below-body","19-rewards-added","1920x1080","Label \"5\\u{a0}party ·\\u{a0}2\\u{a0}×\\u{a0}Ember\\u{a0}Cultist ·\\u{a0}XP\\u{a0}400\\u{a0}·\\u{a0}Low\\u{a0}(up\\u{a0}to\\u{a0}2,800)\"",1],
+    ["G6/footer-far-below-body","23-setup-carries-hp","1200x800","Button \"Ember Cultist 2 · \\u{e5ba} Enemies · HP 33/33 · AC 12\"",1],
+    ["G6/footer-far-below-body","23-setup-carries-hp","1920x1080","Button \"Ember Cultist 2 · \\u{e5ba} Enemies · HP 33/33 · AC 12\"",1],
+    ["G6/footer-far-below-body","26-long-rest-restores","1200x800","Label \"5\\u{a0}party ·\\u{a0}2\\u{a0}×\\u{a0}Cinder\\u{a0}Wolf, … ·\\u{a0}XP\\u{a0}600\\u{a0}·\\u{a0}Low\"",1],
+    ["G6/footer-far-below-body","26-long-rest-restores","1920x1080","Label \"5\\u{a0}party ·\\u{a0}2\\u{a0}×\\u{a0}Cinder\\u{a0}Wolf, 1\\u{a0}×\\u{a0}Ember\\u{a0}Cultist ·\\u{a0}XP\\u{a0}600\\u{a0}·\\u{a0}Low\\u{a0}(up\\u{a0}to\\u{a0}2,800)\"",1],
+    ["G6/footer-far-below-body","26-long-rest-restores","960x640","Label \"5\\u{a0}party ·\\u{a0}2\\u{a0}×\\u{a0}Cinder\\u{a0}Wolf, 1\\u{a0}×\\u{a0}Ember\\u{a0}Cultist ·\\u{a0}XP\\u{a0}600\\u{a0}·\\u{a0}Low\\u{a0}(up\\u{a0}to\\u{a0}2,800)\"",1],
+    ["G6/footer-far-below-body","30-resumed-setup-after-long-rest","1200x800","Button \"Ember Cultist 2 · \\u{e5ba} Enemies · HP 33/33 · AC 12\"",1],
+    ["G6/footer-far-below-body","30-resumed-setup-after-long-rest","1920x1080","Button \"Ember Cultist 2 · \\u{e5ba} Enemies · HP 33/33 · AC 12\"",1],
+    ["G6/footer-far-below-body","30-resumed-setup-after-long-rest","960x640","Button \"Ember Cultist 2 · \\u{e5ba} Enemies · HP 33/33 · AC 12\"",1],
+    ["G6/footer-far-below-body","31-saved-hp-restored","1200x800","Button \"Ember Cultist 2 · \\u{e5ba} Enemies · HP 33/33 · AC 12\"",1],
+    ["G6/footer-far-below-body","31-saved-hp-restored","1920x1080","Button \"Ember Cultist 2 · \\u{e5ba} Enemies · HP 33/33 · AC 12\"",1],
+    ["G6/footer-far-below-body","31-saved-hp-restored","960x640","Button \"Ember Cultist 2 · \\u{e5ba} Enemies · HP 33/33 · AC 12\"",1],
+    ["G6/footer-far-below-body","32-timeline-long-rest-restores","1200x800","Button \"Long rest · Session 2 · \\u{e182} Everyone at full\"",1],
+    ["G6/footer-far-below-body","32-timeline-long-rest-restores","1920x1080","Button \"Long rest · Session 2 · \\u{e182} Everyone at full\"",1],
+    ["G6/footer-far-below-body","32-timeline-long-rest-restores","960x640","Button \"Long rest · Session 2 · \\u{e182} Everyone at full\"",1],
+    ["G6/footer-far-below-body","33-timeline-rest-ruling-off","1200x800","Button \"Long rest · Session 2 · \\u{e0cc} Not at full\"",1],
+    ["G6/footer-far-below-body","33-timeline-rest-ruling-off","1920x1080","Button \"Long rest · Session 2 · \\u{e0cc} Not at full\"",1],
+    ["G6/footer-far-below-body","33-timeline-rest-ruling-off","960x640","Button \"Long rest · Session 2 · \\u{e0cc} Not at full\"",1],
+    ["G6/footer-far-below-body","34-timeline-rest-ruling-on","1200x800","Button \"Long rest · Session 2 · \\u{e182} Everyone at full\"",1],
+    ["G6/footer-far-below-body","34-timeline-rest-ruling-on","1920x1080","Button \"Long rest · Session 2 · \\u{e182} Everyone at full\"",1],
+    ["G6/footer-far-below-body","34-timeline-rest-ruling-on","960x640","Button \"Long rest · Session 2 · \\u{e182} Everyone at full\"",1],
+    ["N2/icon-off-text-centre","09-several-targets","1200x800","CheckBox \"Half damage: Cinder Wolf 1\"",1],
+    ["N2/icon-off-text-centre","09-several-targets","1200x800","CheckBox \"Half damage: Cinder Wolf 2\"",1],
+    ["N2/icon-off-text-centre","09-several-targets","1920x1080","CheckBox \"Half damage: Cinder Wolf 1\"",1],
+    ["N2/icon-off-text-centre","09-several-targets","1920x1080","CheckBox \"Half damage: Cinder Wolf 2\"",1],
+    ["N2/icon-off-text-centre","09-several-targets","960x640","CheckBox \"Half damage: Cinder Wolf 1\"",1],
+    ["N2/icon-off-text-centre","09-several-targets","960x640","CheckBox \"Half damage: Cinder Wolf 2\"",1]
+  ],
+  "session-plan-groups": [
+    ["G1b/pressed-control-moved","02-plan-group-assembled","960x640","Button \"Add\"",1],
+    ["G1b/pressed-control-moved","10-plan-group-in-another-session","960x640","Button \"Add\"",1],
+    ["G6/footer-far-below-body","06-group-removed-from-plan","960x640","Label \"Enemies ·\\u{a0}2 members ·\\u{a0}XP 100 ·\\u{a0}2\\u{a0}×\\u{a0}Wolf\"",1],
+    ["G6/footer-far-below-body","10-plan-group-in-another-session","960x640","Label \"Rivals ·\\u{a0}3 members ·\\u{a0}XP 600 ·\\u{a0}\\u{e3b2}\\u{a0}Changed ·\\u{a0}1\\u{a0}×\\u{a0}Rival\\u{a0}Captain\\u{a0}(as\\u{a0}Ember\\u{a0}Cultist), 2\\u{a0}×\\u{a0}Cinder\\u{a0}Wolf\"",1],
+    ["G6/footer-far-below-body","15-plan-group-no-member-can-join","1920x1080","Label \"Goblin Warrior · line\\u{a0}14: AC would become −35. It must be 0 or more.\"",1],
+    ["N2/icon-off-text-centre","15-plan-group-no-member-can-join","960x640","Button \"More actions for Ash Pack\"",1],
+    ["N5/icon-starts-wrapping-text","08-arrivals-tonight-first","960x640","Text \"\\u{e3b2}\\u{a0}Changed\\n1\\u{a0}×\\u{a0}Rival\\u{a0}Captain (as\\u{a0}Ember\\u{a0}Cultist), 2\\u{a0}×\\u{a0}Cinder\\u{a0}Wolf\"",1]
+  ],
+  "session-plan-scenes": [
+    ["G1b/pressed-control-moved","08-scenes-folded","960x640","Button \"Long rest · Session 1 · \\u{e182} Everyone at full\"",2],
+    ["G6/footer-far-below-body","08-scenes-folded","960x640","Label \"5\\u{a0}party ·\\u{a0}2\\u{a0}×\\u{a0}Ember\\u{a0}Cultist ·\\u{a0}XP\\u{a0}400\\u{a0}·\\u{a0}Low\\u{a0}(up\\u{a0}to\\u{a0}2,800)\"",1]
+  ],
+  "session-recording": [
+    ["G1b/pressed-control-moved","04-recording-listed","960x640","Button \"Recordings, 1 recording\"",1],
+    ["G1b/pressed-control-moved","05-run-silent","960x640","Button \"Note\"",1],
+    ["G1b/pressed-control-moved","37-input-during-recording","960x640","Button \"Record again\"",1],
+    ["G6/footer-far-below-body","11-recording-saved-no-key","960x640","Button \"Process: 2026-01-01 19-00\"",1],
+    ["G6/footer-far-below-body","16-recording-ready","1200x800","Label \"Process sends the audio and the session and campaign names to api.openai.com for a transcript. Then the transcript, this session’s name, notes and events go to Codex (gpt-6.1-sol) twice: once to clean them, and once to check that work against the raw words.\"",1],
+    ["G6/footer-far-below-body","16-recording-ready","1920x1080","Label \"Process sends the audio and the session and campaign names to api.openai.com for a transcript. Then the transcript, this session’s name, notes and events go to Codex (gpt-6.1-sol) twice: once to clean them, and once to check that work against the raw words.\"",1],
+    ["G6/footer-far-below-body","16-recording-ready","960x640","Label \"Process sends the audio and the session and campaign names to api.openai.com for a transcript. Then the transcript, this session’s name, notes and events go to Codex (gpt-6.1-sol) twice: once to clean them, and once to check that work against the raw words.\"",1],
+    ["G6/footer-far-below-body","24-marker-added","1200x800","Label \"After Bridge Ambush\"",1],
+    ["G6/footer-far-below-body","24-marker-added","1920x1080","Label \"After Bridge Ambush\"",1],
+    ["G6/footer-far-below-body","24-marker-added","960x640","Label \"After Bridge Ambush\"",1],
+    ["G6/footer-far-below-body","25-marked-transcript","1200x800","Label \"We rest at the mill.\"",1],
+    ["G6/footer-far-below-body","25-marked-transcript","1920x1080","Label \"We rest at the mill.\"",1],
+    ["G6/footer-far-below-body","25-marked-transcript","960x640","Label \"We rest at the mill.\"",1],
+    ["G6/footer-far-below-body","40-recording-summary-narrow","1200x800","Label \"The party held the bridge against the cinder wolves.\"",1],
+    ["G6/footer-far-below-body","40-recording-summary-narrow","1920x1080","Label \"The party held the bridge against the cinder wolves.\"",1],
+    ["G6/footer-far-below-body","40-recording-summary-narrow","960x640","Label \"The party held the bridge against the cinder wolves.\"",1],
+    ["G6/footer-far-below-body","44-processing-with-no-run","1200x800","Button \"Process: 2026-01-01 19-00\"",1],
+    ["G6/footer-far-below-body","44-processing-with-no-run","1920x1080","Button \"Process: 2026-01-01 19-00\"",1],
+    ["G6/footer-far-below-body","44-processing-with-no-run","960x640","Button \"Process: 2026-01-01 19-00\"",1],
+    ["G6/footer-far-below-body","45-processing-with-setup-run","1200x800","Button \"Process: 2026-01-01 19-00\"",1],
+    ["G6/footer-far-below-body","45-processing-with-setup-run","1920x1080","Button \"Process: 2026-01-01 19-00\"",1],
+    ["G6/footer-far-below-body","46-processing-with-running-run","1200x800","Button \"Process: 2026-01-01 19-00\"",1],
+    ["G6/footer-far-below-body","46-processing-with-running-run","1920x1080","Button \"Process: 2026-01-01 19-00\"",1],
+    ["G6/footer-far-below-body","47-processing-with-ended-run","1200x800","Button \"Process: 2026-01-01 19-00\"",1],
+    ["G6/footer-far-below-body","47-processing-with-ended-run","1920x1080","Button \"Process: 2026-01-01 19-00\"",1],
+    ["N2/icon-off-text-centre","04-recording-listed","960x640","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","06-recording-silent","1200x800","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","06-recording-silent","1920x1080","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","06-recording-silent","960x640","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","07-recording-stalled","1200x800","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","07-recording-stalled","1920x1080","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","07-recording-stalled","960x640","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","11-recording-saved-no-key","960x640","Button \"Dismiss\"",1],
+    ["N2/icon-off-text-centre","11-recording-saved-no-key","960x640","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","16-recording-ready","1200x800","Button \"Dismiss\"",1],
+    ["N2/icon-off-text-centre","16-recording-ready","1200x800","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","16-recording-ready","1920x1080","Button \"Dismiss\"",1],
+    ["N2/icon-off-text-centre","16-recording-ready","1920x1080","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","16-recording-ready","960x640","Button \"Dismiss\"",1],
+    ["N2/icon-off-text-centre","16-recording-ready","960x640","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","17-processing-speech","960x640","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","19-processing-cancelled","1200x800","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","19-processing-cancelled","1920x1080","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","19-processing-cancelled","960x640","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","20-processing-second-pass","960x640","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","21-processing-failed-elsewhere","1200x800","Button \"Dismiss this error\"",1],
+    ["N2/icon-off-text-centre","21-processing-failed-elsewhere","1920x1080","Button \"Dismiss this error\"",1],
+    ["N2/icon-off-text-centre","21-processing-failed-elsewhere","960x640","Button \"Dismiss this error\"",1],
+    ["N2/icon-off-text-centre","22-processing-failed","1200x800","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","22-processing-failed","1920x1080","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","22-processing-failed","960x640","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","23-recording-processed","1200x800","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","23-recording-processed","1920x1080","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","23-recording-processed","960x640","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","24-marker-added","1200x800","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","24-marker-added","1920x1080","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","24-marker-added","960x640","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","30-recording-warned","1200x800","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","30-recording-warned","1920x1080","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","30-recording-warned","960x640","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","31-process-again-confirm","960x640","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","32-recording-processing-again","1200x800","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","32-recording-processing-again","1920x1080","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","32-recording-processing-again","960x640","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","33-recording-row-menu","1200x800","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","33-recording-row-menu","1920x1080","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","33-recording-row-menu","960x640","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","35-recording-stopped-elsewhere","960x640","Button \"Dismiss this error\"",1],
+    ["N2/icon-off-text-centre","36-recording-stopped","1200x800","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","36-recording-stopped","1920x1080","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","36-recording-stopped","960x640","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","43-processing-while-recording-consent","1200x800","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","43-processing-while-recording-consent","1920x1080","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","43-processing-while-recording-consent","960x640","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","44-processing-with-no-run","1200x800","Button \"Dismiss\"",1],
+    ["N2/icon-off-text-centre","44-processing-with-no-run","1200x800","Button \"More actions for 2026-01-01 19:00 (2)\"",1],
+    ["N2/icon-off-text-centre","44-processing-with-no-run","1200x800","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","44-processing-with-no-run","1920x1080","Button \"Dismiss\"",1],
+    ["N2/icon-off-text-centre","44-processing-with-no-run","1920x1080","Button \"More actions for 2026-01-01 19:00 (2)\"",1],
+    ["N2/icon-off-text-centre","44-processing-with-no-run","1920x1080","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","44-processing-with-no-run","960x640","Button \"Dismiss\"",1],
+    ["N2/icon-off-text-centre","44-processing-with-no-run","960x640","Button \"More actions for 2026-01-01 19:00 (2)\"",1],
+    ["N2/icon-off-text-centre","44-processing-with-no-run","960x640","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","45-processing-with-setup-run","1200x800","Button \"Dismiss\"",1],
+    ["N2/icon-off-text-centre","45-processing-with-setup-run","1200x800","Button \"More actions for 2026-01-01 19:00 (2)\"",1],
+    ["N2/icon-off-text-centre","45-processing-with-setup-run","1200x800","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","45-processing-with-setup-run","1920x1080","Button \"Dismiss\"",1],
+    ["N2/icon-off-text-centre","45-processing-with-setup-run","1920x1080","Button \"More actions for 2026-01-01 19:00 (2)\"",1],
+    ["N2/icon-off-text-centre","45-processing-with-setup-run","1920x1080","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","45-processing-with-setup-run","960x640","Button \"Dismiss\"",1],
+    ["N2/icon-off-text-centre","45-processing-with-setup-run","960x640","Button \"More actions for 2026-01-01 19:00 (2)\"",1],
+    ["N2/icon-off-text-centre","45-processing-with-setup-run","960x640","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","46-processing-with-running-run","1200x800","Button \"Dismiss\"",1],
+    ["N2/icon-off-text-centre","46-processing-with-running-run","1200x800","Button \"More actions for 2026-01-01 19:00 (2)\"",1],
+    ["N2/icon-off-text-centre","46-processing-with-running-run","1200x800","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","46-processing-with-running-run","1920x1080","Button \"Dismiss\"",1],
+    ["N2/icon-off-text-centre","46-processing-with-running-run","1920x1080","Button \"More actions for 2026-01-01 19:00 (2)\"",1],
+    ["N2/icon-off-text-centre","46-processing-with-running-run","1920x1080","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","46-processing-with-running-run","960x640","Button \"Dismiss\"",1],
+    ["N2/icon-off-text-centre","46-processing-with-running-run","960x640","Button \"More actions for 2026-01-01 19:00 (2)\"",1],
+    ["N2/icon-off-text-centre","46-processing-with-running-run","960x640","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","47-processing-with-ended-run","1200x800","Button \"Dismiss\"",1],
+    ["N2/icon-off-text-centre","47-processing-with-ended-run","1200x800","Button \"More actions for 2026-01-01 19:00 (2)\"",1],
+    ["N2/icon-off-text-centre","47-processing-with-ended-run","1200x800","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","47-processing-with-ended-run","1920x1080","Button \"Dismiss\"",1],
+    ["N2/icon-off-text-centre","47-processing-with-ended-run","1920x1080","Button \"More actions for 2026-01-01 19:00 (2)\"",1],
+    ["N2/icon-off-text-centre","47-processing-with-ended-run","1920x1080","Button \"More actions for 2026-01-01 19:00\"",1],
+    ["N2/icon-off-text-centre","47-processing-with-ended-run","960x640","Button \"Dismiss\"",1],
+    ["N2/icon-off-text-centre","47-processing-with-ended-run","960x640","Button \"More actions for 2026-01-01 19:00 (2)\"",1],
+    ["N2/icon-off-text-centre","47-processing-with-ended-run","960x640","Button \"More actions for 2026-01-01 19:00\"",1]
+  ],
+  "settings": [
+    ["G1b/pressed-control-moved","09-edit-campaign","960x640","Button \"Edit details\"",1],
+    ["G1b/pressed-control-moved","11-campaign-details-discarded","960x640","Button \"Edit details\"",1],
+    ["N2/icon-off-text-centre","15-sync-stopped-recovery","1200x800","Button \"Dismiss this message\"",1],
+    ["N2/icon-off-text-centre","15-sync-stopped-recovery","1920x1080","Button \"Dismiss this message\"",1],
+    ["N2/icon-off-text-centre","15-sync-stopped-recovery","960x640","Button \"Dismiss this message\"",1]
+  ],
+  "signed-in": [
+    ["G1b/pressed-control-moved","15-link-tab-during-run","960x640","Button \"Add\"",1]
+  ],
+  "trackers": [
+    ["G6/footer-far-below-body","03-trackers-three-notices","1920x1080","Button \"MORE TRACKERS 2\"",1],
+    ["G6/footer-far-below-body","07-tracker-history-in-the-reader","1200x800","Label \"5\\u{a0}party ·\\u{a0}2\\u{a0}×\\u{a0}Ember\\u{a0}Cultist ·\\u{a0}XP\\u{a0}400\\u{a0}·\\u{a0}Low\\u{a0}(up\\u{a0}to\\u{a0}2,800)\"",1],
+    ["G6/footer-far-below-body","07-tracker-history-in-the-reader","1920x1080","Label \"5\\u{a0}party ·\\u{a0}2\\u{a0}×\\u{a0}Ember\\u{a0}Cultist ·\\u{a0}XP\\u{a0}400\\u{a0}·\\u{a0}Low\\u{a0}(up\\u{a0}to\\u{a0}2,800)\"",1],
+    ["G6/footer-far-below-body","07-tracker-history-in-the-reader","960x640","Label \"5\\u{a0}party ·\\u{a0}2\\u{a0}×\\u{a0}Ember\\u{a0}Cultist ·\\u{a0}XP\\u{a0}400\\u{a0}·\\u{a0}Low\\u{a0}(up\\u{a0}to\\u{a0}2,800)\"",1],
+    ["G6/footer-far-below-body","08-tracker-history-removed","1200x800","Label \"5\\u{a0}party ·\\u{a0}2\\u{a0}×\\u{a0}Ember\\u{a0}Cultist ·\\u{a0}XP\\u{a0}400\\u{a0}·\\u{a0}Low\\u{a0}(up\\u{a0}to\\u{a0}2,800)\"",1],
+    ["G6/footer-far-below-body","08-tracker-history-removed","960x640","Label \"5\\u{a0}party ·\\u{a0}2\\u{a0}×\\u{a0}Ember\\u{a0}Cultist ·\\u{a0}XP\\u{a0}400\\u{a0}·\\u{a0}Low\\u{a0}(up\\u{a0}to\\u{a0}2,800)\"",1]
+  ],
+  "travel-checks": [
+    ["G1b/pressed-control-moved","06-travel-checks-timeline","960x640","Button \"Travel · 1 day · Session 1\"",1],
+    ["G1b/pressed-control-moved","10-travel-checks-road-fight","960x640","Button \"Shrine of Cinders · Fight · Round 1 · Session 1 · Day 2 of Travel\"",1]
+  ],
+  "world": [
+    ["G1b/pressed-control-moved","08-world-generated-npc-saved","960x640","Button \"Reroll\"",1],
+    ["G1b/pressed-control-moved","10-npc-add-to-run-form","960x640","Button \"Add to fight\"",1]
+  ],
+  "world-facts": [
+    ["G6/footer-far-below-body","07-group-joined-with-log","960x640","Link \"The Arena (opens The Arena)\"",1],
+    ["G6/footer-far-below-body","09-log-line-added","960x640","Link \"Session 1 (opens Session 1)\"",1],
+    ["G6/footer-far-below-body","11-group-joined-with-log-in-prep","960x640","Link \"The Arena (opens The Arena)\"",1]
+  ],
+  "world-note-duplicated": [
+    ["G1b/pressed-control-moved","01-copied-world-npc-encounter-keeps-guard","960x640","Button \"Save encounter\"",1],
+    ["G6/footer-far-below-body","02-duplicate-npc-repaired-from-encounter","1920x1080","Button \"New group for this encounter\"",1]
+  ],
+  "world-part-of-safety": [
+    ["G1a/message-moved-content","02-read-picker-unread-disk-kept","1200x800","Button \"Change Part of\"",1],
+    ["G1a/message-moved-content","02-read-picker-unread-disk-kept","1200x800","Button \"Change Status\"",1],
+    ["G1a/message-moved-content","02-read-picker-unread-disk-kept","1200x800","Button \"Source and identifiers\"",1],
+    ["G1a/message-moved-content","02-read-picker-unread-disk-kept","1200x800","Label \"Keeps the gate.\"",1],
+    ["G1a/message-moved-content","02-read-picker-unread-disk-kept","1200x800","Label \"Part of\"",1],
+    ["G1a/message-moved-content","02-read-picker-unread-disk-kept","1200x800","Label \"Stat block\"",1],
+    ["G1a/message-moved-content","02-read-picker-unread-disk-kept","1200x800","Label \"Status\"",1],
+    ["G1a/message-moved-content","02-read-picker-unread-disk-kept","1200x800","Label \"alive\"",1],
+    ["G1a/message-moved-content","02-read-picker-unread-disk-kept","1920x1080","Button \"Change Part of\"",1],
+    ["G1a/message-moved-content","02-read-picker-unread-disk-kept","1920x1080","Button \"Change Status\"",1],
+    ["G1a/message-moved-content","02-read-picker-unread-disk-kept","1920x1080","Button \"Source and identifiers\"",1],
+    ["G1a/message-moved-content","02-read-picker-unread-disk-kept","1920x1080","Label \"Keeps the gate.\"",1],
+    ["G1a/message-moved-content","02-read-picker-unread-disk-kept","1920x1080","Label \"Part of\"",1],
+    ["G1a/message-moved-content","02-read-picker-unread-disk-kept","1920x1080","Label \"Stat block\"",1],
+    ["G1a/message-moved-content","02-read-picker-unread-disk-kept","1920x1080","Label \"Status\"",1],
+    ["G1a/message-moved-content","02-read-picker-unread-disk-kept","1920x1080","Label \"alive\"",1],
+    ["G1a/message-moved-content","02-read-picker-unread-disk-kept","960x640","Button \"Change Part of\"",1],
+    ["G1a/message-moved-content","02-read-picker-unread-disk-kept","960x640","Button \"Change Status\"",1],
+    ["G1a/message-moved-content","02-read-picker-unread-disk-kept","960x640","Button \"Source and identifiers\"",1],
+    ["G1a/message-moved-content","02-read-picker-unread-disk-kept","960x640","Label \"Keeps the gate.\"",1],
+    ["G1a/message-moved-content","02-read-picker-unread-disk-kept","960x640","Label \"Part of\"",1],
+    ["G1a/message-moved-content","02-read-picker-unread-disk-kept","960x640","Label \"Stat block\"",1],
+    ["G1a/message-moved-content","02-read-picker-unread-disk-kept","960x640","Label \"Status\"",1],
+    ["G1a/message-moved-content","02-read-picker-unread-disk-kept","960x640","Label \"alive\"",1]
+  ],
+  "world-places": [
+    ["G1c/content-moved-with-bar","07-place-change-keeps-disk-edit","960x640","Link \"Edit in Obsidian\"",1],
+    ["G1c/content-moved-with-bar","07-place-change-keeps-disk-edit","960x640","Link \"Show file\"",1]
+  ]
+}

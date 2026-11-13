@@ -1527,6 +1527,8 @@ impl Sessions {
         let mut record_again = None;
         let mut open = None;
         let mut stop = false;
+        // A pane above the banner ends its body at a whole row, as at a footer (N12).
+        design::pane::note_bottom_banner(ctx);
         egui::TopBottomPanel::bottom("session_banner")
             .frame(
                 egui::Frame::new()
@@ -2941,6 +2943,10 @@ impl Sessions {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn record_control(&mut self, ui: &mut egui::Ui, settings: &ProcessingSettings) {
         // Stop is here whichever session is open. It can be urgent, if a player asks.
         if self.live.as_ref().is_some_and(|live| {
@@ -3001,6 +3007,10 @@ impl Sessions {
     }
 
     /// The live state, or the step before it. Always in the same place.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn record_line(&mut self, ui: &mut egui::Ui, settings: &ProcessingSettings) {
         if self.tab == Tab::Recordings
             && self.reading.is_none()
@@ -3233,6 +3243,10 @@ impl Sessions {
 
     /// What the file did to a draft: changed on disk, gone or moved, or not saved. It arrives on
     /// its own, so it is drawn in the bottom banner, never above the editor.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn draft_warning(ui: &mut egui::Ui, draft: &mut Draft) {
         // A new file could not be made: why, above the choices that are still open.
         if draft.state == DraftState::Missing
@@ -4256,6 +4270,10 @@ impl Sessions {
 
     /// What play changed in the world in this session, from each entry's Log. The entry holds
     /// the line, so this list needs no store of its own.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn world_changes(&mut self, ui: &mut egui::Ui) {
         let Some(index) = ui.ctx().data(|data| {
             data.get_temp::<std::sync::Arc<crate::lookup::ContentIndex>>(egui::Id::new(
@@ -4516,6 +4534,10 @@ impl Sessions {
         self.last_time_line(ui, selected, plan, book);
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn recording_row(
         &mut self,
         ui: &mut egui::Ui,
@@ -5602,6 +5624,10 @@ impl Sessions {
             });
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn delete_dialog(&mut self, ctx: &egui::Context) {
         let focus_id = egui::Id::new("delete_recording_default_focused");
         let Some(path) = self.confirm_delete.clone() else {
@@ -6000,6 +6026,10 @@ impl Sessions {
     }
 
     /// The session page below its title and state line, above its message footer.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn session_body(
         &mut self,
         ui: &mut egui::Ui,
@@ -6629,14 +6659,10 @@ impl Sessions {
         }
     }
 
-    /// `details_open`: the campaign details form, with its own primary save, is in view above.
-    pub fn folder_view(
-        &mut self,
-        ui: &mut egui::Ui,
-        book: &Book,
-        locked: Option<&str>,
-        details_open: bool,
-    ) {
+    /// The Session folder form's fields, in the pane's body. Its title line and save row are
+    /// `folder_save_row`, drawn above the pane so Save never scrolls away (round 28, lead
+    /// ruling; a named lead exception split them from one function).
+    pub fn folder_view(&mut self, ui: &mut egui::Ui, locked: Option<&str>) {
         // Earlier sections can have a wider minimum rect. Give this form its own column.
         let rect = egui::Rect::from_min_size(
             ui.cursor().min,
@@ -6646,27 +6672,16 @@ impl Sessions {
             ),
         );
         ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
-            self.folder_form(ui, book, locked, details_open);
+            self.folder_fields(ui, locked);
         });
     }
 
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
     )]
-    fn folder_form(
-        &mut self,
-        ui: &mut egui::Ui,
-        book: &Book,
-        locked: Option<&str>,
-        details_open: bool,
-    ) {
-        let Some(campaign) = self.campaign.clone() else {
-            return;
-        };
+    fn folder_fields(&mut self, ui: &mut egui::Ui, locked: Option<&str>) {
         ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
-        ui.add_space(design::XS);
-        design::group_heading(ui, "Session folder", 0);
         let response = ui
             .add_enabled_ui(locked.is_none(), |ui| {
                 let response = ui.add(
@@ -6698,6 +6713,28 @@ impl Sessions {
                 "Notes, Timeline.md, Templates and Recordings are all here.",
             );
         }
+    }
+
+    /// The Session folder form's title line and save row: its state word, Discard, the reason
+    /// and Save, at the form's right edge. `details_open`: the campaign details form, with its
+    /// own primary save, is in view.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
+    pub fn folder_save_row(
+        &mut self,
+        ui: &mut egui::Ui,
+        book: &Book,
+        locked: Option<&str>,
+        details_open: bool,
+    ) {
+        let Some(campaign) = self.campaign.clone() else {
+            return;
+        };
+        ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
+        ui.add_space(design::XS);
+        design::group_heading(ui, "Session folder", 0);
         let changed = super::resolve(&campaign, &self.folder_text).ok() != self.folder.clone();
         // `folder_messages` scanned the folder this frame, before the pane's body.
         let files = self

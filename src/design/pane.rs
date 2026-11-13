@@ -342,16 +342,26 @@ fn widget_count(ui: &Ui) -> usize {
 }
 
 /// A body control that gained keyboard focus in this pass comes whole into the pane's view,
-/// above the footer: Tab never reaches a control hidden under it. Only a control that the body
-/// added (`widgets`, on the pane's layer) is scrolled to; a change of focus with a pointer press,
-/// hold or release is not, as `scroll_part` does for the footer.
-fn reveal_focus(ui: &mut Ui, id: Id, widgets: std::ops::Range<usize>) {
+/// above the footer: Tab never reaches a control hidden under it. So does the focused control
+/// when the visible room changes under it (the footer came or grew, the session banner came, the
+/// whole-row cut came with it; review of PR 306): a key press then never reaches a hidden control. Only
+/// a control that the body added (`widgets`, on the pane's layer) is scrolled to; a change of
+/// focus with a pointer press, hold or release is not, as `scroll_part` does for the footer.
+fn reveal_focus(ui: &mut Ui, id: Id, widgets: std::ops::Range<usize>, room: Rect, visible: Rect) {
     let focused = ui.ctx().memory(|memory| memory.focused());
     let seen = id.with("seen_focus");
-    if ui.ctx().data(|data| data.get_temp::<Option<Id>>(seen)) == Some(focused) {
+    // The room, not the clip: a wheel scroll moves the whole-row cut, and must not pull the
+    // focused control back into view.
+    let before = ui
+        .ctx()
+        .data(|data| data.get_temp::<(Option<Id>, Rect)>(seen));
+    if before == Some((focused, room)) {
         return;
     }
-    ui.ctx().data_mut(|data| data.insert_temp(seen, focused));
+    ui.ctx()
+        .data_mut(|data| data.insert_temp(seen, (focused, room)));
+    // The same control, a new room: scroll only when it is not whole in view.
+    let moved_room = before.is_some_and(|(was, _)| was == focused);
     let pointer = ui.input(|input| {
         let pointer = &input.pointer;
         pointer.any_down() || pointer.any_pressed() || pointer.any_released()
@@ -366,7 +376,9 @@ fn reveal_focus(ui: &mut Ui, id: Id, widgets: std::ops::Range<usize>) {
                 .flatten()
         })
     });
-    if let Some(rect) = rect {
+    if let Some(rect) = rect
+        && !(moved_room && visible.contains_rect(rect))
+    {
         ui.scroll_to_rect(rect, None);
     }
 }
@@ -588,14 +600,47 @@ pub fn footer_rect(ctx: &egui::Context, local: Id) -> Option<Rect> {
         .map(|response| response.rect)
 }
 
-/// The body's clip: what is left of `ui`'s clip above the body's room. The one place that
-/// decides where the body is cut. Seam for round 28's N12 (package X, ruling R4: a footer never
-/// cuts through a registered row): X narrows this clip to the last whole row the pane's column
-/// registers, and the pane's hairline then marks that cut; no caller changes.
-fn body_clip(ui: &Ui, body_room: Rect) -> Rect {
+/// The body's clip: what is left of `ui`'s clip above the body's room, and above `row_cut`, the
+/// top of the registered row that the footer or the session banner would cut (N12, ruling R4).
+/// The one place that decides where the body is cut. egui clips paint and presses alike, so a
+/// row under the cut neither shows nor takes a press.
+fn body_clip(ui: &Ui, body_room: Rect, row_cut: Option<f32>) -> Rect {
     let mut clip = ui.clip_rect();
     clip.max.y = clip.max.y.min(body_room.bottom());
+    if let Some(cut) = row_cut {
+        clip.max.y = clip.max.y.min(cut);
+    }
     clip
+}
+
+/// The top of the lowest registered row that the viewport's bottom edge cuts (its top above the
+/// edge, its bottom below), unless that row starts at the viewport's top (one row taller than the
+/// room keeps the plain cut). Prose and notes are not rows: they keep a line cut.
+fn whole_row_cut(rows: &[Rect], viewport: Rect) -> Option<f32> {
+    let edge = viewport.bottom();
+    rows.iter()
+        .filter(|row| {
+            row.top() < edge - 0.5 && row.bottom() > edge + 0.5 && row.top() > viewport.top() + 0.5
+        })
+        .map(|row| row.top())
+        .reduce(f32::min)
+}
+
+fn banner_id() -> Id {
+    Id::new("splat_bottom_banner")
+}
+
+/// A banner at the window's bottom edge shows in this pass (the session banner): a pane above it
+/// cuts its body at whole rows, as a footer does. Call it where the banner is drawn, before the
+/// pages.
+pub fn note_bottom_banner(ctx: &egui::Context) {
+    let pass = ctx.cumulative_pass_nr();
+    ctx.data_mut(|data| data.insert_temp(banner_id(), pass));
+}
+
+fn banner_below(ctx: &egui::Context) -> bool {
+    let pass = ctx.cumulative_pass_nr();
+    ctx.data(|data| data.get_temp::<u64>(banner_id())) == Some(pass)
 }
 
 impl Footer<'_> {
@@ -666,7 +711,16 @@ impl Footer<'_> {
                 .max_rect(body_room)
                 .layout(*ui.layout()),
         );
-        body_ui.set_clip_rect(body_clip(ui, body_room));
+        // Last pass's whole-row cut, while the room is the same; a new cut draws the pass again.
+        let cut_key = id.with("row_cut");
+        let row_cut = ui
+            .ctx()
+            .data(|data| data.get_temp::<(Rect, f32)>(cut_key))
+            .filter(|(kept, _)| *kept == body_room)
+            .map(|(_, cut)| cut);
+        let visible = body_clip(ui, body_room, row_cut);
+        body_ui.set_clip_rect(visible);
+        let rows_before = super::components::rows_this_pass(ui.ctx()).len();
         let (inner, scroll) = match body {
             Body::Content => {
                 // The viewport is the real room, however small: egui's own 64 px minimum would
@@ -698,7 +752,7 @@ impl Footer<'_> {
                     let inner = add(ui);
                     let last = widget_count(ui);
                     open(ui, None);
-                    reveal_focus(ui, id, first..last);
+                    reveal_focus(ui, id, first..last, body_room, visible);
                     if options.holds {
                         ui.add_space(held.room);
                     }
@@ -733,6 +787,33 @@ impl Footer<'_> {
             }
         };
         drop(body_ui);
+        // N12: an edge (the footer, the session banner) never cuts through a registered row.
+        let edge = shown || banner_below(ui.ctx());
+        let new_cut = match scroll {
+            Some(scroll) if edge && scroll.cut() => {
+                let rows = super::components::rows_this_pass(ui.ctx());
+                whole_row_cut(rows.get(rows_before..).unwrap_or_default(), scroll.viewport)
+            }
+            _ => None,
+        };
+        if new_cut != row_cut {
+            ui.ctx().data_mut(|data| match new_cut {
+                Some(cut) => data.insert_temp(cut_key, (body_room, cut)),
+                None => data.remove::<(Rect, f32)>(cut_key),
+            });
+            ui.ctx().request_discard("the body's whole-row cut moved");
+        }
+        if let Some(cut) = new_cut {
+            // The hairline marks where the rows stop.
+            ui.painter().hline(
+                room.left()..=room.left() + width,
+                cut - super::tokens::HAIRLINE_WIDTH / 2.0,
+                egui::Stroke::new(
+                    super::tokens::HAIRLINE_WIDTH,
+                    super::tokens::colors().hairline,
+                ),
+            );
+        }
 
         let placement = match scroll {
             Some(scroll) if scroll.fits() => Placement::Follows,
@@ -757,7 +838,8 @@ impl Footer<'_> {
                 id.with("blocks_body"),
                 Sense::CLICK,
             );
-            self.draw_messages(ui, rect, cut, most, stored);
+            // A whole-row cut has its own hairline; the footer draws one only for a line cut.
+            self.draw_messages(ui, rect, cut && new_cut.is_none(), most, stored);
             if height > 0.0 {
                 footer = Some(rect);
                 #[cfg(test)]
@@ -851,6 +933,204 @@ mod hold_tests {
             } else {
                 assert!(after - before > 20.0, "not held: {before} then {after}");
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod row_cut_tests {
+    use super::*;
+    use crate::design::{
+        components::{ROW_RECTS, two_line_row},
+        outcome::{Messages, NoPress, Outcome, PaneFrame},
+    };
+
+    /// N12 (ruling R4): a footer never cuts through a registered row. At every height, each
+    /// registered row is whole above the body's clip or wholly under it; the hairline marks the
+    /// cut; and with no footer, the rows keep the plain cut of the scroll column. Rung 1 for a
+    /// caller (the clip is the pane's; no caller sets one), this test for the part.
+    #[test]
+    fn a_footer_never_cuts_through_a_registered_row() {
+        let mut hidden_by_the_cut = 0;
+        for message in [true, false] {
+            for height in (300..=360).step_by(7) {
+                let mut harness = egui_kittest::Harness::builder()
+                    .with_size(vec2(600.0, height as f32))
+                    .build_ui(move |ui| {
+                        let frame = PaneFrame::new(ui);
+                        let mut messages =
+                            Messages::<NoPress>::new(&frame, "row_cut_test", ui.available_width());
+                        if message {
+                            messages.outcome(Outcome::Refused(crate::sentence!(
+                                "Save the draft first."
+                            )));
+                        }
+                        let _ = messages.pane(ui, Body::Content, |ui| {
+                            for at in 0..30 {
+                                let _ = two_line_row(
+                                    ui,
+                                    44.0,
+                                    false,
+                                    &format!("Row {at}"),
+                                    "Its second line",
+                                );
+                            }
+                        });
+                    });
+                crate::design::theme::install(&harness.ctx);
+                harness.run_steps(4);
+                let output = harness.output();
+                let rows = harness
+                    .ctx
+                    .data(|data| data.get_temp::<(u64, Vec<Rect>)>(Id::new(ROW_RECTS)))
+                    .map(|(_, rows)| rows)
+                    .unwrap_or_default();
+                assert!(rows.len() == 30, "{message} {height}: rows {}", rows.len());
+                let clip = output
+                    .shapes
+                    .iter()
+                    .find(|clipped| {
+                        matches!(&clipped.shape, egui::Shape::Text(text) if text.galley.job.text == "Row 0")
+                    })
+                    .map(|clipped| clipped.clip_rect.bottom())
+                    .expect("Row 0 is painted");
+                let record = pane_records(&harness.ctx)
+                    .into_iter()
+                    .next()
+                    .expect("the pane keeps its record");
+                let viewport = record.viewport().expect("a Content body");
+                // With no footer the column keeps its plain cut (a row may show in part).
+                for row in rows.iter().filter(|_| message) {
+                    assert!(
+                        row.bottom() <= clip + 0.5 || row.top() >= clip - 0.5,
+                        "n12-cut: message {message}, height {height}: row {row:?} cut at {clip}"
+                    );
+                }
+                if message {
+                    hidden_by_the_cut += rows
+                        .iter()
+                        .filter(|row| row.top() >= clip - 0.5 && row.top() < viewport.bottom())
+                        .count();
+                    let hairline = output.shapes.iter().any(|clipped| {
+                        matches!(&clipped.shape, egui::Shape::LineSegment { points, .. }
+                            if (points[0].y - clip).abs() <= 1.0 && points[0].y == points[1].y)
+                    });
+                    assert!(
+                        hairline || clip >= viewport.bottom() - 0.5,
+                        "n12-hairline: height {height}, cut {clip}"
+                    );
+                } else {
+                    assert!(
+                        (clip - viewport.bottom()).abs() <= 0.5,
+                        "n12-plain: with no footer the column keeps its own cut: {clip} {viewport:?}"
+                    );
+                }
+            }
+        }
+        assert!(hidden_by_the_cut > 0, "n12-reached: some height cut a row");
+    }
+
+    /// Review of PR 306: with keyboard focus on a registered row near the bottom, a footer (or
+    /// the session banner) that comes without a change of focus brings that row whole into view
+    /// before a key reaches it, and Enter fires exactly its one action. Both edges.
+    #[test]
+    fn a_new_edge_brings_the_focused_row_whole_into_view() {
+        #[derive(Default)]
+        struct State {
+            message: bool,
+            banner: bool,
+            focus: Option<usize>,
+            pressed: Vec<usize>,
+            rows: Vec<Rect>,
+            clip: f32,
+        }
+        for banner in [false, true] {
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(vec2(600.0, 420.0))
+                .build_state(
+                    |ctx, state: &mut State| {
+                        if state.banner {
+                            note_bottom_banner(ctx);
+                            egui::TopBottomPanel::bottom("row_cut_banner").show(ctx, |ui| {
+                                for line in 0..3 {
+                                    ui.label(format!("Banner line {line}"));
+                                }
+                            });
+                        }
+                        egui::CentralPanel::default().show(ctx, |ui| {
+                            let frame = PaneFrame::new(ui);
+                            let mut messages = Messages::<NoPress>::new(
+                                &frame,
+                                "row_focus_test",
+                                ui.available_width(),
+                            );
+                            if state.message {
+                                messages.outcome(Outcome::Refused(crate::sentence!(
+                                    "Save the draft first. The other changes wait until it is saved."
+                                )));
+                            }
+                            let focus = state.focus.take();
+                            let (rows, presses, clip) = messages
+                                .pane(ui, Body::Content, |ui| {
+                                let mut rows = Vec::new();
+                                let mut presses = Vec::new();
+                                for at in 0..30 {
+                                    let row = two_line_row(
+                                        ui,
+                                        44.0,
+                                        false,
+                                        &format!("Row {at}"),
+                                        "Its second line",
+                                    );
+                                    if focus == Some(at) {
+                                        row.request_focus();
+                                    }
+                                    if row.clicked() {
+                                        presses.push(at);
+                                    }
+                                    rows.push(row.rect);
+                                }
+                                (rows, presses, ui.clip_rect().bottom())
+                            })
+                                .body;
+                            state.rows = rows;
+                            state.pressed.extend(presses);
+                            state.clip = clip;
+                        });
+                    },
+                    State::default(),
+                );
+            crate::design::theme::install(&harness.ctx);
+            harness.run_steps(3);
+            // The last row whole in view with no edge: focus it.
+            let clip = harness.state().clip;
+            let target = harness
+                .state()
+                .rows
+                .iter()
+                .rposition(|row| row.bottom() <= clip)
+                .expect("a row is whole in view");
+            harness.state_mut().focus = Some(target);
+            harness.run_steps(2);
+            // The edge comes; focus does not change.
+            if banner {
+                harness.state_mut().banner = true;
+            } else {
+                harness.state_mut().message = true;
+            }
+            harness.run_steps(4);
+            let (row, clip) = (harness.state().rows[target], harness.state().clip);
+            assert!(
+                row.bottom() <= clip + 0.5 && row.top() >= 0.0,
+                "n12-focus banner {banner}: row {target} {row:?} not whole above {clip}"
+            );
+            harness.key_press(egui::Key::Enter);
+            harness.run_steps(2);
+            assert_eq!(
+                harness.state().pressed,
+                vec![target],
+                "n12-enter banner {banner}: exactly the focused row's action"
+            );
         }
     }
 }

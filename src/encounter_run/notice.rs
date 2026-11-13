@@ -84,6 +84,10 @@ impl Run {
 
     /// The round and the turn are the strongest things on the page, above any row, and
     /// they grow with the rows. Next up is the only name that may be off the roster's view.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     pub(super) fn live_header(&mut self, ui: &mut egui::Ui, scale: RunScale) -> bool {
         let c = colors();
         let strip = self.strip();

@@ -77,7 +77,7 @@ worse count fails the test, and a better one is printed. The tests use temporary
 synthetic data. Test builds have no route to your settings, character cache, keyring or
 D&D Beyond.
 
-Each completed suite writes `ergonomics.json` and `ergonomics.md` to
+Each completed suite writes `ergonomics.json`, `ergonomics.md` and `stillness.json` to
 `artifacts/screenshots/latest/`, or to `SPLAT_VISUAL_DIR` when set. Each suite clears
 the old reports before starting its scenarios, even without captures.
 If the child exits before reports are written, that folder has no ergonomics report
@@ -114,6 +114,39 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
   because the item takes every press.
   `KNOWN_APP_VS_CHROME` in `src/visual_tests/ergonomics.rs` is empty and may only stay
   empty, so any pair fails the run.
+- The G and N checks (`src/visual_tests/stillness.rs`) compare what the app shows. One report:
+  `stillness.json` has one line per finding (scenario, state, window, check, control, old and
+  new rect, and what set it off), and the terminal and `ergonomics.md` give the counts per check.
+  G1 compares two states in a row at one size: **G1a** a message came or went in a pane (a
+  message is its pane and its words; a typed row, banner or page message may move what follows
+  it) and content below it moved while the content above stayed; **G1b** the control a script
+  pressed moved (by more than 1 px; a selected toggle may grow by up to `TOGGLE_WEIGHT` with its
+  line and one edge kept; links are not checked); **G1c** a scroll bar came or went and a right
+  edge in its pane moved by the bar's lane. **G3** at 1920x1080 a registered row's first action
+  is more than `3 × L` after its last words (form and table rows are exempt). **G6** a pane's
+  footer is more than `2 × L` below a short body (`pane::short_body_gap` for a `Footer::pane`;
+  the footer band for a pane placed by hand). **G7** two live widgets share one id. **N2** an
+  icon control's centre is more than 1 px off the centre of the text line beside it. **N5** a
+  text that starts with an icon wrapped inside its own layout job. These block. Report-only:
+  **G1b** for a control found again only by its id, **G2** a short header action at the widest
+  size is gone or paints other words at a narrower size, **G4** one pane shows a text of four or
+  more words twice, and **N8** one word shown twice in a row (`Travel Travel`).
+- The known lines are `src/visual_tests/stillness_known.json`: per scenario, one line per
+  `[check, state, window, name, count]`, where the name is the control or text the check found.
+  A blocking check fails the run on a finding that has no line or more than its count, and on a
+  listed line of a scenario that ran with fewer. The gate also reads the list of the merge base
+  with `origin/main` (`git show`) and fails on any line that is new or higher there, naming its
+  key, so the list can only shrink. A raise passes only when `SPLAT_STILLNESS_RAISE` names it, one
+  line per raise: `<check> / <scenario> / <state> / <window> / <name> => <reason>`; the report
+  prints each raise for the reviewer and `land.sh`. When the base cannot be read, the report says
+  so, and the landing gate (`land.sh`) fails.
+- To lower your lines after a fix, run your scenarios (`visual-test <label> --only a,b`). Each
+  run writes `artifacts/screenshots/<label>/stillness-known.json` with the lines those scenarios
+  need now. Replace your scenarios' blocks in `stillness_known.json` with those blocks. Pasting a
+  block cannot raise the list: the gate compares it with the merge base.
+- `d.expect_moves("reason")` before a state where a move is the point (a reorder, an answered
+  question that goes) is the one escape from G1a and G1b; it never covers G1c. Its findings
+  stay in `stillness.json` with the reason, and the report counts each use per scenario.
 - After reviewing chrome changes, `devenv shell -- visual-baseline-chrome work`
   applies the saved chrome counts from label `work` without running scenarios again.
   This also works after `--only`: it changes only those scenarios' egui chrome counts,

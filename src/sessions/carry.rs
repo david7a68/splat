@@ -638,6 +638,10 @@ impl Sessions {
     /// The Last time line: the last session's link, its preview, and `Carry over` at the end
     /// while this session is prepared. The preview gives the action its room first, then the
     /// link's words shorten, and nothing wraps. The act's result shows under the line.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     pub(super) fn last_time_line(
         &mut self,
         ui: &mut egui::Ui,
