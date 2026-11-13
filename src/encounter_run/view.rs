@@ -33,6 +33,11 @@ pub(crate) const FIGHT_AFTER: &str = "Fight after: ";
 pub(super) const DOCK_HEIGHT: f32 = 36.0 + 4.0 + 28.0 + 8.0;
 /// The dock's width from which Damage has its key hint, and Temp HP and Roll their full forms.
 pub(super) const DOCK_ALL_WORDS_FROM: f32 = 500.0;
+/// FK1 (iter-27-R): the dock's name slot, one width in every fight and for every row, so the
+/// controls after it keep one x. A name that `Heading` does not hold on one line wraps in it.
+pub(super) const DOCK_NAME_WIDTH: f32 = 8.0 * design::L;
+/// The lines a dock name may take. Two share the height of one control.
+const DOCK_NAME_LINES: usize = 2;
 const FOOTER_HEIGHT: f32 = 28.0 + 7.0;
 const GUTTER: f32 = design::M;
 /// Room for the note under a long roster, past the scroll area's clip margin.
@@ -51,7 +56,7 @@ const NAME_LINES: usize = 3;
 /// X8: the Conditions field's words while the dock has no room for `Effect`.
 const OTHER_EFFECT_TIMED: &str = "Other effect, such as Bless 10 rounds";
 /// X7: what the Conditions tab records, and what Splat does with a time the DM types.
-const CONDITIONS_HELP: &str = "No HP, AC or roll changes by itself. A time you type counts down on that creature’s turns. Other effects stay local and do not sync.";
+const CONDITIONS_HELP: &str = "No HP, AC or roll changes by itself. A time you type counts down at the end of that creature’s turn: Bless 10 rounds goes from 10 to 9. Other effects stay local and do not sync.";
 /// A creature's effects beyond the official conditions, in the run's Conditions tab and in a
 /// change form alike: the `Other effects` label, then each in Body text with its row menu.
 /// Returns the position in `effects` of the one the DM removed. `field` is the width of the
@@ -205,10 +210,10 @@ thread_local! {
 
 #[cfg(test)]
 thread_local! {
-    /// How often the Arrivals summaries, the Arrivals reasons and the dock's widest name were
-    /// worked out (Astra 2): an unchanged frame works out none of them.
-    pub(super) static PREPARED: std::cell::Cell<(usize, usize, usize)> =
-        const { std::cell::Cell::new((0, 0, 0)) };
+    /// How often the Arrivals summaries and the Arrivals reasons were worked out (Astra 2): an
+    /// unchanged frame works out none of them.
+    pub(super) static PREPARED: std::cell::Cell<(usize, usize)> =
+        const { std::cell::Cell::new((0, 0)) };
 }
 
 #[cfg(test)]
@@ -921,54 +926,42 @@ impl Run {
             });
         }
         if let Some(error) = &error {
+            // A stat-block error keeps its own name, apart from the sheet notice's.
+            let close = if repair.is_some() {
+                "Dismiss this error"
+            } else {
+                "Dismiss this message"
+            };
             footer.reason(error.as_str(), |ui| {
-                ui.horizontal_top(|ui| {
-                    let width = ui.available_width() - 36.0;
-                    ui.scope(|ui| {
-                        ui.set_max_width(width);
-                        if let Some(words) = &repair {
-                            // Top down, so the repair goes under the words.
-                            let clicked = ui
-                                .vertical(|ui| {
-                                    design::message_with_actions(ui, Tone::Error, words, |ui| {
-                                        Action::secondary("Campaign → Packages")
-                                            .name("Repair in Campaign → Packages")
-                                            .density(Density::Read)
-                                            .show(ui)
-                                            .clicked()
-                                    })
+                let dismissed = dismissable(ui, close, |ui| {
+                    if let Some(words) = &repair {
+                        // Top down, so the repair goes under the words.
+                        let clicked = ui
+                            .vertical(|ui| {
+                                design::message_with_actions(ui, Tone::Error, words, |ui| {
+                                    Action::secondary("Campaign → Packages")
+                                        .name("Repair in Campaign → Packages")
+                                        .density(Density::Read)
+                                        .show(ui)
+                                        .clicked()
                                 })
-                                .inner;
-                            to_packages.set(clicked);
-                        } else {
-                            design::message(ui, Tone::Error, error);
-                        }
-                    });
-                    // A stat-block error keeps its own name, apart from the sheet notice's.
-                    let close = if repair.is_some() {
-                        "Dismiss this error"
+                            })
+                            .inner;
+                        to_packages.set(clicked);
                     } else {
-                        "Dismiss this message"
-                    };
-                    if design::icon_button(ui, icons::CLOSE, close).clicked() {
-                        dismiss_error.set(true);
+                        design::message(ui, Tone::Error, error);
                     }
                 });
+                dismiss_error.set(dismissed);
             });
         }
         // Said once: the Log keeps the line, and the next save leaves the steps out.
         if unread {
             footer.notice(super::UNDO_UNREAD, |ui| {
-                ui.horizontal_top(|ui| {
-                    let width = ui.available_width() - 36.0;
-                    ui.scope(|ui| {
-                        ui.set_max_width(width);
-                        design::message(ui, Tone::Warning, super::UNDO_UNREAD);
-                    });
-                    if design::icon_button(ui, icons::CLOSE, "Dismiss the Undo message").clicked() {
-                        dismiss_unread.set(true);
-                    }
+                let dismissed = dismissable(ui, "Dismiss the Undo message", |ui| {
+                    design::message(ui, Tone::Warning, super::UNDO_UNREAD);
                 });
+                dismiss_unread.set(dismissed);
             });
         }
         if let Some(words) = &carry {
@@ -2211,9 +2204,10 @@ impl Run {
                 return;
             }
             if self.closing {
+                // FK7 (iter-27-R): the dialog takes the input, and the line behind it stays
+                // as it was, with its save state, so the page behind a dialog does not change.
                 let note = close_saved_words(self.syncs.values().any(|sync| sync.enabled));
                 closed = self.close_confirmation(ui, &note);
-                return;
             }
             // Five actions share the narrowest row. None of them may lose a letter.
             let compact = ui.available_width() < DOCK_ALL_WORDS_FROM;
@@ -2474,7 +2468,9 @@ impl Run {
                     ui.label(format!("and {} more", changes.len() - 3));
                 }
             } else if conflict.is_some() {
-                ui.add(egui::Label::new(conflict_close_words(block.is_some())).wrap());
+                if let Some(words) = conflict_close_words(block.is_some()) {
+                    ui.add(egui::Label::new(words).wrap());
+                }
             } else if stranded.is_empty() {
                 ui.add(egui::Label::new(note).wrap());
             } else {
@@ -2500,21 +2496,25 @@ impl Run {
                 self.wants_sign_in = true;
                 keep = true;
             }
-            // Every close action here waits for the same cause, so it shows once, above them.
-            if block.is_some() {
-                ui.add_space(design::S);
-                design::blocked_reason(ui, block.as_deref());
-            }
+            // Every close action here waits for the same cause. Round 27 FN4: it shows once,
+            // `S` left of the blocked close on the right, or after the red one when that is
+            // the only close.
+            let right_close = cannot_save || lost.is_empty();
             let (lose, ()) = design::dialog_actions(
                 ui,
                 |ui| {
-                    (cannot_save || !lost.is_empty())
+                    let lose = (cannot_save || !lost.is_empty())
                         && Action::destructive("Close and lose changes")
                             .blocked(block.as_deref())
                             .show(ui)
-                            .clicked()
+                            .clicked();
+                    if !right_close {
+                        design::blocked_reason(ui, block.as_deref());
+                    }
+                    lose
                 },
                 |ui| {
+                    ui.spacing_mut().item_spacing.x = design::S;
                     if cannot_save {
                         save_new = Action::primary("Save as a new run and close")
                             .blocked(block.as_deref())
@@ -2525,6 +2525,10 @@ impl Run {
                             .blocked(block.as_deref())
                             .show(ui)
                             .clicked();
+                    }
+                    if right_close && block.is_some() {
+                        design::blocked_reason(ui, block.as_deref());
+                        ui.add_space(design::L - design::S);
                     }
                     let response = Action::secondary("Keep running").show(ui);
                     let id = ui.id().with("close_default_focused");
@@ -2741,7 +2745,10 @@ impl Run {
         let (successes, failures) = (p.successes, p.failures);
         let death_saves = p.shows_death_saves();
         let is_sheet = p.definition.fields.contains_key("splat_external");
-        let title = if matches!(self.panel, Panel::Log | Panel::Encounter | Panel::Groups) {
+        let title = if matches!(
+            self.panel,
+            Panel::Log | Panel::Encounter | Panel::Groups | Panel::Keys
+        ) {
             self.fight_panel_title()
         } else {
             &p.name
@@ -2753,13 +2760,16 @@ impl Run {
         design::named(ui, &response, title);
         response.on_hover_text(title);
 
-        let participant_tab = !matches!(self.panel, Panel::Log | Panel::Encounter | Panel::Groups);
+        let participant_tab = !matches!(
+            self.panel,
+            Panel::Log | Panel::Encounter | Panel::Groups | Panel::Keys
+        );
         let reference = if is_sheet { "Sheet" } else { "Stat block" };
         self.panel_tabs(ui, Some(reference), true);
         design::rule(ui);
         // FJ5: one place on every tab, directly below the tab row, so the counts and their
         // actions do not move when the DM changes tab. Sheet's status line follows them.
-        if death_saves {
+        if death_saves && participant_tab {
             self.death_saves(ui, index, successes, failures);
         }
         if let Some(sync) = self
@@ -2794,6 +2804,8 @@ impl Run {
             Panel::Log => "This fight · Log",
             Panel::Encounter => "This fight · Prep",
             Panel::Groups => "This fight · Arrivals",
+            // FE14 (iter-27-R): the title names what the panel shows.
+            Panel::Keys => "Keyboard commands",
             _ => "This fight",
         }
     }
@@ -3022,8 +3034,8 @@ impl Run {
         }
         #[cfg(test)]
         {
-            let (a, b, c) = PREPARED.with(std::cell::Cell::get);
-            PREPARED.with(|count| count.set((a, b + 1, c)));
+            let (a, b) = PREPARED.with(std::cell::Cell::get);
+            PREPARED.with(|count| count.set((a, b + 1)));
         }
         let offered = super::OfferedGroups::of(groups, self.source);
         let reasons: Arc<[String]> = offered
@@ -3070,8 +3082,8 @@ impl Run {
         }
         #[cfg(test)]
         {
-            let (a, b, c) = PREPARED.with(std::cell::Cell::get);
-            PREPARED.with(|count| count.set((a + 1, b, c)));
+            let (a, b) = PREPARED.with(std::cell::Cell::get);
+            PREPARED.with(|count| count.set((a + 1, b)));
         }
         let (words, alone) = group.member_summary_fit(ui, &font, beside);
         let summary = if alone {
@@ -4001,8 +4013,8 @@ impl Run {
 
     fn keys_tab(&self, ui: &mut egui::Ui) {
         let c = colors();
+        // The panel's title names them (FE14), so the list has no label of its own.
         ui.add_space(design::XS);
-        design::group_label(ui, "Keyboard commands");
         for (key, what) in KEYS {
             ui.horizontal_top(|ui| {
                 let (rect, _) = ui.allocate_exact_size(vec2(96.0, 20.0), egui::Sense::hover());
@@ -4042,21 +4054,24 @@ impl Run {
         ui.horizontal(|ui| {
             ui.set_min_height(Density::Read.control());
             ui.spacing_mut().item_spacing.x = design::XS;
-            ui.label(
-                Type::Small
-                    .rich(
-                        ui,
-                        format!(
-                            "{successes} {} · {failures} {}",
-                            if successes == 1 {
-                                "success"
-                            } else {
-                                "successes"
-                            },
-                            if failures == 1 { "failure" } else { "failures" }
-                        ),
-                    )
-                    .color(c.text),
+            // FJ1 (iter-27-R): the counts have the slot of their widest form, so a press
+            // moves neither `+ Success` nor `+ Failure`.
+            let font = Type::Small.font(ui);
+            let slot = (0..=3)
+                .flat_map(|s| (0..=3).map(move |f| (s, f)))
+                .map(|(s, f)| design::number_width(ui, &death_save_words(s, f), &font))
+                .fold(0.0_f32, f32::max);
+            ui.allocate_ui_with_layout(
+                vec2(slot, Density::Read.control()),
+                Layout::left_to_right(Align::Center),
+                |ui| {
+                    ui.set_width(slot);
+                    ui.label(
+                        Type::Small
+                            .rich(ui, death_save_words(successes, failures))
+                            .color(c.text),
+                    );
+                },
             );
             if Action::quiet("+ Success")
                 .name("Add a death save success")
@@ -4238,40 +4253,46 @@ impl Run {
                 .errors
                 .iter()
                 .any(|error| error.contains(&definition.path));
-            notice = snapshot_notice(definition, current, unreadable);
-            if let Some(message) = &notice {
-                // A file that changed on disk: its state's icon and colour, then words in the
-                // text colour, so it does not read as part of the stat block.
-                let font = Type::Small.font(ui);
-                let inset = design::number_width(ui, icons::WARN, &font) + design::XS;
-                ui.horizontal_top(|ui| {
-                    ui.spacing_mut().item_spacing.x = design::XS;
-                    ui.label(
-                        Type::Small
-                            .rich(ui, icons::WARN)
-                            .color(colors().document.external),
-                    );
-                    ui.add(
-                        egui::Label::new(Type::Small.rich(ui, message).color(colors().text)).wrap(),
-                    );
-                });
-                if let Some(at) = at {
-                    let read = ui
-                        .horizontal(|ui| {
-                            // AJ1: a message action without an icon has the secondary border,
-                            // and its border starts at the notice's words.
-                            ui.add_space(inset);
-                            Action::secondary("Read the new version")
-                                .density(Density::Read)
-                                .show(ui)
-                                .clicked()
-                        })
-                        .inner;
-                    if read {
-                        self.lookup_request = Some(at);
+            notice = snapshot_notice(definition, current, unreadable).map(|words| {
+                // FD3: a file that cannot be read now is an error, as in every other view.
+                let tone = if unreadable {
+                    Tone::Error
+                } else {
+                    Tone::Warning
+                };
+                (words, tone, at)
+            });
+        }
+        // FD5 (iter-27-R): the notice comes and goes with the file, so it is in the panel's
+        // footer and the stat block keeps its top. Its owner is this row's snapshot: the notice
+        // is worked out again each frame from it and the campaign's read, and ends when the
+        // file matches again or another row is selected. Base: view.rs:4230-4262 (a3d947bd).
+        let read = std::cell::Cell::new(None);
+        let mut footer =
+            design::Footer::new(("run_reference_footer", self.id), ui.available_width());
+        if let Some((words, tone, at)) = &notice {
+            footer.notice(words.as_str(), |ui| match at {
+                Some(at) => {
+                    let pressed = design::message_with_actions(ui, *tone, words, |ui| {
+                        // AJ1: a message action without an icon has the secondary border,
+                        // and its border starts at the notice's words.
+                        Action::secondary("Read the new version")
+                            .density(Density::Read)
+                            .show(ui)
+                            .clicked()
+                    });
+                    if pressed {
+                        read.set(Some(*at));
                     }
                 }
-            }
+                None => {
+                    design::message(ui, *tone, words);
+                }
+            });
+        }
+        let body_bottom = footer.show(ui);
+        if let Some(at) = read.get() {
+            self.lookup_request = Some(at);
         }
         if definition.fields.contains_key("splat_external") {
             ui.add(
@@ -4289,7 +4310,8 @@ impl Run {
                 // By participant: copies of one creature can differ, and each card opens on its
                 // own changes, not at the place the last copy was left.
                 .id_salt(("run_reference", &p.key))
-                .auto_shrink([false, false]),
+                .auto_shrink([false, false])
+                .max_height((body_bottom - ui.cursor().top()).max(0.0)),
             |ui| {
                 changes_block(ui, p, true);
                 let links: &dyn view::Links = match &self.content {
@@ -4373,6 +4395,9 @@ impl Run {
                     "You resolve conditions, Concentration, death saves and recovery. Zero HP does not remove a turn.",
                 );
                 if self.state.phase == Phase::Setup {
+                    // FJ8 (iter-27-R): the bonus has its own heading, as live play's total has.
+                    ui.add_space(design::L);
+                    design::group_heading(ui, "Correct initiative", 0);
                     let mut bonus = p.initiative_bonus;
                     optional_number(ui, "Initiative bonus", &mut bonus, -1000..=1000);
                     if bonus != p.initiative_bonus {
@@ -4432,8 +4457,10 @@ impl Run {
                             self.return_focus = self.lookup_open;
                         }
                     });
-                    correction_reason(ui, "Type a number first.", total.is_none());
+                    // FM2 (iter-27-R): the help is the field's, `S` below it; Set initiative's
+                    // reason keeps its reserved line after the help.
                     ui.add(egui::Label::new(Type::Small.rich(ui, words).color(color)).wrap());
+                    correction_reason(ui, "Type a number first.", total.is_none());
                 }
                 ui.add_space(design::L);
                 design::group_heading(ui, "DM notes", 0);
@@ -4621,10 +4648,14 @@ impl Run {
                                                 .color(colors().muted),
                                         );
                                         for mode in &roll_choices {
+                                            // FJ4 (iter-27-R): the selected choice has a check,
+                                            // not only its fill; every word keeps one x.
+                                            let selected = *mode == default_roll;
                                             let item = ui.selectable_label(
-                                                *mode == default_roll,
-                                                mode.label(),
+                                                selected,
+                                                checked_choice(ui, selected, mode.label()),
                                             );
+                                            design::named(ui, &item, mode.label());
                                             if item.clicked() {
                                                 command = Some(Command::RollNpcs(*mode));
                                             }
@@ -4809,11 +4840,15 @@ impl Run {
             |ui| {
                 ui.set_min_height(room);
                 let mut spans = Vec::new();
+                // SJ1 (iter-27-R): the roster keeps the scroll bar's lane whether or not the
+                // bar shows, as Arrivals does, so adding arrivals moves no field, Absent or menu.
+                let lane = (ui.available_width() - ui.spacing().scroll.allocated_width()).max(0.0);
                 let output = egui::ScrollArea::vertical()
                     .id_salt("run_setup_rows")
                     .max_height((room - OVERFLOW_LINE).max(0.0))
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
+                        ui.set_max_width(lane);
                         // Include the heading when comparing rows with the scroll viewport.
                         let origin = ui.cursor().min.y;
                         ui.spacing_mut().item_spacing.y = 0.0;
@@ -5030,20 +5065,12 @@ impl Run {
             let number_slot = design::L * 3.0;
             let actions = number_slot + roll_slot + right;
             let name_width = (ui.available_width() - actions).max(design::XL);
-            let side = "";
-            let plain = format!("{absent}{side}{numbers}");
-            // Changed values keep their mark beside the setup numbers.
-            let detail = if !p.stat_changes() {
-                plain
+            // FK6 (iter-27-R): every row starts with its side, and changed values keep their
+            // mark after the setup numbers, as the encounter editor's row puts `Changed` last.
+            let detail = if p.stat_changes() {
+                format!("{absent}{numbers} · {} Changed", icons::CHANGED)
             } else {
-                let changed = format!("{} Changed", icons::CHANGED);
-                let both = format!("{absent}{side}{changed} · {numbers}");
-                let font = Type::Small.font(ui);
-                if design::number_width(ui, &both, &font) + 2.0 * design::S <= name_width {
-                    both
-                } else {
-                    format!("{absent}{changed} · {numbers}")
-                }
+                format!("{absent}{numbers}")
             };
             let width = name_width - 2.0 * design::S;
             let title =
@@ -5343,7 +5370,10 @@ impl Run {
     }
 
     fn setup_panel(&mut self, ui: &mut egui::Ui) {
-        let title = if matches!(self.panel, Panel::Log | Panel::Encounter | Panel::Groups) {
+        let title = if matches!(
+            self.panel,
+            Panel::Log | Panel::Encounter | Panel::Groups | Panel::Keys
+        ) {
             self.fight_panel_title()
         } else {
             &self.state.participants[self.selected].name
@@ -5969,6 +5999,24 @@ fn snapshot_values_line(notice_shown: bool) -> &'static str {
 /// The action names what it does, so its label cannot be read as a state.
 /// What an encounter or group changed on this creature: the value it replaced and the new
 /// one, each marked. It stays out in the open, above the stat block that keeps its own values.
+/// A footer message with its dismiss cross at its end (AI1). The cross is a `Read` target,
+/// taller than the message's first line, so the message starts lower by half the difference:
+/// the cross is centred on the first line, not on the top of the words. True when the DM
+/// dismisses it.
+fn dismissable(ui: &mut egui::Ui, close: &str, message: impl FnOnce(&mut egui::Ui)) -> bool {
+    ui.horizontal_top(|ui| {
+        let width = ui.available_width() - Density::Read.control() - design::S;
+        let lift = ((Density::Read.control() - Type::Body.line()) / 2.0).max(0.0);
+        ui.vertical(|ui| {
+            ui.set_max_width(width);
+            ui.add_space(lift);
+            message(ui);
+        });
+        design::icon_button(ui, icons::CLOSE, close).clicked()
+    })
+    .inner
+}
+
 fn snapshot_notice(snapshot: &Entry, current: Option<&Entry>, unreadable: bool) -> Option<String> {
     let name = std::path::Path::new(&snapshot.path)
         .file_name()
@@ -6281,12 +6329,10 @@ pub(crate) fn close_recovery_actions(
 }
 
 /// The close dialog's words for a sync conflict. They offer a close only when a close can happen.
-fn conflict_close_words(blocked: bool) -> &'static str {
-    if blocked {
-        "Choose which HP to keep before you close."
-    } else {
-        "Choose which HP to keep, or close and choose next time."
-    }
+/// Round 27 FN4: a blocked close has no words here. The title names the conflict, and the reason
+/// beside the disabled `Close now` says what to do, once.
+fn conflict_close_words(blocked: bool) -> Option<&'static str> {
+    (!blocked).then_some("Choose which HP to keep, or close and choose next time.")
 }
 
 /// What a close keeps. A close keeps the run's Undo steps too (they are saved with the run), so
@@ -6353,7 +6399,7 @@ pub(super) struct UndoForms {
 
 /// The one rule of the run's Undo labels. A label names its act and its target, which
 /// `describe_named` gives as `target`: never read back out of the label's words. A long
-/// effect keeps four of its words, then two (`Undo: effect Wis save… on Cinder Wolf 2`). Then
+/// effect keeps four of its words, then two (`Undo: add effect Wis save… on Cinder Wolf 2`). Then
 /// the target shortens by whole words and keeps the part that tells it from another row: its
 /// copy number or letter (`Cinder… 2`), else its last word. A sheet's step gives up its source
 /// before its target's short forms. When no telling form fits, the target goes (`bare`). No
@@ -6426,7 +6472,7 @@ fn split_target<'a>(action: &'a str, target: &str) -> Option<(&'a str, &'a str)>
 }
 
 /// The act's own words without the target and its joining word: an effect's four, then two
-/// (`effect Wis save…`), or `7 damage`, `initiative`, `2 loot rolls`. None for a name-first
+/// (`add effect Wis save…`), or `7 damage`, `initiative`, `2 loot rolls`. None for a name-first
 /// step.
 fn act_words(before: &str) -> Vec<String> {
     if let Some((words, _)) = effect_words(before) {
@@ -6473,18 +6519,19 @@ fn action_forms(action: &str, target: Option<&str>, participants: &[Participant]
     forms
 }
 
-/// The words of an effect's step before its target (`effect Wis save DC 15 (Hold Person) on `)
-/// when they are more than four: four of them, then two, each with `…`, and the joining word.
-/// The verb (`effect`, `remove`) stays and is not counted. None for any other step's words,
+/// The words of an effect's step before its target (`add effect Wis save DC 15 (Hold Person)
+/// on `) when they are more than four: four of them, then two, each with `…`, and the joining
+/// word. The verb (`add effect`, `add`, `remove`) stays and is not counted. None for any other step's words,
 /// which stay whole.
 fn effect_words(before: &str) -> Option<(Vec<String>, &'static str)> {
     let (words, joining) = [" on ", " off ", " from "]
         .into_iter()
         .find_map(|joining| Some((before.strip_suffix(joining)?, joining)))?;
-    let (verb, words) = match words.split_once(' ') {
-        Some((verb @ ("effect" | "remove"), rest)) => (format!("{verb} "), rest),
-        _ => (String::new(), words),
-    };
+    // FK4 (iter-27-R): every effect step starts with its verb, `add effect`, `add` or `remove`.
+    let (verb, words) = ["add effect ", "add ", "effect ", "remove "]
+        .into_iter()
+        .find_map(|verb| Some((verb.to_owned(), words.strip_prefix(verb)?)))
+        .unwrap_or((String::new(), words));
     let words: Vec<&str> = words.split_whitespace().collect();
     (words.len() > 4).then(|| {
         let forms = [4, 2]
@@ -6537,9 +6584,11 @@ fn move_parts(action: &str) -> Option<(&'static str, &str, &str)> {
 }
 
 /// A move's forms with its target, longest first. SJ1: Undo is not beside the message that
-/// names the arrival, so an arrival with a copy number keeps it and gives up the member's
-/// name, `move Rival… (… 2) before Rival…`; then the place goes, `move Rival… (… 2)`. An
-/// arrival with no copy number shortens with the other name by whole words. None for any
+/// names the arrival, so an arrival with a copy number keeps it. The moved arrival is what the
+/// DM must know (iter-27-R FI8), so the place goes first, `move Rival Team (Rival Captain 2)`,
+/// then the group, `move Rival Captain 2`; last the member's name gives way to `…`,
+/// `move Rival Team (… 2)`, then `move Rival… (… 2)`.
+/// An arrival with no copy number shortens with the other name by whole words. None for any
 /// other step.
 fn move_forms(action: &str) -> Option<Vec<String>> {
     let (verb, moved, before) = move_parts(action)?;
@@ -6548,16 +6597,14 @@ fn move_forms(action: &str) -> Option<Vec<String>> {
         .and_then(|rest| rest.rsplit_once(" ("));
     let copy = parts.and_then(|(group, member)| {
         let (_, last) = member.rsplit_once(' ')?;
-        (!last.is_empty() && last.chars().all(|c| c.is_ascii_digit())).then_some((group, last))
+        (!last.is_empty() && last.chars().all(|c| c.is_ascii_digit()))
+            .then_some((group, member, last))
     });
     let mut forms = vec![action.to_owned()];
     match copy {
-        Some((group, copy)) => {
-            forms.extend(
-                shortened_names(group, before).map(|(group, before)| {
-                    format!("{verb} {group} (…\u{a0}{copy}) before {before}")
-                }),
-            );
+        Some((group, member, copy)) => {
+            forms.push(format!("{verb} {moved}"));
+            forms.push(format!("{verb} {member}"));
             forms.extend(
                 name_words(group)
                     .into_iter()
@@ -6713,52 +6760,74 @@ fn name_lines(ui: &egui::Ui, name: &str, font: &egui::FontId, width: f32) -> (Ar
     }
 }
 
-/// The dock's selected name and its type. FJ5: it keeps `Heading`, as every other name there
-/// does, and gives up whole words by `dock_name`, keeping a telling last word first (X53).
-/// `Small` only when that shows the name whole, so a smaller name never also loses letters.
-pub(super) fn dock_name_shown(ui: &egui::Ui, name: &str, room: f32) -> (Type, String) {
-    if design::number_width(ui, name, &Type::Heading.font(ui)) <= room {
-        (Type::Heading, name.to_owned())
-    } else if design::number_width(ui, name, &Type::Small.font(ui)) <= room {
-        (Type::Small, name.to_owned())
-    } else {
-        let font = Type::Heading.font(ui);
-        // While the first word, `…` and the last word fit, the last word stays: a copy number
-        // or letter by `dock_name`'s rule, other words by the telling-end rule. Else the first
-        // word's start (review of PR 292).
-        let mut words = name.split_whitespace();
-        let first = words
-            .next()
-            .unwrap_or(name)
-            .trim_end_matches([',', ';', ':']);
-        let last = words.last().unwrap_or(first);
-        let numbered = last.chars().all(|c| c.is_ascii_digit()) || last.chars().count() == 1;
-        let ends = design::number_width(ui, &format!("{first}… {last}"), &font) <= room;
-        let shown = match (ends, numbered) {
-            (true, true) => Some(dock_name(ui, name, &font, room)),
-            (true, false) => with_telling_end(ui, name, &font, room),
-            (false, _) => None,
-        }
-        .unwrap_or_else(|| first_word_start(ui, name, &font, room));
-        (Type::Heading, shown)
+/// FK1 (iter-27-R): the dock's selected name in its slot `room` wide, in the text colour. Whole
+/// on one line in `Heading`; else whole in `Small` on up to two lines that share one control's
+/// height; else two `Small` lines of whole words that end in `…` and keep a copy number or
+/// letter (`Ember Cultist of the… 12`); else the first word's letters and `…`. Hover and the
+/// accessible name hold it whole.
+pub(super) fn dock_name_shown(ui: &egui::Ui, name: &str, room: f32) -> Arc<Galley> {
+    let layout = |text: &str, font: egui::FontId, line_height: Option<f32>| {
+        let mut job = egui::text::LayoutJob::single_section(
+            text.to_owned(),
+            egui::TextFormat {
+                font_id: font,
+                color: colors().text,
+                line_height,
+                ..Default::default()
+            },
+        );
+        job.wrap.max_width = room.max(1.0);
+        ui.fonts_mut(|fonts| fonts.layout_job(job))
+    };
+    let heading = Type::Heading.font(ui);
+    if design::number_width(ui, name, &heading) <= room {
+        return layout(name, heading, None);
     }
-}
-
-/// The dock's name where its slot cannot hold the first word, `…` and the last word: its
-/// first word's start and `…`, as many letters as the slot holds (review of PR 292, X53). The
-/// hover and the accessible name hold it whole.
-fn first_word_start(ui: &egui::Ui, name: &str, font: &egui::FontId, room: f32) -> String {
-    let first: Vec<char> = name
-        .split_whitespace()
-        .next()
-        .unwrap_or(name)
-        .chars()
-        .collect();
-    (1..=first.len())
-        .rev()
-        .map(|letters| format!("{}…", first[..letters].iter().collect::<String>()))
-        .find(|shown| design::number_width(ui, shown, font) <= room)
-        .unwrap_or_else(|| "…".to_owned())
+    let line = Some(Density::Read.control() / DOCK_NAME_LINES as f32);
+    let fits = |text: &str| {
+        let galley = layout(text, Type::Small.font(ui), line);
+        (galley.rows.len() <= DOCK_NAME_LINES && galley.size().x <= room + 0.5).then_some(galley)
+    };
+    if let Some(galley) = fits(name) {
+        return galley;
+    }
+    let words: Vec<&str> = name.split_whitespace().collect();
+    let last = words.last().copied().unwrap_or(name);
+    let numbered =
+        words.len() > 1 && (last.chars().all(|c| c.is_ascii_digit()) || last.chars().count() == 1);
+    let (body, end) = if numbered {
+        (&words[..words.len() - 1], format!("…\u{a0}{last}"))
+    } else {
+        (&words[..], "…".to_owned())
+    };
+    for count in (1..body.len()).rev() {
+        let mut kept = &body[..count];
+        // A name does not end on a joining word or a comma.
+        while kept.len() > 1
+            && kept
+                .last()
+                .is_some_and(|word| ["of", "the", "and", "de", "von"].contains(word))
+        {
+            kept = &kept[..kept.len() - 1];
+        }
+        let shown = format!("{}{end}", kept.join(" ").trim_end_matches([',', ';', ':']));
+        if let Some(galley) = fits(&shown) {
+            return galley;
+        }
+    }
+    // The first word's letters, with the copy number while it fits, then without it.
+    let letters: Vec<char> = words.first().copied().unwrap_or(name).chars().collect();
+    [end.as_str(), "…"]
+        .into_iter()
+        .find_map(|end| {
+            (1..=letters.len()).rev().find_map(|count| {
+                fits(&format!(
+                    "{}{end}",
+                    letters[..count].iter().collect::<String>()
+                ))
+            })
+        })
+        .unwrap_or_else(|| layout("…", Type::Small.font(ui), line))
 }
 
 pub(super) fn dock_name(ui: &egui::Ui, name: &str, font: &egui::FontId, width: f32) -> String {
@@ -6794,24 +6863,6 @@ pub(super) fn dock_name(ui: &egui::Ui, name: &str, font: &egui::FontId, width: f
     }
 }
 
-/// X53: the dock's name, when it loses words, keeps its last one, which tells it apart, after
-/// its first whole words: `Seraphina Thornwood-Ashgrave… Bell`. None when the last word is a
-/// number or a letter (`dock_name` keeps those its own way), or no first word fits before it.
-fn with_telling_end(ui: &egui::Ui, name: &str, font: &egui::FontId, width: f32) -> Option<String> {
-    let (first, last) = name.trim().rsplit_once(char::is_whitespace)?;
-    if last.chars().all(|c| c.is_ascii_digit()) || last.chars().count() == 1 {
-        return None;
-    }
-    let end = format!("… {last}");
-    let room = width - design::number_width(ui, &end, font);
-    let prefix = design::words_that_fit(ui, first, font, room);
-    let prefix = prefix
-        .trim_end_matches('…')
-        .trim_end_matches([',', ';', ':']);
-    let shown = format!("{prefix}{end}");
-    (!prefix.is_empty() && design::number_width(ui, &shown, font) <= width).then_some(shown)
-}
-
 pub(super) fn presence_action(present: bool) -> (&'static str, &'static str) {
     if present {
         (
@@ -6825,6 +6876,49 @@ pub(super) fn presence_action(present: bool) -> (&'static str, &'static str) {
 
 fn hp_word(p: &Participant) -> Option<(&'static str, &'static str, egui::Color32)> {
     design::hp_word(p.hp, p.max_hp)
+}
+
+/// A menu choice's words after a check slot: the check shows on the selected choice, and the
+/// slot is kept on the others, so every choice's words start at one x (FJ4).
+fn checked_choice(ui: &egui::Ui, selected: bool, words: &str) -> egui::text::LayoutJob {
+    let font = Type::Body.font(ui);
+    let c = colors();
+    let mut job = egui::text::LayoutJob::default();
+    for (text, color) in [
+        (
+            format!("{} ", icons::OK),
+            if selected {
+                c.text
+            } else {
+                egui::Color32::TRANSPARENT
+            },
+        ),
+        (words.to_owned(), c.text),
+    ] {
+        job.append(
+            &text,
+            0.0,
+            egui::TextFormat {
+                font_id: font.clone(),
+                color,
+                ..Default::default()
+            },
+        );
+    }
+    job
+}
+
+/// The death-save counts in words: `1 success · 0 failures`.
+fn death_save_words(successes: u8, failures: u8) -> String {
+    format!(
+        "{successes} {} · {failures} {}",
+        if successes == 1 {
+            "success"
+        } else {
+            "successes"
+        },
+        if failures == 1 { "failure" } else { "failures" }
+    )
 }
 
 /// A row's place in the turn order. The next participant is never the current one.
@@ -7204,32 +7298,43 @@ pub(super) fn header_height(scale: RunScale) -> f32 {
 }
 
 impl RowLayout {
-    /// The row's roll words, if any, decide whether they need a line of their own.
+    /// The row's roll words, after its second line. FI2 (iter-27-R): a roll result does not
+    /// change a row's height while one of its words fits there. In order: the result (its last
+    /// two parts) whole after the effects and the save DC; whole on the row without them; cut
+    /// to the room by whole words (`badge_words`) on the row, then on the row without them.
+    /// Only where not one word fits does it take a line of its own, and the row grows by it.
+    /// The hover and the Log keep it whole.
     fn with_badge(mut self, ui: &egui::Ui, badge: Option<&str>) -> Self {
         self.badge_below = false;
+        let base = self
+            .without_effects
+            .take()
+            .map(|base| base.with_badge(ui, badge));
         if let Some(badge) = badge {
             let font = Type::Small.font(ui);
-            let (_, _, beside) = badge_place(&self, 0.0);
-            // SJ1: the result itself (its last two parts) stays whole. When it cannot fit after
-            // the conditions but fits on a line of its own, it takes that line, even where a
-            // cut form would fit beside them: `Saved · 1 damage (half)` keeps its `(half)`.
             let parts: Vec<&str> = badge.split(" · ").collect();
             let result = parts[parts.len().saturating_sub(2)..].join(" · ");
             let whole = design::number_width(ui, &result, &font);
-            self.badge_below = true;
-            let (_, _, below) = badge_place(&self, 0.0);
-            self.badge_below = badge_words(ui, badge, &font, beside).is_none()
-                || (whole > beside && whole <= below);
-        }
-        // Roll words that the effects would push to a line of their own: the row has no room
-        // for its effects while they show.
-        if let Some(base) = self.without_effects.take() {
-            let base = base.with_badge(ui, badge);
-            if base.badge_below != self.badge_below {
-                return base;
+            let room = |layout: &Self| badge_place(layout, 0.0).2;
+            let cut = |layout: &Self| badge_words(ui, badge, &font, room(layout)).is_some();
+            let base_fits = |fits: &dyn Fn(&Self) -> bool| {
+                base.as_ref()
+                    .filter(|base| !base.badge_below && fits(base))
+                    .cloned()
+            };
+            if whole > room(&self) {
+                if let Some(base) = base_fits(&|base| whole <= room(base)) {
+                    return base;
+                }
+                if !cut(&self) {
+                    if let Some(base) = base_fits(&cut) {
+                        return base;
+                    }
+                    self.badge_below = true;
+                }
             }
-            self.without_effects = Some(Box::new(base));
         }
+        self.without_effects = base.map(Box::new);
         self
     }
 
@@ -7636,6 +7741,7 @@ impl RowLayout {
         // count has a slot as wide as its widest form, so that a change of count moves no word.
         let mut condition_spans = Vec::new();
         let mut effect_spans = Vec::new();
+        let mut end_pad = 0.0;
         for (at, words) in &extra.effects.shown {
             let condition = &w.conditions[*at];
             let (slot, forms) = count_slot(condition);
@@ -7644,22 +7750,37 @@ impl RowLayout {
                 design::number_width(ui, &text, &font)
             };
             // The slot holds the widest form, and a whole target (`XL`) after the gap in each
-            // form, so the count's target never reaches over its neighbours.
-            let widest = forms
+            // form, so the count's target never reaches over its neighbours. FK2 (iter-27-R):
+            // a count keeps the room of its widest number in place, so `10` to `9` moves no word;
+            // the rest of the room of its widest form (`· ⚠ time is up`) goes to the line's
+            // end, so no hole opens between the effect and what follows it. The words after it
+            // move only at `last round` and `time is up`, when the DM must look.
+            let form_width = |form: &String| {
+                let gap = if form.starts_with(" ·") {
+                    " ·\u{a0}"
+                } else {
+                    " "
+                };
+                design::number_width(ui, form, &font)
+                    .max(design::number_width(ui, gap, &font) + design::XL)
+            };
+            let widest = forms.iter().map(form_width).fold(0.0, f32::max);
+            let numbers = forms
                 .iter()
-                .map(|form| {
-                    let gap = if form.starts_with(" ·") {
-                        " ·\u{a0}"
-                    } else {
-                        " "
-                    };
-                    design::number_width(ui, form, &font)
-                        .max(design::number_width(ui, gap, &font) + design::XL)
-                })
+                .filter(|form| !form.starts_with(" ·"))
+                .map(form_width)
                 .fold(0.0, f32::max);
+            let shown = width(&slot);
+            let worded = slot.first().is_some_and(|(text, _)| text.starts_with(" ·"));
+            let here = if worded {
+                0.0
+            } else {
+                (numbers - shown).max(0.0)
+            };
+            end_pad += (widest - shown - here).max(0.0);
             let mut parts = vec![(words.as_str(), c.participant.condition)];
             parts.extend(slot.iter().map(|(text, color)| (text.as_str(), *color)));
-            let span = add_parts(&parts, (widest - width(&slot)).max(0.0));
+            let span = add_parts(&parts, here);
             let name_end = span.start + words.chars().count();
             let whole = words == condition.name();
             if whole && super::recognized_condition(condition.name()).is_some() {
@@ -7837,6 +7958,10 @@ impl RowLayout {
                     section.format.underline = Stroke::new(design::HAIRLINE_WIDTH, c.accent);
                 }
             }
+        }
+        // FK2: the counts' spare room, after the line's last word.
+        if end_pad > 0.0 && !job.is_empty() {
+            job.append("", end_pad, egui::TextFormat::simple(font.clone(), c.muted));
         }
         let mut conditions = job.clone();
         if let Some(start) = bonus_start {
@@ -9704,13 +9829,19 @@ mod tests {
                     folded > 0,
                     "W1-D1: the due effect's words outrank a plain condition"
                 );
-                // A count's slot is as wide as its widest form: `2`, `last round` and `time is
-                // up` move no word after it.
+                // FK2 (iter-27-R): a count keeps the room of its widest number in place, so `10`,
+                // `9` and `2` move no word after it; the rest of its widest form's room is at the
+                // line's end, so no hole sits between the count and the next word. The words
+                // after it move only at `last round` and `time is up`, and the line keeps its
+                // lines in every form.
                 let mut timed = p.clone();
                 timed.initiative = Some(10);
                 let mut at = Vec::new();
-                for left in [2, 1, 0] {
-                    let mut effect = Condition::read("Bless 2 rounds");
+                let mut lines = Vec::new();
+                let font = Type::Strong.sized(ui, design::RUN_REGULAR.condition);
+                let joint = design::number_width(ui, " ·\u{a0}", &font);
+                for left in [10, 9, 2, 1, 0] {
+                    let mut effect = Condition::read("Bless 10 rounds");
                     if let Condition::Effect(super::super::effect::Effect {
                         time: Time::Rounds { left: l, .. },
                         ..
@@ -9729,16 +9860,38 @@ mod tests {
                         0.0,
                     );
                     let line = layout.second_line.unwrap();
-                    let form = ["2", "last round", "time is up"][2 - left as usize];
+                    let form = match left {
+                        0 => "time is up".to_owned(),
+                        1 => "last round".to_owned(),
+                        n => n.to_string(),
+                    };
                     assert!(line.text().starts_with("Bless"), "{}", line.text());
-                    assert!(line.text().contains(form), "{form}: {}", line.text());
+                    assert!(line.text().contains(&form), "{form}: {}", line.text());
                     assert!(line.text().ends_with("Prone"), "{}", line.text());
                     let prone = line.text().chars().count() - "Prone".chars().count();
                     at.push(line.pos_from_cursor(egui::text::CCursor::new(prone)).min.x);
+                    lines.push(line.rows.len());
+                    if left == 10 {
+                        // No hole: from the end of `10` to `Prone` is the joint and, at most,
+                        // the rest of the count's whole target (`XL`), not the room of
+                        // `· ⚠ time is up`.
+                        let count = line.text().find("10").unwrap();
+                        // The right of the `0` glyph: a cursor after it stands after any room
+                        // the line keeps there.
+                        let zero = line.text()[..count].chars().count() + 1;
+                        let end = line.pos_from_cursor(egui::text::CCursor::new(zero)).min.x
+                            + design::number_width(ui, "0", &font);
+                        assert!(
+                            at[0] - end <= joint + design::XL,
+                            "iter-27-R-FK2: {end} to {} is more than {joint}",
+                            at[0]
+                        );
+                    }
                 }
                 // Whole pixels: a form measured alone and the same form in the line can round
-                // apart by one pixel. No word moves more, or to another line.
-                assert!(at.iter().all(|x| (x - at[0]).abs() <= 1.0), "{at:?}");
+                // apart by one pixel.
+                assert!(at[..3].iter().all(|x| (x - at[0]).abs() <= 1.0), "{at:?}");
+                assert!(lines.iter().all(|n| *n == lines[0]), "{lines:?}");
                 // Rule P, as one rule (reviews of PR 276): a row's height and lines are those of
                 // the same row with each time taken away: each effect is its plain words, and an
                 // official condition with a time is that condition. So no change of a time moves
@@ -9854,7 +10007,10 @@ mod tests {
                     assert!(target.width() >= design::XL);
                 }
                 // Through `2`, `last round` and `time is up`, the same words show at every width
-                // and the word after the slot keeps its place.
+                // and the word after the slot keeps its line. iter-27-R FK2 changes this on
+                // purpose: that word moves at `last round` and `time is up` (the slot's spare
+                // room is at the line's end); the numbers' check below keeps its x for `10`, `9`
+                // and `2`.
                 for width in (400..1000).step_by(6) {
                     for scale in [design::RUN_REGULAR, design::RUN_COMPACT] {
                         let mut seen = Vec::new();
@@ -9889,10 +10045,7 @@ mod tests {
                         for next in &seen[1..] {
                             assert_eq!(seen[0].0, next.0, "{width}: {seen:?}");
                             if let (Some(a), Some(b)) = (seen[0].1, next.1) {
-                                assert!(
-                                    (a.x - b.x).abs() <= 1.0 && a.y == b.y,
-                                    "{width}: {seen:?}"
-                                );
+                                assert!(a.y == b.y, "{width}: {seen:?}");
                             }
                         }
                     }
@@ -10479,7 +10632,7 @@ mod tests {
 
     /// Review repair 4: roll words always fit their place. When a row's conditions leave no
     /// room for one word, the words take a line of their own at the name's edge, and the row
-    /// grows by that line.
+    /// grows by that line. iter-27-R FI2: only then; else they stay on the second line.
     #[test]
     fn roll_words_take_their_own_line_when_the_conditions_fill_it() {
         let mut p = super::super::tests::run().state.participants[0].clone();
@@ -10527,6 +10680,36 @@ mod tests {
                 let room = RowLayout::new(ui, 442.0, &fewer, None, scale, RowFit::Natural, 0.0)
                     .with_badge(ui, Some(badge));
                 assert!(!room.badge_below);
+                // iter-27-R FI2: a Bloodied, concentrating row with its save DC at 960 keeps its
+                // height when a save result comes: the result stays on the second line.
+                let mut wolf = p.clone();
+                wolf.conditions.clear();
+                wolf.hp = Some(3);
+                let row = |badge: Option<&str>| {
+                    RowLayout::fitted(
+                        ui,
+                        442.0,
+                        &wolf,
+                        (None, Some(10), false),
+                        scale,
+                        RowFit::Natural,
+                        0.0,
+                    )
+                    .with_badge(ui, badge)
+                };
+                let saved = row(Some("Saved · 1 damage (half)"));
+                assert!(!saved.badge_below, "iter-27-R-FI2");
+                assert_eq!(
+                    saved.height(scale),
+                    row(None).height(scale),
+                    "iter-27-R-FI2"
+                );
+                let (_, _, room) = badge_place(&saved, 0.0);
+                assert!(
+                    badge_words(ui, "Saved · 1 damage (half)", &font, room)
+                        .is_some_and(|words| words.starts_with("Saved")),
+                    "iter-27-R-FI2: the result's words show in {room}"
+                );
             });
         });
     }
@@ -10833,7 +11016,7 @@ mod tests {
         );
         run.apply(Command::Condition(0, "Prone".into())).unwrap();
         assert_eq!(run.unsaved_summary().len(), 2);
-        assert_eq!(run.unsaved_summary()[1], format!("Prone on {name}"));
+        assert_eq!(run.unsaved_summary()[1], format!("add Prone on {name}"));
         run.undo();
         assert_eq!(run.unsaved_summary().len(), 1);
     }
@@ -10891,24 +11074,34 @@ mod tests {
                         "iter-26-R-FA6 at {width}"
                     );
                 }
-                // iter-26-R SJ1: Undo is not under that message, so it keeps the copy number
-                // that tells two same-name groups apart, and gives up the member's name.
+                // iter-26-R SJ1, iter-27-R FI8: Undo is not under that message, so it keeps the
+                // copy number that tells two same-name groups apart. The moved arrival is what
+                // the DM must know: the place goes first, then the group, and the member keeps
+                // its whole name. One pixel short of each form gives the next.
                 let rival = "Rival Team (Rival Captain 2)";
                 let undo = format!("Undo: move {rival} before Rival Team");
-                let kept = "Undo: move Rival… (…\u{a0}2) before Rival…";
-                let kept_width = design::number_width(ui, kept, &font);
-                let shown = undo_words(ui, (&undo, None), false, &[], &font, kept_width + 0.5);
-                assert_eq!(shown, kept, "iter-26-R-SJ1");
-                let roomy = "Undo: move Rival Team (…\u{a0}2) before Rival Team";
-                let roomy_width = design::number_width(ui, roomy, &font);
-                assert_eq!(
-                    undo_words(ui, (&undo, None), false, &[], &font, roomy_width + 0.5),
-                    roomy,
-                    "iter-26-R-SJ1-roomy"
-                );
-                // X46: narrower, the place goes before the copy number does; with no room
-                // for that either, the target goes: never `move Rival… before Rival…`.
-                let placeless = "Undo: move Rival Team (…\u{a0}2)";
+                let order = [
+                    undo.as_str(),
+                    "Undo: move Rival Team (Rival Captain 2)",
+                    "Undo: move Rival Captain 2",
+                ];
+                for pair in order.windows(2) {
+                    let width = design::number_width(ui, pair[0], &font);
+                    assert_eq!(
+                        undo_words(ui, (&undo, None), false, &[], &font, width + 0.5),
+                        pair[0],
+                        "iter-27-R-SJ1"
+                    );
+                    assert_eq!(
+                        undo_words(ui, (&undo, None), false, &[], &font, width - 1.0),
+                        pair[1],
+                        "iter-27-R-SJ1 one pixel short of {:?}",
+                        pair[0]
+                    );
+                }
+                // X46: narrower, the member's name gives way and its copy number stays; with
+                // no room for that either, the target goes: never `move Rival… before Rival…`.
+                let placeless = "Undo: move Rival… (…\u{a0}2)";
                 let width = design::number_width(ui, placeless, &font) + 0.5;
                 assert_eq!(
                     undo_words(ui, (&undo, None), false, &[], &font, width),
@@ -10981,8 +11174,8 @@ mod tests {
                 let font = Type::Strong.font(ui);
                 for (before, after) in [
                     ("7 damage to ", ""),
-                    ("Frightened on ", ""),
-                    ("Frightened off ", ""),
+                    ("add Frightened on ", ""),
+                    ("remove Frightened from ", ""),
                     ("", " present"),
                     ("", " absent"),
                     ("initiative for ", ""),
@@ -11030,25 +11223,31 @@ mod tests {
                         expected
                     );
                 }
-                // X6: an added effect's Undo has one form, `Undo: effect <words>`: four words,
+                // X6: an added effect's Undo has one form, `Undo: add effect <words>`: four words,
                 // then two, then the target by whole words with its copy number, then no
                 // target. Never a name cut to `…` and its number.
-                let effect = format!("Undo: effect Wis save DC 15 (Hold Person) on {}", p.name);
+                let effect = format!(
+                    "Undo: add effect Wis save DC 15 (Hold Person) on {}",
+                    p.name
+                );
                 let rows = std::slice::from_ref(&p);
                 let forms = undo_forms(&effect, Some(&p.name), false, rows);
                 assert_eq!(
                     forms.target,
                     [
-                        "Undo: effect Wis save DC 15… on Cinder Wolf 3",
-                        "Undo: effect Wis save… on Cinder Wolf 3",
-                        "Undo: effect Wis save… on Cinder… 3",
+                        "Undo: add effect Wis save DC 15… on Cinder Wolf 3",
+                        "Undo: add effect Wis save… on Cinder Wolf 3",
+                        "Undo: add effect Wis save… on Cinder… 3",
                     ]
                 );
                 assert_eq!(
                     forms.bare,
-                    ["Undo: effect Wis save DC 15…", "Undo: effect Wis save…"]
+                    [
+                        "Undo: add effect Wis save DC 15…",
+                        "Undo: add effect Wis save…"
+                    ]
                 );
-                let narrow = "Undo: effect Wis save… on Cinder… 3";
+                let narrow = "Undo: add effect Wis save… on Cinder… 3";
                 let width = design::number_width(ui, narrow, &font) + 0.5;
                 assert_eq!(
                     undo_words(ui, (&effect, Some(&p.name)), false, rows, &font, width),
@@ -11118,7 +11317,7 @@ mod tests {
         assert_eq!(
             (label.as_str(), target.as_deref()),
             (
-                "effect Wis save DC 12 Against the Ancient Archmage on 2",
+                "add effect Wis save DC 12 Against the Ancient Archmage on 2",
                 Some("2")
             )
         );
@@ -11131,7 +11330,7 @@ mod tests {
         assert!(
             forms
                 .target
-                .contains(&"Undo: effect Wis save… on 2".to_owned()),
+                .contains(&"Undo: add effect Wis save… on 2".to_owned()),
             "{:?}",
             forms.target
         );
@@ -12161,13 +12360,6 @@ mod tests {
                     });
                 design::theme::install(&harness.ctx);
                 harness.run_steps(3);
-                // Astra 2: an unchanged frame measures no roster name for the dock again.
-                let prepared = PREPARED.with(std::cell::Cell::get).2;
-                harness.run_steps(2);
-                assert!(
-                    prepared > 0 && PREPARED.with(std::cell::Cell::get).2 == prepared,
-                    "iter-26-R-widest at {width}x{height}: measured {prepared} before"
-                );
                 let log = harness
                     .query_all_by_label("Log")
                     .map(|n| n.rect())
@@ -12348,14 +12540,12 @@ mod tests {
 
     #[test]
     fn iter23_s_am1_conflict_words_offer_a_close_only_when_it_can_happen() {
-        assert_eq!(
-            conflict_close_words(true),
-            "Choose which HP to keep before you close."
-        );
+        // Round 27 FN4: a blocked close has no body words; its reason sits beside Close now.
+        assert_eq!(conflict_close_words(true), None);
         // Lookalike outside the rule: a conflict with nothing blocking keeps the close offer.
         assert_eq!(
             conflict_close_words(false),
-            "Choose which HP to keep, or close and choose next time."
+            Some("Choose which HP to keep, or close and choose next time.")
         );
     }
 
@@ -12390,14 +12580,20 @@ mod tests {
                     );
                     assert!(design::number_width(ui, &fitted, &font) <= 70.0, "{fitted}");
                 }
-                // iter-25-R FJ5: a name that Small shows whole may use Small; one that must lose
-                // words keeps Heading, so it never loses both size and letters.
+                // iter-27-R FK1: a name that `Heading` holds stays in it on one line; else it
+                // wraps in `Small` to two lines, whole while they hold it.
                 let heading = Type::Heading.font(ui);
                 let whole = design::number_width(ui, long, &heading);
-                let small = design::number_width(ui, long, &font);
                 let at = |room: f32| dock_name_shown(ui, long, room);
-                assert!(matches!(at(whole), (Type::Heading, shown) if shown == long));
-                assert!(matches!(at(small), (Type::Small, shown) if shown == long));
+                let size = |galley: &Galley| galley.job.sections[0].format.font_id.size;
+                assert!(at(whole).text() == long && at(whole).rows.len() == 1);
+                assert_eq!(size(&at(whole)), heading.size);
+                let one = at(whole - 1.0);
+                assert_eq!((one.text(), one.rows.len()), (long, 1));
+                assert_eq!(size(&one), font.size, "Small on one line while it holds the name");
+                let two = at(design::number_width(ui, long, &font) - 1.0);
+                assert_eq!((two.text(), two.rows.len()), (long, 2), "iter-27-R-FK1-wraps");
+                assert_eq!(size(&two), font.size);
                 // iter-25-R FJ4, FJ1: a sheet notice keeps one line by shorter forms, and a
                 // count of removed Undo steps stays as long as the name does.
                 let summary = "Brannoch Vale’s sheet changed: HP 58 → 54 and 2 more sheets · 1 Undo step removed";
@@ -12410,43 +12606,56 @@ mod tests {
                 let named_width = design::number_width(ui, named, &font);
                 assert_eq!(notice(named_width), named);
                 assert!(design::number_width(ui, &notice(named_width - 1.0), &font) <= named_width - 1.0);
-                let (role, shown) = at(small - 1.0);
-                // X53: a cut name keeps its telling last word.
-                assert!(role == Type::Heading && shown.ends_with("… Bell"), "{shown}");
-                assert!(design::number_width(ui, &shown, &heading) <= small - 1.0);
-                // X53, review of PR 292: at every room the dock's name keeps to its slot, and
-                // keeps its last word wherever the first word, `…` and the last word fit. Else
-                // it is its first word's start and `…`.
+                // iter-27-R FK1: at every room the dock's name keeps to its slot and to two
+                // lines that share one control's height. It shows whole wherever two lines hold
+                // it; else whole words and `…`, never ending on a joining word, and a copy
+                // number or letter stays.
                 for name in [
                     long,
                     "Ashfang, Eldest Wolf of the Southern Ridge",
                     "Vault Guard",
                     "Ember Cultist of the Southern Watch 12",
                 ] {
-                    let first = name.split(' ').next().unwrap().trim_end_matches(',');
-                    let last = name.rsplit(' ').next().unwrap();
-                    let telling = design::number_width(ui, &format!("{first}… {last}"), &heading);
+                    let mut forms = std::collections::BTreeSet::new();
                     for room in 20..=320 {
                         let room = room as f32;
-                        let (role, shown) = dock_name_shown(ui, name, room);
-                        let font = if role == Type::Heading { &heading } else { &font };
+                        let shown = dock_name_shown(ui, name, room);
+                        let text = shown.text().to_owned();
                         assert!(
-                            design::number_width(ui, &shown, font) <= room,
-                            "{room}: {shown}"
+                            shown.size().x <= room + 0.5
+                                && shown.rows.len() <= DOCK_NAME_LINES
+                                && shown.size().y <= Density::Read.control() + 0.5,
+                            "{room}: {text:?} {:?}",
+                            shown.size()
                         );
-                        if shown == name {
+                        forms.insert(text.clone());
+                        if text == name {
                             continue;
                         }
-                        if telling <= room {
-                            assert!(shown.ends_with(&format!("… {last}")), "{room}: {shown}");
-                        } else {
-                            let start = shown.trim_end_matches('…');
-                            let written = name.split(' ').next().unwrap();
-                            assert!(
-                                shown.ends_with('…') && written.starts_with(start),
-                                "{room}: {shown}"
-                            );
+                        assert!(text.contains('…'), "{room}: {text}");
+                        let (kept, end) = text.split_once('…').unwrap();
+                        if name.ends_with(" 12") && room >= design::XL {
+                            assert!(end == "\u{a0}12", "{room}: {text}");
                         }
+                        let words: Vec<&str> = kept.split_whitespace().collect();
+                        assert!(
+                            words.last().is_none_or(|word| !["of", "the"].contains(word)),
+                            "{room}: {text}"
+                        );
+                        // Whole words, unless the first word alone is cut by letters.
+                        let written: Vec<&str> = name.split_whitespace().collect();
+                        assert!(
+                            words.len() <= 1
+                                || words.iter().zip(&written).all(|(a, b)| {
+                                    a.trim_end_matches(',') == b.trim_end_matches(',')
+                                }),
+                            "{room}: {text}"
+                        );
+                    }
+                    // The rule reaches each of its forms: whole, cut by words.
+                    assert!(forms.contains(name), "{name}: {forms:?}");
+                    if name != "Vault Guard" {
+                        assert!(forms.iter().any(|form| form.contains('…')), "{name}");
                     }
                 }
             });

@@ -206,7 +206,8 @@ menus put the caret after the word. Keep remains the default focus when closing 
 Header actions have at most one bordered secondary button, for `New …`. Other header actions are quiet and
 come first. Only one accent-filled primary action can be visible. An open run's strip owns primary `Next turn`
 on other pages; `Back to run` is secondary. Use a `status_link`, such as `Running · Round 2`, to open its
-state. An on toggle uses `selected`, its word and an icon or check, without accent fill. Use red only for an
+state. An on toggle uses `selected`, its word and an icon or check, without accent fill. A menu's selected choice has a check
+before its words, and the other choices keep that slot empty, so every choice's words start at one x. Use red only for an
 action that loses something. Keep Delete and Remove in row menus.
 
 A save row keeps its state and quiet `Discard` at the left and `Save` at the right. A draft that Save's own check
@@ -229,7 +230,8 @@ Saved and errors keep that left slot. When one cause blocks several controls, st
 save row, run strip or recording row. Other controls use its hover text and accessible description. The rail
 never repeats the sentence. Its campaign switcher keeps its height and a lock; the popup starts with the
 reason and disables campaign choices. The popup stays inside the navigation column, clear of its splitter; in a
-narrow column its choices wrap. With no campaign its one command, `Add campaign…`, stays on one line with `S` on
+narrow column its choices wrap. With no campaign its one command, `Add campaign` (the same words as the page's
+Add campaign button: both open the same form), stays on one line with `S` on
 each side: it uses `Small`, the type of the switcher's own words, because the menu's Strong type does not fit the
 column. Package, encounter, group, repair, World edit and run-settings drafts keep their campaign-switch
 reason after Unsaved and Discard in the save row. While Save is blocked, Discard is the one way out, so the reason
@@ -502,8 +504,8 @@ Draw the manifest error with `message_with_action`, then its muted `Small` conse
 text edge below the action. The consequence wraps at the pane's notice measure, not at the action's width. In Edit
 Markdown the error is in the message space below the save row, and the bordered action and its consequence follow
 directly below that space, at the message text edge: they depend on the saved file only, so they stay while the DM
-edits. Show the chosen and total entries (`4 of 6 entries chosen · 1 still needed`, `All entries chosen`) and `Choose all`, the name Campaign gives the same action. `chosen` counts only the DM's own choices, as Campaign's package row does; `still needed` counts the entries
-those choices need that the DM did not choose, and is left out when it is 0
+edits. Show the chosen and total entries (`5 of 6 entries chosen`, `All entries chosen`) and `Choose all`, the name Campaign gives the same action. A ticked box counts as chosen, whoever ticked it: the DM's choices and the entries
+they need together, as Campaign's package row counts them
 with Undo. Its result
 and Undo sit in the pane's message footer, like manifest-write results (see Files and recovery). Omit the entry breadcrumb and Engine support. Empty package counts have no separator.
 
@@ -746,8 +748,8 @@ fills the rest of the window and keeps room for a few rows, so tall repairs make
 gains focus (Tab or a screen reader) scrolls into view, and a repair editor brings its whole viewport into view.
 The page's messages sit in its one footer, pinned below the page's scroll area: every live result with an Undo (a
 discard, a written Campaign.md or manifest, a found folder, a removed package, each repair's discarded draft),
-newest first, then the reasons (each repair's failed Save or refusal, named by its file, then the page's errors:
-Save's or a load's, the change check's), then the latest plain result (`Campaign selections saved.`, applied
+newest first, then the reasons (each repair's failed Save, and an open repair's refusal, named by its path, then
+the page's errors: Save's or a load's, the change check's), then the latest plain result (`Campaign selections saved.`, applied
 changes) and the package warnings (a faulty manifest, a chosen package that is not available, with their
 actions). Each Undo stays with its own object and action until it is used or its object ends it; a failed Undo
 keeps it. Every live Undo, the page's and the repairs', shares one order, newest first, so a second repair's
@@ -756,15 +758,20 @@ also while the page is hidden. A plain result gives way to any newer result. The
 starts: the package columns clip their painting and their clicks to the page's viewport, so nothing of the page
 shows or takes a press under the footer. Rows below it come into view as the page scrolls, by Tab or by a screen
 reader's focus.
-So no result, error or package warning moves the save rows, the repairs or the package list.
+So no result, error or package warning moves the save rows, the repairs or the package list. A page with no package
+list to show (a load failed: a missing Campaign.md, a load that stopped) draws its errors as its content, at the top
+of the page below the tabs, where an empty state starts, not in the footer: a blank page with its only message at
+the bottom looks as if it did not load.
 The save row, package list and entry search stop at LIST_MEASURE from the tab’s left edge.
 An open repair keeps the same right edge as the save row. Its save row lays out `Save repaired note` first at that edge; a long
 state (`Not saved. …`) or lock reason wraps beside it and never cuts it.
 Repair fills the column with the invalid-note message above it; an `L` gap and hairline separate its save row
 from the package save row. While the repair is open, that message keeps the same words (`<path> cannot be read.
-Fix it here or in World.`), so no edit moves the editor. The repair's messages are in the page's footer: its
-result with a live Undo (`Broken.md draft discarded.` with `Undo discard`), then its cause (`Broken.md: Line 3
-opens a list …`). Discard returns to the unreadable file, so its cause follows the result; the next edit ends the
+Fix it here or in World.`), so no edit moves the editor. The cause shows once on the screen. While the repair is
+closed, the message ends with it (`… Fix it here or in World. Line 3 opens a list …`) and the footer does not
+repeat it. While it is open, the repair's messages are in the page's footer: its result with a live Undo
+(`Broken.md draft discarded.` with `Undo discard`), then its cause, named by the path the message uses
+(`Notes/Broken.md: Line 3 opens a list …`), so two notes of one name in different folders stay apart. Discard returns to the unreadable file, so its cause follows the result; the next edit ends the
 result. In a short window the repair editor gives way: the save row and a few package rows keep their size, and
 the editor's top never moves. Below the repair's save row, an `L` gap and the package list's one hairline
 separate the repair from the list; the repair adds no second rule. Invalid YAML uses plain words and marks the line to fix.
@@ -774,7 +781,7 @@ with the cause; Unsaved and a primary Save come only when Save would write it. S
 campaign ownership). Each repair keeps its answer and asks again only when its draft changes, so the page never
 reads the disk or parses a draft on an unchanged frame. A Save that fails on the disk (read only, missing, a write
 error) is an action-time failure: that repair's state slot says `Not saved`, and its cause is a reason in the
-footer (`Broken.md is not saved. This file is read only. Make it writable, then Save again.`), where a parse cause
+footer (`Notes/Broken.md is not saved. This file is read only. Make it writable, then Save again.`), where a parse cause
 also sits, until its next edit, its successful Save, a reload or another campaign. The failure shows only there:
 the message above stops at `Fix it here or in World.` While it shows, `Save repaired note` stays open for a retry but is secondary; the next
 edit gives the primary back. A refusal that Save's own check finds at Save is Invalid with its cause, never `Not
@@ -785,15 +792,14 @@ first edit in the repair moves nothing.
 
 Needed by your entries sits below packages in the left column. Its right pane has one search and list; rows
 open Lookup. Short package lists fit their rows. A package row's count has one form: `All chosen · 2,065 entries`,
-`None chosen · 6 entries`, `3 of 6 chosen`, `5 of 6 chosen · 1 still needed`. `chosen` counts only the DM's own
-choices, as the page header does (`2,069 entries chosen · 1 still needed`); `· N still needed` counts the entries that
-other choices need and the DM did not
-choose, and is left out when it is 0. An off package with required entries shows
-`None chosen · 3 still needed`, an indeterminate checkbox and encounters that use its creatures. A package whose manifest
+`None chosen · 6 entries`, `5 of 6 chosen`. A ticked box counts as chosen, whoever ticked it: the DM's choices and
+the entries other choices need (ticked and locked) together, as the page header counts them (`2,070 entries
+chosen`). Every needed entry is ticked, so no count says `still needed`; the list `Needed by your entries` says which
+they are. A box that is not fully ticked never says `All chosen` (`6 of 6 chosen`). An off package with required
+entries shows `3 of 6 chosen`, an indeterminate checkbox and encounters that use its creatures. A package whose manifest
 has a fault leads its count with the fault's icon in its tone (amber warning for a deleted manifest, red error for
 one that cannot be read), as the About row does; the message above names the fault, and the row's accessible name
-says it in words (`Manifest deleted · 5 of 6 chosen · 1 still needed`). `still` keeps the short count apart from
-the list `Needed by your entries`, which counts every needed entry, chosen or not. A package's heading shares the
+says it in words (`Manifest deleted · 5 of 6 chosen`). A package's heading shares the
 centre line of its mode and its `Choose all` (or `Include future additions`) and `Choose none` actions.
 
 A missing Campaign.md states whether Splat holds the last read copy and counts its packages and rules. Writing
@@ -840,7 +846,9 @@ reader's place), so the scope, the search and the list never move; Campaign offe
 Missing-package recovery searches beside known package folders. A unique match gets bordered secondary Use
 this folder before Find the folder…; every action on the message, Remove from this campaign too, is bordered
 secondary. Show one warning naming the old and new folders, followed by
-the affected encounter links with word spaces. Align Use this folder, Find the folder… and Remove from this
+the affected encounter links with word spaces. After `Remove from this campaign`, the result says what was done
+first, a success with its Undo (`Ashen Marches removed from this campaign.` with `Undo package removal`); the
+warning about the encounters it leaves without creatures follows it, with their links (`message_with_links`). Align Use this folder, Find the folder… and Remove from this
 campaign on one action line with the warning text. Technical details follows below. Say Splat cannot find the
 package only when there is no match. Use Body text throughout the missing-package sentence. The picker
 starts beside the old folder and checks identity before restoring registration. A folder that holds another
@@ -854,7 +862,9 @@ Campaign Packages and the Library details row say `The package manifest was dele
 Write it again, or restore it from a backup.` and offer `Write the manifest again` for a missing file. The old
 file name is not stored. An existing file offers `Replace with a basic <file>` and warns that other fields
 will be dropped. Keep the registered identity and reload. Writes show the success message `<file> was written
-again.` and `Undo write <file>`, one verb for both, naming the file written, for a missing or a replaced file. On reload, if that file no longer holds the
+again.` and `Undo write <file>`, one verb for both, naming the file written, for a missing or a replaced file. The
+message goes on to say what the file holds now and, for a replaced file, what Undo gives back: `It now has the
+package’s name and ID in the current format. Undo puts your old text back.` On reload, if that file no longer holds the
 written text, the message and its Undo go away.
 
 ### Link and folder
@@ -1482,27 +1492,28 @@ gap: a bordered secondary button, as Arrivals offers it. The words, the button a
 
 Long local effects show four words and `…` (`Hexed until the hag…`), the last shown word a link to the whole effect;
 a hidden count keeps its number (`2 more`, never a bare `more`); Undo keeps four when they fit. An added effect's Undo has
-one form, `Undo: effect <words>`: narrower, it keeps two effect words and its target (`Undo: effect Wis save… on Cinder
-Wolf 2`), then the target shortens by the rule above, then the target goes (`Undo: effect Wis save…`). Concentration Undo says start concentration or stop concentration before
+one form, `Undo: add effect <words>`: narrower, it keeps two effect words and its target (`Undo: add effect Wis save…
+on Cinder Wolf 2`), then the target shortens by the rule above, then the target goes (`Undo: add effect Wis save…`).
+Every condition and effect step names its verb: `Undo: add Frightened on Oren`, `Undo: remove Prone from Oren`. Concentration Undo says start concentration or stop concentration before
 the target. Exhaustion Undo keeps both levels, such as `exhaustion 2 → 3 on Oren`. Exhaustion level uses the shared `stepper` at Scan height. One drag on the level is one Undo step, from the level where the drag started, committed when the drag ends; each − or + press is one step. At a limit the button says `Exhaustion stops at 6.` or `Exhaustion is already 0.` Hover and accessibility keep full text.
 
 The dock has a fixed place above the footer: Amount, Damage, Heal, Temp HP, selected name, Conditions, Conc,
 Absent, Effect. Off toggles use text colour; disabled controls stay muted. Enter applies damage. The dock's and footer's
 background uses roster width; panels never cover them. The dock's controls are one block at the left, no wider than
 `LIST_MEASURE`: the dice end at the block's edge, and Conditions, Conc and Absent follow the selected name's slot after
-an `L` gap, not at the roster's far edge. The slot has one width for the whole fight (the widest roster name in
-`Heading`, at most `12 × L`), so the toggles keep one x whichever row is selected. The selected name keeps `Heading`; it
-uses `Small` only when that shows the name whole. The selected name starts the line. In a dock too narrow for the dice
+an `L` gap, not at the roster's far edge. The slot has one width, `8 × L` (less only where the dock has no room for
+it), in every fight and for every row, so the toggles keep one x whichever row is selected and whatever names the
+roster has. The selected name starts the line: in `Heading` when that holds it on one line; else in `Small` on up to
+two lines that share one control's height, whole while they hold it; else two lines of whole words that end in `…`
+and keep a copy number or letter (`Ember Cultist of the… 12`). In a dock too narrow for the dice
 total beside the dice, the total (the dice icon and the number, named `Rolled 4`) has a reserved place at the end of the name's line, under
 the dice, never before the name. In a wider dock the total (`= 4`, named `Rolled 4`) has a fixed place after Roll at
 the block's edge, and a total of three digits gives up `=` there. Each place holds three digits whole; a longer total
 ends in `…`, and hover keeps the roll's whole line. No control of the dock moves when a total comes, changes or goes.
 Fit whole words, retain a distinguishing last word or copy number or
 letter, end shortened names with an ellipsis and drop trailing joining words: `Seraphina… Bell`, `Cinder… 2`.
-The dock's name keeps its last word while its slot holds the first word, `…` and the last word; else it is its
-first word's start and `…`, within the slot, so no control moves. The limit: in the 442 px dock at 960x640 the
-slot is 79 px (95 beside Lookup), and `Seraphina… Bell` needs 107, so it shows `Seraphina…`; from a 596 px
-dock the slot is 192 px. Hover and accessibility keep full names. A row at 0 HP with the panel hidden has `Death saves` first on the
+The dock's name wraps to its two lines before it ends in `…`; a first word longer than both lines is cut by letters,
+within the slot, so no control moves. Hover and accessibility keep full names. A row at 0 HP with the panel hidden has `Death saves` first on the
 action tiles' line above the dock, so no control of the dock moves and the name keeps its slot.
 
 ### Effects and turn reminders
@@ -1526,8 +1537,10 @@ its place. On the row that has the turn, an effect shown on each turn comes firs
 before the last plain condition folds into `1 more`. Each effect shows whole while the line has room; else the
 first ones and a count of the rest, `⚑ +2`, a space after their slot with no dot; else the first one's words
 shortened from their end and the count; else the count of all, `⚑ 3`; else the row shows the effects as their
-plain words, as the row with no time does. A count has a slot as wide as its widest form (`10`, `· last round`, `· ⚠ time is up`), so a
-change of count moves no word, and its underline stops at its last letter. Words read `Bless 9`, `Bless · last
+plain words, as the row with no time does. A count keeps the room of its widest number (`10`) in place, so a change of
+number moves no word, and the line keeps the rest of the room of its widest form (`· last round`, `· ⚠ time is up`)
+after its last word, so no hole opens between the effect and what follows it and the line keeps its lines. The words
+after it move only at `last round` and `time is up`, when the DM must look. Its underline stops at its last letter. Words read `Bless 9`, `Bless · last
 round`, `Bless · time is up` (the `result.warning` icon, words in `text`), `Legendary actions 2 of 3`, `Fire
 Breath ready`, `Fire Breath spent ⚄`. An official condition's name opens its rule; the count is its own
 target of at least `XL`: a running count or words shown on each turn open Conditions, `time is up` removes,
@@ -1539,7 +1552,7 @@ hover and accessible name hold every whole word. After damage to a row marked Co
 its second line until the next step, only in the room that the effects leave; else only in the hover and the
 accessible name. In Conditions an official condition's count is on its tick, `✓ Frightened 10`, while the
 grid fits its room; else it is listed under Other effects, which lists other words with their whole words. The
-tab's help says `No HP, AC or roll changes by itself. A time you type counts down on that creature’s turns.` An
+tab's help says `No HP, AC or roll changes by itself. A time you type counts down at the end of that creature’s turn: Bless 10 rounds goes from 10 to 9.` An
 ended run shows them as words, and a click does nothing.
 
 The notice line has a third part after the state notice and the sheet summary: the current turn's reminders,
@@ -1566,14 +1579,18 @@ Other participants show them only if a success or failure is already recorded, s
 Clicking a count edits it. Sheet
 shows live death saves once, with correct singular and plural words. A character's sheet panel starts with its sync status and facts on one line, one blank before each `·`
 (`Not connected · Fetched 3 h ago · HP from this run`). Correct has no duplicate fields; HP owns
-its help. Correct initiative says This row moves. The current turn stays. Labels share one column, as wide as the widest label (`Initiative bonus`) and an `S` gap; blocked
-initiative and DM-note commits have a short reason on its own line below the field, at the field's left. That line
-stays when the reason goes, so nothing below moves as the DM types. The DM note field takes the form's width
+its help. Initiative has its own `CORRECT INITIATIVE` heading in setup (the bonus) and in live play (the total), so one
+form has one grouping. Correct initiative says This row moves. The current turn stays., `S` below its field's line.
+Labels share one column, as wide as the widest label (`Initiative bonus`) and an `S` gap; blocked
+initiative and DM-note commits have a short reason on its own line below the field (for initiative, below its help),
+at the field's left. That line stays when the reason goes, so nothing below moves as the DM types. The death-save
+counts have the slot of their widest words, so `+ Success` and `+ Failure` keep their x after each press. The DM note field takes the form's width
 (`FORM_WIDTH`) up to Add note. Correct HP has an `L` gap after death saves.
 Empty Prep offers Edit encounter if its encounter exists.
 
 Changed creatures show Changed and the changes the printed stat block does not show, such as Attack +1 or Speed
-40 ft, on line two, aligned under the name at every scale. Setup shows only Changed. If name-only shrinking is insufficient, keep the
+40 ft, on line two, aligned under the name at every scale. Setup shows only Changed, after the side and the numbers
+(`Enemies · HP 43/43 · AC 15 · ✎ Changed`), as the encounter editor's row puts it last. If name-only shrinking is insufficient, keep the
 first table bonus and more; long conditions keep those that fit and a Conditions count link. The card puts
 changes at the top of its Stat block tab, except AC, maximum HP and initiative bonus, which already appear in
 the value trio. Add by hand comes first, in larger type on one summary line, and holds only what the run
@@ -1584,8 +1601,9 @@ changed maxima or bonuses. Changes scroll with the stat block; each participant 
 Paused snapshots state when they differ from the current file, subject first: `This stat block uses the copy from
 the start of the fight. Cinder Wolf.md has changed.` (`This sheet …` for a character; the same subject when the file
 was deleted, cannot be read or is not in the campaign), then `Read the new version`, a bordered secondary button whose
-border starts at the sentence's words. The sentence is the changed-on-disk state: the warning icon in `document.external`, then words in the
-text colour, so it is not read as part of the stat block. Under that notice a character's
+border starts at the sentence's words. The notice comes and goes with the file, so it is in the panel's message footer,
+and the stat block keeps its top. It is a message: an error when the file cannot be read now, as in every other view,
+else a warning. Under that notice a character's
 card says only `The roster has the current values.`; without it, `Saved when this run began. The roster has the
 current values.`
 
@@ -1608,16 +1626,18 @@ In a run a tile arms its action: its frame turns accent on the selected fill and
 the panel stays on the actor. Under the tiles, a crosshair and the next step in Small (`Click a target to roll against
 it. Enter applies the damage. Escape stops.`), the crosshair centred on the first line when the words wrap, led by the way the d20 rolls when it is not plain (`With advantage.
 Click a target…`). The hint keeps the lines that the longest hint (`With disadvantage.` and the longest next step)
-takes at the panel's width, so `Stop` keeps its y in every roll mode and action. Then quiet actions on their own line, the first of each line with `line_start`, so its words start
-at the tiles' edge: `Stop`, and for a save `Roll damage` and `Half for those at or above DC`, or for a player's attack
-`Roll for them`. Each other row shows its roll words in accent Small in one place, at every size: the line under its
+takes at the panel's width, so `Stop` keeps its y in every roll mode and action. Then the actions on their own line:
+the step that continues the task, `Roll damage`, is secondary (bordered), its border at the tiles' edge; the others are
+quiet, a quiet one that starts a line with `line_start`, so its words start at the tiles' edge: `Stop` (last), `Half
+for those at or above DC`, or for a player's attack `Roll for them`. Each other row shows its roll words in accent Small in one place, at every size: the line under its
 name, after its conditions (and after its state word where the row has no state column), never in the state column.
 They are the chance to hit it while an attack is armed, with the way it rolls (`51% to hit · advantage`), then the
 result against it, a plain comparison with no hit or miss verdict (`17 vs AC 13 · 10 damage`). They take the longest
 form that fits whole, dropping words before the result first; the result's last two parts (the comparison or save
-outcome, and the damage with its `(half)`) never drop. When they do not fit whole after the conditions but fit on a line
-of their own, the words take that line, under the conditions at the name's edge, and that row grows by the line; they
-are cut by whole words only where even that line has no room. The row's accessible name holds them whole. Roll words
+outcome, and the damage with its `(half)`) never drop. A roll result does not change a row's height: when the result
+does not fit whole after the effects and the save DC, the row without them shows it whole if it can; else the words are
+cut by whole words after the conditions. Only where not one word fits there do they take a line of their own under
+the conditions, at the name's edge, and that row grows by the line. The row's accessible name holds them whole. Roll words
 never move a row's columns. A save's creature targets show their roll in the AC
 cell. After `Roll damage`, each target says its own result, from the amount Enter gives it (`Saved · 1 damage
 (half)`, `Failed · 3 damage`), and keeps it after Enter. Enter finishes the save: its tile disarms, the hint and `Roll
@@ -1658,7 +1678,8 @@ is as wide as the group block below it, so the panel has one right edge. In the 
 one word column, so their fields start at one x, and `Side` starts where `HP` does. The form's reason line (`Type its
 HP. A creature made up here has no stat block.`) keeps its height when the reason goes, so Add and the groups below
 stay still. Search
-shows five matches. When more match, a quiet `Show all 6` (the number of matches) lists every match in place, in a scroll list at most
+shows five matches; six show as six rows, since a `Show all` line would cost a click for one row of about its height.
+When more match, a quiet `Show all 7` (the number of matches) lists every match in place, in a scroll list at most
 eight rows tall, so the words, the chosen match and the roster stay in view. New words return to five. Its side
 picker says Side and uses roster words. List encounter groups, tonight's plan groups, then any-encounter
 groups. Empty sections use group headings and one muted line. New group opens Encounters. Each group's first
@@ -1718,7 +1739,8 @@ words come from one function: Setup, Setup · Paused, Round 2, Round 2 · Paused
 with other unfinished copies names its copy beside Saved and in rail hover.
 
 A disconnected run has Connect to sync on its header only; blocked footer Sync party uses that cause on hover.
-End encounter… shortens to End… before it moves into a menu. Keep End… visible while it fits, including on recovery copies. Hover and accessibility keep End encounter…. Keys keeps its word beside Lookup, Notes and a wide panel. Saved and Undo
+End encounter… shortens to End… before it moves into a menu. Keep End… visible while it fits, including on recovery copies. Hover and accessibility keep End encounter…. Keys keeps its word beside Lookup, Notes and a wide panel. With Keys on, the panel's title is `Keyboard commands`, and the
+list has no label of its own. Saved and Undo
 align with the roster's right edge. The footer uses error status when saving stops. Ended runs put short
 conflict and pending-change counts below blocked Close after sync at the panel's right edge, with an `L` gap
 between character sync blocks. Each block's heading has one form whatever its state: the name in `Heading` and the text
@@ -1764,12 +1786,14 @@ lost changes on separate lines, up to three, then the remaining count. Deleted r
 warning. App close says Keep running, Keep recording or Keep processing for each task; recording and job
 titles name the unfinished session. Sync conflicts name the character and offer Review conflict. The run's
 conflict dialog offers to `close and choose next time` only when Close now works. While a sync change is not
-confirmed, it says `Choose which HP to keep before you close.`, and the cause shows once in muted `Small` text
-above the actions, which all wait for it, in the ended view's exact form: `Settle 1 conflict first.` A close keeps the
+confirmed, the close waits: the title names the conflict, and the cause shows once, in muted `Small` text `S` left
+of the blocked close on the action line (after the red close when that is the only close), in the ended view's
+exact form: `Settle 1 conflict first.` No body line repeats it. A close keeps the
 run's Undo steps, so no close words say that Undo ends.
 The app-close and run-close dialogs draw their recovery actions through one shared function: bordered secondary
 buttons on one line, Connect to sync before Review conflict, and the first one's border starts at the dialog text. Stop and
-close is secondary when saved work remains.
+close is secondary when saved work remains. While the run-close dialog is open, the run's footer line stays behind it
+as it was (Close run, End encounter…, Keys and the save state); the dialog takes the input.
 
 Incoming sheet changes remove only that character's Undo steps. Remaining snapshots keep current sheet values.
 Atomic steps involving others end older affected steps when needed to avoid stale values; Log names each
@@ -2213,15 +2237,23 @@ Compact rows omit a missing spell save DC; wide tables keep the empty cell. Spel
 
 The Combat sync heading and its body are one block: the heading is the first row of the sheet's scroll area,
 below the sheet tabs, and its body opens under it. While closed it says the sync state: `Combat sync · Off`,
-`Combat sync · Waiting for the first read` with the first-read icon and colour until Splat has read the sheet,
-then `Combat sync · On`.
+`Combat sync · Waiting for the first sheet read` with the first-read icon and colour until Splat has read the
+sheet, then `Combat sync · On`. The heading says the state; the open block says only the next step (`If the first
+sheet read does not come, check the connection in Settings.`), so the state has one name and shows once.
 
 The Party header states the connection and the sheet's age: `Connected · Fetched 3 h ago`, never `Cached`.
+The sheet's `D&D Beyond ↗` link follows its kind line (`Dwarf · Fighter · Level 6`), `L` after the words, so it
+stays with the sheet at any width. In the list, temporary HP keeps `S` before the HP it adds to, so the two numbers
+read apart. The sync panel's help for the maximum HP modifier sits directly under its stepper, before the death
+saves.
 
-A stopped-sync notice sits below the Party header, across the page. Its bar starts at the pane edge;
-Dismiss sits at the right end of its first line. Every dismissable Party notice (stopped sync, a replaced sheet,
+The Party page's notices and results that come and go sit in the page's one footer, below the list and the
+sheet: the errors first (the party's read, a character's read beside its kept edits), then a replaced sheet's
+result, the local-edit notices with their actions, the storage warnings and the stopped-sync notice. So a notice
+that comes, Replace, or a close icon moves no member row and no sheet. Each bar starts at the pane edge; Dismiss
+sits at the right end of its first line. Every dismissable Party notice (stopped sync, a replaced sheet,
 a combat sync action's result) has this one form: the close icon at the right end of the first line, never a
-word. Notices above the member list and the sheet end with an `L` gap. The member list keeps the scroll bar's
+word. The member list keeps the scroll bar's
 lane whether or not the bar shows, so its rows and header columns never move. A combat sync action's result sits
 in the sheet's footer, below the sheet's scroll area, with its close icon, so the result, its dismissal and the
 next read move no field. The sync panel's help keeps the reader measure. Sheet pages use Small tabs on one line, with later pages in More.
@@ -2324,7 +2356,9 @@ repair. Account help and trust text keep READER_MEASURE in column and stacked la
 
 The account form replaces status and Connect… link. Use Connect, Not connected and Signed out of D&D Beyond.
 A failed Connect says `Connect failed` with the error icon and colour, on the page and in the rail; `Not connected`
-is only the quiet idle state.
+is only the quiet idle state. Its cause sits in Connect's reason slot, `S` left of Connect, where the DM pressed; it
+wraps there and never moves Connect. While the cookie field is empty, the slot says `Paste your session cookie
+first.` instead.
 Show one Connecting state, with Cancel aligned to the column. Connect stays at the cookie field's right edge
 and is primary when a cookie is entered, no campaign form is open and no run owns primary. Keyring warnings
 own Connect again. Put quiet Disconnect after trust text. Settings and rail share an account-status function.
@@ -2340,9 +2374,10 @@ Details hides Edit details, uses a plain Details heading, and puts state and Dis
 at the right. Discard restores saved details with Undo discard; clean forms use Cancel. The tab's messages sit in
 its one footer: the discard result with its live Undo first (while the form is open), then a registered copy
 with `Undo register campaign` (disabled with the reason while a run, a recording or an unsaved draft blocks a
-campaign change, as the list is), then the error (a failed Connect, Save's error with its own recovery, the D&D
-Beyond list's error), then the add result with `Build an encounter`. So none of them moves the form, Connect or
-the campaign rows. Campaign → Link and folder has the same footer for the details form and the link's result. Import opens below its
+campaign change, as the list is), then the error (Save's error with its own recovery, the D&D Beyond list's
+error), then the add result with `Build an encounter`. So none of them moves the form, Connect or
+the campaign rows. Campaign → Link and folder has the same footer for the details form and the link's result. The D&D Beyond list's
+Add or Added sits in one column, `L` after the widest remote name. Import opens below its
 chosen row with a new sibling folder filled in. Keep campaign name in its field; omit remote ID, repeated
 heading and the open row's Add action. Removal dialogs use the shared `dialog` and its top anchor, as every dialog does. Reload from disk names the local reload
 action.

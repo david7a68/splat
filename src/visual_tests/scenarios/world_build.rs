@@ -5639,13 +5639,13 @@ pub fn package_about(d: &mut Driver<'_>) {
     d.open_combo_at(LIBRARY_PACKAGE_DROPDOWN);
     d.click(MODULE);
     d.click("About Ashen Marches");
-    d.wait_for_text("4 of 6 entries chosen · 1 still needed");
+    d.wait_for_text("5 of 6 entries chosen");
     d.observe(
         "W2 fixture",
-        d.visible_text("4 of 6 entries chosen · 1 still needed")
+        d.visible_text("5 of 6 entries chosen")
             && !d.visible_text("Engine support")
             && !d.visible_text("Library / Other entries"),
-        "Four chosen entries count as chosen; the one entry they need counts as still needed",
+        "Four chosen entries and the one entry they need count as chosen (round 27 FA6)",
     );
     d.state("package-about", Sizes::All);
     let title_before = reader_title_tops(d, MODULE);
@@ -5680,7 +5680,7 @@ pub fn package_about(d: &mut Driver<'_>) {
         );
     });
     d.click("Undo package choice");
-    d.wait_for_text("4 of 6 entries chosen · 1 still needed");
+    d.wait_for_text("5 of 6 entries chosen");
     d.expect_same("Undo package choice restores the original package selection and About reader.");
     d.assert_state_matches("package-use-undone", "package-about");
     d.click(EDIT_MARKDOWN);
@@ -5756,6 +5756,16 @@ pub fn package_about(d: &mut Driver<'_>) {
             d.visible_text("Module.md was written again.")
                 && !d.visible_text("Package.md was written again."),
             "Campaign names the existing manifest file",
+        );
+        // Round 27 FC5: the result says what the file holds now, and that Undo puts the DM's
+        // replaced text back.
+        d.observe(
+            "iter-27-C-FC5",
+            d.visible_text(
+                "Module.md was written again. It now has the package’s name and ID in the current \
+                 format. Undo puts your old text back.",
+            ),
+            "The replaced manifest's result says what changed and that Undo restores the old text",
         );
     });
     assert!(!folder.join("Package.md").exists());
@@ -6675,7 +6685,41 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     d.click_row("Cinder Wolf 1");
     d.click("Stat block");
     d.expect("Bite");
+    // iter-27-R FD3: a file that cannot be read now is an error in the run's panel too.
+    let mut error_icon = false;
+    let mut unread = false;
+    d.each_painted_text(|text, _| {
+        let job = &text.galley.job;
+        if job.text == design::icons::ERROR
+            && job.sections.first().map(|s| s.format.color) == Some(design::colors().result.error)
+        {
+            error_icon = true;
+        }
+        unread |= job.text.contains("Cinder Wolf.md cannot be read now.");
+    });
+    d.observe(
+        "iter-27-R-FD3",
+        error_icon && unread,
+        format!("The run's notice is an error: icon {error_icon}, words {unread}"),
+    );
+    // iter-27-R FD5: the notice is in the panel's footer, so the stat block keeps its top when
+    // the notice grows by `Read the new version` after the repair.
+    let bite_y = |d: &mut Driver<'_>| {
+        [(960.0, 640.0), (1200.0, 800.0), (1920.0, 1080.0)].map(|size| {
+            d.at_size(size, |d| {
+                d.painted_rect_in("Bite", egui::Rect::EVERYTHING)
+                    .map(|rect| rect.top().round())
+            })
+        })
+    };
+    let unreadable_y = bite_y(d);
     d.state("invalid-package-in-paused-run", Sizes::All);
+    footer_presses(
+        d,
+        "iter-27-R-FD5-press-appears",
+        Some("Cinder Wolf.md cannot be read now."),
+        false,
+    );
     close_run(d);
     go_library(d);
     search_library(d, "Cinder Wolf");
@@ -6695,7 +6739,29 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     d.click("Stat block");
     d.expect("Bite");
     d.expect_same("The paused run keeps its saved creature snapshot across a package repair.");
+    let repaired_y = bite_y(d);
+    d.observe(
+        "iter-27-R-FD5",
+        unreadable_y.iter().all(Option::is_some)
+            && unreadable_y == repaired_y
+            && d.has("Read the new version"),
+        format!(
+            "Bite's y with the unreadable notice {unreadable_y:?}, after the repair {repaired_y:?}"
+        ),
+    );
     d.state("repaired-package-in-paused-run", Sizes::All);
+    footer_presses(
+        d,
+        "iter-27-R-FD5-press-grows",
+        Some("Cinder Wolf.md has changed."),
+        true,
+    );
+    // Another row's stat block, from a file that did not change: the footer is empty.
+    d.click_row("Ember Cultist");
+    if !d.has(SOURCE_SECTION) {
+        d.click("Stat block");
+    }
+    footer_presses(d, "iter-27-R-FD5-press-clears", None, false);
 
     // iter-22-E-SD1: a repair draft's notice and save-row state come from its current parse. The
     // saved file stays unreadable on its owner line until Save or a newer file.
@@ -11290,4 +11356,74 @@ fn package_list_tops(d: &mut Driver<'_>) -> [Option<f32>; 3] {
                 .map(|node| node.rect.top())
         })
     })
+}
+
+/// The stat block's last section, next to the run panel's footer.
+const SOURCE_SECTION: &str = "Source and identifiers";
+
+/// iter-27-R FD5, review of PR 295 (revision 19 press proof): at 960, 1200 and 1920, with the
+/// run's panel on the stat block, each press reaches only its own control while the panel's
+/// footer holds `notice` (`None`: the footer is empty). The stat block's last action, `Source
+/// and identifiers`, is scrolled to the body's end next to the footer and opens only itself;
+/// the footer's `Read the new version`, when `action`, opens only Lookup and is reached by Tab;
+/// and typing in an outside field (`Amount`) changes only that field.
+fn footer_presses(d: &mut Driver<'_>, id: &str, notice: Option<&str>, action: bool) {
+    const SOURCE: &str = SOURCE_SECTION;
+    const OPENED: &str = "Starting snapshot, saved with this run";
+    for size in [(960.0, 640.0), (1200.0, 800.0), (1920.0, 1080.0)] {
+        let report = d.act_at_size(size, |d| {
+            let footer = |d: &Driver<'_>| notice.is_none_or(|words| d.has_containing(words));
+            let empty = |d: &Driver<'_>| {
+                notice.is_some() || !d.has_containing("uses the copy from the start of the fight")
+            };
+            // The body's end: the stat block scrolled down, so its last action is the body's
+            // lowest control, next to the footer.
+            if let Some(tab) = d.place_of("Stat block") {
+                d.scroll_at(egui::pos2(tab.center().x, tab.bottom() + 120.0), 12);
+            }
+            let source = d.place_of(SOURCE);
+            d.click(SOURCE);
+            let body = d.has_containing(OPENED) && !d.has("Close Lookup") && footer(d) && empty(d);
+            // A press that went elsewhere is recorded, then put back, so each part still runs.
+            if d.has("Close Lookup") {
+                d.press_ctrl(egui::Key::K);
+                if !d.has(SOURCE) {
+                    d.click("Stat block");
+                }
+            }
+            if d.has_containing(OPENED) {
+                d.click(SOURCE);
+            }
+            let closed = !d.has_containing(OPENED);
+            let (pressed, tab) = if action && d.has("Read the new version") {
+                d.click("Read the new version");
+                let pressed = d.has("Close Lookup") && !d.has_containing(OPENED);
+                d.press_ctrl(egui::Key::K);
+                if !d.has("Read the new version") {
+                    d.click("Stat block");
+                }
+                let tab = d.tab_to("Read the new version")
+                    && d.focused_name().as_deref() == Some("Read the new version");
+                (pressed, tab)
+            } else {
+                (!action && !d.has("Read the new version"), true)
+            };
+            d.click("Amount");
+            d.type_text("7");
+            let typed = d.focused_name().as_deref() == Some("Amount")
+                && !d.has("Close Lookup")
+                && !d.has_containing(OPENED)
+                && footer(d)
+                && empty(d);
+            d.clear_text_in("Amount");
+            (
+                body && closed && pressed && tab && typed && source.is_some(),
+                format!(
+                    "source {source:?}: body {body}, closed again {closed}, footer action {pressed}, \
+                     Tab {tab}, outside field {typed}"
+                ),
+            )
+        });
+        d.observe(id, report.0, format!("At {size:?}: {}", report.1));
+    }
 }
