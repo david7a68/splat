@@ -2118,7 +2118,10 @@ mod allowed_classes {
             d: &'a Difference,
             rows: &'a [AllowedRow],
         ) -> impl Iterator<Item = &'a Difference> {
+            // R3e's own rows only: another pull request's rows of the same view are measured
+            // against that pull request's reference.
             rows.iter()
+                .filter(|row| (35..=37).contains(&row.row))
                 .map(|row| &row.difference)
                 .filter(move |o| (&o.screen, &o.view) == (&d.screen, &d.view))
         }

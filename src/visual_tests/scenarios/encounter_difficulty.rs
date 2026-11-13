@@ -526,6 +526,12 @@ pub fn run(d: &mut Driver<'_>) {
     // encounter (Mill Road's), the editor does not open it, and the plan says why.
     let folder = d.root.join("campaigns/emberfall/Encounters");
     let mill = std::fs::read_to_string(folder.join(format!("{HIGH}.md"))).unwrap();
+    // The two files that these checks replace and delete go back afterwards.
+    let kept = [LOW, ABOVE].map(|name| {
+        let path = folder.join(format!("{name}.md"));
+        let text = std::fs::read_to_string(&path).unwrap();
+        (path, text)
+    });
     std::fs::write(folder.join(format!("{LOW}.md")), &mill).unwrap();
     d.click(&format!("More actions for {LOW}"));
     d.click("Edit encounter");
@@ -581,6 +587,10 @@ pub fn run(d: &mut Driver<'_>) {
             d.has("Back to session")
         ),
     );
+    for (path, text) in kept {
+        std::fs::write(path, text).unwrap();
+    }
+    d.click("Back to encounters");
     // X2, review 290: a roster member whose saved level an outside edit removed. Their sheet
     // cannot be read, and the heading still says whose level is not known, at each size and
     // in the tab row beside Lookup; a roster with no character names the campaign's copy too.
