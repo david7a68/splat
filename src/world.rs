@@ -1928,6 +1928,13 @@ pub struct Reader {
     /// `Add to fight` in the header of a creature's reader while a run is open (round 27 FJ5),
     /// for the app to take after this reader draws, through the run's own add.
     pub add_to_fight: Option<StartFight>,
+    /// The campaign and the run that are open now, which the app sets each frame. A refusal
+    /// of `Add to fight` belongs to them.
+    pub run_owner: Option<(Uuid, Uuid)>,
+    /// Why the run refused `Add to fight` for one entry, with its owner. It shows in the footer
+    /// while that entry is open; a successful retry, the run's close and a campaign change end
+    /// it (review of PR 300).
+    add_refusal: Option<Refusal>,
     /// Why no fight can start now, as the encounter editor's `Start fight` says it.
     pub start_blocked: Option<&'static str>,
     /// The encounter editor is the page beside this reader: its own primary `Start fight` is the
@@ -1952,6 +1959,16 @@ pub struct Reader {
     /// The entries whose edit form is open in the other reader (Lookup's, or the World
     /// page's). Their Log field waits too, so Splat never makes its own disk conflict.
     pub edited_elsewhere: Vec<Uuid>,
+}
+
+/// Why the run refused a reader's `Add to fight`, and whose refusal it is.
+#[derive(Clone, Debug, PartialEq)]
+struct Refusal {
+    /// The campaign and the run that refused.
+    owner: (Uuid, Uuid),
+    /// The entry whose `Add to fight` was refused.
+    entry: Uuid,
+    words: String,
 }
 
 /// A result that the World page owns, drawn by the reader in the one place for results.
@@ -2021,9 +2038,10 @@ const LOG_FIELD_BESIDE: f32 = design::XXL * 7.0;
 /// Where a reader's title-line actions go (round 27, one rule for World, Lookup and the
 /// encounter editor's header): `None` when the measured title, the `L` gap and every action
 /// with its word fit in `room`, so they follow the title on its line, `XS` apart. Else the row,
-/// under the title, of each action: all of them move together, in order, and a row takes as
-/// many as fit in `line`, the width under the title. An action never goes away and never loses
-/// its word, whatever the length of the name. `title` is the title's measured width, `widths`
+/// under the title, of each action: all of them move together, in order, on one row when that
+/// row fits in `line`, the width under the title. Only when it does not fit does it wrap, at
+/// whole actions, each row filled from the left with as many as fit. An action never goes
+/// away and never loses its word, whatever the length of the name. `title` is the title's measured width, `widths`
 /// each action's own.
 pub(crate) fn title_line_rows(
     room: f32,
@@ -2306,10 +2324,41 @@ pub(crate) fn draw_footer(
 }
 
 impl Reader {
-    /// Why the run refused the reader's `Add to fight`: the error of the last action, in the
-    /// pane's footer, until another entry opens or another action replaces it.
-    pub(crate) fn refuse(&mut self, reason: String) {
-        self.error = Some(reason);
+    /// The run refused `Add to fight` for `entry`: its reason waits in the footer, owned by the
+    /// campaign and run open now (`run_owner`). No other error changes.
+    pub(crate) fn refuse(&mut self, entry: Uuid, reason: String) {
+        self.add_refusal = self.run_owner.map(|owner| Refusal {
+            owner,
+            entry,
+            words: reason,
+        });
+    }
+
+    /// `Add to fight` for `entry` succeeded: its refusal, if any, is over.
+    pub(crate) fn added_to_fight(&mut self, entry: Uuid) {
+        if self
+            .add_refusal
+            .as_ref()
+            .is_some_and(|refusal| refusal.entry == entry)
+        {
+            self.add_refusal = None;
+        }
+    }
+
+    /// The refusal of `Add to fight` for `entry`, while its campaign and run are still the open
+    /// ones. A closed run or another campaign ends it here.
+    fn refusal_for(&mut self, entry: Uuid) -> Option<&str> {
+        if self
+            .add_refusal
+            .as_ref()
+            .is_some_and(|refusal| Some(refusal.owner) != self.run_owner)
+        {
+            self.add_refusal = None;
+        }
+        self.add_refusal
+            .as_ref()
+            .filter(|refusal| refusal.entry == entry)
+            .map(|refusal| refusal.words.as_str())
     }
 
     /// The stamp that a change's Log line begins with: the session being played and the day,
@@ -3805,6 +3854,15 @@ impl Reader {
         let mut lines = self.gone_log_notices(campaign.map(|campaign| campaign.id));
         // A draft whose note is gone, and its Undo, whatever note is open, also in an edit form.
         lines.extend(self.lost_lines(index));
+        // Why the open run refused this entry's `Add to fight`.
+        if let Some(words) = self.refusal_for(id) {
+            lines.push(FooterLine::new(
+                FooterRank::Reason,
+                Tone::Error,
+                words,
+                FooterKind::Error { editor: None },
+            ));
+        }
         // An open `Add to Log` field waits while an edit form of its entry is open, here or in
         // the other reader. It ends when the form closes (Save, Discard) or the reader shows
         // another entry.
@@ -5991,6 +6049,38 @@ mod tests {
             &campaign,
         );
         assert_eq!(notices(&mut lookup), 1);
+    }
+
+    #[test]
+    fn an_add_to_fight_refusal_belongs_to_its_campaign_and_run() {
+        let (campaign, run, entry) = (Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4());
+        let mut reader = Reader {
+            run_owner: Some((campaign, run)),
+            error: Some("An older action's error.".into()),
+            ..Default::default()
+        };
+        reader.refuse(entry, "This encounter has ended.".into());
+        assert_eq!(reader.refusal_for(entry), Some("This encounter has ended."));
+        // Another entry has none; the refusal waits for its own.
+        assert_eq!(reader.refusal_for(Uuid::new_v4()), None);
+        // A successful retry ends it, and no other error.
+        reader.added_to_fight(entry);
+        assert_eq!(reader.refusal_for(entry), None, "retry");
+        assert_eq!(reader.error.as_deref(), Some("An older action's error."));
+        // Another campaign, or no run, ends it for good: coming back does not bring it back.
+        for owner in [
+            Some((Uuid::new_v4(), run)),
+            Some((campaign, Uuid::new_v4())),
+            None,
+        ] {
+            reader.run_owner = Some((campaign, run));
+            reader.refuse(entry, "This encounter has ended.".into());
+            reader.run_owner = owner;
+            assert_eq!(reader.refusal_for(entry), None, "{owner:?}");
+            reader.run_owner = Some((campaign, run));
+            assert_eq!(reader.refusal_for(entry), None, "back {owner:?}");
+        }
+        assert_eq!(reader.error.as_deref(), Some("An older action's error."));
     }
 
     #[test]

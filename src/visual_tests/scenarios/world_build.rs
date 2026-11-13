@@ -4372,6 +4372,19 @@ pub(super) fn lookup_prose_gap(d: &Driver<'_>, title: &str, kind: &str) -> Optio
     Some(first? - head)
 }
 
+/// The run's words when an ended fight refuses `Add to fight` (`Run::add_to_fight_reason`).
+const ADD_REFUSED: &str = "This encounter has ended. Undo the ending to continue.";
+
+/// End the open fight from the run's footer, with no outcome.
+fn end_fight(d: &mut Driver<'_>) {
+    if !d.has("End encounter…") && d.has("Close menu") {
+        d.click("Close menu");
+    }
+    d.click("End encounter…");
+    d.click("End encounter");
+    d.expect("Outcome: Undecided");
+}
+
 /// The NPC keeps both reference links beside a live fight.
 pub fn npc_in_lookup(d: &mut Driver<'_>) {
     let modules = d.app_mut().campaigns.modules().to_vec();
@@ -4474,6 +4487,28 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
         "iter-27-D-FJ5-undo",
         guards(d) == before,
         format!("Undo: add Guard takes the Guard back: {} Guards", guards(d)),
+    );
+    // Review of PR 300: the run's refusal belongs to that run. An ended fight refuses; after
+    // `Undo: end encounter` the same press adds the Guard, and the refusal is gone.
+    end_fight(d);
+    d.click(add);
+    let refused = d.visible_text(ADD_REFUSED) && guards(d) == before;
+    d.click_containing("Undo: end encounter");
+    d.click(add);
+    let joined = guards(d);
+    d.observe(
+        "iter-27-D-FJ5-refusal",
+        refused && joined == before + 1 && !d.visible_text(ADD_REFUSED),
+        format!(
+            "Refused while ended {refused}; after Undo of the ending, Guards {before} → {joined}, refusal shown {}",
+            d.visible_text(ADD_REFUSED)
+        ),
+    );
+    d.click_containing("Undo: add Guard");
+    d.observe(
+        "iter-27-D-FJ5-refusal-undo",
+        guards(d) == before && !d.visible_text(ADD_REFUSED) && d.in_view(add),
+        "The run's Undo takes the Guard back, and no refusal comes back",
     );
     d.click("Back");
     d.click("Watch House");
@@ -4775,7 +4810,26 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
         if !d.has(CLOSE_RUN) {
             d.click(BACK_TO_RUN);
         }
+        // Review of PR 300: a refusal ends with its run. Lookup keeps Guard open while the
+        // ended run refuses it and then closes.
+        if !d.has(SEARCH_LOOKUP) {
+            d.click(NAV_LOOKUP);
+        }
+        look_up_again(d, "Guard");
+        d.click("Guard · Creature · CR 1/8");
+        d.wait_for_text("ARMOR CLASS");
+        end_fight(d);
+        d.click("Add Guard to the fight");
+        let refused = d.visible_text(ADD_REFUSED);
         close_run(d);
+        d.observe(
+            "iter-27-D-FJ5-refusal-close",
+            refused
+                && !d.visible_text(ADD_REFUSED)
+                && d.visible_text("ARMOR CLASS")
+                && d.has("Start a fight with Guard"),
+            format!("The ended run refused ({refused}); Close run ends the refusal while Lookup keeps Guard"),
+        );
     }
     let start = "Start a fight with Rook Ambry";
     let show = |d: &mut Driver<'_>, name: &str| {
@@ -8791,39 +8845,85 @@ pub fn world_note_deleted(d: &mut Driver<'_>) {
             format!("The file line keeps Watchkeeper.md whole at {size:?}: {detail}"),
         );
     }
-    // Round 27 FF5: with Lookup beside it, World's header keeps every action with its word,
-    // as Lookup's does: two readers, each with Edit, Start fight and Add to Log.
+    // Round 27 FF5 and the lead's ruling on PR 300: with Lookup beside it, World's header keeps
+    // every action with its word, as Lookup's does. Per reader: exactly one Edit, Start fight
+    // and Add to Log, each with its word and inside its own pane. They share one row (equal
+    // centres) when the measured row fits the pane; only when it does not, the row wraps at a
+    // whole action, and the first row holds as many as fit.
     for size in [SMALL, DEFAULT, LARGE] {
-        let counts = d.at_size(size, |d| {
-            // Each action lies inside its own pane: World's, left of the Lookup splitter, or
-            // Lookup's, between the splitter and the window's edge.
-            let splitter = d.place_of("Resize Lookup column");
-            let width = d.window_size().0;
-            [
+        let (fine, detail) = d.at_size(size, |d| {
+            let Some(splitter) = d.place_of("Resize Lookup column") else {
+                return (false, "no Lookup splitter".to_owned());
+            };
+            let lookup_right = d
+                .place_of("Close Lookup")
+                .map_or(d.window_size().0, |close| close.right());
+            let names = [
                 "Edit Watchkeeper",
                 "Start a fight with Watchkeeper",
                 "Add to Log",
-            ]
-            .map(|name| {
-                d.nodes()
-                    .into_iter()
-                    .filter(|node| {
-                        node.name == name
-                            && node.in_view()
-                            && node.rect.width() > design::Density::Read.control() + 0.5
-                            && splitter.is_some_and(|splitter| {
-                                node.rect.right() <= splitter.left()
-                                    || (node.rect.left() >= splitter.right()
-                                        && node.rect.right() <= width)
+            ];
+            let mut fine = true;
+            let mut detail = Vec::new();
+            for (pane, left, right) in [
+                ("World", 0.0, splitter.left()),
+                ("Lookup", splitter.right(), lookup_right),
+            ] {
+                let found: Vec<Vec<egui::Rect>> = names
+                    .iter()
+                    .map(|name| {
+                        d.nodes()
+                            .into_iter()
+                            .filter(|node| {
+                                node.name == *name
+                                    && node.in_view()
+                                    && node.rect.width() > design::Density::Read.control() + 0.5
+                                    && node.rect.left() >= left
+                                    && node.rect.right() <= right
                             })
+                            .map(|node| node.rect)
+                            .collect()
                     })
-                    .count()
-            })
+                    .collect();
+                if found.iter().any(|rects| rects.len() != 1) {
+                    fine = false;
+                    detail.push(format!(
+                        "{pane}: counts {:?}",
+                        found.iter().map(Vec::len).collect::<Vec<_>>()
+                    ));
+                    continue;
+                }
+                let rects: Vec<egui::Rect> = found.into_iter().map(|rects| rects[0]).collect();
+                let same =
+                    |a: egui::Rect, b: egui::Rect| (a.center().y - b.center().y).abs() <= 0.5;
+                let row = rects.iter().map(egui::Rect::width).sum::<f32>()
+                    + design::XS * (rects.len() - 1) as f32;
+                let fits = rects[0].left() + row <= right + 0.5;
+                let first = rects
+                    .iter()
+                    .take_while(|rect| same(**rect, rects[0]))
+                    .count();
+                let pane_fine = if fits {
+                    first == rects.len()
+                } else {
+                    // A wrap at a whole action, after as many as fit: the next one would not.
+                    (1..rects.len()).contains(&first)
+                        && rects[first].top() >= rects[0].bottom() - 0.5
+                        && rects[first - 1].right() + design::XS + rects[first].width()
+                            > right + 0.5
+                };
+                fine &= pane_fine;
+                detail.push(format!(
+                    "{pane}: right {right}, row fits {fits}, first row {first} of {}, {rects:?}",
+                    rects.len()
+                ));
+            }
+            (fine, detail.join("; "))
         });
         d.observe(
             "iter-27-D-FF5",
-            counts == [2, 2, 2],
-            format!("At {size:?}, Edit, Start fight and Add to Log with their words, per reader: {counts:?}"),
+            fine,
+            format!("At {size:?}, each reader's three actions: {detail}"),
         );
     }
     d.state("npc-stat-block-deleted-in-lookup", Sizes::All);

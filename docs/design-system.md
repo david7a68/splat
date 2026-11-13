@@ -1024,8 +1024,11 @@ its own `Add to fight` form, which asks for its stat block and side. A campaign 
 its place whether or not the DM ever adds to a Log. Title-line actions never go away and never lose their word
 (round 27, `world::title_line_actions`, one rule for World, Lookup and the encounter editor's header): when the
 measured title, the `L` gap and every action with its icon and word fit on the title's line, they follow the title
-there; else all of them move together, in order and `XS` apart, to one line under the kind line, the first target at
-the text edge (Lookup's reader clips at it). The test is the measured width, not a fixed threshold. Both layouts
+there; else all of them move together, in order and `XS` apart, to one row under the kind line, the first target at
+the text edge (Lookup's reader clips at it). Only when that one row does not fit the pane does it wrap, at whole actions,
+each row filled from the left with as many as fit, each action with its icon and word: never an icon-only action and
+never a hidden one (World beside Lookup at 960 has `Add to Log` on a second row). The pane is not widened for it. The
+test is the measured width, not a fixed threshold. Both layouts
 take the same widget IDs, so a field below keeps the keyboard when a resize moves the actions. `Start fight`
 saves `Fight with <name>` with the party and the creature and starts its run; an encounter of that name (or of
 that name with a number) that was never run and holds the same roster starts instead. An NPC with no stat block
