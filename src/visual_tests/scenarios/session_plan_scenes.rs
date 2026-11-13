@@ -758,6 +758,13 @@ pub fn log_from_play(d: &mut Driver<'_>) {
         format!("At 1200x800 the stamp {label:?} stands above the field {place:?} of long words"),
     );
     d.state("log-field-from-scene", Sizes::All);
+    // Round 27: the title-line actions move under the title at 960 and back beside it when
+    // they fit; the field below keeps its ID, so it keeps the keyboard across both changes.
+    d.observe(
+        "iter-27-D-title-focus",
+        d.focused_name().as_deref() == Some(field.as_str()),
+        "After 960, 1200 and 1920, the Log field still has the keyboard",
+    );
     d.type_text(TYPED);
     d.observe(
         "T18.2",
