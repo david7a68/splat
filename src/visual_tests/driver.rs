@@ -1191,7 +1191,7 @@ impl<'a> Driver<'a> {
         self.harness.remove_cursor();
         self.interactions += 1;
         self.settle();
-        self.stillness.column_dragged = true;
+        self.stillness.column_resized = true;
         self.film_result("Drag a column's edge");
     }
 
@@ -1440,33 +1440,62 @@ impl<'a> Driver<'a> {
             return None;
         }
         let started = Instant::now();
-        let found = self.nodes();
-        let nodes: Vec<stillness::Node<'_>> = found
-            .iter()
-            .map(|node| (node.id.0, node.role, node.name.as_str(), node.rect))
-            .collect();
-        let shown: Vec<egui::Rect> = found.iter().map(|node| node.shown).collect();
-        let target = stillness::pressed(&nodes, &shown, aim, &self.current_page());
+        let nodes = self.press_nodes();
+        let target = stillness::pressed(&nodes, aim.center(), &self.current_page());
         self.stillness.time += started.elapsed();
         target
     }
 
-    /// G1b: after the press, the pressed control is where it was.
+    /// G1b: the controls as a press sees them, with their pane and whether a popup holds them.
+    fn press_nodes(&self) -> Vec<stillness::PressNode> {
+        let viewport = self.harness.ctx.content_rect();
+        ergonomics::controls(&self.harness)
+            .into_iter()
+            .filter(|control| !control.chrome && !control.is_label())
+            .map(|control| stillness::PressNode {
+                id: control.id,
+                role: control.role,
+                name: if control.name.is_empty() {
+                    control.placeholder.clone().unwrap_or_default()
+                } else {
+                    control.name.clone()
+                },
+                rect: control.rect,
+                shown: control
+                    .clip
+                    .map_or(control.rect, |clip| control.rect.intersect(clip))
+                    .intersect(viewport),
+                scope: control.scope,
+                popup: control.popup.is_some(),
+            })
+            .collect()
+    }
+
+    /// G1b: after the press, the press point is still on the pressed control.
     fn press_result(&mut self, target: Option<stillness::Pressed>, caption: &str) {
         let Some(target) = target else {
             return;
         };
         let started = Instant::now();
-        let found = self.nodes();
-        let nodes: Vec<stillness::Node<'_>> = found
-            .iter()
-            .map(|node| (node.id.0, node.role, node.name.as_str(), node.rect))
-            .collect();
+        let nodes = self.press_nodes();
         if let Some(raw) = stillness::press_moves(&target, &nodes, &self.current_page(), caption) {
             let window = format!("{}x{}", self.window.0, self.window.1);
             self.stillness.press(window, raw);
         }
         self.stillness.time += started.elapsed();
+    }
+
+    /// G1: a key pressed on a focused column splitter resizes a column, as a drag does.
+    fn note_splitter_key(&mut self) {
+        let on_splitter = self
+            .harness
+            .root()
+            .children_recursive()
+            .find(|node| node.accesskit_node().is_focused())
+            .is_some_and(|node| node.accesskit_node().role() == Role::Splitter);
+        if on_splitter {
+            self.stillness.column_resized = true;
+        }
     }
 
     /// Ctrl+click a run row, to add it to the targets of one amount.
@@ -2137,6 +2166,7 @@ impl<'a> Driver<'a> {
     }
 
     pub fn press(&mut self, key: egui::Key) {
+        self.note_splitter_key();
         let caption = format!("Press: {}", key.name());
         self.film_caption(&caption);
         self.harness.key_press(key);
@@ -2147,6 +2177,7 @@ impl<'a> Driver<'a> {
 
     /// Shift+key.
     pub fn press_shift(&mut self, key: egui::Key) {
+        self.note_splitter_key();
         let caption = format!("Press: Shift+{}", key.name());
         self.film_caption(&caption);
         self.harness.key_press_modifiers(
@@ -2899,6 +2930,8 @@ impl<'a> Driver<'a> {
         if size == SMALL {
             found.extend(stillness::repeated_sentences(&items, &rows));
         }
+        let footers = crate::design::footer_bands(&self.harness.ctx);
+        found.extend(stillness::footer_gaps(&items, &footers));
         self.stillness.headers.push(stillness::HeaderView {
             window: window.clone(),
             width: size.0,
@@ -2916,6 +2949,7 @@ impl<'a> Driver<'a> {
                 items,
                 bars,
                 messages,
+                footers,
             },
         ));
         for raw in found {
@@ -2932,7 +2966,6 @@ impl<'a> Driver<'a> {
         }
         self.stillness.time += started.elapsed();
     }
-
 
     /// R3f, the shared footer check, on every captured state: a pane's content ends above its
     /// message footer, so no control and no text of the content is painted into a footer's band

@@ -43,6 +43,7 @@ mod settle_probe;
 mod slots;
 mod steps;
 mod stillness;
+mod stillness_known;
 mod video;
 
 use driver::{Driver, Outcome};
@@ -1057,6 +1058,12 @@ fn visual_suite() {
         ergonomics::compare_app_vs_chrome(&violations, ergonomics::KNOWN_APP_VS_CHROME, &names);
     regressions.extend(mixed);
     regressions.extend(fixed);
+    // A blocking G check's line that the known list lacks, or a stale line, fails like a
+    // regression.
+    let (still_worse, still_stale) =
+        stillness::compare_known(&still, stillness_known::KNOWN, &names);
+    regressions.extend(still_worse);
+    regressions.extend(still_stale);
     let known_open: Vec<String> = ergonomics::KNOWN_APP_VS_CHROME
         .iter()
         .filter(|((scenario, ..), _)| names.contains(scenario))
@@ -1094,7 +1101,8 @@ fn visual_suite() {
         serde_json::to_vec_pretty(&report).expect("encode report"),
     )
     .expect("write ergonomics.json");
-    let still_report = stillness::Report::new(&still, &still_escapes, still_time);
+    let still_report =
+        stillness::Report::new(&still, &still_escapes, stillness_known::KNOWN, still_time);
     fs::write(
         directory.join("stillness.json"),
         stillness::json_lines(&still),

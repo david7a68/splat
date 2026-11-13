@@ -14471,6 +14471,7 @@ pub mod session_recording {
         d.click("Start recording");
         d.expect("Stop recording");
         d.expect("Waiting for sound");
+        d.expect_moves("Start recording answers the consent question, so the question goes.");
         d.state("recording-starting", Sizes::Default);
         d.app_mut()
             .sessions
@@ -15910,6 +15911,10 @@ pub mod session_recording {
                     && node.role == egui::accesskit::Role::Button)
                 .count(),
             2
+        );
+        d.expect_moves(
+            "Start recording answers the consent question, so the question goes, and the new \
+             recording takes the top row.",
         );
         d.state_prepared("processing-with-no-run", Sizes::All, |d| {
             check_processing_action(d, "Process:", true);

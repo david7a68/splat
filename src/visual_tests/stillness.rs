@@ -1,38 +1,52 @@
-//! Gate invariants that compare what the app shows, report-only for now:
+//! Gate invariants that compare what the app shows:
 //!
-//! - **G1a** a message changed in a pane, and content below its top in that pane moved.
+//! - **G1a** a message came or went in a pane, and content below its top in that pane moved.
 //! - **G1b** the control a script pressed moved after the press.
 //! - **G1c** a scroll bar came or went in a pane, and a right edge in that pane moved.
 //! - **G2** a header action at the widest size is gone, or paints other words, at a narrower size.
 //! - **G3** at 1920 px, a row's first action at the right is far from the row's last words.
 //! - **G4** one pane shows the same sentence twice.
+//! - **G6** a pane's message footer sits more than `S` below a body that ends short of it.
+//!
+//! G1a, G1b, G1c and G3 block: a finding that `stillness_known::KNOWN` does not list fails the
+//! run, and so does a listed state with fewer findings (the list may only shrink). G2, G4 and
+//! G1b's renamed tier (`G1B_RENAMED`) are report-only.
 //!
 //! G1 compares two states in a row at one window size. It matches a control by its pane, role,
-//! accessible name and place among equal names, never by AccessKit id: egui's automatic ids
+//! accessible name and place among equal names, never by AccessKit id alone: egui's automatic ids
 //! shift when a widget is inserted before them. `Driver::expect_moves` is the one escape: it
-//! marks the next state's G1 findings as intended, with a reason the report counts.
+//! marks the next state's G1a and G1b findings as intended, with a reason the report counts.
 //!
 //! Messages: until `src/design` registers each message's rect, a message is found in the painted
 //! shapes by what `design::message` and `design::small_message` draw: a 3 px bar in a result tone,
 //! a tone icon after it, then the words. The words' AccessKit label gives the pane.
-use super::ergonomics::Control;
+use super::ergonomics::{Control, StateKey};
 use crate::design::{L, S, XS};
 use eframe::egui::{self, accesskit::Role, epaint::ClippedShape};
 use serde::Serialize;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::time::Duration;
 
 pub const G1A: &str = "G1a/message-moved-content";
 pub const G1B: &str = "G1b/pressed-control-moved";
+/// A pressed control that was found again only by its id, because its name changed: the id may
+/// now be another control's. Report-only.
+pub const G1B_RENAMED: &str = "G1b/renamed-control-moved";
 pub const G1C: &str = "G1c/content-moved-with-bar";
 pub const G2: &str = "G2/header-action-lost";
 pub const G3: &str = "G3/far-action";
 pub const G4: &str = "G4/same-sentence-twice";
-pub const CHECKS: [&str; 6] = [G1A, G1B, G1C, G2, G3, G4];
+pub const G6: &str = "G6/footer-far-below-body";
+pub const CHECKS: [&str; 8] = [G1A, G1B, G1B_RENAMED, G1C, G2, G3, G4, G6];
+/// The checks whose findings must be in `stillness_known::KNOWN`.
+pub const BLOCKING: [&str; 4] = [G1A, G1B, G1C, G3];
 
-/// Rounding, and a selected word's heavier weight, move an edge by up to this much. A person does
-/// not see it.
-const MOVE_TOLERANCE: f32 = 1.5;
+/// An edge may move by rounding up to this much (the design's ±1 px).
+const MOVE_TOLERANCE: f32 = 1.0;
+/// The one exemption from `MOVE_TOLERANCE`: a pressed toggle that turns selected paints its word
+/// heavier and grows by up to this much, with its line and one side edge kept and the press point
+/// still on it.
+pub const TOGGLE_WEIGHT: f32 = 3.0;
 /// G1c: the widest lane a vertical scroll bar takes (its width and outer margin).
 const BAR_LANE: f32 = 24.0;
 /// G2 reads a control as an action when it paints at most this many words (icons left out).
@@ -43,8 +57,13 @@ const ACTION_WORDS: usize = 4;
 pub const HEADER_BAND: f32 = 11.0 * L;
 /// G3: the largest gap from a row's last words to its first action at the right.
 pub const FAR_GAP: f32 = 3.0 * L;
+/// G3: a row with this many words on one line, each more than `L` apart, is a table row.
+const TABLE_COLUMNS: usize = 3;
 /// G4 compares texts of at least this many words.
 const G4_MIN_WORDS: usize = 4;
+/// G1a with nothing above the message in its pane: the share of the content below that must be
+/// in the other state too, for the pane to show the same thing.
+const SAME_VIEW: f32 = 0.8;
 
 /// One finding: a line of `stillness.json`.
 #[derive(Clone, Debug, Serialize)]
@@ -93,6 +112,19 @@ impl Item {
     fn is_label(&self) -> bool {
         self.role == Role::Label
     }
+
+    /// A field the DM types or chooses in: what a form holds.
+    fn is_field(&self) -> bool {
+        matches!(
+            self.role,
+            Role::TextInput
+                | Role::MultilineTextInput
+                | Role::PasswordInput
+                | Role::ComboBox
+                | Role::SpinButton
+                | Role::Slider
+        )
+    }
 }
 
 /// A drawn message: its words, the rect from its bar to its last word, and its pane.
@@ -102,6 +134,29 @@ pub struct Message {
     pub rect: egui::Rect,
     pub scope: Option<u64>,
     pub clip: Option<egui::Rect>,
+}
+
+/// A pane: its top-level scope and the left, top and right of its scroll area. The bottom is left
+/// out: a footer that comes shortens the scroll area.
+type PaneKey = (Option<u64>, Option<[i32; 3]>);
+
+fn pane_key(scope: Option<u64>, clip: Option<egui::Rect>) -> PaneKey {
+    (
+        scope,
+        clip.map(|clip| {
+            [
+                clip.left().round() as i32,
+                clip.top().round() as i32,
+                clip.right().round() as i32,
+            ]
+        }),
+    )
+}
+
+impl Message {
+    fn key(&self) -> (PaneKey, &str) {
+        (pane_key(self.scope, self.clip), &self.words)
+    }
 }
 
 /// A painted text and the part of the screen it covers.
@@ -122,6 +177,8 @@ pub struct Snapshot {
     /// Vertical scroll bars.
     pub bars: Vec<egui::Rect>,
     pub messages: Vec<Message>,
+    /// The panes' message footers (`design::footer_bands`).
+    pub footers: Vec<egui::Rect>,
 }
 
 /// Items from the ergonomics controls: controls and free texts (labels not inside a control),
@@ -308,25 +365,70 @@ fn display(item: &Item) -> String {
     format!("{:?} {:?}", item.role, item.name)
 }
 
-/// G1a: a message came or went between `old` and `new`; every item below its top in its pane
-/// keeps its rect, unless its scroll area changed.
+/// The keys of a message's own block: what lies in its footer, or, in a body, its own line and the
+/// lines under it that start right of its bar (its second lines and its choices, as
+/// `message_choice_row` places them), down to the first line that starts at or left of the bar.
+fn own_block<'a>(
+    message: &Message,
+    pane: &[(Key<'a>, &'a Item)],
+    footers: &[egui::Rect],
+) -> HashSet<Key<'a>> {
+    let mut out = HashSet::new();
+    if let Some(footer) = footers
+        .iter()
+        .find(|footer| footer.expand(MOVE_TOLERANCE).contains_rect(message.rect))
+    {
+        for (key, item) in pane {
+            if footer.expand(MOVE_TOLERANCE).contains(item.rect.center()) {
+                out.insert(*key);
+            }
+        }
+        return out;
+    }
+    let mut below: Vec<&(Key<'a>, &'a Item)> = pane
+        .iter()
+        .filter(|(_, item)| item.rect.top() >= message.rect.top() - MOVE_TOLERANCE)
+        .collect();
+    below.sort_by(|a, b| {
+        a.1.rect
+            .top()
+            .total_cmp(&b.1.rect.top())
+            .then(a.1.rect.left().total_cmp(&b.1.rect.left()))
+    });
+    let mut bottom = message.rect.bottom();
+    for (key, item) in below {
+        let on_its_line = item.rect.top() <= message.rect.bottom() + MOVE_TOLERANCE;
+        let under_it = item.rect.top() <= bottom + L && item.rect.left() > message.rect.left() + S;
+        if !on_its_line && !under_it {
+            break;
+        }
+        out.insert(*key);
+        bottom = bottom.max(item.rect.bottom());
+    }
+    out
+}
+
+/// G1a: a message came or went in a pane between `old` and `new` (a message is its pane and its
+/// words); every item below its top in that pane keeps its rect. Left out: the message's own
+/// block, a pane whose content above the message changed or moved (another view, or a scroll), a
+/// pane where a form field came or went (a form opened in place), and a scroll area that changed.
 pub fn message_moves(old: &Snapshot, new: &Snapshot) -> Vec<Raw> {
-    let words = |snapshot: &Snapshot| -> Vec<String> {
+    let keys = |snapshot: &Snapshot| -> HashSet<(PaneKey, String)> {
         snapshot
             .messages
             .iter()
-            .map(|message| message.words.clone())
+            .map(|message| (message.key().0, message.words.clone()))
             .collect()
     };
-    let (old_words, new_words) = (words(old), words(new));
+    let (old_keys, new_keys) = (keys(old), keys(new));
     let mut changed = Vec::new();
     for message in &new.messages {
-        if !old_words.contains(&message.words) {
+        if !old_keys.contains(&(message.key().0, message.words.clone())) {
             changed.push((message, new, old, "appeared"));
         }
     }
     for message in &old.messages {
-        if !new_words.contains(&message.words) {
+        if !new_keys.contains(&(message.key().0, message.words.clone())) {
             changed.push((message, old, new, "went"));
         }
     }
@@ -334,7 +436,6 @@ pub fn message_moves(old: &Snapshot, new: &Snapshot) -> Vec<Raw> {
     let mut out = Vec::new();
     for (message, with, without, verb) in changed {
         let other = keyed(&without.items);
-        let mine = keyed(&with.items);
         let in_pane = |item: &Item| {
             let same_pane = match message.scope {
                 Some(scope) => item.scope == scope && same_clip(item.clip, message.clip),
@@ -344,34 +445,57 @@ pub fn message_moves(old: &Snapshot, new: &Snapshot) -> Vec<Raw> {
                 && (message.clip.is_some()
                     || item.rect.right() > message.rect.left() - MOVE_TOLERANCE)
         };
-        // A message's own line (its icon, words and actions) moves with it, and so does a
-        // message below it in the same footer.
-        let on_a_message_line = |item: &Item| {
-            with.messages.iter().any(|m| {
-                m.rect
-                    .y_range()
-                    .expand(MOVE_TOLERANCE)
-                    .contains(item.rect.center().y)
-                    && item.rect.left() >= m.rect.left() - S
-            })
-        };
-        // Content above the message is the anchor: when part of it is not in the other state, the
-        // pane shows something else now (another note), and a move says nothing.
-        let mut above = mine
+        let pane: Vec<(Key<'_>, &Item)> = keyed(&with.items)
+            .into_iter()
+            .filter(|(_, item)| in_pane(item))
+            .collect();
+        // A form that opened or closed in place moves what follows it on purpose.
+        let fields_changed = pane
             .iter()
-            .filter(|(_, item)| {
-                in_pane(item) && item.rect.bottom() <= message.rect.top() + MOVE_TOLERANCE
-            })
-            .peekable();
-        if above.peek().is_none() || !above.all(|(key, _)| other.contains_key(key)) {
+            .any(|(key, item)| item.is_field() && !other.contains_key(key))
+            || keyed(&without.items).iter().any(|(key, item)| {
+                item.is_field() && in_pane(item) && !pane.iter().any(|(mine, _)| mine == key)
+            });
+        if fields_changed {
             continue;
         }
-        for (key, item) in &mine {
-            if !in_pane(item)
-                || item.rect.top() < message.rect.top() - MOVE_TOLERANCE
-                || on_a_message_line(item)
-                || reported.contains(key)
-            {
+        let own = own_block(message, &pane, &with.footers);
+        let above: Vec<&(Key<'_>, &Item)> = pane
+            .iter()
+            .filter(|(key, item)| {
+                !own.contains(key) && item.rect.bottom() <= message.rect.top() + MOVE_TOLERANCE
+            })
+            .collect();
+        let below: Vec<&(Key<'_>, &Item)> = pane
+            .iter()
+            .filter(|(key, item)| {
+                !own.contains(key)
+                    && item.rect.top() >= message.rect.top() - MOVE_TOLERANCE
+                    && !with
+                        .footers
+                        .iter()
+                        .any(|footer| footer.contains(item.rect.center()))
+            })
+            .collect();
+        if above.is_empty() {
+            // The message is at the top of its pane: the pane must show the same content.
+            let kept = below
+                .iter()
+                .filter(|(key, _)| other.contains_key(key))
+                .count();
+            if below.is_empty() || (kept as f32) < SAME_VIEW * below.len() as f32 {
+                continue;
+            }
+        } else if !above.iter().all(|(key, item)| {
+            other
+                .get(key)
+                .is_some_and(|there| moved(item.rect, there.rect).is_none())
+        }) {
+            // Content above changed or moved: another view, or the pane scrolled.
+            continue;
+        }
+        for (key, item) in below {
+            if reported.contains(key) {
                 continue;
             }
             let Some(&there) = other.get(key) else {
@@ -400,10 +524,11 @@ pub fn message_moves(old: &Snapshot, new: &Snapshot) -> Vec<Raw> {
     out
 }
 
-/// G1c: a vertical scroll bar came or went; no right edge in its pane moved.
+/// G1c: a vertical scroll bar came or went; no right edge in its pane moved. A bar that moved
+/// sideways by at most its lane is the same bar in a pane that changed width.
 pub fn bar_moves(old: &Snapshot, new: &Snapshot) -> Vec<Raw> {
     let same_bar = |a: &egui::Rect, b: &egui::Rect| {
-        (a.left() - b.left()).abs() <= 2.0 && a.y_range().intersects(b.y_range())
+        (a.left() - b.left()).abs() <= BAR_LANE && a.y_range().intersects(b.y_range())
     };
     let mut changed = Vec::new();
     for bar in &new.bars {
@@ -458,77 +583,127 @@ pub fn bar_moves(old: &Snapshot, new: &Snapshot) -> Vec<Raw> {
     out
 }
 
-/// The control a press aims at, found again after the press.
+/// A control as a press sees it.
 #[derive(Clone, Debug)]
-pub struct Pressed {
+pub struct PressNode {
+    pub id: u64,
     pub role: Role,
     pub name: String,
-    /// Its place among nodes with this role and name.
-    pub place: usize,
-    pub id: u64,
+    /// The whole control.
     pub rect: egui::Rect,
+    /// The part a person can see.
+    pub shown: egui::Rect,
+    /// Its top-level pane.
+    pub scope: u64,
+    /// Drawn in a popup (a menu): a menu entry is not the button that opened the menu.
+    pub popup: bool,
+}
+
+/// The control a press goes to, found again after the press.
+#[derive(Clone, Debug)]
+pub struct Pressed {
+    pub node: PressNode,
+    /// Its place among controls with its role, name, pane and popup.
+    pub place: usize,
+    /// Where the pointer pressed.
+    pub point: egui::Pos2,
     pub page: String,
 }
 
-/// A node as the driver sees it: id, role, name and its whole rect.
-pub type Node<'a> = (u64, Role, &'a str, egui::Rect);
+fn same_identity(a: &PressNode, b: &PressNode) -> bool {
+    a.role == b.role && a.name == b.name && a.scope == b.scope && a.popup == b.popup
+}
 
-/// The node a press at `aim` (the visible part of the node the driver chose) goes to. Nothing for
-/// a link: it opens something else, so what was under the pointer is new.
-pub fn pressed(
-    nodes: &[Node<'_>],
-    shown: &[egui::Rect],
-    aim: egui::Rect,
-    page: &str,
-) -> Option<Pressed> {
-    let index = nodes.iter().zip(shown).position(|((_, role, ..), shown)| {
-        !matches!(role, Role::Label | Role::TextRun) && moved(*shown, aim).is_none()
-    })?;
-    let (id, role, name, rect) = nodes[index];
-    if role == Role::Link {
+/// The control a press at `point` goes to: the smallest visible one under it, a popup's first.
+/// Nothing for a link: it opens something else, so what was under the pointer is new.
+pub fn pressed(nodes: &[PressNode], point: egui::Pos2, page: &str) -> Option<Pressed> {
+    let index = nodes
+        .iter()
+        .enumerate()
+        .filter(|(_, node)| node.shown.contains(point))
+        .min_by(|(_, a), (_, b)| {
+            b.popup
+                .cmp(&a.popup)
+                .then(a.shown.area().total_cmp(&b.shown.area()))
+        })
+        .map(|(index, _)| index)?;
+    let node = nodes[index].clone();
+    if node.role == Role::Link {
         return None;
     }
     let place = nodes[..index]
         .iter()
-        .filter(|(_, r, n, _)| *r == role && *n == name)
+        .filter(|other| same_identity(other, &node))
         .count();
     Some(Pressed {
-        role,
-        name: name.to_owned(),
+        node,
         place,
-        id,
-        rect,
+        point,
         page: page.to_owned(),
     })
 }
 
-/// G1b: after the press, the pressed control (found by role, name and place; by id when its name
-/// changed) keeps its rect. Nothing when the page changed or the control is gone.
-pub fn press_moves(before: &Pressed, after: &[Node<'_>], page: &str, caption: &str) -> Option<Raw> {
+/// The selected-toggle exemption: the line and one side edge stay, the width changes by at most
+/// `TOGGLE_WEIGHT`, and the press point is still on the control.
+fn toggle_weight(old: egui::Rect, new: egui::Rect, point: egui::Pos2) -> bool {
+    (old.top() - new.top()).abs() <= MOVE_TOLERANCE
+        && (old.bottom() - new.bottom()).abs() <= MOVE_TOLERANCE
+        && ((old.left() - new.left()).abs() <= MOVE_TOLERANCE
+            || (old.right() - new.right()).abs() <= MOVE_TOLERANCE)
+        && (old.width() - new.width()).abs() <= TOGGLE_WEIGHT
+        && new.contains(point)
+}
+
+/// G1b after the press: the pressed control, found by role, name, pane, popup and place (by id
+/// when its name changed), keeps its rect. `G1B` for a control found by name, `G1B_RENAMED` for
+/// one found by id. The trigger says when the press point is no longer on it. Nothing when the
+/// page changed or the control is gone.
+pub fn press_moves(
+    before: &Pressed,
+    after: &[PressNode],
+    page: &str,
+    caption: &str,
+) -> Option<Raw> {
     if before.page != page {
         return None;
     }
-    let equal: Vec<_> = after
+    let equal: Vec<&PressNode> = after
         .iter()
-        .filter(|(_, role, name, _)| *role == before.role && *name == before.name)
+        .filter(|node| same_identity(node, &before.node))
         .collect();
-    let (rect, how) = if let Some(node) = equal.get(before.place) {
-        (node.3, "")
+    let (rect, by_name) = if let Some(node) = equal.get(before.place) {
+        (node.rect, true)
     } else if equal.is_empty() {
         let node = after
             .iter()
-            .find(|(id, role, ..)| *id == before.id && *role == before.role)?;
-        (node.3, " (found by id; its name changed)")
+            .find(|node| node.id == before.node.id && node.role == before.node.role)?;
+        (node.rect, false)
     } else {
         return None;
     };
-    moved(before.rect, rect)?;
+    let old = before.node.rect;
+    moved(old, rect)?;
+    if toggle_weight(old, rect, before.point) {
+        return None;
+    }
     Some(Raw {
-        check: G1B,
-        control: format!("{:?} {:?}", before.role, before.name),
-        old: before.rect,
+        check: if by_name { G1B } else { G1B_RENAMED },
+        control: format!("{:?} {:?}", before.node.role, before.node.name),
+        old,
         new: rect,
-        trigger: format!("press: {caption}{how}"),
+        trigger: format!(
+            "press: {caption}{}{}",
+            if rect.contains(before.point) {
+                ""
+            } else {
+                "; the press point is off it"
+            },
+            if by_name {
+                ""
+            } else {
+                " (found by id; its name changed)"
+            }
+        ),
     })
 }
 
@@ -542,7 +717,8 @@ pub struct HeaderView {
 }
 
 /// Controls that G2 reads as header actions: buttons, tabs, combo boxes and links near the
-/// window's top that paint one to `ACTION_WORDS` words, with the words they paint.
+/// window's top that paint at most `ACTION_WORDS` words, with the words they paint. A control that
+/// paints only an icon is kept: at a narrower size that is the fault G2 looks for.
 pub fn header(items: &[Item], texts: &[Text], top: f32) -> Vec<(Item, String)> {
     let icon = |c: char| ('\u{e000}'..='\u{f8ff}').contains(&c);
     items
@@ -565,9 +741,7 @@ pub fn header(items: &[Item], texts: &[Text], top: f32) -> Vec<(Item, String)> {
                 .split_whitespace()
                 .filter(|word| !word.chars().all(icon))
                 .count();
-            (1..=ACTION_WORDS)
-                .contains(&count)
-                .then(|| (item.clone(), words))
+            (count <= ACTION_WORDS).then(|| (item.clone(), words))
         })
         .collect()
 }
@@ -635,7 +809,9 @@ pub fn header_losses(views: &[HeaderView]) -> Vec<(String, Raw)> {
 }
 
 /// G3: in each registered row, the gap from the last words to the first action right of them is
-/// at most `FAR_GAP`.
+/// at most `FAR_GAP`. Two kinds of row are exempt by name: a form row (it holds a field: a label
+/// column, then the field) and a table row (`TABLE_COLUMNS` or more words on one line, each more
+/// than `L` apart: columns line up across rows on purpose).
 pub fn far_actions(rows: &[egui::Rect], items: &[Item], texts: &[Text]) -> Vec<Raw> {
     let mut out = Vec::new();
     for row in rows {
@@ -644,13 +820,25 @@ pub fn far_actions(rows: &[egui::Rect], items: &[Item], texts: &[Text]) -> Vec<R
             .iter()
             .filter(|item| !item.is_label() && inside(item.rect))
             .collect();
-        let words = texts.iter().filter(|text| {
-            inside(text.rect)
-                && !controls
-                    .iter()
-                    .any(|control| control.rect.expand(1.0).contains_rect(text.rect))
-        });
-        let Some(last) = words.max_by(|a, b| a.rect.right().total_cmp(&b.rect.right())) else {
+        if controls.iter().any(|control| control.is_field()) {
+            continue;
+        }
+        let words: Vec<&Text> = texts
+            .iter()
+            .filter(|text| {
+                inside(text.rect)
+                    && !controls
+                        .iter()
+                        .any(|control| control.rect.expand(1.0).contains_rect(text.rect))
+            })
+            .collect();
+        if is_table_row(&words) {
+            continue;
+        }
+        let Some(last) = words
+            .iter()
+            .max_by(|a, b| a.rect.right().total_cmp(&b.rect.right()))
+        else {
             continue;
         };
         let Some(first) = controls
@@ -672,6 +860,21 @@ pub fn far_actions(rows: &[egui::Rect], items: &[Item], texts: &[Text]) -> Vec<R
         }
     }
     out
+}
+
+fn is_table_row(words: &[&Text]) -> bool {
+    words.iter().any(|first| {
+        let mut line: Vec<&&Text> = words
+            .iter()
+            .filter(|text| text.rect.y_range().intersects(first.rect.y_range()))
+            .collect();
+        line.sort_by(|a, b| a.rect.left().total_cmp(&b.rect.left()));
+        let apart = line
+            .windows(2)
+            .filter(|pair| pair[1].rect.left() - pair[0].rect.right() > L)
+            .count();
+        apart + 1 >= TABLE_COLUMNS
+    })
 }
 
 /// G4: in one pane, a text of `G4_MIN_WORDS` or more words that equals, or starts, another text.
@@ -712,15 +915,54 @@ pub fn repeated_sentences(items: &[Item], rows: &[egui::Rect]) -> Vec<Raw> {
     out
 }
 
+/// G6: a footer follows a short body. For each footer band (`design::footer_bands`: from `S` above
+/// the footer to the pane's bottom), the last body item above it in the pane ends at most 1 px
+/// above the band: the footer's first message is at most `S` + 1 px below the body. A body that
+/// fills the pane, scrolled or not, ends at the band, so it passes; only a footer left far below a
+/// short body is found.
+pub fn footer_gaps(items: &[Item], footers: &[egui::Rect]) -> Vec<Raw> {
+    let mut out = Vec::new();
+    for band in footers {
+        let last = items
+            .iter()
+            .filter(|item| {
+                band.x_range().contains(item.rect.center().x)
+                    && item.rect.top() < band.top() - MOVE_TOLERANCE
+            })
+            .map(|item| {
+                let bottom = item.clip.map_or(item.rect.bottom(), |clip| {
+                    item.rect.bottom().min(clip.bottom())
+                });
+                (item, bottom)
+            })
+            .max_by(|a, b| a.1.total_cmp(&b.1));
+        let Some((item, bottom)) = last else {
+            continue;
+        };
+        let gap = band.top() + S - bottom;
+        if gap > S + MOVE_TOLERANCE {
+            out.push(Raw {
+                check: G6,
+                control: display(item),
+                old: item.rect,
+                new: *band,
+                trigger: format!("the footer is {gap:.0} px below the body's last item"),
+            });
+        }
+    }
+    out
+}
+
 /// The driver's G state: the last snapshot per size, presses waiting for their state's name,
 /// the escape for the next state, and what was found.
 #[derive(Default)]
 pub struct Tracker {
     last: HashMap<(u32, u32), Snapshot>,
-    pending: Vec<Raw>,
-    pending_window: String,
+    /// Each press finding with the window it was pressed at.
+    pending: Vec<(String, Raw)>,
     escape: Option<&'static str>,
-    pub column_dragged: bool,
+    /// A column edge was dragged or moved by keyboard since the last state.
+    pub column_resized: bool,
     pub headers: Vec<HeaderView>,
     /// True while the driver checks a state: presses in its `prepare` are not the script's.
     pub in_state: bool,
@@ -739,19 +981,18 @@ impl Tracker {
             self.escapes
                 .push((scenario.to_owned(), state.to_owned(), reason));
         }
-        let window = std::mem::take(&mut self.pending_window);
-        for raw in std::mem::take(&mut self.pending) {
+        for (window, raw) in std::mem::take(&mut self.pending) {
             self.push(scenario, state, &window, raw);
         }
     }
 
     pub fn press(&mut self, window: String, raw: Raw) {
-        self.pending_window = window;
-        self.pending.push(raw);
+        self.pending.push((window, raw));
     }
 
     pub fn push(&mut self, scenario: &str, state: &str, window: &str, raw: Raw) {
-        let g1 = matches!(raw.check, G1A | G1B | G1C);
+        // A reorder or a sort explains a moved message or press, never a bar's lane.
+        let escapable = matches!(raw.check, G1A | G1B | G1B_RENAMED);
         self.findings.push(Finding {
             check: raw.check,
             scenario: scenario.to_owned(),
@@ -761,7 +1002,7 @@ impl Tracker {
             old: xywh(raw.old),
             new: xywh(raw.new),
             trigger: raw.trigger,
-            escaped: if g1 { self.escape } else { None },
+            escaped: if escapable { self.escape } else { None },
         });
     }
 
@@ -772,7 +1013,7 @@ impl Tracker {
         if let Some(old) = self.last.get(&key)
             && old.state + 1 == snapshot.state
             && old.page == snapshot.page
-            && !self.column_dragged
+            && !self.column_resized
         {
             out.extend(message_moves(old, &snapshot));
             out.extend(bar_moves(old, &snapshot));
@@ -784,17 +1025,74 @@ impl Tracker {
     /// A state ends.
     pub fn end(&mut self) {
         self.in_state = false;
-        self.column_dragged = false;
+        self.column_resized = false;
         self.escape = None;
     }
 
     /// Presses after the last state.
     pub fn finish(&mut self, scenario: &str) {
-        let window = std::mem::take(&mut self.pending_window);
-        for raw in std::mem::take(&mut self.pending) {
+        for (window, raw) in std::mem::take(&mut self.pending) {
             self.push(scenario, "(after the last state)", &window, raw);
         }
     }
+}
+
+/// A known line: a blocking check, a state, and its exact count of findings.
+pub type KnownLine = (&'static str, StateKey<'static>, usize);
+
+/// Blocking-check lines by state: a state with more findings than `known` lists (or not listed),
+/// then a listed state with fewer (the list is stale). Both fail a run. Escaped findings do not
+/// count. A scenario that did not run gives no stale line.
+pub fn compare_known(
+    findings: &[Finding],
+    known: &[KnownLine],
+    scenarios: &[&str],
+) -> (Vec<String>, Vec<String>) {
+    let mut found: BTreeMap<(&str, StateKey<'_>), usize> = BTreeMap::new();
+    for finding in findings
+        .iter()
+        .filter(|f| f.escaped.is_none() && BLOCKING.contains(&f.check))
+    {
+        let key = (
+            finding.check,
+            (
+                finding.scenario.as_str(),
+                finding.state.as_str(),
+                finding.window.as_str(),
+            ),
+        );
+        *found.entry(key).or_default() += 1;
+    }
+    let listed = |check: &str, key: StateKey<'_>| {
+        known
+            .iter()
+            .filter(|(c, k, _)| *c == check && *k == key)
+            .map(|(.., count)| count)
+            .sum::<usize>()
+    };
+    let line =
+        |check: &str, (scenario, state, window): StateKey<'_>, count: usize, limit: usize| {
+            format!("{check} / {scenario} / {state} / {window}: {count} (known {limit})")
+        };
+    let worse = found
+        .iter()
+        .filter(|((check, key), count)| **count > listed(check, *key))
+        .map(|((check, key), count)| line(check, *key, *count, listed(check, *key)))
+        .collect();
+    let stale = known
+        .iter()
+        .filter(|(_, (scenario, ..), _)| scenarios.contains(scenario))
+        .filter_map(|(check, key, limit)| {
+            let count = found.get(&(*check, *key)).copied().unwrap_or(0);
+            (count < *limit).then(|| {
+                format!(
+                    "{}. Fixed: lower or remove its line in stillness_known::KNOWN",
+                    line(check, *key, count, *limit)
+                )
+            })
+        })
+        .collect();
+    (worse, stale)
 }
 
 /// `stillness.json`: a JSON array with one finding per line, so `grep` and `diff` read it.
@@ -806,12 +1104,14 @@ pub fn json_lines(findings: &[Finding]) -> String {
     format!("[\n{}\n]\n", lines.join(",\n"))
 }
 
-/// The counts the gate prints. Nothing here fails a run yet.
+/// The counts the gate prints.
 pub struct Report {
     /// Per check: findings, escaped findings, and states with a finding.
     counts: Vec<(&'static str, usize, usize, usize)>,
     /// `expect_moves` uses per scenario.
-    escapes: std::collections::BTreeMap<String, Vec<String>>,
+    escapes: BTreeMap<String, Vec<String>>,
+    /// Known lines per blocking check.
+    known: Vec<(&'static str, usize)>,
     time: Duration,
 }
 
@@ -819,6 +1119,7 @@ impl Report {
     pub fn new(
         findings: &[Finding],
         escapes: &[(String, String, &'static str)],
+        known: &[KnownLine],
         time: Duration,
     ) -> Self {
         let counts = CHECKS
@@ -834,18 +1135,27 @@ impl Report {
                 (*check, of.len() - escaped, escaped, states.len())
             })
             .collect();
-        let mut by_scenario: std::collections::BTreeMap<String, Vec<String>> = Default::default();
+        let mut by_scenario: BTreeMap<String, Vec<String>> = BTreeMap::new();
         for (scenario, state, reason) in escapes {
             by_scenario
                 .entry(scenario.clone())
                 .or_default()
                 .push(format!("{state}: {reason}"));
         }
+        let known = BLOCKING
+            .iter()
+            .map(|check| (*check, known.iter().filter(|(c, ..)| c == check).count()))
+            .collect();
         Self {
             counts,
             escapes: by_scenario,
+            known,
             time,
         }
+    }
+
+    fn blocks(check: &str) -> bool {
+        BLOCKING.contains(&check)
     }
 
     pub fn summary(&self) -> String {
@@ -853,12 +1163,25 @@ impl Report {
             .counts
             .iter()
             .map(|(check, found, escaped, states)| {
-                format!("{check} {found} in {states} states ({escaped} escaped)")
+                format!(
+                    "{check} {found} in {states} states ({escaped} escaped{})",
+                    if Self::blocks(check) {
+                        ", blocking"
+                    } else {
+                        ", report-only"
+                    }
+                )
             })
             .collect();
+        let known: Vec<String> = self
+            .known
+            .iter()
+            .map(|(check, lines)| format!("{check} {lines}"))
+            .collect();
         format!(
-            "Stillness (report-only, stillness.json): {}. expect_moves: {} uses. Check time {:?} (summed over workers).",
+            "Stillness (stillness.json): {}. Known lines: {}. expect_moves: {} uses. Check time {:?} (summed over workers).",
             counts.join("; "),
+            known.join(", "),
             self.escapes.values().map(Vec::len).sum::<usize>(),
             self.time,
         )
@@ -866,10 +1189,18 @@ impl Report {
 
     pub fn markdown(&self) -> String {
         let mut out = String::from(
-            "\n## Stillness and other G checks (report-only)\n\nEach finding is a line of `stillness.json`. They do not fail the run yet.\n\n| Check | Findings | States | Escaped by `expect_moves` |\n|---|---|---|---|\n",
+            "\n## Stillness and other G checks\n\nEach finding is a line of `stillness.json`. A blocking check fails the run on a line that `stillness_known::KNOWN` does not list.\n\n| Check | Findings | States | Escaped by `expect_moves` | Blocks | Known lines |\n|---|---|---|---|---|---|\n",
         );
         for (check, found, escaped, states) in &self.counts {
-            out.push_str(&format!("| {check} | {found} | {states} | {escaped} |\n"));
+            let known = self
+                .known
+                .iter()
+                .find(|(c, _)| c == check)
+                .map_or_else(|| "—".to_owned(), |(_, n)| n.to_string());
+            out.push_str(&format!(
+                "| {check} | {found} | {states} | {escaped} | {} | {known} |\n",
+                if Self::blocks(check) { "yes" } else { "no" }
+            ));
         }
         out.push_str(&format!(
             "\nCheck time, summed over workers: {:?}.\n",
@@ -914,22 +1245,31 @@ mod tests {
             items,
             bars,
             messages,
+            footers: Vec::new(),
+        }
+    }
+
+    fn saved(rect: egui::Rect, clip: Option<egui::Rect>) -> Message {
+        Message {
+            words: "Changes saved.".into(),
+            rect,
+            scope: Some(1),
+            clip,
         }
     }
 
     #[test]
     fn g1a_finds_content_a_new_message_pushed_down_and_not_content_above_it() {
         let body = Some(at(0.0, 0.0, 600.0, 600.0));
-        let message = Message {
-            words: "Changes saved.".into(),
-            rect: at(10.0, 100.0, 200.0, 20.0),
-            scope: Some(1),
-            clip: body,
-        };
+        let message = saved(at(10.0, 100.0, 200.0, 20.0), body);
         let above = item(Role::Label, "File line", at(10.0, 60.0, 200.0, 20.0), body);
         let row = |y| item(Role::Button, "Strength", at(10.0, y, 100.0, 24.0), body);
         let old = snapshot(vec![above.clone(), row(100.0)], vec![], vec![]);
-        let new = snapshot(vec![above, row(128.0)], vec![message], vec![]);
+        let new = snapshot(
+            vec![above.clone(), row(128.0)],
+            vec![message.clone()],
+            vec![],
+        );
         let found = message_moves(&old, &new);
         assert_eq!(found.len(), 1, "{found:?}");
         assert_eq!(found[0].control, "Button \"Strength\"");
@@ -939,40 +1279,224 @@ mod tests {
         // Content that stays still gives nothing; a message that stays gives nothing.
         let still = snapshot(new.items.clone(), new.messages.clone(), vec![]);
         assert!(message_moves(&new, &still).is_empty());
-        let in_place = snapshot(
-            vec![item(
-                Role::Button,
-                "Strength",
-                at(10.0, 128.0, 100.0, 24.0),
-                body,
-            )],
+        let in_place = snapshot(vec![above.clone(), row(128.0)], vec![], vec![]);
+        assert!(message_moves(&in_place, &new).is_empty());
+        // The tolerance is the design's 1 px: 1 px passes, 1.5 px is a move.
+        let below = snapshot(vec![above.clone(), row(140.0)], vec![], vec![]);
+        let by = |dy: f32| {
+            snapshot(
+                vec![above.clone(), row(140.0 + dy)],
+                vec![message.clone()],
+                vec![],
+            )
+        };
+        assert!(message_moves(&below, &by(1.0)).is_empty());
+        assert_eq!(message_moves(&below, &by(1.5)).len(), 1);
+        // The message's own second line and choice row are its block, not content it moved.
+        let choice = item(Role::Button, "Undo", at(40.0, 124.0, 60.0, 24.0), body);
+        let with_choice = snapshot(
+            vec![above.clone(), choice.clone(), row(152.0)],
+            vec![message.clone()],
+            vec![],
+        );
+        let choice_before = snapshot(
+            vec![
+                above.clone(),
+                item(Role::Button, "Undo", at(40.0, 300.0, 60.0, 24.0), body),
+                row(100.0),
+            ],
             vec![],
             vec![],
         );
-        assert!(message_moves(&in_place, &new).is_empty());
+        let found = message_moves(&choice_before, &with_choice);
+        assert_eq!(found.len(), 1, "only the row: {found:?}");
+        // A form field that came in the pane: a form opened in place.
+        let field = item(Role::TextInput, "Name", at(10.0, 160.0, 200.0, 24.0), body);
+        let with_form = snapshot(
+            vec![above.clone(), row(128.0), field],
+            vec![message.clone()],
+            vec![],
+        );
+        assert!(message_moves(&old, &with_form).is_empty());
+        // Content above that moved: the pane scrolled, so the message did not move it.
+        let scrolled = snapshot(
+            vec![
+                item(Role::Label, "File line", at(10.0, 40.0, 200.0, 20.0), body),
+                row(128.0),
+            ],
+            vec![message.clone()],
+            vec![],
+        );
+        assert!(message_moves(&old, &scrolled).is_empty());
     }
 
     #[test]
-    fn g1b_finds_a_pressed_control_that_moved_and_follows_a_renamed_one_by_id() {
-        let nodes = [
-            (7, Role::Button, "+ Success", at(300.0, 50.0, 80.0, 24.0)),
-            (8, Role::Label, "1 success", at(200.0, 50.0, 60.0, 24.0)),
+    fn g1a_compares_messages_by_pane_and_words() {
+        let a = Some(at(0.0, 0.0, 300.0, 600.0));
+        let b = Some(at(320.0, 0.0, 300.0, 600.0));
+        let a_message = saved(at(10.0, 100.0, 200.0, 20.0), a);
+        let b_message = saved(at(330.0, 100.0, 200.0, 20.0), b);
+        let a_title = item(Role::Label, "A title", at(10.0, 60.0, 200.0, 20.0), a);
+        let b_title = item(Role::Label, "B title", at(330.0, 60.0, 200.0, 20.0), b);
+        let a_row = item(Role::Button, "A row", at(10.0, 128.0, 100.0, 24.0), a);
+        let b_row = |y| item(Role::Button, "B row", at(330.0, y, 100.0, 24.0), b);
+        // Pane A already says the words; pane B gains the same words and its row moves.
+        let old = snapshot(
+            vec![
+                a_title.clone(),
+                a_row.clone(),
+                b_title.clone(),
+                b_row(100.0),
+            ],
+            vec![a_message.clone()],
+            vec![],
+        );
+        let new = snapshot(
+            vec![a_title, a_row, b_title, b_row(128.0)],
+            vec![a_message, b_message],
+            vec![],
+        );
+        let found = message_moves(&old, &new);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].control, "Button \"B row\"");
+    }
+
+    #[test]
+    fn g1a_at_the_top_of_a_pane_compares_only_the_same_view() {
+        let body = Some(at(0.0, 0.0, 600.0, 600.0));
+        let message = saved(at(10.0, 0.0, 200.0, 20.0), body);
+        let rows = |names: &[&str], y: f32| -> Vec<Item> {
+            names
+                .iter()
+                .enumerate()
+                .map(|(i, name)| {
+                    item(
+                        Role::Button,
+                        name,
+                        at(10.0, y + 30.0 * i as f32, 100.0, 24.0),
+                        body,
+                    )
+                })
+                .collect()
+        };
+        let old = snapshot(rows(&["A", "B", "C"], 0.0), vec![], vec![]);
+        let new = snapshot(rows(&["A", "B", "C"], 28.0), vec![message.clone()], vec![]);
+        assert_eq!(message_moves(&old, &new).len(), 3);
+        let other_view = snapshot(rows(&["D", "E", "C"], 28.0), vec![message], vec![]);
+        assert!(message_moves(&old, &other_view).is_empty());
+    }
+
+    fn node(id: u64, name: &str, rect: egui::Rect, popup: bool) -> PressNode {
+        PressNode {
+            id,
+            role: Role::Button,
+            name: name.into(),
+            rect,
+            shown: rect,
+            scope: 1,
+            popup,
+        }
+    }
+
+    #[test]
+    fn g1b_finds_a_pressed_control_that_moved() {
+        let button = at(300.0, 50.0, 80.0, 24.0);
+        let before = pressed(
+            &[node(7, "+ Success", button, false)],
+            button.center(),
+            "Run",
+        )
+        .expect("the pressed button");
+        let after = |rect| [node(7, "+ Success", rect, false)];
+        // Off the press point.
+        let found = press_moves(&before, &after(at(390.0, 50.0, 80.0, 24.0)), "Run", "Click")
+            .expect("a move");
+        assert_eq!(found.check, G1B);
+        assert!(found.trigger.contains("the press point is off it"));
+        // Moved 12 px, with the point still on it (count words with no fixed width): blocking too.
+        let found = press_moves(&before, &after(at(312.0, 50.0, 80.0, 24.0)), "Run", "Click")
+            .expect("a shift");
+        assert_eq!(found.check, G1B);
+        assert!(!found.trigger.contains("off it"));
+        assert!(press_moves(&before, &after(button), "Run", "Click").is_none());
+        assert!(
+            press_moves(
+                &before,
+                &after(at(390.0, 50.0, 80.0, 24.0)),
+                "World",
+                "Click"
+            )
+            .is_none()
+        );
+        // 1 px is the design's tolerance; 1.5 px is a move.
+        assert!(
+            press_moves(&before, &after(at(301.0, 50.0, 80.0, 24.0)), "Run", "Click").is_none()
+        );
+        assert!(
+            press_moves(&before, &after(at(301.5, 51.5, 80.0, 24.0)), "Run", "Click").is_some()
+        );
+        // Renamed: found by id, never blocking.
+        let renamed = [node(7, "Stop", at(500.0, 50.0, 80.0, 24.0), false)];
+        assert_eq!(
+            press_moves(&before, &renamed, "Run", "Click").map(|raw| raw.check),
+            Some(G1B_RENAMED)
+        );
+    }
+
+    #[test]
+    fn g1b_exempts_a_selected_toggle_up_to_its_weight_and_no_more() {
+        let toggle = at(500.0, 70.0, 110.0, 28.0);
+        let before = pressed(
+            &[node(3, "Edit Markdown", toggle, false)],
+            toggle.center(),
+            "Library",
+        )
+        .expect("the toggle");
+        let grown = |width| {
+            [node(
+                3,
+                "Edit Markdown",
+                at(500.0, 70.0, 110.0 + width, 28.0),
+                false,
+            )]
+        };
+        assert!(press_moves(&before, &grown(TOGGLE_WEIGHT), "Library", "Click").is_none());
+        assert_eq!(
+            press_moves(&before, &grown(TOGGLE_WEIGHT + 0.5), "Library", "Click").map(|r| r.check),
+            Some(G1B)
+        );
+        // Its line must stay: the same growth one line lower is a move.
+        let lower = [node(
+            3,
+            "Edit Markdown",
+            at(500.0, 72.0, 112.0, 28.0),
+            false,
+        )];
+        assert!(press_moves(&before, &lower, "Library", "Click").is_some());
+    }
+
+    #[test]
+    fn g1b_tells_a_menu_entry_from_the_button_that_opened_it() {
+        let button = at(400.0, 450.0, 80.0, 26.0);
+        let before = pressed(
+            &[node(1, "On the road", button, false)],
+            button.center(),
+            "Travel",
+        )
+        .expect("the menu button");
+        // After the press the menu shows an entry with the same name elsewhere; the button stays.
+        let after = [
+            node(2, "On the road", at(390.0, 380.0, 100.0, 30.0), true),
+            node(1, "On the road", button, false),
         ];
-        let shown: Vec<_> = nodes.iter().map(|node| node.3).collect();
-        let before = pressed(&nodes, &shown, nodes[0].3, "Run").expect("the pressed button");
-        let after = [(7, Role::Button, "+ Success", at(310.0, 50.0, 80.0, 24.0))];
-        let found = press_moves(&before, &after, "Run", "Click: + Success").expect("a move");
-        assert_eq!(found.new.left(), 310.0);
-        assert!(
-            press_moves(&before, &nodes, "Run", "Click").is_none(),
-            "it stayed"
-        );
-        assert!(
-            press_moves(&before, &after, "World", "Click").is_none(),
-            "another page"
-        );
-        let renamed = [(7, Role::Button, "Stop", at(320.0, 50.0, 80.0, 24.0))];
-        assert!(press_moves(&before, &renamed, "Run", "Click").is_some());
+        assert!(press_moves(&before, &after, "Travel", "Click").is_none());
+        // A press on the entry goes to the entry, the popup's node, not the button under it.
+        let entry = at(400.0, 450.0, 100.0, 30.0);
+        let both = [
+            node(1, "On the road", button, false),
+            node(2, "On the road", entry, true),
+        ];
+        assert!(pressed(&both, button.center(), "Travel").is_some_and(|p| p.node.popup));
     }
 
     #[test]
@@ -995,52 +1519,124 @@ mod tests {
             bar_moves(&old, &kept).is_empty(),
             "a kept lane moves nothing"
         );
+        // The pane got 8 px wider: its bar moved by less than a lane. Not a new bar.
+        let wider = snapshot(vec![field(608.0)], vec![], vec![at(609.0, 0.0, 6.0, 600.0)]);
+        let narrow = snapshot(vec![field(600.0)], vec![], vec![bar]);
+        assert!(bar_moves(&narrow, &wider).is_empty());
     }
 
     #[test]
-    fn g2_finds_a_header_action_that_is_gone_or_drops_its_words() {
-        let action = |name: &str| item(Role::Button, name, at(500.0, 10.0, 80.0, 24.0), None);
-        let view = |window: &str, width, header: Vec<(Item, String)>| HeaderView {
+    fn expect_moves_covers_g1a_and_g1b_but_not_g1c() {
+        let mut tracker = Tracker::default();
+        tracker.begin("s", "01-x", Some("A reorder."));
+        for check in [G1A, G1B, G1C] {
+            tracker.push(
+                "s",
+                "01-x",
+                "960x640",
+                Raw {
+                    check,
+                    control: String::new(),
+                    old: egui::Rect::NOTHING,
+                    new: egui::Rect::NOTHING,
+                    trigger: String::new(),
+                },
+            );
+        }
+        let escaped: Vec<bool> = tracker
+            .findings
+            .iter()
+            .map(|f| f.escaped.is_some())
+            .collect();
+        assert_eq!(escaped, [true, true, false]);
+    }
+
+    #[test]
+    fn g2_finds_a_header_action_that_is_gone_or_turns_icon_only() {
+        let edit = item(Role::Button, "Edit", at(500.0, 10.0, 80.0, 24.0), None);
+        let open = item(Role::Button, "Open", at(600.0, 10.0, 80.0, 24.0), None);
+        let text = |words: &str, x: f32| Text {
+            words: words.into(),
+            rect: at(x, 14.0, 10.0, 16.0),
+        };
+        let pencil = "\u{e3ae}";
+        let view = |window: &str, width, items: &[Item], texts: &[Text]| HeaderView {
             window: window.into(),
             width,
-            all: header
+            header: header(items, texts, 0.0),
+            all: items
                 .iter()
-                .map(|(item, _)| (item.role, item.name.clone()))
+                .map(|item| (item.role, item.name.clone()))
                 .collect(),
-            header,
         };
         let wide = view(
             "1920x1080",
             1920.0,
-            vec![
-                (action("Edit"), "Edit".into()),
-                (action("Open"), "Open".into()),
+            &[edit.clone(), open.clone()],
+            &[
+                text(pencil, 505.0),
+                text("Edit", 530.0),
+                text("Open", 630.0),
             ],
         );
-        let narrow = view("960x640", 960.0, vec![(action("Edit"), String::new())]);
+        // Unchanged words: nothing.
+        let same = view(
+            "960x640",
+            960.0,
+            &[edit.clone(), open.clone()],
+            &[
+                text(pencil, 505.0),
+                text("Edit", 530.0),
+                text("Open", 630.0),
+            ],
+        );
+        assert!(header_losses(&[same, wide]).is_empty());
+        let wide = view(
+            "1920x1080",
+            1920.0,
+            &[edit.clone(), open.clone()],
+            &[
+                text(pencil, 505.0),
+                text("Edit", 530.0),
+                text("Open", 630.0),
+            ],
+        );
+        // `Edit` keeps its accessible name but paints only its icon; `Open` is gone.
+        let narrow = view("960x640", 960.0, &[edit], &[text(pencil, 505.0)]);
         let found = header_losses(&[narrow, wide]);
         assert_eq!(found.len(), 2, "{found:?}");
         assert!(found.iter().any(|(_, raw)| raw.trigger.starts_with("gone")));
         assert!(
             found
                 .iter()
-                .any(|(_, raw)| raw.trigger.starts_with("paints \"\""))
+                .any(|(_, raw)| raw.control == "Button \"Edit\""
+                    && raw.trigger.starts_with("paints"))
         );
     }
 
     #[test]
-    fn g3_finds_an_action_far_from_its_row_words() {
+    fn g3_finds_an_action_far_from_its_row_words_but_not_in_form_or_table_rows() {
         let row = at(0.0, 0.0, 1600.0, 32.0);
-        let words = Text {
-            words: "Goblin".into(),
-            rect: at(10.0, 4.0, 60.0, 20.0),
+        let words = |name: &str, x: f32| Text {
+            words: name.into(),
+            rect: at(x, 4.0, 60.0, 20.0),
         };
         let action = |x| item(Role::Button, "Remove", at(x, 4.0, 70.0, 24.0), None);
-        assert_eq!(
-            far_actions(&[row], &[action(1500.0)], std::slice::from_ref(&words)).len(),
-            1
-        );
-        assert!(far_actions(&[row], &[action(70.0 + FAR_GAP)], &[words]).is_empty());
+        let goblin = [words("Goblin", 10.0)];
+        assert_eq!(far_actions(&[row], &[action(1500.0)], &goblin).len(), 1);
+        assert!(far_actions(&[row], &[action(70.0 + FAR_GAP)], &goblin).is_empty());
+        // A form row: a label, then its field.
+        let field = item(Role::ComboBox, "Speed", at(400.0, 4.0, 90.0, 24.0), None);
+        assert!(far_actions(&[row], &[field], &goblin).is_empty());
+        // A table row: three columns of words.
+        let table = [
+            words("Goblin", 10.0),
+            words("CR 1/4", 200.0),
+            words("50 XP", 400.0),
+        ];
+        assert!(far_actions(&[row], &[action(1500.0)], &table).is_empty());
+        let two = [words("Goblin", 10.0), words("CR 1/4", 200.0)];
+        assert_eq!(far_actions(&[row], &[action(1500.0)], &two).len(), 1);
     }
 
     #[test]
@@ -1058,6 +1654,68 @@ mod tests {
         assert!(
             repeated_sentences(&[text(cause, 10.0), text("The file has tables", 50.0)], &[])
                 .is_empty()
+        );
+    }
+
+    #[test]
+    fn g6_finds_a_footer_far_below_a_short_body() {
+        let pane_band = |top: f32| at(400.0, top, 500.0, 1080.0 - top);
+        let row = item(Role::Button, "Process", at(420.0, 300.0, 90.0, 28.0), None);
+        // The footer follows the body: its message is `S` below the last row.
+        assert!(footer_gaps(std::slice::from_ref(&row), &[pane_band(328.0)]).is_empty());
+        assert!(footer_gaps(std::slice::from_ref(&row), &[pane_band(329.0)]).is_empty());
+        // 1.5 px past the rule, and 700 px (the round 28 faults).
+        assert_eq!(
+            footer_gaps(std::slice::from_ref(&row), &[pane_band(329.5)]).len(),
+            1
+        );
+        assert_eq!(
+            footer_gaps(std::slice::from_ref(&row), &[pane_band(1028.0)]).len(),
+            1
+        );
+        // A body that fills the pane is clipped at the band: it passes.
+        let tall = item(
+            Role::Label,
+            "Long note",
+            at(420.0, 300.0, 400.0, 2000.0),
+            Some(at(400.0, 100.0, 500.0, 928.0)),
+        );
+        assert!(footer_gaps(&[tall], &[pane_band(1028.0)]).is_empty());
+        // Another pane's content beside it does not count.
+        let beside = item(Role::Button, "Other", at(100.0, 900.0, 90.0, 28.0), None);
+        assert_eq!(footer_gaps(&[row, beside], &[pane_band(1028.0)]).len(), 1);
+    }
+
+    fn finding(check: &'static str, state: &str) -> Finding {
+        Finding {
+            check,
+            scenario: "s".into(),
+            state: state.into(),
+            window: "960x640".into(),
+            control: String::new(),
+            old: [0.0; 4],
+            new: [0.0; 4],
+            trigger: String::new(),
+            escaped: None,
+        }
+    }
+
+    #[test]
+    fn known_lines_fail_a_new_finding_and_a_stale_line() {
+        let known: &[KnownLine] = &[(G3, ("s", "01-a", "960x640"), 1)];
+        let run = [finding(G3, "01-a"), finding(G2, "02-b")];
+        assert_eq!(compare_known(&run, known, &["s"]), (vec![], vec![]));
+        let more = [finding(G3, "01-a"), finding(G1A, "02-b")];
+        let (worse, stale) = compare_known(&more, known, &["s"]);
+        assert_eq!((worse.len(), stale.len()), (1, 0), "{worse:?}");
+        let (worse, stale) = compare_known(&[], known, &["s"]);
+        assert_eq!((worse.len(), stale.len()), (0, 1));
+        assert_eq!(compare_known(&[], known, &["other"]), (vec![], vec![]));
+        let mut escaped = finding(G1A, "02-b");
+        escaped.escaped = Some("A reorder.");
+        assert_eq!(
+            compare_known(&[finding(G3, "01-a"), escaped], known, &["s"]),
+            (vec![], vec![])
         );
     }
 }
