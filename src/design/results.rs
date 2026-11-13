@@ -1129,7 +1129,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Layout(1)],
         ),
         ("src/trackers/view.rs", "amount_field", &[Ban::Layout(1)]),
-        ("src/trackers/view.rs", "show", &[Ban::Extras(1)]),
         (
             "src/world.rs",
             "add_form",

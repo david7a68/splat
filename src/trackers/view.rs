@@ -236,7 +236,7 @@ pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, from_top: bool) {
     let messages = messages(&frame, trackers, ui.available_width());
     if !trackers.in_play() {
         let paned = messages.pane(ui, Body::Content, |ui| {
-            ui.add_space(design::S);
+            design::gap(ui, design::Gap::S);
             design::empty_state(
                 ui,
                 icons::BELL,

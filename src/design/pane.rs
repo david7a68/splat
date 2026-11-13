@@ -754,7 +754,7 @@ impl Footer<'_> {
                     open(ui, None);
                     reveal_focus(ui, id, first..last, body_room, visible);
                     if options.holds {
-                        ui.add_space(held.room);
+                        super::extras::space(ui, held.room);
                     }
                     inner
                 });
