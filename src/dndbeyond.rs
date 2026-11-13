@@ -381,15 +381,17 @@ impl DndBeyond {
         clippy::disallowed_methods,
         reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
     )]
-    pub fn footer_messages<'a>(&'a self, footer: &mut crate::design::Footer<'a>, link: bool) {
-        if let Some(error) = &self.error {
-            footer.reason(error.as_str(), move |ui| {
-                crate::design::message(ui, crate::design::Tone::Error, error);
+    /// The messages own their words, so the pane's body can change this list while the footer
+    /// waits for it (`Footer::pane`).
+    pub fn footer_messages(&self, footer: &mut crate::design::Footer<'_>, link: bool) {
+        if let Some(error) = self.error.clone() {
+            footer.reason(error.clone(), move |ui| {
+                crate::design::message(ui, crate::design::Tone::Error, &error);
             });
         }
-        if link && let Some((message, order)) = &self.message {
-            footer.result(*order, message.as_str(), false, move |ui| {
-                crate::design::message(ui, crate::design::Tone::Success, message);
+        if link && let Some((message, order)) = self.message.clone() {
+            footer.result(order, message.clone(), false, move |ui| {
+                crate::design::message(ui, crate::design::Tone::Success, &message);
             });
         }
     }
@@ -430,9 +432,12 @@ impl DndBeyond {
         if session.is_none() {
             connection_help(ui);
         }
+        // Round 28 FO7: the pane's lock (a run) blocks Refresh list as it blocks the picker.
         if crate::design::Action::secondary("Refresh list")
             .density(crate::design::Density::Read)
-            .blocked(if session.is_none() {
+            .blocked(if let Some(lock) = blocked {
+                Some(lock)
+            } else if session.is_none() {
                 Some("Connect to D&D Beyond in Settings first.")
             } else if self.pending.is_some() {
                 Some("Already refreshing.")

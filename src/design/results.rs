@@ -489,7 +489,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/campaign_content.rs",
             "page_footer",
-            &[Ban::Results, Ban::Pane(1)],
+            &[Ban::Results],
         ),
         (
             "src/campaign_content.rs",
@@ -715,21 +715,8 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/world.rs", "stamp", &[Ban::Results]),
         // Package K: raw egui calls that a layout part replaces.
         ("src/art.rs", "show_viewer", &[Ban::Layout(1)]),
-        (
-            "src/campaign_content.rs",
-            "packages_content",
-            &[Ban::Layout(4)],
-        ),
-        (
-            "src/campaign_content.rs",
-            "reconcile_section",
-            &[Ban::Layout(1)],
-        ),
-        ("src/campaign_content.rs", "show", &[Ban::Layout(1)]),
         ("src/campaigns.rs", "selector", &[Ban::Layout(1)]),
         ("src/copy_dialog.rs", "show", &[Ban::Layout(3)]),
-        ("src/creature_filter.rs", "filter_bar", &[Ban::Layout(1)]),
-        ("src/creature_filter.rs", "menu", &[Ban::Layout(2)]),
         (
             "src/encounter_run/ad_hoc.rs",
             "add_creature_form",
@@ -804,7 +791,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/encounters/groups.rs", "text_row", &[Ban::Layout(1)]),
         ("src/encounters/list.rs", "row_menu", &[Ban::Layout(1)]),
         ("src/encounters/list.rs", "side_control", &[Ban::Layout(2)]),
-        ("src/lib.rs", "page", &[Ban::Layout(3), Ban::Pane(3)]),
         ("src/library.rs", "above_footer", &[Ban::Layout(1)]),
         ("src/library.rs", "folder_field", &[Ban::Layout(2)]),
         ("src/library.rs", "new_entry", &[Ban::Layout(3)]),
@@ -957,12 +943,8 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Pane(1)],
         ),
         ("src/library.rs", "form_footer", &[Ban::Pane(1)]),
+        ("src/campaign_content.rs", "show", &[Ban::Pane(1)]),
         ("src/party.rs", "show", &[Ban::Pane(1)]),
-        (
-            "src/settings.rs",
-            "a_failed_removal_keeps_disconnect_until_it_works",
-            &[Ban::Pane(1)],
-        ),
     ]
 };
 

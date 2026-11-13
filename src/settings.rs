@@ -41,6 +41,13 @@ pub struct Settings {
     warning: Option<String>,
     /// A saved session failed to restore, so one is still in the keyring.
     saved_session: bool,
+    /// Round 28 FH6: the session in use is saved on this computer (a restored one, or a Connect
+    /// with the box ticked whose save worked). It is set by the reply to a Restore or Connect
+    /// and ends with Disconnect, a failed sign-in or a failed save; a refresh keeps it.
+    remembered: bool,
+    /// The request in progress saves the session it gets (a Restore, or a Connect with the box
+    /// ticked).
+    saves: bool,
     /// The worker is removing the saved session.
     forgetting: bool,
     /// The request in progress renews a working session. The DM need not hear of it.
@@ -112,6 +119,8 @@ impl Default for Settings {
             error: None,
             warning: None,
             saved_session: false,
+            remembered: false,
+            saves: false,
             forgetting: false,
             refreshing: false,
             refresh_failures: 0,
@@ -159,9 +168,13 @@ impl Settings {
         self.error = None;
         self.warning = None;
         self.refresh_error = None;
+        self.remembered = false;
         match account {
             Account::Busy => self.simulated = Some(Account::Busy),
-            Account::Connected => self.session = session(),
+            Account::Connected => {
+                self.session = session();
+                self.remembered = true;
+            }
             Account::NotConnected => self.session = None,
             Account::Failed => {
                 self.session = None;
@@ -230,6 +243,10 @@ impl Settings {
         self.reveal_retry = false;
         self.forgetting = matches!(&action, Action::Forget);
         self.refreshing = matches!(&action, Action::Refresh(_));
+        self.saves = matches!(
+            &action,
+            Action::Restore | Action::Connect { remember: true, .. }
+        );
         if !matches!(&action, Action::Refresh(_)) {
             self.warning = None;
             self.account_epoch += 1;
@@ -265,6 +282,11 @@ impl Settings {
                                     self.cookie_input.zeroize();
                                     self.sign_in_again = false;
                                 }
+                                if !self.refreshing {
+                                    self.remembered = self.saves
+                                        && outcome.session.is_some()
+                                        && outcome.warning.is_none();
+                                }
                                 self.session = outcome.session;
                                 self.saved_session = false;
                                 self.refresh_failures = 0;
@@ -289,6 +311,7 @@ impl Settings {
                             }
                             Err(error) => {
                                 self.session = None;
+                                self.remembered = false;
                                 self.error = Some(error);
                                 self.connect_failed = self.connecting;
                                 self.reveal_retry = self.connecting;
@@ -408,7 +431,9 @@ impl Settings {
                     } else if self.account() == Account::RefreshFailing {
                         "Connect again…"
                     } else {
-                        "Account…"
+                        // Round 28 FO3: it names what it opens, the sign-in and its Disconnect.
+                        // `…`: a form follows (R12).
+                        "Sign-in details…"
                     },
                 )
                 .show(ui)
@@ -429,14 +454,16 @@ impl Settings {
     /// in the Settings footer, so their recovery stays in view whatever the cookie field holds.
     /// A failed Connect's cause sits beside Connect instead (round 27 FA1); an ended session is
     /// the account's state, said in the account column. Each lives until the next request.
-    pub fn footer_messages<'a>(&'a self, footer: &mut design::Footer<'a>) {
+    /// The message owns its words, so the pane's body can change the account while the footer
+    /// waits for it (`Footer::pane`).
+    pub fn footer_messages(&self, footer: &mut design::Footer<'_>) {
         if let Some(error) = self
             .error
-            .as_deref()
+            .clone()
             .filter(|error| !self.connect_failed && *error != SESSION_ENDED)
         {
-            footer.reason(error, move |ui| {
-                design::message(ui, Tone::Error, error);
+            footer.reason(error.clone(), move |ui| {
+                design::message(ui, Tone::Error, &error);
             });
         }
     }
@@ -469,6 +496,10 @@ impl Settings {
             });
         }
         match account {
+            // Round 28 FH6: the help says whether the sign-in was saved.
+            Account::Connected if self.remembered => {
+                small(ui, "Splat signs in again when it starts.");
+            }
             Account::Connected => {
                 small(ui, "Splat stays signed in while it is open.");
             }
@@ -597,7 +628,22 @@ impl Settings {
                             self.reveal_rect = Some(connect.rect);
                         }
                         ui.spacing_mut().item_spacing.x = design::S;
-                        design::blocked_reason(ui, reason.or(failure));
+                        // Round 28 FA11: a reason that fits on one line sits `S` left of
+                        // Connect; a longer one starts at the field's left edge and wraps from
+                        // there, so no line is left with one word. Measured, not a fixed width.
+                        let shown = reason.or(failure);
+                        let fits = shown.is_none_or(|words| {
+                            design::number_width(ui, words, &Type::Small.font(ui))
+                                <= ui.available_width()
+                        });
+                        if fits {
+                            design::blocked_reason(ui, shown);
+                        } else {
+                            ui.with_layout(
+                                egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true),
+                                |ui| design::blocked_reason(ui, shown),
+                            );
+                        }
                         connect.clicked()
                     })
                     .inner;
@@ -624,7 +670,11 @@ impl Settings {
         ) {
             small(
                 ui,
-                "Disconnect removes Splat’s saved D&D Beyond sign-in. It does not sign your browser out of D&D Beyond.",
+                if self.remembered {
+                    "Disconnect removes Splat’s saved D&D Beyond sign-in. It does not sign your browser out of D&D Beyond."
+                } else {
+                    "Disconnect signs Splat out. It does not sign your browser out of D&D Beyond."
+                },
             );
         }
         // Only when there is something to forget. It follows the trust text.
@@ -669,7 +719,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::disallowed_methods)]
     fn a_failed_removal_keeps_disconnect_until_it_works() {
         let ctx = egui::Context::default();
         let (worker, commands, results) = Worker::test_channels();
@@ -699,8 +748,7 @@ mod tests {
                 |ui, settings: &mut Settings| {
                     let mut footer = design::Footer::new("settings_footer", 600.0);
                     settings.footer_messages(&mut footer);
-                    let _ = footer.show_by_hand(ui);
-                    settings.show(ui);
+                    footer.pane(ui, design::Body::Content, |ui| settings.show(ui));
                 },
                 std::mem::take(&mut settings),
             );

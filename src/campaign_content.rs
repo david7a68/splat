@@ -757,7 +757,7 @@ impl CampaignContent {
 
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+        reason = "staged: the package list's columns fill the page (`Fills::because`) (design::results::STAGED_ALLOWS)"
     )]
     pub fn show(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns) {
         let scope = (self.module, self.dependencies);
@@ -831,31 +831,54 @@ impl CampaignContent {
         // Round 25 review: the page scrolls, as the other pages do, so every repair and its Save
         // stay in reach at any window size. The page keeps the scroll bar's lane whether or not
         // the bar shows, so nothing moves when it starts to scroll.
-        let width = ui.available_width() - ui.spacing().scroll.allocated_width();
-        // Round 26: the page's results, reasons and package warnings sit in one footer pinned
-        // at the bottom of the page, below its scroll area, so none of them moves the save
-        // rows, the repairs or the package list.
-        // The footer and the page share a child `Ui` that starts here: the footer shortens what
-        // is left of it, and the header and tabs above stay where they are.
-        let rest = ui.available_rect_before_wrap();
-        ui.scope_builder(egui::UiBuilder::new().max_rect(rest), |ui| {
-            let bottom = self.page_footer(ui, campaigns, &active, width.min(design::LIST_MEASURE));
-            let page_height = (bottom - ui.cursor().top()).max(0.0);
-            egui::ScrollArea::vertical()
-                .id_salt("campaign_packages_page")
-                .max_height(page_height)
-                .auto_shrink([false, false])
-                .show(ui, |ui| {
-                    // egui gives the content only the visible height, so a scroll area inside it
-                    // (a repair editor, a list) would shrink below the fold. The page's content
-                    // has all the height it needs; the page scrolls instead.
+        let width = ui.available_width() - design::lane_width();
+        // Round 26: the page's results, reasons and package warnings sit in one footer, so none
+        // of them moves the save rows, the repairs or the package list. Round 28: the pane
+        // places it. With the package list, the page's columns fill the room and each scrolls
+        // (`Fills`), so the footer is pinned; without it (an error, a missing folder), the
+        // footer follows the page's content (row 39).
+        let press = std::cell::Cell::new(None);
+        let write = std::cell::Cell::new(false);
+        let fills = self.snapshot.is_some();
+        let me = std::cell::RefCell::new(&mut *self);
+        let footer = Self::page_footer(
+            &me,
+            ui,
+            campaigns,
+            &active,
+            width.min(design::LIST_MEASURE),
+            (&press, &write),
+        );
+        let body = if fills {
+            design::Body::Fills(design::Fills::because(design::FillsReason::Columns))
+        } else {
+            design::Body::Content
+        };
+        footer.pane(ui, body, |ui| {
+            let mut this = me.borrow_mut();
+            if fills {
+                let page_height = ui.available_height();
+                design::ScrollColumn::new("campaign_packages_page").show(ui, |ui| {
+                    // egui gives the content only the visible height, so a scroll area inside
+                    // it (a repair editor, a list) would shrink below the fold. The page's
+                    // content has all the height it needs; the page scrolls instead.
                     ui.allocate_ui(egui::vec2(width, f32::INFINITY), |ui| {
-                        self.editor_rects.clear();
-                        self.page(ui, campaigns, &active, page_height);
-                        self.scroll_to_focus(ui);
+                        this.editor_rects.clear();
+                        this.page(ui, campaigns, &active, page_height);
+                        this.scroll_to_focus(ui);
                     });
                 });
+            } else {
+                this.editor_rects.clear();
+                this.page(ui, campaigns, &active, 0.0);
+                this.scroll_to_focus(ui);
+            }
         });
+        let this = me.into_inner();
+        this.press_result(press.take());
+        if write.get() {
+            this.write_campaign(campaigns, &active);
+        }
     }
 
     /// Keyboard and screen-reader focus bring the focused control into view. egui scrolls to a
@@ -959,32 +982,37 @@ impl CampaignContent {
         clippy::disallowed_methods,
         reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
     )]
-    fn page_footer(
-        &mut self,
-        ui: &mut egui::Ui,
-        campaigns: &Campaigns,
-        active: &Campaign,
+    #[allow(clippy::type_complexity)]
+    fn page_footer<'a>(
+        me: &'a std::cell::RefCell<&mut Self>,
+        ui: &egui::Ui,
+        campaigns: &'a Campaigns,
+        active: &'a Campaign,
         width: f32,
-    ) -> f32 {
-        use std::cell::{Cell, RefCell};
-        let locked = self
+        (press, write): (
+            &'a std::cell::Cell<Option<(PageResult, ResultPress)>>,
+            &'a std::cell::Cell<bool>,
+        ),
+    ) -> design::Footer<'a> {
+        let this = me.borrow();
+        let locked = this
             .dirty()
             .then_some("Save or discard campaign changes first.");
-        let results = self.live_results(active);
+        let results = this.live_results(active);
         // Round 27 FB3, AB1: with no package list to show, the page's errors are its content, at
         // the top of the page (`page`), not in the footer.
-        let reason = if self.body_missing() {
+        let reason = if this.body_missing() {
             String::new()
         } else {
-            self.reason_words(campaigns, active)
+            this.reason_words(campaigns, active)
         };
-        let warnings = self.package_warnings_of(campaigns);
+        let warnings = this.package_warnings_of(campaigns);
         let warning_words = warnings.words();
         // What each repair says, by its path, as the message above and Save's reason name it
         // (round 27 FB5: two notes can share a name in different folders). Round 27 FB1, AB2:
         // a refusal's cause shows once. While the repair is closed the message above says it;
         // only an open repair's message drops it, and then the footer says it.
-        let repair_messages: Vec<(String, Option<String>, Option<String>)> = self
+        let repair_messages: Vec<(String, Option<String>, Option<String>)> = this
             .repairs
             .iter()
             .map(|repair| {
@@ -999,14 +1027,11 @@ impl CampaignContent {
                 )
             })
             .collect();
-        let press = Cell::new(None);
-        let write = Cell::new(false);
-        let me = RefCell::new(&mut *self);
-        let bottom = {
+        drop(this);
+        {
             let mut footer = design::Footer::new(("campaign_page_footer", active.id), width);
             for (kind, order) in results.iter().copied().filter(|(kind, _)| kind.has_undo()) {
                 let words = me.borrow().words_of(kind);
-                let (me, press) = (&me, &press);
                 footer.result(order, words, true, move |ui| {
                     if let Some(pressed) = me.borrow().draw_one(ui, kind, locked) {
                         press.set(Some((kind, pressed)));
@@ -1027,7 +1052,6 @@ impl CampaignContent {
                 });
             }
             if !reason.is_empty() {
-                let (me, write) = (&me, &write);
                 footer.reason(reason, move |ui| {
                     let mut wants = false;
                     me.borrow().draw_reason(ui, campaigns, active, &mut wants);
@@ -1036,7 +1060,6 @@ impl CampaignContent {
             }
             for (kind, order) in results.iter().copied().filter(|(kind, _)| !kind.has_undo()) {
                 let words = me.borrow().words_of(kind);
-                let (me, press) = (&me, &press);
                 footer.result(order, words, false, move |ui| {
                     if let Some(pressed) = me.borrow().draw_one(ui, kind, locked) {
                         press.set(Some((kind, pressed)));
@@ -1044,20 +1067,13 @@ impl CampaignContent {
                 });
             }
             if !warnings.is_empty() {
-                let me = &me;
                 footer.notice(warning_words, move |ui| {
                     me.borrow_mut()
                         .package_warnings(ui, campaigns, active, warnings.unavailable);
                 });
             }
-            footer.show_by_hand(ui)
-        };
-        let this = me.into_inner();
-        this.press_result(press.take());
-        if write.get() {
-            this.write_campaign(campaigns, active);
+            footer
         }
-        bottom
     }
 
     /// The package list cannot show: no load is waiting and none gave a snapshot (a missing
@@ -1374,10 +1390,6 @@ impl CampaignContent {
     }
 
     /// Each change waits for the DM. A blocked one says what they must decide first.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn reconcile_section(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
         let reconcile = &mut self.reconcile;
         if reconcile.applying {
@@ -1396,9 +1408,9 @@ impl CampaignContent {
                 .rich(ui, "Campaign package: changes to review")
                 .color(c.text),
         );
-        egui::ScrollArea::vertical()
+        design::ScrollColumn::new("campaign package changes")
             .max_height(220.0)
-            .id_salt("campaign package changes")
+            .fit_height()
             .show(ui, |ui| {
                 for proposal in &reconcile.proposals {
                     let line = format!(
@@ -1763,10 +1775,16 @@ impl CampaignContent {
                     None,
                 );
             }
-            if !dirty && !self.repairs.iter().any(Repair::dirty) {
+            if !dirty {
+                // Round 28 FB5: a repair's draft blocks Reload, which would drop it; Reload keeps
+                // its place and says why, as on Encounters.
                 reload = Action::quiet("Reload from disk")
                     .icon(icons::REFRESH)
                     .density(Density::Read)
+                    .blocked_if(
+                        self.repairs.iter().any(Repair::dirty),
+                        "Save or discard your changes first.",
+                    )
                     .show(ui)
                     .clicked();
             }
@@ -2146,10 +2164,6 @@ impl CampaignContent {
         });
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn packages_content(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
         // Review round 26: egui panels set their own clip to the panel's rect, so their rows would
         // paint and take clicks below the page's viewport, under the footer. Each column clips
@@ -2264,9 +2278,9 @@ impl CampaignContent {
                 .icon(design::section_icon)
                 .default_open(!campaign_flags.is_empty())
                 .show(ui, |ui| {
-                    egui::ScrollArea::vertical()
+                    design::ScrollColumn::new("campaign_issues")
                         .max_height(design::FORM_WIDTH / 2.0)
-                        .id_salt("campaign_issues")
+                        .fit_height()
                         .show(ui, |ui| {
                             flag_lines(ui, &mut self.open_run_settings);
                             for e in errors.iter().filter(|error| {
@@ -2365,9 +2379,7 @@ impl CampaignContent {
             }))
             .show_inside(ui, |ui| {
                 ui.set_clip_rect(ui.clip_rect().intersect(viewport));
-                egui::ScrollArea::vertical()
-                    .id_salt("package_list")
-                    .auto_shrink([false, false])
+                design::ScrollColumn::new("package_list")
                     .show(ui, |ui| {
                         for module in catalogue.modules.iter().filter(|m| !m.private) {
                             let existing = document.selections.iter().position(|s| {
@@ -2420,7 +2432,8 @@ impl CampaignContent {
                                         },
                                     );
                                 }
-                                ui.horizontal(|ui| {
+                                // Round 28 FC12: where the row's name starts, for its note.
+                                let name_left = ui.horizontal(|ui| {
                                     let check = ui
                                         .add(egui::Checkbox::new(&mut enabled, "").indeterminate(
                                             partial || (count == 0 && required > 0),
@@ -2479,20 +2492,21 @@ impl CampaignContent {
                                         ),
                                         None => (counted.clone(), counted),
                                     };
-                                    if package_row(
+                                    let row = package_row(
                                         ui,
                                         !self.dependencies && self.module == Some(module.id),
                                         &module.name,
                                         &detail,
                                         &spoken,
-                                    )
-                                    .clicked()
-                                    {
+                                    );
+                                    if row.clicked() {
                                         self.module = Some(module.id);
                                         self.dependencies = false;
                                         self.search.clear();
                                     }
-                                });
+                                    row.rect.left() + design::S
+                                })
+                                .inner;
                                 if count == 0 && required > 0 {
                                     let selection = PackageSelection {
                                         name: Some(module.name.clone()),
@@ -2514,11 +2528,16 @@ impl CampaignContent {
                                         }
                                     };
                                     if !names.is_empty() {
-                                        ui.label(
-                                            Type::Small
-                                                .rich(ui, format!("{names} use its creatures."))
-                                                .color(c.muted),
-                                        );
+                                        // It starts at the row's name, not at its checkbox.
+                                        let mut note = ui.available_rect_before_wrap();
+                                        note.min.x = name_left.max(note.min.x);
+                                        ui.scope_builder(egui::UiBuilder::new().max_rect(note), |ui| {
+                                            ui.label(
+                                                Type::Small
+                                                    .rich(ui, format!("{names} use its creatures."))
+                                                    .color(c.muted),
+                                            );
+                                        });
                                     }
                                 }
                             });
@@ -2577,9 +2596,8 @@ impl CampaignContent {
                         })
                         .collect();
                     required.sort_by_key(|(id, _)| catalogue.entries[id].entry.name.to_lowercase());
-                    egui::ScrollArea::vertical()
-                        .id_salt("required_entries")
-                        .auto_shrink([false, true])
+                    design::ScrollColumn::new("required_entries")
+                        .fit_height()
                         .show(ui, |ui| {
                             for (id, reasons) in required {
                                 let entry = &catalogue.entries[id];
@@ -2589,9 +2607,9 @@ impl CampaignContent {
                                     catalogue.package_name(entry.owner)
                                 };
                                 let detail = format!(
-                                    "{} · {owner} · needed by {}",
+                                    "{} · {owner} · {}",
                                     crate::design::reader::human_label(&entry.entry.kind),
-                                    reasons.iter().cloned().collect::<Vec<_>>().join(", ")
+                                    needed_by(reasons.iter().cloned())
                                 );
                                 if design::two_line_row(
                                     ui,
@@ -2718,9 +2736,8 @@ impl CampaignContent {
                 }
                 let ids = &self.entry_matches.as_ref().unwrap().2;
                 let mut toggled = None;
-                egui::ScrollArea::vertical()
-                    .id_salt(("package_entries", module.id, &query))
-                    .auto_shrink([false, true])
+                design::ScrollColumn::new(("package_entries", module.id, &query))
+                    .fit_height()
                     .show_rows(ui, 30.0, ids.len(), |ui, range| {
                         for index in range {
                             let id = ids[index];
@@ -2758,25 +2775,27 @@ impl CampaignContent {
                                     if response.changed() {
                                         toggled = Some((id, selected));
                                     }
-                                    ui.label(
-                                        Type::Small
-                                            .rich(
-                                                ui,
-                                                snapshot
-                                                    .subtitles
-                                                    .get(&id)
-                                                    .cloned()
-                                                    .unwrap_or_default(),
-                                            )
-                                            .color(c.muted),
+                                    // Round 28 FB7: one detail line, in the form of the
+                                    // `Needed by your entries` list: `Rule · needed by Ember
+                                    // Cultist` (`needed_by`).
+                                    let subtitle =
+                                        snapshot.subtitles.get(&id).cloned().unwrap_or_default();
+                                    let font = Type::Small.font(ui);
+                                    let mut job = egui::text::LayoutJob::default();
+                                    job.append(
+                                        &subtitle,
+                                        0.0,
+                                        egui::TextFormat::simple(font.clone(), c.muted),
                                     );
-                                    if let Some(why) = &why {
-                                        ui.label(
-                                            Type::Small
-                                                .rich(ui, format!("Needed by {why}"))
-                                                .color(c.document.read_only),
+                                    if let Some(reasons) = closure.required.get(&id) {
+                                        let lead = if subtitle.is_empty() { "" } else { " · " };
+                                        job.append(
+                                            &format!("{lead}{}", needed_by(reasons.iter().cloned())),
+                                            0.0,
+                                            egui::TextFormat::simple(font, c.document.read_only),
                                         );
                                     }
+                                    ui.label(job);
                                 });
                             });
                         }
@@ -2848,6 +2867,12 @@ pub(crate) fn load_snapshot(campaign: &Campaign, modules: &[Module]) -> Loaded {
         })
     });
     (repairs, result)
+}
+
+/// `needed by Ember Cultist, Arena Final`: the one form of what keeps an entry selected, in the
+/// package list's rows and in `Needed by your entries` (round 28 FB7).
+fn needed_by(reasons: impl Iterator<Item = String>) -> String {
+    format!("needed by {}", reasons.collect::<Vec<_>>().join(", "))
 }
 
 #[cfg(test)]
