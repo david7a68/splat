@@ -1443,10 +1443,14 @@ pub(super) struct Scenes {
     field: Option<design::AddField>,
     /// `Scene added to tonight.`
     pub(super) added: Option<NoteUndo>,
+    /// When the scene in `added` was added: its result's footer order.
+    added_order: design::ResultOrder,
     /// A scene taken out of tonight: its line's place among the plan's lines, its words, and
     /// its Undo. The place is the line that now follows it, which stays while the note is as the
     /// act left it, also when a fight before it is played.
     removed: Option<(usize, String, NoteUndo)>,
+    /// When the scene in `removed` was taken out: its result's footer order.
+    removed_order: design::ResultOrder,
     pub(super) fault: Option<Fault>,
     fold: Fold,
     /// The Scene field had focus on the last frame.
@@ -1927,6 +1931,8 @@ pub(super) struct Travel {
     /// Undo. It lasts while the note's words are what the act left, as every note act's Undo
     /// does; a page change keeps it.
     planned: Option<(String, checks::Planned, NoteUndo)>,
+    /// When the line in `planned` was written: its result's footer order.
+    planned_order: design::ResultOrder,
     /// The fights still to come with their days on the road, while the note, the Timeline and
     /// the campaign's fights are as they were.
     days: Option<(RoadKey, Arc<RoadDays>)>,
@@ -1984,7 +1990,7 @@ struct RewardsDone {
     not_rolled: usize,
     unknown: u64,
     /// When the act made it (`next_result_order`): the plan's footer lists results newest first.
-    order: u64,
+    order: design::ResultOrder,
     /// The fight's name as the act read it, so the footer searches no DM data each frame
     /// (review of PR 296, item 1).
     fight: String,
@@ -2564,13 +2570,13 @@ impl Sessions {
             });
             match written {
                 Ok(undo) => {
-                    self.result_orders.renew("plan line");
+                    self.travel.planned_order = design::ResultOrder::issue();
                     self.travel.planned = Some((id.to_owned(), chosen.clone(), undo));
                 }
                 Err(fault) => {
                     let words = fault.words().to_owned();
                     if let crate::sessions::ActFault::NotSaved(_, undo) = fault {
-                        self.result_orders.renew("plan line");
+                        self.travel.planned_order = design::ResultOrder::issue();
                         self.travel.planned = Some((id.to_owned(), chosen.clone(), undo));
                     }
                     self.travel.block.failed(&act, words);
@@ -2606,16 +2612,14 @@ impl Sessions {
         act: &'a std::cell::Cell<Option<FooterAct>>,
         session: Option<Uuid>,
     ) {
-        let Some((id, _, _, after, _, name)) = &self.removed_group else {
+        let Some((id, _, _, _, _, name)) = &self.removed_group else {
             return;
         };
         if *id != session {
             return;
         }
         let words = format!("Removed “{name}” from tonight.");
-        let order = self
-            .result_orders
-            .of("group remove", (session, name, after.len()));
+        let order = self.removed_group_order;
         undos.push(order, words.clone(), move |ui| {
             if design::undo_message(ui, Tone::Success, &words, "Undo remove") {
                 act.set(Some(FooterAct::UndoGroupRemove));
@@ -2827,10 +2831,12 @@ impl Sessions {
             });
         }
         let mut undos = LiveUndos::new();
-        if plan.group_discarded && here {
+        if plan.group_discarded
+            && here
+            && let Some(order) = plan.group_discarded_order
+        {
             let name = plan.group_discarded_name.clone();
             let act = &footer_act;
-            let order = plan.group_discarded_order;
             undos.push(order, format!("{name} draft discarded."), move |ui| {
                 if design::draft_discarded(ui, &name) {
                     act.set(Some(FooterAct::UndoGroupDiscard));
@@ -2871,7 +2877,7 @@ impl Sessions {
                 .any(|event| event.id == *journey && event.is_in(session))
         {
             let words = line.words();
-            let order = self.result_orders.of("plan line", (journey, &line.name));
+            let order = self.travel.planned_order;
             let act = &footer_act;
             undos.push(order, words.clone(), move |ui| {
                 if design::undo_message(ui, Tone::Success, &words, "Undo plan line") {
@@ -2912,8 +2918,8 @@ impl Sessions {
             let days = timeline::day_numbers(&book.events);
             let index = book.events.iter().position(|event| event.id == *id);
             self.row_reveal = Some((id.clone(), 0, ui.ctx().cumulative_pass_nr()));
-            self.result_orders.renew("add");
             self.added = Some(Added {
+                order: design::ResultOrder::issue(),
                 id: id.clone(),
                 label: index.map_or_else(String::new, |at| book.events[at].label(days[at])),
                 at: Instant::now(),
@@ -3416,7 +3422,7 @@ impl Sessions {
             let before = draft.body.clone();
             unlink_group(&mut draft.body, &name);
             draft.edited();
-            self.result_orders.renew("group remove");
+            self.removed_group_order = design::ResultOrder::issue();
             self.removed_group =
                 Some((session, position, before, draft.body.clone(), height, name));
             self.plan_notice_state = Some((draft.body.clone(), book.events.clone()));
@@ -3680,10 +3686,7 @@ impl Sessions {
             && self.draft.as_ref().is_some_and(|draft| undo.live(draft))
         {
             const ADDED: &str = "Scene added to tonight.";
-            // A cheap identity: the session and the length the act left, never the words.
-            let order = self
-                .result_orders
-                .of("scene", (self.selected, undo.after().len()));
+            let order = self.scenes.added_order;
             undos.push(order, ADDED.to_owned(), move |ui| {
                 if design::undo_message(ui, Tone::Success, ADDED, "Undo scene") {
                     act.set(Some(FooterAct::Scene(SceneAct::UndoAdd)));
@@ -3695,10 +3698,7 @@ impl Sessions {
             && self.draft.as_ref().is_some_and(|draft| undo.live(draft))
         {
             let words = format!("Removed “{words}” from tonight.");
-            // A cheap identity: the session and the length the act left.
-            let order = self
-                .result_orders
-                .of("scene-removed", (self.selected, undo.after().len()));
+            let order = self.scenes.removed_order;
             undos.push(order, words.clone(), move |ui| {
                 if design::undo_message(ui, Tone::Success, &words, "Undo remove") {
                     act.set(Some(FooterAct::Scene(SceneAct::UndoRemove(Place::Footer))));
@@ -3819,7 +3819,7 @@ impl Sessions {
                 let result = draft.apply(note, Apply::Now, |text| Some(add_scene(text, &words)));
                 if let Ok(undo) | Err(ActFault::NotSaved(_, undo)) = &result {
                     scenes.added = Some(undo.clone());
-                    self.result_orders.renew("scene");
+                    scenes.added_order = design::ResultOrder::issue();
                     if let Some(field) = &mut scenes.field {
                         field.clear();
                         field.focus = true;
@@ -3846,6 +3846,7 @@ impl Sessions {
                 });
                 if let Ok(undo) | Err(ActFault::NotSaved(_, undo)) = &result {
                     scenes.removed = Some((line, plain_links(&task.words), undo.clone()));
+                    scenes.removed_order = design::ResultOrder::issue();
                 }
                 (result.map(drop), Place::Row(slot))
             }
@@ -3919,7 +3920,7 @@ impl Sessions {
         deleted: crate::encounter_run::DeletedRun,
         run: Option<Uuid>,
     ) {
-        self.result_orders.renew("deleted run");
+        self.deleted_run_order = design::ResultOrder::issue();
         self.deleted_run = Some((deleted, removal_replaced_by(book, run)));
         self.wants_runs_refresh = true;
     }
@@ -3978,7 +3979,7 @@ impl Sessions {
         act: &'a std::cell::Cell<Option<FooterAct>>,
     ) {
         if let Some((tone, words)) = self.deleted_run_words() {
-            let order = self.result_orders.of("deleted run", &words);
+            let order = self.deleted_run_order;
             undos.push(order, words.clone(), move |ui| {
                 if design::undo_message(
                     ui,
@@ -4038,7 +4039,7 @@ impl Sessions {
                 just.id.clone(),
                 added_message(&just.label, to.as_deref(), restores),
             );
-            let order = self.result_orders.of("add", &id);
+            let order = just.order;
             undos.push(order, words.clone(), move |ui| {
                 if design::undo_message(ui, Tone::Success, &words, "Undo add") {
                     act.set(Some(FooterAct::UndoAdd(id)));
@@ -4049,7 +4050,8 @@ impl Sessions {
             && let Some(label) = book.removed().map(str::to_owned)
         {
             let words = removed_event_words(book, session, &days, &label, planned);
-            let order = self.result_orders.of("remove", book.removal_action());
+            // The removal's own order, kept with it in Book: Timeline made it.
+            let order = book.removal_order().unwrap_or_default();
             undos.push(order, words.clone(), move |ui| {
                 if design::undo_message(ui, Tone::Success, &words, "Undo remove") {
                     act.set(Some(FooterAct::UndoRemove));
@@ -4937,7 +4939,7 @@ mod tests {
                         group_open: false,
                         group_discarded: false,
                         group_discarded_name: String::new(),
-                        group_discarded_order: 0,
+                        group_discarded_order: None,
                         arrivals_open: false,
                         group_editor: std::cell::RefCell::new(&mut group),
                         blocked: None,
@@ -5438,7 +5440,7 @@ mod tests {
                         group_open: false,
                         group_discarded: false,
                         group_discarded_name: String::new(),
-                        group_discarded_order: 0,
+                        group_discarded_order: None,
                         arrivals_open: false,
                         group_editor: std::cell::RefCell::new(&mut group),
                         blocked: None,
@@ -5518,7 +5520,7 @@ mod tests {
                         group_open: false,
                         group_discarded: false,
                         group_discarded_name: String::new(),
-                        group_discarded_order: 0,
+                        group_discarded_order: None,
                         arrivals_open: false,
                         group_editor: std::cell::RefCell::new(&mut group),
                         blocked: None,
@@ -5755,6 +5757,7 @@ mod tests {
             (event.id.clone(), event.label(day), book.events.len())
         };
         harness.state_mut().0.added = Some(Added {
+            order: design::ResultOrder::issue(),
             id,
             label,
             at: Instant::now(),
@@ -6226,7 +6229,7 @@ mod tests {
                         group_open: false,
                         group_discarded: false,
                         group_discarded_name: String::new(),
-                        group_discarded_order: 0,
+                        group_discarded_order: None,
                         arrivals_open: false,
                         group_editor: std::cell::RefCell::new(&mut group),
                         blocked: None,

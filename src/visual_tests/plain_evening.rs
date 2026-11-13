@@ -1564,8 +1564,9 @@ fn add_to_reference(reference: Reference, ev: &Evening) {
         acts,
         ..reference
     };
-    fs::write(folder().join("reference.json"), reference_text(&reference))
-        .expect("write the reference");
+    let path = super::dm_audit::frozen_out("src/visual_tests/plain_evening/reference.json");
+    fs::create_dir_all(path.parent().expect("a folder")).expect("make the reference's folder");
+    fs::write(path, reference_text(&reference)).expect("write the reference");
 }
 
 /// G7. The scenario `plain-evening`.
@@ -1720,6 +1721,11 @@ pub fn run(d: &mut Driver<'_>) {
 /// class fails, so the list cannot allow a fault by copying the failures. Each pull request of
 /// the build plan keeps its own classes here: P5 the Travel menu (row 12), P2 the difficulty
 /// word (rows 1 to 3), P7 `Add rewards` (row 10).
+///
+/// The classes read the rows that they were written for and the reference that those rows differ
+/// from, as `main` 4d0c799b held them before the reference was frozen again with no rows:
+/// `allowed_4d0c799b.json` and `reference_4d0c799b.json`. So a later freeze, which empties
+/// `allowed.json`, leaves each class test with its real rows, as `history_r1c.json` does for R1c.
 #[cfg(test)]
 mod allowed_classes {
     use super::*;
@@ -2150,7 +2156,9 @@ mod allowed_classes {
             static REFERENCE: std::sync::OnceLock<super::super::Reference> =
                 std::sync::OnceLock::new();
             REFERENCE
-                .get_or_init(|| super::super::read(&super::super::folder().join("reference.json")))
+                .get_or_init(|| {
+                    super::super::read(&super::super::folder().join("reference_4d0c799b.json"))
+                })
                 .views
                 .iter()
                 .find(|view| (&view.screen, &view.view) == (&d.screen, &d.view))
@@ -2815,7 +2823,7 @@ mod allowed_classes {
         /// The frozen reference, read once.
         fn reference() -> &'static Reference {
             static REFERENCE: std::sync::OnceLock<Reference> = std::sync::OnceLock::new();
-            REFERENCE.get_or_init(|| read(&folder().join("reference.json")))
+            REFERENCE.get_or_init(|| read(&folder().join("reference_4d0c799b.json")))
         }
 
         /// The reference's record of the act that a difference names (`act 86` is the 86th).
@@ -2989,7 +2997,7 @@ mod allowed_classes {
 
         fn reference() -> &'static Reference {
             static REFERENCE: OnceLock<Reference> = OnceLock::new();
-            REFERENCE.get_or_init(|| read(&folder().join("reference.json")))
+            REFERENCE.get_or_init(|| read(&folder().join("reference_4d0c799b.json")))
         }
 
         /// The place of this control in the reference's view of `d` (review of PR 292).
@@ -4195,7 +4203,9 @@ mod allowed_classes {
         fn frozen_view(screen: &str, view: &str) -> Option<&'static View> {
             static REFERENCE: std::sync::OnceLock<Reference> = std::sync::OnceLock::new();
             REFERENCE
-                .get_or_init(|| super::super::read(&super::super::folder().join("reference.json")))
+                .get_or_init(|| {
+                    super::super::read(&super::super::folder().join("reference_4d0c799b.json"))
+                })
                 .views
                 .iter()
                 .find(|frozen| (frozen.screen.as_str(), frozen.view.as_str()) == (screen, view))
@@ -4722,7 +4732,7 @@ mod allowed_classes {
             // Review 290: the real rows with one fault each. A line the scroll newly shows keeps
             // its words, its size and its place; the editor's words move with their controls.
             let allowed: super::super::Allowed =
-                super::super::read(&super::super::folder().join("allowed.json"));
+                super::super::read(&super::super::folder().join("allowed_4d0c799b.json"));
             let refused =
                 |rows: &[AllowedRow]| rows.iter().any(|row| super::class_of(row, rows).is_none());
             let kestrel = |detail: Option<&str>, words: Option<&str>| {
@@ -6414,7 +6424,7 @@ mod allowed_classes {
 
     #[test]
     fn every_allowed_row_is_in_a_class_of_its_row() {
-        let allowed: Allowed = read(&folder().join("allowed.json"));
+        let allowed: Allowed = read(&folder().join("allowed_4d0c799b.json"));
         let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
         let mut unfit = Vec::new();
         for (row, class) in allowed.rows.iter().zip(classes(&allowed.rows)) {
@@ -6439,7 +6449,7 @@ mod allowed_classes {
             ("Where field narrowed to 35 px", 2),
         ] {
             let menu = mode == 1;
-            let mut attacked: Allowed = read(&folder().join("allowed.json"));
+            let mut attacked: Allowed = read(&folder().join("allowed_4d0c799b.json"));
             let mut changed = 0;
             for row in &mut attacked.rows {
                 let d = &mut row.difference;

@@ -147,16 +147,20 @@ impl PageResult {
     }
 }
 
-/// A new result comes first. It ends the plain results, never another action's Undo. A macro,
-/// so it runs while other fields of the page are borrowed.
+/// A new result comes first, with the order its action takes. It ends the plain results, never
+/// another action's Undo. A macro, so it runs while other fields of the page are borrowed.
 macro_rules! new_result {
     ($page:expr, $kind:expr) => {
         let _ = $page.message.take();
         let _ = $page.reconcile.message.take();
         $page
             .result_order
-            .retain(|kind: &PageResult| *kind != $kind && kind.has_undo());
-        $page.result_order.insert(0, $kind);
+            .retain(|(kind, _): &(PageResult, design::ResultOrder)| {
+                *kind != $kind && kind.has_undo()
+            });
+        $page
+            .result_order
+            .insert(0, ($kind, design::ResultOrder::issue()));
     };
 }
 
@@ -171,8 +175,9 @@ pub struct CampaignContent {
     /// Where each open repair's editor sits this frame. Focus scrolling leaves them to the
     /// editor, which scrolls the page to its own viewport.
     editor_rects: Vec<egui::Rect>,
-    /// The page's results, newest first. Each lives while its own field holds it.
-    result_order: Vec<PageResult>,
+    /// The page's results, newest first, each with the order its action took. Each lives while
+    /// its own field holds it.
+    result_order: Vec<(PageResult, design::ResultOrder)>,
     /// How often the page prepared a package removal's words: once per removal.
     removal_text_preparations: usize,
     reconcile: Reconcile,
@@ -986,10 +991,10 @@ impl CampaignContent {
         let me = RefCell::new(&mut *self);
         let bottom = {
             let mut footer = design::Footer::new(("campaign_page_footer", active.id), width);
-            for kind in results.iter().copied().filter(|kind| kind.has_undo()) {
+            for (kind, order) in results.iter().copied().filter(|(kind, _)| kind.has_undo()) {
                 let words = me.borrow().words_of(kind);
                 let (me, press) = (&me, &press);
-                footer.result(words, true, move |ui| {
+                footer.result(order, words, true, move |ui| {
                     if let Some(pressed) = me.borrow().draw_one(ui, kind, locked) {
                         press.set(Some((kind, pressed)));
                     }
@@ -1016,10 +1021,10 @@ impl CampaignContent {
                     write.set(wants);
                 });
             }
-            for kind in results.iter().copied().filter(|kind| !kind.has_undo()) {
+            for (kind, order) in results.iter().copied().filter(|(kind, _)| !kind.has_undo()) {
                 let words = me.borrow().words_of(kind);
                 let (me, press) = (&me, &press);
-                footer.result(words, false, move |ui| {
+                footer.result(order, words, false, move |ui| {
                     if let Some(pressed) = me.borrow().draw_one(ui, kind, locked) {
                         press.set(Some((kind, pressed)));
                     }
@@ -1088,10 +1093,10 @@ impl CampaignContent {
         }
     }
 
-    /// The page's live results: those with a live Undo first, newest first, then the plain one.
-    /// So every Undo stays in view while it lives. A result set without `new_result!` (a page
-    /// made in a test) comes after the others of its kind.
-    fn live_results(&self, active: &Campaign) -> Vec<PageResult> {
+    /// The page's live results, newest first, each with its order: only results that
+    /// `new_result!` made, so each has the order of its own action. The footer puts those with a
+    /// live Undo first, so every Undo stays in view while it lives.
+    fn live_results(&self, active: &Campaign) -> Vec<(PageResult, design::ResultOrder)> {
         let live = |kind: &PageResult| match kind {
             PageResult::CampaignWrite => self.campaign_write.is_some(),
             PageResult::Recovered(package) => self.recovered.iter().any(|(id, _)| id == package),
@@ -1109,29 +1114,11 @@ impl CampaignContent {
             PageResult::Saved => self.message.is_some(),
             PageResult::Applied => self.reconcile.message.is_some(),
         };
-        let mut results: Vec<_> = self.result_order.iter().copied().filter(live).collect();
-        let every = [PageResult::CampaignWrite, PageResult::Discarded]
-            .into_iter()
-            .chain(
-                self.recovered
-                    .iter()
-                    .map(|(id, _)| PageResult::Recovered(*id)),
-            )
-            .chain(
-                self.manifest_writes
-                    .iter()
-                    .map(|(id, _, _)| PageResult::ManifestWrite(*id)),
-            )
-            .chain(
-                self.discarded_repairs
-                    .iter()
-                    .map(|(.., stamp)| PageResult::RepairDiscard(*stamp)),
-            )
-            .chain([PageResult::Removed, PageResult::Saved, PageResult::Applied]);
-        results.extend(every.filter(|kind| live(kind) && !self.result_order.contains(kind)));
-        // Stable: the order within each group stays newest first.
-        results.sort_by_key(|kind| !kind.has_undo());
-        results
+        self.result_order
+            .iter()
+            .copied()
+            .filter(|(kind, _)| live(kind))
+            .collect()
     }
 
     /// The file name of a repair's discarded draft, by its stamp.

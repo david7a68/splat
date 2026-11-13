@@ -151,6 +151,8 @@ pub(super) struct Repair {
     draft: String,
     discarded: Option<String>,
     reloaded: Option<String>,
+    /// When the Discard or the Reload that `discarded` or `reloaded` holds was done.
+    undo_order: design::ResultOrder,
     disk: Option<String>,
     /// Save's failure on the disk (read only, missing, a write error): the draft it tried to
     /// write and Save's reason. This draft owns it. Each end event clears it: an edit, Discard
@@ -171,6 +173,7 @@ impl Repair {
             draft: text,
             discarded: None,
             reloaded: None,
+            undo_order: design::ResultOrder::default(),
             disk: None,
             failed: None,
         })
@@ -283,6 +286,7 @@ impl Repair {
         match choice {
             design::DiskConflictChoice::Reload => {
                 self.reloaded = Some(std::mem::replace(&mut self.draft, self.baseline.clone()));
+                self.undo_order = design::ResultOrder::issue();
                 // Reload ends the failure even when the file holds the draft's words.
                 self.failed = None;
                 false
@@ -317,7 +321,7 @@ impl Repair {
         );
         if let (Some(undo), Some(words)) = (undo, &result) {
             let pressed = &pressed;
-            footer.result(words.as_str(), true, move |ui| {
+            footer.result(self.undo_order, words.as_str(), true, move |ui| {
                 let undone = match undo {
                     UndoResult::Discard => design::draft_discarded(ui, name),
                     UndoResult::Reload => {
@@ -422,6 +426,7 @@ impl Repair {
                     };
                     if design::save_row_state(ui, state, dirty, None) {
                         self.discarded = Some(self.draft.clone());
+                        self.undo_order = design::ResultOrder::issue();
                         self.draft = self.baseline.clone();
                         self.failed = None;
                         // A Discard after a reload ends the reload's Undo: one Undo per draft.
@@ -755,6 +760,7 @@ mod tests {
             draft: draft.clone(),
             discarded: None,
             reloaded: None,
+            undo_order: design::ResultOrder::default(),
             disk: None,
             failed: None,
         };

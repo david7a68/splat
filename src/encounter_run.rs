@@ -769,6 +769,10 @@ pub(crate) struct Run {
     /// a loot table, as `describe` made them. Undo shortens them from these parts, and never
     /// reads them back out of the label (a row named `2` is not the `2` of `DC 12`).
     history_targets: Vec<Option<String>>,
+    /// Beside each step: when it was done, the order a footer result of that step takes (the
+    /// saved HP's use, a recharge roll, an arrival). Not saved: a reopened run issues them in
+    /// its steps' order when it opens.
+    history_orders: Vec<crate::design::ResultOrder>,
     /// How many of the oldest steps came from the run file. Undo of an ending among them makes
     /// the fight live again by `continue_blocked`, as Continue fight does. Never saved.
     saved_steps: usize,
@@ -1306,6 +1310,7 @@ impl Run {
             history_labels: Vec::new(),
             history_from_sheet: Vec::new(),
             history_targets: Vec::new(),
+            history_orders: Vec::new(),
             saved_steps: 0,
             selected: 0,
             also: BTreeSet::new(),
@@ -1494,7 +1499,11 @@ impl Run {
         self.history_from_sheet.drain(..extra);
         self.history_targets
             .drain(..extra.min(self.history_targets.len()));
+        self.history_orders
+            .drain(..extra.min(self.history_orders.len()));
         self.history.push(before);
+        self.history_orders
+            .push(crate::design::ResultOrder::issue());
         self.history_labels.push(label);
         self.history_from_sheet.push(from_sheet);
         self.history_targets.push(target);
@@ -1504,6 +1513,13 @@ impl Run {
     fn keep_own_step(&mut self, before: State, named: Named, from_sheet: bool) {
         self.keep_step(before, named, from_sheet);
         self.dm_steps += 1;
+    }
+    /// When the newest Undo step was done: the order of a footer result that belongs to it.
+    pub(crate) fn newest_step_order(&self) -> Option<crate::design::ResultOrder> {
+        self.history_orders
+            .last()
+            .copied()
+            .filter(|_| self.history_orders.len() == self.history.len())
     }
     /// The newest Undo step's name, if there is one.
     fn last_step(&self) -> Option<&str> {
@@ -2771,6 +2787,8 @@ impl Run {
             self.history_from_sheet.pop();
             self.history_targets
                 .truncate(self.history_labels.len().min(self.history_targets.len()));
+            self.history_orders
+                .truncate(self.history_labels.len().min(self.history_orders.len()));
             // What D&D Beyond last confirmed is a fact, not a step that can be taken back.
             let confirmed: Vec<_> = self
                 .state
@@ -3720,6 +3738,7 @@ impl Run {
         let mut labels = Vec::new();
         let mut from_sheet = Vec::new();
         let mut targets = Vec::new();
+        let mut orders = Vec::new();
         let mut dropped = Vec::new();
         // A multi-target step is atomic. If it also touched another participant, its
         // older steps cannot safely cross this boundary either. Say which steps were lost.
@@ -3775,11 +3794,13 @@ impl Run {
             labels.push(self.history_labels[at].clone());
             from_sheet.push(self.history_from_sheet[at]);
             targets.push(self.history_targets.get(at).cloned().flatten());
+            orders.extend(self.history_orders.get(at).copied());
         }
         self.history = kept;
         self.history_labels = labels;
         self.history_from_sheet = from_sheet;
         self.history_targets = targets;
+        self.history_orders = orders;
         self.saved_steps = saved;
         self.removed_steps = dropped.len();
         if !dropped.is_empty() {
@@ -4453,6 +4474,11 @@ impl Run {
                     run.history_from_sheet,
                     run.history_targets,
                 ) = steps;
+                run.history_orders = run
+                    .history
+                    .iter()
+                    .map(|_| crate::design::ResultOrder::issue())
+                    .collect();
                 run.saved_steps = run.history.len();
             }
             None => run.no_saved_undo = Some(UNDO_NOT_KEPT),
@@ -4536,6 +4562,7 @@ impl Run {
             history_labels: Vec::new(),
             history_from_sheet: Vec::new(),
             history_targets: Vec::new(),
+            history_orders: Vec::new(),
             saved_steps: 0,
             also: BTreeSet::new(),
             halved: BTreeSet::new(),
@@ -5101,6 +5128,7 @@ impl Run {
         self.history_labels.clear();
         self.history_from_sheet.clear();
         self.history_targets.clear();
+        self.history_orders.clear();
         self.reopened = false;
         self.no_saved_undo = None;
         self.undo_stopped = false;

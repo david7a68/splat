@@ -585,7 +585,12 @@ impl Party {
                 let words =
                     format!("{name}’s sheet now matches D&D Beyond. Your edited version is kept.");
                 let dismiss = &dismiss_archived;
-                footer.result(words.clone(), false, move |ui| {
+                let order = reader
+                    .archived_orders
+                    .get(path)
+                    .copied()
+                    .unwrap_or_default();
+                footer.result(order, words.clone(), false, move |ui| {
                     if dismissable(ui, |ui| {
                         storage_notice(ui, Tone::Success, &words, &["Show file"], |ui| {
                             show_file(ui, path);
@@ -665,6 +670,7 @@ impl Party {
         }
         if dismiss_archived.get() {
             self.reader.archived.clear();
+            self.reader.archived_orders.clear();
             self.reader.archived_owners.clear();
         }
         self.wants_settings |= wants_settings.get();

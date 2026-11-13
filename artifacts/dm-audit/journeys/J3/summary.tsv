@@ -1,0 +1,60 @@
+Phase totals
+phase	tasks	transitions	interactions	nav	sub	panel	find	do
+during	9	1	26	1	1	2	4	18
+after the fight	5	2	10	2	0	0	2	6
+total	14	3	36	3	1	2	6	24
+
+Tasks
+phase	task	transitions	interactions	overhead	nav	sub	panel	find	do	path
+during	End the fight by mistake	0	2	0	0	0	0	0	2	Run
+during	Take the ending back	0	1	0	0	0	0	0	1	Run
+during	Pin Poisoned 3 rounds to a wolf	0	5	2	0	1	0	1	3	Run
+during	Play on into round 3	0	8	0	0	0	0	0	8	Run
+during	After the crash: back to the fight	0	0	0	0	0	0	0	0	Run
+during	Lookup is closed after the restart: find the note again	0	2	2	0	0	1	1	0	Run
+during	A sync conflict on Kestrel Dunmoor: review it and choose	0	5	3	0	0	1	2	2	Run
+during	The note changed in Obsidian: see it in Splat	0	0	0	0	0	0	0	0	Run
+during	End the second fight	1	3	1	1	0	0	0	2	Run > Session
+after the fight	Add the Wolf Pack's rewards while the note has unsaved words and changed on disk	0	1	0	0	0	0	0	1	Session
+after the fight	The note changed on disk: choose a version, and add the rewards again	0	2	0	0	0	0	0	2	Session
+after the fight	Take a scene off tonight's plan	0	3	2	0	0	0	2	1	Session
+after the fight	Begin the fight before it	1	1	1	1	0	0	0	0	Session > Run
+after the fight	The scene is wanted after all: take the removal back	1	3	1	1	0	0	0	2	Run > Session
+
+Set-up, not counted
+before	prep: the encounters, and the Tournament's trackers in play
+before	play last week's session, then quit and open the app
+before	work at 960x640
+before	prep: tonight's plan holds three fights and two scenes
+before	save, quit and open the app at the table
+before	a notice is due from before the fight: the first bell
+before	sync with D&D Beyond is on
+before	play the first fight
+before	the second fight, in round 2
+before	Lookup shows last week's note, found by `miller`
+during	the app stops in round 3, and opens again
+during	D&D Beyond: Kestrel Dunmoor's sheet changed, on the wolf's turn
+during	in Obsidian, the DM ticks a scene and adds a plan line
+during	the DM types a line in the note; it is not saved yet
+during	in Obsidian, the DM adds another plan line
+after the fight	Splat's save after a pause meets the changed file
+
+Blocked
+
+Facts
+during / : the start: 960x640, Lookup open on the found note, the rail says Due 1, round 2: holds
+during / End the fight by mistake: the run file is ended in round 2: holds
+during / Take the ending back: the run file is in round 2 again, and not ended: holds
+during / Pin Poisoned 3 rounds to a wolf: the run file holds Poisoned on the wolf, 3 rounds with 3 left: holds
+during / Play on into round 3: the run file is in round 3, the wolf's Poisoned has 2 left, and its Undo step is the one the Undo button names: holds
+during / After the crash: back to the fight: the run file holds round 3, the wolf's Poisoned with 3 rounds and 2 left, and the Undo step that Undo names; the wolf's row says Poisoned 2; the rail still says Due 1, read from Trackers.md: holds
+during / Lookup is closed after the restart: find the note again: no file: Lookup is open on the search `miller`, and a result names last week's note: holds
+during / A sync conflict on Kestrel Dunmoor: review it and choose: Kestrel's row has no conflict, and the run file holds the HP the DM chose; the wolf is selected; Lookup shows the note again: holds
+during / The note changed in Obsidian: see it in Splat: no conflict: the rail does not say Notes changed: holds
+during / End the second fight: the run file is ended, with the outcome: holds
+after the fight / Add the Wolf Pack's rewards while the note has unsaved words and changed on disk: the act is refused with its words, and the file is as Obsidian left it: holds
+after the fight / The note changed on disk: choose a version, and add the rewards again: the rail says Notes changed: holds
+after the fight / The note changed on disk: choose a version, and add the rewards again: the note holds the chosen version, the DM's words with the first Obsidian edit, and the rewards once; Lookup still shows the found note: holds
+after the fight / Take a scene off tonight's plan: the scene's line is gone from the saved plan, and nothing else changed: holds
+after the fight / Begin the fight before it: the run file of Ember Watch is saved in set-up, and the Run page shows it: holds
+after the fight / The scene is wanted after all: take the removal back: the plan is as before the removal: the scene at its old place, the Obsidian lines kept: holds
