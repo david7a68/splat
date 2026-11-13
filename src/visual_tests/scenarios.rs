@@ -17115,6 +17115,27 @@ pub mod encounter_groups {
         std::fs::remove_file(&found).unwrap();
         reread(d);
         d.expect("Replace Unknown creature");
+        // Review of PR 299: a populated Changes form, open and unchanged, copies no change map
+        // and runs no check on a redraw; an edit in it runs the check again.
+        d.click("Changes for Cinder Wolf");
+        d.expect("Display name");
+        let copies = crate::encounters::change_copies();
+        let checks_form = checks.steady(d, |d| {
+            d.settle();
+            d.at_size(LARGE, |_| ());
+            d.settle();
+            d.has("Display name") && d.has_containing("would become −28")
+        });
+        let copied = crate::encounters::change_copies() - copies;
+        let checks_edit = checks.refresh(d, 1, |d| {
+            d.type_into("Display name", "Ash Wolf");
+            d.has("Discard")
+        });
+        d.click("Discard");
+        if d.has("Display name") {
+            d.click("Changes for Cinder Wolf");
+        }
+        d.expect("Replace Unknown creature");
         // Outside the rule's scope: once the members change, a line may no longer be the
         // member's, so the fault names none, as Save's check does. Discard brings the line back.
         let before = crate::encounters::group_checks();
@@ -17138,9 +17159,12 @@ pub mod encounter_groups {
                 && checks_idle.is_ok()
                 && checks_outside.is_ok()
                 && checks_creature.is_ok()
+                && checks_form.is_ok()
+                && copied == 0
+                && checks_edit.is_ok()
                 && checked,
             format!(
-                "Group check: warm {checks_warm:?}, steady {checks_steady:?}, held pointer and scroll {checks_idle:?}, outside file {checks_outside:?}, creature {checks_creature:?}, ran again after the move {checked}"
+                "Group check: warm {checks_warm:?}, steady {checks_steady:?}, held pointer and scroll {checks_idle:?}, outside file {checks_outside:?}, creature {checks_creature:?}, open form {checks_form:?} with {copied} change map copies, edit in the form {checks_edit:?}, ran again after the move {checked}"
             ),
         );
         let changed = refresh.is_ok();

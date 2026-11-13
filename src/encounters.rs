@@ -117,7 +117,7 @@ mod history;
 use groups::GroupDraft;
 pub(crate) use groups::{ENCOUNTER_DELETED, NO_MAX_HP_CAUSE, member_fault, member_fault_row};
 #[cfg(test)]
-pub(crate) use groups::{group_checks, member_comparisons};
+pub(crate) use groups::{change_copies, group_checks, member_comparisons};
 pub(crate) use history::{Template, template_of};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -6493,7 +6493,8 @@ impl Encounters {
                             entry,
                             &slot.side,
                             Some(&sides),
-                        );
+                        )
+                        .done;
                         if done {
                             *expanded = None;
                             ui.scroll_to_rect(member_row, Some(egui::Align::Min));

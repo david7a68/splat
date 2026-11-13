@@ -1806,6 +1806,14 @@ fn other_effect_width(ui: &egui::Ui) -> f32 {
 /// The whole list of changes this slot or member can build in. `sides` is for a roster slot,
 /// whose row already sets its side, so this offers a side only when a note has given one, to
 /// change or clear it. A group can arrive anywhere, so its members can name any side.
+/// What a change form's frame did: `done` when the DM closed it, `changed` when it wrote a new
+/// change into the block (its own comparison says so, so a caller copies nothing to find out).
+#[derive(Clone, Copy, Default)]
+pub(super) struct FormEnd {
+    pub(super) done: bool,
+    pub(super) changed: bool,
+}
+
 pub(super) fn overrides_form(
     ui: &mut egui::Ui,
     id: &str,
@@ -1813,7 +1821,7 @@ pub(super) fn overrides_form(
     entry: &Entry,
     side: &str,
     sides: Option<&[String]>,
-) -> bool {
+) -> FormEnd {
     let mut overrides = match Overrides::parse(block) {
         Ok(overrides) => overrides,
         Err(error) => {
@@ -1822,7 +1830,7 @@ pub(super) fn overrides_form(
                 Tone::Error,
                 &format!("{error} Repair it in Campaign → Campaign entries."),
             );
-            return false;
+            return FormEnd::default();
         }
     };
     let base = Base::of(entry, side);
@@ -1994,10 +2002,11 @@ pub(super) fn overrides_form(
             &mut overrides.loot,
         );
     });
-    if overrides != before {
+    let changed = overrides != before;
+    if changed {
         *block = overrides.to_mapping();
     }
-    done
+    FormEnd { done, changed }
 }
 
 /// The same official names and local Other effect as the run.
@@ -2689,6 +2698,24 @@ thread_local! {
 pub(crate) fn group_checks() -> (usize, usize) {
     GROUP_CHECKS.with(std::cell::Cell::get)
 }
+#[cfg(test)]
+thread_local! {
+    /// How often the member loop copied a member's change map (review of PR 299).
+    static CHANGE_COPIES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+/// A member's change map, copied and counted. The editor makes no such copy on a frame; a test
+/// that puts one back (its mutation proof) goes through here, so the scenario counts it.
+#[cfg(test)]
+#[allow(dead_code)]
+fn counted_changes_copy(changes: &Mapping) -> Mapping {
+    CHANGE_COPIES.with(|copies| copies.set(copies.get() + 1));
+    changes.clone()
+}
+/// How often the member loop copied a member's change map.
+#[cfg(test)]
+pub(crate) fn change_copies() -> usize {
+    CHANGE_COPIES.with(std::cell::Cell::get)
+}
 /// The counts of `members_are_saved`, for `CachedWork`.
 #[cfg(test)]
 pub(crate) fn member_comparisons() -> (usize, usize) {
@@ -3022,14 +3049,15 @@ fn members(
                     show_form_when_it_opens(ui);
                     *expanded = Some(key.clone());
                 }
-                // The open form edits one member's changes: a change to them is an edit.
-                let before = is_open.then(|| member.overrides.clone());
-                if is_open && overrides_form(ui, &key, &mut member.overrides, entry, &side, None) {
-                    *expanded = None;
-                    ui.scroll_to_rect(member_row, Some(egui::Align::Min));
-                }
-                if before.is_some_and(|before| before != member.overrides) {
-                    edited = true;
+                // The open form edits one member's changes: a change it writes is an edit. The form
+                // says so itself; nothing here copies the changes (review of PR 299).
+                if is_open {
+                    let end = overrides_form(ui, &key, &mut member.overrides, entry, &side, None);
+                    edited |= end.changed;
+                    if end.done {
+                        *expanded = None;
+                        ui.scroll_to_rect(member_row, Some(egui::Align::Min));
+                    }
                 }
             }
             design::rule(ui);
@@ -3241,7 +3269,7 @@ fn unread_member(
         });
         if let Some(entry) = entry {
             let id = format!("{repair_id}:{line}");
-            if overrides_form(ui, &id, block, &entry.entry, &draft.setup.side, None) {
+            if overrides_form(ui, &id, block, &entry.entry, &draft.setup.side, None).done {
                 apply = Some(block.clone());
             }
         } else {
