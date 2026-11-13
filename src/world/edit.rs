@@ -614,6 +614,34 @@ impl super::GoneLog {
     }
 }
 
+/// A lost draft's warning with its choices: `Copy text`, then, an `L` gap on, `Discard draft`.
+pub(super) fn lost_draft(
+    ui: &mut egui::Ui,
+    words: &str,
+    tone: Tone,
+    id: Uuid,
+    name: &str,
+) -> Option<super::FooterAct> {
+    // The choices start at the message text, as every message's choices do.
+    let (copied, discard) = ui
+        .push_id(id, |ui| {
+            design::message_with_actions(ui, tone, words, |ui| {
+                copy_or_let_go(
+                    ui,
+                    &format!("Copy the text of {name}"),
+                    "Discard draft",
+                    &format!("Discard the draft of {name}"),
+                )
+            })
+        })
+        .inner;
+    if copied {
+        Some(super::FooterAct::LostCopy(id))
+    } else {
+        discard.then_some(super::FooterAct::LostDiscard(id))
+    }
+}
+
 impl Reader {
     /// Open the form for the entry on show.
     pub(super) fn begin_edit(&mut self, campaign: &Campaign, item: &Item) {
@@ -754,67 +782,63 @@ impl Reader {
         out.extend(self.edits.keys().copied());
     }
 
-    /// A draft whose note is gone, or the Undo for one, is on show.
-    pub(super) fn has_lost_edits(&self, index: &ContentIndex) -> bool {
-        let here = index_campaign(index);
-        self.edits.iter().any(|(id, draft)| {
-            draft.campaign == here && index.position(*id).is_none() && draft.dirty()
-        }) || self
-            .discarded
-            .as_ref()
-            .is_some_and(|(id, draft)| draft.campaign == here && index.position(*id).is_none())
-    }
-
-    /// Drafts whose note was deleted or given a new identity outside Splat. They cannot open
-    /// again, so the DM copies the text or lets the draft go here. A draft let go stays in
+    /// Drafts whose note was deleted or given a new identity outside Splat, as footer lines of
+    /// the reader's pane (round 27 FE6, FC1): they are no note's state, so they never sit in the
+    /// body of the note on show. They cannot open again, so the DM copies the text or lets the
+    /// draft go (`FooterAct::LostCopy`, `FooterAct::LostDiscard`). Each shows for its own
+    /// campaign only, whatever note is open, in the order of the names. A draft let go stays in
     /// `discarded` for one `Undo discard` until the next Edit, the next Discard or the Undo.
-    pub(super) fn lost_edits(&mut self, ui: &mut egui::Ui, index: &ContentIndex) {
+    pub(super) fn lost_lines(&self, index: &ContentIndex) -> Vec<super::FooterLine> {
+        let here = index_campaign(index);
         let mut lost: Vec<_> = self
             .edits
             .iter()
             .filter(|(id, draft)| {
-                draft.campaign == index_campaign(index)
-                    && index.position(**id).is_none()
-                    && draft.dirty()
+                draft.campaign == here && index.position(**id).is_none() && draft.dirty()
             })
-            .map(|(id, draft)| (*id, draft.name.clone()))
+            .map(|(id, draft)| (*id, draft.name.as_str()))
             .collect();
-        lost.sort_by(|a, b| a.1.cmp(&b.1));
-        for (id, name) in lost {
-            // The choices start at the message text, as every message's choices do.
-            ui.push_id(id, |ui| {
-                design::message_with_actions(
-                    ui,
+        lost.sort_by(|a, b| a.1.cmp(b.1));
+        let mut lines: Vec<_> = lost
+            .into_iter()
+            .map(|(id, name)| {
+                super::FooterLine::new(
+                    super::FooterRank::Notice,
                     Tone::Warning,
                     &format!(
                         "The note for your unsaved changes to {name} is gone. It was deleted, or another note took its place."
                     ),
-                    |ui| {
-                        let (copied, discard) = copy_or_let_go(
-                            ui,
-                            &format!("Copy the text of {name}"),
-                            "Discard draft",
-                            &format!("Discard the draft of {name}"),
-                        );
-                        if copied && let Some(draft) = self.edits.get(&id) {
-                            ui.ctx().copy_text(draft.now.text.clone());
-                        }
-                        if discard && let Some(draft) = self.edits.remove(&id) {
-                            self.discarded = Some((id, draft));
-                            self.stamp(super::FooterAct::Discarded);
-                        }
+                    super::FooterKind::LostDraft {
+                        id,
+                        name: name.to_owned(),
                     },
-                );
-            });
-        }
-        // The Undo for a lost draft sits where its warning sat, whatever note is open.
+                )
+            })
+            .collect();
         if let Some((at, draft)) = &self.discarded
-            && draft.campaign == index_campaign(index)
+            && draft.campaign == here
             && index.position(*at).is_none()
-            && design::draft_discarded(ui, &draft.name)
-            && let Some((id, draft)) = self.discarded.take()
         {
-            self.edits.insert(id, draft);
+            lines.push(super::FooterLine::discarded(
+                &draft.name,
+                super::FooterAct::Discarded,
+            ));
+        }
+        lines
+    }
+
+    /// `Copy text` of a lost draft: the draft's text on the clipboard; the draft stays.
+    pub(super) fn copy_lost(&self, ctx: &egui::Context, id: Uuid) {
+        if let Some(draft) = self.edits.get(&id) {
+            ctx.copy_text(draft.now.text.clone());
+        }
+    }
+
+    /// `Discard draft` of a lost draft: it waits in `discarded` for `Undo discard`.
+    pub(super) fn discard_lost(&mut self, id: Uuid) {
+        if let Some(draft) = self.edits.remove(&id) {
+            self.discarded = Some((id, draft));
+            self.stamp(super::FooterAct::Discarded);
         }
     }
 
@@ -904,18 +928,23 @@ impl Reader {
         {
             self.picker = None;
         }
-        // Each value as the form draws it, with whether it is set. `not set` and `not read` are
-        // muted and warning words, not names.
+        // Each value as the form draws it, with its colour and size, as Read draws it: a set value
+        // is `Body` in the text colour, also a group (round 27 FF2); `not set` is muted `Small`
+        // and `not read` a `Small` warning, not names (FF3).
         let slot_words = |slot: &Option<Value>, label: &str| match slot {
             Some(value) if !super::empty_optional(value) => {
-                (value_name(index, value, label), colors().text)
+                (value_name(index, value, label), colors().text, Type::Body)
             }
-            _ => ("not set".to_owned(), colors().muted),
+            _ => ("not set".to_owned(), colors().muted, Type::Small),
         };
         let group_words = if groups_error.is_some() {
-            ("not read".to_owned(), colors().result.warning)
+            (
+                "not read".to_owned(),
+                colors().result.warning,
+                Type::Small,
+            )
         } else if draft.now.groups.is_empty() {
-            ("not set".to_owned(), colors().muted)
+            ("not set".to_owned(), colors().muted, Type::Small)
         } else {
             (
                 draft
@@ -925,7 +954,8 @@ impl Reader {
                     .map(|value| value_name(index, value, "group"))
                     .collect::<Vec<_>>()
                     .join(", "),
-                colors().muted,
+                colors().text,
+                Type::Body,
             )
         };
         let words = [
@@ -941,14 +971,14 @@ impl Reader {
         let value_width = words
             .iter()
             .flatten()
-            .map(|(words, _)| design::number_width(ui, words, &Type::Body.font(ui)))
+            .map(|(words, _, role)| design::number_width(ui, words, &role.font(ui)))
             .fold(0.0_f32, f32::max)
             .min(
                 (ui.available_width().min(design::FORM_WIDTH) - change_width - design::L)
                     .max(design::XXL),
             );
         let value_and_change = |ui: &mut egui::Ui,
-                                (words, color): (String, egui::Color32),
+                                (words, color, role): (String, egui::Color32, Type),
                                 change: Action<'_>| {
             ui.horizontal(|ui| {
                 ui.allocate_ui_with_layout(
@@ -956,7 +986,7 @@ impl Reader {
                     egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true),
                     |ui| {
                         ui.set_width(value_width);
-                        ui.add(egui::Label::new(Type::Body.rich(ui, words).color(color)).wrap());
+                        ui.add(egui::Label::new(role.rich(ui, words).color(color)).wrap());
                     },
                 );
                 ui.add_space((design::L - ui.spacing().item_spacing.x).max(0.0));
@@ -2129,10 +2159,17 @@ mod tests {
         // The note goes in its own campaign: the Undo is offered there.
         fs::remove_file(home_dir.path().join(&entry.path)).unwrap();
         let home_index = ContentIndex::load(&[], Some(&home)).unwrap();
-        assert!(reader.has_lost_edits(&home_index), "owner-home");
+        // Its `Undo discard` is a footer line of the pane, by the draft's own name (round 27 FC1).
+        let lines = reader.lost_lines(&home_index);
+        assert!(
+            lines.len() == 1
+                && lines[0].words == "Rook draft discarded."
+                && lines[0].rank == super::super::FooterRank::Undo,
+            "owner-home"
+        );
         // Another campaign has no such note either, but the draft is not its own.
         let other_index = ContentIndex::load(&[], Some(&other)).unwrap();
-        assert!(!reader.has_lost_edits(&other_index), "owner-other");
+        assert!(reader.lost_lines(&other_index).is_empty(), "owner-other");
         reader.discarded = None;
     }
 

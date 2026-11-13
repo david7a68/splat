@@ -608,25 +608,28 @@ fn place_choices_words(name: &str, count: usize) -> String {
 /// still says it is a warning. The text wraps and has the same size as `wrapped_link`.
 fn warning_link(ui: &mut egui::Ui, words: &str) -> egui::Response {
     let c = colors();
+    // The icon has its own column, so wrapped words start each line at the first word, as
+    // every wrapped status does (round 27 FH3 family).
+    let icon = ui.painter().layout_no_wrap(
+        format!("{} ", design::icons::WARN),
+        Type::Body.font(ui),
+        c.result.warning,
+    );
     let mut job = egui::text::LayoutJob::default();
     let style = ui.style().clone();
-    for text in [
-        Type::Body
-            .rich(ui, format!("{} ", design::icons::WARN))
-            .color(c.result.warning),
-        Type::Body.rich(ui, words).color(c.accent).underline(),
-    ] {
-        text.append_to(
-            &mut job,
-            &style,
-            egui::FontSelection::Style(egui::TextStyle::Body),
-            egui::Align::Center,
-        );
-    }
-    job.wrap.max_width = ui.available_width().max(1.0);
+    Type::Body.rich(ui, words).color(c.accent).underline().append_to(
+        &mut job,
+        &style,
+        egui::FontSelection::Style(egui::TextStyle::Body),
+        egui::Align::Center,
+    );
+    job.wrap.max_width = (ui.available_width() - icon.size().x).max(1.0);
     let galley = ui.fonts_mut(|fonts| fonts.layout_job(job));
     let (rect, response) = ui.allocate_exact_size(
-        egui::vec2(galley.size().x, galley.size().y.max(design::XL)),
+        egui::vec2(
+            icon.size().x + galley.size().x,
+            galley.size().y.max(design::XL),
+        ),
         egui::Sense::click(),
     );
     response.widget_info(|| {
@@ -639,7 +642,12 @@ fn warning_link(ui: &mut egui::Ui, words: &str) -> egui::Response {
     if ui.is_rect_visible(rect) {
         let top = rect.center().y - galley.size().y / 2.0;
         ui.painter()
-            .galley(egui::pos2(rect.left(), top), galley, c.accent);
+            .galley(egui::pos2(rect.left(), top), icon.clone(), c.result.warning);
+        ui.painter().galley(
+            egui::pos2(rect.left() + icon.size().x, top),
+            galley,
+            c.accent,
+        );
         if response.has_focus() {
             design::focus_ring(ui, rect);
         }
@@ -1233,8 +1241,8 @@ fn log_words(index: &ContentIndex, key: &str, before: Option<&Value>, after: &Va
     )
 }
 
-/// A value change's result as a sentence (round 26 FE3): `Stat block set to Guard.`, `In set to
-/// North Gate. It was Watch House.`, `In cleared. It was Ashfall Keep.` The arrow form stays in
+/// A value change's result as a sentence (round 26 FE3): `Stat block set to Guard.`, `Place set
+/// to North Gate. It was Watch House.`, `Place cleared. It was Ashfall Keep.` The arrow form stays in
 /// the note's Log lines only (`log_words`). `None` is a value that is not set.
 fn change_words(label: &str, before: Option<&str>, after: Option<&str>) -> String {
     match (before, after) {
@@ -2007,63 +2015,126 @@ struct LogField {
     select: bool,
 }
 
+/// Why an open `Add to Log` field waits: an edit form of its entry is open.
+pub(crate) const LOG_WAITS: &str = "Save or discard your edit first.";
+
 /// The least room that `Add to Log`'s field keeps for a sentence when its stamp shares its line.
 /// It also keeps the words it holds whole, with the field's margins.
 const LOG_FIELD_BESIDE: f32 = design::XXL * 7.0;
 
-/// How `Add to Log` shows in a reader's header.
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum LogAction {
-    /// With its word, this wide.
-    Word(f32),
-    /// As its icon, with its name on hover.
-    Icon,
-}
-
-/// The header's quiet actions after Edit, in `room`, by section 1.2 of the session-cycle
-/// design: the first of these that fits. Both with their words; `Start fight` with its word and
-/// `Add to Log` as its icon; `Start fight` alone; `Add to Log` as its icon; neither. An entry
-/// with only `Add to Log` shows its word, then its icon, then nothing. `Start fight` is never an
-/// icon. Each action after the first has `XS` before it. Returns how `Add to Log` shows and
-/// `Start fight`'s width when it shows.
-fn header_actions(
+/// Where a reader's title-line actions go (round 27, one rule for World, Lookup and the
+/// encounter editor's header): `None` when the measured title, the `L` gap and every action
+/// with its word fit in `room`, so they follow the title on its line, `XS` apart. Else the row,
+/// under the title, of each action: all of them move together, in order, and a row takes as
+/// many as fit in `line`, the width under the title. An action never goes away and never loses
+/// its word, whatever the length of the name. `title` is the title's measured width, `widths`
+/// each action's own.
+pub(crate) fn title_line_rows(
     room: f32,
-    log: Option<f32>,
-    start: Option<f32>,
-) -> (Option<LogAction>, Option<f32>) {
-    let icon = Density::Read.control();
-    let fits = |widths: &[f32]| {
-        widths.iter().sum::<f32>() + design::XS * widths.len().saturating_sub(1) as f32 <= room
-    };
-    let choices = [
-        (log.map(LogAction::Word), start),
-        (log.map(|_| LogAction::Icon), start),
-        (None, start),
-        (log.map(|_| LogAction::Icon), None),
-        (None, None),
-    ];
-    choices
-        .into_iter()
-        // An entry with one of the two meets its choices in the same order.
-        .find(|(shown, width)| {
-            let shown = shown.map(|shown| match shown {
-                LogAction::Word(width) => width,
-                LogAction::Icon => icon,
-            });
-            fits(&[shown, *width].into_iter().flatten().collect::<Vec<_>>())
-        })
-        .unwrap_or((None, None))
+    line: f32,
+    title: f32,
+    widths: &[f32],
+) -> Option<Vec<usize>> {
+    let all = widths.iter().sum::<f32>() + design::XS * widths.len().saturating_sub(1) as f32;
+    // The first target starts `S` before its icon, which sits `L` after the title.
+    if widths.is_empty() || title + design::L - design::S + all <= room {
+        return None;
+    }
+    let mut rows = Vec::with_capacity(widths.len());
+    let mut row = 0;
+    let mut used: Option<f32> = None;
+    for width in widths {
+        // The first target of a row starts `S` before the text edge, so its icon is at it.
+        let next = used.map_or(width - design::S, |used| used + design::XS + width);
+        if used.is_some() && next > line {
+            row += 1;
+            used = Some(width - design::S);
+        } else {
+            used = Some(next);
+        }
+        rows.push(row);
+    }
+    Some(rows)
 }
 
-/// Draw one header action in its target.
-fn in_rect(ui: &mut egui::Ui, rect: egui::Rect, add: impl FnOnce(&mut egui::Ui) -> bool) -> bool {
-    ui.scope_builder(
+/// Draw a reader's title-line actions by `title_line_rows`. `cell` holds the title and its kind
+/// line, drawn at its full width; `title` is the title's measured width and `room` the width
+/// from the cell's left edge that the actions may use beside the title (less a portrait). Under
+/// the title, the first action's icon sits at the text edge and its target `S` into the
+/// gutter, as on the title line. Returns which actions were pressed, in order.
+pub(crate) fn title_line_actions(
+    ui: &mut egui::Ui,
+    cell: egui::Rect,
+    title: f32,
+    room: f32,
+    actions: Vec<Action<'_>>,
+) -> Vec<bool> {
+    let widths: Vec<f32> = actions
+        .iter()
+        .map(|action| action.natural_width(ui))
+        .collect();
+    let height = Density::Read.control();
+    let rows = title_line_rows(room, cell.width(), title, &widths);
+    let mut places = Vec::with_capacity(widths.len());
+    match &rows {
+        None => {
+            let mut next = cell.left() + title + design::L - design::S;
+            for width in &widths {
+                places.push(egui::pos2(next, cell.top()));
+                next += width + design::XS;
+            }
+        }
+        Some(rows) => {
+            let count = rows.last().map_or(0, |row| row + 1);
+            let (line, _) = ui.allocate_exact_size(
+                egui::vec2(
+                    cell.width(),
+                    height * count as f32 + design::XS * count.saturating_sub(1) as f32,
+                ),
+                egui::Sense::hover(),
+            );
+            let mut next = line.left() - design::S;
+            let mut last = 0;
+            for (width, row) in widths.iter().zip(rows) {
+                if *row != last {
+                    next = line.left() - design::S;
+                    last = *row;
+                }
+                places.push(egui::pos2(
+                    next,
+                    line.top() + *row as f32 * (height + design::XS),
+                ));
+                next += width + design::XS;
+            }
+        }
+    }
+    actions
+        .into_iter()
+        .zip(places.into_iter().zip(widths))
+        .map(|(action, (at, width))| {
+            in_rect(
+                ui,
+                egui::Rect::from_min_size(at, egui::vec2(width, height)),
+                |ui| action.show(ui).clicked(),
+            )
+        })
+        .collect()
+}
+
+/// Draw one action in its target, which the caller has already allocated or which lies on a
+/// line already allocated: a child that takes no room from `ui`, so a top-down layout never
+/// moves its cursor back up to the target.
+pub(crate) fn in_rect(
+    ui: &mut egui::Ui,
+    rect: egui::Rect,
+    add: impl FnOnce(&mut egui::Ui) -> bool,
+) -> bool {
+    let mut child = ui.new_child(
         egui::UiBuilder::new()
             .max_rect(rect)
             .layout(egui::Layout::left_to_right(egui::Align::Center)),
-        add,
-    )
-    .inner
+    );
+    add(&mut child)
 }
 
 /// Where a footer line stands: a result with a live Undo, a reason, or another notice.
@@ -2088,6 +2159,10 @@ pub(crate) enum FooterAct {
     Page,
     /// The DM copied or dismissed the words of a Log line whose entry is gone, by its notice.
     GoneLog(u64),
+    /// `Copy text` of a draft whose note is gone, by the note's ID.
+    LostCopy(Uuid),
+    /// `Discard draft` of a draft whose note is gone, by the note's ID.
+    LostDiscard(Uuid),
     /// `Undo tick` of an open question, by its note and its line: the World page's.
     Untick(Uuid, usize),
     /// `Undo remove` of a row of a tracker's history: the trackers own it, and the pane takes it.
@@ -2112,6 +2187,8 @@ pub(crate) enum FooterKind {
     },
     /// A Log line whose entry is gone, with `Copy text` and `Dismiss`.
     GoneLog(GoneLog),
+    /// A draft whose note is gone, with `Copy text` and `Discard draft`.
+    LostDraft { id: Uuid, name: String },
 }
 
 /// One World or Lookup message for its pane's footer (round 26): a result, reason or notice
@@ -2168,6 +2245,9 @@ impl FooterLine {
                 design::draft_discarded(ui, name).then_some(*act)
             }
             FooterKind::GoneLog(gone) => gone.draw(ui, &self.words, self.tone),
+            FooterKind::LostDraft { id, name } => {
+                edit::lost_draft(ui, &self.words, self.tone, *id, name)
+            }
             FooterKind::Error { editor } => {
                 ui.horizontal_wrapped(|ui| {
                     design::message(ui, self.tone, &self.words);
@@ -2447,13 +2527,8 @@ impl Reader {
             && !campaign.is_some_and(|c| self.editing(id, c)))
         .then(|| start_fight(item, index))
         .flatten();
-        ui.horizontal_top(|ui| {
-            let edit_action = Action::quiet("Edit")
-                .icon(design::icons::EDIT)
-                .density(Density::Read);
-            let room = edit.map_or(0.0, |_| edit_action.natural_width(ui) + design::L);
-            let right = ui.max_rect().right();
-            let width = ui.available_width() - room;
+        {
+            let width = ui.available_width();
             let cell = ui
                 .allocate_ui_with_layout(
                     egui::vec2(width, 0.0),
@@ -2480,81 +2555,60 @@ impl Reader {
                 )
                 .size()
                 .x;
-            // Where the header's next action's target starts: one `L` after the measured title,
-            // less the `S` before its icon. Art beside the title keeps Edit after the art.
-            let mut next = cell.left() + title_width + design::L - design::S;
-            let mut top = cell.top();
-            if let Some(campaign) = edit {
-                // Edit's icon sits one `L` after the measured title, so a kind line wider than
-                // a short title never pushes it away. Its target starts `S` before the icon.
-                if !art {
-                    ui.add_space(next - ui.cursor().left());
-                }
-                let response = edit_action
-                    .name(&format!("Edit {}", item.entry.name))
-                    .show(ui);
-                if response.clicked() {
-                    self.begin_edit(campaign, item);
-                }
-                next = response.rect.right() + design::XS;
-                top = response.rect.top();
-            }
-            // The header's quiet actions follow Edit, `XS` apart, in the room that is spare: the
-            // title keeps its width and the row its line (section 1.2 of the session-cycle
-            // design): `Start fight` next to Edit, where it is for a DM who never adds to a Log,
-            // then `Add to Log`, which gives way first: to its icon, then away. `Start fight`
-            // keeps its word, or does not show.
-            // Its own glyph, a list with a plus, so it is not a bare `+` above `Add to fight`.
-            let log_action = Action::quiet("Add to Log")
-                .icon(design::icons::ADD_TO_LOG)
-                .density(Density::Read);
+            // The title line's actions, each with its icon and its word (round 27): Edit, then
+            // `Start fight`, where it is for a DM who never adds to a Log, then `Add to Log`. Edit's
+            // icon sits one `L` after the measured title, so a kind line wider than a short title
+            // never pushes it away. When the title and all of them do not fit on one line, all
+            // of them move together to a line under the title: none goes away or loses its word.
+            let edit_name = format!("Edit {}", item.entry.name);
             let start_name = start
                 .as_ref()
                 .map(|start| format!("Start a fight with {}", start.name));
-            let start_action = start_name.as_deref().map(|name| {
-                Action::quiet("Start fight")
-                    .icon(design::icons::RUN)
-                    .density(Density::Read)
-                    .name(name)
-                    .blocked(self.start_blocked)
-            });
-            let limit = if art && edit.is_none() {
-                cell.right() - art_width
-            } else {
-                right
-            };
-            let (log, start_width) = header_actions(
-                limit - next,
-                edit.map(|_| log_action.natural_width(ui)),
-                start_action.as_ref().map(|action| action.natural_width(ui)),
-            );
-            // Each shown action's target, in order from `next`.
-            let mut at = |width: f32| {
-                let rect = egui::Rect::from_min_size(
-                    egui::pos2(next, top),
-                    egui::vec2(width, Density::Read.control()),
+            let mut actions = Vec::with_capacity(3);
+            if edit.is_some() {
+                actions.push(
+                    Action::quiet("Edit")
+                        .icon(design::icons::EDIT)
+                        .density(Density::Read)
+                        .name(&edit_name),
                 );
-                next = rect.right() + design::XS;
-                rect
-            };
-            if let (Some(start), Some(action), Some(width)) = (start, start_action, start_width)
-                && in_rect(ui, at(width), |ui| action.show(ui).clicked())
+            }
+            if let Some(name) = start_name.as_deref() {
+                actions.push(
+                    Action::quiet("Start fight")
+                        .icon(design::icons::RUN)
+                        .density(Density::Read)
+                        .name(name)
+                        .blocked(self.start_blocked),
+                );
+            }
+            if edit.is_some() {
+                // Its own glyph, a list with a plus, so it is not a bare `+` above `Add to fight`.
+                actions.push(
+                    Action::quiet("Add to Log")
+                        .icon(design::icons::ADD_TO_LOG)
+                        .density(Density::Read),
+                );
+            }
+            // A portrait keeps the right of the title's line.
+            let pressed = title_line_actions(ui, cell, title_width, width - art_width, actions);
+            let mut pressed = pressed.into_iter();
+            if let Some(campaign) = edit
+                && pressed.next() == Some(true)
+            {
+                self.begin_edit(campaign, item);
+            }
+            if let Some(start) = start
+                && pressed.next() == Some(true)
             {
                 self.start_fight = Some(start);
             }
-            let log_pressed = match log {
-                Some(LogAction::Word(width)) => {
-                    in_rect(ui, at(width), |ui| log_action.show(ui).clicked())
-                }
-                Some(LogAction::Icon) => in_rect(ui, at(Density::Read.control()), |ui| {
-                    design::icon_button(ui, design::icons::ADD_TO_LOG, "Add to Log").clicked()
-                }),
-                None => false,
-            };
-            if log_pressed && let Some(campaign) = edit {
+            if let Some(campaign) = edit
+                && pressed.next() == Some(true)
+            {
                 self.open_log(campaign.id, id, &item.entry.name, "");
             }
-        });
+        }
         self.form_focused = false;
         let editing = campaign.is_some_and(|campaign| self.editing(id, campaign));
         if let Some(campaign) = campaign
@@ -2582,9 +2636,6 @@ impl Reader {
         if let Some(campaign) = campaign
             && editing
         {
-            if self.has_lost_edits(index) {
-                design::reader::measure(ui, |ui| self.lost_edits(ui, index));
-            }
             return self.edit_form(ui, item, index, campaign);
         }
 
@@ -2599,8 +2650,6 @@ impl Reader {
         // Every warning sits below the file line, so the file line keeps its place. Each wraps
         // at the reader measure, the right edge of the rows below.
         design::reader::measure(ui, |ui| {
-            // A draft whose note is gone, whatever note is open.
-            self.lost_edits(ui, index);
             let fault = self.group_fault.as_ref().filter(|fault| fault.id == id);
             if let Some(unread) = fault
                 .filter(|_| !editing)
@@ -2912,6 +2961,9 @@ impl Reader {
         let campaign = campaign?;
         let mut chosen = None;
         ui.add_space(design::M);
+        // The edit form's fields end at `FORM_WIDTH` from the reader's edge; the section's
+        // indent must not move this field's right edge past them (round 27 FF7).
+        let form_edge = ui.max_rect().left() + design::FORM_WIDTH;
         design::quiet_section(ui, "Give this note a type", |ui| {
             // The help says what the choice does for the DM; how Splat stores it waits in
             // Technical details at the end of the section.
@@ -2928,13 +2980,16 @@ impl Reader {
                     }
                 }
             });
-            design::text_field(
-                ui,
-                "Another type",
-                &mut self.other_type,
-                Some("A word of your own, such as faction or quest."),
-                None,
-            );
+            ui.scope(|ui| {
+                ui.set_max_width((form_edge - ui.max_rect().left()).min(ui.available_width()));
+                design::text_field(
+                    ui,
+                    "Another type",
+                    &mut self.other_type,
+                    Some("A word of your own, such as faction or quest."),
+                    None,
+                );
+            });
             let other = self.other_type.trim().to_lowercase();
             if !other.is_empty()
                 && Action::quiet(&format!("Make {other}"))
@@ -3097,8 +3152,10 @@ impl Reader {
             self.place_choices_open = false;
             return None;
         }
+        // The result names the place as the Undo (`Undo place change`) and the list (`Place not
+        // found`) do; the field's label `In` is not a noun (round 27 FA5).
         let words = change_words(
-            label,
+            if key == "in" { "Place" } else { label },
             world_field(current_entry, key).and_then(name).as_deref(),
             name(&value).as_deref(),
         );
@@ -3166,8 +3223,9 @@ impl Reader {
         editing: bool,
     ) -> Option<Go> {
         let key = (campaign.id, item.entry.id);
+        // The field waits, with its words, while an edit form of this entry is open; the reason
+        // is in the pane's footer, so the form below never moves (round 27 FC2).
         if editing || self.edited_elsewhere.contains(&item.entry.id) {
-            design::message(ui, Tone::Info, "Save or discard your edit first.");
             return None;
         }
         let stamp = self
@@ -3177,17 +3235,29 @@ impl Reader {
         let select = std::mem::take(&mut open.select);
         let field = &mut open.field;
         let name = format!("Log line for {}", item.entry.name);
+        // The field ends at the reader's measure, also when the stamp shares its line: a row of
+        // a wrapping layout does not hold a nested row to its parent's width (round 27 AF2, FF1).
+        let edge = ui.max_rect().right();
         let draw = |ui: &mut egui::Ui, field: &mut design::AddField| {
-            design::add_field(
-                ui,
-                field,
-                &name,
-                "What happened?",
-                0.0,
-                |_| None::<()>,
-                |_| Vec::new(),
+            let width = (edge - ui.cursor().left()).max(design::XXL);
+            ui.allocate_ui_with_layout(
+                egui::vec2(width, 0.0),
+                egui::Layout::top_down(egui::Align::Min),
+                |ui| {
+                    ui.set_max_width(width);
+                    design::add_field(
+                        ui,
+                        field,
+                        &name,
+                        "What happened?",
+                        0.0,
+                        |_| None::<()>,
+                        |_| Vec::new(),
+                    )
+                    .field
+                },
             )
-            .field
+            .inner
         };
         let response = match &stamp {
             None => draw(ui, field),
@@ -3699,6 +3769,23 @@ impl Reader {
         let id = item.entry.id;
         let editing = campaign.is_some_and(|campaign| self.editing(id, campaign));
         let mut lines = self.gone_log_notices(campaign.map(|campaign| campaign.id));
+        // A draft whose note is gone, and its Undo, whatever note is open, also in an edit form.
+        lines.extend(self.lost_lines(index));
+        // An open `Add to Log` field waits while an edit form of its entry is open, here or in
+        // the other reader. It ends when the form closes (Save, Discard) or the reader shows
+        // another entry.
+        if let Some(campaign) = campaign
+            && takes_log(item, index)
+            && self.log_fields.contains_key(&(campaign.id, id))
+            && (self.editing(id, campaign) || self.edited_elsewhere.contains(&id))
+        {
+            lines.push(FooterLine::new(
+                FooterRank::Reason,
+                Tone::Info,
+                LOG_WAITS,
+                FooterKind::Plain,
+            ));
+        }
         let has_unread = self
             .group_fault
             .as_ref()
@@ -3829,6 +3916,7 @@ impl Reader {
     /// Take a footer line's action on the open note. `FooterAct::Page` is the page's.
     pub(crate) fn footer_act(
         &mut self,
+        ctx: &egui::Context,
         act: FooterAct,
         item: &Item,
         campaign: &Campaign,
@@ -3882,6 +3970,14 @@ impl Reader {
             FooterAct::Page | FooterAct::Trackers => None,
             FooterAct::GoneLog(id) => {
                 self.end_gone_log(id);
+                None
+            }
+            FooterAct::LostCopy(id) => {
+                self.copy_lost(ctx, id);
+                None
+            }
+            FooterAct::LostDiscard(id) => {
+                self.discard_lost(id);
                 None
             }
             // The World page takes a tick's Undo.
@@ -5018,7 +5114,7 @@ mod tests {
                 let line = FooterLine::new(
                     FooterRank::Undo,
                     CHANGED,
-                    "In set to North Gate. It was Watch House.",
+                    "Place set to North Gate. It was Watch House.",
                     FooterKind::Undo {
                         label: ChangeKind::Place.undo_label(),
                         act: FooterAct::Change,
@@ -5508,7 +5604,7 @@ mod tests {
         );
         // Round 26 FE3: a result is a sentence; only the Log keeps the arrow form.
         assert_eq!(status.word, "Status set to dead. It was alive.");
-        assert_eq!(place.word, "In set to The Arena.");
+        assert_eq!(place.word, "Place set to The Arena.");
         assert_eq!(group.word, "Part of set to Harvest Cart.");
         assert_eq!(group.kind, ChangeKind::PartOf);
 
@@ -5848,51 +5944,42 @@ mod tests {
                 .all(|line| !matches!(line.kind, FooterKind::GoneLog(_)))
         );
         let first = gone.iter().find(|gone| gone.words == "Kept.").unwrap().id;
-        lookup.footer_act(FooterAct::GoneLog(first), item, &campaign);
+        lookup.footer_act(&egui::Context::default(), FooterAct::GoneLog(first), item, &campaign);
         assert_eq!(notices(&mut lookup), 1);
     }
 
     #[test]
-    fn the_header_shows_the_first_choice_that_fits() {
-        let (log, start, icon) = (108.0, 100.0, Density::Read.control());
-        let both = log + design::XS + start;
-        let cases = [
-            (both, Some(LogAction::Word(log)), Some(start)),
-            (both - 1.0, Some(LogAction::Icon), Some(start)),
-            (
-                icon + design::XS + start,
-                Some(LogAction::Icon),
-                Some(start),
-            ),
-            (icon + design::XS + start - 1.0, None, Some(start)),
-            (start, None, Some(start)),
-            (start - 1.0, Some(LogAction::Icon), None),
-            (icon, Some(LogAction::Icon), None),
-            (icon - 1.0, None, None),
-        ];
-        for (room, shown, started) in cases {
-            assert_eq!(
-                header_actions(room, Some(log), Some(start)),
-                (shown, started),
-                "{room}"
-            );
-        }
-        // An entry with only `Add to Log`: its word, then its icon, then nothing. One with only
-        // `Start fight`: its word, or nothing.
+    fn title_line_actions_keep_their_words_beside_or_under_the_title() {
+        // Edit, Start fight and Add to Log with their words (round 27 FC4, FJ3, FM5, FF5).
+        let widths = [60.0, 100.0, 108.0];
+        let title = 150.0;
+        let all = 60.0 + 100.0 + 108.0 + 2.0 * design::XS;
+        let fits = title + design::L - design::S + all;
+        // All of them fit after the title: they share its line.
+        assert_eq!(title_line_rows(fits, fits, title, &widths), None);
+        // One pixel short: all of them move together under the title, none goes away, in one
+        // row while the line holds them.
         assert_eq!(
-            header_actions(log, Some(log), None),
-            (Some(LogAction::Word(log)), None)
+            title_line_rows(fits - 1.0, fits - 1.0, title, &widths),
+            Some(vec![0, 0, 0])
+        );
+        // A line too narrow for all three takes as many as fit, in order, on more rows.
+        let two = 60.0 - design::S + design::XS + 100.0;
+        assert_eq!(
+            title_line_rows(two, two, title, &widths),
+            Some(vec![0, 0, 1])
         );
         assert_eq!(
-            header_actions(log - 1.0, Some(log), None),
-            (Some(LogAction::Icon), None)
+            title_line_rows(two - 1.0, two - 1.0, title, &widths),
+            Some(vec![0, 1, 2])
         );
-        assert_eq!(header_actions(icon - 1.0, Some(log), None), (None, None));
+        // A long title alone sends them under it, with room to spare under the title.
         assert_eq!(
-            header_actions(start, None, Some(start)),
-            (None, Some(start))
+            title_line_rows(600.0, 600.0, 600.0, &widths),
+            Some(vec![0, 0, 0])
         );
-        assert_eq!(header_actions(start - 1.0, None, Some(start)), (None, None));
+        // No actions: nothing to place.
+        assert_eq!(title_line_rows(10.0, 10.0, 600.0, &[]), None);
     }
 
     #[test]

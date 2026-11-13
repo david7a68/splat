@@ -22473,7 +22473,27 @@ fn icon_link_parts(d: &Driver<'_>, icon: &str, words: &str) -> Option<(bool, boo
 
 /// FT1: Lookup's `Show all N` is quiet, lists every match in place in a list of at most eight
 /// rows, and the list follows Tab and the arrow keys. Ends with `words` typed again.
-fn lookup_show_all(d: &mut Driver<'_>, words: &str) {
+fn lookup_show_all(d: &mut Driver<'_>, six: &str) {
+    // Round 27 FJ2: `Show all` takes a line as tall as a row, so six matches show as six rows
+    // in that room, with no `Show all` and every row in view.
+    let rows = lookup_results(d);
+    d.observe(
+        "iter-27-D-FJ2",
+        rows.len() == 6 && show_all_count(d).is_none() && rows.iter().all(|row| row.fully_in_view()),
+        format!(
+            "Six matches for {six} show as six rows with no Show all: {} rows, Show all {:?}",
+            rows.len(),
+            show_all_count(d)
+        ),
+    );
+    // The Show all proof needs seven or eight matches: more than six, and all in view after.
+    let words = ["wolf", "giant", "fire", "sword", "cult"]
+        .into_iter()
+        .find(|words| {
+            d.replace_text_in(SEARCH_LOOKUP, words);
+            show_all_count(d).is_some_and(|count| (7..=8).contains(&count))
+        })
+        .unwrap_or("wolf");
     let before = lookup_results(d).len();
     let count = show_all_count(d);
     let label = format!("Show all {}", count.unwrap_or_default());

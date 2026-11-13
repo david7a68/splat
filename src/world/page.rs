@@ -42,10 +42,22 @@ fn broken_row(ui: &mut egui::Ui, selected: bool, path: &str, cause: &str) -> egu
         color,
         ..Default::default()
     };
+    // The icon has its own column, so a wrapped cause starts each line at its first word, as
+    // every wrapped status does (round 27 FH3, FF4).
+    let icon = ui.painter().layout_no_wrap(
+        icons::ERROR.to_owned(),
+        Type::Small.font(ui),
+        colors().result.error,
+    );
+    let gap = ui
+        .painter()
+        .layout_no_wrap(" ".to_owned(), Type::Small.font(ui), colors().muted)
+        .size()
+        .x;
+    let words_x = icon.size().x + gap;
     let mut job = egui::text::LayoutJob::default();
-    job.append(icons::ERROR, 0.0, format(colors().result.error));
-    job.append(&format!(" {cause}"), 0.0, format(colors().muted));
-    job.wrap.max_width = width;
+    job.append(cause, 0.0, format(colors().muted));
+    job.wrap.max_width = (width - words_x).max(design::XXL);
     let detail = ui.fonts_mut(|fonts| fonts.layout_job(job));
     let height = (title.size().y + detail.size().y + design::S).max(ROW);
     design::row(
@@ -56,11 +68,11 @@ fn broken_row(ui: &mut egui::Ui, selected: bool, path: &str, cause: &str) -> egu
         |ui, rect| {
             let position = rect.min + egui::vec2(design::S, design::XS);
             ui.painter().galley(position, title.clone(), colors().text);
-            ui.painter().galley(
-                position + egui::vec2(0.0, title.size().y),
-                detail,
-                colors().muted,
-            );
+            let below = position + egui::vec2(0.0, title.size().y);
+            ui.painter()
+                .galley(below, icon.clone(), colors().result.error);
+            ui.painter()
+                .galley(below + egui::vec2(words_x, 0.0), detail, colors().muted);
         },
     )
 }
@@ -192,6 +204,10 @@ pub struct WorldPage {
     ticks: Vec<Tick>,
     /// Why the last tick, or its Undo, wrote nothing.
     tick_error: Option<String>,
+    /// The held NPC whose card's `Copy the marker` was pressed, by name: the footer says
+    /// `MARKER_COPIED` while that card is the view. Another NPC on the card (a roll, Lookup's
+    /// card), its save or discard, and a campaign change end it.
+    marker_copied: Option<String>,
 }
 
 /// One unreadable note's row words.
@@ -291,6 +307,7 @@ impl WorldPage {
             self.generated = None;
             self.generated_shown = false;
             self.discarded_npc = None;
+            self.marker_copied = None;
             self.ticks.clear();
             self.tick_error = None;
         }
@@ -375,6 +392,7 @@ impl WorldPage {
         self.new_kind = None;
         self.error = None;
         self.lookup_kept = false;
+        self.marker_copied = None;
         self.generated = Some(card.npc);
         self.generated_shown = true;
         self.discarded_npc = None;
@@ -748,7 +766,7 @@ impl WorldPage {
                 match pressed {
                     Some(super::FooterAct::Page) => self.undo_discard(),
                     Some(super::FooterAct::Trackers) => trackers.undo_remove(),
-                    Some(act) => nav = self.reader.footer_act(act, item, campaign),
+                    Some(act) => nav = self.reader.footer_act(ui.ctx(), act, item, campaign),
                     None => {}
                 }
                 // As in Library, a wide table may use the pane; prose keeps its measure.
@@ -811,6 +829,7 @@ impl WorldPage {
         match crate::npc_generator::roll(&tables) {
             Ok(npc) => {
                 self.generated = Some(npc);
+                self.marker_copied = None;
                 self.generated_shown = true;
                 self.discarded_npc = None;
                 self.generator_sources = tables.sources;
@@ -940,7 +959,46 @@ impl WorldPage {
         }
     }
 
+    /// A creation form or the held NPC's card, with the pane's footer: the card's `Copy the
+    /// marker` result and the error of the last Create or Save (round 27 FG2: no body places).
     fn creation_form(&mut self, ui: &mut egui::Ui, index: &ContentIndex, campaign: &Campaign) {
+        let form = self.new_kind.is_some() || self.card_shown();
+        let mut lines = Vec::new();
+        if let Some(npc) = self.generated.as_ref().filter(|_| self.generated_shown)
+            && self.marker_copied.as_deref() == Some(npc.name.as_str())
+        {
+            lines.push(super::FooterLine::new(
+                super::FooterRank::Notice,
+                design::Tone::Success,
+                crate::lookup::MARKER_COPIED,
+                super::FooterKind::Plain,
+            ));
+        }
+        if form && let Some(PageError::Words(error)) = &self.error {
+            lines.push(super::FooterLine::new(
+                super::FooterRank::Reason,
+                design::Tone::Error,
+                error,
+                super::FooterKind::Error { editor: None },
+            ));
+        }
+        let bottom = if lines.is_empty() {
+            ui.max_rect().bottom()
+        } else {
+            super::draw_footer(ui, "world_footer", &lines).1
+        };
+        egui::ScrollArea::vertical()
+            .id_salt("world_creation")
+            .max_height((bottom - ui.cursor().top()).max(0.0))
+            .auto_shrink([false, false])
+            .show(ui, |ui| self.creation_body(ui, index, campaign));
+    }
+
+    /// Inline creation (round 27 ruling): the Label title and the fields, the named Create
+    /// action after the last field on that field's line, centred on it, then one kept line
+    /// below, as tall as a control: quiet `Cancel` at its start, then the reason or the new
+    /// file's path. Typing moves nothing.
+    fn creation_body(&mut self, ui: &mut egui::Ui, index: &ContentIndex, campaign: &Campaign) {
         let mut made = None;
         if let Some(kind) = self.new_kind {
             design::group_label(
@@ -951,58 +1009,103 @@ impl WorldPage {
                     _ => "New note",
                 },
             );
-            design::text_field(ui, "Name", &mut self.new_name, None, None);
-            if kind == "npc" && !self.new_name.trim().is_empty() {
-                let path = super::new_entry_path(Some(index), &self.new_name, "npc");
-                ui.label(
-                    Type::Small
-                        .rich(ui, format!("Will create {path}"))
-                        .color(colors().muted),
-                );
-            }
-            if kind == "note" {
-                design::text_field(
-                    ui,
-                    "Type (optional)",
-                    &mut self.note_type,
-                    Some("Leave empty for a plain note. For example: faction or quest."),
-                    None,
-                );
-            }
-            ui.horizontal(|ui| {
-                let reason = self
-                    .new_name
-                    .trim()
-                    .is_empty()
-                    .then_some("Type a name first.");
-                if (if self.run_open {
-                    design::Action::secondary(match kind {
-                        "npc" => "Create NPC",
-                        "location" => "Create location",
-                        _ => "Create note",
+            let reason = self
+                .new_name
+                .trim()
+                .is_empty()
+                .then_some("Type a name first.");
+            let label = match kind {
+                "npc" => "Create NPC",
+                "location" => "Create location",
+                _ => "Create note",
+            };
+            let create = || {
+                if self.run_open {
+                    design::Action::secondary(label)
+                } else {
+                    design::Action::primary(label)
+                }
+            };
+            let create_width = create().natural_width(ui);
+            // The last field shares its line with Create; the others take the form's width.
+            let created = {
+                let name = &mut self.new_name;
+                let note_type = &mut self.note_type;
+                let field = |ui: &mut egui::Ui, last: bool, draw: &mut dyn FnMut(&mut egui::Ui) -> egui::Response| {
+                    if !last {
+                        draw(ui);
+                        return false;
+                    }
+                    let width = (ui.available_width() - create_width - design::S)
+                        .min(design::FORM_WIDTH)
+                        .max(design::XXL);
+                    // Create sits `S` after the field's column, centred on the field itself.
+                    // The column's height is the line's, so the kept line follows it.
+                    let column = ui.allocate_ui_with_layout(
+                        egui::vec2(width, 0.0),
+                        egui::Layout::top_down(egui::Align::Min),
+                        |ui| draw(ui).rect,
+                    );
+                    let field = column.inner;
+                    let at = egui::Rect::from_min_size(
+                        egui::pos2(
+                            column.response.rect.right() + design::S,
+                            field.center().y - design::Density::Scan.control() / 2.0,
+                        ),
+                        egui::vec2(create_width, design::Density::Scan.control()),
+                    );
+                    super::in_rect(ui, at, |ui| create().blocked(reason).show(ui).clicked())
+                };
+                let mut name_field = |ui: &mut egui::Ui| {
+                    design::text_field(ui, "Name", name, None, None)
+                };
+                if kind == "note" {
+                    field(ui, false, &mut name_field);
+                    field(ui, true, &mut |ui: &mut egui::Ui| {
+                        design::text_field(
+                            ui,
+                            "Type (optional)",
+                            note_type,
+                            Some("Leave empty for a plain note. For example: faction or quest."),
+                            None,
+                        )
                     })
                 } else {
-                    design::Action::primary(match kind {
-                        "npc" => "Create NPC",
-                        "location" => "Create location",
-                        _ => "Create note",
-                    })
-                })
-                .blocked(reason)
-                .show(ui)
-                .clicked()
-                {
-                    let kind = if kind == "note" {
-                        self.note_type.trim()
-                    } else {
-                        kind
-                    };
-                    made = Some(super::create_entry(campaign, &self.new_name, kind));
+                    field(ui, true, &mut name_field)
                 }
-                design::blocked_reason(ui, reason);
-                ui.add_space(design::L);
-                if design::Action::quiet("Cancel").show(ui).clicked() {
+            };
+            if created {
+                let kind = if kind == "note" {
+                    self.note_type.trim()
+                } else {
+                    kind
+                };
+                made = Some(super::create_entry(campaign, &self.new_name, kind));
+            }
+            // The kept line: Cancel at its start, then the reason, or the file the name makes.
+            ui.horizontal(|ui| {
+                ui.set_min_height(design::Density::Read.control());
+                if design::Action::quiet("Cancel")
+                    .density(design::Density::Read)
+                    .line_start()
+                    .show(ui)
+                    .clicked()
+                {
                     self.new_kind = None;
+                }
+                ui.add_space(design::L - ui.spacing().item_spacing.x);
+                if reason.is_some() {
+                    design::blocked_reason(ui, reason);
+                } else if kind == "npc" {
+                    let path = super::new_entry_path(Some(index), &self.new_name, "npc");
+                    ui.add(
+                        egui::Label::new(
+                            Type::Small
+                                .rich(ui, format!("Will create {path}"))
+                                .color(colors().muted),
+                        )
+                        .wrap(),
+                    );
                 }
             });
         }
@@ -1022,6 +1125,9 @@ impl WorldPage {
                 crate::lookup::NamesHelp::Marker,
                 &super::new_entry_path(Some(index), &npc.name, "npc"),
             );
+            if choice.copied_marker {
+                self.marker_copied = Some(npc.name.clone());
+            }
             if choice.save {
                 made = Some(super::create_generated(campaign, npc));
             }
@@ -1059,21 +1165,22 @@ impl WorldPage {
             Some(Err(error)) => self.error = Some(error.into()),
             None => {}
         }
-        if let Some(PageError::Words(error)) = self.error.clone() {
-            if self.new_kind.is_none() && !self.card_shown() {
-                // Cancel starts at the message text, as every message's choices do. A message
-                // action without an icon has the secondary border (round 25 family).
-                let cancel = design::message_with_actions(ui, design::Tone::Error, &error, |ui| {
-                    design::Action::secondary("Cancel")
-                        .density(design::Density::Read)
-                        .show(ui)
-                        .clicked()
-                });
-                if cancel {
-                    self.error = None;
-                }
-            } else {
-                design::message(ui, design::Tone::Error, &error);
+        // With no form and no card, the error is the page's content, with its Cancel; under a
+        // form or a card it is in the footer (`creation_form`).
+        if let Some(PageError::Words(error)) = self.error.clone()
+            && self.new_kind.is_none()
+            && !self.card_shown()
+        {
+            // Cancel starts at the message text, as every message's choices do. A message
+            // action without an icon has the secondary border (round 25 family).
+            let cancel = design::message_with_actions(ui, design::Tone::Error, &error, |ui| {
+                design::Action::secondary("Cancel")
+                    .density(design::Density::Read)
+                    .show(ui)
+                    .clicked()
+            });
+            if cancel {
+                self.error = None;
             }
         }
     }

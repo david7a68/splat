@@ -2396,7 +2396,7 @@ pub fn places(d: &mut Driver<'_>) {
     // in the file (`The Keep`).
     d.observe(
         "iter-23-D-FG3-cleared",
-        d.visible_text("In cleared. It was Ashfall Keep.") && !d.visible_text("The Keep"),
+        d.visible_text("Place cleared. It was Ashfall Keep.") && !d.visible_text("The Keep"),
         "The cleared place's message names the note the In row showed",
     );
     d.observe(
@@ -2444,8 +2444,8 @@ pub fn places(d: &mut Driver<'_>) {
     d.click("New location…");
     d.type_into("Location name", "Watch House");
     d.click("Create location here");
-    d.expect("In set to Watch House. It was Ashfall Keep.");
-    let (success, detail) = finished_change_tone(d, "In set to Watch House. It was Ashfall Keep.");
+    d.expect("Place set to Watch House. It was Ashfall Keep.");
+    let (success, detail) = finished_change_tone(d, "Place set to Watch House. It was Ashfall Keep.");
     d.observe("iter-20-D-FD5-place", success, detail);
     d.state("npc-new-place", Sizes::All);
     d.click("Undo place change");
@@ -8070,7 +8070,7 @@ pub fn world_note_moved(d: &mut Driver<'_>) {
     // folder as the list shows it. The other folder is not named.
     d.observe(
         "iter-24-D-AD2",
-        d.has_containing("In set to Watch House (Locations). It was Watch House.")
+        d.has_containing("Place set to Watch House (Locations). It was Watch House.")
             && !d.has_containing("Watch House (Other)"),
         "The place result names the folder of the file the DM chose",
     );
