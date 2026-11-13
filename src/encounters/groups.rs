@@ -1813,11 +1813,25 @@ fn text_row(
             Type::Small.font(ui),
             colors().muted,
         );
-        let mut text = value.clone().unwrap_or_default();
+        // While the field has focus it keeps the exact words typed (a lone space too): the field
+        // part drops its text Undo when the bound text is rewritten under it.
+        let typed = field.named_id(label).with("typed");
+        let mut text = ui
+            .data(|data| data.get_temp::<String>(typed))
+            .unwrap_or_else(|| value.clone().unwrap_or_default());
         let width = text_field_width(ui.available_width());
-        if design::line_field(ui, field, label, &mut text, hint, width).changed() {
-            *value = (!text.trim().is_empty()).then_some(text);
+        let response = design::line_field(ui, field, label, &mut text, hint, width);
+        if response.changed() {
+            *value = (!text.trim().is_empty()).then(|| text.clone());
         }
+        let focused = response.has_focus();
+        ui.data_mut(|data| {
+            if focused {
+                data.insert_temp(typed, text);
+            } else {
+                data.remove::<String>(typed);
+            }
+        });
     });
 }
 
@@ -3422,6 +3436,54 @@ fn unread_changes(raw: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// K3 review 1, finding 4: a change form's text row keeps the DM's exact words while it has
+    /// focus, so the field's text Undo survives a word the row stores as `None` (a lone space).
+    #[test]
+    fn a_text_row_keeps_its_undo_through_a_blank_word() {
+        const ROW: design::FieldName = crate::field_id!("test_override_row");
+        let ctx = egui::Context::default();
+        let field = ROW.of(Uuid::from_u128(7));
+        let id = field.named_id("Display name");
+        let mut value = Some(String::from("Wolf"));
+        let mut frame = |value: &mut Option<String>, events: Vec<egui::Event>| {
+            let input = egui::RawInput {
+                events,
+                ..Default::default()
+            };
+            let _ = ctx.run(input, |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    text_row(ui, field, "Display name", value, "");
+                });
+            });
+        };
+        ctx.memory_mut(|memory| memory.request_focus(id));
+        frame(&mut value, Vec::new());
+        // Select all and type a space: the row stores no name.
+        let key = |key, modifiers| egui::Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers,
+        };
+        frame(
+            &mut value,
+            vec![key(egui::Key::A, egui::Modifiers::COMMAND)],
+        );
+        frame(&mut value, vec![egui::Event::Text(" ".into())]);
+        assert_eq!(value, None, "a blank word stores no name");
+        frame(&mut value, Vec::new());
+        frame(
+            &mut value,
+            vec![key(egui::Key::Z, egui::Modifiers::COMMAND)],
+        );
+        assert_eq!(
+            value.as_deref(),
+            Some("Wolf"),
+            "k3-blank: Ctrl+Z brings the name back"
+        );
+    }
 
     /// FT4: UI text names a value in curly quotation marks, never straight ones.
     #[test]

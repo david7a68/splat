@@ -166,11 +166,8 @@ impl TextKey {
     /// The key of `owner`'s fields: its own id text. Not banned: the text comes from a listed
     /// owner type's id, never from the layout or a `format!`.
     ///
-    /// ```
-    /// use splat::layout::{DocOwner, TextKey};
-    /// let journey = DocOwner { id: "journey-1".to_owned() };
-    /// assert_eq!(TextKey::of(&journey), TextKey::of(&journey));
-    /// ```
+    /// The compiling twin is the part test `a_timeline_event_keys_its_fields` (a timeline event,
+    /// a crate-private type, cannot be named in a doc example).
     ///
     /// A free text is not an owner, and only the types listed in `src/design/layout.rs` can
     /// become one (the trait is sealed):
@@ -181,6 +178,24 @@ impl TextKey {
     ///
     /// ```compile_fail,E0277
     /// let _ = splat::layout::TextKey::of(&format!("row {}", 1));
+    /// ```
+    ///
+    /// No public owner type holds a free text (review 1: `DocOwner` did):
+    ///
+    /// ```compile_fail,E0422
+    /// let _ = splat::layout::TextKey::of(&splat::layout::DocOwner { id: format!("row_{}", 1) });
+    /// ```
+    ///
+    /// A caller's own type cannot become an owner (it would turn any text into a key with no
+    /// counted row):
+    ///
+    /// ```compile_fail,E0277
+    /// struct Row(String);
+    /// impl splat::layout::TextOwner for Row {
+    ///     fn owner_text(&self) -> &str {
+    ///         &self.0
+    ///     }
+    /// }
     /// ```
     pub fn of(owner: &impl TextOwner) -> Self {
         Self(owner.owner_text().to_owned())
@@ -207,16 +222,7 @@ macro_rules! text_owners {
         }
     )*};
 }
-text_owners!(
-    crate::timeline::Event => |event| &event.id,
-    DocOwner => |owner| &owner.id,
-);
-
-/// An owner for the doc examples and part tests.
-#[doc(hidden)]
-pub struct DocOwner {
-    pub id: String,
-}
+text_owners!(crate::timeline::Event => |event| &event.id);
 
 macro_rules! row_keys {
     ($($key:ty),*) => {$(
@@ -616,8 +622,7 @@ pub struct Editor {
     pub cursor_range: Option<egui::text::CCursorRange>,
 }
 
-/// What the bound text was when the field last drew with focus: its length and a hash. Kept per
-/// field id, in egui's temporary data, for the focused field only.
+/// What the bound text was when the field last drew with focus: its length and a hash.
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct BoundText {
     len: usize,
@@ -625,8 +630,8 @@ struct BoundText {
 }
 
 impl BoundText {
-    /// One hash of the text, for the field that has focus (egui itself copies that field's whole
-    /// text into its Undo history every frame it has focus, so this adds less than egui does).
+    /// One hash of the text (egui itself copies a focused field's whole text into its Undo
+    /// history every frame it has focus, so this adds less than egui does).
     fn of(text: &str) -> Self {
         #[cfg(test)]
         BOUND_TEXT_HASHES.with(|count| count.set(count.get() + 1));
@@ -643,8 +648,23 @@ thread_local! {
     pub(crate) static BOUND_TEXT_HASHES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-fn bound_text_id(id: Id) -> Id {
-    id.with("splat_bound_text")
+/// How many fields keep a record. The oldest record goes first, and egui's Undo history for
+/// its field goes with it, so a field with no record never has old history.
+pub(crate) const BOUND_TEXTS: usize = 32;
+
+/// The records, newest last. At most [`BOUND_TEXTS`].
+#[derive(Clone, Default)]
+struct BoundTexts(Vec<(Id, BoundText)>);
+
+fn bound_texts_id() -> Id {
+    Id::new("splat_bound_texts")
+}
+
+/// How many records the guard holds, for the part test.
+#[cfg(test)]
+pub(crate) fn bound_text_count(ctx: &egui::Context) -> usize {
+    ctx.data(|data| data.get_temp::<BoundTexts>(bound_texts_id()))
+        .map_or(0, |records| records.0.len())
 }
 
 /// The field parts' guard of egui's text Undo. egui keeps a field's cursor and Undo history
@@ -652,10 +672,20 @@ fn bound_text_id(id: Id) -> Id {
 /// else's history is under this id (another object's, when the caller left out the owner's
 /// key; or the program replaced the text): drop it before Ctrl+Z can bring it back.
 ///
-/// It runs only for a field that has focus or gains it in this frame (egui adds Undo history
-/// only then), so it hashes at most one text a frame. One case passes: the old and new texts
-/// are equal (A's text was emptied, B's is empty). The owner's key ([`FieldName::of`]) covers
-/// that one.
+/// When it checks, before the draw:
+/// - the field has focus: every frame (egui adds Undo history only then);
+/// - the field has a record and no focus: on a frame with a pointer press or a key press, the
+///   only frames in which focus can come and Ctrl+Z run inside egui's draw. An idle frame, or
+///   one with only pointer moves, hashes nothing.
+///
+/// A field that is not drawn for a while (its pane closed) keeps its record, so the same check
+/// runs when it comes back. A dropped history removes the record. At most [`BOUND_TEXTS`] fields
+/// keep a record; the oldest goes first, with its egui history.
+///
+/// One case passes: the old and new texts are equal (A's text was emptied, B's is empty). The
+/// owner's key ([`FieldName::of`]) covers that one. A caller does not rewrite the bound text
+/// while the field has focus (a trim, a format, a clear in the frame of `changed()`): the guard
+/// takes that for another text and drops the DM's own Undo.
 #[must_use]
 struct TextGuard {
     id: Id,
@@ -665,9 +695,18 @@ struct TextGuard {
 impl TextGuard {
     fn before(ui: &Ui, id: Id, text: &str) -> Self {
         let focused_before = ui.memory(|memory| memory.has_focus(id));
-        if focused_before && Self::stale(ui, id, text) {
+        let check = focused_before
+            || ui.input(|input| {
+                input.pointer.any_pressed()
+                    || input
+                        .events
+                        .iter()
+                        .any(|event| matches!(event, egui::Event::Key { pressed: true, .. }))
+            });
+        if check && Self::stale(ui, id, text) {
             // The cursor is stale too: it points into the old text.
-            Self::drop_history(ui, id, true);
+            Self::drop_history(ui.ctx(), id, true);
+            Self::forget(ui.ctx(), id);
         }
         Self { id, focused_before }
     }
@@ -676,36 +715,74 @@ impl TextGuard {
         if !response.has_focus() {
             return;
         }
-        // Focus came this frame (a click, Tab, a request): egui may already have fed the old
-        // history with this text. The cursor is new (from the click), so it stays.
+        // Focus came this frame by a way the check before the draw did not see: egui may have
+        // fed the old history with this text. The cursor is new (from the click), so it stays.
         if !self.focused_before && Self::stale(ui, self.id, text) {
-            Self::drop_history(ui, self.id, false);
+            Self::drop_history(ui.ctx(), self.id, false);
         }
         let bound = BoundText::of(text);
-        ui.ctx()
-            .data_mut(|data| data.insert_temp(bound_text_id(self.id), bound));
+        let ctx = ui.ctx();
+        let oldest = ctx.data_mut(|data| {
+            let records = &mut data
+                .get_temp_mut_or_default::<BoundTexts>(bound_texts_id())
+                .0;
+            records.retain(|(id, _)| *id != self.id);
+            records.push((self.id, bound));
+            (records.len() > BOUND_TEXTS).then(|| records.remove(0).0)
+        });
+        if let Some(oldest) = oldest {
+            Self::drop_history(ctx, oldest, false);
+        }
     }
 
     /// Whether the field last had focus with another text.
     fn stale(ui: &Ui, id: Id, text: &str) -> bool {
-        let Some(bound) = ui
-            .ctx()
-            .data(|data| data.get_temp::<BoundText>(bound_text_id(id)))
-        else {
+        let Some(bound) = ui.ctx().data(|data| {
+            data.get_temp::<BoundTexts>(bound_texts_id())
+                .and_then(|records| {
+                    records
+                        .0
+                        .iter()
+                        .find(|(record, _)| *record == id)
+                        .map(|(_, bound)| *bound)
+                })
+        }) else {
             return false;
         };
         bound.len != text.len() || bound != BoundText::of(text)
     }
 
-    fn drop_history(ui: &Ui, id: Id, cursor: bool) {
-        if let Some(mut state) = egui::text_edit::TextEditState::load(ui.ctx(), id) {
+    fn forget(ctx: &egui::Context, id: Id) {
+        ctx.data_mut(|data| {
+            data.get_temp_mut_or_default::<BoundTexts>(bound_texts_id())
+                .0
+                .retain(|(record, _)| *record != id);
+        });
+    }
+
+    fn drop_history(ctx: &egui::Context, id: Id, cursor: bool) {
+        if let Some(mut state) = egui::text_edit::TextEditState::load(ctx, id) {
             state.clear_undoer();
             if cursor {
                 state.cursor.set_char_range(None);
             }
-            state.store(ui.ctx(), id);
+            state.store(ctx, id);
         }
     }
+}
+
+/// The guarded draw of a field that a part outside this file draws (a number field): `draw`
+/// draws the `TextEdit` with `id` and the text.
+pub(super) fn guarded_field(
+    ui: &mut Ui,
+    id: Id,
+    text: &mut String,
+    draw: impl FnOnce(&mut Ui, &mut String) -> Response,
+) -> Response {
+    let guard = TextGuard::before(ui, id, text);
+    let response = draw(ui, text);
+    guard.after(ui, text, &response);
+    response
 }
 
 /// What [`FieldId::search`] drew: the field, and whether `Clear` emptied it this frame.

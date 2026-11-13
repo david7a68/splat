@@ -6509,22 +6509,39 @@ impl Encounters {
                         side_control(ui, "Side", &mut slot.side, &sides);
                     });
                     ui.horizontal_wrapped(|ui| {
-                        let mut group = slot
-                            .extra
-                            .get("initiative_group")
-                            .and_then(Value::as_str)
-                            .unwrap_or("")
-                            .to_owned();
+                        let field = INITIATIVE_GROUP
+                            .of(draft_id)
+                            .with(design::TextKey::from_data(&slot.key));
+                        const GROUP_LABEL: &str = "Initiative group (optional)";
+                        // While the field has focus it keeps the exact words typed (a lone
+                        // space too): the field part drops its text Undo when the bound text is
+                        // rewritten under it.
+                        let typed = field.named_id(GROUP_LABEL).with("typed");
+                        let mut group = ui
+                            .data(|data| data.get_temp::<String>(typed))
+                            .unwrap_or_else(|| {
+                                slot.extra
+                                    .get("initiative_group")
+                                    .and_then(Value::as_str)
+                                    .unwrap_or("")
+                                    .to_owned()
+                            });
                         let response = design::line_field(
                             ui,
-                            INITIATIVE_GROUP
-                                .of(draft_id)
-                                .with(design::TextKey::from_data(&slot.key)),
-                            "Initiative group (optional)",
+                            field,
+                            GROUP_LABEL,
                             &mut group,
                             "Initiative group",
                             120.0,
                         );
+                        let focused = response.has_focus();
+                        ui.data_mut(|data| {
+                            if focused {
+                                data.insert_temp(typed, group.clone());
+                            } else {
+                                data.remove::<String>(typed);
+                            }
+                        });
                         if response.changed() {
                             if group.trim().is_empty() {
                                 slot.extra.remove("initiative_group");

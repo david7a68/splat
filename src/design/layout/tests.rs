@@ -686,6 +686,70 @@ fn a_field_id_keeps_focus_across_a_layout_branch() {
         "k3-cost: at most two hashes a frame with focus"
     );
 
+    // Review 1, finding 2: the click that gives focus and Ctrl+Z come in one frame. egui takes
+    // focus on the press and runs Ctrl+Z inside its draw, so the guard checks before the draw.
+    ctx.memory_mut(|memory| memory.surrender_focus(second_id));
+    let mut tern = String::from("Tern");
+    edit(&mut tern, Vec::new());
+    assert!(!ctx.memory(|memory| memory.has_focus(second_id)));
+    let idle = hashes();
+    edit(&mut tern, vec![egui::Event::PointerMoved(at)]);
+    assert_eq!(
+        hashes(),
+        idle,
+        "k3-cost: a pointer move with no press hashes nothing"
+    );
+    edit(
+        &mut tern,
+        vec![
+            egui::Event::PointerMoved(at),
+            egui::Event::PointerButton {
+                pos: at,
+                button: egui::PointerButton::Primary,
+                pressed: true,
+                modifiers: egui::Modifiers::NONE,
+            },
+            ctrl_z(),
+        ],
+    );
+    assert!(
+        ctx.memory(|memory| memory.has_focus(second_id)),
+        "the press gives focus"
+    );
+    assert_eq!(
+        tern, "Tern",
+        "k3-click-one-frame: focus and Ctrl+Z in one frame bring no other object's words"
+    );
+    edit(
+        &mut tern,
+        vec![egui::Event::PointerButton {
+            pos: at,
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: egui::Modifiers::NONE,
+        }],
+    );
+
+    // Review 1, finding 5: a number field is guarded too.
+    let number_id = egui::Id::new("test_number_field");
+    let number = |text: &mut String, events: Vec<egui::Event>| {
+        frame_with(&ctx, vec2(800.0, 400.0), events, |ui| {
+            let _ =
+                crate::design::number_field_with_id(ui, number_id, "Amount", text, "", 64.0, 30.0);
+        });
+    };
+    let mut hp = String::from("12");
+    ctx.memory_mut(|memory| memory.request_focus(number_id));
+    number(&mut hp, Vec::new());
+    number(&mut hp, vec![egui::Event::Text("5".into())]);
+    assert_eq!(hp, "125");
+    let mut other_hp = String::from("40");
+    number(&mut other_hp, vec![ctrl_z()]);
+    assert_eq!(
+        other_hp, "40",
+        "k3-number: another object's number keeps its digits"
+    );
+
     // A key that is a place (lead note b): two members keyed by their index in the list. The DM
     // types in member A's field, presses "Move down", and B now sits at A's index, under A's id
     // and A's history. Ctrl+Z must leave both members' words as they are, with focus kept
@@ -809,6 +873,31 @@ fn the_gate_finds_two_live_widgets_with_one_id() {
         widget_id_clashes(&ctx, &output.shapes)
     };
     assert!(clashes(0).is_empty(), "two keys: {:?}", clashes(0));
+    // Claim 4 (review 1, finding 6): one name and one key with two labels are two fields, with
+    // their own ids and their own focus.
+    let mut labels = [String::from("Wolves"), String::from("Ogre")];
+    let mut ids = [egui::Id::NULL; 2];
+    let draw = |labels: &mut [String; 2], ids: &mut [egui::Id; 2], events: Vec<egui::Event>| {
+        frame_with(&ctx, vec2(500.0, 400.0), events, |ui| {
+            for ((label, text), id) in ["Find a group", "Find a stat block"]
+                .into_iter()
+                .zip(labels.iter_mut())
+                .zip(ids.iter_mut())
+            {
+                *id = line_field(ui, NAME.of(RowIndex(7)), label, text, "", 200.0).id;
+            }
+        });
+    };
+    draw(&mut labels, &mut ids, Vec::new());
+    assert_ne!(ids[0], ids[1], "k3-label: two labels, two ids");
+    ctx.memory_mut(|memory| memory.request_focus(ids[1]));
+    draw(&mut labels, &mut ids, Vec::new());
+    draw(&mut labels, &mut ids, vec![egui::Event::Text("s".into())]);
+    assert_eq!(
+        labels,
+        [String::from("Wolves"), String::from("Ogres")],
+        "k3-label: only the focused label's field takes the text"
+    );
     for case in 1..=5 {
         assert!(!clashes(case).is_empty(), "case {case} is found");
     }
@@ -862,5 +951,75 @@ fn a_search_field_always_draws_its_clear() {
         (h.state().width - 300.0).abs() <= 0.5,
         "n10-width: {}",
         h.state().width
+    );
+}
+
+/// Review 1, finding 3: the guard keeps at most `BOUND_TEXTS` records. The oldest goes first and
+/// takes its egui Undo history with it, so a field with no record has no old history.
+#[test]
+fn the_text_guard_keeps_a_bounded_record() {
+    const ROW: FieldName = crate::field_id!("test_bounded_row");
+    let ctx = context();
+    let ctrl_z = || egui::Event::Key {
+        key: egui::Key::Z,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: egui::Modifiers::COMMAND,
+    };
+    let mut texts: Vec<String> = (0..=super::BOUND_TEXTS)
+        .map(|at| format!("row {at}"))
+        .collect();
+    let draw = |texts: &mut Vec<String>, events: Vec<egui::Event>| {
+        frame_with(&ctx, vec2(800.0, 4000.0), events, |ui| {
+            for (at, text) in texts.iter_mut().enumerate() {
+                let _ = ROW.of(RowIndex(at)).single_line(ui, text, |edit| edit);
+            }
+        });
+    };
+    // Focus each field in turn and type one letter, so each has a record and a history.
+    for at in 0..=super::BOUND_TEXTS {
+        ctx.memory_mut(|memory| memory.request_focus(ROW.of(RowIndex(at)).id()));
+        draw(&mut texts, Vec::new());
+        draw(&mut texts, vec![egui::Event::Text("x".into())]);
+    }
+    assert_eq!(
+        super::bound_text_count(&ctx),
+        super::BOUND_TEXTS,
+        "k3-cap: the records stay at the cap"
+    );
+    let first = ROW.of(RowIndex(0)).id();
+    let history = egui::text_edit::TextEditState::load(&ctx, first).map(|state| {
+        state
+            .undoer()
+            .has_undo(&(Default::default(), texts[0].clone()))
+    });
+    assert_eq!(
+        history,
+        Some(false),
+        "k3-cap: the first field's history went with its record"
+    );
+    // And so Ctrl+Z in it changes nothing.
+    ctx.memory_mut(|memory| memory.request_focus(first));
+    draw(&mut texts, Vec::new());
+    draw(&mut texts, vec![ctrl_z()]);
+    assert_eq!(texts[0], "row 0x");
+}
+
+/// Review 1, finding 1: the compiling twin of `TextKey::of`'s doc tests. A timeline event is an
+/// owner; its fields are keyed by its id, and two events have two keys.
+#[test]
+fn a_timeline_event_keys_its_fields() {
+    let event = |id: &str| -> crate::timeline::Event {
+        serde_json::from_value(serde_json::json!({ "id": id, "kind": "day" })).expect("an event")
+    };
+    const NOTES: FieldName = crate::field_id!("test_event_notes");
+    assert_eq!(
+        NOTES.of(TextKey::of(&event("a"))).id(),
+        NOTES.of(TextKey::of(&event("a"))).id()
+    );
+    assert_ne!(
+        NOTES.of(TextKey::of(&event("a"))).id(),
+        NOTES.of(TextKey::of(&event("b"))).id()
     );
 }
