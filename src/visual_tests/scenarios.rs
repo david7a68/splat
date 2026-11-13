@@ -12691,6 +12691,19 @@ pub mod session_notes {
                 }),
             format!("Create on the field's line, Cancel below at its start, same empty and filled: {filled:?}"),
         );
+        // The shared heading rule: the heading owns the `XS` below it, so the field's label
+        // starts `XS` under the heading, and the form adds no space of its own there.
+        let below_heading = d
+            .place_of("NEW TEMPLATE")
+            .zip(d.nodes().into_iter().find(|node| {
+                node.name == "Template name" && node.role == egui::accesskit::Role::Label
+            }))
+            .map(|(heading, label)| label.rect.top() - heading.bottom());
+        d.observe(
+            "round-28-S-template-heading-gap",
+            below_heading.is_some_and(|gap| (gap - crate::design::XS).abs() < 1.0),
+            format!("The field label starts XS under the New template heading: {below_heading:?}"),
+        );
         d.observe(
             "iter-13-S1",
             !d.has("New template") && d.has("Cancel"),
